@@ -1,0 +1,196 @@
+/* Google Fonts loaded via index.html for non-render-blocking behavior */
+
+/* OpenDyslexic - Accessibility font for dyslexia */
+@font-face {
+  font-family: 'OpenDyslexic';
+  src: url('/fonts/OpenDyslexic-Regular.otf') format('opentype');
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'OpenDyslexic';
+  src: url('/fonts/OpenDyslexic-Bold.otf') format('opentype');
+  font-weight: bold;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'OpenDyslexic';
+  src: url('/fonts/OpenDyslexic-Italic.otf') format('opentype');
+  font-weight: normal;
+  font-style: italic;
+  font-display: swap;
+}
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 40 20% 96%;
+    --foreground: 195 35% 12%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 195 35% 12%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 195 35% 12%;
+
+    --primary: 195 35% 38%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 195 20% 92%;
+    --secondary-foreground: 195 35% 28%;
+
+    --muted: 40 15% 93%;
+    --muted-foreground: 195 10% 45%;
+
+    --accent: 40 55% 50%;
+    --accent-foreground: 0 0% 100%;
+
+    --destructive: 0 72% 55%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 195 12% 87%;
+    --input: 195 12% 87%;
+    --ring: 195 35% 38%;
+
+    --radius: 0.75rem;
+
+    --sidebar-background: 195 35% 14%;
+    --sidebar-foreground: 40 15% 92%;
+    --sidebar-primary: 40 55% 50%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 195 30% 22%;
+    --sidebar-accent-foreground: 40 15% 92%;
+    --sidebar-border: 195 30% 20%;
+    --sidebar-ring: 40 55% 50%;
+
+    /* Custom tokens */
+    --hero-gradient: linear-gradient(135deg, hsl(195 35% 38%), hsl(195 35% 28%));
+    --card-shadow: 0 1px 3px 0 hsl(195 35% 12% / 0.06), 0 1px 2px -1px hsl(195 35% 12% / 0.06);
+    --card-shadow-hover: 0 10px 25px -5px hsl(195 35% 12% / 0.08), 0 8px 10px -6px hsl(195 35% 12% / 0.06);
+    --glow-accent: 0 4px 20px hsl(40 55% 50% / 0.25);
+  }
+
+  .dark {
+    --background: 195 30% 8%;
+    --foreground: 40 15% 94%;
+    --card: 195 25% 12%;
+    --card-foreground: 40 15% 94%;
+    --popover: 195 25% 12%;
+    --popover-foreground: 40 15% 94%;
+    --primary: 195 35% 45%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 195 25% 18%;
+    --secondary-foreground: 195 30% 75%;
+    --muted: 195 15% 16%;
+    --muted-foreground: 195 10% 55%;
+    --accent: 40 55% 50%;
+    --accent-foreground: 0 0% 100%;
+    --destructive: 0 62% 45%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 195 15% 20%;
+    --input: 195 15% 20%;
+    --ring: 195 35% 45%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground font-sans antialiased;
+    font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
+  }
+
+  /* Focus visible for all interactive elements */
+  :focus-visible {
+    @apply outline-2 outline-offset-2 outline-ring rounded-sm;
+  }
+
+  /* Skip to content link */
+  .skip-to-content {
+    @apply absolute -top-full left-4 z-[100] bg-primary text-primary-foreground px-4 py-2 rounded-b-lg font-medium text-sm transition-all;
+  }
+  .skip-to-content:focus {
+    @apply top-0;
+  }
+}
+
+/* Respect prefers-reduced-motion */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+@layer utilities {
+  .gradient-hero {
+    background: linear-gradient(135deg, hsl(195 35% 38%), hsl(195 30% 28%));
+  }
+
+  .gradient-accent {
+    background: linear-gradient(135deg, hsl(40 55% 50%), hsl(35 50% 45%));
+  }
+
+  .gradient-subtle {
+    background: linear-gradient(180deg, hsl(40 20% 96%), hsl(195 15% 94%));
+  }
+
+  .text-gradient-hero {
+    background: linear-gradient(135deg, hsl(195 35% 38%), hsl(195 35% 28%));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  .shadow-card {
+    box-shadow: var(--card-shadow);
+  }
+
+  .shadow-card-hover {
+    box-shadow: var(--card-shadow-hover);
+  }
+
+  .shadow-glow {
+    box-shadow: var(--glow-accent);
+  }
+}
+
+/* Tiptap editor */
+.tiptap p.is-editor-empty:first-child::before {
+  content: attr(data-placeholder);
+  float: left;
+  color: hsl(var(--muted-foreground));
+  pointer-events: none;
+  height: 0;
+}
+
+.tiptap:focus {
+  outline: none;
+}
+
+.tiptap img.editor-image {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  margin: 0.5rem auto;
+  cursor: pointer;
+  position: relative;
+  border-radius: 0.5rem;
+  border: 2px solid transparent;
+  transition: border-color 0.15s;
+}
+
+.tiptap img.editor-image.ProseMirror-selectednode {
+  border-color: hsl(var(--primary));
+  outline: 2px solid hsl(var(--primary) / 0.3);
+}
