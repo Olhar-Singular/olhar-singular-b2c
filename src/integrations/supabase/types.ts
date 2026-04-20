@@ -291,7 +291,26 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      deduct_credits: {
+        Args: {
+          p_amount: number
+          p_ref_id?: string
+          p_type: string
+          p_user_id: string
+        }
+        Returns: Json
+      }
       get_user_school_id: { Args: { _user_id: string }; Returns: string }
+      grant_credits: {
+        Args: {
+          p_amount: number
+          p_payment_id?: string
+          p_ref_id?: string
+          p_type: string
+          p_user_id: string
+        }
+        Returns: Json
+      }
     }
     Enums: {
       [_ in never]: never

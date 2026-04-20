@@ -56,16 +56,15 @@ describe("AuthPage", () => {
 
   it("renders login form by default", () => {
     renderAuthPage();
-    expect(screen.getByRole("tab", { name: /entrar/i })).toBeInTheDocument();
-    expect(screen.getByRole("tab", { name: /cadastrar/i })).toBeInTheDocument();
     expect(screen.getByLabelText(/e-mail/i)).toBeInTheDocument();
-    expect(screen.getByLabelText(/^senha/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/senha/i)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /entrar/i })).toBeInTheDocument();
   });
 
-  it("switches to signup tab and shows name field", async () => {
+  it("shows name field after switching to signup", async () => {
     const user = userEvent.setup();
     renderAuthPage();
-    await user.click(screen.getByRole("tab", { name: /cadastrar/i }));
+    await user.click(screen.getByRole("button", { name: /cadastre-se/i }));
     expect(screen.getByLabelText(/nome/i)).toBeInTheDocument();
   });
 
@@ -74,7 +73,7 @@ describe("AuthPage", () => {
     fireEvent.change(screen.getByLabelText(/e-mail/i), {
       target: { value: "a@b.com" },
     });
-    fireEvent.change(screen.getByLabelText(/^senha/i), {
+    fireEvent.change(screen.getByLabelText(/senha/i), {
       target: { value: "123456" },
     });
     fireEvent.click(screen.getByRole("button", { name: /entrar/i }));
@@ -89,11 +88,11 @@ describe("AuthPage", () => {
   it("calls signUp on register submit", async () => {
     const user = userEvent.setup();
     renderAuthPage();
-    await user.click(screen.getByRole("tab", { name: /cadastrar/i }));
+    await user.click(screen.getByRole("button", { name: /cadastre-se/i }));
     await user.type(screen.getByLabelText(/nome/i), "Ana");
     await user.type(screen.getByLabelText(/e-mail/i), "ana@b.com");
-    await user.type(screen.getByLabelText(/^senha/i), "123456");
-    await user.click(screen.getByRole("button", { name: /cadastrar/i }));
+    await user.type(screen.getByLabelText(/senha/i), "123456");
+    await user.click(screen.getByRole("button", { name: /criar conta/i }));
     await waitFor(() =>
       expect(supabase.auth.signUp).toHaveBeenCalledWith({
         email: "ana@b.com",
@@ -111,7 +110,7 @@ describe("AuthPage", () => {
     fireEvent.change(screen.getByLabelText(/e-mail/i), {
       target: { value: "a@b.com" },
     });
-    fireEvent.change(screen.getByLabelText(/^senha/i), {
+    fireEvent.change(screen.getByLabelText(/senha/i), {
       target: { value: "errada" },
     });
     fireEvent.click(screen.getByRole("button", { name: /entrar/i }));
