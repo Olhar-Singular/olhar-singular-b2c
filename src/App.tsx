@@ -6,6 +6,7 @@ import { ProtectedRoute } from "@/components/ProtectedRoute";
 import AuthPage from "@/pages/AuthPage";
 import DashboardPage from "@/pages/DashboardPage";
 import BarrierProfilesPage from "@/pages/BarrierProfilesPage";
+import CreditsPage from "@/pages/CreditsPage";
 
 const queryClient = new QueryClient();
 
@@ -22,6 +23,24 @@ export default function App() {
               element={
                 <ProtectedRoute>
                   <DashboardPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/creditos"
+              element={
+                <ProtectedRoute>
+                  <CreditsPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/creditos/sucesso"
+              element={
+                <ProtectedRoute>
+                  <div className="flex min-h-screen items-center justify-center">
+                    <p className="text-lg font-medium">Pagamento confirmado! Seus créditos foram adicionados.</p>
+                  </div>
                 </ProtectedRoute>
               }
             />
