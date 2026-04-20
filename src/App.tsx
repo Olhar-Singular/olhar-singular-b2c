@@ -5,6 +5,7 @@ import { AuthProvider } from "@/contexts/AuthContext";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import AuthPage from "@/pages/AuthPage";
 import DashboardPage from "@/pages/DashboardPage";
+import BarrierProfilesPage from "@/pages/BarrierProfilesPage";
 
 const queryClient = new QueryClient();
 
@@ -21,6 +22,14 @@ export default function App() {
               element={
                 <ProtectedRoute>
                   <DashboardPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/perfis-barreira"
+              element={
+                <ProtectedRoute>
+                  <BarrierProfilesPage />
                 </ProtectedRoute>
               }
             />

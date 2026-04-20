@@ -16,12 +16,12 @@ Object.defineProperty(window, "matchMedia", {
   })),
 });
 
-// Mock do ResizeObserver
-global.ResizeObserver = vi.fn().mockImplementation(() => ({
-  observe: vi.fn(),
-  unobserve: vi.fn(),
-  disconnect: vi.fn(),
-}));
+// Mock do ResizeObserver — must be a class (Radix UI calls `new ResizeObserver`)
+global.ResizeObserver = class ResizeObserver {
+  observe = vi.fn();
+  unobserve = vi.fn();
+  disconnect = vi.fn();
+};
 
 // Mock do IntersectionObserver
 global.IntersectionObserver = vi.fn().mockImplementation(() => ({
