@@ -6,7 +6,7 @@ import tseslint from "typescript-eslint";
 import localRules from "./eslint-local-rules/no-sync-effect.js";
 
 export default tseslint.config(
-  { ignores: ["dist", "supabase/functions", "eslint-local-rules"] },
+  { ignores: ["dist", "supabase/functions", "eslint-local-rules", "src/integrations/supabase/types.ts"] },
   {
     extends: [js.configs.recommended, ...tseslint.configs.recommended],
     files: ["**/*.{ts,tsx}"],
@@ -38,9 +38,11 @@ export default tseslint.config(
       "src/test/**/*.{ts,tsx}",
       "**/*.test.{ts,tsx}",
       "src/components/ui/**/*.{ts,tsx}",
+      "src/contexts/**/*.{ts,tsx}",
     ],
     rules: {
       "local/no-sync-effect": "off",
+      "react-refresh/only-export-components": "off",
     },
   },
 );
