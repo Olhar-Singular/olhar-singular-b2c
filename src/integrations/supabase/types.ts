@@ -265,11 +265,48 @@ export type Database = {
         }
         Relationships: []
       }
+      pdf_uploads: {
+        Row: {
+          credits_spent: number | null
+          description: string | null
+          file_name: string
+          file_path: string
+          id: string
+          questions_extracted: number | null
+          uploaded_at: string | null
+          user_id: string
+          was_free: boolean | null
+        }
+        Insert: {
+          credits_spent?: number | null
+          description?: string | null
+          file_name: string
+          file_path: string
+          id?: string
+          questions_extracted?: number | null
+          uploaded_at?: string | null
+          user_id: string
+          was_free?: boolean | null
+        }
+        Update: {
+          credits_spent?: number | null
+          description?: string | null
+          file_name?: string
+          file_path?: string
+          id?: string
+          questions_extracted?: number | null
+          uploaded_at?: string | null
+          user_id?: string
+          was_free?: boolean | null
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           created_at: string
           credit_balance: number
           free_adaptation_used: boolean
+          free_extraction_used: boolean
           full_name: string | null
           id: string
           updated_at: string
@@ -278,6 +315,7 @@ export type Database = {
           created_at?: string
           credit_balance?: number
           free_adaptation_used?: boolean
+          free_extraction_used?: boolean
           full_name?: string | null
           id: string
           updated_at?: string
@@ -286,9 +324,67 @@ export type Database = {
           created_at?: string
           credit_balance?: number
           free_adaptation_used?: boolean
+          free_extraction_used?: boolean
           full_name?: string | null
           id?: string
           updated_at?: string
+        }
+        Relationships: []
+      }
+      question_bank: {
+        Row: {
+          correct_answer: number | null
+          created_at: string | null
+          created_by: string
+          difficulty: string | null
+          figure_description: string | null
+          id: string
+          image_url: string | null
+          is_public: boolean | null
+          options: Json | null
+          resolution: string | null
+          source: string | null
+          source_file_name: string | null
+          subject: string
+          text: string
+          topic: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          correct_answer?: number | null
+          created_at?: string | null
+          created_by: string
+          difficulty?: string | null
+          figure_description?: string | null
+          id?: string
+          image_url?: string | null
+          is_public?: boolean | null
+          options?: Json | null
+          resolution?: string | null
+          source?: string | null
+          source_file_name?: string | null
+          subject: string
+          text: string
+          topic?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          correct_answer?: number | null
+          created_at?: string | null
+          created_by?: string
+          difficulty?: string | null
+          figure_description?: string | null
+          id?: string
+          image_url?: string | null
+          is_public?: boolean | null
+          options?: Json | null
+          resolution?: string | null
+          source?: string | null
+          source_file_name?: string | null
+          subject?: string
+          text?: string
+          topic?: string | null
+          updated_at?: string | null
         }
         Relationships: []
       }
