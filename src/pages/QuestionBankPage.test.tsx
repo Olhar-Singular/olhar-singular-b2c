@@ -15,6 +15,7 @@ vi.mock("@/hooks/useQuestionBank", () => ({
   useQuestions: (...args: any[]) => mockUseQuestions(...args),
   useDeleteQuestion: vi.fn(() => ({ mutateAsync: vi.fn(), isPending: false })),
   useQuestionStats: vi.fn(() => ({ data: { total: 0, bySubject: {} }, isLoading: false })),
+  useInsertQuestions: vi.fn(() => ({ mutate: vi.fn(), isPending: false })),
 }));
 
 vi.mock("@/contexts/AuthContext", () => ({

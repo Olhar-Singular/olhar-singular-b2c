@@ -23,7 +23,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Loader2, Plus, BookOpen, Search, Gift, CreditCard, ScanText, MoreVertical, Pencil, Trash2, FileText } from "lucide-react";
 import { useAuthContext } from "@/contexts/AuthContext";
-import { useQuestions, useDeleteQuestion, useQuestionStats } from "@/hooks/useQuestionBank";
+import { useQuestions, useDeleteQuestion, useQuestionStats, useInsertQuestions } from "@/hooks/useQuestionBank";
 import QuestionExtractModal from "@/components/QuestionExtractModal";
 import QuestionForm from "@/components/QuestionForm";
 import ManualQuestionEditor from "@/components/ManualQuestionEditor";
@@ -67,6 +67,7 @@ export default function QuestionBankPage() {
   const { data: questions = [], isLoading } = useQuestions(filters);
   const { data: stats } = useQuestionStats();
   const deleteQuestion = useDeleteQuestion();
+  const insertQuestions = useInsertQuestions();
 
   const filteredQuestions = search.trim()
     ? questions.filter((q) =>
@@ -77,9 +78,8 @@ export default function QuestionBankPage() {
     : questions;
 
   const handleExtracted = (extracted: any[], sourceFileName: string) => {
-    // Redirect to manual editor flow with extracted questions pre-filled
-    // For now, toast confirmation is enough — user reviews in ManualQuestionEditor
-    console.info(`Extracted ${extracted.length} questions from ${sourceFileName}`);
+    const rows = extracted.map((q) => ({ ...q, source_file_name: sourceFileName }));
+    insertQuestions.mutate(rows);
   };
 
   const handleManualFileSelect = () => {
