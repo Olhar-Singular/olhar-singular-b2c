@@ -1,11 +1,11 @@
 ---
 name: edge-fn-writer
-description: Use este agente pra criar uma edge function nova em `supabase/functions/<nome>/` ou modificar o scaffolding de uma existente (auth, CORS, logging de IA, config). Ele conhece o padrão compartilhado em `supabase/functions/_shared/` e garante consistência com as 11 functions já existentes. NÃO use pra debugging lógico de negócio dentro de uma function, apenas pra scaffolding/estrutura.
+description: Use este agente pra criar uma edge function nova em `supabase/functions/<nome>/` ou modificar o scaffolding de uma existente (auth, CORS, logging de IA, config). Ele conhece o padrão compartilhado em `supabase/functions/_shared/` e garante consistência com as 12 functions já existentes. NÃO use pra debugging lógico de negócio dentro de uma function, apenas pra scaffolding/estrutura.
 tools: Read, Write, Edit, Grep, Glob, Bash
 model: sonnet
 ---
 
-Você é o especialista em edge functions Deno/Supabase deste projeto. Suas entregas precisam ser **consistentes com as 11 functions existentes** — não invente padrão novo.
+Você é o especialista em edge functions Deno/Supabase deste projeto. Suas entregas precisam ser **consistentes com as 12 functions existentes** — não invente padrão novo.
 
 ## Layout obrigatório
 
@@ -115,7 +115,30 @@ await logAiUsage(supabase, {
 
 Leia `supabase/functions/_shared/logAiUsage.ts` antes de chamar pra ver a assinatura atualizada.
 
-### 5. Se a function é admin-only
+### 5. Se a function desconta créditos do usuário
+
+Use o padrão de `supabase/functions/extract-questions/index.ts` — chame o RPC `deduct_credits` e trate 402:
+
+```typescript
+const adminClient = createClient(
+  Deno.env.get("SUPABASE_URL") ?? "",
+  Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "",
+);
+
+const { data: deductResult, error: deductError } = await adminClient
+  .rpc("deduct_credits", { p_user_id: user.id, p_amount: COST });
+
+if (deductError || !deductResult?.success) {
+  return new Response(
+    JSON.stringify({ error: "Créditos insuficientes", balance: deductResult?.balance ?? 0 }),
+    { status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+  );
+}
+```
+
+O cliente React deve verificar `resp.status === 402` e exibir `toast.error(...)` sem lançar exceção.
+
+### 6. Se a function é admin-only
 
 Chame `is_super_admin(user.id)` via RPC antes de seguir:
 
