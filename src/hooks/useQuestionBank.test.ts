@@ -7,6 +7,7 @@ import {
   useDeleteQuestion,
   useUpdateQuestion,
   useQuestionStats,
+  useInsertQuestions,
 } from "./useQuestionBank";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -185,5 +186,69 @@ describe("useQuestionStats", () => {
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
     expect(result.current.data?.total).toBe(0);
     expect(result.current.data?.bySubject).toEqual({});
+  });
+});
+
+describe("useInsertQuestions", () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it("inserts rows with created_by set to current user", async () => {
+    const chain = {
+      insert: vi.fn().mockResolvedValue({ error: null }),
+    };
+    vi.mocked(supabase.from).mockReturnValue(chain as never);
+
+    const rows = [
+      { text: "Questão 1", subject: "Física" },
+      { text: "Questão 2", subject: "Matemática" },
+    ];
+
+    const { result } = renderHook(() => useInsertQuestions(), { wrapper });
+    await act(async () => {
+      await result.current.mutateAsync(rows);
+    });
+
+    expect(chain.insert).toHaveBeenCalledWith(
+      expect.arrayContaining([
+        expect.objectContaining({ text: "Questão 1", created_by: "u1" }),
+        expect.objectContaining({ text: "Questão 2", created_by: "u1" }),
+      ])
+    );
+  });
+
+  it("throws when insert returns an error", async () => {
+    const chain = {
+      insert: vi.fn().mockResolvedValue({ error: new Error("insert failed") }),
+    };
+    vi.mocked(supabase.from).mockReturnValue(chain as never);
+
+    const { result } = renderHook(() => useInsertQuestions(), { wrapper });
+    await act(async () => {
+      await expect(result.current.mutateAsync([{ text: "Q", subject: "Física" }])).rejects.toThrow("insert failed");
+    });
+  });
+
+  it("invalidates question_bank and question_bank_stats queries on success", async () => {
+    const chain = {
+      insert: vi.fn().mockResolvedValue({ error: null }),
+    };
+    vi.mocked(supabase.from).mockReturnValue(chain as never);
+
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
+    const invalidateSpy = vi.spyOn(qc, "invalidateQueries");
+    const customWrapper = ({ children }: { children: React.ReactNode }) =>
+      createElement(QueryClientProvider, { client: qc }, children);
+
+    const { result } = renderHook(() => useInsertQuestions(), { wrapper: customWrapper });
+    await act(async () => {
+      await result.current.mutateAsync([{ text: "Q", subject: "Física" }]);
+    });
+
+    expect(invalidateSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ queryKey: expect.arrayContaining(["question_bank"]) })
+    );
+    expect(invalidateSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ queryKey: expect.arrayContaining(["question_bank_stats"]) })
+    );
   });
 });

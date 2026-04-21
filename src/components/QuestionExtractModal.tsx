@@ -126,7 +126,7 @@ export default function QuestionExtractModal({
 
       const isImage = file.type.startsWith("image/");
       let body: FormData | string;
-      let headers: Record<string, string> = { Authorization: `Bearer ${token}` };
+      const headers: Record<string, string> = { Authorization: `Bearer ${token}` };
 
       if (isImage) {
         const formData = new FormData();

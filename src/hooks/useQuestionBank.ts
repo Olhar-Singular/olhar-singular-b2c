@@ -68,6 +68,54 @@ export function useUpdateQuestion() {
   });
 }
 
+type ExtractedQuestion = {
+  text: string;
+  subject: string;
+  topic?: string | null;
+  options?: string[] | null;
+  correct_answer?: number | null;
+  resolution?: string | null;
+  has_figure?: boolean;
+  figure_description?: string | null;
+  image_url?: string | null;
+  source_file_name?: string | null;
+  [key: string]: unknown;
+};
+
+export function useInsertQuestions() {
+  const qc = useQueryClient();
+  const { user } = useAuth();
+
+  return useMutation({
+    mutationFn: async (rows: ExtractedQuestion[]) => {
+      const payload = rows.map((r) => ({
+        text: r.text,
+        subject: r.subject,
+        topic: r.topic ?? null,
+        options: r.options ?? null,
+        correct_answer: r.correct_answer ?? null,
+        resolution: r.resolution ?? null,
+        figure_description: r.figure_description ?? null,
+        image_url: r.image_url ?? null,
+        source_file_name: r.source_file_name ?? null,
+        difficulty: "medio",
+        source: "ai_extract",
+        created_by: user!.id,
+      }));
+
+      const { error } = await (supabase.from as any)("question_bank").insert(payload);
+      if (error) throw error;
+      return payload.length;
+    },
+    onSuccess: (count: number) => {
+      qc.invalidateQueries({ queryKey: ["question_bank", user?.id] });
+      qc.invalidateQueries({ queryKey: ["question_bank_stats", user?.id] });
+      toast.success(`${count} questão(ões) adicionada(s) ao banco.`);
+    },
+    onError: (err: Error) => toast.error(err.message),
+  });
+}
+
 type QuestionStats = {
   total: number;
   bySubject: Record<string, number>;
