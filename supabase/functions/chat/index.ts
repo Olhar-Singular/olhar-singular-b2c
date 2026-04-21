@@ -11,6 +11,8 @@ const corsHeaders = {
 
 const MAX_SESSIONS = 10;
 const SESSION_CREDIT_COST = 3;
+const MAX_EXCHANGES_PER_SESSION = 20;
+const AI_CONTEXT_WINDOW = 10;
 
 const SYSTEM_PROMPT = `Você é ISA (Inteligência de Suporte à Aprendizagem), assistente pedagógico do Olhar Singular — uma ferramenta de apoio para professores, pedagogos e terapeutas.
 
@@ -172,6 +174,15 @@ serve(async (req) => {
       activeSessionId = session_id;
     }
 
+    // ── Enforce exchange limit ────────────────────────────────────────────
+    const completedExchanges = messages.filter((m) => m.role === "assistant").length;
+    if (completedExchanges >= MAX_EXCHANGES_PER_SESSION) {
+      return new Response(
+        JSON.stringify({ error: "Limite de mensagens atingido. Inicie uma nova conversa." }),
+        { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
     // ── Call Gemini Flash ─────────────────────────────────────────────────
     const ai = getAiConfig();
     const modelName = ai.resolveModel("google/gemini-2.5-flash");
@@ -192,7 +203,7 @@ serve(async (req) => {
           model: modelName,
           messages: [
             { role: "system", content: SYSTEM_PROMPT },
-            ...messages,
+            ...messages.slice(-AI_CONTEXT_WINDOW),
           ],
           max_tokens: 2000,
         }),
