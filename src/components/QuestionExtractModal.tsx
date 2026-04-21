@@ -120,45 +120,32 @@ export default function QuestionExtractModal({
     setExtracting(true);
 
     try {
-      const session = await supabase.auth.getSession();
-      const token = session.data.session?.access_token;
-      if (!token) throw new Error("Sessão expirada. Faça login novamente.");
-
       const isImage = file.type.startsWith("image/");
-      let body: FormData | string;
-      const headers: Record<string, string> = { Authorization: `Bearer ${token}` };
+      let body: FormData | Record<string, unknown>;
 
       if (isImage) {
         const formData = new FormData();
         formData.append("file", file, file.name);
         body = formData;
       } else {
-        // PDF: render pages client-side and send as JSON
         const { parsePdf } = await import("@/lib/pdf-utils");
         const { pageImages, text } = await parsePdf(file);
-
-        body = JSON.stringify({
-          pdfText: text,
-          pdfFileName: file.name,
-          pageImages,
-        });
-        headers["Content-Type"] = "application/json";
+        body = { pdfText: text, pdfFileName: file.name, pageImages };
       }
 
-      const resp = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/extract-questions`,
-        { method: "POST", headers, body }
+      const { data, error: invokeError } = await supabase.functions.invoke(
+        "extract-questions",
+        { body }
       );
 
-      const data = await resp.json();
-
-      if (!resp.ok) {
-        if (resp.status === 402) {
-          toast.error(`Créditos insuficientes. Saldo: ${data.balance ?? creditBalance}. Necessário: ${EXTRACTION_COST}.`);
+      if (invokeError) {
+        const status = (invokeError as any)?.context?.status;
+        if (status === 402) {
+          toast.error(`Créditos insuficientes. Saldo: ${data?.balance ?? creditBalance}. Necessário: ${EXTRACTION_COST}.`);
           resetState();
           return;
         }
-        throw new Error(data.error || "Falha na extração.");
+        throw new Error((invokeError as any).message || "Falha na extração.");
       }
 
       const questions = validateExtractedQuestions(data.questions);

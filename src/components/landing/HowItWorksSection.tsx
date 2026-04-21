@@ -4,7 +4,7 @@ const STEPS = [
   {
     n: "01",
     title: "Selecione as barreiras",
-    desc: "Escolha as barreiras pedagógicas observáveis do seu aluno — sem diagnóstico, sem laudo.",
+    desc: "Escolha as barreiras pedagógicas observáveis do seu aluno, sem diagnóstico, sem laudo.",
   },
   {
     n: "02",

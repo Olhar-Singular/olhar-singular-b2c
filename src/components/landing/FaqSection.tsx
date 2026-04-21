@@ -12,7 +12,7 @@ const FAQ = [
   },
   {
     q: "Quanto vale 1 crédito?",
-    a: "1 adaptação completa custa 3 créditos. Iniciar uma conversa com a ISA também custa 3 créditos — as mensagens seguintes na mesma conversa são gratuitas.",
+    a: "1 adaptação completa custa 3 créditos. Iniciar uma conversa com a ISA também custa 3 créditos. As mensagens seguintes na mesma conversa são gratuitas.",
   },
   {
     q: "Os créditos expiram?",
