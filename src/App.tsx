@@ -10,6 +10,7 @@ import CreditsPage from "@/pages/CreditsPage";
 import AdaptarPage from "@/pages/AdaptarPage";
 import ChatPage from "@/pages/ChatPage";
 import LandingPage from "@/pages/LandingPage";
+import Layout from "@/components/Layout";
 
 const queryClient = new QueryClient();
 
@@ -22,55 +23,27 @@ export default function App() {
             <Route path="/" element={<LandingPage />} />
             <Route path="/auth" element={<AuthPage />} />
             <Route
-              path="/dashboard"
               element={
                 <ProtectedRoute>
-                  <DashboardPage />
+                  <Layout />
                 </ProtectedRoute>
               }
-            />
-            <Route
-              path="/creditos"
-              element={
-                <ProtectedRoute>
-                  <CreditsPage />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/creditos/sucesso"
-              element={
-                <ProtectedRoute>
-                  <div className="flex min-h-screen items-center justify-center">
-                    <p className="text-lg font-medium">Pagamento confirmado! Seus créditos foram adicionados.</p>
+            >
+              <Route path="/dashboard" element={<DashboardPage />} />
+              <Route path="/adaptar" element={<AdaptarPage />} />
+              <Route path="/perfis-barreira" element={<BarrierProfilesPage />} />
+              <Route path="/chat" element={<ChatPage />} />
+              <Route path="/creditos" element={<CreditsPage />} />
+              <Route
+                path="/creditos/sucesso"
+                element={
+                  <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4 text-center">
+                    <p className="text-lg font-semibold text-foreground">Pagamento confirmado!</p>
+                    <p className="text-muted-foreground text-sm">Seus créditos foram adicionados à sua conta.</p>
                   </div>
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/adaptar"
-              element={
-                <ProtectedRoute>
-                  <AdaptarPage />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/chat"
-              element={
-                <ProtectedRoute>
-                  <ChatPage />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/perfis-barreira"
-              element={
-                <ProtectedRoute>
-                  <BarrierProfilesPage />
-                </ProtectedRoute>
-              }
-            />
+                }
+              />
+            </Route>
           </Routes>
           <Toaster />
         </AuthProvider>

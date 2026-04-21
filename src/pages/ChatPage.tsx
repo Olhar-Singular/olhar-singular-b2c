@@ -56,7 +56,7 @@ export default function ChatPage() {
       : localMessages;
 
   return (
-    <div className="flex h-screen bg-background">
+    <div className="flex h-[calc(100vh-3.5rem)] lg:h-screen bg-background">
       <ChatSidebar
         sessions={sessions}
         activeSessionId={activeSessionId}
