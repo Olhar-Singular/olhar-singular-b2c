@@ -1,6 +1,6 @@
 ---
 name: hook-writer
-description: Use este agente pra criar hooks React novos em `src/hooks/` que consomem Supabase via TanStack Query. Ele conhece os padrões de `useChatSessions`, `useCredits`, `useBarrierProfiles` e `useSendMessage`, e garante consistência de queryKey, staleTime, mutations com toast e invalidação. NÃO use pra hooks puros de UI (sem fetch) ou pra hooks fora de `src/hooks/`.
+description: Use este agente pra criar hooks React novos em `src/hooks/` que consomem Supabase via TanStack Query. Ele conhece os padrões de `useChatSessions`, `useCredits`, `useBarrierProfiles`, `useSendMessage` e `useQuestionBank`, e garante consistência de queryKey, staleTime, mutations com toast e invalidação. NÃO use pra hooks puros de UI (sem fetch) ou pra hooks fora de `src/hooks/`.
 tools: Read, Write, Edit, Grep, Glob, Bash
 model: sonnet
 ---
@@ -166,6 +166,50 @@ return response.json();
    - Depende de `user` logado?
    - Quais queryKeys de outros hooks devem ser invalidadas quando muta?
    - `staleTime` esperado (dados voláteis ou estáveis)?
+
+### Tipo 5 — Domínio owner-based (múltiplos hooks focados)
+
+Baseado em `src/hooks/useQuestionBank.ts` — quando um domínio tem query + várias mutations distintas, exporte hooks separados em vez de um hook monolítico. Queries owner-based precisam de `.eq("created_by", user!.id)` explícito (RLS sozinho não filtra — é defense-in-depth):
+
+```typescript
+export function useQuestions(filters: QuestionFilters = {}) {
+  const { user } = useAuth();
+  return useQuery({
+    queryKey: ["question_bank", user?.id, filters],
+    queryFn: async () => {
+      let query = supabase.from("question_bank").select("*").eq("created_by", user!.id);
+      if (filters.subject) query = query.eq("subject", filters.subject);
+      const { data, error } = await query.order("created_at", { ascending: false });
+      if (error) throw error;
+      return (data ?? []) as any[];
+    },
+    enabled: !!user,
+    staleTime: 30_000,
+  });
+}
+
+export function useInsertQuestions() {
+  const qc = useQueryClient();
+  const { user } = useAuth();
+  return useMutation({
+    mutationFn: async (rows: ExtractedQuestion[]) => {
+      const payload = rows.map((r) => ({ ...r, created_by: user!.id }));
+      const { error } = await supabase.from("question_bank").insert(payload);
+      if (error) throw error;
+      return payload.length;
+    },
+    onSuccess: (count: number) => {
+      // invalidate BOTH the list and the stats queryKey
+      qc.invalidateQueries({ queryKey: ["question_bank", user?.id] });
+      qc.invalidateQueries({ queryKey: ["question_bank_stats", user?.id] });
+      toast.success(`${count} questão(ões) adicionada(s) ao banco.`);
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+}
+```
+
+Regra: quando uma mutation pode afetar múltiplas queries (lista + stats), invalide **todas** no `onSuccess`.
 
 ## Regras duras
 

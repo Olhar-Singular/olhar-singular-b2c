@@ -1,7 +1,7 @@
 import { Link, useLocation, Outlet, useNavigate } from "react-router-dom";
 import {
   LayoutDashboard, Wand2, Users, MessageSquare,
-  Coins, LogOut, Menu, X,
+  Coins, LogOut, Menu, X, BookOpen,
 } from "lucide-react";
 import { useState } from "react";
 import { useAuth } from "@/hooks/useAuth";
@@ -12,6 +12,7 @@ const NAV_ITEMS = [
   { path: "/adaptar",          label: "Adaptar",             icon: Wand2 },
   { path: "/perfis-barreira",  label: "Perfis de Barreira",  icon: Users },
   { path: "/chat",             label: "Chat com a ISA",      icon: MessageSquare },
+  { path: "/banco-questoes",  label: "Banco de Questões",   icon: BookOpen },
 ];
 
 export default function Layout({ children }: { children?: React.ReactNode }) {

@@ -10,6 +10,7 @@ import CreditsPage from "@/pages/CreditsPage";
 import AdaptarPage from "@/pages/AdaptarPage";
 import ChatPage from "@/pages/ChatPage";
 import LandingPage from "@/pages/LandingPage";
+import QuestionBankPage from "@/pages/QuestionBankPage";
 import Layout from "@/components/Layout";
 
 const queryClient = new QueryClient();
@@ -33,6 +34,7 @@ export default function App() {
               <Route path="/adaptar" element={<AdaptarPage />} />
               <Route path="/perfis-barreira" element={<BarrierProfilesPage />} />
               <Route path="/chat" element={<ChatPage />} />
+              <Route path="/banco-questoes" element={<QuestionBankPage />} />
               <Route path="/creditos" element={<CreditsPage />} />
               <Route
                 path="/creditos/sucesso"
