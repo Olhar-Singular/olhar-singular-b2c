@@ -8,6 +8,7 @@ import DashboardPage from "@/pages/DashboardPage";
 import BarrierProfilesPage from "@/pages/BarrierProfilesPage";
 import CreditsPage from "@/pages/CreditsPage";
 import AdaptarPage from "@/pages/AdaptarPage";
+import ChatPage from "@/pages/ChatPage";
 
 const queryClient = new QueryClient();
 
@@ -50,6 +51,14 @@ export default function App() {
               element={
                 <ProtectedRoute>
                   <AdaptarPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/chat"
+              element={
+                <ProtectedRoute>
+                  <ChatPage />
                 </ProtectedRoute>
               }
             />

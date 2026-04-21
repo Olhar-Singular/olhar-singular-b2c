@@ -33,6 +33,9 @@ global.IntersectionObserver = vi.fn().mockImplementation(() => ({
 // Mock scrollTo
 window.scrollTo = vi.fn() as any;
 
+// Mock scrollIntoView (not implemented in jsdom)
+window.HTMLElement.prototype.scrollIntoView = vi.fn();
+
 // Mock URL.createObjectURL / revokeObjectURL
 URL.createObjectURL = vi.fn(() => "blob:test");
 URL.revokeObjectURL = vi.fn();
