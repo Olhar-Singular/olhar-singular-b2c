@@ -5,6 +5,7 @@ import {
 } from "lucide-react";
 import { useState } from "react";
 import { useAuth } from "@/hooks/useAuth";
+import logoImg from "@/assets/logo-olho-transparent.png";
 
 const NAV_ITEMS = [
   { path: "/dashboard",        label: "Dashboard",          icon: LayoutDashboard },
@@ -53,9 +54,12 @@ export default function Layout({ children }: { children?: React.ReactNode }) {
         aria-label="Menu principal"
       >
         {/* Logo */}
-        <div className="px-4 py-5">
-          <Link to="/dashboard" className="text-xs font-bold tracking-widest uppercase text-primary-foreground">
-            Olhar Singular
+        <div className="px-4 py-4 flex items-center gap-2">
+          <Link to="/dashboard" className="flex items-center gap-2">
+            <img src={logoImg} alt="Olhar Singular" className="h-9 w-auto" loading="eager" />
+            <span className="text-[0.65rem] font-semibold text-primary-foreground tracking-widest uppercase leading-tight">
+              Olhar Singular
+            </span>
           </Link>
         </div>
 
@@ -109,8 +113,9 @@ export default function Layout({ children }: { children?: React.ReactNode }) {
 
       {/* ── Mobile Header ── */}
       <div className="lg:hidden fixed top-0 left-0 right-0 z-50 gradient-hero text-primary-foreground px-4 py-3 flex items-center justify-between">
-        <Link to="/dashboard" className="text-xs font-bold tracking-widest uppercase text-primary-foreground">
-          Olhar Singular
+        <Link to="/dashboard" className="flex items-center gap-2">
+          <img src={logoImg} alt="Olhar Singular" className="h-7 w-auto" loading="eager" />
+          <span className="text-[0.65rem] font-semibold text-primary-foreground tracking-widest uppercase">Olhar Singular</span>
         </Link>
         <div className="flex items-center gap-3">
           {profile?.credit_balance != null && (
