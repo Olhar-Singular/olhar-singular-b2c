@@ -9,6 +9,7 @@ import BarrierProfilesPage from "@/pages/BarrierProfilesPage";
 import CreditsPage from "@/pages/CreditsPage";
 import AdaptarPage from "@/pages/AdaptarPage";
 import ChatPage from "@/pages/ChatPage";
+import LandingPage from "@/pages/LandingPage";
 
 const queryClient = new QueryClient();
 
@@ -18,7 +19,7 @@ export default function App() {
       <BrowserRouter>
         <AuthProvider>
           <Routes>
-            <Route path="/" element={<div className="flex min-h-screen items-center justify-center"><h1 className="text-4xl font-semibold">Olhar Singular</h1></div>} />
+            <Route path="/" element={<LandingPage />} />
             <Route path="/auth" element={<AuthPage />} />
             <Route
               path="/dashboard"
