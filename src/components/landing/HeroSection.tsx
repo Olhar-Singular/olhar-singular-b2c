@@ -13,14 +13,14 @@ export default function HeroSection() {
             {/* Text side */}
             <div>
               <Badge variant="secondary" className="mb-5 text-xs font-medium">
-                10 créditos grátis ao cadastrar — sem cartão
+                10 créditos grátis ao cadastrar, sem cartão
               </Badge>
               <h1 className="text-4xl sm:text-5xl lg:text-[3.25rem] font-extrabold text-primary-foreground leading-tight mb-5">
-                Adapte atividades para qualquer barreira de aprendizagem — em minutos
+                Adapte atividades para qualquer barreira de aprendizagem em minutos
               </h1>
               <p className="text-lg text-primary-foreground/80 leading-relaxed mb-8 max-w-lg">
                 Ferramenta de IA pedagógica para professores que querem incluir de verdade.
-                Sem diagnóstico, sem laudo — foco nas barreiras observáveis em sala.
+                Sem diagnóstico, sem laudo. Foco nas barreiras observáveis em sala.
               </p>
               <div className="flex flex-col sm:flex-row gap-3">
                 <Link to="/auth?signup=1">
@@ -30,7 +30,7 @@ export default function HeroSection() {
                   </Button>
                 </Link>
                 <a href="#como-funciona">
-                  <Button size="lg" variant="outline" className="border-white/40 text-primary-foreground hover:bg-white/10 w-full sm:w-auto">
+                  <Button size="lg" variant="outline" className="border-white text-white bg-white/20 hover:bg-white/30 font-semibold w-full sm:w-auto">
                     Ver como funciona
                   </Button>
                 </a>
