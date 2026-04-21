@@ -132,9 +132,8 @@ if (!isSuperAdmin) {
 ## Fluxo obrigatório ao começar
 
 1. **Leia** 1-2 edge functions existentes que sejam similares em propósito:
-   - Consome IA? leia `supabase/functions/adapt-activity/index.ts`
-   - É admin? leia `supabase/functions/admin-manage-teachers/index.ts` ou `admin-ai-usage-report/index.ts`
-   - Extrai dado? leia `supabase/functions/extract-questions/index.ts`
+   - Consome IA + persiste resultado no DB? leia `supabase/functions/chat/index.ts`
+   - Consome IA + retorna JSON? leia `supabase/functions/adapt-activity/index.ts`
 2. **Leia** `_shared/aiConfig.ts` e `_shared/logAiUsage.ts` se for usar
 3. **Pergunte** ao thread principal os detalhes de contrato:
    - Quais campos no body de entrada?

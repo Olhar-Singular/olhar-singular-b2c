@@ -1,6 +1,6 @@
 ---
 name: hook-writer
-description: Use este agente pra criar hooks React novos em `src/hooks/` que consomem Supabase via TanStack Query. Ele conhece os padrões de `useUserSchool`, `useUserRole`, `useSchoolManagement` e `useAiUsageReport`, e garante consistência de queryKey, staleTime, mutations com toast e invalidação. NÃO use pra hooks puros de UI (sem fetch) ou pra hooks fora de `src/hooks/`.
+description: Use este agente pra criar hooks React novos em `src/hooks/` que consomem Supabase via TanStack Query. Ele conhece os padrões de `useChatSessions`, `useCredits`, `useBarrierProfiles` e `useSendMessage`, e garante consistência de queryKey, staleTime, mutations com toast e invalidação. NÃO use pra hooks puros de UI (sem fetch) ou pra hooks fora de `src/hooks/`.
 tools: Read, Write, Edit, Grep, Glob, Bash
 model: sonnet
 ---
@@ -31,44 +31,34 @@ Você é o especialista em hooks React que consomem Supabase neste projeto. Sua 
 
 ## Padrões por tipo de hook
 
-### Tipo 1 — Query simples (dependente de user)
+### Tipo 1 — Query simples (RLS implícito — sem user no queryFn)
 
-Baseado em `src/hooks/useUserSchool.ts`:
+Baseado em `src/hooks/useChatSessions.ts` — B2C usa RLS para isolamento, sem `eq("user_id", user.id)` manual:
 
 ```typescript
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { useAuth } from "./useAuth";
+import type { MyType } from "@/types/myTypes";
 
-export function useThing() {
-  const { user } = useAuth();
-
-  const query = useQuery({
-    queryKey: ["thing", user?.id],
+export function useMyQuery() {
+  return useQuery<MyType[]>({
+    queryKey: ["my-resource"],
     queryFn: async () => {
-      if (!user) return null;
       const { data, error } = await supabase
-        .from("things")
-        .select("id, name")
-        .eq("user_id", user.id)
-        .maybeSingle();
+        .from("my_table")
+        .select("id, field1, field2")
+        .order("created_at", { ascending: false });
       if (error) throw error;
-      return data;
+      return (data ?? []) as MyType[];
     },
-    enabled: !!user,
-    staleTime: 5 * 60 * 1000,
+    staleTime: 30_000,
   });
-
-  return {
-    thing: query.data,
-    isLoading: query.isLoading,
-  };
 }
 ```
 
 ### Tipo 2 — CRUD com mutations
 
-Baseado em `src/hooks/useSchoolManagement.ts`:
+Baseado em `src/hooks/useBarrierProfiles.ts`:
 
 ```typescript
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -165,10 +155,10 @@ return response.json();
 ## Fluxo obrigatório ao começar
 
 1. **Leia o hook mais próximo** ao que vai criar:
-   - Query simples dependente de user → `src/hooks/useUserSchool.ts`
-   - Query com derivação/cruzamento → `src/hooks/useUserRole.ts`
-   - CRUD com mutations e toast → `src/hooks/useSchoolManagement.ts`
-   - Edge function com refresh manual → `src/hooks/useAiUsageReport.ts`
+   - Query simples (lista, RLS implícito) → `src/hooks/useChatSessions.ts`
+   - CRUD com mutations e toast → `src/hooks/useBarrierProfiles.ts`
+   - Mutation chamando edge function via fetch → `src/hooks/useSendMessage.ts`
+   - Query de créditos → `src/hooks/useCredits.ts`
 2. **Cheque** `src/integrations/supabase/types.ts` pra tipos da tabela/função (não edite — só leia)
 3. **Pergunte** ao thread principal:
    - Qual tabela ou edge function o hook consome?
