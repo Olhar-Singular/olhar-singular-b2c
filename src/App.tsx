@@ -7,6 +7,7 @@ import AuthPage from "@/pages/AuthPage";
 import DashboardPage from "@/pages/DashboardPage";
 import BarrierProfilesPage from "@/pages/BarrierProfilesPage";
 import CreditsPage from "@/pages/CreditsPage";
+import AdaptarPage from "@/pages/AdaptarPage";
 
 const queryClient = new QueryClient();
 
@@ -41,6 +42,14 @@ export default function App() {
                   <div className="flex min-h-screen items-center justify-center">
                     <p className="text-lg font-medium">Pagamento confirmado! Seus créditos foram adicionados.</p>
                   </div>
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/adaptar"
+              element={
+                <ProtectedRoute>
+                  <AdaptarPage />
                 </ProtectedRoute>
               }
             />
