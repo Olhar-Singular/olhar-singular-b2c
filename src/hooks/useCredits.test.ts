@@ -1,8 +1,8 @@
-import { renderHook, waitFor } from "@testing-library/react";
+import { renderHook, waitFor, act } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { createElement } from "react";
-import { useTransactionHistory } from "./useCredits";
+import { useTransactionHistory, useCreateCheckout } from "./useCredits";
 import { supabase } from "@/integrations/supabase/client";
 
 const mockTransactions = [
@@ -27,15 +27,20 @@ const mockTransactions = [
 ];
 
 vi.mock("@/integrations/supabase/client", () => ({
-  supabase: { from: vi.fn() },
+  supabase: {
+    from: vi.fn(),
+    functions: { invoke: vi.fn() },
+  },
 }));
 
 vi.mock("@/hooks/useAuth", () => ({
   useAuth: () => ({ user: { id: "u1" } }),
 }));
 
+vi.mock("sonner", () => ({ toast: { error: vi.fn(), success: vi.fn() } }));
+
 function wrapper({ children }: { children: React.ReactNode }) {
-  const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const qc = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
   return createElement(QueryClientProvider, { client: qc }, children);
 }
 
@@ -83,5 +88,51 @@ describe("useTransactionHistory", () => {
     const { result } = renderHook(() => useTransactionHistory(), { wrapper });
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
     expect(chain.limit).toHaveBeenCalledWith(50);
+  });
+});
+
+describe("useCreateCheckout", () => {
+  const mockInvoke = supabase.functions.invoke as ReturnType<typeof vi.fn>;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    delete (window as { location?: unknown }).location;
+    (window as { location: unknown }).location = { href: "" };
+  });
+
+  it("invokes create-checkout with credits and amountBrl", async () => {
+    mockInvoke.mockResolvedValue({ data: { url: "https://mp.test/checkout" }, error: null });
+
+    const { result } = renderHook(() => useCreateCheckout(), { wrapper });
+    await act(async () => {
+      await result.current.mutateAsync({ credits: 30, amountBrl: 9.9 });
+    });
+
+    expect(mockInvoke).toHaveBeenCalledWith("create-checkout", {
+      body: { credits: 30, amountBrl: 9.9 },
+    });
+  });
+
+  it("redirects to url on success", async () => {
+    mockInvoke.mockResolvedValue({ data: { url: "https://mp.test/checkout" }, error: null });
+
+    const { result } = renderHook(() => useCreateCheckout(), { wrapper });
+    await act(async () => {
+      await result.current.mutateAsync({ credits: 30, amountBrl: 9.9 });
+    });
+
+    expect(window.location.href).toBe("https://mp.test/checkout");
+  });
+
+  it("calls toast.error when invoke returns error", async () => {
+    const { toast } = await import("sonner");
+    mockInvoke.mockResolvedValue({ data: null, error: new Error("falha no servidor") });
+
+    const { result } = renderHook(() => useCreateCheckout(), { wrapper });
+    await act(async () => {
+      try { await result.current.mutateAsync({ credits: 30, amountBrl: 9.9 }); } catch { /* expected */ }
+    });
+
+    expect(toast.error).toHaveBeenCalled();
   });
 });
