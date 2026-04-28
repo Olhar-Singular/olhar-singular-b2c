@@ -6,7 +6,7 @@ import tseslint from "typescript-eslint";
 import localRules from "./eslint-local-rules/no-sync-effect.js";
 
 export default tseslint.config(
-  { ignores: ["dist", "supabase/functions", "eslint-local-rules", "src/integrations/supabase/types.ts"] },
+  { ignores: ["dist", "coverage", "supabase/functions", "eslint-local-rules", "src/integrations/supabase/types.ts"] },
   {
     extends: [js.configs.recommended, ...tseslint.configs.recommended],
     files: ["**/*.{ts,tsx}"],

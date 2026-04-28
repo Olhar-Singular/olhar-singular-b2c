@@ -11,6 +11,7 @@
     "preview": "vite preview",
     "test": "NODE_OPTIONS='--max-old-space-size=19456' vitest run",
     "test:watch": "NODE_OPTIONS='--max-old-space-size=19456' vitest",
+    "test:coverage": "NODE_OPTIONS='--max-old-space-size=19456' vitest run --coverage",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
