@@ -24,15 +24,11 @@ import {
 import { Loader2, Plus, BookOpen, Search, Gift, CreditCard, ScanText, MoreVertical, Pencil, Trash2, FileText } from "lucide-react";
 import { useAuthContext } from "@/contexts/AuthContext";
 import { useQuestions, useDeleteQuestion, useQuestionStats, useInsertQuestions } from "@/hooks/useQuestionBank";
-import QuestionExtractModal from "@/components/QuestionExtractModal";
-import QuestionForm from "@/components/QuestionForm";
-import ManualQuestionEditor from "@/components/ManualQuestionEditor";
+import QuestionExtractModal from "@/components/dialogs/QuestionExtractModal";
+import QuestionForm from "@/components/forms/QuestionForm";
+import ManualQuestionEditor from "@/components/forms/ManualQuestionEditor";
+import { SUBJECTS } from "@/lib/utils/constants";
 import "katex/dist/katex.min.css";
-
-const SUBJECTS = [
-  "Física", "Matemática", "Química", "Biologia", "Português",
-  "História", "Geografia", "Inglês", "Ciências", "Arte", "Ed. Física", "Geral",
-];
 
 const DIFFICULTY_LABEL: Record<string, string> = {
   facil: "Fácil",

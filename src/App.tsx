@@ -2,7 +2,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Route, Routes } from "react-router-dom";
 import { Toaster } from "@/components/ui/sonner";
 import { AuthProvider } from "@/contexts/AuthContext";
-import { ProtectedRoute } from "@/components/ProtectedRoute";
+import { ProtectedRoute } from "@/components/common/ProtectedRoute";
 import AuthPage from "@/pages/AuthPage";
 import DashboardPage from "@/pages/DashboardPage";
 import BarrierProfilesPage from "@/pages/BarrierProfilesPage";
@@ -11,7 +11,7 @@ import AdaptarPage from "@/pages/AdaptarPage";
 import ChatPage from "@/pages/ChatPage";
 import LandingPage from "@/pages/LandingPage";
 import QuestionBankPage from "@/pages/QuestionBankPage";
-import Layout from "@/components/Layout";
+import Layout from "@/components/common/Layout";
 
 const queryClient = new QueryClient();
 

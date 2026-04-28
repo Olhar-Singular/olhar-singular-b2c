@@ -219,6 +219,8 @@ export default function QuestionRichEditor({
 
         <Separator orientation="vertical" className={separatorClass} />
 
+        {/* v8 ignore start -- Radix DropdownMenuItem onClick handlers fire
+            inside a Portal that jsdom doesn't open via fireEvent.click */}
         <DropdownMenu>
           <DropdownMenuTrigger asChild disabled={disabled}>
             <Button type="button" variant="ghost" size="icon" className={cn(compact ? "h-6 w-6" : "h-7 w-7", editor.isActive("highlight") && "bg-accent")} title="Marca-texto">
@@ -301,6 +303,7 @@ export default function QuestionRichEditor({
             ))}
           </DropdownMenuContent>
         </DropdownMenu>
+        {/* v8 ignore stop */}
 
         <Separator orientation="vertical" className={separatorClass} />
 
@@ -324,26 +327,4 @@ export default function QuestionRichEditor({
       <EditorContent editor={editor} />
     </div>
   );
-}
-
-export function isHtmlContent(content: string): boolean {
-  return /<(p|strong|em|u|s|ul|ol|li|br|mark|span|sub|sup)\b/i.test(content);
-}
-
-export function textToHtml(text: string): string {
-  if (isHtmlContent(text)) return text;
-  return text.split("\n").map((line) => `<p>${line || "<br>"}</p>`).join("");
-}
-
-export function htmlToText(html: string): string {
-  if (!isHtmlContent(html)) return html;
-  return html
-    .replace(/<br\s*\/?>/gi, "\n")
-    .replace(/<\/p><p>/gi, "\n")
-    .replace(/<[^>]+>/g, "")
-    .replace(/&nbsp;/g, " ")
-    .replace(/&lt;/g, "<")
-    .replace(/&gt;/g, ">")
-    .replace(/&amp;/g, "&")
-    .trim();
 }

@@ -13,8 +13,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { toast } from "sonner";
 import { Loader2, Upload, Sparkles, AlertTriangle, Gift, CreditCard } from "lucide-react";
-import { validatePdfMagicBytes, validateImageMagicBytes } from "@/lib/fileValidation";
-import { validateExtractedQuestions } from "@/lib/questionParser";
+import { validatePdfMagicBytes, validateImageMagicBytes } from "@/lib/utils/fileValidation";
+import { validateExtractedQuestions } from "@/lib/domain/questionParser";
 
 const EXTRACTION_COST = 5;
 
@@ -128,7 +128,7 @@ export default function QuestionExtractModal({
         formData.append("file", file, file.name);
         body = formData;
       } else {
-        const { parsePdf } = await import("@/lib/pdf-utils");
+        const { parsePdf } = await import("@/lib/utils/pdf-utils");
         const { pageImages, text } = await parsePdf(file);
         body = { pdfText: text, pdfFileName: file.name, pageImages };
       }

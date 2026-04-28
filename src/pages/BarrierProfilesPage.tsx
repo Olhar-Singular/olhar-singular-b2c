@@ -19,14 +19,14 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { BarrierProfileForm, type BarrierProfileFormValues } from "@/components/BarrierProfileForm";
+import { BarrierProfileForm, type BarrierProfileFormValues } from "@/components/forms/BarrierProfileForm";
 import {
   useBarrierProfiles,
   useCreateBarrierProfile,
   useUpdateBarrierProfile,
   useDeleteBarrierProfile,
 } from "@/hooks/useBarrierProfiles";
-import { BARRIER_DIMENSIONS } from "@/lib/barriers";
+import { BARRIER_DIMENSIONS } from "@/lib/domain/barriers";
 import type { Database } from "@/integrations/supabase/types";
 
 type BarrierProfile = Database["public"]["Tables"]["barrier_profiles"]["Row"];

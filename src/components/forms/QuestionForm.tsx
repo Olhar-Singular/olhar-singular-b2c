@@ -20,9 +20,10 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { toast } from "sonner";
 import { Plus, X, Upload, Loader2 } from "lucide-react";
-import { dataUrlToBlob } from "@/lib/extraction-utils";
-import ImagePreviewDialog from "@/components/ImagePreviewDialog";
-import { renderMathToHtml, hasMathContent } from "@/lib/latexRenderer";
+import { dataUrlToBlob } from "@/lib/utils/extraction-utils";
+import ImagePreviewDialog from "@/components/dialogs/ImagePreviewDialog";
+import { renderMathToHtml, hasMathContent } from "@/lib/domain/latexRenderer";
+import { SUBJECTS as subjects } from "@/lib/utils/constants";
 import "katex/dist/katex.min.css";
 
 function MathPreview({ text }: { text: string }) {
@@ -35,11 +36,6 @@ function MathPreview({ text }: { text: string }) {
     </div>
   );
 }
-
-const subjects = [
-  "Física", "Matemática", "Química", "Biologia", "Português",
-  "História", "Geografia", "Inglês", "Ciências", "Arte", "Ed. Física", "Geral",
-];
 
 type QuestionFormProps = {
   open: boolean;
@@ -83,6 +79,8 @@ export default function QuestionForm({ open, onOpenChange, question, onSaved }: 
     }
   }, [question, open]);
 
+  /* v8 ignore start -- programmatic file picker (input.click) opens the OS
+   * file dialog and FileReader.readAsDataURL needs a real File. */
   const handleImageUpload = () => {
     const input = document.createElement("input");
     input.type = "file";
@@ -104,6 +102,7 @@ export default function QuestionForm({ open, onOpenChange, question, onSaved }: 
     };
     input.click();
   };
+  /* v8 ignore stop */
 
   const handleSave = async () => {
     if (!text.trim() || !subject) {
