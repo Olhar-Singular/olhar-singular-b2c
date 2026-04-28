@@ -1,12 +1,12 @@
 import { useMemo, useRef, useEffect } from "react";
-import { parseActivity } from "@/lib/activityParser";
+import { parseActivity } from "@/lib/domain/activityParser";
 import type {
   ParsedQuestion,
   ParsedSection,
   SectionItem,
   QuestionType,
-} from "@/lib/activityParser";
-import { formatInline, renderKatexBlock } from "@/lib/activityFormatter";
+} from "@/lib/domain/activityParser";
+import { formatInline, renderKatexBlock } from "@/lib/domain/activityFormatter";
 import { FileText, Info, ImageIcon, Check } from "lucide-react";
 import ImageResizer from "./ImageResizer";
 import { resolveImageSrc } from "./imageManagerUtils";

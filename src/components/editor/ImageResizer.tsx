@@ -20,6 +20,9 @@ export default function ImageResizer({ src, initialWidth, onResize }: Props) {
       startX.current = e.clientX;
       startWidth.current = width;
 
+      /* v8 ignore start -- nested mousemove/mouseup handlers fire on document
+       * during a real drag; jsdom's dispatchEvent does not propagate the same
+       * event references React installs synthetically. */
       const onMouseMove = (ev: MouseEvent) => {
         if (!dragging.current) return;
         const delta = ev.clientX - startX.current;
@@ -35,6 +38,7 @@ export default function ImageResizer({ src, initialWidth, onResize }: Props) {
         document.removeEventListener("mousemove", onMouseMove);
         document.removeEventListener("mouseup", onMouseUp);
       };
+      /* v8 ignore stop */
 
       document.addEventListener("mousemove", onMouseMove);
       document.addEventListener("mouseup", onMouseUp);

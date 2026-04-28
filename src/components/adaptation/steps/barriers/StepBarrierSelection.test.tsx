@@ -1,9 +1,9 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, fireEvent } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { StepBarrierSelection } from "./StepBarrierSelection";
-import type { WizardData } from "@/lib/adaptationWizardHelpers";
+import type { WizardData } from "@/lib/domain/adaptationWizardHelpers";
 
 const mockBarrierProfiles = [
   {
@@ -95,5 +95,54 @@ describe("StepBarrierSelection", () => {
     renderStep();
     await user.click(screen.getByRole("button", { name: /voltar/i }));
     expect(mockOnPrev).toHaveBeenCalled();
+  });
+
+  it("loads barriers from a saved profile when selected", async () => {
+    const user = userEvent.setup();
+    renderStep();
+    const select = screen.getByLabelText(/Carregar perfil/i) as HTMLSelectElement;
+    await user.selectOptions(select, "prof-1");
+    expect(mockUpdateData).toHaveBeenCalledWith(
+      expect.objectContaining({ barrierProfileId: "prof-1" }),
+    );
+  });
+
+  it("clears selection when profile is reset to empty", async () => {
+    const user = userEvent.setup();
+    renderStep({ ...baseData, barrierProfileId: "prof-1" });
+    const select = screen.getByLabelText(/Carregar perfil/i) as HTMLSelectElement;
+    await user.selectOptions(select, "");
+    expect(mockUpdateData).toHaveBeenCalledWith({ barrierProfileId: null, barriers: [] });
+  });
+
+  it("forwards observation notes to updateData", () => {
+    renderStep();
+    const ta = screen.getByLabelText(/Observações adicionais/i);
+    fireEvent.change(ta, { target: { value: "obs extra" } });
+    expect(mockUpdateData).toHaveBeenCalledWith({ observationNotes: "obs extra" });
+  });
+
+  it("clears the alert after a successful next", async () => {
+    const user = userEvent.setup();
+    const { rerender } = renderStep();
+    await user.click(screen.getByRole("button", { name: /próximo/i }));
+    expect(screen.getByRole("alert")).toBeInTheDocument();
+
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    rerender(
+      <QueryClientProvider client={qc}>
+        <StepBarrierSelection
+          data={{
+            ...baseData,
+            barriers: [{ dimension: "tea", barrier_key: "x", label: "X", is_active: true }],
+          }}
+          updateData={mockUpdateData}
+          onNext={mockOnNext}
+          onPrev={mockOnPrev}
+        />
+      </QueryClientProvider>,
+    );
+    await user.click(screen.getByRole("button", { name: /próximo/i }));
+    expect(screen.queryByRole("alert")).toBeNull();
   });
 });

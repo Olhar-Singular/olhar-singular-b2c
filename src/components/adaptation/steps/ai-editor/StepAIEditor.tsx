@@ -2,13 +2,13 @@ import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, ArrowRight, FileEdit, Loader2, RefreshCw, Coins } from "lucide-react";
 import ActivityEditor from "@/components/editor/ActivityEditor";
-import { structuredToMarkdownDsl } from "@/lib/activityDslConverter";
+import { structuredToMarkdownDsl } from "@/lib/domain/activityDslConverter";
 import { useActivityContent } from "@/hooks/useActivityContent";
 import { isStructuredActivity } from "@/types/adaptation";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { buildAIEditorAdvancePatch, resetGeneratedState } from "@/lib/adaptationWizardHelpers";
-import type { WizardData, AdaptationResult } from "@/lib/adaptationWizardHelpers";
+import { buildAIEditorAdvancePatch, resetGeneratedState } from "@/lib/domain/adaptationWizardHelpers";
+import type { WizardData, AdaptationResult } from "@/lib/domain/adaptationWizardHelpers";
 import { Link } from "react-router-dom";
 
 type Props = {

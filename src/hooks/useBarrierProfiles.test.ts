@@ -29,6 +29,8 @@ vi.mock("@/hooks/useAuth", () => ({
   useAuth: () => ({ user: { id: "u1" } }),
 }));
 
+vi.mock("sonner", () => ({ toast: { error: vi.fn(), success: vi.fn() } }));
+
 function wrapper({ children }: { children: React.ReactNode }) {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return createElement(QueryClientProvider, { client: qc }, children);
@@ -72,6 +74,14 @@ describe("useBarrierProfiles", () => {
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
     expect(result.current.data).toEqual([]);
   });
+
+  it("propagates Supabase errors as failed query state", async () => {
+    vi.mocked(supabase.from).mockReturnValue(
+      buildChain({ order: vi.fn().mockResolvedValue({ data: null, error: { message: "boom" } }) }) as never
+    );
+    const { result } = renderHook(() => useBarrierProfiles(), { wrapper });
+    await waitFor(() => expect(result.current.isError).toBe(true));
+  });
 });
 
 describe("useCreateBarrierProfile", () => {
@@ -98,6 +108,23 @@ describe("useCreateBarrierProfile", () => {
       })
     );
   });
+
+  it("toasts an error when the insert fails", async () => {
+    const { toast } = await import("sonner");
+    const chain = buildChain({
+      insert: vi.fn().mockResolvedValue({ data: null, error: { message: "fail-insert" } }),
+    });
+    vi.mocked(supabase.from).mockReturnValue(chain as never);
+    const { result } = renderHook(() => useCreateBarrierProfile(), { wrapper });
+    await act(async () => {
+      try {
+        await result.current.mutateAsync({ barriers: ["x"], observation: null });
+      } catch {
+        /* expected */
+      }
+    });
+    expect(toast.error).toHaveBeenCalled();
+  });
 });
 
 describe("useUpdateBarrierProfile", () => {
@@ -118,6 +145,23 @@ describe("useUpdateBarrierProfile", () => {
 
     expect(chain.eq).toHaveBeenCalledWith("id", "p1");
   });
+
+  it("toasts an error when single() returns error", async () => {
+    const { toast } = await import("sonner");
+    const chain = buildChain({
+      single: vi.fn().mockResolvedValue({ data: null, error: { message: "update-fail" } }),
+    });
+    vi.mocked(supabase.from).mockReturnValue(chain as never);
+    const { result } = renderHook(() => useUpdateBarrierProfile(), { wrapper });
+    await act(async () => {
+      try {
+        await result.current.mutateAsync({ id: "p1", barriers: ["x"] });
+      } catch {
+        /* expected */
+      }
+    });
+    expect(toast.error).toHaveBeenCalled();
+  });
 });
 
 describe("useDeleteBarrierProfile", () => {
@@ -136,5 +180,23 @@ describe("useDeleteBarrierProfile", () => {
 
     expect(supabase.from).toHaveBeenCalledWith("barrier_profiles");
     expect(chain.eq).toHaveBeenCalledWith("id", "p1");
+  });
+
+  it("toasts an error when delete fails", async () => {
+    const { toast } = await import("sonner");
+    const chain = buildChain();
+    // override eq AFTER buildChain finishes the chaining setup
+    chain.eq = vi.fn().mockResolvedValue({ error: { message: "delete-fail" } });
+    chain.delete = vi.fn().mockReturnValue(chain);
+    vi.mocked(supabase.from).mockReturnValue(chain as never);
+    const { result } = renderHook(() => useDeleteBarrierProfile(), { wrapper });
+    await act(async () => {
+      try {
+        await result.current.mutateAsync("p1");
+      } catch {
+        /* expected */
+      }
+    });
+    expect(toast.error).toHaveBeenCalled();
   });
 });

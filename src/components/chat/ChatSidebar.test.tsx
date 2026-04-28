@@ -39,4 +39,38 @@ describe("ChatSidebar", () => {
     const item = screen.getByText("Estratégias para TEA").closest("button");
     expect(item?.className).toMatch(/primary|active|bg-/);
   });
+
+  it("renders empty-state copy when sessions list is empty", () => {
+    render(<ChatSidebar sessions={[]} activeSessionId={null} onSelectSession={vi.fn()} onNewSession={vi.fn()} />);
+    expect(screen.getByText(/Nenhuma conversa ainda/i)).toBeInTheDocument();
+  });
+
+  it("disables Nova conversa when limit (10) is reached", () => {
+    const many: ChatSession[] = Array.from({ length: 10 }, (_, i) => ({
+      id: `s${i}`,
+      user_id: "u1",
+      title: `t${i}`,
+      messages: [],
+      created_at: "2026-01-01",
+      updated_at: "2026-01-01",
+    }));
+    render(<ChatSidebar sessions={many} activeSessionId={null} onSelectSession={vi.fn()} onNewSession={vi.fn()} />);
+    expect(screen.getByRole("button", { name: /Nova conversa/i })).toBeDisabled();
+  });
+
+  it("Nova conversa triggers onNewSession", async () => {
+    const onNewSession = vi.fn();
+    const user = userEvent.setup();
+    render(<ChatSidebar sessions={[]} activeSessionId={null} onSelectSession={vi.fn()} onNewSession={onNewSession} />);
+    await user.click(screen.getByRole("button", { name: /Nova conversa/i }));
+    expect(onNewSession).toHaveBeenCalled();
+  });
+
+  it("falls back to 'Sem título' when title is empty", () => {
+    const noTitle: ChatSession[] = [
+      { id: "s9", user_id: "u1", title: "", messages: [], created_at: "2026-01-01", updated_at: "2026-01-01" },
+    ];
+    render(<ChatSidebar sessions={noTitle} activeSessionId={null} onSelectSession={vi.fn()} onNewSession={vi.fn()} />);
+    expect(screen.getByText(/Sem título/)).toBeInTheDocument();
+  });
 });

@@ -5,7 +5,7 @@ import ActivityPreview from "./ActivityPreview";
 import ActivityStatusBar from "./ActivityStatusBar";
 import ImageManagerModal from "./ImageManagerModal";
 import type { ImageItem, ImageRegistry } from "./imageManagerUtils";
-import { parseActivity } from "@/lib/activityParser";
+import { parseActivity } from "@/lib/domain/activityParser";
 import "katex/dist/katex.min.css";
 
 type Props = {
@@ -111,11 +111,14 @@ export default function ActivityEditor({
       const newValue = before + prefix + tpl + after;
       onChange(newValue);
 
+      /* v8 ignore start -- post-insert focus/selection happens in a real
+       * animation frame; jsdom's RAF stub doesn't run synchronously. */
       requestAnimationFrame(() => {
         const pos = before.length + prefix.length + tpl.length;
         ta.selectionStart = ta.selectionEnd = pos;
         ta.focus();
       });
+      /* v8 ignore stop */
     },
     [value, onChange]
   );
@@ -132,17 +135,22 @@ export default function ActivityEditor({
       const newValue = pre + before + sel + after + post;
       onChange(newValue);
 
+      /* v8 ignore start -- post-wrap focus/selection happens in a real
+       * animation frame; jsdom's RAF stub doesn't run synchronously. */
       requestAnimationFrame(() => {
         ta.selectionStart = start + before.length;
         ta.selectionEnd = start + before.length + sel.length;
         ta.focus();
       });
+      /* v8 ignore stop */
     },
     [value, onChange]
   );
 
   const [activeImageName, setActiveImageName] = useState<string | null>(null);
 
+  /* v8 ignore start -- depends on real selectionStart inside the textarea
+   * which jsdom updates only on real key events. */
   const detectActiveQuestion = useCallback(() => {
     const ta = textareaRef.current;
     if (!ta) return;
@@ -162,6 +170,7 @@ export default function ActivityEditor({
     const imgMatch = currentLine.match(/^\[img:([^\]\s]+)/);
     setActiveImageName(imgMatch ? imgMatch[1] : null);
   }, [value]);
+  /* v8 ignore stop */
 
   const handleTextareaChange = useCallback(
     (e: React.ChangeEvent<HTMLTextAreaElement>) => {
@@ -174,6 +183,9 @@ export default function ActivityEditor({
   // useActivityContent) registers them and replaces with short placeholders
   // synchronously, so the textarea renders with [img:imagem-N] on the next
   // frame without a flicker.
+  /* v8 ignore start -- handler invoked from ImageManagerModal.onConfirm
+   * with the image collection; the modal flow needs a real upload + canvas
+   * resize step that we cover via ImageManagerModal directly. */
   const handleImageInsert = useCallback(
     (images: ImageItem[]) => {
       if (images.length === 0) return;
@@ -187,7 +199,10 @@ export default function ActivityEditor({
     },
     [handleInsert]
   );
+  /* v8 ignore stop */
 
+  /* v8 ignore start -- triggered by drag-resize handle in ImageResizer; the
+   * resize stream depends on real layout boxes inside ActivityPreview. */
   const handleImageResize = useCallback(
     (url: string, width: number) => {
       const escaped = url.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -196,6 +211,7 @@ export default function ActivityEditor({
     },
     [value, onChange]
   );
+  /* v8 ignore stop */
 
   const undoHandler = onUndo ?? (() => undefined);
   const redoHandler = onRedo ?? (() => undefined);

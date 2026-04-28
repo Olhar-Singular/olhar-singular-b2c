@@ -115,6 +115,72 @@ describe("AuthContext", () => {
     consoleError.mockRestore();
   });
 
+  it("clears profile when auth changes to a null session", async () => {
+    const { supabase } = await import("@/integrations/supabase/client");
+    vi.mocked(supabase.auth.getSession).mockResolvedValue({
+      data: { session: mockSession as never },
+    });
+
+    render(
+      <AuthProvider>
+        <TestConsumer />
+      </AuthProvider>
+    );
+    await waitFor(() => expect(screen.getByTestId("credits")).toHaveTextContent("10"));
+    await waitFor(() => expect(authStateCallback).not.toBeNull());
+
+    act(() => {
+      authStateCallback!("SIGNED_OUT", null);
+    });
+
+    await waitFor(() =>
+      expect(screen.getByTestId("credits")).toHaveTextContent("-")
+    );
+  });
+
+  it("calls supabase.auth.signOut from the signOut method", async () => {
+    let providedSignOut: (() => Promise<void>) | null = null;
+    function Capture() {
+      const { signOut, loading } = useAuthContext();
+      if (!providedSignOut) providedSignOut = signOut;
+      return loading ? null : <span>ready</span>;
+    }
+    render(
+      <AuthProvider>
+        <Capture />
+      </AuthProvider>
+    );
+    await waitFor(() => expect(screen.getByText("ready")).toBeInTheDocument());
+
+    const { supabase } = await import("@/integrations/supabase/client");
+    await act(async () => {
+      await providedSignOut!();
+    });
+    expect(supabase.auth.signOut).toHaveBeenCalled();
+  });
+
+  it("refreshProfile is a no-op when there is no session", async () => {
+    let providedRefresh: (() => Promise<void>) | null = null;
+    function Capture() {
+      const { refreshProfile, loading } = useAuthContext();
+      if (!providedRefresh) providedRefresh = refreshProfile;
+      return loading ? null : <span>ready</span>;
+    }
+    render(
+      <AuthProvider>
+        <Capture />
+      </AuthProvider>
+    );
+    await waitFor(() => expect(screen.getByText("ready")).toBeInTheDocument());
+
+    const { supabase } = await import("@/integrations/supabase/client");
+    vi.mocked(supabase.from).mockClear();
+    await act(async () => {
+      await providedRefresh!();
+    });
+    expect(supabase.from).not.toHaveBeenCalled();
+  });
+
   it("refreshProfile re-fetches and updates profile state", async () => {
     const { supabase } = await import("@/integrations/supabase/client");
     vi.mocked(supabase.auth.getSession).mockResolvedValue({

@@ -1,5 +1,5 @@
 import { Bot, Pencil } from "lucide-react";
-import type { WizardMode } from "@/lib/adaptationWizardHelpers";
+import type { WizardMode } from "@/lib/domain/adaptationWizardHelpers";
 
 type Props = {
   onSelect: (mode: WizardMode) => void;

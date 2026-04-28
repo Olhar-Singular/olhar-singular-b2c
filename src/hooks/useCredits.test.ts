@@ -76,6 +76,32 @@ describe("useTransactionHistory", () => {
     expect(result.current.data).toEqual([]);
   });
 
+  it("propagates Supabase errors as failed query state", async () => {
+    const chain = {
+      select: vi.fn().mockReturnThis(),
+      eq: vi.fn().mockReturnThis(),
+      order: vi.fn().mockReturnThis(),
+      limit: vi.fn().mockResolvedValue({ data: null, error: { message: "boom" } }),
+    };
+    vi.mocked(supabase.from).mockReturnValue(chain as never);
+    const { result } = renderHook(() => useTransactionHistory(), { wrapper });
+    await waitFor(() => expect(result.current.isError).toBe(true));
+    expect((result.current.error as { message: string }).message).toBe("boom");
+  });
+
+  it("respects custom limit when provided", async () => {
+    const chain = {
+      select: vi.fn().mockReturnThis(),
+      eq: vi.fn().mockReturnThis(),
+      order: vi.fn().mockReturnThis(),
+      limit: vi.fn().mockResolvedValue({ data: [], error: null }),
+    };
+    vi.mocked(supabase.from).mockReturnValue(chain as never);
+    const { result } = renderHook(() => useTransactionHistory(20), { wrapper });
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(chain.limit).toHaveBeenCalledWith(20);
+  });
+
   it("limits to 50 transactions by default", async () => {
     const chain = {
       select: vi.fn().mockReturnThis(),

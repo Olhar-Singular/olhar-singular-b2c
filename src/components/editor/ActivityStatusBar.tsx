@@ -1,6 +1,6 @@
 import { useMemo } from "react";
-import { parseActivity } from "@/lib/activityParser";
-import type { QuestionType } from "@/lib/activityParser";
+import { parseActivity } from "@/lib/domain/activityParser";
+import type { QuestionType } from "@/lib/domain/activityParser";
 
 type Props = {
   text: string;

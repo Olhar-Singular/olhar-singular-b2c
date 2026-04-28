@@ -93,6 +93,44 @@ describe("useRegenerateQuestion", () => {
     expect(mockFetch).toHaveBeenCalledTimes(1);
   });
 
+  it("throws status-coded credit error when status != 402", async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: false,
+      status: 500,
+      json: async () => ({ error: "DB indisponível" }),
+    });
+    const { result } = renderHook(() => useRegenerateQuestion(), { wrapper });
+    await act(async () => { result.current.mutate(baseInput); });
+    await waitFor(() => expect(result.current.isError).toBe(true));
+    expect(result.current.error?.message).toMatch(/DB indisponível|verificar créditos/);
+  });
+
+  it("uses generic message when credits endpoint returns invalid JSON", async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: false,
+      status: 503,
+      json: async () => { throw new Error("not json"); },
+    });
+    const { result } = renderHook(() => useRegenerateQuestion(), { wrapper });
+    await act(async () => { result.current.mutate(baseInput); });
+    await waitFor(() => expect(result.current.isError).toBe(true));
+    expect(result.current.error?.message).toMatch(/verificar créditos/i);
+  });
+
+  it("uses generic message when regenerate endpoint returns invalid JSON", async () => {
+    mockFetch
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ success: true }) })
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 502,
+        json: async () => { throw new Error("not json"); },
+      });
+    const { result } = renderHook(() => useRegenerateQuestion(), { wrapper });
+    await act(async () => { result.current.mutate(baseInput); });
+    await waitFor(() => expect(result.current.isError).toBe(true));
+    expect(result.current.error?.message).toMatch(/regenerar/i);
+  });
+
   it("throws on error from regenerate function", async () => {
     mockFetch
       .mockResolvedValueOnce({ ok: true, json: async () => ({ success: true }) })

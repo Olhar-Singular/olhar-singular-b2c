@@ -98,6 +98,18 @@ describe("useSendMessage", () => {
     expect(result.current.error?.message).toMatch(/limite/i);
   });
 
+  it("uses fallback message when error body cannot be parsed as JSON", async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: false,
+      status: 502,
+      json: async () => { throw new Error("not json"); },
+    });
+    const { result } = renderHook(() => useSendMessage(), { wrapper });
+    await act(async () => { result.current.mutate(baseInput); });
+    await waitFor(() => expect(result.current.isError).toBe(true));
+    expect(result.current.error?.message).toMatch(/502/);
+  });
+
   it("invalidates chat-sessions query on success", async () => {
     mockFetch.mockResolvedValueOnce({
       ok: true,

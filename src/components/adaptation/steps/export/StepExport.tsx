@@ -6,9 +6,9 @@ import { Save, Copy, RotateCcw, Check, Loader2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useQueryClient } from "@tanstack/react-query";
-import { structuredToMarkdownDsl } from "@/lib/activityDslConverter";
+import { structuredToMarkdownDsl } from "@/lib/domain/activityDslConverter";
 import { isStructuredActivity } from "@/types/adaptation";
-import type { WizardData } from "@/lib/adaptationWizardHelpers";
+import type { WizardData } from "@/lib/domain/adaptationWizardHelpers";
 
 type Props = {
   data: WizardData;

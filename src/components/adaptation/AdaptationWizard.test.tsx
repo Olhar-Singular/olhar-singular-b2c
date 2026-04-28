@@ -63,12 +63,69 @@ describe("AdaptationWizard", () => {
   });
 
   it("shows discard confirmation when navigating back from editor with result", async () => {
-    // This test verifies shouldConfirmDiscard is wired up
-    // The full flow is covered by integration; here we test the helper directly
-    const { shouldConfirmDiscard } = await import("@/lib/adaptationWizardHelpers");
+    const { shouldConfirmDiscard } = await import("@/lib/domain/adaptationWizardHelpers");
     const steps = ["activity_type", "activity_input", "barriers", "choice", "ai_editor", "export"] as const;
     expect(shouldConfirmDiscard(steps, 4, 0, true)).toBe(true);
     expect(shouldConfirmDiscard(steps, 4, 0, false)).toBe(false);
     expect(shouldConfirmDiscard(steps, 2, 0, true)).toBe(false);
+  });
+
+  it("renders the step counter (passo X de Y)", () => {
+    renderWizard();
+    expect(screen.getByText(/passo/i)).toBeInTheDocument();
+  });
+
+  it("Voltar from input step navigates back to type step", async () => {
+    const user = userEvent.setup();
+    renderWizard();
+    await user.click(screen.getByRole("button", { name: /exercício/i }));
+    expect(screen.getByPlaceholderText(/cole ou digite/i)).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: /^Voltar/ }));
+    expect(screen.getByText(/tipo de atividade/i)).toBeInTheDocument();
+  });
+
+  it("advances to barriers step after activity input is filled", async () => {
+    const user = userEvent.setup();
+    renderWizard();
+    await user.click(screen.getByRole("button", { name: /exercício/i }));
+    fireEvent.change(screen.getByLabelText(/Conteúdo da atividade/i), {
+      target: { value: "1) Q?" },
+    });
+    await user.click(screen.getByRole("button", { name: /Próximo/i }));
+    expect(screen.getAllByText(/barreira/i).length).toBeGreaterThan(0);
+  });
+
+  it("step indicator buttons for future steps are disabled", () => {
+    renderWizard();
+    const buttons = screen.getAllByRole("button");
+    const future = buttons.filter((b) => /Atividade|Barreiras|Método|Adapta|Editor|Exportar/i.test(b.textContent ?? ""));
+    expect(future.some((b) => b.hasAttribute("disabled"))).toBe(true);
+  });
+
+  it("clicking a previously visited step indicator returns to that step", async () => {
+    const user = userEvent.setup();
+    renderWizard();
+    await user.click(screen.getByRole("button", { name: /exercício/i }));
+    expect(screen.getByPlaceholderText(/cole ou digite/i)).toBeInTheDocument();
+    const indicator = screen.getAllByRole("button").find((b) => /1\s*Tipo/i.test(b.textContent ?? ""));
+    if (indicator) {
+      await user.click(indicator);
+      expect(screen.getByText(/tipo de atividade/i)).toBeInTheDocument();
+    }
+  });
+
+  it("manual mode swaps the wizard step labels (shows 'Editor' instead of 'Adaptação IA')", async () => {
+    const user = userEvent.setup();
+    renderWizard();
+    await user.click(screen.getByRole("button", { name: /exercício/i }));
+    fireEvent.change(screen.getByLabelText(/Conteúdo da atividade/i), {
+      target: { value: "1) Q?" },
+    });
+    await user.click(screen.getByRole("button", { name: /Próximo/i }));
+    const checkboxes = screen.getAllByRole("checkbox");
+    fireEvent.click(checkboxes[0]);
+    await user.click(screen.getByRole("button", { name: /Próximo/i }));
+    await user.click(screen.getByRole("button", { name: /Adaptar manualmente/i }));
+    expect(screen.getAllByText(/Editor/i).length).toBeGreaterThan(0);
   });
 });

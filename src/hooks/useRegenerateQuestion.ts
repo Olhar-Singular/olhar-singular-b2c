@@ -1,7 +1,7 @@
 import { useMutation } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import type { StructuredQuestion } from "@/types/adaptation";
-import type { BarrierItem } from "@/lib/adaptationWizardHelpers";
+import type { BarrierItem } from "@/lib/domain/adaptationWizardHelpers";
 
 export type RegenerateInput = {
   question: StructuredQuestion;

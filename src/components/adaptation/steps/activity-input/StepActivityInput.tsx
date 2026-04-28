@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { ArrowLeft, ArrowRight } from "lucide-react";
-import type { WizardData } from "@/lib/adaptationWizardHelpers";
+import type { WizardData } from "@/lib/domain/adaptationWizardHelpers";
 
 type Props = {
   data: WizardData;

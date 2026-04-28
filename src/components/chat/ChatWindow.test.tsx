@@ -45,4 +45,47 @@ describe("ChatWindow", () => {
     fireEvent.submit(input.closest("form")!);
     expect((input as HTMLTextAreaElement).value).toBe("");
   });
+
+  it("submits on Enter without shift", async () => {
+    const onSend = vi.fn();
+    render(<ChatWindow messages={[]} onSend={onSend} isPending={false} />);
+    const input = screen.getByPlaceholderText(/mensagem/i);
+    fireEvent.change(input, { target: { value: "via-enter" } });
+    fireEvent.keyDown(input, { key: "Enter" });
+    expect(onSend).toHaveBeenCalledWith("via-enter");
+  });
+
+  it("does not submit when Shift+Enter is pressed", () => {
+    const onSend = vi.fn();
+    render(<ChatWindow messages={[]} onSend={onSend} isPending={false} />);
+    const input = screen.getByPlaceholderText(/mensagem/i);
+    fireEvent.change(input, { target: { value: "linha 1" } });
+    fireEvent.keyDown(input, { key: "Enter", shiftKey: true });
+    expect(onSend).not.toHaveBeenCalled();
+  });
+
+  it("does not submit empty/whitespace-only messages", async () => {
+    const onSend = vi.fn();
+    const user = userEvent.setup();
+    render(<ChatWindow messages={[]} onSend={onSend} isPending={false} />);
+    await user.type(screen.getByPlaceholderText(/mensagem/i), "   ");
+    expect(screen.getByRole("button", { name: /enviar/i })).toBeDisabled();
+    expect(onSend).not.toHaveBeenCalled();
+  });
+
+  it("does not submit while isPending even with content", async () => {
+    const onSend = vi.fn();
+    render(<ChatWindow messages={[]} onSend={onSend} isPending={true} />);
+    const input = screen.getByPlaceholderText(/mensagem/i);
+    fireEvent.change(input, { target: { value: "x" } });
+    fireEvent.submit(input.closest("form")!);
+    expect(onSend).not.toHaveBeenCalled();
+  });
+
+  it("renders the loader bubble while isPending and there are messages", () => {
+    const { container } = render(
+      <ChatWindow messages={messages} onSend={noop} isPending={true} />,
+    );
+    expect(container.querySelector(".animate-spin")).not.toBeNull();
+  });
 });

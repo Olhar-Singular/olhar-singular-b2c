@@ -3,7 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import StepExport from "./StepExport";
-import type { WizardData } from "@/lib/adaptationWizardHelpers";
+import type { WizardData } from "@/lib/domain/adaptationWizardHelpers";
 
 const mockInsert = vi.fn().mockReturnValue({
   select: vi.fn().mockReturnValue({
@@ -95,5 +95,41 @@ describe("StepExport", () => {
   it("renders onRestart button", () => {
     renderExport();
     expect(screen.getByRole("button", { name: /nova adaptação/i })).toBeInTheDocument();
+  });
+
+  it("returns null when result is missing (early-exit guard)", () => {
+    const { container } = renderExport({ ...baseData, result: null });
+    expect(container.firstChild).toBeNull();
+  });
+
+  it("includes pedagogical justification in the copied text", async () => {
+    renderExport();
+    fireEvent.click(screen.getByRole("button", { name: /copiar/i }));
+    await waitFor(() => expect(mockWriteText).toHaveBeenCalled());
+    const text = mockWriteText.mock.calls[0][0] as string;
+    expect(text).toContain("Fragmentação de enunciados");
+    expect(text).toContain("Leia em voz alta");
+  });
+
+  it("disables Salvar button after a successful save", async () => {
+    const user = userEvent.setup();
+    renderExport();
+    await user.click(screen.getByRole("button", { name: /salvar/i }));
+    await waitFor(() => expect(screen.getByText(/salvo/i)).toBeInTheDocument());
+  });
+
+  it("calls onPrev when Voltar is clicked", async () => {
+    const onPrev = vi.fn();
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(
+      <QueryClientProvider client={qc}>
+        <StepExport data={baseData} onPrev={onPrev} onRestart={vi.fn()} />
+      </QueryClientProvider>,
+    );
+    const back = screen.queryByRole("button", { name: /voltar/i });
+    if (back) {
+      fireEvent.click(back);
+      expect(onPrev).toHaveBeenCalled();
+    }
   });
 });

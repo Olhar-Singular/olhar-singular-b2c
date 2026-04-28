@@ -4,8 +4,8 @@ import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { ArrowLeft, ArrowRight, User } from "lucide-react";
 import { useBarrierProfiles } from "@/hooks/useBarrierProfiles";
-import { BARRIER_DIMENSIONS } from "@/lib/barriers";
-import type { WizardData, BarrierItem } from "@/lib/adaptationWizardHelpers";
+import { BARRIER_DIMENSIONS } from "@/lib/domain/barriers";
+import type { WizardData, BarrierItem } from "@/lib/domain/adaptationWizardHelpers";
 
 type Props = {
   data: WizardData;

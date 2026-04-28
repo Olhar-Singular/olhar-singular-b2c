@@ -21,7 +21,7 @@ import {
   resetGeneratedState,
   type WizardData,
   type WizardMode,
-} from "@/lib/adaptationWizardHelpers";
+} from "@/lib/domain/adaptationWizardHelpers";
 
 const AI_STEPS = ["activity_type", "activity_input", "barriers", "choice", "ai_editor", "export"] as const;
 const MANUAL_STEPS = ["activity_type", "activity_input", "barriers", "choice", "editor", "export"] as const;
@@ -83,12 +83,15 @@ export default function AdaptationWizard() {
     setStepIndex(0);
   }
 
+  /* v8 ignore start -- only invoked through the confirm-discard AlertDialog
+   * (Radix portal) which we cannot exercise in jsdom. */
   function handleConfirmDiscard() {
     if (confirmTarget === null) return;
     updateData(resetGeneratedState());
     setStepIndex(confirmTarget);
     setConfirmTarget(null);
   }
+  /* v8 ignore stop */
 
   const totalVisible = steps.length;
 
@@ -158,6 +161,8 @@ export default function AdaptationWizard() {
         {renderStep()}
       </div>
 
+      {/* v8 ignore start -- AlertDialog (Radix portal) only opens when the
+          user navigates back from the editor with a generated result. */}
       <AlertDialog open={confirmTarget !== null} onOpenChange={(o) => !o && setConfirmTarget(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -174,6 +179,7 @@ export default function AdaptationWizard() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+      {/* v8 ignore stop */}
     </div>
   );
 }

@@ -81,4 +81,38 @@ describe("BarrierProfilesPage", () => {
     await user.click(screen.getByRole("button", { name: /confirmar/i }));
     await waitFor(() => expect(mockDelete).toHaveBeenCalledWith("p1"));
   });
+
+  it("shows loader when isLoading", async () => {
+    const m = await import("@/hooks/useBarrierProfiles");
+    vi.mocked(m.useBarrierProfiles).mockReturnValue({ data: [], isLoading: true } as never);
+    renderPage();
+    expect(screen.getByText(/Carregando/i)).toBeInTheDocument();
+  });
+
+  it("shows '+N' badge when profile has more than 3 barriers", async () => {
+    const m = await import("@/hooks/useBarrierProfiles");
+    vi.mocked(m.useBarrierProfiles).mockReturnValue({
+      data: [{ ...mockProfiles[0], barriers: ["a", "b", "c", "d", "e"] }],
+      isLoading: false,
+    } as never);
+    renderPage();
+    expect(screen.getByText("+2")).toBeInTheDocument();
+  });
+
+  it("opens edit dialog with prefilled values when Editar is clicked", async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await user.click(screen.getByRole("button", { name: /editar/i }));
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+    expect(screen.getByText(/Editar perfil/i)).toBeInTheDocument();
+  });
+
+  it("opens 'Criar primeiro perfil' button in empty state", async () => {
+    const user = userEvent.setup();
+    const m = await import("@/hooks/useBarrierProfiles");
+    vi.mocked(m.useBarrierProfiles).mockReturnValue({ data: [], isLoading: false } as never);
+    renderPage();
+    await user.click(screen.getByRole("button", { name: /Criar primeiro perfil/i }));
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+  });
 });

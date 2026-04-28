@@ -86,6 +86,18 @@ describe("useQuestions", () => {
     expect(result.current.isPending).toBe(true);
     expect(result.current.isFetching).toBe(false);
   });
+
+  it("propagates Supabase errors as failed query state", async () => {
+    const chain = {
+      select: vi.fn().mockReturnThis(),
+      eq: vi.fn().mockReturnThis(),
+      order: vi.fn().mockResolvedValue({ data: null, error: { message: "boom" } }),
+    };
+    vi.mocked(supabase.from).mockReturnValue(chain as never);
+
+    const { result } = renderHook(() => useQuestions({}), { wrapper });
+    await waitFor(() => expect(result.current.isError).toBe(true));
+  });
 });
 
 describe("useDeleteQuestion", () => {
@@ -186,6 +198,28 @@ describe("useQuestionStats", () => {
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
     expect(result.current.data?.total).toBe(0);
     expect(result.current.data?.bySubject).toEqual({});
+  });
+
+  it("falls back to empty rows when data is null", async () => {
+    const chain = {
+      select: vi.fn().mockReturnThis(),
+      eq: vi.fn().mockResolvedValue({ data: null, error: null }),
+    };
+    vi.mocked(supabase.from).mockReturnValue(chain as never);
+
+    const { result } = renderHook(() => useQuestionStats(), { wrapper });
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(result.current.data?.total).toBe(0);
+  });
+
+  it("propagates errors as failed query state", async () => {
+    const chain = {
+      select: vi.fn().mockReturnThis(),
+      eq: vi.fn().mockResolvedValue({ data: null, error: { message: "stat-fail" } }),
+    };
+    vi.mocked(supabase.from).mockReturnValue(chain as never);
+    const { result } = renderHook(() => useQuestionStats(), { wrapper });
+    await waitFor(() => expect(result.current.isError).toBe(true));
   });
 });
 

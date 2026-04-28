@@ -2,10 +2,10 @@ import { useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, ArrowRight, FileEdit } from "lucide-react";
 import ActivityEditor from "@/components/editor/ActivityEditor";
-import { structuredToMarkdownDsl, markdownDslToStructured } from "@/lib/activityDslConverter";
+import { structuredToMarkdownDsl, markdownDslToStructured } from "@/lib/domain/activityDslConverter";
 import { useActivityContent } from "@/hooks/useActivityContent";
-import type { WizardData, AdaptationResult } from "@/lib/adaptationWizardHelpers";
-import { buildManualResult } from "@/lib/adaptationWizardHelpers";
+import type { WizardData, AdaptationResult } from "@/lib/domain/adaptationWizardHelpers";
+import { buildManualResult } from "@/lib/domain/adaptationWizardHelpers";
 
 type Props = {
   data: WizardData;
