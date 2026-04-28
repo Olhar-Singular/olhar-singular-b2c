@@ -2,16 +2,9 @@
 // Parses a markdown-like DSL into a structured activity tree for preview rendering.
 
 import { normalizeAIText } from "./normalizeAIText";
+import type { QuestionType } from "@/types/adaptation";
 
-export type QuestionType =
-  | "multiple_choice"
-  | "multiple_answer"
-  | "open_ended"
-  | "fill_blank"
-  | "true_false"
-  | "matching"
-  | "ordering"
-  | "table";
+export type { QuestionType };
 
 export type ParsedAlternative = {
   letter: string;

@@ -1,5 +1,5 @@
 import type { StructuredActivity, StructuredAdaptationResult } from "@/types/adaptation";
-import { markdownDslToStructured } from "@/lib/activityDslConverter";
+import { markdownDslToStructured } from "@/lib/domain/activityDslConverter";
 
 export type AdaptationResult = StructuredAdaptationResult;
 

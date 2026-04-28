@@ -52,6 +52,7 @@ export function parseMarkdownInline(text: string): InlineRun[] | undefined {
     runs.push({ text: text.slice(cursor) });
   }
 
+  /* v8 ignore next 2 -- defensive: every span is constructed with bold or italic set, so this branch is unreachable in practice */
   if (runs.every((r) => !r.bold && !r.italic)) return undefined;
 
   return runs;
