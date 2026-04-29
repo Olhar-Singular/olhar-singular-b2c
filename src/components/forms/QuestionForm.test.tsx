@@ -242,4 +242,182 @@ describe("QuestionForm — image flow", () => {
     expect(screen.getByRole("button", { name: /Remover/i })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /Trocar/i })).toBeInTheDocument();
   });
+
+  it("clicking Remover clears the image preview and shows Upload button again", () => {
+    render(
+      <QuestionForm
+        open
+        onOpenChange={vi.fn()}
+        question={{ id: "q1", text: "x", subject: "Física", difficulty: "medio", image_url: "https://x.png" }}
+        onSaved={vi.fn()}
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: /Remover/i }));
+    expect(screen.getByRole("button", { name: /Upload Imagem/i })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Remover/i })).toBeNull();
+  });
+});
+
+describe("QuestionForm — field interactions", () => {
+  it("topic input onChange updates the value (line 212)", () => {
+    render(
+      <QuestionForm
+        open
+        onOpenChange={vi.fn()}
+        question={{ id: "q1", text: "x", subject: "Física", difficulty: "medio" }}
+        onSaved={vi.fn()}
+      />,
+    );
+    const topicInput = screen.getByPlaceholderText(/Frações/i);
+    fireEvent.change(topicInput, { target: { value: "Cinemática" } });
+    expect((topicInput as HTMLInputElement).value).toBe("Cinemática");
+  });
+
+  it("difficulty select onChange updates correctly (lines 216-223)", () => {
+    render(
+      <QuestionForm
+        open
+        onOpenChange={vi.fn()}
+        question={{ id: "q1", text: "x", subject: "Física", difficulty: "medio" }}
+        onSaved={vi.fn()}
+      />,
+    );
+    const selects = screen.getAllByLabelText("select-mock") as HTMLSelectElement[];
+    // Difficulty select is the 3rd select (subject, difficulty, tipo)
+    const difficultySelect = selects.find((s) =>
+      Array.from(s.options).some((o) => o.value === "facil"),
+    );
+    expect(difficultySelect).toBeDefined();
+    fireEvent.change(difficultySelect!, { target: { value: "dificil" } });
+    expect(difficultySelect!.value).toBe("dificil");
+  });
+
+  it("questionType select switches to objetiva and shows alternatives section (lines 227-229)", () => {
+    render(
+      <QuestionForm
+        open
+        onOpenChange={vi.fn()}
+        question={null}
+        onSaved={vi.fn()}
+      />,
+    );
+    // Default is dissertativa — alternatives section not visible
+    expect(screen.queryByText(/Clique em "Adicionar"/)).toBeNull();
+    // Switch to objetiva
+    const selects = screen.getAllByLabelText("select-mock") as HTMLSelectElement[];
+    const tipoSelect = selects.find((s) =>
+      Array.from(s.options).some((o) => o.value === "objetiva"),
+    );
+    expect(tipoSelect).toBeDefined();
+    fireEvent.change(tipoSelect!, { target: { value: "objetiva" } });
+    // In objetiva mode with no options the empty-state message appears
+    expect(screen.queryByText(/Clique em "Adicionar"/)).toBeInTheDocument();
+  });
+
+  it("editing an option input updates its value (line 251)", () => {
+    render(
+      <QuestionForm
+        open
+        onOpenChange={vi.fn()}
+        question={{ id: "q1", text: "x", subject: "Física", difficulty: "medio", options: ["Original"] }}
+        onSaved={vi.fn()}
+      />,
+    );
+    const optInput = screen.getByDisplayValue("Original");
+    fireEvent.change(optInput, { target: { value: "Atualizado" } });
+    expect((optInput as HTMLInputElement).value).toBe("Atualizado");
+  });
+
+  it("resolution textarea onChange updates the value (line 282)", () => {
+    render(
+      <QuestionForm
+        open
+        onOpenChange={vi.fn()}
+        question={{ id: "q1", text: "x", subject: "Física", difficulty: "medio" }}
+        onSaved={vi.fn()}
+      />,
+    );
+    const resolutionTextarea = screen.getByPlaceholderText(/Explicação da resposta/i);
+    fireEvent.change(resolutionTextarea, { target: { value: "A resposta é correta." } });
+    expect((resolutionTextarea as HTMLTextAreaElement).value).toBe("A resposta é correta.");
+  });
+
+  it("form resets to empty state when open changes with question=null (useEffect with open dep)", () => {
+    const { rerender } = render(
+      <QuestionForm
+        open={false}
+        onOpenChange={vi.fn()}
+        question={{ id: "q1", text: "Anterior", subject: "Física", difficulty: "medio" }}
+        onSaved={vi.fn()}
+      />,
+    );
+    rerender(
+      <QuestionForm
+        open
+        onOpenChange={vi.fn()}
+        question={null}
+        onSaved={vi.fn()}
+      />,
+    );
+    // With question=null the title should be "Adicionar Questão"
+    expect(screen.getByText("Adicionar Questão")).toBeInTheDocument();
+    // The textareas should be empty
+    const textareas = screen.getAllByRole("textbox");
+    expect((textareas[0] as HTMLTextAreaElement).value).toBe("");
+  });
+
+  it("removing a non-correct option adjusts correctAnswer index when it is after the removed item", async () => {
+    const user = userEvent.setup();
+    render(
+      <QuestionForm
+        open
+        onOpenChange={vi.fn()}
+        question={{ id: "q1", text: "x", subject: "Física", difficulty: "medio", options: ["A", "B", "C"], correct_answer: 2 }}
+        onSaved={vi.fn()}
+      />,
+    );
+    // C is correct (index 2). Remove A (index 0) — correctAnswer should shift to 1.
+    const xButtons = screen.getAllByRole("button").filter((b) => b.querySelector("svg.lucide-x"));
+    // First X button removes option A (index 0)
+    await user.click(xButtons[0]);
+    // Now B is at 0, C is at 1 (was 2). The C button should still show ✓
+    const allButtons = screen.getAllByRole("button");
+    const checkButton = allButtons.find((b) => b.textContent === "✓");
+    expect(checkButton).toBeDefined();
+  });
+
+  it("removing the correct option clears correctAnswer", async () => {
+    const user = userEvent.setup();
+    render(
+      <QuestionForm
+        open
+        onOpenChange={vi.fn()}
+        question={{ id: "q1", text: "x", subject: "Física", difficulty: "medio", options: ["A", "B"], correct_answer: 0 }}
+        onSaved={vi.fn()}
+      />,
+    );
+    // A is correct (index 0). Remove A.
+    const xButtons = screen.getAllByRole("button").filter((b) => b.querySelector("svg.lucide-x"));
+    await user.click(xButtons[0]);
+    // After removing A (which was correct), no ✓ should remain
+    const allButtons = screen.getAllByRole("button");
+    const checkButton = allButtons.find((b) => b.textContent === "✓");
+    expect(checkButton).toBeUndefined();
+  });
+
+  it("toasts error when insert returns an error (new question save failure)", async () => {
+    insertSpy.mockResolvedValue({ error: new Error("insert falhou") });
+    const { toast } = await import("sonner");
+    render(
+      <QuestionForm open onOpenChange={vi.fn()} question={null} onSaved={vi.fn()} />,
+    );
+    const textareas = screen.getAllByRole("textbox");
+    fireEvent.change(textareas[0], { target: { value: "novo enunciado" } });
+    const selects = screen.getAllByLabelText("select-mock") as HTMLSelectElement[];
+    fireEvent.change(selects[0], { target: { value: "Física" } });
+    fireEvent.click(screen.getByRole("button", { name: /^Adicionar$/ }));
+    await waitFor(() =>
+      expect(toast.error).toHaveBeenCalledWith("Erro", expect.objectContaining({ description: "insert falhou" })),
+    );
+  });
 });

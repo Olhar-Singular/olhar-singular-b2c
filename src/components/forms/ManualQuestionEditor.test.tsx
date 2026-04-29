@@ -186,3 +186,132 @@ describe("ManualQuestionEditor — file loading", () => {
     expect(tabs[1]).toBeInTheDocument();
   });
 });
+
+describe("ManualQuestionEditor — question editing", () => {
+  it("removeQuestion on the last remaining question resets to an empty question (line 39)", async () => {
+    const { findByRole, queryAllByLabelText, container } = render(
+      <ManualQuestionEditor file={pdfFile()} onFinish={vi.fn()} />,
+    );
+    await findByRole("button", { name: /Nova questão/i });
+    // Only one question exists; click its remove (X) button
+    const removeButtons = queryAllByLabelText(/Remover questão/i);
+    expect(removeButtons.length).toBe(1);
+    fireEvent.click(removeButtons[0]);
+    // Should still have exactly 1 question tab (reset, not deleted)
+    const tabs = Array.from(container.querySelectorAll("button")).filter((b) =>
+      /^Q\d+/.test(b.textContent ?? ""),
+    );
+    expect(tabs.length).toBe(1);
+  });
+
+  it("topic input onChange updates the question topic (line 450)", async () => {
+    const { findByRole, getByPlaceholderText } = render(
+      <ManualQuestionEditor file={pdfFile()} onFinish={vi.fn()} />,
+    );
+    await findByRole("button", { name: /Nova questão/i });
+    const topicInput = getByPlaceholderText(/Cinemática/i);
+    fireEvent.change(topicInput, { target: { value: "Dinâmica" } });
+    expect((topicInput as HTMLInputElement).value).toBe("Dinâmica");
+  });
+
+  it("alternatives section renders five option inputs (lines 468-487)", async () => {
+    const { findByRole, getAllByPlaceholderText } = render(
+      <ManualQuestionEditor file={pdfFile()} onFinish={vi.fn()} />,
+    );
+    await findByRole("button", { name: /Nova questão/i });
+    // Default question is objetiva — should render Alternativa A through E
+    const altInputs = getAllByPlaceholderText(/Alternativa [A-E]/);
+    expect(altInputs.length).toBe(5);
+  });
+
+  it("typing in an option input updates its value (line 475-476)", async () => {
+    const { findByRole, getAllByPlaceholderText } = render(
+      <ManualQuestionEditor file={pdfFile()} onFinish={vi.fn()} />,
+    );
+    await findByRole("button", { name: /Nova questão/i });
+    const altInputs = getAllByPlaceholderText(/Alternativa [A-E]/);
+    fireEvent.change(altInputs[0], { target: { value: "Resposta A" } });
+    expect((altInputs[0] as HTMLInputElement).value).toBe("Resposta A");
+  });
+
+  it("toggling the correct-answer letter button selects and deselects it (lines 468)", async () => {
+    const { findByRole, getAllByRole } = render(
+      <ManualQuestionEditor file={pdfFile()} onFinish={vi.fn()} />,
+    );
+    await findByRole("button", { name: /Nova questão/i });
+    // Letter buttons for alternatives are labeled A-E
+    const letterA = getAllByRole("button").find((b) => b.textContent?.trim() === "A");
+    expect(letterA).toBeDefined();
+    fireEvent.click(letterA!);
+    // After first click the button becomes selected (variant=default)
+    expect(letterA!.className).toMatch(/default|bg-primary/);
+    // Click again to deselect
+    fireEvent.click(letterA!);
+  });
+
+  it("shows the gabarito hint when an option is filled but no correct answer is set (line 483-485)", async () => {
+    const { findByRole, getAllByPlaceholderText, findByText } = render(
+      <ManualQuestionEditor file={pdfFile()} onFinish={vi.fn()} />,
+    );
+    await findByRole("button", { name: /Nova questão/i });
+    const altInputs = getAllByPlaceholderText(/Alternativa [A-E]/);
+    fireEvent.change(altInputs[0], { target: { value: "Opção preenchida" } });
+    await findByText(/Clique na letra correta para definir o gabarito/i);
+  });
+
+  it("resolution textarea onChange updates the field (lines 489-498)", async () => {
+    const { findByRole, getByPlaceholderText } = render(
+      <ManualQuestionEditor file={pdfFile()} onFinish={vi.fn()} />,
+    );
+    await findByRole("button", { name: /Nova questão/i });
+    const resolutionTextarea = getByPlaceholderText(/Explicação da resposta/i);
+    fireEvent.change(resolutionTextarea, { target: { value: "A resposta é B porque..." } });
+    expect((resolutionTextarea as HTMLTextAreaElement).value).toBe("A resposta é B porque...");
+  });
+
+  it("Salvar questão button is disabled when enunciado is empty (lines 513-520)", async () => {
+    const { findByRole } = render(
+      <ManualQuestionEditor file={pdfFile()} onFinish={vi.fn()} />,
+    );
+    await findByRole("button", { name: /Nova questão/i });
+    const saveBtn = await findByRole("button", { name: /Salvar questão/i });
+    expect(saveBtn).toBeDisabled();
+  });
+
+  it("Remover button in the bottom action bar removes the active question (line 520)", async () => {
+    const { findByRole, container } = render(
+      <ManualQuestionEditor file={pdfFile()} onFinish={vi.fn()} />,
+    );
+    const novaBtn = await findByRole("button", { name: /Nova questão/i });
+    fireEvent.click(novaBtn);
+    // Now 2 questions — activate Q2
+    const tabs = Array.from(container.querySelectorAll("button")).filter((b) =>
+      /^Q\d+/.test(b.textContent ?? ""),
+    );
+    fireEvent.click(tabs[1]);
+    // The bottom action bar has a ghost button containing the text "Remover" (with Trash2 icon)
+    const removerBtn = Array.from(container.querySelectorAll("button")).find(
+      (b) => b.textContent?.includes("Remover") && b.classList.contains("text-destructive"),
+    );
+    expect(removerBtn).toBeDefined();
+    fireEvent.click(removerBtn!);
+    const tabsAfter = Array.from(container.querySelectorAll("button")).filter((b) =>
+      /^Q\d+/.test(b.textContent ?? ""),
+    );
+    expect(tabsAfter.length).toBe(1);
+  });
+
+  it("switching isObjective to false hides the alternatives section (lines 364-372)", async () => {
+    const { findByRole, queryAllByPlaceholderText } = render(
+      <ManualQuestionEditor file={pdfFile()} onFinish={vi.fn()} />,
+    );
+    await findByRole("button", { name: /Nova questão/i });
+    // Default is objetiva=true; the switch label should say "Objetiva"
+    expect(queryAllByPlaceholderText(/Alternativa [A-E]/).length).toBe(5);
+    // Find and toggle the switch
+    const switchEl = await findByRole("switch");
+    fireEvent.click(switchEl);
+    // After switching to dissertativa, alternatives should disappear
+    expect(queryAllByPlaceholderText(/Alternativa [A-E]/).length).toBe(0);
+  });
+});

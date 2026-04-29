@@ -170,4 +170,54 @@ describe("QuestionExtractModal — extract flow", () => {
     fireEvent.click(screen.getByRole("button", { name: /Extrair/i }));
     await waitFor(() => expect(toast.error).toHaveBeenCalledWith(expect.stringMatching(/AI down|Falha/i)));
   });
+
+  it("sends image as FormData when an image file is selected (L127-129 branch)", async () => {
+    const onExtracted = vi.fn();
+    invokeSpy.mockResolvedValue({
+      data: { questions: [{ text: "Q1" }], source_file_name: "img.png" },
+      error: null,
+    });
+
+    render(<QuestionExtractModal {...baseProps} onExtracted={onExtracted} />);
+    const input = document.querySelector('input[type="file"]') as HTMLInputElement;
+    const imgFile = new File([new Uint8Array([0x89, 0x50, 0x4e, 0x47])], "img.png", { type: "image/png" });
+    Object.defineProperty(input, "files", { value: [imgFile], configurable: true, writable: false });
+    fireEvent.change(input);
+    await waitFor(() => screen.getByText(/img\.png/));
+
+    fireEvent.click(screen.getByRole("button", { name: /Extrair/i }));
+    await waitFor(() => expect(invokeSpy).toHaveBeenCalledWith(
+      "extract-questions",
+      expect.objectContaining({ body: expect.any(FormData) }),
+    ));
+    await waitFor(() => expect(onExtracted).toHaveBeenCalled());
+  });
+});
+
+describe("QuestionExtractModal — drop zone (L218-220)", () => {
+  it("accepts a valid PDF dropped onto the drop zone and moves to confirm step", async () => {
+    render(<QuestionExtractModal {...baseProps} />);
+
+    const dropZone = screen.getByText(/Clique ou arraste o arquivo aqui/).closest("div")!;
+    const droppedFile = pdfFile();
+
+    fireEvent.drop(dropZone, {
+      dataTransfer: { files: [droppedFile] },
+    });
+
+    await waitFor(() => expect(screen.getByText(/doc\.pdf/)).toBeInTheDocument());
+  });
+
+  it("does not react to drop when canExtract is false", async () => {
+    render(<QuestionExtractModal {...baseProps} freeExtractionUsed creditBalance={0} />);
+
+    const dropZone = screen.getByText(/Clique ou arraste o arquivo aqui/).closest("div")!;
+
+    fireEvent.drop(dropZone, {
+      dataTransfer: { files: [pdfFile()] },
+    });
+
+    // Should stay on the upload step — no file name rendered
+    expect(screen.queryByText(/doc\.pdf/)).toBeNull();
+  });
 });
