@@ -31,6 +31,9 @@ export default tseslint.config(
       "no-case-declarations": "off",
       "no-constant-binary-expression": "off",
       "local/no-sync-effect": "error",
+      "no-restricted-imports": ["error", {
+        patterns: [{ group: ["../../*"], message: "Use o alias @/ para imports cross-folder." }]
+      }],
     },
   },
   {
