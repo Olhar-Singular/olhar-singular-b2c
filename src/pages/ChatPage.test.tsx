@@ -57,6 +57,10 @@ vi.mock("@/components/chat/ChatWindow", () => ({
 
 vi.mock("sonner", () => ({ toast: { error: vi.fn() } }));
 
+vi.mock("@/hooks/useAuth", () => ({
+  useAuth: vi.fn(() => ({ refreshProfile: vi.fn().mockResolvedValue(undefined) })),
+}));
+
 import { useChatSessions } from "@/hooks/useChatSessions";
 
 beforeEach(() => {

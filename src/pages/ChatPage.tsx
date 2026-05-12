@@ -6,8 +6,10 @@ import ChatWindow from "@/components/chat/ChatWindow";
 import type { ChatMessage } from "@/types/chat";
 import { toast } from "sonner";
 import { parseEdgeFnError } from "@/lib/utils/errors";
+import { useAuth } from "@/hooks/useAuth";
 
 export default function ChatPage() {
+  const { refreshProfile } = useAuth();
   const { data: sessions = [] } = useChatSessions();
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
   const [localMessages, setLocalMessages] = useState<ChatMessage[]>([]);
@@ -40,6 +42,7 @@ export default function ChatPage() {
         onSuccess: (result) => {
           setActiveSessionId(result.session_id);
           setLocalMessages([]);
+          refreshProfile().catch(() => {});
         },
         onError: (err) => {
           toast.error(parseEdgeFnError(err, "Erro ao enviar mensagem."));

@@ -1,5 +1,30 @@
 import "@testing-library/jest-dom";
-import { vi } from "vitest";
+import { vi, beforeAll, afterAll } from "vitest";
+
+// Suppress Radix UI accessibility warnings in tests.
+// These fire when DialogContent lacks aria-describedby / DialogDescription.
+// They are real a11y concerns addressed in production; suppressed here to keep
+// test output clean without masking unrelated console calls.
+// Radix uses console.warn; React act() warnings use console.error.
+const RADIX_PATTERNS = ["Missing `Description`", "aria-describedby={undefined}", "requires a `DialogTitle`"];
+const _originalWarn = console.warn.bind(console);
+const _originalError = console.error.bind(console);
+beforeAll(() => {
+  console.warn = (...args: unknown[]) => {
+    const msg = typeof args[0] === "string" ? args[0] : "";
+    if (RADIX_PATTERNS.some((p) => msg.includes(p))) return;
+    _originalWarn(...args);
+  };
+  console.error = (...args: unknown[]) => {
+    const msg = typeof args[0] === "string" ? args[0] : "";
+    if (RADIX_PATTERNS.some((p) => msg.includes(p))) return;
+    _originalError(...args);
+  };
+});
+afterAll(() => {
+  console.warn = _originalWarn;
+  console.error = _originalError;
+});
 
 // Mock do matchMedia
 Object.defineProperty(window, "matchMedia", {

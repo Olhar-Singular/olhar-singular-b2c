@@ -10,6 +10,7 @@ import { toast } from "sonner";
 import { parseEdgeFnError } from "@/lib/utils/errors";
 import { buildAIEditorAdvancePatch, resetGeneratedState } from "@/lib/domain/adaptationWizardHelpers";
 import type { WizardData, AdaptationResult } from "@/lib/domain/adaptationWizardHelpers";
+import QuestionRegeneratePanel from "./QuestionRegeneratePanel";
 import { Link } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 
@@ -218,6 +219,16 @@ export default function StepAIEditor({ data, updateData, onNext, onPrev }: Props
           canRedo={activeContent.canRedo}
         />
       </div>
+
+      <QuestionRegeneratePanel
+        result={data.result}
+        versionType={activeTab}
+        activityType={data.activityType ?? ""}
+        barriers={data.barriers}
+        currentDsl={activeContent.dsl}
+        onDslUpdate={activeContent.setDsl}
+        onCreditRefresh={() => refreshProfile().catch(() => {})}
+      />
 
       <div className="flex justify-between pt-4">
         <Button variant="outline" onClick={onPrev} aria-label="Voltar">
