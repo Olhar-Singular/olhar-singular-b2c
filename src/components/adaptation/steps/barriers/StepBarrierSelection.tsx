@@ -2,9 +2,15 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
-import { ArrowLeft, ArrowRight, User } from "lucide-react";
+import { ArrowLeft, ArrowRight, User, Coins } from "lucide-react";
 import { useBarrierProfiles } from "@/hooks/useBarrierProfiles";
-import { BARRIER_DIMENSIONS } from "@/lib/domain/barriers";
+import { useAuth } from "@/hooks/useAuth";
+import {
+  BARRIER_DIMENSIONS,
+  COMPLEXITY_LABELS,
+  calcAdaptationCost,
+  getComplexityTier,
+} from "@/lib/domain/barriers";
 import type { WizardData, BarrierItem } from "@/lib/domain/adaptationWizardHelpers";
 
 type Props = {
@@ -34,7 +40,16 @@ function toggleBarrier(
 
 export function StepBarrierSelection({ data, updateData, onNext, onPrev }: Props) {
   const { data: profiles = [] } = useBarrierProfiles();
+  const { profile } = useAuth();
   const [error, setError] = useState("");
+
+  const activeDimensions = [...new Set(
+    data.barriers.filter((b) => b.is_active).map((b) => b.dimension).filter(Boolean),
+  )];
+  const hasBarriers = activeDimensions.length > 0;
+  const isFreeAdaptation = !profile?.free_adaptation_used;
+  const creditCost = calcAdaptationCost(activeDimensions);
+  const complexityTier = getComplexityTier(activeDimensions);
 
   function handleProfileChange(profileId: string) {
     if (!profileId) {
@@ -146,6 +161,26 @@ export function StepBarrierSelection({ data, updateData, onNext, onPrev }: Props
 
       {error && (
         <p role="alert" className="text-sm text-destructive">{error}</p>
+      )}
+
+      {hasBarriers && (
+        <div className="flex items-center gap-2 p-3 bg-primary/5 rounded-lg border border-primary/20">
+          <Coins className="w-4 h-4 text-primary shrink-0" />
+          {isFreeAdaptation ? (
+            <p className="text-sm">
+              <strong>Grátis</strong>
+              <span className="text-muted-foreground ml-1">(primeira adaptação por IA)</span>
+            </p>
+          ) : (
+            <p className="text-sm">
+              Adaptação por IA:{" "}
+              <strong>{creditCost} créditos</strong>
+              <span className="text-muted-foreground ml-1">
+                (complexidade {COMPLEXITY_LABELS[complexityTier]})
+              </span>
+            </p>
+          )}
+        </div>
       )}
 
       <div className="flex justify-between pt-2">

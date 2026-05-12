@@ -35,6 +35,7 @@ import {
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
+import { parseDbError } from "@/lib/utils/errors";
 import { parsePdf } from "@/lib/utils/pdf-utils";
 import { extractDocxText } from "@/lib/utils/docx-utils";
 import { detectFileType } from "@/lib/utils/fileValidation";
@@ -112,7 +113,7 @@ export default function ManualQuestionEditor({ file, onFinish }: Props) {
           setDocxText(text);
         }
       } catch (e: any) {
-        toast.error("Erro ao processar arquivo", { description: e.message });
+        toast.error("Erro ao processar arquivo. Verifique se o arquivo não está corrompido.");
       } finally {
         setLoadingDoc(false);
       }
@@ -223,7 +224,7 @@ export default function ManualQuestionEditor({ file, onFinish }: Props) {
       toast.success(`Questão ${index + 1} salva!`);
     } catch (e: any) {
       updateQuestion(index, "saving", false);
-      toast.error("Erro ao salvar", { description: e.message });
+      toast.error(parseDbError(e, "Erro ao salvar questão."));
     }
   };
 

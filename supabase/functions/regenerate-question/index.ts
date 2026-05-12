@@ -4,6 +4,8 @@ import { sanitize } from "../_shared/sanitize.ts";
 import { logAiUsage } from "../_shared/logAiUsage.ts";
 import { getAiConfig } from "../_shared/aiConfig.ts";
 
+const REGENERATE_COST = 2;
+
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers":
@@ -114,6 +116,7 @@ serve(async (req) => {
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
+    const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
     const userClient = createClient(supabaseUrl, supabaseAnonKey, {
       global: { headers: { Authorization: authHeader } },
@@ -125,6 +128,46 @@ serve(async (req) => {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
+
+    const serviceClient = createClient(supabaseUrl, supabaseServiceKey);
+
+    // ─── Credit deduction ────────────────────────────────────────────────────
+    const { data: deductResult, error: deductError } = await serviceClient.rpc("deduct_credits", {
+      p_user_id: user.id,
+      p_amount: REGENERATE_COST,
+      p_type: "regenerate",
+    });
+
+    if (deductError) {
+      console.error("deduct_credits error:", deductError);
+      return new Response(JSON.stringify({ error: "Erro ao processar créditos." }), {
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    const dr = deductResult as { success: boolean; error?: string; balance?: number } | null;
+    if (dr?.success === false) {
+      if (dr.error === "insufficient_credits") {
+        return new Response(
+          JSON.stringify({ error: "Créditos insuficientes.", balance: dr.balance, required: REGENERATE_COST }),
+          { status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        );
+      }
+      return new Response(JSON.stringify({ error: "Erro ao processar créditos." }), {
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+    // ─── End credit deduction ─────────────────────────────────────────────────
+
+    const refundIfNeeded = async () => {
+      await serviceClient.rpc("grant_credits", {
+        p_user_id: user.id,
+        p_amount: REGENERATE_COST,
+        p_type: "refund",
+      }).catch((e: unknown) => console.error("Refund failed for user:", user.id, e));
+    };
 
     const body = await req.json();
     const { question, version_type, activity_type, barriers, hint } = body;
@@ -255,6 +298,7 @@ Regenere esta questão melhorando clareza, scaffolding e adequação às barreir
         error_message: `HTTP ${aiResponse.status}: ${errText.slice(0, 200)}`,
         metadata: { activity_type: sanitizedActivityType, question_number: question.number },
       }).catch(() => {});
+      await refundIfNeeded();
       return new Response(
         JSON.stringify({ error: "Erro na IA." }),
         { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -285,6 +329,7 @@ Regenere esta questão melhorando clareza, scaffolding e adequação às barreir
     const { question_dsl, changes_made } = parseDslQuestionResponse(responseContent);
 
     if (!question_dsl) {
+      await refundIfNeeded();
       return new Response(
         JSON.stringify({ error: "Resposta da IA em formato inesperado." }),
         { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -292,7 +337,7 @@ Regenere esta questão melhorando clareza, scaffolding e adequação às barreir
     }
 
     return new Response(
-      JSON.stringify({ question_dsl, changes_made }),
+      JSON.stringify({ question_dsl, changes_made, credits_charged: REGENERATE_COST }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (e) {

@@ -22,6 +22,14 @@ vi.mock("@/hooks/useBarrierProfiles", () => ({
   })),
 }));
 
+const mockUseAuth = vi.fn(() => ({
+  profile: { free_adaptation_used: false, credit_balance: 30 },
+}));
+
+vi.mock("@/hooks/useAuth", () => ({
+  useAuth: () => mockUseAuth(),
+}));
+
 const baseData: WizardData = {
   activityType: "exercício",
   activityText: "Texto da atividade",
@@ -52,6 +60,7 @@ function renderStep(data: WizardData = baseData) {
 describe("StepBarrierSelection", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockUseAuth.mockReturnValue({ profile: { free_adaptation_used: false, credit_balance: 30 } });
   });
 
   it("renders barrier dimension checkboxes", () => {
@@ -120,6 +129,55 @@ describe("StepBarrierSelection", () => {
     const ta = screen.getByLabelText(/Observações adicionais/i);
     fireEvent.change(ta, { target: { value: "obs extra" } });
     expect(mockUpdateData).toHaveBeenCalledWith({ observationNotes: "obs extra" });
+  });
+
+  it("does not show credit badge when no barriers are selected", () => {
+    renderStep();
+    expect(screen.queryByText(/Grátis/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/créditos/i)).not.toBeInTheDocument();
+  });
+
+  it("shows 'Grátis' badge when barriers are selected and first adaptation is free", () => {
+    mockUseAuth.mockReturnValue({ profile: { free_adaptation_used: false, credit_balance: 30 } });
+    renderStep({
+      ...baseData,
+      barriers: [{ dimension: "tea", barrier_key: "tea_abstracao", label: "TEA", is_active: true }],
+    });
+    expect(screen.getByText(/Grátis/i)).toBeInTheDocument();
+    expect(screen.getByText(/primeira adaptação por IA/i)).toBeInTheDocument();
+  });
+
+  it("shows credit cost badge when barriers are selected and free adaptation was used", () => {
+    mockUseAuth.mockReturnValue({ profile: { free_adaptation_used: true, credit_balance: 30 } });
+    renderStep({
+      ...baseData,
+      barriers: [{ dimension: "tea", barrier_key: "tea_abstracao", label: "TEA", is_active: true }],
+    });
+    expect(screen.getByText(/12 créditos/i)).toBeInTheDocument();
+    expect(screen.getByText(/complexidade alta/i)).toBeInTheDocument();
+  });
+
+  it("shows lower credit cost for low-complexity barriers", () => {
+    mockUseAuth.mockReturnValue({ profile: { free_adaptation_used: true, credit_balance: 30 } });
+    renderStep({
+      ...baseData,
+      barriers: [{ dimension: "dislexia", barrier_key: "dislexia_leitura", label: "Dislexia", is_active: true }],
+    });
+    expect(screen.getByText(/5 créditos/i)).toBeInTheDocument();
+    expect(screen.getByText(/complexidade baixa/i)).toBeInTheDocument();
+  });
+
+  it("escalates to highest complexity when multiple dimensions are selected", () => {
+    mockUseAuth.mockReturnValue({ profile: { free_adaptation_used: true, credit_balance: 30 } });
+    renderStep({
+      ...baseData,
+      barriers: [
+        { dimension: "dislexia", barrier_key: "dislexia_leitura", label: "Dislexia", is_active: true },
+        { dimension: "tea", barrier_key: "tea_abstracao", label: "TEA", is_active: true },
+      ],
+    });
+    expect(screen.getByText(/12 créditos/i)).toBeInTheDocument();
+    expect(screen.getByText(/complexidade alta/i)).toBeInTheDocument();
   });
 
   it("clears the alert after a successful next", async () => {

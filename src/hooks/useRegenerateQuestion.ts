@@ -1,5 +1,6 @@
 import { useMutation } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { parseEdgeFnError } from "@/lib/utils/errors";
 import type { StructuredQuestion } from "@/types/adaptation";
 import type { BarrierItem } from "@/lib/domain/adaptationWizardHelpers";
 
@@ -21,40 +22,31 @@ async function regenerateQuestion(input: RegenerateInput): Promise<RegenerateRes
   const accessToken = sessionData.session?.access_token;
   const baseUrl = import.meta.env.VITE_SUPABASE_URL;
 
-  const creditsResp = await fetch(`${baseUrl}/functions/v1/check-and-deduct-credits`, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({ amount: 1, type: "regenerate" }),
-  });
-
-  if (!creditsResp.ok) {
-    const err = await creditsResp.json().catch(() => ({}));
-    if (creditsResp.status === 402) {
-      throw new Error("Créditos insuficientes. Adquira mais créditos para continuar.");
-    }
-    throw new Error(err.error || `Erro ao verificar créditos (${creditsResp.status})`);
+  let resp: Response;
+  try {
+    resp = await fetch(`${baseUrl}/functions/v1/regenerate-question`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        question: input.question,
+        version_type: input.version_type,
+        activity_type: input.activity_type,
+        barriers: input.barriers,
+        hint: input.hint,
+      }),
+    });
+  } catch (e) {
+    throw new Error(parseEdgeFnError(e, "Erro ao regenerar questão."));
   }
-
-  const resp = await fetch(`${baseUrl}/functions/v1/regenerate-question`, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      question: input.question,
-      version_type: input.version_type,
-      activity_type: input.activity_type,
-      barriers: input.barriers,
-      hint: input.hint,
-    }),
-  });
 
   if (!resp.ok) {
     const err = await resp.json().catch(() => ({}));
+    if (resp.status === 402) {
+      throw new Error("Créditos insuficientes. Adquira mais créditos para continuar.");
+    }
     throw new Error(err.error || "Erro ao regenerar questão.");
   }
 

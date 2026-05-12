@@ -1,5 +1,6 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { parseEdgeFnError } from "@/lib/utils/errors";
 import type { ChatMessage } from "@/types/chat";
 
 export type SendMessageInput = {
@@ -18,17 +19,22 @@ async function sendMessage(input: SendMessageInput): Promise<SendMessageResult> 
   const accessToken = sessionData.session?.access_token;
   const baseUrl = import.meta.env.VITE_SUPABASE_URL;
 
-  const resp = await fetch(`${baseUrl}/functions/v1/chat`, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      messages: input.messages,
-      ...(input.session_id ? { session_id: input.session_id } : {}),
-    }),
-  });
+  let resp: Response;
+  try {
+    resp = await fetch(`${baseUrl}/functions/v1/chat`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        messages: input.messages,
+        ...(input.session_id ? { session_id: input.session_id } : {}),
+      }),
+    });
+  } catch (e) {
+    throw new Error(parseEdgeFnError(e, "Erro ao enviar mensagem."));
+  }
 
   if (!resp.ok) {
     const err = await resp.json().catch(() => ({}));

@@ -12,6 +12,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { toast } from "sonner";
+import { parseEdgeFnError } from "@/lib/utils/errors";
 import { Loader2, Upload, Sparkles, AlertTriangle, Gift, CreditCard } from "lucide-react";
 import { validatePdfMagicBytes, validateImageMagicBytes } from "@/lib/utils/fileValidation";
 import { validateExtractedQuestions } from "@/lib/domain/questionParser";
@@ -161,7 +162,7 @@ export default function QuestionExtractModal({
       onExtracted(questions, data.source_file_name || file.name);
       handleClose(false);
     } catch (e: any) {
-      toast.error(e.message || "Erro na extração");
+      toast.error(parseEdgeFnError(e, "Erro na extração."));
       setStep("confirm");
     } finally {
       setExtracting(false);

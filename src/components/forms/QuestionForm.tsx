@@ -19,6 +19,7 @@ import { Label } from "@/components/ui/label";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { toast } from "sonner";
+import { parseDbError } from "@/lib/utils/errors";
 import { Plus, X, Upload, Loader2 } from "lucide-react";
 import { dataUrlToBlob } from "@/lib/utils/extraction-utils";
 import ImagePreviewDialog from "@/components/dialogs/ImagePreviewDialog";
@@ -151,7 +152,7 @@ export default function QuestionForm({ open, onOpenChange, question, onSaved }: 
       onOpenChange(false);
       onSaved();
     } catch (e: any) {
-      toast.error("Erro", { description: e.message });
+      toast.error(parseDbError(e, "Erro ao salvar questão."));
     } finally {
       setSaving(false);
     }

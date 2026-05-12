@@ -5,6 +5,7 @@ import ChatSidebar from "@/components/chat/ChatSidebar";
 import ChatWindow from "@/components/chat/ChatWindow";
 import type { ChatMessage } from "@/types/chat";
 import { toast } from "sonner";
+import { parseEdgeFnError } from "@/lib/utils/errors";
 
 export default function ChatPage() {
   const { data: sessions = [] } = useChatSessions();
@@ -41,7 +42,7 @@ export default function ChatPage() {
           setLocalMessages([]);
         },
         onError: (err) => {
-          toast.error(err.message);
+          toast.error(parseEdgeFnError(err, "Erro ao enviar mensagem."));
           if (!activeSession) {
             setLocalMessages(messages);
           }
