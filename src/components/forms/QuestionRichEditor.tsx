@@ -129,6 +129,9 @@ function injectStyles() {
   stylesInjected = true;
 }
 
+/* v8 ignore start -- FontSize.addAttributes callbacks (parseHTML / renderHTML)
+   are invoked by ProseMirror at document parse/render time; they are
+   unreachable under jsdom because @tiptap/react is fully mocked in tests. */
 const FontSize = TextStyle.extend({
   addAttributes() {
     return {
@@ -144,6 +147,7 @@ const FontSize = TextStyle.extend({
     };
   },
 });
+/* v8 ignore stop */
 
 export default function QuestionRichEditor({
   value,

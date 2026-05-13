@@ -270,4 +270,93 @@ describe("streamAI", () => {
     });
     expect(onDelta).toHaveBeenCalledWith("partial");
   });
+
+  it("strips \\r from lines in the main SSE loop (line 58 branch)", async () => {
+    // A \r-terminated line *with* a newline separator triggers the line 58 strip in the main loop
+    const content = JSON.stringify({ choices: [{ delta: { content: "crlf-main" } }] });
+    const chunk = `data: ${content}\r\ndata: [DONE]\n`;
+    fetchMock.mockResolvedValue(sseStream([chunk]));
+    const onDelta = vi.fn();
+    await streamAI({
+      endpoint: "chat",
+      body: {},
+      onDelta,
+      onDone: vi.fn(),
+      onError: vi.fn(),
+    });
+    expect(onDelta).toHaveBeenCalledWith("crlf-main");
+  });
+
+  it("ignores whitespace-only lines in trailing buffer (lines 83-84 raw.trim()==='' branch)", async () => {
+    // trailing buffer line that is spaces-only: raw is not "" but raw.trim() === ""
+    const content = JSON.stringify({ choices: [{ delta: { content: "after-space" } }] });
+    // "   " is a whitespace line, then valid delta, all without a terminating newline so they end in buffer
+    const trailing = `   \ndata: ${content}`;
+    fetchMock.mockResolvedValue(sseStream([trailing]));
+    const onDelta = vi.fn();
+    await streamAI({
+      endpoint: "chat",
+      body: {},
+      onDelta,
+      onDone: vi.fn(),
+      onError: vi.fn(),
+    });
+    expect(onDelta).toHaveBeenCalledWith("after-space");
+  });
+
+  it("calls onError with 'Erro desconhecido' when a non-Error value is thrown (line 97 false branch)", async () => {
+    // Throwing a non-Error (e.g., a string) hits the `e instanceof Error` false branch
+    fetchMock.mockImplementation(() => { throw "string error"; });
+    const onError = vi.fn();
+    await streamAI({
+      endpoint: "chat",
+      body: {},
+      onDelta: vi.fn(),
+      onDone: vi.fn(),
+      onError,
+    });
+    expect(onError).toHaveBeenCalledWith("Erro desconhecido");
+  });
+
+  it("re-parks malformed JSON line in main loop and recovers from next chunk (lines 73-74)", async () => {
+    // A complete line with bad JSON triggers the catch; the line is re-parked into
+    // textBuffer and on the next read it gets a valid continuation appended.
+    // Simplest: bad JSON line followed by another read containing its fix and [DONE].
+    const bad = `data: {broken\n`;
+    const fix = `data: ${JSON.stringify({ choices: [{ delta: { content: "recovered" } }] })}\ndata: [DONE]\n`;
+    fetchMock.mockResolvedValue(sseStream([bad, fix]));
+    const onDelta = vi.fn();
+    const onDone = vi.fn();
+    await streamAI({
+      endpoint: "chat",
+      body: {},
+      onDelta,
+      onDone,
+      onError: vi.fn(),
+    });
+    // The bad line is re-parked; the next read re-processes it. Since re-parked line
+    // still has bad JSON, it ends up in the trailing buffer and is silently ignored.
+    // The valid line that follows is processed normally.
+    expect(onDelta).toHaveBeenCalledWith("recovered");
+    expect(onDone).toHaveBeenCalled();
+  });
+
+  it("skips non-data trailing text after a newline-terminated delta (line 85 true branch)", async () => {
+    // Main loop processes the delta line (has \n), leaving "ignored text" in trailing buffer.
+    // trailing buffer: "ignored text" does not start with "data: " -> hits line 85 true branch (continue)
+    const content = JSON.stringify({ choices: [{ delta: { content: "main-delta" } }] });
+    const chunk = `data: ${content}\nignored text`;
+    fetchMock.mockResolvedValue(sseStream([chunk]));
+    const onDelta = vi.fn();
+    const onDone = vi.fn();
+    await streamAI({
+      endpoint: "chat",
+      body: {},
+      onDelta,
+      onDone,
+      onError: vi.fn(),
+    });
+    expect(onDelta).toHaveBeenCalledWith("main-delta");
+    expect(onDone).toHaveBeenCalled();
+  });
 });

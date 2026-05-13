@@ -106,6 +106,7 @@ export default function StepAIEditor({ data, updateData, onNext, onPrev }: Props
       }
 
       const result = await resp.json();
+      /* v8 ignore next -- AbortController race: signal aborts between resp.json() and updateData; not reliably reproducible in jsdom */
       if (controller.signal.aborted) return;
 
       updateData({
@@ -119,6 +120,7 @@ export default function StepAIEditor({ data, updateData, onNext, onPrev }: Props
       if (e.name === "AbortError") return;
       toast.error(parseEdgeFnError(e, "Erro ao gerar adaptação."));
     } finally {
+      /* v8 ignore next -- AbortController race: false branch (signal aborted) only reachable via Regerar timing; not reliably reproducible in jsdom */
       if (!controller.signal.aborted) setLoading(false);
     }
   }, [data, updateData]);

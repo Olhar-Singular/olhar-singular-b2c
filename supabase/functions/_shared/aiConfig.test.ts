@@ -44,6 +44,19 @@ describe("getAiConfig", () => {
   it("throws when no provider key is configured", () => {
     expect(() => getAiConfig(envMap({}))).toThrow(/No AI provider configured/);
   });
+
+  it("uses the default EnvGetter (globalThis.Deno) when no argument is passed (line 18)", () => {
+    (globalThis as { Deno?: unknown }).Deno = {
+      env: { get: (k: string) => (k === "LOVABLE_API_KEY" ? "deno-lov-key" : undefined) },
+    };
+    try {
+      const cfg = getAiConfig();
+      expect(cfg.isLovable).toBe(true);
+      expect(cfg.apiKey).toBe("deno-lov-key");
+    } finally {
+      delete (globalThis as { Deno?: unknown }).Deno;
+    }
+  });
 });
 
 describe("resolveImagePayloadFields", () => {

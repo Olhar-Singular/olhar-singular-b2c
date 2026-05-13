@@ -121,4 +121,41 @@ describe("CreditsPage", () => {
     renderPage();
     expect(screen.getByText(/nenhuma movimentação/i)).toBeInTheDocument();
   });
+
+  it("shows dash when profile is null (branch 46: credit_balance ?? '—')", async () => {
+    const auth = await import("@/hooks/useAuth");
+    vi.mocked(auth.useAuth).mockReturnValue({ profile: null } as never);
+    renderPage();
+    expect(screen.getByText("—")).toBeInTheDocument();
+  });
+
+  it("shows loading state for transactions (branch 104)", async () => {
+    const m = await import("@/hooks/useCredits");
+    vi.mocked(m.useTransactionHistory).mockReturnValue({
+      data: [],
+      isLoading: true,
+    } as never);
+    renderPage();
+    expect(screen.getByText(/Carregando/i)).toBeInTheDocument();
+  });
+
+  it("falls back to raw type key when tx.type is unknown (branch 121: TYPE_LABELS ?? tx.type)", async () => {
+    const m = await import("@/hooks/useCredits");
+    vi.mocked(m.useTransactionHistory).mockReturnValue({
+      data: [
+        {
+          id: "t99",
+          user_id: "u1",
+          delta: 5,
+          type: "unknown_type_xyz",
+          ref_id: null,
+          payment_id: null,
+          created_at: "2026-04-20T10:00:00Z",
+        },
+      ],
+      isLoading: false,
+    } as never);
+    renderPage();
+    expect(screen.getByText("unknown_type_xyz")).toBeInTheDocument();
+  });
 });

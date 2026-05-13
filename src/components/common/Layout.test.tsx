@@ -142,4 +142,31 @@ describe("Layout", () => {
     const { container } = renderWithProviders(<Layout />, { route: "/dashboard" });
     expect(container.textContent).toContain("7");
   });
+
+  it("shows credit balance badge inside the mobile drawer when drawer is open", () => {
+    setAuth({ profile: { credit_balance: 99 } });
+    renderWithProviders(<Layout />, { route: "/dashboard" });
+    fireEvent.click(screen.getByRole("button", { name: /Abrir menu/i }));
+    const spans = screen.getAllByText("99");
+    // At least one span should be inside the drawer nav
+    expect(spans.length).toBeGreaterThan(0);
+  });
+
+  it("clicking Créditos link inside mobile drawer closes the drawer", () => {
+    setAuth({ profile: { credit_balance: 10 } });
+    renderWithProviders(<Layout />, { route: "/dashboard" });
+    fireEvent.click(screen.getByRole("button", { name: /Abrir menu/i }));
+    // The Créditos links inside the drawer — click the last one (drawer is last in DOM)
+    const creditLinks = screen.getAllByRole("link", { name: /Crédit/i });
+    fireEvent.click(creditLinks[creditLinks.length - 1]);
+    expect(screen.queryByRole("button", { name: /Fechar menu/i })).toBeNull();
+  });
+
+  it("marks Créditos link as active in mobile drawer when on /creditos route", () => {
+    setAuth();
+    renderWithProviders(<Layout />, { route: "/creditos" });
+    fireEvent.click(screen.getByRole("button", { name: /Abrir menu/i }));
+    const creditLinks = screen.getAllByRole("link", { name: /Crédit/i });
+    expect(creditLinks.some((l) => l.getAttribute("aria-current") === "page")).toBe(true);
+  });
 });

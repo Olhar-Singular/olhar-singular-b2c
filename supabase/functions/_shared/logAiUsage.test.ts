@@ -170,4 +170,88 @@ describe("logAiUsage", () => {
     expect(inserted.tokens_source).toBe("estimated");
     expect(inserted.input_tokens).toBeGreaterThan(0);
   });
+
+  it("estimates input_tokens from prompt_text when input is 0 but output_tokens > 0 (lines 91-92)", async () => {
+    // else-if branch: inputTokens === 0 AND outputTokens > 0 AND prompt_text present
+    const { logAiUsage } = await import("./logAiUsage");
+    await logAiUsage({
+      user_id: "u1",
+      action_type: "chat",
+      model: "google/gemini-2.5-flash",
+      input_tokens: 0,
+      output_tokens: 500,
+      prompt_text: "x".repeat(400),
+    });
+    const inserted = insertMock.mock.calls[0][0];
+    expect(inserted.tokens_source).toBe("estimated");
+    expect(inserted.input_tokens).toBeGreaterThan(0);
+    expect(inserted.output_tokens).toBe(500);
+  });
+
+  it("estimates only output_tokens when only response_text provided and no prompt_text (line 84 false branch)", async () => {
+    // inputTokens===0, outputTokens===0, log.response_text present but log.prompt_text absent
+    // => if(log.prompt_text) is false, only if(log.response_text) runs
+    const { logAiUsage } = await import("./logAiUsage");
+    await logAiUsage({
+      user_id: "u1",
+      action_type: "chat",
+      model: "google/gemini-2.5-flash",
+      response_text: "r".repeat(350),
+    });
+    const inserted = insertMock.mock.calls[0][0];
+    expect(inserted.tokens_source).toBe("estimated");
+    expect(inserted.input_tokens).toBe(0);
+    expect(inserted.output_tokens).toBeGreaterThan(0);
+  });
+
+  it("uses hardcoded fallback pricing when DB returns null data (lines 37-54 data===null branch)", async () => {
+    // getModelPricing: data is null => if(data) is false => falls through to FALLBACK
+    fromMock.mockReturnValue({
+      select: () => ({
+        eq: () => ({
+          eq: () => ({
+            single: () => Promise.resolve({ data: null, error: null }),
+          }),
+        }),
+      }),
+      insert: insertMock,
+    });
+    const { logAiUsage } = await import("./logAiUsage");
+    await logAiUsage({
+      user_id: "u1",
+      action_type: "chat",
+      model: "google/gemini-2.5-flash",
+      input_tokens: 1_000_000,
+      output_tokens: 1_000_000,
+    });
+    const inserted = insertMock.mock.calls[0][0];
+    // falls back to hardcoded pricing for gemini-2.5-flash
+    expect(inserted.cost_input).toBeCloseTo(0.075);
+    expect(inserted.cost_output).toBeCloseTo(0.30);
+  });
+
+  it("uses zero pricing for unknown model not in FALLBACK (line 54 false branch)", async () => {
+    // FALLBACK[model] is undefined => uses { input: 0, output: 0 }
+    fromMock.mockReturnValue({
+      select: () => ({
+        eq: () => ({
+          eq: () => ({
+            single: () => Promise.resolve({ data: null, error: null }),
+          }),
+        }),
+      }),
+      insert: insertMock,
+    });
+    const { logAiUsage } = await import("./logAiUsage");
+    await logAiUsage({
+      user_id: "u1",
+      action_type: "chat",
+      model: "unknown/model-xyz",
+      input_tokens: 1_000_000,
+      output_tokens: 1_000_000,
+    });
+    const inserted = insertMock.mock.calls[0][0];
+    expect(inserted.cost_input).toBe(0);
+    expect(inserted.cost_output).toBe(0);
+  });
 });

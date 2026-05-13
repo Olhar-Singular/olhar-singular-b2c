@@ -64,3 +64,10 @@ window.HTMLElement.prototype.scrollIntoView = vi.fn();
 // Mock URL.createObjectURL / revokeObjectURL
 URL.createObjectURL = vi.fn(() => "blob:test");
 URL.revokeObjectURL = vi.fn();
+
+// Pointer capture APIs (used by Radix Select; not implemented in jsdom)
+if (!window.HTMLElement.prototype.hasPointerCapture) {
+  window.HTMLElement.prototype.hasPointerCapture = vi.fn(() => false);
+  window.HTMLElement.prototype.setPointerCapture = vi.fn();
+  window.HTMLElement.prototype.releasePointerCapture = vi.fn();
+}

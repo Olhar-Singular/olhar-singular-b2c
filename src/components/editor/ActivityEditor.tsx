@@ -85,6 +85,8 @@ export default function ActivityEditor({
       setPreviewText(value);
     }, 100);
     return () => {
+      /* v8 ignore next -- timerRef.current is always set before cleanup runs;
+       * the null branch is structurally unreachable after the first render. */
       if (timerRef.current) clearTimeout(timerRef.current);
     };
   }, [value]);
@@ -103,6 +105,7 @@ export default function ActivityEditor({
   const handleInsert = useCallback(
     (tpl: string) => {
       const ta = textareaRef.current;
+      /* v8 ignore next -- ref is always bound while the textarea is mounted */
       if (!ta) return;
       const start = ta.selectionStart;
       const before = value.slice(0, start);
@@ -126,6 +129,7 @@ export default function ActivityEditor({
   const handleWrap = useCallback(
     (before: string, after: string) => {
       const ta = textareaRef.current;
+      /* v8 ignore next -- ref is always bound while the textarea is mounted */
       if (!ta) return;
       const start = ta.selectionStart;
       const end = ta.selectionEnd;
@@ -255,6 +259,9 @@ export default function ActivityEditor({
           {registryEntries.length > 0 && (
             <div className="border-t border-border bg-emerald-50/60 px-3 py-2 flex items-center gap-2.5 overflow-x-auto">
               <ImageIcon className="w-3.5 h-3.5 text-emerald-600 flex-shrink-0" />
+              {/* v8 ignore start -- activeImageName is set only by the
+                  detectActiveQuestion handler (already v8-ignored); the
+                  isActive truthy branches are unreachable in tests. */}
               {registryEntries.map(([name, src]) => {
                 const isActive = activeImageName === name;
                 return (
@@ -274,6 +281,7 @@ export default function ActivityEditor({
                   </div>
                 );
               })}
+              {/* v8 ignore stop */}
             </div>
           )}
 

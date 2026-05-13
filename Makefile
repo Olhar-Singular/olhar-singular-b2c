@@ -1,6 +1,5 @@
-# Preencher após criar o projeto Supabase remoto do B2C:
-# supabase login → supabase link --project-ref <ref> → atualizar aqui.
-PROJECT_ID :=
+# Projeto Supabase remoto (B2C). Bate com VITE_SUPABASE_PROJECT_ID no .env.
+PROJECT_ID := ztngcyflcxgvohtdlbhq
 DC         := docker compose
 EXEC       := $(DC) exec app
 
@@ -174,7 +173,7 @@ db-seed-test-user:
 # ─────────────────────────────────────────────
 #  EDGE FUNCTIONS
 # ─────────────────────────────────────────────
-FUNCTIONS :=
+FUNCTIONS := adapt-activity chat check-and-deduct-credits create-checkout extract-questions mp-webhook regenerate-question
 
 .PHONY: fn-deploy-all
 fn-deploy-all:

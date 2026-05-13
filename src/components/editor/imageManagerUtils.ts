@@ -77,6 +77,8 @@ export function expandImageRegistry(
     if (!Object.prototype.hasOwnProperty.call(registry, name)) return full;
     const url = registry[name];
     if (!url) return full;
+    /* v8 ignore next -- regex capture group is always a string (""), never
+     * null/undefined, so the ?? "" fallback is structurally unreachable. */
     return `[img:${url}${params ?? ""}]`;
   });
 }

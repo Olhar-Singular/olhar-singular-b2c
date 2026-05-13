@@ -133,6 +133,7 @@ export default function AdaptationWizard() {
         return <StepEditor data={data} updateData={updateData} onNext={onNext} onPrev={onPrev} />;
       case "export":
         return <StepExport data={data} onPrev={onPrev} onRestart={handleRestart} />;
+      /* v8 ignore next -- exhaustive switch over const tuple; branch is unreachable at runtime */
       default:
         return null;
     }

@@ -506,6 +506,148 @@ describe("markdownDslToStructured — extra branches", () => {
     const out = markdownDslToStructured("");
     expect(out.sections).toEqual([]);
   });
+
+  it("derives q.scaffolding from Apoio in content blocks (before body, line 371)", () => {
+    // > Apoio: before any alternatives => goes to continuations => content scaffolding block
+    const out = markdownDslToStructured("1) Q\n> Apoio: dica cedo\n");
+    const q = out.sections[0].questions[0];
+    expect(q.scaffolding).toEqual(["dica cedo"]);
+  });
+});
+
+describe("activityDslConverter — missing branches", () => {
+  it("buildBlocksFromLines: skips flushText when text is empty after trim (line 433)", () => {
+    // Questão N: with no text => statement is "" => textBuffer seed is ""
+    // Then [img:...] triggers flushText with whitespace-only buffer (hits the text.length===0 early return)
+    const out = markdownDslToStructured("Questão 1:\n[img:x.png]\n");
+    const q = out.sections[0].questions[0];
+    // image block should be present even though text buffer was empty
+    expect(q.content?.some((b) => b.type === "image")).toBe(true);
+  });
+
+  it("buildBlocksFromLines: includes richContent when text contains markdown (line 439 true branch)", () => {
+    // text with * triggers parseMarkdownInline to return a non-undefined value => richContent truthy
+    const out = markdownDslToStructured("1) **enunciado** em negrito\n");
+    const q = out.sections[0].questions[0];
+    const textBlock = q.content?.find((b) => b.type === "text");
+    expect(textBlock).toBeDefined();
+    if (textBlock?.type === "text") {
+      expect(textBlock.richContent).toBeDefined();
+    }
+  });
+
+  it("buildBlocksFromLines: skips $$ and plain > lines without apoio (line 480 $$ branch)", () => {
+    // A $$ line inside a question continuation triggers the startsWith("$$") branch in buildBlocksFromLines
+    const out = markdownDslToStructured("1) Q\n$$x=1$$\nrespondido\n");
+    const q = out.sections[0].questions[0];
+    // $$ line is dropped from content blocks; plain continuation is kept
+    expect(q.content?.some((b) => b.type === "text" && b.content.includes("respondido"))).toBe(true);
+  });
+
+  it("mapQuestionType: default branch uses open_ended fallback via structuredToMarkdownDsl roundtrip", () => {
+    // Exercise the default path indirectly by ensuring fill_blank roundtrips correctly
+    // (covering all switch cases so v8 sees complete branch coverage)
+    const out = structuredToMarkdownDsl({
+      sections: [{
+        questions: [{ number: 1, type: "fill_blank", statement: "Complete: ____" }],
+      }],
+    });
+    expect(out).toContain("1) Complete");
+  });
+
+  it("emits no alternatives for multiple_choice question with empty alternatives (line 68 false branch)", () => {
+    const out = structuredToMarkdownDsl({
+      sections: [{ questions: [{ number: 1, type: "multiple_choice", statement: "Q?" }] }],
+    });
+    expect(out).toContain("1) Q?");
+    // no alternatives emitted
+    expect(out).not.toMatch(/^[a-f]\)/m);
+  });
+
+  it("emits no checkboxes for multiple_answer question with empty check_items (line 77 false branch)", () => {
+    const out = structuredToMarkdownDsl({
+      sections: [{ questions: [{ number: 1, type: "multiple_answer", statement: "Q?" }] }],
+    });
+    expect(out).toContain("1) Q?");
+    expect(out).not.toContain("[x]");
+    expect(out).not.toContain("[ ]");
+  });
+
+  it("emits nothing for matching question with empty match_pairs (line 99 false branch)", () => {
+    const out = structuredToMarkdownDsl({
+      sections: [{ questions: [{ number: 1, type: "matching", statement: "Q" }] }],
+    });
+    expect(out).toContain("1) Q");
+    expect(out).not.toContain(" -- ");
+  });
+
+  it("emits nothing for ordering question with empty order_items (line 107 false branch)", () => {
+    const out = structuredToMarkdownDsl({
+      sections: [{ questions: [{ number: 1, type: "ordering", statement: "Q" }] }],
+    });
+    expect(out).toContain("1) Q");
+    expect(out).not.toMatch(/\[\d+\]/);
+  });
+
+  it("emits nothing for table question with empty table_rows (line 115 false branch)", () => {
+    const out = structuredToMarkdownDsl({
+      sections: [{ questions: [{ number: 1, type: "table", statement: "Q" }] }],
+    });
+    expect(out).toContain("1) Q");
+    expect(out).not.toContain("|");
+  });
+
+  it("emits section questions without title prefix when section has no title (line 44 false branch)", () => {
+    // section.title is undefined => if(section.title) false branch
+    const out = structuredToMarkdownDsl({
+      sections: [{ questions: [{ number: 1, type: "open_ended", statement: "Q sem título" }] }],
+    });
+    expect(out).toContain("1) Q sem título");
+    expect(out).not.toContain("# ");
+  });
+
+  it("trailingContent with unknown block type silently skipped (else if scaffolding false branch)", () => {
+    // Pass an unknown block type via cast to hit the false branch of else if(type==='scaffolding')
+    const out = structuredToMarkdownDsl({
+      sections: [{
+        questions: [{
+          number: 1,
+          type: "open_ended",
+          statement: "Q",
+           
+          trailingContent: [{ id: "t1", type: "unknown_type" } as any],
+        }],
+      }],
+    });
+    expect(out).toContain("1) Q");
+  });
+
+  it("content block with unknown type silently skipped in emitQuestionFromContent (else if scaffolding false branch)", () => {
+    const out = structuredToMarkdownDsl({
+      sections: [{
+        questions: [{
+          number: 1,
+          type: "open_ended",
+          statement: "Q",
+          content: [
+            { id: "c1", type: "text", content: "header" },
+             
+            { id: "c2", type: "unknown_type" } as any,
+          ],
+        }],
+      }],
+    });
+    expect(out).toContain("1) header");
+  });
+
+  it("trailingContent non-scaffolding blocks don't add to scaffolding array (line 375 false branch)", () => {
+    // trailingContent with image and text blocks => the if(block.type==='scaffolding') loop iteration is false
+    const out = markdownDslToStructured("1) Q\na) op\n[img:trailing.png]\n");
+    const q = out.sections[0].questions[0];
+    // image goes to trailingContent; no scaffolding block means q.scaffolding is undefined
+    expect(q.trailingContent?.some((b) => b.type === "image")).toBe(true);
+    expect(q.scaffolding).toBeUndefined();
+  });
 });
 
 describe("roundtrip structured -> dsl -> structured", () => {

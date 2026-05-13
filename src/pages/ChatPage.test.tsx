@@ -134,4 +134,38 @@ describe("ChatPage", () => {
     });
     expect(toast.error).toHaveBeenCalledWith("falhou");
   });
+
+  it("does not update localMessages when sending with an active session (branch 32)", () => {
+    vi.mocked(useChatSessions).mockReturnValue({
+      data: [{ id: "s1", title: "X", messages: [{ role: "user", content: "hello" }] }],
+    } as never);
+    renderWithProviders(<ChatPage />);
+    // Select s1 so activeSession is defined
+    fireEvent.click(screen.getByText("select-s1"));
+    expect(screen.getByTestId("active")).toHaveTextContent("s1");
+    // Send while activeSession is set — branch `if (!activeSession)` is false so localMessages stays []
+    fireEvent.click(screen.getByText("send"));
+    expect(mutate).toHaveBeenCalled();
+    const [args] = mutate.mock.calls[0];
+    // session_id should be s1
+    expect(args.session_id).toBe("s1");
+  });
+
+  it("on error does not restore localMessages when active session exists (branch 45)", async () => {
+    const { toast } = await import("sonner");
+    vi.mocked(useChatSessions).mockReturnValue({
+      data: [{ id: "s1", title: "Y", messages: [] }],
+    } as never);
+    renderWithProviders(<ChatPage />);
+    fireEvent.click(screen.getByText("select-s1"));
+    fireEvent.click(screen.getByText("send"));
+    const [, options] = mutate.mock.calls[0];
+    act(() => {
+      options.onError(new Error("network fail"));
+    });
+    // toast.error must be called; no crash on the `if (!activeSession)` false branch
+    expect(toast.error).toHaveBeenCalledWith("network fail");
+    // msg-count stays at the active session's message count (0 in this case)
+    expect(screen.getByTestId("msg-count")).toHaveTextContent("0");
+  });
 });

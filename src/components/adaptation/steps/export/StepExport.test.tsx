@@ -5,6 +5,8 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import StepExport from "./StepExport";
 import type { WizardData } from "@/lib/domain/adaptationWizardHelpers";
 
+vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
+
 const mockInsert = vi.fn().mockReturnValue({
   select: vi.fn().mockReturnValue({
     single: vi.fn().mockResolvedValue({ data: { id: "ad-1" }, error: null }),
@@ -131,5 +133,102 @@ describe("StepExport", () => {
       fireEvent.click(back);
       expect(onPrev).toHaveBeenCalled();
     }
+  });
+
+  it("returns empty string for falsy version in flattenVersion (line 20 branch: !v)", async () => {
+    const dataWithNullVersions: WizardData = {
+      ...baseData,
+      result: {
+        version_universal: null as any,
+        version_directed: null as any,
+        strategies_applied: [],
+        pedagogical_justification: "Justificativa.",
+        implementation_tips: [],
+      },
+    };
+    renderExport(dataWithNullVersions);
+    fireEvent.click(screen.getByRole("button", { name: /copiar/i }));
+    await waitFor(() => expect(mockWriteText).toHaveBeenCalled());
+    const text = mockWriteText.mock.calls[0][0] as string;
+    expect(text).toContain("VERSÃO ORIGINAL");
+  });
+
+  it("renders and copies plain string versions (flattenVersion String(v) branch, line 22)", async () => {
+    // version_universal and version_directed as plain strings (not structured objects)
+    const dataWithStringVersions: WizardData = {
+      ...baseData,
+      result: {
+        version_universal: "Texto universal simples" as any,
+        version_directed: "Texto adaptado simples" as any,
+        strategies_applied: [],
+        pedagogical_justification: "Justificativa simples.",
+        implementation_tips: [],
+      },
+    };
+    renderExport(dataWithStringVersions);
+    fireEvent.click(screen.getByRole("button", { name: /copiar/i }));
+    await waitFor(() => expect(mockWriteText).toHaveBeenCalled());
+    const text = mockWriteText.mock.calls[0][0] as string;
+    expect(text).toContain("Texto universal simples");
+    expect(text).toContain("Texto adaptado simples");
+  });
+
+  it("shows toast.error with error message when save throws (line 101 left branch)", async () => {
+    const { toast } = await import("sonner");
+    const { supabase } = await import("@/integrations/supabase/client");
+    const mockFromFn = supabase.from as ReturnType<typeof vi.fn>;
+    mockFromFn.mockReturnValueOnce({
+      insert: vi.fn().mockReturnValue({
+        select: vi.fn().mockReturnValue({
+          single: vi.fn().mockResolvedValue({ data: null, error: { message: "DB error" } }),
+        }),
+      }),
+    });
+    const user = userEvent.setup();
+    renderExport();
+    await user.click(screen.getByRole("button", { name: /salvar/i }));
+    await waitFor(() => expect(toast.error).toHaveBeenCalled());
+  });
+
+  it("shows fallback error message when save throws without message (line 101 right branch)", async () => {
+    const { toast } = await import("sonner");
+    const { supabase } = await import("@/integrations/supabase/client");
+    const mockFromFn = supabase.from as ReturnType<typeof vi.fn>;
+    mockFromFn.mockReturnValueOnce({
+      insert: vi.fn().mockReturnValue({
+        select: vi.fn().mockReturnValue({
+          single: vi.fn().mockResolvedValue({ data: null, error: {} }),
+        }),
+      }),
+    });
+    const user = userEvent.setup();
+    renderExport();
+    await user.click(screen.getByRole("button", { name: /salvar/i }));
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith("Erro ao salvar. Tente novamente."));
+  });
+
+  it("shows toast.error when clipboard.writeText fails (line 112)", async () => {
+    const { toast } = await import("sonner");
+    mockWriteText.mockRejectedValueOnce(new Error("clipboard denied"));
+    renderExport();
+    fireEvent.click(screen.getByRole("button", { name: /copiar/i }));
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith("Erro ao copiar."));
+  });
+
+  it("does not call supabase when user is null (line 69 !user guard)", async () => {
+    const { useAuth } = await import("@/hooks/useAuth");
+    (useAuth as ReturnType<typeof vi.fn>).mockReturnValueOnce({
+      user: null,
+      profile: null,
+      loading: false,
+      signOut: vi.fn(),
+      session: null,
+    });
+    const user = userEvent.setup();
+    renderExport();
+    await user.click(screen.getByRole("button", { name: /salvar/i }));
+    // No supabase call should happen
+    await new Promise((r) => setTimeout(r, 50));
+    expect(mockInsert).not.toHaveBeenCalled();
   });
 });

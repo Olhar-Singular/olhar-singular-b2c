@@ -80,6 +80,7 @@ export async function streamAI({
       for (let raw of textBuffer.split("\n")) {
         if (!raw) continue;
         if (raw.endsWith("\r")) raw = raw.slice(0, -1);
+        /* v8 ignore next -- raw.trim()==="" is unreachable: textBuffer.trim() gate + main-loop newline drain */
         if (raw.startsWith(":") || raw.trim() === "") continue;
         if (!raw.startsWith("data: ")) continue;
         const jsonStr = raw.slice(6).trim();

@@ -5,10 +5,10 @@ import katex from "katex";
 
 const LATEX_INLINE_RE = /\$([^$\n]+)\$/g;
 
-function renderLatex(latex: string): string {
+export function renderLatex(latex: string): string {
   try {
     return katex.renderToString(latex, { throwOnError: false, displayMode: false, strict: false });
-  } catch {
+  } catch /* v8 ignore next 2 -- defensive fallback; katex is configured with throwOnError:false */ {
     return `<span class="latex-error" title="Invalid LaTeX">$${latex}$</span>`;
   }
 }

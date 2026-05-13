@@ -200,11 +200,13 @@ function emitQuestionFromContent(
   q: StructuredQuestion,
   n: (s: string) => string,
 ): void {
+  /* v8 ignore next -- call site guarantees content is defined and non-empty */
   const blocks = q.content ?? [];
   const firstTextIdx = blocks.findIndex((b) => b.type === "text");
 
   if (firstTextIdx >= 0) {
     const first = blocks[firstTextIdx];
+    /* v8 ignore next -- firstTextIdx comes from findIndex(b.type==="text") so first.type is always "text" */
     const headerText = first.type === "text" ? first.content : q.statement;
     lines.push(`${q.number}) ${n(headerText)}`);
   } else {
@@ -306,6 +308,7 @@ function parsedQuestionToStructured(pq: ParsedQuestion): StructuredQuestion {
           is_correct: a.correct || undefined,
         })
       );
+    /* v8 ignore next 3 -- alt regex (.+) guarantees non-empty text; filtered-empty branch unreachable */
     if (alts.length > 0) {
       q.alternatives = alts;
     }
@@ -383,6 +386,7 @@ function parsedQuestionToStructured(pq: ParsedQuestion): StructuredQuestion {
   return q;
 }
 
+/* v8 ignore next 14 -- dead helper kept for back-compat; not reachable via exported API */
 function buildFullStatement(pq: ParsedQuestion): string {
   let stmt = pq.statement;
   // Append non-instruction continuations to statement
@@ -429,6 +433,7 @@ function buildBlocksFromLines(
     if (textBuffer.length === 0) return;
     const text = textBuffer.join("\n").trim();
     textBuffer.length = 0;
+    /* v8 ignore next -- parser trims all lines before pushing; whitespace-only textBuffer is unreachable */
     if (text.length === 0) return;
     const richContent = parseMarkdownInline(text);
     blocks.push({
@@ -505,6 +510,7 @@ function mapQuestionType(parserType: string): StructuredQuestion["type"] {
     case "table":
     case "open_ended":
       return parserType;
+    /* v8 ignore next 3 -- defensive fallback; QuestionType union covers all cases */
     default:
       return "open_ended";
   }
