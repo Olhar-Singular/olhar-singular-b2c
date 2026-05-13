@@ -96,7 +96,7 @@ describe("StepAIEditor — generate flow", () => {
 });
 
 describe("StepAIEditor — interactions", () => {
-  it("toggles between Versão Original and Versão Adaptada tabs", async () => {
+  it("toggles between Versão Original e Versão Adaptada tabs", async () => {
     renderWithProviders(
       <StepAIEditor data={{ ...baseData, result: finishedResult }} updateData={vi.fn()} onNext={vi.fn()} onPrev={vi.fn()} />,
     );
@@ -125,5 +125,211 @@ describe("StepAIEditor — interactions", () => {
     fireEvent.click(avancar);
     expect(updateData).toHaveBeenCalled();
     expect(onNext).toHaveBeenCalled();
+  });
+
+  it("typing in Versão Adaptada tab calls directedContent onChange (line 48 function)", async () => {
+    const updateData = vi.fn();
+    renderWithProviders(
+      <StepAIEditor data={{ ...baseData, result: finishedResult }} updateData={updateData} onNext={vi.fn()} onPrev={vi.fn()} />,
+    );
+    const directedTab = await screen.findByRole("button", { name: /Versão Adaptada/i });
+    fireEvent.click(directedTab);
+    const editor = screen.getByTestId("ae");
+    fireEvent.change(editor, { target: { value: "novo conteúdo dirigido" } });
+    expect(updateData).toHaveBeenCalledWith(expect.objectContaining({ editorContentDirected: expect.any(Object) }));
+  });
+
+  it("onPrev is shown on credit error screen", async () => {
+    const onPrev = vi.fn();
+    fetchMock.mockResolvedValueOnce(new Response(JSON.stringify({ error: "no" }), { status: 402 }));
+    renderWithProviders(
+      <StepAIEditor data={baseData} updateData={vi.fn()} onNext={vi.fn()} onPrev={onPrev} />,
+    );
+    await waitFor(() => expect(screen.getByText(/Créditos insuficientes/i)).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: /Voltar/i }));
+    expect(onPrev).toHaveBeenCalled();
+  });
+});
+
+describe("StepAIEditor — toInitialDsl branches (line 26)", () => {
+  it("renders empty editor when result version is null/undefined (line 26 branch: !v)", async () => {
+    const resultWithNullVersions = {
+      version_universal: null as unknown as object,
+      version_directed: null as unknown as object,
+      strategies_applied: [],
+      pedagogical_justification: "",
+      implementation_tips: [],
+    };
+    renderWithProviders(
+      <StepAIEditor
+        data={{ ...baseData, result: resultWithNullVersions as any }}
+        updateData={vi.fn()}
+        onNext={vi.fn()}
+        onPrev={vi.fn()}
+      />,
+    );
+    expect(await screen.findByText(/Editar Atividade Adaptada/i)).toBeInTheDocument();
+    expect(screen.getByTestId("ae")).toHaveValue("");
+  });
+
+  it("renders with plain string version (not structured — line 26 String(v) path)", async () => {
+    const resultWithStringVersions = {
+      version_universal: "Texto simples universal",
+      version_directed: "Texto simples adaptado",
+      strategies_applied: [],
+      pedagogical_justification: "",
+      implementation_tips: [],
+    };
+    renderWithProviders(
+      <StepAIEditor
+        data={{ ...baseData, result: resultWithStringVersions as any }}
+        updateData={vi.fn()}
+        onNext={vi.fn()}
+        onPrev={vi.fn()}
+      />,
+    );
+    expect(await screen.findByText(/Editar Atividade Adaptada/i)).toBeInTheDocument();
+    expect(screen.getByTestId("ae")).toHaveValue("Texto simples universal");
+  });
+});
+
+describe("StepAIEditor — editorContent fallback branches (lines 43, 48)", () => {
+  it("uses editorContentUniversal.dsl when already in data (line 43 ?? left branch)", async () => {
+    renderWithProviders(
+      <StepAIEditor
+        data={{
+          ...baseData,
+          result: finishedResult,
+          editorContentUniversal: { dsl: "dsl-cached-universal", registry: {} },
+          editorContentDirected: { dsl: "dsl-cached-directed", registry: {} },
+        }}
+        updateData={vi.fn()}
+        onNext={vi.fn()}
+        onPrev={vi.fn()}
+      />,
+    );
+    expect(await screen.findByTestId("ae")).toHaveValue("dsl-cached-universal");
+  });
+});
+
+describe("StepAIEditor — result-change useEffect (lines 54-56)", () => {
+  it("resets editor content when data.result changes to a new value", async () => {
+    const updateData = vi.fn();
+    const { rerender } = renderWithProviders(
+      <StepAIEditor
+        data={{ ...baseData, result: finishedResult }}
+        updateData={updateData}
+        onNext={vi.fn()}
+        onPrev={vi.fn()}
+      />,
+    );
+    // Wait for initial render
+    await screen.findByText(/Editar Atividade Adaptada/i);
+
+    const newResult = {
+      ...finishedResult,
+      version_universal: { sections: [{ title: "Novo", questions: [{ number: 1, type: "open_ended", statement: "Q2" }] }] },
+    };
+
+    rerender(
+      <StepAIEditor
+        data={{ ...baseData, result: newResult }}
+        updateData={updateData}
+        onNext={vi.fn()}
+        onPrev={vi.fn()}
+      />,
+    );
+
+    await waitFor(() => {
+      // The reset is triggered; updateData is called via onChange in useActivityContent
+      expect(screen.getByTestId("ae")).toBeInTheDocument();
+    });
+  });
+});
+
+describe("StepAIEditor — non-402 credit error (line 92)", () => {
+  it("throws generic error when credit check fails with non-402 status (line 92)", async () => {
+    const { toast } = await import("sonner");
+    // Credit check returns 500 with error message
+    fetchMock.mockResolvedValueOnce(
+      new Response(JSON.stringify({ error: "Serviço indisponível" }), { status: 500 }),
+    );
+    renderWithProviders(
+      <StepAIEditor data={baseData} updateData={vi.fn()} onNext={vi.fn()} onPrev={vi.fn()} />,
+    );
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith("Serviço indisponível"));
+  });
+
+  it("uses fallback error message when credit check 500 has no error field (line 92 || branch)", async () => {
+    const { toast } = await import("sonner");
+    fetchMock.mockResolvedValueOnce(
+      new Response(JSON.stringify({}), { status: 503 }),
+    );
+    renderWithProviders(
+      <StepAIEditor data={baseData} updateData={vi.fn()} onNext={vi.fn()} onPrev={vi.fn()} />,
+    );
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith("Erro 503"));
+  });
+
+  it("uses fallback 'Falha na adaptação' when adapt-activity fails with no error field (line 119 right branch)", async () => {
+    const { toast } = await import("sonner");
+    fetchMock
+      .mockResolvedValueOnce(new Response(JSON.stringify({ ok: true }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({}), { status: 500 }));
+    renderWithProviders(
+      <StepAIEditor data={baseData} updateData={vi.fn()} onNext={vi.fn()} onPrev={vi.fn()} />,
+    );
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith("Falha na adaptação"));
+  });
+
+  it("uses fallback 'Erro ao gerar adaptação' when catch error has no message (line 131 right branch)", async () => {
+    const { toast } = await import("sonner");
+    // Throw an error object with no message
+    fetchMock
+      .mockResolvedValueOnce(new Response(JSON.stringify({ ok: true }), { status: 200 }))
+      .mockRejectedValueOnce(Object.assign(new Error(), { message: undefined }));
+    renderWithProviders(
+      <StepAIEditor data={baseData} updateData={vi.fn()} onNext={vi.fn()} onPrev={vi.fn()} />,
+    );
+    await waitFor(() => expect(toast.error).toHaveBeenCalled());
+  });
+
+  it("uses empty error object when credit check response json() fails (line 87 catch(() => ({})) function)", async () => {
+    const { toast } = await import("sonner");
+    // Return a non-ok response whose body cannot be parsed as JSON
+    const invalidJsonResp = new Response("não é json", { status: 500 });
+    fetchMock.mockResolvedValueOnce(invalidJsonResp);
+    renderWithProviders(
+      <StepAIEditor data={baseData} updateData={vi.fn()} onNext={vi.fn()} onPrev={vi.fn()} />,
+    );
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith("Erro 500"));
+  });
+
+  it("uses empty error object when adapt-activity response json() fails (line 118 catch(() => ({})) function)", async () => {
+    const { toast } = await import("sonner");
+    fetchMock
+      .mockResolvedValueOnce(new Response(JSON.stringify({ ok: true }), { status: 200 }))
+      .mockResolvedValueOnce(new Response("não é json", { status: 500 }));
+    renderWithProviders(
+      <StepAIEditor data={baseData} updateData={vi.fn()} onNext={vi.fn()} onPrev={vi.fn()} />,
+    );
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith("Falha na adaptação"));
+  });
+});
+
+describe("StepAIEditor — AbortError (line 130)", () => {
+  it("silently ignores AbortError during generation", async () => {
+    const { toast } = await import("sonner");
+    // Credit check OK, then adapt-activity throws AbortError
+    fetchMock
+      .mockResolvedValueOnce(new Response(JSON.stringify({ ok: true }), { status: 200 }))
+      .mockRejectedValueOnce(Object.assign(new Error("Aborted"), { name: "AbortError" }));
+    renderWithProviders(
+      <StepAIEditor data={baseData} updateData={vi.fn()} onNext={vi.fn()} onPrev={vi.fn()} />,
+    );
+    // Should NOT call toast.error for AbortError
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+    await new Promise((r) => setTimeout(r, 50));
+    expect(toast.error).not.toHaveBeenCalled();
   });
 });

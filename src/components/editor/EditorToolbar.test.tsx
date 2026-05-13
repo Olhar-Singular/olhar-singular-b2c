@@ -98,6 +98,16 @@ describe("EditorToolbar", () => {
     expect(screen.queryByText("Seção")).toBeNull();
   });
 
+  it("keeps the Inserir dropdown open when mousedown fires inside the dropdown itself", () => {
+    render(<Wrapper />);
+    fireEvent.click(screen.getByText(/Inserir/i));
+    const secaoItem = screen.getByText("Seção");
+    expect(secaoItem).toBeInTheDocument();
+    // mousedown inside the dropdown container should NOT close it
+    fireEvent.mouseDown(secaoItem);
+    expect(screen.getByText("Seção")).toBeInTheDocument();
+  });
+
   it("Info button inserts an instruction template", () => {
     const onInsert = vi.fn();
     render(<Wrapper onInsert={onInsert} />);

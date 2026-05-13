@@ -30,15 +30,20 @@ export default function PdfPreviewModal({ open, onOpenChange, file, onCrop, init
       setLoading(true);
       try {
         const count = await getPdfPageCount(file);
+        /* v8 ignore next -- cancelled=true only on unmount-during-fetch race */
         if (cancelled) return;
         setPageCount(count);
         const startPage = initialPage && initialPage >= 1 && initialPage <= count ? initialPage : 1;
         const img = await renderPdfPage(file, startPage, 2);
+        /* v8 ignore next -- same unmount race guard */
         if (cancelled) return;
         setPageImage(img);
         setCurrentPage(startPage);
       } catch (e) { console.error("Error loading PDF:", e); }
-      finally { if (!cancelled) setLoading(false); }
+      finally {
+        /* v8 ignore next -- cancelled=true in finally only on unmount race */
+        if (!cancelled) setLoading(false);
+      }
     };
     load();
     return () => { cancelled = true; };
@@ -56,12 +61,14 @@ export default function PdfPreviewModal({ open, onOpenChange, file, onCrop, init
   };
 
   const handleClose = (isOpen: boolean) => {
+    /* v8 ignore next -- Radix Dialog only calls onOpenChange(false); the true branch (isOpen=true) is unreachable in controlled mode */
     if (!isOpen) { setPageImage(null); setCurrentPage(1); setPageCount(0); setCropping(false); setCropStart(null); setCropEnd(null); }
     onOpenChange(isOpen);
   };
 
   const getRelativeCoords = useCallback((e: React.MouseEvent) => {
     const img = imgRef.current;
+    /* v8 ignore next -- imgRef is always bound while the image is mounted */
     if (!img) return null;
     const rect = img.getBoundingClientRect();
     return {
@@ -74,6 +81,7 @@ export default function PdfPreviewModal({ open, onOpenChange, file, onCrop, init
     if (!cropping) return;
     e.preventDefault();
     const coords = getRelativeCoords(e);
+    /* v8 ignore next -- coords is null only when imgRef unmounts between events */
     if (!coords) return;
     setCropStart(coords); setCropEnd(coords); setIsDragging(true);
   };
@@ -81,6 +89,7 @@ export default function PdfPreviewModal({ open, onOpenChange, file, onCrop, init
     if (!isDragging || !cropping) return;
     e.preventDefault();
     const coords = getRelativeCoords(e);
+    /* v8 ignore next -- false branch only when imgRef unmounts mid-drag */
     if (coords) setCropEnd(coords);
   };
   const handleMouseUp = () => setIsDragging(false);

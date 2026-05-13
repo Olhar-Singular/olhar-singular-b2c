@@ -26,6 +26,7 @@ function toggleBarrier(
   checked: boolean,
 ): BarrierItem[] {
   if (checked) {
+    /* v8 ignore next -- defensive guard: Radix Checkbox fires onCheckedChange(false) for checked items, so duplicate-add is unreachable via normal UI */
     if (barrierIsActive(barriers, dimension, barrierKey)) return barriers;
     return [...barriers, { dimension, barrier_key: barrierKey, label, is_active: true }];
   }
@@ -42,6 +43,7 @@ export function StepBarrierSelection({ data, updateData, onNext, onPrev }: Props
       return;
     }
     const profile = profiles.find((p) => p.id === profileId);
+    /* v8 ignore next -- defensive guard: select options are generated from profiles, so an unknown profileId is unreachable via normal UI */
     if (!profile) return;
 
     const barriers: BarrierItem[] = profile.barriers.map((key: string) => {

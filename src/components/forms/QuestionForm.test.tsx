@@ -420,4 +420,140 @@ describe("QuestionForm — field interactions", () => {
       expect(toast.error).toHaveBeenCalledWith("Erro", expect.objectContaining({ description: "insert falhou" })),
     );
   });
+
+  it("uploads data: image to storage and replaces with public URL on save (lines 116-125)", async () => {
+    const onSaved = vi.fn();
+    render(
+      <QuestionForm
+        open
+        onOpenChange={vi.fn()}
+        question={{ id: "q1", text: "x", subject: "Física", difficulty: "medio", image_url: "data:image/png;base64,abc" }}
+        onSaved={onSaved}
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: /Atualizar/ }));
+    await waitFor(() => expect(uploadSpy).toHaveBeenCalled());
+    expect(getPublicUrlSpy).toHaveBeenCalled();
+    expect(onSaved).toHaveBeenCalled();
+  });
+
+  it("sets finalImageUrl to null when storage upload returns an error (line 125)", async () => {
+    uploadSpy.mockResolvedValue({ error: new Error("upload falhou") });
+    const onSaved = vi.fn();
+    render(
+      <QuestionForm
+        open
+        onOpenChange={vi.fn()}
+        question={{ id: "q1", text: "x", subject: "Física", difficulty: "medio", image_url: "data:image/png;base64,abc" }}
+        onSaved={onSaved}
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: /Atualizar/ }));
+    await waitFor(() => expect(uploadSpy).toHaveBeenCalled());
+    // upload error → finalImageUrl=null → save still succeeds
+    expect(onSaved).toHaveBeenCalled();
+  });
+});
+
+describe("QuestionForm — branch coverage", () => {
+  it("question fields with undefined values fall back to empty strings (lines 64-67)", () => {
+    // question has no text/subject/difficulty — triggers the || fallback branches
+    render(
+      <QuestionForm
+        open
+        onOpenChange={vi.fn()}
+        question={{ id: "q1" }}
+        onSaved={vi.fn()}
+      />,
+    );
+    // Text textarea should be empty (fallback "")
+    const textareas = screen.getAllByRole("textbox");
+    expect((textareas[0] as HTMLTextAreaElement).value).toBe("");
+  });
+
+  it("saves objetiva question with options.length > 0 (options branch true, line 134)", async () => {
+    const onSaved = vi.fn();
+    render(
+      <QuestionForm
+        open
+        onOpenChange={vi.fn()}
+        question={{ id: "q1", text: "q", subject: "Física", difficulty: "medio", options: ["A", "B"], correct_answer: 0 }}
+        onSaved={onSaved}
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: /Atualizar/ }));
+    await waitFor(() => expect(eqSpy).toHaveBeenCalledWith("id", "q1"));
+    expect(updateSpy).toHaveBeenCalledWith(expect.objectContaining({ options: ["A", "B"], correct_answer: 0 }));
+    expect(onSaved).toHaveBeenCalled();
+  });
+
+  it("saves objetiva question with empty options array (options null branch, line 134)", async () => {
+    const onSaved = vi.fn();
+    render(
+      <QuestionForm
+        open
+        onOpenChange={vi.fn()}
+        question={{ id: "q1", text: "q", subject: "Física", difficulty: "medio", options: [], correct_answer: null }}
+        onSaved={onSaved}
+      />,
+    );
+    // Switch to objetiva via select
+    const selects = screen.getAllByLabelText("select-mock") as HTMLSelectElement[];
+    const tipoSelect = selects.find((s) => Array.from(s.options).some((o) => o.value === "objetiva"));
+    fireEvent.change(tipoSelect!, { target: { value: "objetiva" } });
+    fireEvent.click(screen.getByRole("button", { name: /Atualizar/ }));
+    await waitFor(() => expect(eqSpy).toHaveBeenCalledWith("id", "q1"));
+    // options is empty → null; correct_answer objetiva with null
+    expect(updateSpy).toHaveBeenCalledWith(expect.objectContaining({ options: null, correct_answer: null }));
+    expect(onSaved).toHaveBeenCalled();
+  });
+
+  it("deselects the already-correct alternative by clicking it again (line 258 null branch)", async () => {
+    const user = userEvent.setup();
+    render(
+      <QuestionForm
+        open
+        onOpenChange={vi.fn()}
+        question={{ id: "q1", text: "x", subject: "Física", difficulty: "medio", options: ["A", "B"], correct_answer: 0 }}
+        onSaved={vi.fn()}
+      />,
+    );
+    // A is correct (shows ✓). Click ✓ to deselect.
+    const checkButton = screen.getAllByRole("button").find((b) => b.textContent === "✓");
+    expect(checkButton).toBeDefined();
+    await user.click(checkButton!);
+    // After deselect, no ✓ remains
+    const afterButtons = screen.getAllByRole("button");
+    expect(afterButtons.find((b) => b.textContent === "✓")).toBeUndefined();
+  });
+});
+
+describe("QuestionForm — MathPreview and image preview", () => {
+  it("renders MathPreview when enunciado contains LaTeX content (line 32)", () => {
+    render(
+      <QuestionForm
+        open
+        onOpenChange={vi.fn()}
+        question={{ id: "q1", text: "Calcule $\\frac{1}{2}$", subject: "Física", difficulty: "medio" }}
+        onSaved={vi.fn()}
+      />,
+    );
+    expect(screen.getByText("Prévia matemática")).toBeInTheDocument();
+  });
+
+  it("clicking the image thumbnail opens the ImagePreviewDialog (line 182)", () => {
+    render(
+      <QuestionForm
+        open
+        onOpenChange={vi.fn()}
+        question={{ id: "q1", text: "x", subject: "Física", difficulty: "medio", image_url: "https://x.png" }}
+        onSaved={vi.fn()}
+      />,
+    );
+    const img = screen.getByAltText("Imagem da questão");
+    fireEvent.click(img);
+    // After click, the ImagePreviewDialog should be open — verify the img is still rendered
+    // (ImagePreviewDialog is a separate dialog that renders when open=true)
+    expect(img).toBeInTheDocument();
+  });
 });

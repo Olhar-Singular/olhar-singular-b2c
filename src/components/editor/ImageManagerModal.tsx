@@ -145,6 +145,8 @@ export default function ImageManagerModal({ open, onClose, onConfirm }: Props) {
   }, []);
 
   const handleConfirm = useCallback(() => {
+    /* v8 ignore next -- the Inserir button is disabled when images.length === 0,
+     * so the else branch (images empty) is structurally unreachable via UI. */
     if (images.length > 0) onConfirm(images);
     onClose();
   }, [images, onConfirm, onClose]);

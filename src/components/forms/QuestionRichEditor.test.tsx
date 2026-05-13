@@ -123,4 +123,31 @@ describe("QuestionRichEditor", () => {
     const button = screen.getByTitle(/Marca-texto/i);
     expect(button.className).toContain("accent");
   });
+
+  it("calls setTick via onSelectionUpdate captured from useEditor config (line 177)", () => {
+    let capturedOnSelectionUpdate: (() => void) | undefined;
+    vi.mocked(useEditor).mockImplementation((cfg: unknown) => {
+      const c = cfg as { onSelectionUpdate?: () => void };
+      capturedOnSelectionUpdate = c.onSelectionUpdate;
+      return editorMock as never;
+    });
+    render(<QuestionRichEditor value="" onChange={vi.fn()} />);
+    // Calling onSelectionUpdate should not throw and triggers the setTick updater
+    expect(() => capturedOnSelectionUpdate?.()).not.toThrow();
+  });
+
+  it("ToolbarButton renders active class when active=true (line 106 branch)", () => {
+    editorMock.isActive = vi.fn().mockReturnValue(true);
+    render(<QuestionRichEditor value="" onChange={vi.fn()} />);
+    const boldButton = screen.getByTitle(/Negrito/);
+    expect(boldButton.className).toContain("accent");
+  });
+
+  it("injectStyles is idempotent — second render does not append duplicate style tags", () => {
+    render(<QuestionRichEditor value="" onChange={vi.fn()} />);
+    const countBefore = document.head.querySelectorAll("style").length;
+    render(<QuestionRichEditor value="" onChange={vi.fn()} />);
+    const countAfter = document.head.querySelectorAll("style").length;
+    expect(countAfter).toBe(countBefore);
+  });
 });

@@ -115,3 +115,12 @@ describe("LatexExtension", () => {
     expect(decoSet).toBeDefined();
   });
 });
+
+import { renderLatex } from "./latexExtension";
+
+describe("renderLatex (internal helper)", () => {
+  it("returns rendered HTML for valid LaTeX", () => {
+    const html = renderLatex("x^2");
+    expect(html).toContain("katex");
+  });
+});

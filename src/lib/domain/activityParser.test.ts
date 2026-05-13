@@ -320,6 +320,26 @@ describe("parseActivity — continuations and blank-line marker", () => {
   });
 });
 
+describe("parseActivity — missing branches", () => {
+  it("ignores [img:...] line that appears outside any question (line 224 false branch)", () => {
+    // [img:...] outside a question: curQ is null, so the if(curQ) branch is not taken
+    const out = parseActivity("# Seção\n[img:outside.png]\n1) Q?\n");
+    const sec = out.sections[0];
+    // The image line outside a question is silently dropped (no crash, no item added for it)
+    const unrecognized = sec.items.filter((i) => i.kind === "unrecognized");
+    // img line should not be an unrecognized item, it just continues
+    expect(unrecognized.map((u) => u.kind === "unrecognized" && u.text)).not.toContain("outside.png");
+  });
+
+  it("skips matching pair when alternatives exist but matchMode is false (line 341 false branch)", () => {
+    // a -- b matches the matching regex; but alternatives.length > 0 and matchMode is false
+    // => the if(matchMode || curQ.alternatives.length === 0) is false => line falls through to alt/continuation
+    const q = firstQuestion("1) Q\na) primeira alternativa\nb -- c\n");
+    // The line b -- c is not treated as a match pair because alternatives already exist and matchMode=false
+    expect(q.matchPairs).toHaveLength(0);
+  });
+});
+
 describe("parseActivity — multi-question + multi-section", () => {
   it("parses two questions separated by a question marker", () => {
     const out = parseActivity("# Sec\n1) p1\na) op\n2) p2\nb) op\n");
@@ -334,5 +354,22 @@ describe("parseActivity — multi-question + multi-section", () => {
     const qs = out.sections[0].items.filter((i) => i.kind === "question");
     if (qs[0].kind === "question") expect(qs[0].data.type).toBe("multiple_choice");
     if (qs[1].kind === "question") expect(qs[1].data.type).toBe("multiple_answer");
+  });
+
+  it("resets checkMode on blank line when alternatives exist (line 173)", () => {
+    // checkMode=true + alternatives.length > 0 => line 173 executes on blank line
+    // Sequence: alternatives exist, then a checkbox item (sets checkMode), then blank
+    const q = firstQuestion("# S\n1) Q?\na) primeira\n[x] marcado\n\nb) segunda\n");
+    // After blank resets checkMode; b) is parsed as a new alternative
+    expect(q.alternatives.length).toBeGreaterThanOrEqual(2);
+  });
+
+  it("stores a blank tf item nested under the last alternative (line 311)", () => {
+    // ( ) text after an alternative => stored in lastAlt.tfItems
+    const q = firstQuestion("# S\n1) Q?\na) primeira\n( ) sub item\n");
+    const lastAlt = q.alternatives[q.alternatives.length - 1];
+    expect(lastAlt.tfItems.length).toBeGreaterThan(0);
+    expect(lastAlt.tfItems[0].marked).toBeNull();
+    expect(lastAlt.tfItems[0].text).toBe("sub item");
   });
 });

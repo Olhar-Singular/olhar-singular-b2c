@@ -69,6 +69,7 @@ export default function BarrierProfilesPage() {
   }
 
   async function handleDelete() {
+    /* v8 ignore next -- defensive guard: Confirmar button is only enabled when deleteTarget is set */
     if (!deleteTarget) return;
     await remove.mutateAsync(deleteTarget);
     setDeleteTarget(null);

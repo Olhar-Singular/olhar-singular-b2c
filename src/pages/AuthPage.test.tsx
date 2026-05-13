@@ -194,4 +194,33 @@ describe("AuthPage", () => {
     );
     expect(screen.getByLabelText(/nome/i)).toBeInTheDocument();
   });
+
+  it("shows fallback error message when signUp returns error with no message (line 62 branch)", async () => {
+    const user = userEvent.setup();
+    vi.mocked(supabase.auth.signUp).mockResolvedValue({
+      error: { message: "" },
+    } as never);
+    renderAuthPage();
+    await user.click(screen.getByRole("button", { name: /cadastre-se/i }));
+    await user.type(screen.getByLabelText(/nome/i), "Ana");
+    await user.type(screen.getByLabelText(/e-mail/i), "ana@b.com");
+    await user.type(screen.getByLabelText(/senha/i), "123456");
+    await user.click(screen.getByRole("button", { name: /criar conta/i }));
+    await waitFor(() =>
+      expect(screen.getByRole("alert")).toHaveTextContent(/Erro ao criar conta/i)
+    );
+  });
+
+  it("shows fallback error 'Erro ao entrar.' when login returns error with no message (line 47 binary-expr branch)", async () => {
+    vi.mocked(supabase.auth.signInWithPassword).mockResolvedValue({
+      error: { message: "" },
+    } as never);
+    renderAuthPage();
+    fireEvent.change(screen.getByLabelText(/e-mail/i), { target: { value: "a@b.com" } });
+    fireEvent.change(screen.getByLabelText(/senha/i), { target: { value: "123456" } });
+    fireEvent.click(screen.getByRole("button", { name: /entrar/i }));
+    await waitFor(() =>
+      expect(screen.getByRole("alert")).toHaveTextContent(/Erro ao entrar/i)
+    );
+  });
 });

@@ -115,4 +115,49 @@ describe("BarrierProfilesPage", () => {
     await user.click(screen.getByRole("button", { name: /Criar primeiro perfil/i }));
     expect(screen.getByRole("dialog")).toBeInTheDocument();
   });
+
+  it("calls update.mutateAsync when editing a profile and submitting (lines 63-68)", async () => {
+    mockUpdate.mockResolvedValue(undefined);
+    const user = userEvent.setup();
+    renderPage();
+    // Open edit dialog
+    await user.click(screen.getByRole("button", { name: /editar/i }));
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+    // Submit the form (BarrierProfileForm calls onSubmit with form values)
+    // Directly trigger via the submit button in the form
+    const submitBtn = screen.getByRole("button", { name: /Salvar perfil/i });
+    await user.click(submitBtn);
+    await waitFor(() => expect(mockUpdate).toHaveBeenCalled());
+  });
+
+  it("calls create.mutateAsync when creating a new profile and submitting (else branch of handleSubmit)", async () => {
+    mockCreate.mockResolvedValue(undefined);
+    const user = userEvent.setup();
+    renderPage();
+    // Click "Novo perfil" to open dialog with editing=null
+    await user.click(screen.getByRole("button", { name: /novo perfil/i }));
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+    expect(screen.getByText(/Novo perfil de barreira/i)).toBeInTheDocument();
+    // Select at least one barrier so validation passes (schema requires min 1)
+    const checkboxes = screen.getAllByRole("checkbox");
+    await user.click(checkboxes[0]);
+    // Submit the form
+    const submitBtn = screen.getByRole("button", { name: /Salvar perfil/i });
+    await user.click(submitBtn);
+    await waitFor(() => expect(mockCreate).toHaveBeenCalled());
+  });
+
+  it("shows singular form when profile has exactly 1 barrier (covers !== 1 false branch)", async () => {
+    const m = await import("@/hooks/useBarrierProfiles");
+    vi.mocked(m.useBarrierProfiles).mockReturnValue({
+      data: [{ ...mockProfiles[0], barriers: ["tea_abstracao"] }],
+      isLoading: false,
+    } as never);
+    renderPage();
+    // With 1 barrier, the text should be "1 barreira selecionada" (no trailing 's')
+    expect(screen.getByText(/1 barreira/i)).toBeInTheDocument();
+    // The text should NOT have trailing 's' after "selecionada"
+    const statsText = screen.getByText(/1 barreira/i).textContent;
+    expect(statsText).toMatch(/1 barreira selecionada$/);
+  });
 });

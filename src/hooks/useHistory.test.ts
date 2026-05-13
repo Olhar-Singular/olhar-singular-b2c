@@ -113,6 +113,52 @@ describe("useHistory", () => {
     expect(result.current.current).toBe("b");
   });
 
+  it("Meta+Z triggers undo (macOS metaKey branch)", () => {
+    const { result } = renderHook(() => useHistory("a"));
+    act(() => result.current.set("b"));
+    act(() => {
+      window.dispatchEvent(new KeyboardEvent("keydown", { key: "z", metaKey: true }));
+    });
+    expect(result.current.current).toBe("a");
+  });
+
+  it("Meta+Shift+Z triggers redo (Ctrl+Z+Shift redo branch)", () => {
+    const { result } = renderHook(() => useHistory("a"));
+    act(() => result.current.set("b"));
+    act(() => result.current.undo());
+    act(() => {
+      window.dispatchEvent(new KeyboardEvent("keydown", { key: "z", ctrlKey: true, shiftKey: true }));
+    });
+    expect(result.current.current).toBe("b");
+  });
+
+  it("unrelated key combo (Ctrl+X) does not trigger undo or redo", () => {
+    const { result } = renderHook(() => useHistory("a"));
+    act(() => result.current.set("b"));
+    act(() => {
+      window.dispatchEvent(new KeyboardEvent("keydown", { key: "x", ctrlKey: true }));
+    });
+    // State should be unchanged
+    expect(result.current.current).toBe("b");
+    expect(result.current.canUndo).toBe(true);
+  });
+
+  it("ignores Ctrl+Z keydown originating from select elements", () => {
+    const { result } = renderHook(() => useHistory("a"));
+    act(() => result.current.set("b"));
+
+    const select = document.createElement("select");
+    document.body.appendChild(select);
+    const event = new KeyboardEvent("keydown", { key: "z", ctrlKey: true, bubbles: true });
+    Object.defineProperty(event, "target", { value: select, writable: false });
+    act(() => {
+      window.dispatchEvent(event);
+    });
+    document.body.removeChild(select);
+
+    expect(result.current.current).toBe("b");
+  });
+
   describe("reset", () => {
     beforeEach(() => vi.clearAllMocks());
 

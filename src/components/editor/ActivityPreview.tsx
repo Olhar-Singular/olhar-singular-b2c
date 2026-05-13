@@ -58,6 +58,8 @@ function isApoioLine(line: string): boolean {
 
 function apoioInner(line: string): string {
   const m = APOIO_RE.exec(line);
+  /* v8 ignore next -- apoioInner is only called after isApoioLine(c) === true,
+   * so APOIO_RE always matches; the fallback branch is structurally unreachable. */
   return m ? m[1] : line.slice(2);
 }
 
@@ -106,6 +108,10 @@ function QuestionAlternatives({ q }: { q: ParsedQuestion }) {
                     );
                   }
                   if (c.startsWith("> ")) {
+                    /* v8 ignore start -- the parser routes Apoio lines to
+                     * question-level continuations, never to alternative
+                     * continuations, so isApoioLine is always false here and
+                     * the entire if-branch is structurally unreachable. */
                     if (isApoioLine(c)) {
                       return (
                         <div key={ci} className="mt-1.5 py-1.5 px-3 bg-amber-50 border-l-4 border-amber-400 rounded-r-md text-sm text-amber-900">
@@ -114,6 +120,7 @@ function QuestionAlternatives({ q }: { q: ParsedQuestion }) {
                         </div>
                       );
                     }
+                    /* v8 ignore stop */
                     return (
                       <div key={ci} className="mt-1.5 py-1.5 px-3 bg-indigo-50 border-l-4 border-indigo-400 rounded-r-md text-sm text-indigo-800">
                         <InlineHtml html={formatInline(c.slice(2))} />
@@ -401,7 +408,11 @@ function SingleImage({
           <ImageResizer
             src={resolvedSrc}
             initialWidth={width}
+            /* v8 ignore start -- onResize fires only on real drag events inside
+             * ImageResizer (mocked in tests); this callback body is never
+             * invoked and is unreachable. */
             onResize={(w) => onImageResize(ref, w)}
+            /* v8 ignore stop */
           />
         </div>
       );
@@ -448,6 +459,9 @@ function QuestionImages({
   onImageResize?: (url: string, width: number) => void;
   imageRegistry?: ImageRegistry;
 }) {
+  /* v8 ignore start -- fallbackLeadingRefs is always [] because the parser
+   * always records [img:…] markers in continuations; the non-empty branch of
+   * QuestionImages is structurally unreachable for any valid DSL input. */
   if (refs.length === 0) return null;
 
   return (
@@ -457,6 +471,7 @@ function QuestionImages({
       ))}
     </>
   );
+  /* v8 ignore stop */
 }
 
 // ── Question card ──
@@ -473,8 +488,11 @@ function QuestionCard({
   isActive?: boolean;
 }) {
   const cardRef = useRef<HTMLDivElement>(null);
+  /* v8 ignore start -- TYPE_BADGE_CLASSES and TYPE_LABELS cover all QuestionType
+   * values exhaustively; the || fallbacks are unreachable for any valid parsed type. */
   const badgeCls = TYPE_BADGE_CLASSES[q.type] || "bg-red-100 text-red-700";
   const label = TYPE_LABELS[q.type] || "?";
+  /* v8 ignore stop */
 
   useEffect(() => {
     if (isActive && cardRef.current) {

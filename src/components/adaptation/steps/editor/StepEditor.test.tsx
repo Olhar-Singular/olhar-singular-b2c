@@ -82,4 +82,10 @@ describe("StepEditor", () => {
     const calls = updateData.mock.calls.map(([arg]) => arg);
     expect(calls.some((c) => c.editorContentManual !== undefined)).toBe(true);
   });
+
+  it("seeds editor with empty string when activityText is empty and no result (line 22 falsy branch)", () => {
+    const emptyData: WizardData = { ...baseData, activityText: "", result: null };
+    render(<StepEditor data={emptyData} updateData={vi.fn()} onNext={vi.fn()} onPrev={vi.fn()} />);
+    expect(screen.getByTestId("editor-textarea")).toHaveValue("");
+  });
 });

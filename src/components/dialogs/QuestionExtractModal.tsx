@@ -114,6 +114,7 @@ export default function QuestionExtractModal({
   };
 
   const handleExtract = async () => {
+    /* v8 ignore next -- defensive guard: file/user/canExtract are all guaranteed by the UI flow that leads to this call */
     if (!file || !user || !canExtract) return;
 
     setStep("extracting");
