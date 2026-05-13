@@ -152,15 +152,17 @@ describe("AuthPage", () => {
     expect(screen.getByRole("alert")).toHaveTextContent(/pelo menos 6 caracteres/i);
   });
 
-  it("shows generic error message when supabase returns non-Invalid-login error", async () => {
+  it("shows generic error message when supabase returns an unmapped error", async () => {
     vi.mocked(supabase.auth.signInWithPassword).mockResolvedValue({
-      error: { message: "Network down" },
+      error: { message: "Some unexpected server error" },
     } as never);
     renderAuthPage();
     fireEvent.change(screen.getByLabelText(/e-mail/i), { target: { value: "a@b.com" } });
     fireEvent.change(screen.getByLabelText(/senha/i), { target: { value: "123456" } });
     fireEvent.click(screen.getByRole("button", { name: /entrar/i }));
-    await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent(/Network down/));
+    await waitFor(() =>
+      expect(screen.getByRole("alert")).toHaveTextContent(/Erro ao acessar a conta/i)
+    );
   });
 
   it("shows already-registered error when signUp returns 'already registered'", async () => {

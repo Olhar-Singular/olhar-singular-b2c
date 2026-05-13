@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
+import { parseAuthError } from "@/lib/utils/errors";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -41,11 +42,7 @@ export default function AuthPage() {
       if (isLogin) {
         const { error: err } = await supabase.auth.signInWithPassword({ email, password });
         if (err) {
-          if (err.message?.includes("Invalid login")) {
-            setError("E-mail ou senha incorretos.");
-          } else {
-            setError(err.message || "Erro ao entrar.");
-          }
+          setError(parseAuthError(err.message));
           return;
         }
         navigate("/dashboard", { replace: true });
@@ -56,11 +53,7 @@ export default function AuthPage() {
           options: { data: { full_name: name } },
         });
         if (err) {
-          if (err.message?.includes("already registered")) {
-            setError("Este e-mail já está cadastrado. Tente entrar.");
-          } else {
-            setError(err.message || "Erro ao criar conta.");
-          }
+          setError(parseAuthError(err.message));
           return;
         }
         toast.success("Conta criada! Verifique seu e-mail para confirmar o cadastro.");

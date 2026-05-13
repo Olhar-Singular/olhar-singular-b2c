@@ -166,26 +166,55 @@ serve(async (req) => {
 
     const uploadId = uploadRecord?.id ?? null;
 
-    // ── Deduct credits or mark free extraction ────────────────────────────────
+    // ── Deduct credits or claim free extraction (atomic) ─────────────────────
     if (isFreeExtraction) {
-      await admin
+      const { data: claimed } = await admin
         .from("profiles")
         .update({ free_extraction_used: true })
-        .eq("id", user.id);
+        .eq("id", user.id)
+        .eq("free_extraction_used", false)
+        .select("id");
+      // If another concurrent request already claimed the free slot, charge normally.
+      if ((claimed?.length ?? 0) === 0) {
+        const { data: dr } = await admin.rpc("deduct_credits", {
+          p_user_id: user.id,
+          p_amount: EXTRACTION_COST,
+          p_type: "extract",
+          p_ref_id: uploadId,
+        });
+        if ((dr as { success: boolean; error?: string } | null)?.success === false) {
+          return new Response(
+            JSON.stringify({ error: "insufficient_credits", balance: profile.credit_balance }),
+            { status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+          );
+        }
+      }
     } else {
-      const deductResult = await admin.rpc("deduct_credits", {
+      const { data: dr } = await admin.rpc("deduct_credits", {
         p_user_id: user.id,
         p_amount: EXTRACTION_COST,
         p_type: "extract",
         p_ref_id: uploadId,
       });
-      if (deductResult.data?.success === false) {
+      if ((dr as { success: boolean; error?: string } | null)?.success === false) {
         return new Response(
           JSON.stringify({ error: "insufficient_credits", balance: profile.credit_balance }),
-          { status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          { status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" } },
         );
       }
     }
+
+    const creditsCharged = isFreeExtraction ? 0 : EXTRACTION_COST;
+
+    const refundIfNeeded = async () => {
+      if (creditsCharged > 0) {
+        await admin.rpc("grant_credits", {
+          p_user_id: user.id,
+          p_amount: creditsCharged,
+          p_type: "refund",
+        }).catch((e: unknown) => console.error("Extraction refund failed for user:", user.id, e));
+      }
+    };
 
     // ── Build AI messages ─────────────────────────────────────────────────────
     const contentParts: any[] = [
@@ -217,6 +246,7 @@ serve(async (req) => {
     if (!aiResponse.ok) {
       const errText = await aiResponse.text();
       console.error("AI gateway error:", aiResponse.status, errText);
+      await refundIfNeeded();
       if (aiResponse.status === 429) {
         return new Response(
           JSON.stringify({ error: "Limite de requisições IA atingido. Tente novamente em alguns minutos." }),
@@ -258,9 +288,10 @@ serve(async (req) => {
         .eq("id", uploadId);
     }
 
-    return new Response(JSON.stringify({ questions, source_file_name: pdfFileName }), {
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+    return new Response(
+      JSON.stringify({ questions, source_file_name: pdfFileName, credits_charged: creditsCharged }),
+      { headers: { ...corsHeaders, "Content-Type": "application/json" } },
+    );
   } catch (e) {
     console.error("extract-questions error:", e);
     return new Response(

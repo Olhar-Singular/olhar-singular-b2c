@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor, act } from "@testing-library/react";
 import PdfPreviewModal from "./PdfPreviewModal";
 
 const renderPdfPageMock = vi.fn();
@@ -65,7 +65,9 @@ describe("PdfPreviewModal", () => {
   it("shows Recortar button only when onCrop prop is provided", async () => {
     const { rerender } = render(<PdfPreviewModal open onOpenChange={vi.fn()} file={fakePdfFile()} />);
     await waitFor(() => expect(screen.queryByText(/Recortar/)).toBeNull());
-    rerender(<PdfPreviewModal open onOpenChange={vi.fn()} file={fakePdfFile()} onCrop={vi.fn()} />);
+    await act(async () => {
+      rerender(<PdfPreviewModal open onOpenChange={vi.fn()} file={fakePdfFile()} onCrop={vi.fn()} />);
+    });
     expect(screen.getByText(/Recortar/)).toBeInTheDocument();
   });
 

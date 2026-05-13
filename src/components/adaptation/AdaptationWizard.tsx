@@ -1,4 +1,6 @@
 import { useState, useCallback } from "react";
+import { useAuth } from "@/hooks/useAuth";
+import { calcAdaptationCost } from "@/lib/domain/barriers";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -46,9 +48,16 @@ const INITIAL_DATA: WizardData = {
 };
 
 export default function AdaptationWizard() {
+  const { profile } = useAuth();
   const [data, setData] = useState<WizardData>(INITIAL_DATA);
   const [stepIndex, setStepIndex] = useState(0);
   const [confirmTarget, setConfirmTarget] = useState<number | null>(null);
+
+  const activeDimensions = [...new Set(
+    data.barriers.filter((b) => b.is_active).map((b) => b.dimension).filter(Boolean),
+  )];
+  const creditCost = calcAdaptationCost(activeDimensions);
+  const isFreeAdaptation = !profile?.free_adaptation_used;
 
   const steps = data.wizardMode === "manual" ? MANUAL_STEPS : AI_STEPS;
   const currentKey = steps[stepIndex];
@@ -111,7 +120,13 @@ export default function AdaptationWizard() {
       case "barriers":
         return <StepBarrierSelection data={data} updateData={updateData} onNext={onNext} onPrev={onPrev} />;
       case "choice":
-        return <StepChoice onSelect={handleModeSelect} />;
+        return (
+          <StepChoice
+            onSelect={handleModeSelect}
+            creditCost={creditCost}
+            isFreeAdaptation={isFreeAdaptation}
+          />
+        );
       case "ai_editor":
         return <StepAIEditor data={data} updateData={updateData} onNext={onNext} onPrev={onPrev} />;
       case "editor":

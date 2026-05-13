@@ -160,7 +160,7 @@ describe("QuestionForm — save flow", () => {
       />,
     );
     fireEvent.click(screen.getByRole("button", { name: /Atualizar/ }));
-    await waitFor(() => expect(toast.error).toHaveBeenCalledWith("Erro", expect.objectContaining({ description: "DB falhou" })));
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith("Erro ao salvar questão."));
   });
 });
 
@@ -417,7 +417,7 @@ describe("QuestionForm — field interactions", () => {
     fireEvent.change(selects[0], { target: { value: "Física" } });
     fireEvent.click(screen.getByRole("button", { name: /^Adicionar$/ }));
     await waitFor(() =>
-      expect(toast.error).toHaveBeenCalledWith("Erro", expect.objectContaining({ description: "insert falhou" })),
+      expect(toast.error).toHaveBeenCalledWith("Erro ao salvar questão."),
     );
   });
 

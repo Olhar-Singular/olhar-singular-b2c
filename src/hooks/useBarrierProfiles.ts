@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
+import { parseDbError } from "@/lib/utils/errors";
 import type { Database } from "@/integrations/supabase/types";
 
 type BarrierProfile = Database["public"]["Tables"]["barrier_profiles"]["Row"];
@@ -42,7 +43,7 @@ export function useCreateBarrierProfile() {
       qc.invalidateQueries({ queryKey: QUERY_KEY });
       toast.success("Perfil criado com sucesso.");
     },
-    onError: (err: Error) => toast.error(err.message),
+    onError: (err: Error) => toast.error(parseDbError(err, "Erro ao criar perfil de barreiras.")),
   });
 }
 
@@ -62,7 +63,7 @@ export function useUpdateBarrierProfile() {
       qc.invalidateQueries({ queryKey: QUERY_KEY });
       toast.success("Perfil atualizado.");
     },
-    onError: (err: Error) => toast.error(err.message),
+    onError: (err: Error) => toast.error(parseDbError(err, "Erro ao salvar alterações no perfil.")),
   });
 }
 
@@ -80,6 +81,6 @@ export function useDeleteBarrierProfile() {
       qc.invalidateQueries({ queryKey: QUERY_KEY });
       toast.success("Perfil excluído.");
     },
-    onError: (err: Error) => toast.error(err.message),
+    onError: (err: Error) => toast.error(parseDbError(err, "Erro ao excluir perfil.")),
   });
 }

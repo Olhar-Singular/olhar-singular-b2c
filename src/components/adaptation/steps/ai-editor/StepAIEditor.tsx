@@ -7,9 +7,12 @@ import { useActivityContent } from "@/hooks/useActivityContent";
 import { isStructuredActivity } from "@/types/adaptation";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { parseEdgeFnError } from "@/lib/utils/errors";
 import { buildAIEditorAdvancePatch, resetGeneratedState } from "@/lib/domain/adaptationWizardHelpers";
 import type { WizardData, AdaptationResult } from "@/lib/domain/adaptationWizardHelpers";
+import QuestionRegeneratePanel from "./QuestionRegeneratePanel";
 import { Link } from "react-router-dom";
+import { useAuth } from "@/hooks/useAuth";
 
 type Props = {
   data: WizardData;
@@ -27,6 +30,7 @@ function toInitialDsl(result: AdaptationResult | null, version: "universal" | "d
 }
 
 export default function StepAIEditor({ data, updateData, onNext, onPrev }: Props) {
+  const { refreshProfile } = useAuth();
   const [loading, setLoading] = useState(!data.result);
   const [activeTab, setActiveTab] = useState<"universal" | "directed">("universal");
   const [creditError, setCreditError] = useState<string | null>(null);
@@ -69,33 +73,11 @@ export default function StepAIEditor({ data, updateData, onNext, onPrev }: Props
       const session = await supabase.auth.getSession();
       const accessToken = session.data.session?.access_token;
 
-      // Credit check before calling adapt-activity
-      const creditResp = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/check-and-deduct-credits`,
-        {
-          method: "POST",
-          signal: controller.signal,
-          headers: {
-            Authorization: `Bearer ${accessToken}`,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({ amount: 1, type: "adapt" }),
-        }
-      );
-
-      if (!creditResp.ok) {
-        const err = await creditResp.json().catch(() => ({}));
-        if (creditResp.status === 402) {
-          setCreditError("Créditos insuficientes. Adquira mais créditos para continuar.");
-          return;
-        }
-        throw new Error(err.error || `Erro ${creditResp.status}`);
-      }
-
       const activeBarriers = data.barriers
         .filter((b) => b.is_active)
         .map((b) => ({ dimension: b.dimension, barrier_key: b.barrier_key, notes: b.notes }));
 
+      // adapt-activity handles credit deduction internally (with complexity-based cost).
       const resp = await fetch(
         `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/adapt-activity`,
         {
@@ -116,6 +98,10 @@ export default function StepAIEditor({ data, updateData, onNext, onPrev }: Props
 
       if (!resp.ok) {
         const err = await resp.json().catch(() => ({}));
+        if (resp.status === 402) {
+          setCreditError("Créditos insuficientes. Adquira mais créditos para continuar.");
+          return;
+        }
         throw new Error(err.error || "Falha na adaptação");
       }
 
@@ -127,9 +113,12 @@ export default function StepAIEditor({ data, updateData, onNext, onPrev }: Props
         ...resetGeneratedState(),
         result: result.adaptation as AdaptationResult,
       });
+
+      // Refresh profile so the credit balance in the UI reflects the deduction.
+      refreshProfile().catch(() => {});
     } catch (e: any) {
       if (e.name === "AbortError") return;
-      toast.error(e.message || "Erro ao gerar adaptação");
+      toast.error(parseEdgeFnError(e, "Erro ao gerar adaptação."));
     } finally {
       /* v8 ignore next -- AbortController race: false branch (signal aborted) only reachable via Regerar timing; not reliably reproducible in jsdom */
       if (!controller.signal.aborted) setLoading(false);
@@ -232,6 +221,16 @@ export default function StepAIEditor({ data, updateData, onNext, onPrev }: Props
           canRedo={activeContent.canRedo}
         />
       </div>
+
+      <QuestionRegeneratePanel
+        result={data.result}
+        versionType={activeTab}
+        activityType={data.activityType ?? ""}
+        barriers={data.barriers}
+        currentDsl={activeContent.dsl}
+        onDslUpdate={activeContent.setDsl}
+        onCreditRefresh={() => refreshProfile().catch(() => {})}
+      />
 
       <div className="flex justify-between pt-4">
         <Button variant="outline" onClick={onPrev} aria-label="Voltar">

@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
+import { parseDbError } from "@/lib/utils/errors";
 
 type QuestionFilters = {
   subject?: string;
@@ -46,7 +47,7 @@ export function useDeleteQuestion() {
       qc.invalidateQueries({ queryKey: ["question_bank", user?.id] });
       toast.success("Questão removida.");
     },
-    onError: (err: Error) => toast.error(err.message),
+    onError: (err: Error) => toast.error(parseDbError(err, "Erro ao excluir questão.")),
   });
 }
 
@@ -64,7 +65,7 @@ export function useUpdateQuestion() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["question_bank", user?.id] });
     },
-    onError: (err: Error) => toast.error(err.message),
+    onError: (err: Error) => toast.error(parseDbError(err, "Erro ao salvar alterações na questão.")),
   });
 }
 
@@ -112,7 +113,7 @@ export function useInsertQuestions() {
       qc.invalidateQueries({ queryKey: ["question_bank_stats", user?.id] });
       toast.success(`${count} questão(ões) adicionada(s) ao banco.`);
     },
-    onError: (err: Error) => toast.error(err.message),
+    onError: (err: Error) => toast.error(parseDbError(err, "Erro ao salvar questões no banco.")),
   });
 }
 

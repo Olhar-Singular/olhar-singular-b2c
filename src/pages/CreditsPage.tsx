@@ -17,7 +17,8 @@ const TYPE_LABELS: Record<string, string> = {
   signup_bonus: "Bônus de cadastro",
   purchase: "Compra",
   adapt: "Adaptação",
-  regenerate: "Regeneração",
+  extract: "Extração de questões",
+  regenerate: "Regeneração de questão",
   chat: "Chat com IA",
   refund: "Reembolso",
 };

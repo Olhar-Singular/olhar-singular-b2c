@@ -19,6 +19,12 @@ vi.mock("@/components/editor/ActivityEditor", () => ({
 
 vi.mock("sonner", () => ({ toast: { error: vi.fn() } }));
 
+vi.mock("@/hooks/useAuth", () => ({
+  useAuth: vi.fn(() => ({
+    refreshProfile: vi.fn().mockResolvedValue(undefined),
+  })),
+}));
+
 const fetchMock = vi.fn();
 global.fetch = fetchMock as unknown as typeof fetch;
 
@@ -74,9 +80,9 @@ describe("StepAIEditor — generate flow", () => {
 
   it("renders generic error fallback when adapt fails", async () => {
     const { toast } = await import("sonner");
-    fetchMock
-      .mockResolvedValueOnce(new Response(JSON.stringify({ ok: true }), { status: 200 }))
-      .mockResolvedValueOnce(new Response(JSON.stringify({ error: "boom" }), { status: 500 }));
+    fetchMock.mockResolvedValueOnce(
+      new Response(JSON.stringify({ error: "boom" }), { status: 500 }),
+    );
     renderWithProviders(
       <StepAIEditor data={baseData} updateData={vi.fn()} onNext={vi.fn()} onPrev={vi.fn()} />,
     );
@@ -85,9 +91,9 @@ describe("StepAIEditor — generate flow", () => {
 
   it("populates result on success", async () => {
     const updateData = vi.fn();
-    fetchMock
-      .mockResolvedValueOnce(new Response(JSON.stringify({ ok: true }), { status: 200 }))
-      .mockResolvedValueOnce(new Response(JSON.stringify({ adaptation: finishedResult }), { status: 200 }));
+    fetchMock.mockResolvedValueOnce(
+      new Response(JSON.stringify({ adaptation: finishedResult, credits_charged: 12 }), { status: 200 }),
+    );
     renderWithProviders(
       <StepAIEditor data={baseData} updateData={updateData} onNext={vi.fn()} onPrev={vi.fn()} />,
     );

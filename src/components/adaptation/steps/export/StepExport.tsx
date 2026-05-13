@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { toast } from "sonner";
+import { parseDbError } from "@/lib/utils/errors";
 import { Save, Copy, RotateCcw, Check, Loader2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
@@ -98,7 +99,7 @@ export default function StepExport({ data, onPrev, onRestart }: Props) {
       toast.success("Adaptação salva no histórico!");
       queryClient.invalidateQueries({ queryKey: ["adaptations"] });
     } catch (e: any) {
-      toast.error(e.message || "Erro ao salvar. Tente novamente.");
+      toast.error(parseDbError(e, "Erro ao salvar. Tente novamente."));
     } finally {
       setSaving(false);
     }

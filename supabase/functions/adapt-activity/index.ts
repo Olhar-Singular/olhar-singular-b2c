@@ -4,6 +4,29 @@ import { sanitize } from "../_shared/sanitize.ts";
 import { logAiUsage } from "../_shared/logAiUsage.ts";
 import { getAiConfig } from "../_shared/aiConfig.ts";
 
+// Complexity tiers mirroring src/lib/domain/barriers.ts — must stay in sync.
+const BARRIER_COMPLEXITY: Record<string, "low" | "medium" | "high"> = {
+  tea: "high",
+  tdah: "medium",
+  tod: "medium",
+  sindrome_down: "high",
+  altas_habilidades: "high",
+  dislexia: "low",
+  discalculia: "low",
+  disgrafia: "low",
+  tourette: "medium",
+  dispraxia: "low",
+  toc: "medium",
+};
+const ADAPTATION_CREDITS = { low: 5, medium: 8, high: 12 } as const;
+
+function calcAdaptationCost(dimensions: string[]): number {
+  if (dimensions.length === 0) return ADAPTATION_CREDITS.medium;
+  const tiers = dimensions.map((d) => BARRIER_COMPLEXITY[d] ?? "medium");
+  const tier = tiers.includes("high") ? "high" : tiers.includes("medium") ? "medium" : "low";
+  return ADAPTATION_CREDITS[tier];
+}
+
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers":
@@ -373,6 +396,7 @@ serve(async (req) => {
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
+    const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
     const userClient = createClient(supabaseUrl, supabaseAnonKey, {
       global: { headers: { Authorization: authHeader } },
@@ -385,6 +409,8 @@ serve(async (req) => {
       });
     }
 
+    const serviceClient = createClient(supabaseUrl, supabaseServiceKey);
+
     const body = await req.json();
     const { original_activity, activity_type, barriers, observation_notes } = body;
 
@@ -394,6 +420,59 @@ serve(async (req) => {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
+
+    // ─── Credit deduction ───────────────────────────────────────────────────────
+    const barrierDimensions = [...new Set(
+      (barriers as Array<{ dimension?: string }>)
+        .map((b) => b.dimension)
+        .filter((d): d is string => Boolean(d)),
+    )];
+    const creditCost = calcAdaptationCost(barrierDimensions);
+
+    // Atomically claim first-free slot (UPDATE WHERE free_adaptation_used = false).
+    // If another concurrent request claims it first, update returns 0 rows → charge normally.
+    const { data: claimedFree } = await serviceClient
+      .from("profiles")
+      .update({ free_adaptation_used: true })
+      .eq("id", user.id)
+      .eq("free_adaptation_used", false)
+      .select("id");
+
+    const isFirstFree = (claimedFree?.length ?? 0) > 0;
+    let creditsCharged = 0;
+
+    if (!isFirstFree) {
+      const { data: deductResult, error: deductError } = await serviceClient.rpc("deduct_credits", {
+        p_user_id: user.id,
+        p_amount: creditCost,
+        p_type: "adapt",
+      });
+
+      if (deductError) {
+        console.error("deduct_credits error:", deductError);
+        return new Response(JSON.stringify({ error: "Erro ao processar créditos." }), {
+          status: 500,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      if ((deductResult as { success: boolean; error?: string; balance?: number } | null)?.success === false) {
+        const r = deductResult as { error: string; balance?: number };
+        if (r.error === "insufficient_credits") {
+          return new Response(
+            JSON.stringify({ error: "Créditos insuficientes.", balance: r.balance, required: creditCost }),
+            { status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+          );
+        }
+        return new Response(JSON.stringify({ error: "Erro ao processar créditos." }), {
+          status: 500,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      creditsCharged = creditCost;
+    }
+    // ─── End credit deduction ───────────────────────────────────────────────────
 
     const sanitizedActivity = sanitize(original_activity, 15000);
     const sanitizedType = sanitize(activity_type, 100);
@@ -429,6 +508,16 @@ BARREIRAS OBSERVÁVEIS:
     let aiData: unknown;
     let aiDurationMs: number;
 
+    const refundIfNeeded = async () => {
+      if (creditsCharged > 0) {
+        await serviceClient.rpc("grant_credits", {
+          p_user_id: user.id,
+          p_amount: creditsCharged,
+          p_type: "refund",
+        }).catch((e: unknown) => console.error("Refund failed for user:", user.id, e));
+      }
+    };
+
     try {
       aiResponse = await fetch(`${ai.baseUrl}/chat/completions`, {
         method: "POST",
@@ -463,6 +552,7 @@ BARREIRAS OBSERVÁVEIS:
           : ((fetchErr as Error)?.message || "Network error"),
         metadata: { activity_type: sanitizedType, barriers_count: barriers.length },
       }).catch(() => {});
+      await refundIfNeeded();
       throw new Error(
         isTimeout
           ? "A IA demorou demais para responder. Tente novamente."
@@ -487,6 +577,7 @@ BARREIRAS OBSERVÁVEIS:
         error_message: `HTTP ${aiResponse.status}: ${errText.slice(0, 200)}`,
         metadata: { activity_type: sanitizedType, barriers_count: barriers.length, http_status: aiResponse.status },
       }).catch(() => {});
+      await refundIfNeeded();
 
       if (aiResponse.status === 429) {
         return new Response(
@@ -550,6 +641,8 @@ BARREIRAS OBSERVÁVEIS:
         adaptation: adaptationResult,
         model_used: modelName,
         tokens_used: tokensUsed,
+        credits_charged: creditsCharged,
+        is_first_free: isFirstFree,
         disclaimer: "Ferramenta pedagógica. Não realiza diagnóstico. A decisão final é sempre do profissional.",
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }

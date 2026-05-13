@@ -36,39 +36,34 @@ function wrapper({ children }: { children: React.ReactNode }) {
 describe("useRegenerateQuestion", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockFetch.mockReset();
     mockGetSession.mockResolvedValue({ data: { session: { access_token: "tok-123" } } });
   });
 
-  it("calls check-and-deduct-credits before regenerate-question", async () => {
-    mockFetch
-      .mockResolvedValueOnce({ ok: true, json: async () => ({ success: true, newBalance: 9 }) })
-      .mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ question_dsl: "1) Nova questão\n[linhas:3]", changes_made: ["Simplificado enunciado"] }),
-      });
+  it("calls regenerate-question endpoint directly (no credit pre-check)", async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ question_dsl: "1) Nova questão\n[linhas:3]", changes_made: ["Simplificado"] }),
+    });
 
     const { result } = renderHook(() => useRegenerateQuestion(), { wrapper });
-
     await act(async () => { result.current.mutate(baseInput); });
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
 
-    expect(mockFetch).toHaveBeenCalledTimes(2);
-    const firstCall = mockFetch.mock.calls[0][0] as string;
-    expect(firstCall).toContain("check-and-deduct-credits");
-    const secondCall = mockFetch.mock.calls[1][0] as string;
-    expect(secondCall).toContain("regenerate-question");
+    expect(mockFetch).toHaveBeenCalledTimes(1);
+    const url = mockFetch.mock.calls[0][0] as string;
+    expect(url).toContain("regenerate-question");
+    expect(url).not.toContain("check-and-deduct-credits");
   });
 
   it("returns question_dsl and changes_made on success", async () => {
-    mockFetch
-      .mockResolvedValueOnce({ ok: true, json: async () => ({ success: true }) })
-      .mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({
-          question_dsl: "1) Questão regenerada\n[linhas:4]",
-          changes_made: ["Enunciado mais claro", "Apoio adicionado"],
-        }),
-      });
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        question_dsl: "1) Questão regenerada\n[linhas:4]",
+        changes_made: ["Enunciado mais claro", "Apoio adicionado"],
+      }),
+    });
 
     const { result } = renderHook(() => useRegenerateQuestion(), { wrapper });
     await act(async () => { result.current.mutate(baseInput); });
@@ -78,7 +73,7 @@ describe("useRegenerateQuestion", () => {
     expect(result.current.data?.changes_made).toHaveLength(2);
   });
 
-  it("throws with credit error message on 402", async () => {
+  it("throws with credit error message on 402 from regenerate-question", async () => {
     mockFetch.mockResolvedValueOnce({
       ok: false,
       status: 402,
@@ -93,7 +88,7 @@ describe("useRegenerateQuestion", () => {
     expect(mockFetch).toHaveBeenCalledTimes(1);
   });
 
-  it("throws status-coded credit error when status != 402", async () => {
+  it("uses server error message when regenerate returns non-402 error", async () => {
     mockFetch.mockResolvedValueOnce({
       ok: false,
       status: 500,
@@ -102,10 +97,10 @@ describe("useRegenerateQuestion", () => {
     const { result } = renderHook(() => useRegenerateQuestion(), { wrapper });
     await act(async () => { result.current.mutate(baseInput); });
     await waitFor(() => expect(result.current.isError).toBe(true));
-    expect(result.current.error?.message).toMatch(/DB indisponível|verificar créditos/);
+    expect(result.current.error?.message).toBe("DB indisponível");
   });
 
-  it("uses generic message when credits endpoint returns invalid JSON", async () => {
+  it("uses generic message when regenerate endpoint returns invalid JSON", async () => {
     mockFetch.mockResolvedValueOnce({
       ok: false,
       status: 503,
@@ -114,36 +109,30 @@ describe("useRegenerateQuestion", () => {
     const { result } = renderHook(() => useRegenerateQuestion(), { wrapper });
     await act(async () => { result.current.mutate(baseInput); });
     await waitFor(() => expect(result.current.isError).toBe(true));
-    expect(result.current.error?.message).toMatch(/verificar créditos/i);
-  });
-
-  it("uses generic message when regenerate endpoint returns invalid JSON", async () => {
-    mockFetch
-      .mockResolvedValueOnce({ ok: true, json: async () => ({ success: true }) })
-      .mockResolvedValueOnce({
-        ok: false,
-        status: 502,
-        json: async () => { throw new Error("not json"); },
-      });
-    const { result } = renderHook(() => useRegenerateQuestion(), { wrapper });
-    await act(async () => { result.current.mutate(baseInput); });
-    await waitFor(() => expect(result.current.isError).toBe(true));
     expect(result.current.error?.message).toMatch(/regenerar/i);
   });
 
-  it("throws on error from regenerate function", async () => {
-    mockFetch
-      .mockResolvedValueOnce({ ok: true, json: async () => ({ success: true }) })
-      .mockResolvedValueOnce({
-        ok: false,
-        status: 500,
-        json: async () => ({ error: "Erro na IA." }),
-      });
+  it("throws on AI error from regenerate function", async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: false,
+      status: 500,
+      json: async () => ({ error: "Erro na IA." }),
+    });
 
     const { result } = renderHook(() => useRegenerateQuestion(), { wrapper });
     await act(async () => { result.current.mutate(baseInput); });
     await waitFor(() => expect(result.current.isError).toBe(true));
 
     expect(result.current.error?.message).toMatch(/IA|regenerar/i);
+  });
+
+  it("throws network error message when fetch itself fails", async () => {
+    mockFetch.mockRejectedValueOnce(new TypeError("Failed to fetch"));
+
+    const { result } = renderHook(() => useRegenerateQuestion(), { wrapper });
+    await act(async () => { result.current.mutate(baseInput); });
+    await waitFor(() => expect(result.current.isError).toBe(true));
+
+    expect(result.current.error?.message).toMatch(/conexão|servidor/i);
   });
 });

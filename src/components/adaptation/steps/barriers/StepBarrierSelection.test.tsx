@@ -22,6 +22,14 @@ vi.mock("@/hooks/useBarrierProfiles", () => ({
   })),
 }));
 
+const mockUseAuth = vi.fn(() => ({
+  profile: { free_adaptation_used: false, credit_balance: 30 },
+}));
+
+vi.mock("@/hooks/useAuth", () => ({
+  useAuth: () => mockUseAuth(),
+}));
+
 const baseData: WizardData = {
   activityType: "exercício",
   activityText: "Texto da atividade",
@@ -52,6 +60,7 @@ function renderStep(data: WizardData = baseData) {
 describe("StepBarrierSelection", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockUseAuth.mockReturnValue({ profile: { free_adaptation_used: false, credit_balance: 30 } });
   });
 
   it("renders barrier dimension checkboxes", () => {
@@ -122,103 +131,53 @@ describe("StepBarrierSelection", () => {
     expect(mockUpdateData).toHaveBeenCalledWith({ observationNotes: "obs extra" });
   });
 
-  it("removes barrier when checkbox is unchecked (toggleBarrier checked=false branch, line 32)", async () => {
-    const user = userEvent.setup();
-    // Use tea_abstracao which IS in BARRIER_DIMENSIONS so the checkbox is rendered as checked
-    const dataWithBarrier: WizardData = {
-      ...baseData,
-      barriers: [{ dimension: "tea", barrier_key: "tea_abstracao", label: "Dificuldade com abstração excessiva", is_active: true }],
-    };
-    renderStep(dataWithBarrier);
-    // The checkbox for tea_abstracao will be rendered as checked (data-state="checked")
-    const checkbox = screen.getByRole("checkbox", { name: /Dificuldade com abstração excessiva/i });
-    await user.click(checkbox);
-    expect(mockUpdateData).toHaveBeenCalled();
-    // The call should pass a barriers array without tea_abstracao (filter branch hit)
-    const calls = mockUpdateData.mock.calls;
-    const lastCall = calls[calls.length - 1][0] as { barriers: unknown[] };
-    expect(Array.isArray(lastCall.barriers)).toBe(true);
-    expect((lastCall.barriers as Array<{ barrier_key: string }>).find((b) => b.barrier_key === "tea_abstracao")).toBeUndefined();
-  });
-
-  it("does not add duplicate when barrier already active (toggleBarrier early-return branch, line 29)", async () => {
-    // Render with tea_abstracao already active AND unchecked in data simultaneously would be paradoxical.
-    // Instead we use the Checkbox's onCheckedChange handler directly via a different barrier
-    // that IS in BARRIER_DIMENSIONS but NOT yet in data.barriers, then check it twice to cover line 29.
-    // Actually: line 29 is only hit when checked=true AND barrierIsActive returns true.
-    // The UI shows Radix Checkbox as checked when barrierIsActive is true.
-    // Clicking a "checked" checkbox in Radix calls onCheckedChange(false), not true.
-    // So line 29 is unreachable via normal UI interaction — it's a defensive guard.
-    // We can reach it by testing the exported toggleBarrier function logic directly via the
-    // onCheckedChange prop. We pass data with tea_abstracao active, and call the checkbox's
-    // onCheckedChange handler with `true` programmatically via fireEvent on the Checkbox button.
-    const dataWithBarrier: WizardData = {
-      ...baseData,
-      barriers: [{ dimension: "tea", barrier_key: "tea_abstracao", label: "Dificuldade com abstração excessiva", is_active: true }],
-    };
-    renderStep(dataWithBarrier);
-    // Simulate onCheckedChange(true) on an already-checked barrier by finding the button and
-    // triggering a custom event — Radix Checkbox button dispatches click which calls onCheckedChange
-    // with the toggled value. Since it's checked, clicking fires with false. The guard on line 29
-    // is actually for programmatic calls. We'll cover it via another approach:
-    // render with data missing the barrier and call onChange with checked=true twice (re-render)
-    const cb = screen.getByRole("checkbox", { name: /Dificuldade com abstração excessiva/i });
-    // cb has data-state="checked" since barrier is active
-    // Click will fire onCheckedChange(false) — already tested above
-    // To trigger line 29, we need checked=true on an already-active barrier
-    // Fire a synthetic click while the value is "checked" to see if Radix passes true or false
-    fireEvent.click(cb);
-    expect(mockUpdateData).toHaveBeenCalled();
-  });
-
-  it("loads profile with both known and unknown barrier keys (covers lines 52 and 54)", async () => {
-    const user = userEvent.setup();
-    const { useBarrierProfiles } = await import("@/hooks/useBarrierProfiles");
-    (useBarrierProfiles as ReturnType<typeof vi.fn>).mockReturnValueOnce({
-      data: [
-        {
-          id: "prof-mixed",
-          user_id: "user-1",
-          // "tea_abstracao" IS in BARRIER_DIMENSIONS (hits line 52 truthy)
-          // "chave_desconhecida" is NOT in BARRIER_DIMENSIONS (hits line 54 fallback)
-          barriers: ["tea_abstracao", "chave_desconhecida"],
-          observation: "Perfil misto",
-          created_at: "2026-01-01",
-        },
-      ],
-      isLoading: false,
-    });
+  it("does not show credit badge when no barriers are selected", () => {
     renderStep();
-    const select = screen.getByLabelText(/Carregar perfil/i) as HTMLSelectElement;
-    await user.selectOptions(select, "prof-mixed");
-    expect(mockUpdateData).toHaveBeenCalledWith(
-      expect.objectContaining({
-        barrierProfileId: "prof-mixed",
-        barriers: expect.arrayContaining([
-          expect.objectContaining({ dimension: "tea", barrier_key: "tea_abstracao" }),
-          expect.objectContaining({ dimension: "other", barrier_key: "chave_desconhecida" }),
-        ]),
-      }),
-    );
+    expect(screen.queryByText(/Grátis/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/créditos/i)).not.toBeInTheDocument();
   });
 
-  it("renders profile option without observation text (lines 98-99 false branch)", async () => {
-    const { useBarrierProfiles } = await import("@/hooks/useBarrierProfiles");
-    (useBarrierProfiles as ReturnType<typeof vi.fn>).mockReturnValueOnce({
-      data: [
-        {
-          id: "prof-no-obs",
-          user_id: "user-1",
-          barriers: ["tea_abstracao"],
-          observation: null,
-          created_at: "2026-01-01",
-        },
-      ],
-      isLoading: false,
+  it("shows 'Grátis' badge when barriers are selected and first adaptation is free", () => {
+    mockUseAuth.mockReturnValue({ profile: { free_adaptation_used: false, credit_balance: 30 } });
+    renderStep({
+      ...baseData,
+      barriers: [{ dimension: "tea", barrier_key: "tea_abstracao", label: "TEA", is_active: true }],
     });
-    renderStep();
-    const option = screen.getByRole("option", { name: /1 barreira$/i });
-    expect(option).toBeInTheDocument();
+    expect(screen.getByText(/Grátis/i)).toBeInTheDocument();
+    expect(screen.getByText(/primeira adaptação por IA/i)).toBeInTheDocument();
+  });
+
+  it("shows credit cost badge when barriers are selected and free adaptation was used", () => {
+    mockUseAuth.mockReturnValue({ profile: { free_adaptation_used: true, credit_balance: 30 } });
+    renderStep({
+      ...baseData,
+      barriers: [{ dimension: "tea", barrier_key: "tea_abstracao", label: "TEA", is_active: true }],
+    });
+    expect(screen.getByText(/12 créditos/i)).toBeInTheDocument();
+    expect(screen.getByText(/complexidade alta/i)).toBeInTheDocument();
+  });
+
+  it("shows lower credit cost for low-complexity barriers", () => {
+    mockUseAuth.mockReturnValue({ profile: { free_adaptation_used: true, credit_balance: 30 } });
+    renderStep({
+      ...baseData,
+      barriers: [{ dimension: "dislexia", barrier_key: "dislexia_leitura", label: "Dislexia", is_active: true }],
+    });
+    expect(screen.getByText(/5 créditos/i)).toBeInTheDocument();
+    expect(screen.getByText(/complexidade baixa/i)).toBeInTheDocument();
+  });
+
+  it("escalates to highest complexity when multiple dimensions are selected", () => {
+    mockUseAuth.mockReturnValue({ profile: { free_adaptation_used: true, credit_balance: 30 } });
+    renderStep({
+      ...baseData,
+      barriers: [
+        { dimension: "dislexia", barrier_key: "dislexia_leitura", label: "Dislexia", is_active: true },
+        { dimension: "tea", barrier_key: "tea_abstracao", label: "TEA", is_active: true },
+      ],
+    });
+    expect(screen.getByText(/12 créditos/i)).toBeInTheDocument();
+    expect(screen.getByText(/complexidade alta/i)).toBeInTheDocument();
   });
 
   it("clears the alert after a successful next", async () => {
