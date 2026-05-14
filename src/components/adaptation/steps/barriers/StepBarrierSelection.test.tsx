@@ -180,6 +180,17 @@ describe("StepBarrierSelection", () => {
     expect(screen.getByText(/complexidade alta/i)).toBeInTheDocument();
   });
 
+  it("removes a barrier when its checkbox is unchecked (line 39 filter branch)", async () => {
+    const user = userEvent.setup();
+    renderStep({
+      ...baseData,
+      barriers: [{ dimension: "tea", barrier_key: "tea_abstracao", label: "Dificuldade com abstração", is_active: true }],
+    });
+    const checkboxes = screen.getAllByRole("checkbox");
+    await user.click(checkboxes[0]);
+    expect(mockUpdateData).toHaveBeenCalledWith({ barriers: [] });
+  });
+
   it("clears the alert after a successful next", async () => {
     const user = userEvent.setup();
     const { rerender } = renderStep();
@@ -202,5 +213,44 @@ describe("StepBarrierSelection", () => {
     );
     await user.click(screen.getByRole("button", { name: /próximo/i }));
     expect(screen.queryByRole("alert")).toBeNull();
+  });
+
+  it("maps profile barrier to known dimension when key is in BARRIER_DIMENSIONS (line 67 branch)", async () => {
+    const user = userEvent.setup();
+    const { useBarrierProfiles } = await import("@/hooks/useBarrierProfiles");
+    vi.mocked(useBarrierProfiles).mockReturnValueOnce({
+      data: [{ id: "p-known", user_id: "u1", barriers: ["tea_abstracao"], observation: "obs", created_at: "2026-01-01" }],
+      isLoading: false,
+    } as never);
+    renderStep();
+    const select = screen.getByLabelText(/Carregar perfil/i) as HTMLSelectElement;
+    await user.selectOptions(select, "p-known");
+    expect(mockUpdateData).toHaveBeenCalledWith(
+      expect.objectContaining({ barriers: [expect.objectContaining({ dimension: "tea" })] }),
+    );
+  });
+
+  it("shows singular 'barreira' label for profile with exactly 1 barrier (line 115 '' branch)", async () => {
+    const { useBarrierProfiles } = await import("@/hooks/useBarrierProfiles");
+    vi.mocked(useBarrierProfiles).mockReturnValueOnce({
+      data: [{ id: "p-one", user_id: "u1", barriers: ["tea_abstracao"], observation: "obs", created_at: "2026-01-01" }],
+      isLoading: false,
+    } as never);
+    renderStep();
+    const select = screen.getByRole("combobox");
+    expect(select.textContent).toContain("1 barreira");
+    expect(select.textContent).not.toContain("1 barreiras");
+  });
+
+  it("shows no observation suffix in option when observation is empty (line 116 '' branch)", async () => {
+    const { useBarrierProfiles } = await import("@/hooks/useBarrierProfiles");
+    vi.mocked(useBarrierProfiles).mockReturnValueOnce({
+      data: [{ id: "p-noobs", user_id: "u1", barriers: ["tea_abstracao", "dislexia_leitura"], observation: "", created_at: "2026-01-01" }],
+      isLoading: false,
+    } as never);
+    renderStep();
+    const select = screen.getByRole("combobox");
+    expect(select.textContent).toContain("2 barreiras");
+    expect(select.textContent).not.toContain(" — ");
   });
 });

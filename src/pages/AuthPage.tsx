@@ -42,7 +42,7 @@ export default function AuthPage() {
       if (isLogin) {
         const { error: err } = await supabase.auth.signInWithPassword({ email, password });
         if (err) {
-          setError(parseAuthError(err.message));
+          setError(parseAuthError(err.message, "login"));
           return;
         }
         navigate("/dashboard", { replace: true });
@@ -53,7 +53,7 @@ export default function AuthPage() {
           options: { data: { full_name: name } },
         });
         if (err) {
-          setError(parseAuthError(err.message));
+          setError(parseAuthError(err.message, "signup"));
           return;
         }
         toast.success("Conta criada! Verifique seu e-mail para confirmar o cadastro.");

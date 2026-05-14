@@ -93,7 +93,20 @@ describe("parseAuthError", () => {
     expect(parseAuthError("some unknown error")).toBe("Erro ao acessar a conta. Tente novamente.");
   });
 
-  it("returns generic fallback for undefined", () => {
-    expect(parseAuthError(undefined)).toBe("Erro inesperado. Tente novamente.");
+  it("returns login fallback for undefined with default action", () => {
+    expect(parseAuthError(undefined)).toBe("Erro ao entrar. Tente novamente.");
+    expect(parseAuthError(undefined, "login")).toBe("Erro ao entrar. Tente novamente.");
+  });
+
+  it("returns signup fallback for undefined with signup action", () => {
+    expect(parseAuthError(undefined, "signup")).toBe("Erro ao criar conta. Tente novamente.");
+  });
+
+  it("returns login fallback for empty string with default action", () => {
+    expect(parseAuthError("")).toBe("Erro ao entrar. Tente novamente.");
+  });
+
+  it("returns signup fallback for empty string with signup action", () => {
+    expect(parseAuthError("", "signup")).toBe("Erro ao criar conta. Tente novamente.");
   });
 });

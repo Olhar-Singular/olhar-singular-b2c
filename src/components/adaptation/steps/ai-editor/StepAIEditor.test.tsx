@@ -17,7 +17,12 @@ vi.mock("@/components/editor/ActivityEditor", () => ({
   ),
 }));
 
-vi.mock("sonner", () => ({ toast: { error: vi.fn() } }));
+vi.mock("sonner", () => ({ toast: { error: vi.fn(), success: vi.fn() } }));
+
+const regenerateMutateMock = vi.fn();
+vi.mock("@/hooks/useRegenerateQuestion", () => ({
+  useRegenerateQuestion: () => ({ mutate: regenerateMutateMock, isPending: false }),
+}));
 
 vi.mock("@/hooks/useAuth", () => ({
   useAuth: vi.fn(() => ({
@@ -48,6 +53,7 @@ const finishedResult = {
 beforeEach(() => {
   vi.clearAllMocks();
   fetchMock.mockReset();
+  regenerateMutateMock.mockReset();
   getSessionMock.mockResolvedValue({ data: { session: { access_token: "tok" } } });
 });
 
@@ -98,6 +104,21 @@ describe("StepAIEditor — generate flow", () => {
       <StepAIEditor data={baseData} updateData={updateData} onNext={vi.fn()} onPrev={vi.fn()} />,
     );
     await waitFor(() => expect(updateData).toHaveBeenCalledWith(expect.objectContaining({ result: finishedResult })));
+  });
+
+  it("swallows refreshProfile rejection silently after successful generation (line 118 catch fn)", async () => {
+    const mockRefresh = vi.fn().mockRejectedValue(new Error("auth fail"));
+    const { useAuth } = await import("@/hooks/useAuth");
+    vi.mocked(useAuth).mockReturnValueOnce({ refreshProfile: mockRefresh } as never);
+    const updateData = vi.fn();
+    fetchMock.mockResolvedValueOnce(
+      new Response(JSON.stringify({ adaptation: finishedResult, credits_charged: 12 }), { status: 200 }),
+    );
+    renderWithProviders(
+      <StepAIEditor data={baseData} updateData={updateData} onNext={vi.fn()} onPrev={vi.fn()} />,
+    );
+    await waitFor(() => expect(updateData).toHaveBeenCalledWith(expect.objectContaining({ result: finishedResult })));
+    await waitFor(() => expect(mockRefresh).toHaveBeenCalled());
   });
 });
 
@@ -154,6 +175,36 @@ describe("StepAIEditor — interactions", () => {
     await waitFor(() => expect(screen.getByText(/Créditos insuficientes/i)).toBeInTheDocument());
     fireEvent.click(screen.getByRole("button", { name: /Voltar/i }));
     expect(onPrev).toHaveBeenCalled();
+  });
+
+  it("calls handleCreditRefresh when QuestionRegeneratePanel fires onCreditRefresh (line 132 fn)", async () => {
+    const mockRefresh = vi.fn().mockRejectedValue(new Error("auth fail"));
+    const { useAuth } = await import("@/hooks/useAuth");
+    vi.mocked(useAuth).mockReturnValueOnce({ refreshProfile: mockRefresh } as never);
+
+    renderWithProviders(
+      <StepAIEditor data={{ ...baseData, result: finishedResult }} updateData={vi.fn()} onNext={vi.fn()} onPrev={vi.fn()} />,
+    );
+    await screen.findByText(/Editar Atividade Adaptada/i);
+
+    fireEvent.click(screen.getByRole("button", { name: /Regerar Q1/i }));
+
+    const [, { onSuccess }] = regenerateMutateMock.mock.calls[0];
+    onSuccess({ question_dsl: "1) Nova questão\n[linhas:3]", changes_made: [] });
+
+    await waitFor(() => expect(mockRefresh).toHaveBeenCalled());
+  });
+
+  it("renders correctly when activityType is null (covers ?? branch at line 231)", async () => {
+    renderWithProviders(
+      <StepAIEditor
+        data={{ ...baseData, activityType: null, result: finishedResult }}
+        updateData={vi.fn()}
+        onNext={vi.fn()}
+        onPrev={vi.fn()}
+      />,
+    );
+    expect(await screen.findByText(/Editar Atividade Adaptada/i)).toBeInTheDocument();
   });
 });
 
@@ -274,14 +325,12 @@ describe("StepAIEditor — non-402 credit error (line 92)", () => {
     renderWithProviders(
       <StepAIEditor data={baseData} updateData={vi.fn()} onNext={vi.fn()} onPrev={vi.fn()} />,
     );
-    await waitFor(() => expect(toast.error).toHaveBeenCalledWith("Erro 503"));
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith("Falha na adaptação"));
   });
 
   it("uses fallback 'Falha na adaptação' when adapt-activity fails with no error field (line 119 right branch)", async () => {
     const { toast } = await import("sonner");
-    fetchMock
-      .mockResolvedValueOnce(new Response(JSON.stringify({ ok: true }), { status: 200 }))
-      .mockResolvedValueOnce(new Response(JSON.stringify({}), { status: 500 }));
+    fetchMock.mockResolvedValueOnce(new Response(JSON.stringify({}), { status: 500 }));
     renderWithProviders(
       <StepAIEditor data={baseData} updateData={vi.fn()} onNext={vi.fn()} onPrev={vi.fn()} />,
     );
@@ -291,9 +340,7 @@ describe("StepAIEditor — non-402 credit error (line 92)", () => {
   it("uses fallback 'Erro ao gerar adaptação' when catch error has no message (line 131 right branch)", async () => {
     const { toast } = await import("sonner");
     // Throw an error object with no message
-    fetchMock
-      .mockResolvedValueOnce(new Response(JSON.stringify({ ok: true }), { status: 200 }))
-      .mockRejectedValueOnce(Object.assign(new Error(), { message: undefined }));
+    fetchMock.mockRejectedValueOnce(Object.assign(new Error(), { message: undefined }));
     renderWithProviders(
       <StepAIEditor data={baseData} updateData={vi.fn()} onNext={vi.fn()} onPrev={vi.fn()} />,
     );
@@ -308,14 +355,12 @@ describe("StepAIEditor — non-402 credit error (line 92)", () => {
     renderWithProviders(
       <StepAIEditor data={baseData} updateData={vi.fn()} onNext={vi.fn()} onPrev={vi.fn()} />,
     );
-    await waitFor(() => expect(toast.error).toHaveBeenCalledWith("Erro 500"));
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith("Falha na adaptação"));
   });
 
   it("uses empty error object when adapt-activity response json() fails (line 118 catch(() => ({})) function)", async () => {
     const { toast } = await import("sonner");
-    fetchMock
-      .mockResolvedValueOnce(new Response(JSON.stringify({ ok: true }), { status: 200 }))
-      .mockResolvedValueOnce(new Response("não é json", { status: 500 }));
+    fetchMock.mockResolvedValueOnce(new Response("não é json", { status: 500 }));
     renderWithProviders(
       <StepAIEditor data={baseData} updateData={vi.fn()} onNext={vi.fn()} onPrev={vi.fn()} />,
     );
@@ -323,18 +368,16 @@ describe("StepAIEditor — non-402 credit error (line 92)", () => {
   });
 });
 
+
 describe("StepAIEditor — AbortError (line 130)", () => {
   it("silently ignores AbortError during generation", async () => {
     const { toast } = await import("sonner");
-    // Credit check OK, then adapt-activity throws AbortError
-    fetchMock
-      .mockResolvedValueOnce(new Response(JSON.stringify({ ok: true }), { status: 200 }))
-      .mockRejectedValueOnce(Object.assign(new Error("Aborted"), { name: "AbortError" }));
+    fetchMock.mockRejectedValueOnce(Object.assign(new Error("Aborted"), { name: "AbortError" }));
     renderWithProviders(
       <StepAIEditor data={baseData} updateData={vi.fn()} onNext={vi.fn()} onPrev={vi.fn()} />,
     );
     // Should NOT call toast.error for AbortError
-    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
     await new Promise((r) => setTimeout(r, 50));
     expect(toast.error).not.toHaveBeenCalled();
   });

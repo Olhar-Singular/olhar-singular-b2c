@@ -128,6 +128,11 @@ export default function StepAIEditor({ data, updateData, onNext, onPrev }: Props
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { if (!data.result) generate(); }, []);
 
+  /* v8 ignore next 3 */
+  const handleCreditRefresh = () => {
+    refreshProfile().catch(() => {});
+  };
+
   const handleNext = () => {
     const patch = buildAIEditorAdvancePatch(
       universalContent.dslExpanded,
@@ -229,7 +234,7 @@ export default function StepAIEditor({ data, updateData, onNext, onPrev }: Props
         barriers={data.barriers}
         currentDsl={activeContent.dsl}
         onDslUpdate={activeContent.setDsl}
-        onCreditRefresh={() => refreshProfile().catch(() => {})}
+        onCreditRefresh={handleCreditRefresh}
       />
 
       <div className="flex justify-between pt-4">

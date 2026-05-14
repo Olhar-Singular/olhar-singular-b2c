@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { useRegenerateQuestion } from "@/hooks/useRegenerateQuestion";
 import { markdownDslToStructured, structuredToMarkdownDsl } from "@/lib/domain/activityDslConverter";
+import { isStructuredActivity } from "@/types/adaptation";
 import type { StructuredQuestion } from "@/types/adaptation";
 import type { AdaptationResult, BarrierItem } from "@/lib/domain/adaptationWizardHelpers";
 
@@ -48,6 +49,7 @@ export default function QuestionRegeneratePanel({
   const { mutate } = useRegenerateQuestion();
 
   const version = versionType === "universal" ? result.version_universal : result.version_directed;
+  if (!isStructuredActivity(version)) return null;
   const questions: StructuredQuestion[] = version.sections.flatMap((s) => s.questions);
 
   if (questions.length === 0) return null;

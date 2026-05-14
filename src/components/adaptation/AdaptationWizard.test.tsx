@@ -12,6 +12,7 @@ vi.mock("@/hooks/useAuth", () => ({
     profile: { credit_balance: 10 },
     loading: false,
     signOut: vi.fn(),
+    refreshProfile: vi.fn().mockResolvedValue(undefined),
   })),
 }));
 
@@ -150,7 +151,6 @@ describe("AdaptationWizard", () => {
   it("setConfirmTarget is called when navigating back from ai_editor with a result (lines 62-63)", async () => {
     const user = userEvent.setup();
     global.fetch = vi.fn()
-      .mockResolvedValueOnce(new Response(JSON.stringify({ ok: true }), { status: 200 }))
       .mockResolvedValueOnce(new Response(JSON.stringify({ adaptation: finishedResult }), { status: 200 }));
     renderWizard();
     // Navigate through to ai_editor step with a result
@@ -199,9 +199,7 @@ describe("AdaptationWizard", () => {
   it("reaches ai_editor step with result and advances to export (line 116 + export restart line 83)", async () => {
     const user = userEvent.setup();
     global.fetch = vi.fn()
-      .mockResolvedValueOnce(new Response(JSON.stringify({ ok: true }), { status: 200 }))
-      .mockResolvedValueOnce(new Response(JSON.stringify({ adaptation: finishedResult }), { status: 200 }))
-      .mockResolvedValueOnce(new Response(JSON.stringify({ ok: true }), { status: 200 }));
+      .mockResolvedValueOnce(new Response(JSON.stringify({ adaptation: finishedResult }), { status: 200 }));
     renderWizard();
     // Step 1
     await user.click(screen.getByRole("button", { name: /exercício/i }));

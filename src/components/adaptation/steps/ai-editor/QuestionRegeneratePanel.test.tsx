@@ -141,6 +141,61 @@ describe("QuestionRegeneratePanel", () => {
     expect(screen.queryByRole("button", { name: /Regerar/i })).toBeNull();
   });
 
+  it("does not call toast.success when changes_made is empty (line 73 false branch)", async () => {
+    const { toast } = await import("sonner");
+    render(<QuestionRegeneratePanel {...defaultProps} />);
+    fireEvent.click(screen.getAllByRole("button", { name: /Regerar Q1/i })[0]);
+    const [, { onSuccess }] = mutateMock.mock.calls[0];
+    onSuccess({ question_dsl: "1) Nova questão\n[linhas:3]", changes_made: [] });
+    await new Promise((r) => setTimeout(r, 10));
+    expect(toast.success).not.toHaveBeenCalled();
+  });
+
+  it("truncates question statement longer than 60 chars in button label (line 93 true branch)", () => {
+    const longStatement = "A".repeat(80);
+    const resultWithLong = {
+      ...makeResult(1),
+      version_universal: {
+        sections: [{ title: undefined, introduction: undefined, questions: [{ number: 1, type: "open_ended" as const, statement: longStatement, answerLines: 3 }] }],
+      },
+    };
+    render(<QuestionRegeneratePanel {...defaultProps} result={resultWithLong as any} />);
+    expect(screen.getByRole("button", { name: /Regerar Q1/i })).toHaveTextContent("…");
+  });
+
+  it("replaceQuestionInDsl returns original DSL when parsed question_dsl has no question (line 25 true branch)", async () => {
+    const onDslUpdate = vi.fn();
+    render(<QuestionRegeneratePanel {...defaultProps} onDslUpdate={onDslUpdate} />);
+    fireEvent.click(screen.getAllByRole("button", { name: /Regerar Q1/i })[0]);
+    const [, { onSuccess }] = mutateMock.mock.calls[0];
+    // Empty DSL parses to no question → early return preserves currentDsl
+    onSuccess({ question_dsl: "", changes_made: [] });
+    await new Promise((r) => setTimeout(r, 10));
+    expect(onDslUpdate).toHaveBeenCalledWith(defaultProps.currentDsl);
+  });
+
+  it("replaceQuestionInDsl skips replacement when question number not found (line 30 false branch)", async () => {
+    const onDslUpdate = vi.fn();
+    render(<QuestionRegeneratePanel {...defaultProps} onDslUpdate={onDslUpdate} />);
+    fireEvent.click(screen.getAllByRole("button", { name: /Regerar Q1/i })[0]);
+    const [, { onSuccess }] = mutateMock.mock.calls[0];
+    // DSL with question number 99 — no match in current sections
+    onSuccess({ question_dsl: "99) Questão nova\n[linhas:3]", changes_made: [] });
+    await new Promise((r) => setTimeout(r, 10));
+    expect(onDslUpdate).toHaveBeenCalled();
+  });
+
+  it("returns null when version is not a structured activity (guard added at line 52)", () => {
+    const resultNullVersion = {
+      ...makeResult(2),
+      version_universal: null,
+    };
+    const { container } = render(
+      <QuestionRegeneratePanel {...defaultProps} result={resultNullVersion as any} />
+    );
+    expect(container.firstChild).toBeNull();
+  });
+
   it("passes only active barriers to mutate", () => {
     const barriersWithInactive: BarrierItem[] = [
       { dimension: "d1", barrier_key: "b1", label: "Active", is_active: true },
@@ -153,5 +208,22 @@ describe("QuestionRegeneratePanel", () => {
     const [{ barriers: passedBarriers }] = mutateMock.mock.calls[0];
     expect(passedBarriers).toHaveLength(1);
     expect(passedBarriers[0].barrier_key).toBe("b1");
+  });
+
+  it("replaceQuestionInDsl leaves sections unchanged when question idx is -1 (line 30 false branch)", async () => {
+    const onDslUpdate = vi.fn();
+    // currentDsl only has question 5, but panel regenerates Q1 → idx will be -1 for every section
+    render(
+      <QuestionRegeneratePanel
+        {...defaultProps}
+        currentDsl="5) Questão cinco\n[linhas:3]"
+        onDslUpdate={onDslUpdate}
+      />
+    );
+    fireEvent.click(screen.getAllByRole("button", { name: /Regerar Q1/i })[0]);
+    const [, { onSuccess }] = mutateMock.mock.calls[0];
+    onSuccess({ question_dsl: "1) Nova questão\n[linhas:3]", changes_made: [] });
+    await new Promise((r) => setTimeout(r, 10));
+    expect(onDslUpdate).toHaveBeenCalled();
   });
 });

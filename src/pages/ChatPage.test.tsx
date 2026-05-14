@@ -151,6 +151,21 @@ describe("ChatPage", () => {
     expect(args.session_id).toBe("s1");
   });
 
+  it("swallows refreshProfile rejection silently on success (line 45 catch arrow-fn)", async () => {
+    const { useAuth } = await import("@/hooks/useAuth");
+    vi.mocked(useAuth).mockReturnValue({
+      refreshProfile: vi.fn().mockRejectedValue(new Error("auth fail")),
+    } as never);
+    renderWithProviders(<ChatPage />);
+    fireEvent.click(screen.getByText("send"));
+    const [, options] = mutate.mock.calls[0];
+    await act(async () => {
+      options.onSuccess({ session_id: "new-id" });
+    });
+    // refreshProfile rejected but catch(() => {}) swallows it — no crash
+    expect(screen.getByTestId("active")).toHaveTextContent("new-id");
+  });
+
   it("on error does not restore localMessages when active session exists (branch 45)", async () => {
     const { toast } = await import("sonner");
     vi.mocked(useChatSessions).mockReturnValue({

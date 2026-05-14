@@ -10,7 +10,7 @@ export const MSG_NETWORK = "Sem conexão com o servidor. Verifique sua internet.
 export function isNetworkError(err: unknown): boolean {
   if (err instanceof TypeError) return true;
   if (!(err instanceof Error)) return false;
-  const lower = err.message.toLowerCase();
+  const lower = (err.message ?? "").toLowerCase();
   return NETWORK_PATTERNS.some((p) => lower.includes(p));
 }
 
@@ -35,8 +35,8 @@ export function parseEdgeFnError(err: unknown, fallback: string): string {
 }
 
 /** Maps Supabase Auth error messages to Portuguese user-facing strings. */
-export function parseAuthError(message: string | undefined): string {
-  if (!message) return "Erro inesperado. Tente novamente.";
+export function parseAuthError(message: string | undefined, action: "login" | "signup" = "login"): string {
+  if (!message) return action === "signup" ? "Erro ao criar conta. Tente novamente." : "Erro ao entrar. Tente novamente.";
   const m = message.toLowerCase();
   if (m.includes("failed to fetch") || m.includes("networkerror") || m.includes("network")) {
     return MSG_NETWORK;
