@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
-import { ArrowLeft, ArrowRight, User, Coins } from "lucide-react";
+import { ArrowLeft, ArrowRight, User, Coins, Pencil } from "lucide-react";
 import { useBarrierProfiles } from "@/hooks/useBarrierProfiles";
 import { useAuth } from "@/hooks/useAuth";
 import {
@@ -43,6 +43,7 @@ export function StepBarrierSelection({ data, updateData, onNext, onPrev }: Props
   const { data: profiles = [] } = useBarrierProfiles();
   const { profile } = useAuth();
   const [error, setError] = useState("");
+  const [locked, setLocked] = useState(data.barrierProfileId !== null);
 
   const activeDimensions = [...new Set(
     data.barriers.filter((b) => b.is_active).map((b) => b.dimension).filter(Boolean),
@@ -55,6 +56,7 @@ export function StepBarrierSelection({ data, updateData, onNext, onPrev }: Props
   function handleProfileChange(profileId: string) {
     if (!profileId) {
       updateData({ barrierProfileId: null, barriers: [] });
+      setLocked(false);
       return;
     }
     const profile = profiles.find((p) => p.id === profileId);
@@ -70,6 +72,7 @@ export function StepBarrierSelection({ data, updateData, onNext, onPrev }: Props
     });
 
     updateData({ barrierProfileId: profileId, barriers });
+    setLocked(true);
   }
 
   function handleCheckboxChange(dimKey: string, barrierKey: string, label: string, checked: boolean) {
@@ -78,6 +81,10 @@ export function StepBarrierSelection({ data, updateData, onNext, onPrev }: Props
   }
 
   function handleNext() {
+    if (!data.barrierProfileId) {
+      setError("Selecione um perfil de barreira antes de continuar.");
+      return;
+    }
     const active = data.barriers.filter((b) => b.is_active);
     if (active.length === 0) {
       setError("Selecione pelo menos uma barreira de aprendizagem.");
@@ -96,29 +103,41 @@ export function StepBarrierSelection({ data, updateData, onNext, onPrev }: Props
         </p>
       </div>
 
-      {/* Profile selector */}
-      {profiles.length > 0 && (
-        <div className="space-y-2">
-          <Label htmlFor="profile-select" className="flex items-center gap-1.5">
-            <User className="w-3.5 h-3.5" />
-            Carregar perfil salvo
-          </Label>
-          <select
-            id="profile-select"
-            className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            value={data.barrierProfileId ?? ""}
-            onChange={(e) => handleProfileChange(e.target.value)}
-          >
-            <option value="">— Selecionar perfil (opcional) —</option>
-            {profiles.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.barriers.length} barreira{p.barriers.length !== 1 ? "s" : ""}
-                {p.observation ? ` — ${p.observation.slice(0, 40)}` : ""}
-              </option>
-            ))}
-          </select>
-        </div>
-      )}
+      {/* Profile selector — always shown, selection is mandatory */}
+      <div className="space-y-2">
+        <Label htmlFor="profile-select" className="flex items-center gap-1.5">
+          <User className="w-3.5 h-3.5" />
+          Perfil de barreira
+          <span className="text-destructive ml-0.5">*</span>
+        </Label>
+        {profiles.length === 0 ? (
+          <p className="text-sm text-muted-foreground">
+            Nenhum perfil criado. Crie um perfil em{" "}
+            <strong>Perfis de Barreira</strong> antes de continuar.
+          </p>
+        ) : (
+          <div className="flex gap-2 items-center">
+            <select
+              id="profile-select"
+              className="flex-1 rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              value={data.barrierProfileId ?? ""}
+              onChange={(e) => handleProfileChange(e.target.value)}
+            >
+              <option value="">— Selecionar perfil —</option>
+              {profiles.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name || "Perfil sem nome"}
+                </option>
+              ))}
+            </select>
+            {data.barrierProfileId && locked && (
+              <Button size="sm" variant="outline" onClick={() => setLocked(false)}>
+                <Pencil className="w-3 h-3 mr-1" /> Editar
+              </Button>
+            )}
+          </div>
+        )}
+      </div>
 
       {/* Barrier checkboxes grouped by dimension */}
       <div className="space-y-4 max-h-[400px] overflow-y-auto pr-1">
@@ -136,6 +155,7 @@ export function StepBarrierSelection({ data, updateData, onNext, onPrev }: Props
                       onCheckedChange={(v) =>
                         handleCheckboxChange(dim.key, b.key, b.label, !!v)
                       }
+                      disabled={locked}
                     />
                     <Label htmlFor={`barrier-${b.key}`} className="text-sm font-normal cursor-pointer">
                       {b.label}

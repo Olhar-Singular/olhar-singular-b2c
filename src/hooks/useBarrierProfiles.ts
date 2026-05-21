@@ -6,7 +6,7 @@ import { parseDbError } from "@/lib/utils/errors";
 import type { Database } from "@/integrations/supabase/types";
 
 type BarrierProfile = Database["public"]["Tables"]["barrier_profiles"]["Row"];
-type CreateInput = Pick<BarrierProfile, "barriers" | "observation">;
+type CreateInput = Pick<BarrierProfile, "barriers" | "observation" | "name">;
 type UpdateInput = { id: string } & Partial<CreateInput>;
 
 const QUERY_KEY = ["barrier_profiles"] as const;

@@ -11,6 +11,7 @@ const mockBarrierProfiles = [
     user_id: "user-1",
     barriers: ["tea_sensory", "attention_sustained"],
     observation: "Aluno com TEA leve",
+    name: "Aluno TEA",
     created_at: "2026-01-01",
   },
 ];
@@ -73,11 +74,11 @@ describe("StepBarrierSelection", () => {
     expect(screen.getByRole("combobox")).toBeInTheDocument();
   });
 
-  it("shows validation error when submitting with no barriers", async () => {
+  it("shows validation error when submitting with no barriers (profile set but no barriers)", async () => {
     const user = userEvent.setup();
-    renderStep();
+    renderStep({ ...baseData, barrierProfileId: "prof-1" });
     await user.click(screen.getByRole("button", { name: /próximo/i }));
-    expect(screen.getByRole("alert")).toBeInTheDocument();
+    expect(screen.getByRole("alert")).toHaveTextContent(/selecione pelo menos uma barreira/i);
   });
 
   it("allows selecting a barrier checkbox", async () => {
@@ -88,10 +89,11 @@ describe("StepBarrierSelection", () => {
     expect(mockUpdateData).toHaveBeenCalled();
   });
 
-  it("calls onNext when barriers are selected", async () => {
+  it("calls onNext when profile and barriers are selected", async () => {
     const user = userEvent.setup();
     const dataWithBarriers: WizardData = {
       ...baseData,
+      barrierProfileId: "prof-1",
       barriers: [{ dimension: "attention", barrier_key: "attention_sustained", label: "Atenção", is_active: true }],
     };
     renderStep(dataWithBarriers);
@@ -109,7 +111,7 @@ describe("StepBarrierSelection", () => {
   it("loads barriers from a saved profile when selected", async () => {
     const user = userEvent.setup();
     renderStep();
-    const select = screen.getByLabelText(/Carregar perfil/i) as HTMLSelectElement;
+    const select = screen.getByLabelText(/Perfil de barreira/i) as HTMLSelectElement;
     await user.selectOptions(select, "prof-1");
     expect(mockUpdateData).toHaveBeenCalledWith(
       expect.objectContaining({ barrierProfileId: "prof-1" }),
@@ -119,7 +121,7 @@ describe("StepBarrierSelection", () => {
   it("clears selection when profile is reset to empty", async () => {
     const user = userEvent.setup();
     renderStep({ ...baseData, barrierProfileId: "prof-1" });
-    const select = screen.getByLabelText(/Carregar perfil/i) as HTMLSelectElement;
+    const select = screen.getByLabelText(/Perfil de barreira/i) as HTMLSelectElement;
     await user.selectOptions(select, "");
     expect(mockUpdateData).toHaveBeenCalledWith({ barrierProfileId: null, barriers: [] });
   });
@@ -203,6 +205,7 @@ describe("StepBarrierSelection", () => {
         <StepBarrierSelection
           data={{
             ...baseData,
+            barrierProfileId: "prof-1",
             barriers: [{ dimension: "tea", barrier_key: "x", label: "X", is_active: true }],
           }}
           updateData={mockUpdateData}
@@ -223,34 +226,105 @@ describe("StepBarrierSelection", () => {
       isLoading: false,
     } as never);
     renderStep();
-    const select = screen.getByLabelText(/Carregar perfil/i) as HTMLSelectElement;
+    const select = screen.getByLabelText(/Perfil de barreira/i) as HTMLSelectElement;
     await user.selectOptions(select, "p-known");
     expect(mockUpdateData).toHaveBeenCalledWith(
       expect.objectContaining({ barriers: [expect.objectContaining({ dimension: "tea" })] }),
     );
   });
 
-  it("shows singular 'barreira' label for profile with exactly 1 barrier (line 115 '' branch)", async () => {
-    const { useBarrierProfiles } = await import("@/hooks/useBarrierProfiles");
-    vi.mocked(useBarrierProfiles).mockReturnValueOnce({
-      data: [{ id: "p-one", user_id: "u1", barriers: ["tea_abstracao"], observation: "obs", created_at: "2026-01-01" }],
-      isLoading: false,
-    } as never);
-    renderStep();
-    const select = screen.getByRole("combobox");
-    expect(select.textContent).toContain("1 barreira");
-    expect(select.textContent).not.toContain("1 barreiras");
+  // ── Perfil carregado: travado e editável ────────────────────────────────────
+
+  it("checkboxes are disabled when a profile is loaded", () => {
+    renderStep({
+      ...baseData,
+      barrierProfileId: "prof-1",
+      barriers: [{ dimension: "tea", barrier_key: "tea_abstracao", label: "Abstração", is_active: true }],
+    });
+    const checkboxes = screen.getAllByRole("checkbox");
+    checkboxes.forEach((cb) => expect(cb).toBeDisabled());
   });
 
-  it("shows no observation suffix in option when observation is empty (line 116 '' branch)", async () => {
+  it("shows Editar button when a profile is loaded", () => {
+    renderStep({ ...baseData, barrierProfileId: "prof-1" });
+    expect(screen.getByRole("button", { name: /^Editar$/i })).toBeInTheDocument();
+  });
+
+  it("does not show Editar button when no profile is loaded", () => {
+    renderStep();
+    expect(screen.queryByRole("button", { name: /^Editar$/i })).not.toBeInTheDocument();
+  });
+
+  it("clicking Editar enables checkboxes", async () => {
+    const user = userEvent.setup();
+    renderStep({
+      ...baseData,
+      barrierProfileId: "prof-1",
+      barriers: [{ dimension: "tea", barrier_key: "tea_abstracao", label: "Abstração", is_active: true }],
+    });
+    const checkboxes = screen.getAllByRole("checkbox");
+    checkboxes.forEach((cb) => expect(cb).toBeDisabled());
+    await user.click(screen.getByRole("button", { name: /^Editar$/i }));
+    const checkboxesAfter = screen.getAllByRole("checkbox");
+    checkboxesAfter.forEach((cb) => expect(cb).not.toBeDisabled());
+  });
+
+  it("Editar button disappears after being clicked", async () => {
+    const user = userEvent.setup();
+    renderStep({ ...baseData, barrierProfileId: "prof-1" });
+    await user.click(screen.getByRole("button", { name: /^Editar$/i }));
+    expect(screen.queryByRole("button", { name: /^Editar$/i })).not.toBeInTheDocument();
+  });
+
+  it("selecting a new profile re-locks checkboxes", async () => {
+    const user = userEvent.setup();
+    renderStep({ ...baseData, barrierProfileId: "prof-1" });
+    await user.click(screen.getByRole("button", { name: /^Editar$/i }));
+    const select = screen.getByLabelText(/Perfil de barreira/i) as HTMLSelectElement;
+    await user.selectOptions(select, "prof-1");
+    const checkboxes = screen.getAllByRole("checkbox");
+    checkboxes.forEach((cb) => expect(cb).toBeDisabled());
+  });
+
+  it("shows 'Perfil sem nome' in dropdown when profile has no name", async () => {
     const { useBarrierProfiles } = await import("@/hooks/useBarrierProfiles");
     vi.mocked(useBarrierProfiles).mockReturnValueOnce({
-      data: [{ id: "p-noobs", user_id: "u1", barriers: ["tea_abstracao", "dislexia_leitura"], observation: "", created_at: "2026-01-01" }],
+      data: [{ id: "p-one", user_id: "u1", barriers: ["tea_abstracao"], observation: "obs", name: null, created_at: "2026-01-01" }],
       isLoading: false,
     } as never);
     renderStep();
     const select = screen.getByRole("combobox");
-    expect(select.textContent).toContain("2 barreiras");
-    expect(select.textContent).not.toContain(" — ");
+    expect(select.textContent).toContain("Perfil sem nome");
+  });
+
+  it("shows error when submitting without a profile selected (profile selection is mandatory)", async () => {
+    const user = userEvent.setup();
+    renderStep({
+      ...baseData,
+      barriers: [{ dimension: "tea", barrier_key: "tea_abstracao", label: "TEA", is_active: true }],
+      barrierProfileId: null,
+    });
+    await user.click(screen.getByRole("button", { name: /próximo/i }));
+    expect(screen.getByRole("alert")).toHaveTextContent(/selecione um perfil/i);
+    expect(mockOnNext).not.toHaveBeenCalled();
+  });
+
+  it("shows profile name in dropdown instead of barrier count", () => {
+    renderStep();
+    const select = screen.getByRole("combobox");
+    expect(select.textContent).toContain("Aluno TEA");
+    expect(select.textContent).not.toContain("2 barreira");
+  });
+
+  it("shows profile name in dropdown when name is set (even if observation is empty)", async () => {
+    const { useBarrierProfiles } = await import("@/hooks/useBarrierProfiles");
+    vi.mocked(useBarrierProfiles).mockReturnValueOnce({
+      data: [{ id: "p-named", user_id: "u1", barriers: ["tea_abstracao"], observation: "", name: "Turma 5A TEA", created_at: "2026-01-01" }],
+      isLoading: false,
+    } as never);
+    renderStep();
+    const select = screen.getByRole("combobox");
+    expect(select.textContent).toContain("Turma 5A TEA");
+    expect(select.textContent).not.toContain("1 barreira");
   });
 });

@@ -207,84 +207,35 @@ describe("StepActivityInput — Banco de Questões tab", () => {
   });
 });
 
-// ── Arquivo / Imagem tab tests ─────────────────────────────────────────────
+// ── Tab visibility ─────────────────────────────────────────────────────────
 
-describe("StepActivityInput — Arquivo tab", () => {
-  it("shows Envio de Arquivo tab button", () => {
+describe("StepActivityInput — tab visibility", () => {
+  it("does not show Envio de Arquivo tab button", () => {
     render(<StepActivityInput data={baseData} updateData={vi.fn()} onNext={vi.fn()} onPrev={vi.fn()} />);
-    expect(screen.getByRole("button", { name: /Envio de Arquivo/i })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Envio de Arquivo/i })).not.toBeInTheDocument();
   });
 
-  it("switching to Arquivo tab shows PDF/DOCX drop zone", () => {
+  it("does not show Imagem (OCR) tab button", () => {
     render(<StepActivityInput data={baseData} updateData={vi.fn()} onNext={vi.fn()} onPrev={vi.fn()} />);
-    fireEvent.click(screen.getByRole("button", { name: /Envio de Arquivo/i }));
-    expect(screen.getByText(/PDF ou Word/i)).toBeInTheDocument();
-    expect(screen.queryByLabelText(/Conteúdo da atividade/i)).toBeNull();
+    expect(screen.queryByRole("button", { name: /^Imagem/i })).not.toBeInTheDocument();
   });
 
-  it("uploading a PDF extracts questions and updates activityText", async () => {
-    fetchSpy.mockResolvedValue({
-      ok: true,
-      json: vi.fn().mockResolvedValue({ questions: [{ text: "Questão do arquivo", options: [] }] }),
-    });
-    const updateData = vi.fn();
-    render(<StepActivityInput data={baseData} updateData={updateData} onNext={vi.fn()} onPrev={vi.fn()} />);
-    fireEvent.click(screen.getByRole("button", { name: /Envio de Arquivo/i }));
-    const input = document.querySelector("input[type='file'][accept='.pdf,.docx']") as HTMLInputElement;
-    const file = new File(["pdf"], "prova.pdf", { type: "application/pdf" });
-    fireEvent.change(input, { target: { files: [file] } });
+  it("defaults to Banco de Questões tab when questions exist in bank", async () => {
+    bankQuestionsResult.data = [
+      { id: "q1", text: "Q1", subject: "Física", topic: null, difficulty: null, image_url: null, options: null },
+    ];
+    render(<StepActivityInput data={baseData} updateData={vi.fn()} onNext={vi.fn()} onPrev={vi.fn()} />);
     await waitFor(() => {
-      expect(updateData).toHaveBeenCalledWith(
-        expect.objectContaining({ activityText: expect.stringContaining("Questão do arquivo") }),
-      );
+      expect(screen.getByRole("button", { name: /Abrir Banco de Questões/i })).toBeInTheDocument();
     });
   });
 
-  it("shows error toast when extraction returns non-ok", async () => {
-    const { toast } = await import("sonner");
-    fetchSpy.mockResolvedValue({
-      ok: false,
-      json: vi.fn().mockResolvedValue({ error: "Créditos insuficientes" }),
-    });
+  it("stays on Colar Texto tab when no questions exist in bank", async () => {
+    bankQuestionsResult.data = [];
     render(<StepActivityInput data={baseData} updateData={vi.fn()} onNext={vi.fn()} onPrev={vi.fn()} />);
-    fireEvent.click(screen.getByRole("button", { name: /Envio de Arquivo/i }));
-    const input = document.querySelector("input[type='file'][accept='.pdf,.docx']") as HTMLInputElement;
-    const file = new File(["pdf"], "prova.pdf", { type: "application/pdf" });
-    fireEvent.change(input, { target: { files: [file] } });
     await waitFor(() => {
-      expect(toast.error).toHaveBeenCalledWith(expect.stringContaining("Créditos insuficientes"));
+      expect(screen.getByLabelText(/Conteúdo da atividade/i)).toBeInTheDocument();
     });
-  });
-});
-
-describe("StepActivityInput — Imagem tab", () => {
-  it("shows Imagem tab button", () => {
-    render(<StepActivityInput data={baseData} updateData={vi.fn()} onNext={vi.fn()} onPrev={vi.fn()} />);
-    expect(screen.getByRole("button", { name: /Imagem/i })).toBeInTheDocument();
-  });
-
-  it("switching to Imagem tab shows image drop zone", () => {
-    render(<StepActivityInput data={baseData} updateData={vi.fn()} onNext={vi.fn()} onPrev={vi.fn()} />);
-    fireEvent.click(screen.getByRole("button", { name: /^Imagem/i }));
-    expect(screen.getByText(/prova ou atividade/i)).toBeInTheDocument();
-    expect(screen.queryByLabelText(/Conteúdo da atividade/i)).toBeNull();
-  });
-
-  it("uploading an image extracts questions and updates activityText", async () => {
-    fetchSpy.mockResolvedValue({
-      ok: true,
-      json: vi.fn().mockResolvedValue({ questions: [{ text: "Questão da imagem", options: [] }] }),
-    });
-    const updateData = vi.fn();
-    render(<StepActivityInput data={baseData} updateData={updateData} onNext={vi.fn()} onPrev={vi.fn()} />);
-    fireEvent.click(screen.getByRole("button", { name: /^Imagem/i }));
-    const input = document.querySelector("input[type='file'][accept='image/*']") as HTMLInputElement;
-    const file = new File(["img"], "prova.png", { type: "image/png" });
-    fireEvent.change(input, { target: { files: [file] } });
-    await waitFor(() => {
-      expect(updateData).toHaveBeenCalledWith(
-        expect.objectContaining({ activityText: expect.stringContaining("Questão da imagem") }),
-      );
-    });
+    expect(screen.queryByRole("button", { name: /Abrir Banco de Questões/i })).not.toBeInTheDocument();
   });
 });

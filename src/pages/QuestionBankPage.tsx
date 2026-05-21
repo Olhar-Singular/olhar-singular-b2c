@@ -30,12 +30,11 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
-  DialogClose,
 } from "@/components/ui/dialog";
 import {
   Loader2, Plus, BookOpen, Search, Gift, CreditCard,
   MoreVertical, Pencil, Trash2, FileText, AlertTriangle,
-  Upload, X, CheckCircle2, Eye,
+  Upload, X, CheckCircle2, Eye, Crop,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useAuthContext } from "@/contexts/AuthContext";
@@ -49,6 +48,7 @@ import { resolveUniqueFileName } from "@/lib/utils/fileNameUtils";
 import { normalizeTextForDedup, autoCropFromBbox, dataUrlToBlob } from "@/lib/utils/extraction-utils";
 import QuestionForm from "@/components/forms/QuestionForm";
 import ManualQuestionEditor from "@/components/forms/ManualQuestionEditor";
+import PdfPreviewModal from "@/components/forms/PdfPreviewModal";
 import { SUBJECTS } from "@/lib/utils/constants";
 import "katex/dist/katex.min.css";
 
@@ -95,17 +95,12 @@ function FilePreviewDialog({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-4xl h-[80vh] flex flex-col">
-        <DialogHeader className="flex flex-row items-center justify-between">
+        <DialogHeader>
           <DialogTitle>{file?.name ?? "Prévia do arquivo"}</DialogTitle>
-          <DialogClose asChild>
-            <Button variant="ghost" size="sm" aria-label="fechar">
-              <X className="w-4 h-4" />
-            </Button>
-          </DialogClose>
         </DialogHeader>
         {objectUrl && (
           <iframe
-            src={objectUrl}
+            src={`${objectUrl}#toolbar=0&navpanes=0`}
             className="flex-1 w-full rounded border"
             title="Prévia do arquivo"
           />
@@ -157,6 +152,10 @@ export default function QuestionBankPage() {
   // File preview dialog
   const [previewOpen, setPreviewOpen] = useState(false);
   const [previewObjectUrl, setPreviewObjectUrl] = useState<string | null>(null);
+
+  // PDF crop modal
+  const [cropModalOpen, setCropModalOpen] = useState(false);
+  const [cropTargetIndex, setCropTargetIndex] = useState<number | null>(null);
 
   const fileRef = useRef<HTMLInputElement>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -343,6 +342,7 @@ export default function QuestionBankPage() {
   const handleSaveExtracted = async () => {
     const selected = extractedQuestions.filter((q) => q.selected && !q.saved);
     const source = uploadFile?.name.toLowerCase().endsWith(".pdf") ? "pdf_extract" : "docx_extract";
+    let imageUploadErrors = 0;
 
     const rows = await Promise.all(
       selected.map(async (q) => {
@@ -358,6 +358,9 @@ export default function QuestionBankPage() {
               .from("question-images")
               .getPublicUrl(fileName);
             image_url = publicUrl;
+          } else {
+            imageUploadErrors++;
+            console.error("Image upload error:", error);
           }
         }
         return {
@@ -375,9 +378,61 @@ export default function QuestionBankPage() {
       }),
     );
 
+    if (imageUploadErrors > 0) {
+      toast.error(`${imageUploadErrors} imagem(ns) não puderam ser salvas no armazenamento.`);
+    }
     insertQuestions.mutate(rows);
     setShowReview(false);
     setExtractedQuestions([]);
+  };
+
+  const handleSaveOne = async (index: number) => {
+    const q = extractedQuestions[index];
+    if (!q || q.saved) return;
+    const source = uploadFile?.name.toLowerCase().endsWith(".pdf") ? "pdf_extract" : "docx_extract";
+
+    let image_url: string | null = null;
+    if (q.imageUrl?.startsWith("data:") && user) {
+      const blob = dataUrlToBlob(q.imageUrl);
+      const fileName = `${user.id}/${Date.now()}_${Math.random().toString(36).slice(2)}.png`;
+      const { error } = await supabase.storage
+        .from("question-images")
+        .upload(fileName, blob, { contentType: "image/png" });
+      if (!error) {
+        const { data: { publicUrl } } = supabase.storage
+          .from("question-images")
+          .getPublicUrl(fileName);
+        image_url = publicUrl;
+      } else {
+        console.error("Image upload error:", error);
+        toast.error("Imagem não pôde ser salva no armazenamento.");
+      }
+    }
+
+    insertQuestions.mutate([{
+      text: q.text,
+      subject: q.subject,
+      topic: q.topic || null,
+      options: q.options || null,
+      correct_answer: q.correct_answer ?? null,
+      resolution: q.resolution || null,
+      difficulty: "medio",
+      source,
+      source_file_name: uploadFile?.name || null,
+      image_url,
+    }]);
+
+    setExtractedQuestions((prev) =>
+      prev.map((eq, idx) => (idx === index ? { ...eq, saved: true, selected: true } : eq)),
+    );
+  };
+
+  const handleRemoveOne = (index: number) => {
+    setExtractedQuestions((prev) => prev.filter((_, idx) => idx !== index));
+  };
+
+  const handleRemoveSelected = () => {
+    setExtractedQuestions((prev) => prev.filter((q) => q.saved || !q.selected));
   };
 
   const handleFinishReview = () => {
@@ -472,11 +527,18 @@ export default function QuestionBankPage() {
       <div className="p-6 max-w-6xl mx-auto space-y-4">
         <div className="flex items-center justify-between flex-wrap gap-2">
           <h1 className="text-2xl font-bold text-foreground">Revisão de Questões Extraídas</h1>
-          {uploadFile && (
-            <Button variant="outline" onClick={() => openPreview(uploadFile)}>
-              <Eye className="w-4 h-4 mr-1" /> Ver Exercícios
-            </Button>
-          )}
+          <div className="flex items-center gap-2 flex-wrap">
+            {selectedCount > 0 && (
+              <Button variant="destructive" size="sm" onClick={handleRemoveSelected}>
+                <Trash2 className="w-3 h-3 mr-1" /> Remover selecionadas ({selectedCount})
+              </Button>
+            )}
+            {uploadFile && (
+              <Button variant="outline" onClick={() => openPreview(uploadFile)}>
+                <Eye className="w-4 h-4 mr-1" /> Ver Exercícios
+              </Button>
+            )}
+          </div>
         </div>
 
         <Alert>
@@ -556,6 +618,24 @@ export default function QuestionBankPage() {
                             Forçar inclusão
                           </Button>
                         )}
+                        {!q.saved && q.selected && (
+                          <Button
+                            size="sm"
+                            variant="secondary"
+                            onClick={() => handleSaveOne(i)}
+                          >
+                            Salvar
+                          </Button>
+                        )}
+                        {!q.saved && q.selected && (
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => handleRemoveOne(i)}
+                          >
+                            Remover
+                          </Button>
+                        )}
                       </div>
                     </div>
 
@@ -576,6 +656,16 @@ export default function QuestionBankPage() {
                         alt="Imagem da questão"
                         className="mt-2 max-h-48 rounded border"
                       />
+                    )}
+
+                    {q.editing && uploadFile && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => { setCropTargetIndex(i); setCropModalOpen(true); }}
+                      >
+                        <Crop className="w-3 h-3 mr-1" /> Recortar do PDF
+                      </Button>
                     )}
 
                     {q.editing && (
@@ -655,6 +745,19 @@ export default function QuestionBankPage() {
               URL.revokeObjectURL(previewObjectUrl);
               setPreviewObjectUrl(null);
             }
+          }}
+        />
+
+        <PdfPreviewModal
+          open={cropModalOpen}
+          onOpenChange={setCropModalOpen}
+          file={uploadFile}
+          initialPage={cropTargetIndex !== null ? extractedQuestions[cropTargetIndex]?.image_page : undefined}
+          onCrop={(dataUrl) => {
+            if (cropTargetIndex !== null) {
+              updateExtracted(cropTargetIndex, "imageUrl", dataUrl);
+            }
+            setCropModalOpen(false);
           }}
         />
       </div>

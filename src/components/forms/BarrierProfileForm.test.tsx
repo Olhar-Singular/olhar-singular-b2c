@@ -41,6 +41,7 @@ describe("BarrierProfileForm", () => {
   it("submits with selected barriers when valid", async () => {
     const onSubmit = vi.fn().mockResolvedValue(undefined);
     render(<BarrierProfileForm onSubmit={onSubmit} />);
+    fireEvent.change(screen.getByLabelText(/Nome do perfil/i), { target: { value: "Meu Perfil" } });
     fireEvent.click(screen.getAllByRole("checkbox")[0]);
     fireEvent.click(screen.getByRole("button", { name: /Salvar perfil/i }));
     await waitFor(() => expect(onSubmit).toHaveBeenCalled());
@@ -63,7 +64,7 @@ describe("BarrierProfileForm", () => {
     render(
       <BarrierProfileForm
         onSubmit={onSubmit}
-        defaultValues={{ barriers: ["tea_abstracao"], observation: "x" }}
+        defaultValues={{ name: "Perfil Teste", barriers: ["tea_abstracao"], observation: "x" }}
       />,
     );
     const ta = screen.getByLabelText(/Observações/);

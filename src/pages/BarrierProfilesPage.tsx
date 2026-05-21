@@ -120,6 +120,10 @@ export default function BarrierProfilesPage() {
               className="hover:shadow-card-hover transition-shadow border-border group relative"
             >
               <CardContent className="p-5">
+                {/* Profile name */}
+                {profile.name && (
+                  <h3 className="text-sm font-semibold mb-2 pr-16 truncate">{profile.name}</h3>
+                )}
                 {/* Barrier badges */}
                 <div className="flex flex-wrap gap-1.5 mb-3 pr-16">
                   {profile.barriers.slice(0, 3).map((key) => (
@@ -182,7 +186,7 @@ export default function BarrierProfilesPage() {
           <BarrierProfileForm
             defaultValues={
               editing
-                ? { barriers: editing.barriers, observation: editing.observation }
+                ? { name: editing.name ?? "", barriers: editing.barriers, observation: editing.observation }
                 : undefined
             }
             onSubmit={handleSubmit}

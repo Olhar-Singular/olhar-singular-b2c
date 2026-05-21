@@ -21,8 +21,6 @@ import {
   ArrowRight,
   Type,
   Database,
-  FileUp,
-  Crop,
   Search,
   Check,
   Loader2,
@@ -41,7 +39,7 @@ type Props = {
   onPrev: () => void;
 };
 
-type Tab = "manual" | "banco" | "arquivo" | "imagem";
+type Tab = "manual" | "banco";
 
 type BankQuestion = {
   id: string;
@@ -67,8 +65,6 @@ const DIFFICULTIES = [
 const TABS: { key: Tab; label: string; icon: React.ElementType }[] = [
   { key: "manual", label: "Colar Texto", icon: Type },
   { key: "banco", label: "Banco de Questões", icon: Database },
-  { key: "arquivo", label: "Envio de Arquivo", icon: FileUp },
-  { key: "imagem", label: "Imagem (OCR)", icon: Crop },
 ];
 
 function buildActivityText(questions: SelectedQuestion[]): string {
@@ -87,6 +83,13 @@ export function StepActivityInput({ data, updateData, onNext, onPrev }: Props) {
   const [tab, setTab] = useState<Tab>("manual");
   const [error, setError] = useState("");
 
+  // Set default tab based on whether the user has questions in their bank
+  useEffect(() => {
+    supabase.from("question_bank").select("id").limit(1).then(({ data: rows }) => {
+      if (rows && rows.length > 0) setTab("banco");
+    });
+  }, []);
+
   // Bank modal state
   const [showBankModal, setShowBankModal] = useState(false);
   const [bankQuestions, setBankQuestions] = useState<BankQuestion[]>([]);
@@ -99,9 +102,6 @@ export function StepActivityInput({ data, updateData, onNext, onPrev }: Props) {
   // Image preview
   const [previewImageUrl, setPreviewImageUrl] = useState<string | null>(null);
 
-  // File / image extraction state
-  const [fileExtracting, setFileExtracting] = useState(false);
-  const abortRef = useRef<AbortController | null>(null);
   const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // ── Bank query ────────────────────────────────────────────────────────────
@@ -171,109 +171,6 @@ export function StepActivityInput({ data, updateData, onNext, onPrev }: Props) {
   function removeQuestion(id: string) {
     const updated = data.selectedQuestions.filter((q) => q.id !== id);
     updateData({ selectedQuestions: updated, activityText: buildActivityText(updated) });
-  }
-
-  // ── File / image extraction ───────────────────────────────────────────────
-
-  async function handleFileUpload(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    if (abortRef.current) abortRef.current.abort();
-    abortRef.current = new AbortController();
-    setFileExtracting(true);
-    try {
-      const formData = new FormData();
-      formData.append("file", file);
-      const session = await supabase.auth.getSession();
-      const resp = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/extract-questions`,
-        {
-          method: "POST",
-          headers: { Authorization: `Bearer ${session.data.session?.access_token}` },
-          body: formData,
-          signal: abortRef.current.signal,
-        },
-      );
-      if (!resp.ok) {
-        const err = await resp.json();
-        throw new Error(err.error || "Falha na extração");
-      }
-      const result = await resp.json();
-      const questions: Array<{ text: string; options?: string[] }> = result.questions || [];
-      if (questions.length === 0) {
-        toast.error("Nenhuma questão encontrada no arquivo.");
-        return;
-      }
-      const extracted = questions
-        .map((q, i) => {
-          let t = `${i + 1}) ${q.text}`;
-          if (q.options?.length) {
-            t += "\n" + q.options.map((o, j) => `   ${String.fromCharCode(65 + j)}) ${o}`).join("\n");
-          }
-          return t;
-        })
-        .join("\n\n");
-      updateData({ activityText: data.activityText ? data.activityText + "\n\n" + extracted : extracted });
-      toast.success(`${questions.length} questão(ões) extraída(s) do arquivo!`);
-    } catch (err: unknown) {
-      if (err instanceof Error && err.name === "AbortError") return;
-      const msg = err instanceof Error ? err.message : "Falha na extração";
-      toast.error(msg);
-    } finally {
-      setFileExtracting(false);
-    }
-  }
-
-  async function handleImageOcr(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (!file || !file.type.startsWith("image/")) {
-      toast.error("Selecione uma imagem.");
-      return;
-    }
-    if (abortRef.current) abortRef.current.abort();
-    abortRef.current = new AbortController();
-    setFileExtracting(true);
-    try {
-      const formData = new FormData();
-      formData.append("file", file);
-      const session = await supabase.auth.getSession();
-      const resp = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/extract-questions`,
-        {
-          method: "POST",
-          headers: { Authorization: `Bearer ${session.data.session?.access_token}` },
-          body: formData,
-          signal: abortRef.current.signal,
-        },
-      );
-      if (!resp.ok) {
-        const err = await resp.json();
-        throw new Error(err.error || "Falha no OCR");
-      }
-      const result = await resp.json();
-      const questions: Array<{ text: string; options?: string[] }> = result.questions || [];
-      if (questions.length === 0) {
-        toast.error("Nenhuma questão identificada na imagem.");
-        return;
-      }
-      const extracted = questions
-        .map((q, i) => {
-          let t = `${i + 1}) ${q.text}`;
-          if (q.options?.length) {
-            t += "\n" + q.options.map((o, j) => `   ${String.fromCharCode(65 + j)}) ${o}`).join("\n");
-          }
-          return t;
-        })
-        .join("\n\n");
-      updateData({ activityText: data.activityText ? data.activityText + "\n\n" + extracted : extracted });
-      toast.success(`${questions.length} questão(ões) extraída(s) da imagem!`);
-    } catch (err: unknown) {
-      if (err instanceof Error && err.name === "AbortError") return;
-      const msg = err instanceof Error ? err.message : "Falha no OCR";
-      toast.error(msg);
-    } finally {
-      setFileExtracting(false);
-    }
   }
 
   // ── Render ────────────────────────────────────────────────────────────────
@@ -390,70 +287,6 @@ export function StepActivityInput({ data, updateData, onNext, onPrev }: Props) {
 
           {error && (
             <p role="alert" className="text-sm text-destructive">{error}</p>
-          )}
-        </div>
-      )}
-
-      {/* Tab: Envio de Arquivo */}
-      {tab === "arquivo" && (
-        <div className="space-y-3">
-          <label className="border-2 border-dashed rounded-lg p-8 text-center cursor-pointer hover:border-primary/50 transition-colors block">
-            <FileUp className="w-10 h-10 mx-auto mb-3 text-muted-foreground" />
-            <p className="text-sm font-medium text-foreground mb-1">
-              {fileExtracting ? "Extraindo questões..." : "Clique ou arraste um arquivo aqui"}
-            </p>
-            <p className="text-xs text-muted-foreground">PDF ou Word (.docx) • A IA extrai as questões automaticamente</p>
-            <input
-              type="file"
-              accept=".pdf,.docx"
-              className="hidden"
-              onChange={handleFileUpload}
-              disabled={fileExtracting}
-            />
-          </label>
-          {fileExtracting && (
-            <div className="flex items-center gap-2 text-sm text-muted-foreground">
-              <Loader2 className="w-4 h-4 animate-spin" />
-              Analisando arquivo com IA...
-            </div>
-          )}
-          {data.activityText && (
-            <div className="border rounded-lg p-3 bg-muted/30">
-              <p className="text-xs text-muted-foreground mb-1">Conteúdo extraído:</p>
-              <p className="text-sm whitespace-pre-wrap line-clamp-6">{data.activityText}</p>
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* Tab: Imagem (OCR) */}
-      {tab === "imagem" && (
-        <div className="space-y-3">
-          <label className="border-2 border-dashed rounded-lg p-8 text-center cursor-pointer hover:border-primary/50 transition-colors block">
-            <Crop className="w-10 h-10 mx-auto mb-3 text-muted-foreground" />
-            <p className="text-sm font-medium text-foreground mb-1">
-              {fileExtracting ? "Extraindo texto da imagem..." : "Clique ou arraste uma imagem aqui"}
-            </p>
-            <p className="text-xs text-muted-foreground">Foto de prova ou atividade • PNG, JPG, WebP</p>
-            <input
-              type="file"
-              accept="image/*"
-              className="hidden"
-              onChange={handleImageOcr}
-              disabled={fileExtracting}
-            />
-          </label>
-          {fileExtracting && (
-            <div className="flex items-center gap-2 text-sm text-muted-foreground">
-              <Loader2 className="w-4 h-4 animate-spin" />
-              Analisando imagem com IA (OCR)...
-            </div>
-          )}
-          {data.activityText && (
-            <div className="border rounded-lg p-3 bg-muted/30">
-              <p className="text-xs text-muted-foreground mb-1">Texto extraído:</p>
-              <p className="text-sm whitespace-pre-wrap line-clamp-6">{data.activityText}</p>
-            </div>
           )}
         </div>
       )}

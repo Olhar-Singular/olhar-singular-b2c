@@ -153,6 +153,7 @@ export type Database = {
           barriers: string[]
           created_at: string
           id: string
+          name: string | null
           observation: string | null
           updated_at: string
           user_id: string
@@ -161,6 +162,7 @@ export type Database = {
           barriers?: string[]
           created_at?: string
           id?: string
+          name?: string | null
           observation?: string | null
           updated_at?: string
           user_id: string
@@ -169,6 +171,7 @@ export type Database = {
           barriers?: string[]
           created_at?: string
           id?: string
+          name?: string | null
           observation?: string | null
           updated_at?: string
           user_id?: string

@@ -4,11 +4,13 @@ import { z } from "zod";
 import { BARRIER_DIMENSIONS } from "@/lib/domain/barriers";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 
 const schema = z.object({
+  name: z.string().min(1, "Nome do perfil é obrigatório"),
   barriers: z.array(z.string()).min(1, "Selecione pelo menos uma barreira"),
   observation: z.string().max(2000).nullable(),
 });
@@ -22,15 +24,27 @@ interface Props {
 }
 
 export function BarrierProfileForm({ defaultValues, onSubmit, isPending }: Props) {
-  const { control, handleSubmit, watch, formState: { errors } } = useForm<BarrierProfileFormValues>({
+  const { control, handleSubmit, watch, register, formState: { errors } } = useForm<BarrierProfileFormValues>({
     resolver: zodResolver(schema),
-    defaultValues: { barriers: [], observation: null, ...defaultValues },
+    defaultValues: { name: "", barriers: [], observation: null, ...defaultValues },
   });
 
   const selected = watch("barriers");
 
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
+      <div className="space-y-1">
+        <Label htmlFor="profile-name">Nome do perfil</Label>
+        <Input
+          id="profile-name"
+          placeholder="Ex.: Aluno com TEA — turma 5A"
+          {...register("name")}
+        />
+        {errors.name && (
+          <p className="text-sm text-destructive">{errors.name.message}</p>
+        )}
+      </div>
+
       <Controller
         control={control}
         name="barriers"

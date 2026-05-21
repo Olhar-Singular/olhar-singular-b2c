@@ -75,6 +75,16 @@ vi.mock("@/lib/utils/extraction-utils", () => ({
 // ---------------------------------------------------------------------------
 const questionFormCallbacks: { onSaved?: () => void; open?: boolean; question?: any } = {};
 const manualEditorCallbacks: { onFinish?: () => void; file?: File | null } = {};
+const pdfPreviewModalCallbacks: { onCrop?: (dataUrl: string) => void; open?: boolean; initialPage?: number } = {};
+
+vi.mock("@/components/forms/PdfPreviewModal", () => ({
+  default: (props: any) => {
+    pdfPreviewModalCallbacks.onCrop = props.onCrop;
+    pdfPreviewModalCallbacks.open = props.open;
+    pdfPreviewModalCallbacks.initialPage = props.initialPage;
+    return props.open ? <div data-testid="pdf-preview-modal" /> : null;
+  },
+}));
 
 vi.mock("@/components/forms/ManualQuestionEditor", () => ({
   default: (props: any) => {
@@ -163,6 +173,9 @@ beforeEach(() => {
   delete questionFormCallbacks.question;
   delete manualEditorCallbacks.onFinish;
   delete manualEditorCallbacks.file;
+  delete pdfPreviewModalCallbacks.onCrop;
+  delete pdfPreviewModalCallbacks.open;
+  delete pdfPreviewModalCallbacks.initialPage;
 });
 
 // ---------------------------------------------------------------------------
@@ -581,7 +594,7 @@ describe("QuestionBankPage", () => {
     await waitFor(() => {
       expect(screen.getByText("Questão extraída")).toBeInTheDocument();
     });
-    expect(screen.getByRole("button", { name: /Salvar/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Salvar todas/i })).toBeInTheDocument();
   });
 
   it("review: Salvar todas calls insertQuestions with extracted questions", async () => {
@@ -600,7 +613,7 @@ describe("QuestionBankPage", () => {
     await waitFor(() => screen.getByRole("button", { name: /Extrair com IA/i }));
     fireEvent.click(screen.getByRole("button", { name: /Extrair com IA/i }));
     await waitFor(() => screen.getByText("Q1"));
-    fireEvent.click(screen.getByRole("button", { name: /Salvar/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Salvar todas/i }));
     await waitFor(() => expect(mockInsertMutate).toHaveBeenCalledWith(
       expect.arrayContaining([expect.objectContaining({ text: "Q1" })]),
     ));
@@ -1000,6 +1013,55 @@ describe("QuestionBankPage", () => {
     });
   });
 
+  it("save: shows error toast when storage upload fails for an image", async () => {
+    const { toast } = await import("sonner");
+    const { autoCropFromBbox, dataUrlToBlob } = await import("@/lib/utils/extraction-utils");
+    const { parsePdf } = await import("@/lib/utils/pdf-utils");
+    (parsePdf as ReturnType<typeof vi.fn>).mockResolvedValue({
+      text: "Questão com figura",
+      pageImages: ["data:image/png;base64,page1"],
+      pageCount: 1,
+      pagesProcessed: [1],
+    });
+    (autoCropFromBbox as ReturnType<typeof vi.fn>).mockResolvedValue("data:image/png;base64,cropped");
+    (dataUrlToBlob as ReturnType<typeof vi.fn>).mockReturnValue(new Blob(["fake"], { type: "image/png" }));
+    fetchSpy.mockResolvedValue({
+      ok: true,
+      json: vi.fn().mockResolvedValue({
+        questions: [{
+          text: "Questão com figura",
+          subject: "Física",
+          has_figure: true,
+          image_page: 1,
+          figure_bbox: { x: 0.1, y: 0.1, width: 0.5, height: 0.3 },
+        }],
+      }),
+    });
+
+    const imageUploadSpy = vi.fn().mockResolvedValue({ error: { message: "Bucket not found" } });
+    (supabase.storage.from as ReturnType<typeof vi.fn>).mockImplementation((bucket: string) => {
+      if (bucket === "question-images") return { upload: imageUploadSpy };
+      return { upload: storageUploadSpy, remove: storageRemoveSpy, download: storageDownloadSpy };
+    });
+
+    render(<QuestionBankPage />, { wrapper });
+    fireEvent.click(screen.getByRole("tab", { name: /Provas/i }));
+    const input = document.querySelector("input[data-upload-input]") as HTMLInputElement;
+    fireEvent.change(input, { target: { files: [new File(["pdf"], "prova.pdf", { type: "application/pdf" })] } });
+    await waitFor(() => screen.getByRole("button", { name: /Extrair com IA/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Extrair com IA/i }));
+    await waitFor(() => screen.getByText("Questão com figura"));
+    fireEvent.click(screen.getByRole("button", { name: /Salvar todas/i }));
+    await waitFor(() => {
+      expect(toast.error).toHaveBeenCalledWith(expect.stringMatching(/imagem.*não pude/i));
+      expect(mockInsertMutate).toHaveBeenCalledWith(
+        expect.arrayContaining([
+          expect.objectContaining({ image_url: null }),
+        ]),
+      );
+    });
+  });
+
   it("save: question without imageUrl is saved with image_url null", async () => {
     fetchSpy.mockResolvedValue({
       ok: true,
@@ -1077,9 +1139,165 @@ describe("QuestionBankPage", () => {
     await waitFor(() => screen.getByRole("button", { name: /Visualizar/i }));
     fireEvent.click(screen.getByRole("button", { name: /Visualizar/i }));
     await waitFor(() => screen.getByRole("dialog"));
-    fireEvent.click(screen.getByRole("button", { name: /fechar/i }));
+    fireEvent.click(screen.getByRole("button", { name: /close/i }));
     await waitFor(() =>
       expect(screen.queryByRole("dialog")).not.toBeInTheDocument(),
     );
+  });
+
+  // ── Review: salvar questão individual ────────────────────────────────────────
+
+  it("review: each non-saved card shows an individual Salvar button", async () => {
+    await goToReview([{ text: "Q1", subject: "Física" }, { text: "Q2", subject: "Química" }]);
+    const saveBtns = screen.getAllByRole("button", { name: /^Salvar$/i });
+    expect(saveBtns.length).toBeGreaterThanOrEqual(2);
+  });
+
+  it("review: clicking individual Salvar calls insertQuestions with only that question", async () => {
+    await goToReview([{ text: "Q1", subject: "Física" }, { text: "Q2", subject: "Química" }]);
+    const saveBtns = screen.getAllByRole("button", { name: /^Salvar$/i });
+    fireEvent.click(saveBtns[0]);
+    await waitFor(() =>
+      expect(mockInsertMutate).toHaveBeenCalledWith(
+        expect.arrayContaining([expect.objectContaining({ text: "Q1" })]),
+      ),
+    );
+    const allCalls = mockInsertMutate.mock.calls as any[][];
+    const savedTexts = allCalls.flatMap((c) => (c[0] as any[]).map((r: any) => r.text));
+    expect(savedTexts).not.toContain("Q2");
+  });
+
+  it("review: after individual save, card shows ✓ Salva badge and individual Salvar button disappears", async () => {
+    await goToReview([{ text: "Q1", subject: "Física" }]);
+    const saveBtn = screen.getByRole("button", { name: /^Salvar$/i });
+    fireEvent.click(saveBtn);
+    await waitFor(() => expect(screen.getByText("✓ Salva")).toBeInTheDocument());
+    expect(screen.queryByRole("button", { name: /^Salvar$/i })).not.toBeInTheDocument();
+  });
+
+  // ── Review: remover questão individual ───────────────────────────────────────
+
+  it("review: selected card shows a Remover button", async () => {
+    await goToReview([{ text: "Q1", subject: "Física" }]);
+    expect(screen.getByRole("button", { name: /^Remover$/i })).toBeInTheDocument();
+  });
+
+  it("review: unselected card does not show Remover button", async () => {
+    await goToReview([{ text: "Q1", subject: "Física" }]);
+    fireEvent.click(screen.getByRole("checkbox", { name: /Selecionar questão 1/i }));
+    expect(screen.queryByRole("button", { name: /^Remover$/i })).not.toBeInTheDocument();
+  });
+
+  it("review: clicking Remover removes the question from the list", async () => {
+    await goToReview([{ text: "Q1", subject: "Física" }, { text: "Q2", subject: "Química" }]);
+    const removeBtns = screen.getAllByRole("button", { name: /^Remover$/i });
+    fireEvent.click(removeBtns[0]);
+    expect(screen.queryByText("Q1")).not.toBeInTheDocument();
+    expect(screen.getByText("Q2")).toBeInTheDocument();
+  });
+
+  it("review: after removing a question, the extracted count decreases", async () => {
+    await goToReview([{ text: "Q1", subject: "Física" }, { text: "Q2", subject: "Química" }]);
+    expect(screen.getByText(/2 extraída\(s\)/i)).toBeInTheDocument();
+    fireEvent.click(screen.getAllByRole("button", { name: /^Remover$/i })[0]);
+    expect(screen.getByText(/1 extraída\(s\)/i)).toBeInTheDocument();
+  });
+
+  it("review: saved cards do not show Remover button", async () => {
+    await goToReview([{ text: "Q1", subject: "Física" }]);
+    fireEvent.click(screen.getByRole("button", { name: /^Salvar$/i }));
+    await waitFor(() => expect(screen.getByText("✓ Salva")).toBeInTheDocument());
+    expect(screen.queryByRole("button", { name: /^Remover$/i })).not.toBeInTheDocument();
+  });
+
+  // ── Review: salvar individual só quando selecionada ──────────────────────────
+
+  it("review: unselected card does not show individual Salvar button", async () => {
+    await goToReview([{ text: "Q1", subject: "Física" }]);
+    fireEvent.click(screen.getByRole("checkbox", { name: /Selecionar questão 1/i }));
+    expect(screen.queryByRole("button", { name: /^Salvar$/i })).not.toBeInTheDocument();
+  });
+
+  // ── Review: remover todas selecionadas ───────────────────────────────────────
+
+  it("review: shows Remover selecionadas button with count of selected questions", async () => {
+    await goToReview([{ text: "Q1", subject: "Física" }, { text: "Q2", subject: "Química" }]);
+    expect(screen.getByRole("button", { name: /Remover selecionadas \(2\)/i })).toBeInTheDocument();
+  });
+
+  it("review: Remover selecionadas count updates when a question is deselected", async () => {
+    await goToReview([{ text: "Q1", subject: "Física" }, { text: "Q2", subject: "Química" }]);
+    fireEvent.click(screen.getByRole("checkbox", { name: /Selecionar questão 1/i }));
+    expect(screen.getByRole("button", { name: /Remover selecionadas \(1\)/i })).toBeInTheDocument();
+  });
+
+  it("review: clicking Remover selecionadas removes all selected questions", async () => {
+    await goToReview([{ text: "Q1", subject: "Física" }, { text: "Q2", subject: "Química" }]);
+    fireEvent.click(screen.getByRole("button", { name: /Remover selecionadas \(2\)/i }));
+    expect(screen.queryByText("Q1")).not.toBeInTheDocument();
+    expect(screen.queryByText("Q2")).not.toBeInTheDocument();
+  });
+
+  it("review: Remover selecionadas does not remove saved questions", async () => {
+    await goToReview([{ text: "Q1", subject: "Física" }, { text: "Q2", subject: "Química" }]);
+    fireEvent.click(screen.getAllByRole("button", { name: /^Salvar$/i })[0]);
+    await waitFor(() => expect(screen.getByText("✓ Salva")).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: /Remover selecionadas/i }));
+    expect(screen.getByText("Q1")).toBeInTheDocument();
+    expect(screen.queryByText("Q2")).not.toBeInTheDocument();
+  });
+
+  // ── Review: recortar do PDF ───────────────────────────────────────────────
+
+  it("review: Recortar do PDF button appears in card edit mode", async () => {
+    await goToReview([{ text: "Q1", subject: "Física" }]);
+    fireEvent.click(screen.getByRole("button", { name: /^Editar$/i }));
+    expect(screen.getByRole("button", { name: /Recortar do PDF/i })).toBeInTheDocument();
+  });
+
+  it("review: Recortar do PDF button is not visible outside edit mode", async () => {
+    await goToReview([{ text: "Q1", subject: "Física" }]);
+    expect(screen.queryByRole("button", { name: /Recortar do PDF/i })).not.toBeInTheDocument();
+  });
+
+  it("review: clicking Recortar do PDF opens PdfPreviewModal", async () => {
+    await goToReview([{ text: "Q1", subject: "Física" }]);
+    fireEvent.click(screen.getByRole("button", { name: /^Editar$/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Recortar do PDF/i }));
+    await waitFor(() =>
+      expect(screen.getByTestId("pdf-preview-modal")).toBeInTheDocument(),
+    );
+  });
+
+  it("review: PdfPreviewModal receives initialPage from question image_page", async () => {
+    fetchSpy.mockResolvedValue({
+      ok: true,
+      json: vi.fn().mockResolvedValue({
+        questions: [{ text: "Q com figura", subject: "Física", has_figure: true, image_page: 3 }],
+      }),
+    });
+    render(<QuestionBankPage />, { wrapper });
+    fireEvent.click(screen.getByRole("tab", { name: /Provas/i }));
+    const input = document.querySelector("input[data-upload-input]") as HTMLInputElement;
+    fireEvent.change(input, { target: { files: [new File(["pdf"], "prova.pdf", { type: "application/pdf" })] } });
+    await waitFor(() => screen.getByRole("button", { name: /Extrair com IA/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Extrair com IA/i }));
+    await waitFor(() => screen.getByText("Q com figura"));
+    fireEvent.click(screen.getByRole("button", { name: /^Editar$/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Recortar do PDF/i }));
+    await waitFor(() => expect(pdfPreviewModalCallbacks.open).toBe(true));
+    expect(pdfPreviewModalCallbacks.initialPage).toBe(3);
+  });
+
+  it("review: onCrop from PdfPreviewModal updates the question imageUrl", async () => {
+    await goToReview([{ text: "Q1", subject: "Física" }]);
+    fireEvent.click(screen.getByRole("button", { name: /^Editar$/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Recortar do PDF/i }));
+    await waitFor(() => expect(pdfPreviewModalCallbacks.onCrop).toBeDefined());
+    act(() => { pdfPreviewModalCallbacks.onCrop!("data:image/png;base64,newcrop"); });
+    await waitFor(() => {
+      const img = screen.getByAltText(/Imagem da questão/i);
+      expect(img).toHaveAttribute("src", "data:image/png;base64,newcrop");
+    });
   });
 });

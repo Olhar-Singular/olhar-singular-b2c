@@ -17,7 +17,10 @@ vi.mock("@/hooks/useAuth", () => ({
 }));
 
 vi.mock("@/hooks/useBarrierProfiles", () => ({
-  useBarrierProfiles: vi.fn(() => ({ data: [], isLoading: false })),
+  useBarrierProfiles: vi.fn(() => ({
+    data: [{ id: "bp-1", user_id: "user-1", barriers: ["tea_abstracao"], observation: null, name: "Perfil Teste", created_at: "2026-01-01" }],
+    isLoading: false,
+  })),
 }));
 
 vi.mock("@/integrations/supabase/client", () => ({
@@ -26,6 +29,7 @@ vi.mock("@/integrations/supabase/client", () => ({
     from: vi.fn(() => ({
       insert: vi.fn().mockReturnThis(),
       select: vi.fn().mockReturnThis(),
+      limit: vi.fn().mockResolvedValue({ data: [], error: null }),
       single: vi.fn().mockResolvedValue({ data: { id: "ad-1" }, error: null }),
     })),
     functions: { invoke: vi.fn().mockResolvedValue({ data: null, error: null }) },
@@ -141,8 +145,7 @@ describe("AdaptationWizard", () => {
       target: { value: "1) Q?" },
     });
     await user.click(screen.getByRole("button", { name: /Próximo/i }));
-    const checkboxes = screen.getAllByRole("checkbox");
-    fireEvent.click(checkboxes[0]);
+    await user.selectOptions(screen.getByRole("combobox"), "bp-1");
     await user.click(screen.getByRole("button", { name: /Próximo/i }));
     await user.click(screen.getByRole("button", { name: /Adaptar manualmente/i }));
     expect(screen.getAllByText(/Editor/i).length).toBeGreaterThan(0);
@@ -157,8 +160,7 @@ describe("AdaptationWizard", () => {
     await user.click(screen.getByRole("button", { name: /exercício/i }));
     fireEvent.change(screen.getByLabelText(/Conteúdo da atividade/i), { target: { value: "1) Q?" } });
     await user.click(screen.getByRole("button", { name: /Próximo/i }));
-    const checkboxes = screen.getAllByRole("checkbox");
-    fireEvent.click(checkboxes[0]);
+    await user.selectOptions(screen.getByRole("combobox"), "bp-1");
     await user.click(screen.getByRole("button", { name: /Próximo/i }));
     await user.click(screen.getByRole("button", { name: /Gerar com IA/i }));
     // Wait for AI editor to show (result loaded)
@@ -187,8 +189,7 @@ describe("AdaptationWizard", () => {
     });
     await user.click(screen.getByRole("button", { name: /Próximo/i }));
     // Step 3: check barrier
-    const checkboxes = screen.getAllByRole("checkbox");
-    fireEvent.click(checkboxes[0]);
+    await user.selectOptions(screen.getByRole("combobox"), "bp-1");
     await user.click(screen.getByRole("button", { name: /Próximo/i }));
     // Step 4: AI mode
     await user.click(screen.getByRole("button", { name: /Gerar com IA/i }));
@@ -209,8 +210,7 @@ describe("AdaptationWizard", () => {
     });
     await user.click(screen.getByRole("button", { name: /Próximo/i }));
     // Step 3
-    const checkboxes = screen.getAllByRole("checkbox");
-    fireEvent.click(checkboxes[0]);
+    await user.selectOptions(screen.getByRole("combobox"), "bp-1");
     await user.click(screen.getByRole("button", { name: /Próximo/i }));
     // Step 4: AI
     await user.click(screen.getByRole("button", { name: /Gerar com IA/i }));
@@ -235,8 +235,7 @@ describe("AdaptationWizard", () => {
     });
     await user.click(screen.getByRole("button", { name: /Próximo/i }));
     // Step 3: barriers — check one and proceed
-    const checkboxes = screen.getAllByRole("checkbox");
-    fireEvent.click(checkboxes[0]);
+    await user.selectOptions(screen.getByRole("combobox"), "bp-1");
     await user.click(screen.getByRole("button", { name: /Próximo/i }));
     // Step 4: choose manual mode
     await user.click(screen.getByRole("button", { name: /Adaptar manualmente/i }));
@@ -255,8 +254,7 @@ describe("AdaptationWizard", () => {
     });
     await user.click(screen.getByRole("button", { name: /Próximo/i }));
     // Step 3
-    const checkboxes = screen.getAllByRole("checkbox");
-    fireEvent.click(checkboxes[0]);
+    await user.selectOptions(screen.getByRole("combobox"), "bp-1");
     await user.click(screen.getByRole("button", { name: /Próximo/i }));
     // Step 4: manual
     await user.click(screen.getByRole("button", { name: /Adaptar manualmente/i }));

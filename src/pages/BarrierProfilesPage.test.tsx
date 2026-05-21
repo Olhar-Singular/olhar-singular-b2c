@@ -10,6 +10,7 @@ const mockProfiles = [
     user_id: "u1",
     barriers: ["tea_abstracao", "tdah_atencao_sustentada"],
     observation: "Precisa de apoio visual",
+    name: "Perfil TEA",
     created_at: "2026-01-01T00:00:00Z",
     updated_at: "2026-01-01T00:00:00Z",
   },
@@ -138,6 +139,8 @@ describe("BarrierProfilesPage", () => {
     await user.click(screen.getByRole("button", { name: /novo perfil/i }));
     expect(screen.getByRole("dialog")).toBeInTheDocument();
     expect(screen.getByText(/Novo perfil de barreira/i)).toBeInTheDocument();
+    // Fill in the required name field
+    await user.type(screen.getByLabelText(/Nome do perfil/i), "Meu Perfil");
     // Select at least one barrier so validation passes (schema requires min 1)
     const checkboxes = screen.getAllByRole("checkbox");
     await user.click(checkboxes[0]);
@@ -145,6 +148,18 @@ describe("BarrierProfilesPage", () => {
     const submitBtn = screen.getByRole("button", { name: /Salvar perfil/i });
     await user.click(submitBtn);
     await waitFor(() => expect(mockCreate).toHaveBeenCalled());
+  });
+
+  it("shows profile name as card heading when name is present", () => {
+    renderPage();
+    expect(screen.getByText("Perfil TEA")).toBeInTheDocument();
+  });
+
+  it("form has a name input field", async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await user.click(screen.getByRole("button", { name: /novo perfil/i }));
+    expect(screen.getByLabelText(/Nome do perfil/i)).toBeInTheDocument();
   });
 
   it("shows singular form when profile has exactly 1 barrier (covers !== 1 false branch)", async () => {
