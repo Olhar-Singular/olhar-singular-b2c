@@ -15,9 +15,20 @@ export type BarrierItem = {
   notes?: string;
 };
 
+export type SelectedQuestion = {
+  id: string;
+  text: string;
+  image_url: string | null;
+  options: string[] | null;
+  subject: string;
+  topic: string | null;
+  difficulty: string | null;
+};
+
 export type WizardData = {
   activityType: string | null;
   activityText: string;
+  selectedQuestions: SelectedQuestion[];
   barriers: BarrierItem[];
   barrierProfileId: string | null;
   observationNotes?: string;

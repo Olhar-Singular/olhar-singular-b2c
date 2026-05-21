@@ -101,3 +101,16 @@ BEGIN
   RAISE NOTICE '  Senha: %', v_pass;
   RAISE NOTICE '  Role:  professor';
 END $$;
+
+-- Garante créditos ilimitados para o usuário de teste (idempotente)
+DO $$
+BEGIN
+  UPDATE public.profiles
+  SET
+    credit_balance       = 999999,
+    free_extraction_used = false
+  WHERE id IN (
+    SELECT id FROM auth.users WHERE email = 'teste@teste.com'
+  );
+  RAISE NOTICE '✓ Créditos ilimitados configurados para teste@teste.com';
+END $$;

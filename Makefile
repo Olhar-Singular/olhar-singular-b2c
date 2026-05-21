@@ -195,7 +195,7 @@ fn-list:
 
 .PHONY: fn-serve
 fn-serve:
-	supabase functions serve --env-file .env
+	supabase functions serve --env-file supabase/functions/.env
 
 .PHONY: fn-new
 fn-new:

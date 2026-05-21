@@ -3,7 +3,7 @@ import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import type { Database } from "@/integrations/supabase/types";
-import { parseEdgeFnError } from "@/lib/utils/errors";
+import { parseInvokeError } from "@/lib/utils/errors";
 
 type CreditTransaction = Database["public"]["Tables"]["credit_transactions"]["Row"];
 
@@ -37,12 +37,15 @@ export function useCreateCheckout() {
       const { data, error } = await supabase.functions.invoke("create-checkout", {
         body: input,
       });
-      if (error) throw error;
+      if (error) {
+        const msg = await parseInvokeError(error, "Erro ao iniciar compra. Tente novamente.");
+        throw new Error(msg);
+      }
       return data as { url: string };
     },
     onSuccess: ({ url }) => {
       window.location.href = url;
     },
-    onError: (err: Error) => toast.error(parseEdgeFnError(err, "Erro ao iniciar compra. Tente novamente.")),
+    onError: (err: Error) => toast.error(err.message),
   });
 }

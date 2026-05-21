@@ -41,6 +41,7 @@ const STEP_LABELS: Record<string, string> = {
 const INITIAL_DATA: WizardData = {
   activityType: null,
   activityText: "",
+  selectedQuestions: [],
   barriers: [],
   barrierProfileId: null,
   result: null,

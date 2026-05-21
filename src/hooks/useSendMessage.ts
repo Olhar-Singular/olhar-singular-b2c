@@ -17,6 +17,7 @@ export type SendMessageResult = {
 async function sendMessage(input: SendMessageInput): Promise<SendMessageResult> {
   const { data: sessionData } = await supabase.auth.getSession();
   const accessToken = sessionData.session?.access_token;
+  if (!accessToken) throw new Error("Sessão expirada. Faça login novamente.");
   const baseUrl = import.meta.env.VITE_SUPABASE_URL;
 
   let resp: Response;
@@ -37,8 +38,9 @@ async function sendMessage(input: SendMessageInput): Promise<SendMessageResult> 
   }
 
   if (!resp.ok) {
+    if (resp.status === 401) throw new Error("Sessão expirada. Faça login novamente.");
     const err = await resp.json().catch(() => ({}));
-    throw new Error(err.error || `Erro ao enviar mensagem (${resp.status})`);
+    throw new Error(err.error || "Erro ao enviar mensagem.");
   }
 
   return resp.json();

@@ -4,6 +4,7 @@ import {
   parseDbError,
   parseEdgeFnError,
   parseAuthError,
+  parseInvokeError,
   MSG_NETWORK,
 } from "./errors";
 
@@ -36,9 +37,25 @@ describe("parseDbError", () => {
     expect(parseDbError(new Error("network request failed"), "fallback")).toBe(MSG_NETWORK);
   });
 
-  it("returns fallback for non-network errors", () => {
+  it("returns fallback for generic non-network errors", () => {
     expect(parseDbError(new Error("duplicate key"), "Erro ao salvar.")).toBe("Erro ao salvar.");
     expect(parseDbError(new Error("row not found"), "Erro.")).toBe("Erro.");
+  });
+
+  it("returns user-friendly message for PGRST205 schema cache errors (no code shown)", () => {
+    const err = Object.assign(new Error("Could not find the table 'public.question_bank' in the schema cache"), { code: "PGRST205" });
+    const result = parseDbError(err, "fallback");
+    expect(result).not.toContain("PGRST");
+    expect(result).not.toContain("schema cache");
+    expect(result).not.toContain("public.");
+    expect(result.length).toBeGreaterThan(0);
+  });
+
+  it("returns user-friendly message when error message contains schema cache text (no code)", () => {
+    const err = new Error("Could not find the table 'public.chat_sessions' in the schema cache");
+    const result = parseDbError(err, "fallback");
+    expect(result).not.toContain("schema cache");
+    expect(result).not.toContain("chat_sessions");
   });
 });
 
@@ -52,12 +69,58 @@ describe("parseEdgeFnError", () => {
     expect(parseEdgeFnError(abort, "fallback")).toBe("");
   });
 
-  it("returns err.message for backend errors with message", () => {
+  it("returns err.message for backend errors with meaningful message", () => {
     expect(parseEdgeFnError(new Error("Créditos insuficientes."), "fallback")).toBe("Créditos insuficientes.");
+  });
+
+  it("returns fallback (not the technical Supabase message) for generic edge function error", () => {
+    const err = new Error("Edge Function returned a non-2xx status code");
+    const result = parseEdgeFnError(err, "Falha na extração.");
+    expect(result).toBe("Falha na extração.");
+    expect(result).not.toContain("non-2xx");
+    expect(result).not.toContain("Edge Function");
   });
 
   it("returns fallback when err has no message", () => {
     expect(parseEdgeFnError({}, "Erro genérico.")).toBe("Erro genérico.");
+  });
+});
+
+describe("parseInvokeError", () => {
+  it("returns body.error when context.json() resolves with error field", async () => {
+    const fakeResponse = { json: () => Promise.resolve({ error: "Nenhuma chave de IA configurada." }) };
+    const err = Object.assign(new Error("Edge Function returned a non-2xx status code"), { context: fakeResponse });
+    const result = await parseInvokeError(err, "fallback");
+    expect(result).toBe("Nenhuma chave de IA configurada.");
+    expect(result).not.toContain("non-2xx");
+  });
+
+  it("returns fallback when context.json() rejects", async () => {
+    const fakeResponse = { json: () => Promise.reject(new Error("body consumed")) };
+    const err = Object.assign(new Error("Edge Function returned a non-2xx status code"), { context: fakeResponse });
+    const result = await parseInvokeError(err, "Falha na extração.");
+    expect(result).toBe("Falha na extração.");
+  });
+
+  it("returns fallback when context is absent", async () => {
+    const err = new Error("Edge Function returned a non-2xx status code");
+    const result = await parseInvokeError(err, "Falha na extração.");
+    expect(result).toBe("Falha na extração.");
+  });
+
+  it("returns err.message when it is a meaningful backend message (not the Supabase generic one)", async () => {
+    const err = new Error("Créditos insuficientes para esta operação.");
+    const result = await parseInvokeError(err, "fallback");
+    expect(result).toBe("Créditos insuficientes para esta operação.");
+  });
+
+  it("does not expose status codes or technical strings to the user", async () => {
+    const fakeResponse = { json: () => Promise.resolve({}) };
+    const err = Object.assign(new Error("Edge Function returned a non-2xx status code"), { context: fakeResponse });
+    const result = await parseInvokeError(err, "Serviço indisponível.");
+    expect(result).not.toMatch(/\d{3}/);
+    expect(result).not.toContain("non-2xx");
+    expect(result).not.toContain("Edge Function");
   });
 });
 

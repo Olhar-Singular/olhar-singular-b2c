@@ -107,7 +107,8 @@ describe("useSendMessage", () => {
     const { result } = renderHook(() => useSendMessage(), { wrapper });
     await act(async () => { result.current.mutate(baseInput); });
     await waitFor(() => expect(result.current.isError).toBe(true));
-    expect(result.current.error?.message).toMatch(/502/);
+    expect(result.current.error?.message).toBe("Erro ao enviar mensagem.");
+    expect(result.current.error?.message).not.toMatch(/\d{3}/);
   });
 
   it("throws network error when fetch itself throws (line 36 catch branch)", async () => {
@@ -116,6 +117,25 @@ describe("useSendMessage", () => {
     await act(async () => { result.current.mutate(baseInput); });
     await waitFor(() => expect(result.current.isError).toBe(true));
     expect(result.current.error?.message).toContain("Sem conexão");
+  });
+
+  it("throws user-friendly error when session is absent (no token)", async () => {
+    mockGetSession.mockResolvedValueOnce({ data: { session: null } });
+    const { result } = renderHook(() => useSendMessage(), { wrapper });
+    await act(async () => { result.current.mutate(baseInput); });
+    await waitFor(() => expect(result.current.isError).toBe(true));
+    expect(result.current.error?.message).toContain("Sessão expirada");
+    expect(mockFetch).not.toHaveBeenCalled();
+  });
+
+  it("throws user-friendly error on 401 from server (expired/invalid JWT)", async () => {
+    mockFetch.mockResolvedValueOnce({ ok: false, status: 401, json: async () => ({ msg: "Invalid JWT" }) });
+    const { result } = renderHook(() => useSendMessage(), { wrapper });
+    await act(async () => { result.current.mutate(baseInput); });
+    await waitFor(() => expect(result.current.isError).toBe(true));
+    expect(result.current.error?.message).toContain("Sessão expirada");
+    expect(result.current.error?.message).not.toContain("JWT");
+    expect(result.current.error?.message).not.toMatch(/\d{3}/);
   });
 
   it("invalidates chat-sessions query on success", async () => {
