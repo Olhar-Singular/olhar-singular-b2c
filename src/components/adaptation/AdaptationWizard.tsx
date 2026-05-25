@@ -124,6 +124,7 @@ export default function AdaptationWizard() {
         return (
           <StepChoice
             onSelect={handleModeSelect}
+            onBack={onPrev}
             creditCost={creditCost}
             isFreeAdaptation={isFreeAdaptation}
           />

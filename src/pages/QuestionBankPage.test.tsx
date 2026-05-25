@@ -31,11 +31,13 @@ vi.mock("@/contexts/AuthContext", () => ({
 }));
 
 const getSessionSpy = vi.fn();
+const invokeSpy = vi.fn();
 vi.mock("@/integrations/supabase/client", () => ({
   supabase: {
     from: vi.fn(),
     auth: { getSession: (...a: unknown[]) => getSessionSpy(...a) },
     storage: { from: vi.fn() },
+    functions: { invoke: (...a: unknown[]) => invokeSpy(...a) },
   },
 }));
 
@@ -130,19 +132,23 @@ function wrapper({ children }: { children: React.ReactNode }) {
   return createElement(QueryClientProvider, { client: qc }, children);
 }
 
-beforeEach(() => {
+beforeEach(async () => {
   vi.clearAllMocks();
   pdfUploadsRows = [];
   mockDeleteMutateAsync.mockResolvedValue(undefined);
   mockInsertMutate.mockReset();
   mockRefreshProfile.mockResolvedValue(undefined);
   mockUseQuestions.mockReturnValue({ data: [], isLoading: false, isSuccess: true });
+  // Reset useQuestionStats to default so sidebar tests don't leak their mock values
+  const { useQuestionStats } = await import("@/hooks/useQuestionBank");
+  (useQuestionStats as ReturnType<typeof vi.fn>).mockReturnValue({ data: { total: 0, bySubject: {} }, isLoading: false });
   mockUseAuthContext.mockReturnValue({
     user: { id: "u1" },
     profile: { credit_balance: 10, free_extraction_used: false },
     refreshProfile: mockRefreshProfile,
   });
   getSessionSpy.mockResolvedValue({ data: { session: { access_token: "tok" } } });
+  invokeSpy.mockResolvedValue({ data: { questions: [], source_file_name: "prova.pdf" }, error: null });
   fetchSpy.mockResolvedValue({
     ok: true,
     status: 200,
@@ -324,6 +330,56 @@ describe("QuestionBankPage", () => {
     (useQuestionStats as ReturnType<typeof vi.fn>).mockReturnValue({ data: undefined, isLoading: false });
     render(<QuestionBankPage />, { wrapper });
     expect(screen.getByText(/0 questão/i)).toBeInTheDocument();
+  });
+
+  // ── Subject sidebar (folder navigation) ─────────────────────────────────
+
+  it("sidebar: shows 'Todas as matérias' item by default", async () => {
+    const { useQuestionStats } = await import("@/hooks/useQuestionBank");
+    (useQuestionStats as ReturnType<typeof vi.fn>).mockReturnValue({
+      data: { total: 5, bySubject: { Física: 3, Matemática: 2 } },
+      isLoading: false,
+    });
+    render(<QuestionBankPage />, { wrapper });
+    expect(screen.getByRole("button", { name: /todas as matérias/i })).toBeInTheDocument();
+  });
+
+  it("sidebar: shows subjects that have questions with their counts", async () => {
+    const { useQuestionStats } = await import("@/hooks/useQuestionBank");
+    (useQuestionStats as ReturnType<typeof vi.fn>).mockReturnValue({
+      data: { total: 5, bySubject: { Física: 3, Matemática: 2 } },
+      isLoading: false,
+    });
+    render(<QuestionBankPage />, { wrapper });
+    expect(screen.getByRole("button", { name: /Física/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Matemática/i })).toBeInTheDocument();
+    expect(screen.getByText("3")).toBeInTheDocument();
+    expect(screen.getByText("2")).toBeInTheDocument();
+  });
+
+  it("sidebar: clicking a subject button filters useQuestions by that subject", async () => {
+    const { useQuestionStats } = await import("@/hooks/useQuestionBank");
+    (useQuestionStats as ReturnType<typeof vi.fn>).mockReturnValue({
+      data: { total: 5, bySubject: { Física: 3, Matemática: 2 } },
+      isLoading: false,
+    });
+    render(<QuestionBankPage />, { wrapper });
+    fireEvent.click(screen.getByRole("button", { name: /Física/i }));
+    const calls = mockUseQuestions.mock.calls;
+    expect(calls.some((c) => c[0] && c[0].subject === "Física")).toBe(true);
+  });
+
+  it("sidebar: clicking 'Todas as matérias' clears the subject filter", async () => {
+    const { useQuestionStats } = await import("@/hooks/useQuestionBank");
+    (useQuestionStats as ReturnType<typeof vi.fn>).mockReturnValue({
+      data: { total: 5, bySubject: { Física: 3, Matemática: 2 } },
+      isLoading: false,
+    });
+    render(<QuestionBankPage />, { wrapper });
+    fireEvent.click(screen.getByRole("button", { name: /Física/i }));
+    fireEvent.click(screen.getByRole("button", { name: /todas as matérias/i }));
+    const calls = mockUseQuestions.mock.calls;
+    expect(calls.some((c) => c[0] && c[0].subject === undefined)).toBe(true);
   });
 
   // ── Search / filter ──────────────────────────────────────────────────────
@@ -552,13 +608,9 @@ describe("QuestionBankPage", () => {
 
   it("clicking Extrair com IA calls parsePdf and sends JSON to the API", async () => {
     const { parsePdf } = await import("@/lib/utils/pdf-utils");
-    fetchSpy.mockResolvedValue({
-      ok: true,
-      status: 200,
-      json: vi.fn().mockResolvedValue({
-        questions: [{ text: "Questão extraída", subject: "Física" }],
-        source_file_name: "prova.pdf",
-      }),
+    invokeSpy.mockResolvedValue({
+      data: { questions: [{ text: "Questão extraída", subject: "Física" }], source_file_name: "prova.pdf" },
+      error: null,
     });
     render(<QuestionBankPage />, { wrapper });
     fireEvent.click(screen.getByRole("tab", { name: /Provas/i }));
@@ -569,22 +621,15 @@ describe("QuestionBankPage", () => {
     fireEvent.click(screen.getByRole("button", { name: /Extrair com IA/i }));
     await waitFor(() => {
       expect(parsePdf).toHaveBeenCalled();
-      expect(fetchSpy).toHaveBeenCalledWith(
-        expect.stringContaining("extract-questions"),
-        expect.objectContaining({ method: "POST" }),
+      expect(invokeSpy).toHaveBeenCalledWith(
+        "extract-questions",
+        expect.objectContaining({ body: expect.objectContaining({ pdfFileName: "prova.pdf" }) }),
       );
     });
   });
 
   it("successful extraction shows review mode with question cards and checkboxes", async () => {
-    fetchSpy.mockResolvedValue({
-      ok: true,
-      status: 200,
-      json: vi.fn().mockResolvedValue({
-        questions: [{ text: "Questão extraída", subject: "Física" }],
-        source_file_name: "prova.pdf",
-      }),
-    });
+    invokeSpy.mockResolvedValue({ data: { questions: [{ text: "Questão extraída", subject: "Física" }], source_file_name: "prova.pdf" }, error: null });
     render(<QuestionBankPage />, { wrapper });
     fireEvent.click(screen.getByRole("tab", { name: /Provas/i }));
     const input = document.querySelector("input[data-upload-input]") as HTMLInputElement;
@@ -598,14 +643,7 @@ describe("QuestionBankPage", () => {
   });
 
   it("review: Salvar todas calls insertQuestions with extracted questions", async () => {
-    fetchSpy.mockResolvedValue({
-      ok: true,
-      status: 200,
-      json: vi.fn().mockResolvedValue({
-        questions: [{ text: "Q1", subject: "Física" }],
-        source_file_name: "prova.pdf",
-      }),
-    });
+    invokeSpy.mockResolvedValue({ data: { questions: [{ text: "Q1", subject: "Física" }], source_file_name: "prova.pdf" }, error: null });
     render(<QuestionBankPage />, { wrapper });
     fireEvent.click(screen.getByRole("tab", { name: /Provas/i }));
     const input = document.querySelector("input[data-upload-input]") as HTMLInputElement;
@@ -620,10 +658,7 @@ describe("QuestionBankPage", () => {
   });
 
   it("review: Cancelar exits review mode and shows Provas tab again", async () => {
-    fetchSpy.mockResolvedValue({
-      ok: true,
-      json: vi.fn().mockResolvedValue({ questions: [{ text: "Q1", subject: "Física" }], source_file_name: "f.pdf" }),
-    });
+    invokeSpy.mockResolvedValue({ data: { questions: [{ text: "Q1", subject: "Física" }], source_file_name: "f.pdf" }, error: null });
     render(<QuestionBankPage />, { wrapper });
     fireEvent.click(screen.getByRole("tab", { name: /Provas/i }));
     const input = document.querySelector("input[data-upload-input]") as HTMLInputElement;
@@ -640,11 +675,7 @@ describe("QuestionBankPage", () => {
 
   it("Provas tab extraction: shows error toast when API returns non-ok", async () => {
     const { toast } = await import("sonner");
-    fetchSpy.mockResolvedValue({
-      ok: false,
-      status: 500,
-      json: vi.fn().mockResolvedValue({ error: "Erro interno" }),
-    });
+    invokeSpy.mockResolvedValue({ data: null, error: { context: { status: 500, json: async () => ({ error: "Erro interno" }) } } });
     render(<QuestionBankPage />, { wrapper });
     fireEvent.click(screen.getByRole("tab", { name: /Provas/i }));
     const input = document.querySelector("input[data-upload-input]") as HTMLInputElement;
@@ -693,17 +724,20 @@ describe("QuestionBankPage", () => {
     expect(pdfUploadsDeleteEqSpy).toHaveBeenCalledWith("id", "up1");
   });
 
-  it("history: Extrair button loads file and shows extraction flow", async () => {
+  it("history: Extrair button immediately triggers extraction and shows review mode", async () => {
+    invokeSpy.mockResolvedValue({ data: { questions: [{ text: "Q do histórico", subject: "Física" }], source_file_name: "Prova.pdf" }, error: null });
     pdfUploadsRows = [
       { id: "up1", file_name: "Prova.pdf", file_path: "u1/123_Prova.pdf", questions_extracted: 3, uploaded_at: "2026-05-01T10:00:00Z" },
     ];
     render(<QuestionBankPage />, { wrapper });
     fireEvent.click(screen.getByRole("tab", { name: /Provas/i }));
     await waitFor(() => screen.getByText("Prova.pdf"));
-    fireEvent.click(screen.getByRole("button", { name: /extrair/i }));
+    fireEvent.click(screen.getByRole("button", { name: /extrair questões/i }));
+    // Should go directly to review mode without requiring a second "Extrair com IA" click
     await waitFor(() => {
-      expect(screen.getByRole("button", { name: /Extrair com IA/i })).toBeInTheDocument();
+      expect(screen.getByText("Q do histórico")).toBeInTheDocument();
     });
+    expect(screen.getByRole("button", { name: /Salvar todas/i })).toBeInTheDocument();
   });
 
   // ── Dropdown menu ────────────────────────────────────────────────────────
@@ -747,17 +781,16 @@ describe("QuestionBankPage", () => {
     expect(screen.getByText(/extração gratuita/i)).toBeInTheDocument();
   });
 
-  it("subject filter passes subject value to useQuestions when not all", async () => {
-    render(<QuestionBankPage />, { wrapper });
-    const trigger = screen.getByRole("combobox");
-    fireEvent.pointerDown(trigger);
-    fireEvent.click(trigger);
-    await waitFor(() => {
-      const mat = screen.queryByRole("option", { name: /Matemática/i });
-      if (mat) fireEvent.click(mat);
+  it("subject filter: clicking a sidebar subject button passes subject to useQuestions", async () => {
+    const { useQuestionStats } = await import("@/hooks/useQuestionBank");
+    (useQuestionStats as ReturnType<typeof vi.fn>).mockReturnValue({
+      data: { total: 5, bySubject: { Matemática: 5 } },
+      isLoading: false,
     });
+    render(<QuestionBankPage />, { wrapper });
+    fireEvent.click(screen.getByRole("button", { name: /Matemática/i }));
     const calls = mockUseQuestions.mock.calls;
-    expect(calls.some((c) => c[0] && c[0].subject === undefined)).toBe(true);
+    expect(calls.some((c) => c[0] && c[0].subject === "Matemática")).toBe(true);
   });
 
   // ── Helper: reach review mode ─────────────────────────────────────────────
@@ -765,10 +798,7 @@ describe("QuestionBankPage", () => {
   async function goToReview(
     questions: Array<{ text: string; subject: string; options?: string[]; correct_answer?: number }> = [{ text: "Q1", subject: "Física" }],
   ) {
-    fetchSpy.mockResolvedValue({
-      ok: true,
-      json: vi.fn().mockResolvedValue({ questions, source_file_name: "prova.pdf" }),
-    });
+    invokeSpy.mockResolvedValue({ data: { questions, source_file_name: "prova.pdf" }, error: null });
     render(<QuestionBankPage />, { wrapper });
     fireEvent.click(screen.getByRole("tab", { name: /Provas/i }));
     const input = document.querySelector("input[data-upload-input]") as HTMLInputElement;
@@ -905,18 +935,7 @@ describe("QuestionBankPage", () => {
       pagesProcessed: [1],
     });
     (autoCropFromBbox as ReturnType<typeof vi.fn>).mockResolvedValue("data:image/png;base64,cropped");
-    fetchSpy.mockResolvedValue({
-      ok: true,
-      json: vi.fn().mockResolvedValue({
-        questions: [{
-          text: "Questão com figura",
-          subject: "Física",
-          has_figure: true,
-          image_page: 1,
-          figure_bbox: { x: 0.1, y: 0.1, width: 0.5, height: 0.3 },
-        }],
-      }),
-    });
+    invokeSpy.mockResolvedValue({ data: { questions: [{ text: "Questão com figura", subject: "Física", has_figure: true, image_page: 1, figure_bbox: { x: 0.1, y: 0.1, width: 0.5, height: 0.3 } }] }, error: null });
     render(<QuestionBankPage />, { wrapper });
     fireEvent.click(screen.getByRole("tab", { name: /Provas/i }));
     const input = document.querySelector("input[data-upload-input]") as HTMLInputElement;
@@ -939,17 +958,7 @@ describe("QuestionBankPage", () => {
       pageCount: 1,
       pagesProcessed: [1],
     });
-    fetchSpy.mockResolvedValue({
-      ok: true,
-      json: vi.fn().mockResolvedValue({
-        questions: [{
-          text: "Questão sem bbox",
-          subject: "Física",
-          has_figure: true,
-          image_page: 1,
-        }],
-      }),
-    });
+    invokeSpy.mockResolvedValue({ data: { questions: [{ text: "Questão sem bbox", subject: "Física", has_figure: true, image_page: 1 }] }, error: null });
     render(<QuestionBankPage />, { wrapper });
     fireEvent.click(screen.getByRole("tab", { name: /Provas/i }));
     const input = document.querySelector("input[data-upload-input]") as HTMLInputElement;
@@ -975,18 +984,7 @@ describe("QuestionBankPage", () => {
     });
     (autoCropFromBbox as ReturnType<typeof vi.fn>).mockResolvedValue("data:image/png;base64,cropped");
     (dataUrlToBlob as ReturnType<typeof vi.fn>).mockReturnValue(new Blob(["fake"], { type: "image/png" }));
-    fetchSpy.mockResolvedValue({
-      ok: true,
-      json: vi.fn().mockResolvedValue({
-        questions: [{
-          text: "Questão com figura",
-          subject: "Física",
-          has_figure: true,
-          image_page: 1,
-          figure_bbox: { x: 0.1, y: 0.1, width: 0.5, height: 0.3 },
-        }],
-      }),
-    });
+    invokeSpy.mockResolvedValue({ data: { questions: [{ text: "Questão com figura", subject: "Física", has_figure: true, image_page: 1, figure_bbox: { x: 0.1, y: 0.1, width: 0.5, height: 0.3 } }] }, error: null });
 
     const imageUploadSpy = vi.fn().mockResolvedValue({ error: null });
     const getPublicUrlSpy = vi.fn().mockReturnValue({ data: { publicUrl: "https://cdn.example.com/img.png" } });
@@ -1025,18 +1023,7 @@ describe("QuestionBankPage", () => {
     });
     (autoCropFromBbox as ReturnType<typeof vi.fn>).mockResolvedValue("data:image/png;base64,cropped");
     (dataUrlToBlob as ReturnType<typeof vi.fn>).mockReturnValue(new Blob(["fake"], { type: "image/png" }));
-    fetchSpy.mockResolvedValue({
-      ok: true,
-      json: vi.fn().mockResolvedValue({
-        questions: [{
-          text: "Questão com figura",
-          subject: "Física",
-          has_figure: true,
-          image_page: 1,
-          figure_bbox: { x: 0.1, y: 0.1, width: 0.5, height: 0.3 },
-        }],
-      }),
-    });
+    invokeSpy.mockResolvedValue({ data: { questions: [{ text: "Questão com figura", subject: "Física", has_figure: true, image_page: 1, figure_bbox: { x: 0.1, y: 0.1, width: 0.5, height: 0.3 } }] }, error: null });
 
     const imageUploadSpy = vi.fn().mockResolvedValue({ error: { message: "Bucket not found" } });
     (supabase.storage.from as ReturnType<typeof vi.fn>).mockImplementation((bucket: string) => {
@@ -1063,12 +1050,7 @@ describe("QuestionBankPage", () => {
   });
 
   it("save: question without imageUrl is saved with image_url null", async () => {
-    fetchSpy.mockResolvedValue({
-      ok: true,
-      json: vi.fn().mockResolvedValue({
-        questions: [{ text: "Q sem figura", subject: "Matemática" }],
-      }),
-    });
+    invokeSpy.mockResolvedValue({ data: { questions: [{ text: "Q sem figura", subject: "Matemática" }] }, error: null });
     render(<QuestionBankPage />, { wrapper });
     fireEvent.click(screen.getByRole("tab", { name: /Provas/i }));
     const input = document.querySelector("input[data-upload-input]") as HTMLInputElement;
@@ -1094,18 +1076,7 @@ describe("QuestionBankPage", () => {
       pagesProcessed: [1],
     });
     (autoCropFromBbox as ReturnType<typeof vi.fn>).mockResolvedValue("data:image/png;base64,cropped");
-    fetchSpy.mockResolvedValue({
-      ok: true,
-      json: vi.fn().mockResolvedValue({
-        questions: [{
-          text: "Questão com figura",
-          subject: "Física",
-          has_figure: true,
-          image_page: 1,
-          figure_bbox: { x: 0.1, y: 0.1, width: 0.5, height: 0.3 },
-        }],
-      }),
-    });
+    invokeSpy.mockResolvedValue({ data: { questions: [{ text: "Questão com figura", subject: "Física", has_figure: true, image_page: 1, figure_bbox: { x: 0.1, y: 0.1, width: 0.5, height: 0.3 } }] }, error: null });
     render(<QuestionBankPage />, { wrapper });
     fireEvent.click(screen.getByRole("tab", { name: /Provas/i }));
     const input = document.querySelector("input[data-upload-input]") as HTMLInputElement;
@@ -1270,12 +1241,7 @@ describe("QuestionBankPage", () => {
   });
 
   it("review: PdfPreviewModal receives initialPage from question image_page", async () => {
-    fetchSpy.mockResolvedValue({
-      ok: true,
-      json: vi.fn().mockResolvedValue({
-        questions: [{ text: "Q com figura", subject: "Física", has_figure: true, image_page: 3 }],
-      }),
-    });
+    invokeSpy.mockResolvedValue({ data: { questions: [{ text: "Q com figura", subject: "Física", has_figure: true, image_page: 3 }] }, error: null });
     render(<QuestionBankPage />, { wrapper });
     fireEvent.click(screen.getByRole("tab", { name: /Provas/i }));
     const input = document.querySelector("input[data-upload-input]") as HTMLInputElement;

@@ -70,54 +70,46 @@ export default function StepAIEditor({ data, updateData, onNext, onPrev }: Props
     setCreditError(null);
 
     try {
-      const session = await supabase.auth.getSession();
-      const accessToken = session.data.session?.access_token;
-
       const activeBarriers = data.barriers
         .filter((b) => b.is_active)
         .map((b) => ({ dimension: b.dimension, barrier_key: b.barrier_key, notes: b.notes }));
 
-      // adapt-activity handles credit deduction internally (with complexity-based cost).
-      const resp = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/adapt-activity`,
-        {
-          method: "POST",
-          signal: controller.signal,
-          headers: {
-            Authorization: `Bearer ${accessToken}`,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            original_activity: data.activityText,
-            activity_type: data.activityType,
-            barriers: activeBarriers,
-            observation_notes: data.observationNotes || undefined,
-          }),
-        }
-      );
+      const { data: fnResult, error: fnError } = await supabase.functions.invoke("adapt-activity", {
+        body: {
+          original_activity: data.activityText,
+          activity_type: data.activityType,
+          barriers: activeBarriers,
+          observation_notes: data.observationNotes || undefined,
+        },
+        signal: controller.signal,
+      });
 
-      if (!resp.ok) {
-        const err = await resp.json().catch(() => ({}));
-        if (resp.status === 402) {
+      /* v8 ignore next -- AbortController race */
+      if (controller.signal.aborted) return;
+
+      if (fnError) {
+        const context = (fnError as any).context as Response | undefined;
+        if (context?.status === 402) {
           setCreditError("Créditos insuficientes. Adquira mais créditos para continuar.");
           return;
         }
-        throw new Error(err.error || "Falha na adaptação");
+        let errMsg = "Falha na adaptação";
+        try {
+          const body = await context?.json();
+          if (body?.error) errMsg = body.error;
+        } catch {}
+        throw new Error(errMsg);
       }
-
-      const result = await resp.json();
-      /* v8 ignore next -- AbortController race: signal aborts between resp.json() and updateData; not reliably reproducible in jsdom */
-      if (controller.signal.aborted) return;
 
       updateData({
         ...resetGeneratedState(),
-        result: result.adaptation as AdaptationResult,
+        result: fnResult.adaptation as AdaptationResult,
       });
 
-      // Refresh profile so the credit balance in the UI reflects the deduction.
       refreshProfile().catch(() => {});
     } catch (e: any) {
-      if (e.name === "AbortError") return;
+      /* v8 ignore next -- AbortController race */
+      if (e.name === "AbortError" || controller.signal.aborted) return;
       toast.error(parseEdgeFnError(e, "Erro ao gerar adaptação."));
     } finally {
       /* v8 ignore next -- AbortController race: false branch (signal aborted) only reachable via Regerar timing; not reliably reproducible in jsdom */

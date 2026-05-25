@@ -510,11 +510,15 @@ BARREIRAS OBSERVÁVEIS:
 
     const refundIfNeeded = async () => {
       if (creditsCharged > 0) {
-        await serviceClient.rpc("grant_credits", {
-          p_user_id: user.id,
-          p_amount: creditsCharged,
-          p_type: "refund",
-        }).catch((e: unknown) => console.error("Refund failed for user:", user.id, e));
+        try {
+          await serviceClient.rpc("grant_credits", {
+            p_user_id: user.id,
+            p_amount: creditsCharged,
+            p_type: "refund",
+          });
+        } catch (e: unknown) {
+          console.error("Refund failed for user:", user.id, e);
+        }
       }
     };
 

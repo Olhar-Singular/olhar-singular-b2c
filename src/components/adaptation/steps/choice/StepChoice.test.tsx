@@ -47,4 +47,21 @@ describe("StepChoice", () => {
     render(<StepChoice onSelect={vi.fn()} />);
     expect(screen.queryByText(/créditos/i)).not.toBeInTheDocument();
   });
+
+  it("renders Voltar button when onBack is provided", () => {
+    render(<StepChoice onSelect={vi.fn()} onBack={vi.fn()} />);
+    expect(screen.getByRole("button", { name: /Voltar/i })).toBeInTheDocument();
+  });
+
+  it("does not render Voltar button when onBack is not provided", () => {
+    render(<StepChoice onSelect={vi.fn()} />);
+    expect(screen.queryByRole("button", { name: /Voltar/i })).not.toBeInTheDocument();
+  });
+
+  it("calls onBack when Voltar is clicked", () => {
+    const onBack = vi.fn();
+    render(<StepChoice onSelect={vi.fn()} onBack={onBack} />);
+    fireEvent.click(screen.getByRole("button", { name: /Voltar/i }));
+    expect(onBack).toHaveBeenCalledTimes(1);
+  });
 });

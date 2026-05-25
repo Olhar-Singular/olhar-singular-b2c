@@ -4,6 +4,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { MemoryRouter } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import AdaptationWizard from "./AdaptationWizard";
+import { supabase } from "@/integrations/supabase/client";
 
 vi.mock("@/hooks/useAuth", () => ({
   useAuth: vi.fn(() => ({
@@ -32,7 +33,7 @@ vi.mock("@/integrations/supabase/client", () => ({
       limit: vi.fn().mockResolvedValue({ data: [], error: null }),
       single: vi.fn().mockResolvedValue({ data: { id: "ad-1" }, error: null }),
     })),
-    functions: { invoke: vi.fn().mockResolvedValue({ data: null, error: null }) },
+    functions: { invoke: vi.fn().mockImplementation(() => new Promise(() => undefined)) },
   },
 }));
 
@@ -153,8 +154,7 @@ describe("AdaptationWizard", () => {
 
   it("setConfirmTarget is called when navigating back from ai_editor with a result (lines 62-63)", async () => {
     const user = userEvent.setup();
-    global.fetch = vi.fn()
-      .mockResolvedValueOnce(new Response(JSON.stringify({ adaptation: finishedResult }), { status: 200 }));
+    (supabase.functions.invoke as ReturnType<typeof vi.fn>).mockResolvedValueOnce({ data: { adaptation: finishedResult }, error: null });
     renderWizard();
     // Navigate through to ai_editor step with a result
     await user.click(screen.getByRole("button", { name: /exercício/i }));
@@ -178,8 +178,7 @@ describe("AdaptationWizard", () => {
 
   it("reaches ai_editor step and renders StepAIEditor loading state (line 116)", async () => {
     const user = userEvent.setup();
-    // fetch keeps hanging so AI step shows loading UI
-    global.fetch = vi.fn().mockImplementation(() => new Promise(() => undefined));
+    // functions.invoke hangs so AI step shows loading UI (default mock already hangs)
     renderWizard();
     // Step 1
     await user.click(screen.getByRole("button", { name: /exercício/i }));
@@ -199,8 +198,7 @@ describe("AdaptationWizard", () => {
 
   it("reaches ai_editor step with result and advances to export (line 116 + export restart line 83)", async () => {
     const user = userEvent.setup();
-    global.fetch = vi.fn()
-      .mockResolvedValueOnce(new Response(JSON.stringify({ adaptation: finishedResult }), { status: 200 }));
+    (supabase.functions.invoke as ReturnType<typeof vi.fn>).mockResolvedValueOnce({ data: { adaptation: finishedResult }, error: null });
     renderWizard();
     // Step 1
     await user.click(screen.getByRole("button", { name: /exercício/i }));

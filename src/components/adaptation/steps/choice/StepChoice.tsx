@@ -1,13 +1,15 @@
-import { Bot, Pencil } from "lucide-react";
+import { ArrowLeft, Bot, Pencil } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import type { WizardMode } from "@/lib/domain/adaptationWizardHelpers";
 
 type Props = {
   onSelect: (mode: WizardMode) => void;
+  onBack?: () => void;
   creditCost?: number;
   isFreeAdaptation?: boolean;
 };
 
-export function StepChoice({ onSelect, creditCost, isFreeAdaptation }: Props) {
+export function StepChoice({ onSelect, onBack, creditCost, isFreeAdaptation }: Props) {
   return (
     <div className="flex flex-col gap-6 items-center py-8">
       <div className="text-center">
@@ -55,6 +57,14 @@ export function StepChoice({ onSelect, creditCost, isFreeAdaptation }: Props) {
           </div>
         </button>
       </div>
+      {onBack && (
+        <div className="flex justify-start w-full max-w-xl">
+          <Button variant="outline" onClick={onBack} aria-label="Voltar">
+            <ArrowLeft className="w-4 h-4 mr-2" />
+            Voltar
+          </Button>
+        </div>
+      )}
     </div>
   );
 }

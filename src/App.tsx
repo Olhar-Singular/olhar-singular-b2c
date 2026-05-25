@@ -47,7 +47,7 @@ export default function App() {
               />
             </Route>
           </Routes>
-          <Toaster />
+          <Toaster position="top-right" />
         </AuthProvider>
       </BrowserRouter>
     </QueryClientProvider>
