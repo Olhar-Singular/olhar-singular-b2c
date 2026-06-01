@@ -1,27 +1,18 @@
 import { describe, it, expect } from "vitest";
-import { getAiConfig, resolveImagePayloadFields } from "./aiConfig";
+import { getAiConfig } from "./aiConfig";
 
 function envMap(map: Record<string, string | undefined>) {
   return (key: string) => map[key];
 }
 
 describe("getAiConfig", () => {
-  it("returns Lovable config when LOVABLE_API_KEY is set", () => {
-    const cfg = getAiConfig(envMap({ LOVABLE_API_KEY: "lov-key" }));
-    expect(cfg.apiKey).toBe("lov-key");
-    expect(cfg.baseUrl).toBe("https://ai.gateway.lovable.dev/v1");
-    expect(cfg.isLovable).toBe(true);
-    expect(cfg.resolveModel("any-model")).toBe("any-model");
-  });
-
-  it("returns Google config when only AI_API_KEY is set", () => {
+  it("returns Google config when AI_API_KEY is set", () => {
     const cfg = getAiConfig(envMap({ AI_API_KEY: "g-key" }));
     expect(cfg.apiKey).toBe("g-key");
     expect(cfg.baseUrl).toBe("https://generativelanguage.googleapis.com/v1beta/openai");
-    expect(cfg.isLovable).toBe(false);
   });
 
-  it("Google config maps known model identifiers via the MODEL_MAP", () => {
+  it("maps known model identifiers via the MODEL_MAP", () => {
     const cfg = getAiConfig(envMap({ AI_API_KEY: "g-key" }));
     expect(cfg.resolveModel("google/gemini-2.5-pro")).toBe("gemini-2.5-pro");
     expect(cfg.resolveModel("google/gemini-2.5-flash")).toBe("gemini-2.5-flash");
@@ -31,14 +22,20 @@ describe("getAiConfig", () => {
     );
   });
 
-  it("Google config returns the model unchanged when not in MODEL_MAP", () => {
+  it("returns the model unchanged when not in MODEL_MAP", () => {
     const cfg = getAiConfig(envMap({ AI_API_KEY: "g-key" }));
     expect(cfg.resolveModel("openai/gpt-4")).toBe("openai/gpt-4");
   });
 
-  it("Lovable takes precedence over Google when both are set", () => {
-    const cfg = getAiConfig(envMap({ LOVABLE_API_KEY: "lov", AI_API_KEY: "g" }));
-    expect(cfg.isLovable).toBe(true);
+  it("ignores LOVABLE_API_KEY entirely — throws when only LOVABLE_API_KEY is set", () => {
+    expect(() => getAiConfig(envMap({ LOVABLE_API_KEY: "lov-key" }))).toThrow(
+      /No AI provider configured/,
+    );
+  });
+
+  it("no longer exposes an isLovable flag on the config", () => {
+    const cfg = getAiConfig(envMap({ AI_API_KEY: "g-key" }));
+    expect("isLovable" in cfg).toBe(false);
   });
 
   it("throws when no provider key is configured", () => {
@@ -47,24 +44,14 @@ describe("getAiConfig", () => {
 
   it("uses the default EnvGetter (globalThis.Deno) when no argument is passed (line 18)", () => {
     (globalThis as { Deno?: unknown }).Deno = {
-      env: { get: (k: string) => (k === "LOVABLE_API_KEY" ? "deno-lov-key" : undefined) },
+      env: { get: (k: string) => (k === "AI_API_KEY" ? "deno-g-key" : undefined) },
     };
     try {
       const cfg = getAiConfig();
-      expect(cfg.isLovable).toBe(true);
-      expect(cfg.apiKey).toBe("deno-lov-key");
+      expect(cfg.apiKey).toBe("deno-g-key");
+      expect(cfg.baseUrl).toBe("https://generativelanguage.googleapis.com/v1beta/openai");
     } finally {
       delete (globalThis as { Deno?: unknown }).Deno;
     }
-  });
-});
-
-describe("resolveImagePayloadFields", () => {
-  it("returns Lovable modalities for isLovable=true", () => {
-    expect(resolveImagePayloadFields(true)).toEqual({ modalities: ["image", "text"] });
-  });
-
-  it("returns Google response_modalities for isLovable=false", () => {
-    expect(resolveImagePayloadFields(false)).toEqual({ response_modalities: ["IMAGE", "TEXT"] });
   });
 });
