@@ -4,9 +4,9 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 
 const PACKAGES = [
-  { label: "Básico",        credits: 30,  price: "R$ 9,90",  perCredit: "~10 adaptações",  highlight: false },
-  { label: "Profissional",  credits: 120, price: "R$ 29,90", perCredit: "~40 adaptações",  highlight: true  },
-  { label: "Avançado",      credits: 300, price: "R$ 59,90", perCredit: "~100 adaptações", highlight: false },
+  { label: "Básico",        credits: 30,  price: "R$ 9,90",  perCredit: "3 a 6 adaptações",   highlight: false },
+  { label: "Profissional",  credits: 120, price: "R$ 29,90", perCredit: "10 a 24 adaptações", highlight: true  },
+  { label: "Avançado",      credits: 300, price: "R$ 59,90", perCredit: "25 a 60 adaptações", highlight: false },
 ];
 
 export default function PricingSection() {
@@ -29,7 +29,7 @@ export default function PricingSection() {
             <ul className="space-y-2 text-sm text-foreground flex-1 mb-6">
               <li className="flex items-center gap-2">
                 <CheckCircle2 className="w-4 h-4 text-primary shrink-0" aria-hidden="true" />
-                10 créditos grátis ao cadastrar
+                50 créditos grátis ao cadastrar
               </li>
               <li className="flex items-center gap-2">
                 <CheckCircle2 className="w-4 h-4 text-primary shrink-0" aria-hidden="true" />

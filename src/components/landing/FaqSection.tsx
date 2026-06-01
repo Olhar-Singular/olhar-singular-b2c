@@ -12,7 +12,7 @@ const FAQ = [
   },
   {
     q: "Quanto vale 1 crédito?",
-    a: "1 adaptação completa custa 3 créditos. Iniciar uma conversa com a ISA também custa 3 créditos. As mensagens seguintes na mesma conversa são gratuitas.",
+    a: "Uma adaptação custa de 5 a 12 créditos, conforme a complexidade das barreiras — e a sua primeira adaptação é grátis. Iniciar uma conversa com a ISA custa 3 créditos, e as mensagens seguintes na mesma conversa são gratuitas.",
   },
   {
     q: "Os créditos expiram?",

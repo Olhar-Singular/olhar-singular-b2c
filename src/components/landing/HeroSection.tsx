@@ -13,7 +13,7 @@ export default function HeroSection() {
             {/* Text side */}
             <div>
               <Badge variant="secondary" className="mb-5 text-xs font-medium">
-                10 créditos grátis ao cadastrar, sem cartão
+                50 créditos grátis ao cadastrar, sem cartão
               </Badge>
               <h1 className="text-4xl sm:text-5xl lg:text-[3.25rem] font-extrabold text-primary-foreground leading-tight mb-5">
                 Adapte atividades para qualquer barreira de aprendizagem em minutos

@@ -24,8 +24,8 @@ describe("HeroSection", () => {
     expect(anchor).toHaveAttribute("href", "#como-funciona");
   });
 
-  it("mentions 10 free credits in the badge", () => {
+  it("mentions 50 free credits in the badge", () => {
     renderWithProviders(<HeroSection />);
-    expect(screen.getByText(/10 créditos grátis/i)).toBeInTheDocument();
+    expect(screen.getByText(/50 créditos grátis/i)).toBeInTheDocument();
   });
 });

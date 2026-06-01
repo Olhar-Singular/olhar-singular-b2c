@@ -26,7 +26,7 @@ export default function LandingPage() {
             Comece a adaptar hoje, de graça
           </h2>
           <p className="text-primary-foreground/80 mb-8">
-            10 créditos grátis ao cadastrar. Sem cartão. Sem compromisso.
+            50 créditos grátis ao cadastrar. Sem cartão. Sem compromisso.
           </p>
           <Link to="/auth?signup=1">
             <Button size="lg" className="bg-white text-primary hover:bg-white/90 font-semibold gap-2">

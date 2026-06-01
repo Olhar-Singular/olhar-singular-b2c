@@ -9,10 +9,10 @@ describe("PricingSection", () => {
     expect(screen.getByRole("heading", { name: /Planos e preços/i })).toBeInTheDocument();
   });
 
-  it("renders the free tier with 10 free credits and a signup CTA", () => {
+  it("renders the free tier with 50 free credits and a signup CTA", () => {
     renderWithProviders(<PricingSection />);
     expect(screen.getByText(/Grátis/)).toBeInTheDocument();
-    expect(screen.getByText(/10 créditos grátis ao cadastrar/i)).toBeInTheDocument();
+    expect(screen.getByText(/50 créditos grátis ao cadastrar/i)).toBeInTheDocument();
   });
 
   it("renders all three paid packages with prices", () => {
@@ -20,6 +20,13 @@ describe("PricingSection", () => {
     expect(screen.getByText(/R\$\s*9,90/)).toBeInTheDocument();
     expect(screen.getByText(/R\$\s*29,90/)).toBeInTheDocument();
     expect(screen.getByText(/R\$\s*59,90/)).toBeInTheDocument();
+  });
+
+  it("shows adaptation estimates consistent with the real 5–12 credit cost", () => {
+    renderWithProviders(<PricingSection />);
+    // 30 credits ÷ (5–12 per adaptation) ≈ 3–6, not the legacy ~10 (which assumed 3/each)
+    expect(screen.getByText(/3 a 6 adaptações/i)).toBeInTheDocument();
+    expect(screen.queryByText(/~10 adaptações/i)).not.toBeInTheDocument();
   });
 
   it("flags the highlighted (Profissional) package as Popular", () => {

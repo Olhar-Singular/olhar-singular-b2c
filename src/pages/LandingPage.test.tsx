@@ -29,9 +29,9 @@ describe("LandingPage", () => {
     expect(screen.getByText(/R\$\s*59,90/)).toBeInTheDocument();
   });
 
-  it("advertises 10 free credits at signup", () => {
+  it("advertises 50 free credits at signup", () => {
     renderLanding();
-    const matches = screen.getAllByText(/10 créditos grátis/i);
+    const matches = screen.getAllByText(/50 créditos grátis/i);
     expect(matches.length).toBeGreaterThan(0);
   });
 

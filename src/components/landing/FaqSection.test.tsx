@@ -23,6 +23,13 @@ describe("FaqSection", () => {
     expect(screen.getByText(/barreiras pedagógicas observáveis/i)).toBeInTheDocument();
   });
 
+  it("states the real adaptation cost range (5–12 credits), not the legacy flat 3", () => {
+    renderWithProviders(<FaqSection />);
+    const button = screen.getByRole("button", { name: /Quanto vale 1 crédito/i });
+    fireEvent.click(button);
+    expect(screen.getByText(/5 a 12 créditos/i)).toBeInTheDocument();
+  });
+
   it("collapses again on second click", () => {
     renderWithProviders(<FaqSection />);
     const button = screen.getByRole("button", { name: /créditos expiram/i });
