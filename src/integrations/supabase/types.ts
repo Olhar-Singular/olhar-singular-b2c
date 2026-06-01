@@ -7,10 +7,30 @@ export type Json =
   | Json[]
 
 export type Database = {
-  // Allows to automatically instantiate createClient with right options
-  // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
-  __InternalSupabase: {
-    PostgrestVersion: "14.5"
+  graphql_public: {
+    Tables: {
+      [_ in never]: never
+    }
+    Views: {
+      [_ in never]: never
+    }
+    Functions: {
+      graphql: {
+        Args: {
+          extensions?: Json
+          operationName?: string
+          query?: string
+          variables?: Json
+        }
+        Returns: Json
+      }
+    }
+    Enums: {
+      [_ in never]: never
+    }
+    CompositeTypes: {
+      [_ in never]: never
+    }
   }
   public: {
     Tables: {
@@ -312,6 +332,7 @@ export type Database = {
           free_extraction_used: boolean
           full_name: string | null
           id: string
+          is_super_admin: boolean
           updated_at: string
         }
         Insert: {
@@ -321,6 +342,7 @@ export type Database = {
           free_extraction_used?: boolean
           full_name?: string | null
           id: string
+          is_super_admin?: boolean
           updated_at?: string
         }
         Update: {
@@ -330,6 +352,7 @@ export type Database = {
           free_extraction_used?: boolean
           full_name?: string | null
           id?: string
+          is_super_admin?: boolean
           updated_at?: string
         }
         Relationships: []
@@ -396,6 +419,29 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      admin_cost_series: {
+        Args: { p_buckets: number; p_granularity: string }
+        Returns: {
+          bucket: string
+          cost: number
+        }[]
+      }
+      admin_cost_summary: {
+        Args: never
+        Returns: {
+          month_usd: number
+          today_usd: number
+          total_usd: number
+        }[]
+      }
+      admin_user_spending: {
+        Args: never
+        Returns: {
+          last_action: string
+          total_usd: number
+          user_id: string
+        }[]
+      }
       deduct_credits: {
         Args: {
           p_amount: number
@@ -544,7 +590,11 @@ export type CompositeTypes<
     : never
 
 export const Constants = {
+  graphql_public: {
+    Enums: {},
+  },
   public: {
     Enums: {},
   },
 } as const
+
