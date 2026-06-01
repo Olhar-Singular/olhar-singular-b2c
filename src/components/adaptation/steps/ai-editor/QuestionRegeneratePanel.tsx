@@ -3,6 +3,7 @@ import { RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { useRegenerateQuestion } from "@/hooks/useRegenerateQuestion";
+import { parseEdgeFnError } from "@/lib/utils/errors";
 import { markdownDslToStructured, structuredToMarkdownDsl } from "@/lib/domain/activityDslConverter";
 import { isStructuredActivity } from "@/types/adaptation";
 import type { StructuredQuestion } from "@/types/adaptation";
@@ -74,7 +75,7 @@ export default function QuestionRegeneratePanel({
           setLoadingQuestion(null);
         },
         onError: (err) => {
-          toast.error(err.message);
+          toast.error(parseEdgeFnError(err, "Erro ao regenerar questão."));
           setLoadingQuestion(null);
         },
       }

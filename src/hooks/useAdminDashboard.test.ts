@@ -5,6 +5,7 @@ import { createElement } from "react";
 import { useAdminDashboard, useSetUserStatus } from "./useAdminDashboard";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { MSG_NETWORK } from "@/lib/utils/errors";
 
 vi.mock("@/integrations/supabase/client", () => ({
   supabase: { functions: { invoke: vi.fn() } },
@@ -96,5 +97,21 @@ describe("useSetUserStatus", () => {
     });
 
     expect(toast.error).toHaveBeenCalledWith("falhou");
+  });
+
+  it("maps a raw network rejection to the friendly connection message", async () => {
+    mockInvoke.mockRejectedValue(new TypeError("Failed to fetch"));
+    const { wrapper } = makeWrapper();
+
+    const { result } = renderHook(() => useSetUserStatus(), { wrapper });
+    await act(async () => {
+      try {
+        await result.current.mutateAsync({ userId: "u1", action: "ban" });
+      } catch {
+        /* expected */
+      }
+    });
+
+    expect(toast.error).toHaveBeenCalledWith(MSG_NETWORK);
   });
 });

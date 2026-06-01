@@ -4,6 +4,7 @@ import { createElement } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import QuestionBankPage from "./QuestionBankPage";
 import { supabase } from "@/integrations/supabase/client";
+import { MSG_NETWORK } from "@/lib/utils/errors";
 
 // ---------------------------------------------------------------------------
 // Hook / context mocks
@@ -1265,5 +1266,57 @@ describe("QuestionBankPage", () => {
       const img = screen.getByAltText(/Imagem da questão/i);
       expect(img).toHaveAttribute("src", "data:image/png;base64,newcrop");
     });
+  });
+
+  // ── Error mapping: never leak raw technical messages in toasts ─────────────
+
+  it("upload: maps a raw network rejection to the friendly connection message", async () => {
+    const { toast } = await import("sonner");
+    storageUploadSpy.mockRejectedValueOnce(new TypeError("Failed to fetch"));
+    render(<QuestionBankPage />, { wrapper });
+    fireEvent.click(screen.getByRole("tab", { name: /Provas/i }));
+    const input = document.querySelector("input[data-upload-input]") as HTMLInputElement;
+    fireEvent.change(input, { target: { files: [new File(["pdf"], "prova.pdf", { type: "application/pdf" })] } });
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith(MSG_NETWORK));
+  });
+
+  it("extract: suppresses a raw parser error behind the friendly fallback", async () => {
+    const { toast } = await import("sonner");
+    const { parsePdf } = await import("@/lib/utils/pdf-utils");
+    (parsePdf as ReturnType<typeof vi.fn>).mockRejectedValueOnce(new Error("InvalidPDFException: bad xref table"));
+    render(<QuestionBankPage />, { wrapper });
+    fireEvent.click(screen.getByRole("tab", { name: /Provas/i }));
+    const input = document.querySelector("input[data-upload-input]") as HTMLInputElement;
+    fireEvent.change(input, { target: { files: [new File(["pdf"], "prova.pdf", { type: "application/pdf" })] } });
+    await waitFor(() => screen.getByRole("button", { name: /Extrair com IA/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Extrair com IA/i }));
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith("Falha na extração."));
+    expect(toast.error).not.toHaveBeenCalledWith(expect.stringContaining("InvalidPDFException"));
+  });
+
+  it("delete: maps a raw network rejection to the friendly connection message", async () => {
+    const { toast } = await import("sonner");
+    pdfUploadsRows = [
+      { id: "up1", file_name: "Prova.pdf", file_path: "u1/123_Prova.pdf", questions_extracted: 3, uploaded_at: "2026-05-01T10:00:00Z" },
+    ];
+    storageRemoveSpy.mockRejectedValueOnce(new TypeError("Failed to fetch"));
+    render(<QuestionBankPage />, { wrapper });
+    fireEvent.click(screen.getByRole("tab", { name: /Provas/i }));
+    await waitFor(() => screen.getByText("Prova.pdf"));
+    fireEvent.click(screen.getByRole("button", { name: /excluir prova/i }));
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith(MSG_NETWORK));
+  });
+
+  it("re-extract: maps a raw network rejection to the friendly connection message", async () => {
+    const { toast } = await import("sonner");
+    pdfUploadsRows = [
+      { id: "up1", file_name: "Prova.pdf", file_path: "u1/123_Prova.pdf", questions_extracted: 3, uploaded_at: "2026-05-01T10:00:00Z" },
+    ];
+    storageDownloadSpy.mockRejectedValueOnce(new TypeError("Failed to fetch"));
+    render(<QuestionBankPage />, { wrapper });
+    fireEvent.click(screen.getByRole("tab", { name: /Provas/i }));
+    await waitFor(() => screen.getByText("Prova.pdf"));
+    fireEvent.click(screen.getByRole("button", { name: /extrair questões/i }));
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith(MSG_NETWORK));
   });
 });

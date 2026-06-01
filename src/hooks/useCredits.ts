@@ -3,7 +3,7 @@ import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import type { Database } from "@/integrations/supabase/types";
-import { parseInvokeError } from "@/lib/utils/errors";
+import { parseInvokeError, parseEdgeFnError } from "@/lib/utils/errors";
 
 type CreditTransaction = Database["public"]["Tables"]["credit_transactions"]["Row"];
 
@@ -46,7 +46,7 @@ export function useCreateCheckout() {
     onSuccess: ({ url }) => {
       window.location.href = url;
     },
-    onError: (err: Error) => toast.error(err.message),
+    onError: (err: Error) => toast.error(parseEdgeFnError(err, "Erro ao iniciar compra. Tente novamente.")),
   });
 }
 
@@ -67,6 +67,6 @@ export function useCreateStripeCheckout() {
     onSuccess: ({ url }) => {
       window.location.href = url;
     },
-    onError: (err: Error) => toast.error(err.message),
+    onError: (err: Error) => toast.error(parseEdgeFnError(err, "Erro ao iniciar compra. Tente novamente.")),
   });
 }

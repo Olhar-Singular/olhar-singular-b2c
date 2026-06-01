@@ -4,6 +4,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { createElement } from "react";
 import { useTransactionHistory, useCreateCheckout, useCreateStripeCheckout } from "./useCredits";
 import { supabase } from "@/integrations/supabase/client";
+import { MSG_NETWORK } from "@/lib/utils/errors";
 
 const mockTransactions = [
   {
@@ -161,6 +162,18 @@ describe("useCreateCheckout", () => {
 
     expect(toast.error).toHaveBeenCalled();
   });
+
+  it("maps a raw network rejection to the friendly connection message", async () => {
+    const { toast } = await import("sonner");
+    mockInvoke.mockRejectedValue(new TypeError("Failed to fetch"));
+
+    const { result } = renderHook(() => useCreateCheckout(), { wrapper });
+    await act(async () => {
+      try { await result.current.mutateAsync({ credits: 30, amountBrl: 9.9 }); } catch { /* expected */ }
+    });
+
+    expect(toast.error).toHaveBeenCalledWith(MSG_NETWORK);
+  });
 });
 
 describe("useCreateStripeCheckout", () => {
@@ -206,5 +219,17 @@ describe("useCreateStripeCheckout", () => {
     });
 
     expect(toast.error).toHaveBeenCalled();
+  });
+
+  it("maps a raw network rejection to the friendly connection message", async () => {
+    const { toast } = await import("sonner");
+    mockInvoke.mockRejectedValue(new TypeError("Failed to fetch"));
+
+    const { result } = renderHook(() => useCreateStripeCheckout(), { wrapper });
+    await act(async () => {
+      try { await result.current.mutateAsync({ credits: 120, amountBrl: 29.9 }); } catch { /* expected */ }
+    });
+
+    expect(toast.error).toHaveBeenCalledWith(MSG_NETWORK);
   });
 });

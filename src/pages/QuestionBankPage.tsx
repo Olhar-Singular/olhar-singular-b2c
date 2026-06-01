@@ -46,6 +46,7 @@ import { extractDocxWithImages } from "@/lib/utils/docx-utils";
 import { detectFileType } from "@/lib/utils/fileValidation";
 import { resolveUniqueFileName } from "@/lib/utils/fileNameUtils";
 import { normalizeTextForDedup, autoCropFromBbox, dataUrlToBlob } from "@/lib/utils/extraction-utils";
+import { parseDbError, parseEdgeFnError } from "@/lib/utils/errors";
 import QuestionForm from "@/components/forms/QuestionForm";
 import ManualQuestionEditor from "@/components/forms/ManualQuestionEditor";
 import PdfPreviewModal from "@/components/forms/PdfPreviewModal";
@@ -233,7 +234,7 @@ export default function QuestionBankPage() {
       setUploadFile(fileToUpload);
       await fetchUploads();
     } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : "Erro ao enviar arquivo.");
+      toast.error(parseDbError(err, "Erro ao enviar arquivo."));
     } finally {
       setUploading(false);
     }
@@ -278,7 +279,9 @@ export default function QuestionBankPage() {
         try {
           const body = await context?.json();
           if (body?.error) errMsg = body.error;
-        } catch {}
+        } catch {
+          // corpo já consumido ou não-JSON — mantém o fallback
+        }
         toast.error(errMsg);
         return;
       }
@@ -327,7 +330,7 @@ export default function QuestionBankPage() {
       setShowReview(true);
       await refreshProfile();
     } catch (e: unknown) {
-      toast.error(e instanceof Error ? e.message : "Falha na extração.");
+      toast.error(parseDbError(e, "Falha na extração."));
     } finally {
       setExtracting(false);
     }
@@ -458,7 +461,7 @@ export default function QuestionBankPage() {
       await supabase.from("pdf_uploads").delete().eq("id", upload.id);
       await fetchUploads();
     } catch (e: unknown) {
-      toast.error(e instanceof Error ? e.message : "Erro ao excluir.");
+      toast.error(parseDbError(e, "Erro ao excluir."));
     } finally {
       setDeletingId(null);
     }
@@ -480,7 +483,7 @@ export default function QuestionBankPage() {
       });
       await handleExtract(file);
     } catch (e: unknown) {
-      toast.error(e instanceof Error ? e.message : "Erro ao carregar arquivo.");
+      toast.error(parseEdgeFnError(e, "Erro ao carregar arquivo."));
     }
   };
 

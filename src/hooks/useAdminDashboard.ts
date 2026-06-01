@@ -1,7 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
-import { parseInvokeError } from "@/lib/utils/errors";
+import { parseInvokeError, parseEdgeFnError } from "@/lib/utils/errors";
 import type { AdminDashboardData, SetUserStatusInput } from "@/types/admin";
 
 const DASHBOARD_KEY = ["admin", "dashboard"] as const;
@@ -36,6 +36,6 @@ export function useSetUserStatus() {
       queryClient.invalidateQueries({ queryKey: DASHBOARD_KEY });
       toast.success(variables.action === "ban" ? "Usuário inativado." : "Usuário reativado.");
     },
-    onError: (err: Error) => toast.error(err.message),
+    onError: (err: Error) => toast.error(parseEdgeFnError(err, "Erro ao atualizar o usuário. Tente novamente.")),
   });
 }

@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { MSG_NETWORK } from "@/lib/utils/errors";
 import QuestionRegeneratePanel from "./QuestionRegeneratePanel";
 import type { AdaptationResult } from "@/lib/domain/adaptationWizardHelpers";
 import type { BarrierItem } from "@/lib/domain/adaptationWizardHelpers";
@@ -133,6 +134,18 @@ describe("QuestionRegeneratePanel", () => {
     await waitFor(() =>
       expect(toast.error).toHaveBeenCalledWith("Erro de rede")
     );
+  });
+
+  it("maps a raw network error to the friendly connection message", async () => {
+    const { toast } = await import("sonner");
+    render(<QuestionRegeneratePanel {...defaultProps} />);
+
+    fireEvent.click(screen.getAllByRole("button", { name: /Regerar Q1/i })[0]);
+
+    const [, { onError }] = mutateMock.mock.calls[0];
+    onError(new TypeError("Failed to fetch"));
+
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith(MSG_NETWORK));
   });
 
   it("renders nothing when result has no questions", () => {

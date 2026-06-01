@@ -97,7 +97,9 @@ export default function StepAIEditor({ data, updateData, onNext, onPrev }: Props
         try {
           const body = await context?.json();
           if (body?.error) errMsg = body.error;
-        } catch {}
+        } catch {
+          // corpo já consumido ou não-JSON — mantém o fallback
+        }
         throw new Error(errMsg);
       }
 
