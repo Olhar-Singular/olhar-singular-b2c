@@ -1,11 +1,11 @@
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { Coins, TrendingUp, TrendingDown, ArrowRight } from "lucide-react";
+import { Coins, TrendingUp, TrendingDown, CreditCard, QrCode } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { useAuth } from "@/hooks/useAuth";
-import { useTransactionHistory, useCreateCheckout } from "@/hooks/useCredits";
+import { useTransactionHistory, useCreateCheckout, useCreateStripeCheckout } from "@/hooks/useCredits";
 
 const PACKAGES = [
   { credits: 30, amountBrl: 9.9, label: "Básico" },
@@ -31,6 +31,8 @@ export default function CreditsPage() {
   const { profile } = useAuth();
   const { data: transactions = [], isLoading } = useTransactionHistory();
   const checkout = useCreateCheckout();
+  const stripeCheckout = useCreateStripeCheckout();
+  const buying = checkout.isPending || stripeCheckout.isPending;
 
   return (
     <div className="mx-auto max-w-2xl px-4 py-8 space-y-8">
@@ -78,23 +80,36 @@ export default function CreditsPage() {
                 <p className="text-muted-foreground text-sm font-medium">
                   {formatBrl(pkg.amountBrl)}
                 </p>
-                <Button
-                  className="w-full gap-1"
-                  variant={pkg.highlight ? "default" : "outline"}
-                  disabled={checkout.isPending}
-                  onClick={() =>
-                    checkout.mutateAsync({ credits: pkg.credits, amountBrl: pkg.amountBrl })
-                  }
-                >
-                  Comprar
-                  <ArrowRight className="w-3.5 h-3.5" />
-                </Button>
+                <div className="space-y-2">
+                  <Button
+                    className="w-full gap-1.5"
+                    variant={pkg.highlight ? "default" : "outline"}
+                    disabled={buying}
+                    onClick={() =>
+                      stripeCheckout.mutateAsync({ credits: pkg.credits, amountBrl: pkg.amountBrl })
+                    }
+                  >
+                    <CreditCard className="w-3.5 h-3.5" />
+                    Cartão de crédito
+                  </Button>
+                  <Button
+                    className="w-full gap-1.5"
+                    variant="ghost"
+                    disabled={buying}
+                    onClick={() =>
+                      checkout.mutateAsync({ credits: pkg.credits, amountBrl: pkg.amountBrl })
+                    }
+                  >
+                    <QrCode className="w-3.5 h-3.5" />
+                    Pix
+                  </Button>
+                </div>
               </CardContent>
             </Card>
           ))}
         </div>
         <p className="text-xs text-muted-foreground text-center">
-          PIX ou cartão via Mercado Pago. Créditos nunca expiram.
+          Cartão de crédito via Stripe ou Pix via Mercado Pago. Créditos nunca expiram.
         </p>
       </section>
 

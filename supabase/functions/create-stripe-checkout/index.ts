@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import Stripe from "https://esm.sh/stripe@17.7.0?target=deno";
 import { findPackage } from "../_shared/creditPackages.ts";
 
 const corsHeaders = {
@@ -26,11 +27,11 @@ serve(async (req) => {
       return json({ error: "Não autorizado." }, 401);
     }
 
-    const supabaseUrl      = Deno.env.get("SUPABASE_URL")!;
-    const supabaseAnonKey  = Deno.env.get("SUPABASE_ANON_KEY")!;
-    const serviceKey       = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-    const mpAccessToken    = Deno.env.get("MP_ACCESS_TOKEN")!;
-    const appUrl           = Deno.env.get("APP_URL") ?? "http://localhost:8080";
+    const supabaseUrl     = Deno.env.get("SUPABASE_URL")!;
+    const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
+    const serviceKey      = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    const stripeKey       = Deno.env.get("STRIPE_SECRET_KEY")!;
+    const appUrl          = Deno.env.get("APP_URL") ?? "http://localhost:8080";
 
     const userClient = createClient(supabaseUrl, supabaseAnonKey, {
       global: { headers: { Authorization: authHeader } },
@@ -57,7 +58,7 @@ serve(async (req) => {
         amount_brl:      pkg.amountBrl,
         credits_granted: pkg.credits,
         status:          "pending",
-        provider:        "mercadopago",
+        provider:        "stripe",
       })
       .select("id")
       .single();
@@ -67,61 +68,44 @@ serve(async (req) => {
       return json({ error: "Erro ao criar registro de compra." }, 500);
     }
 
-    // Create Mercado Pago preference
-    const notificationUrl = `${supabaseUrl}/functions/v1/mp-webhook`;
-
-    const mpPayload = {
-      items: [
-        {
-          title:      `${pkg.credits} créditos — Olhar Singular`,
-          quantity:   1,
-          unit_price: pkg.amountBrl,
-          currency_id: "BRL",
-        },
-      ],
-      payer: { email: user.email },
-      back_urls: {
-        success: `${appUrl}/creditos/sucesso`,
-        failure: `${appUrl}/creditos`,
-        pending: `${appUrl}/creditos`,
-      },
-      auto_return:        "approved",
-      external_reference: purchase.id,
-      notification_url:   notificationUrl,
-      // Mercado Pago handles Pix only; card flows go through Stripe (create-stripe-checkout).
-      payment_methods: {
-        excluded_payment_types: [
-          { id: "credit_card" },
-          { id: "debit_card" },
-          { id: "ticket" },
-          { id: "atm" },
-          { id: "prepaid_card" },
-        ],
-        installments: 1,
-      },
-    };
-
-    const mpResp = await fetch("https://api.mercadopago.com/checkout/preferences", {
-      method:  "POST",
-      headers: {
-        Authorization:  `Bearer ${mpAccessToken}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(mpPayload),
+    // Create Stripe Checkout Session (hosted, card-only, BRL)
+    const stripe = new Stripe(stripeKey, {
+      apiVersion: "2024-06-20",
+      httpClient: Stripe.createFetchHttpClient(),
     });
 
-    if (!mpResp.ok) {
-      const errText = await mpResp.text();
-      console.error("MP preferences error:", mpResp.status, errText);
-      return json({ error: "Erro ao criar preferência de pagamento." }, 502);
+    const session = await stripe.checkout.sessions.create({
+      mode: "payment",
+      payment_method_types: ["card"],
+      line_items: [
+        {
+          price_data: {
+            currency:     "brl",
+            product_data: { name: `${pkg.credits} créditos — Olhar Singular` },
+            unit_amount:  Math.round(pkg.amountBrl * 100),
+          },
+          quantity: 1,
+        },
+      ],
+      client_reference_id: purchase.id,
+      customer_email:      user.email,
+      success_url:         `${appUrl}/creditos/sucesso`,
+      cancel_url:          `${appUrl}/creditos`,
+      metadata: {
+        purchase_id: purchase.id,
+        user_id:     user.id,
+        credits:     String(pkg.credits),
+      },
+    });
+
+    if (!session.url) {
+      console.error("Stripe session has no url:", session.id);
+      return json({ error: "Erro ao criar sessão de pagamento." }, 502);
     }
 
-    const preference = await mpResp.json();
-    const url: string = preference.init_point;
-
-    return json({ url });
+    return json({ url: session.url });
   } catch (e) {
-    console.error("create-checkout error:", e);
+    console.error("create-stripe-checkout error:", e);
     return json({ error: e instanceof Error ? e.message : "Erro desconhecido." }, 500);
   }
 });

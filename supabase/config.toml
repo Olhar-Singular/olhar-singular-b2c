@@ -1,1 +1,9 @@
 project_id = "orientador-digital-b2c"
+
+# Webhooks são chamados por provedores externos (Stripe / Mercado Pago) sem JWT
+# do Supabase. Sem isto o gateway rejeita a chamada com 401 antes da função rodar.
+[functions.stripe-webhook]
+verify_jwt = false
+
+[functions.mp-webhook]
+verify_jwt = false

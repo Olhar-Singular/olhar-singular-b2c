@@ -26,10 +26,12 @@ const mockTransactions = [
 ];
 
 const mockCheckout = vi.fn();
+const mockStripeCheckout = vi.fn();
 
 vi.mock("@/hooks/useCredits", () => ({
   useTransactionHistory: vi.fn(() => ({ data: mockTransactions, isLoading: false })),
   useCreateCheckout: vi.fn(() => ({ mutateAsync: mockCheckout, isPending: false })),
+  useCreateStripeCheckout: vi.fn(() => ({ mutateAsync: mockStripeCheckout, isPending: false })),
 }));
 
 vi.mock("@/hooks/useAuth", () => ({
@@ -56,6 +58,10 @@ describe("CreditsPage", () => {
     } as never);
     vi.mocked(m.useCreateCheckout).mockReturnValue({
       mutateAsync: mockCheckout,
+      isPending: false,
+    } as never);
+    vi.mocked(m.useCreateStripeCheckout).mockReturnValue({
+      mutateAsync: mockStripeCheckout,
       isPending: false,
     } as never);
     const auth = await import("@/hooks/useAuth");
@@ -97,19 +103,42 @@ describe("CreditsPage", () => {
     expect(screen.getByText(/bônus/i)).toBeInTheDocument();
   });
 
-  it("calls createCheckout with correct package on button click", async () => {
+  it("renders a credit-card and a Pix button for every package", () => {
+    renderPage();
+    expect(screen.getAllByRole("button", { name: /cartão de crédito/i })).toHaveLength(3);
+    expect(screen.getAllByRole("button", { name: /^pix$/i })).toHaveLength(3);
+  });
+
+  it("calls the Stripe checkout with the correct package on credit-card click", async () => {
+    const user = userEvent.setup();
+    mockStripeCheckout.mockResolvedValue({ url: "https://stripe.com/checkout" });
+    renderPage();
+
+    const cardButtons = screen.getAllByRole("button", { name: /cartão de crédito/i });
+    await user.click(cardButtons[0]);
+
+    await waitFor(() =>
+      expect(mockStripeCheckout).toHaveBeenCalledWith(
+        expect.objectContaining({ credits: 30 })
+      )
+    );
+    expect(mockCheckout).not.toHaveBeenCalled();
+  });
+
+  it("calls the Mercado Pago (Pix) checkout with the correct package on Pix click", async () => {
     const user = userEvent.setup();
     mockCheckout.mockResolvedValue({ url: "https://mp.com/checkout" });
     renderPage();
 
-    const buyButtons = screen.getAllByRole("button", { name: /comprar/i });
-    await user.click(buyButtons[0]);
+    const pixButtons = screen.getAllByRole("button", { name: /^pix$/i });
+    await user.click(pixButtons[0]);
 
     await waitFor(() =>
       expect(mockCheckout).toHaveBeenCalledWith(
         expect.objectContaining({ credits: 30 })
       )
     );
+    expect(mockStripeCheckout).not.toHaveBeenCalled();
   });
 
   it("shows empty state when no transactions", async () => {

@@ -2,7 +2,7 @@ import { renderHook, waitFor, act } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { createElement } from "react";
-import { useTransactionHistory, useCreateCheckout } from "./useCredits";
+import { useTransactionHistory, useCreateCheckout, useCreateStripeCheckout } from "./useCredits";
 import { supabase } from "@/integrations/supabase/client";
 
 const mockTransactions = [
@@ -157,6 +157,52 @@ describe("useCreateCheckout", () => {
     const { result } = renderHook(() => useCreateCheckout(), { wrapper });
     await act(async () => {
       try { await result.current.mutateAsync({ credits: 30, amountBrl: 9.9 }); } catch { /* expected */ }
+    });
+
+    expect(toast.error).toHaveBeenCalled();
+  });
+});
+
+describe("useCreateStripeCheckout", () => {
+  const mockInvoke = supabase.functions.invoke as ReturnType<typeof vi.fn>;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    delete (window as { location?: unknown }).location;
+    (window as { location: unknown }).location = { href: "" };
+  });
+
+  it("invokes create-stripe-checkout with credits and amountBrl", async () => {
+    mockInvoke.mockResolvedValue({ data: { url: "https://stripe.test/checkout" }, error: null });
+
+    const { result } = renderHook(() => useCreateStripeCheckout(), { wrapper });
+    await act(async () => {
+      await result.current.mutateAsync({ credits: 120, amountBrl: 29.9 });
+    });
+
+    expect(mockInvoke).toHaveBeenCalledWith("create-stripe-checkout", {
+      body: { credits: 120, amountBrl: 29.9 },
+    });
+  });
+
+  it("redirects to the Stripe url on success", async () => {
+    mockInvoke.mockResolvedValue({ data: { url: "https://stripe.test/checkout" }, error: null });
+
+    const { result } = renderHook(() => useCreateStripeCheckout(), { wrapper });
+    await act(async () => {
+      await result.current.mutateAsync({ credits: 120, amountBrl: 29.9 });
+    });
+
+    expect(window.location.href).toBe("https://stripe.test/checkout");
+  });
+
+  it("calls toast.error when invoke returns error", async () => {
+    const { toast } = await import("sonner");
+    mockInvoke.mockResolvedValue({ data: null, error: new Error("falha no servidor") });
+
+    const { result } = renderHook(() => useCreateStripeCheckout(), { wrapper });
+    await act(async () => {
+      try { await result.current.mutateAsync({ credits: 120, amountBrl: 29.9 }); } catch { /* expected */ }
     });
 
     expect(toast.error).toHaveBeenCalled();

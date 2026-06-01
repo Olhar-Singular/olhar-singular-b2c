@@ -49,3 +49,24 @@ export function useCreateCheckout() {
     onError: (err: Error) => toast.error(err.message),
   });
 }
+
+// Credit-card checkout via Stripe (hosted). Mirrors useCreateCheckout but targets
+// the Stripe edge function; Mercado Pago (useCreateCheckout) now handles Pix only.
+export function useCreateStripeCheckout() {
+  return useMutation({
+    mutationFn: async (input: CheckoutInput) => {
+      const { data, error } = await supabase.functions.invoke("create-stripe-checkout", {
+        body: input,
+      });
+      if (error) {
+        const msg = await parseInvokeError(error, "Erro ao iniciar compra. Tente novamente.");
+        throw new Error(msg);
+      }
+      return data as { url: string };
+    },
+    onSuccess: ({ url }) => {
+      window.location.href = url;
+    },
+    onError: (err: Error) => toast.error(err.message),
+  });
+}
