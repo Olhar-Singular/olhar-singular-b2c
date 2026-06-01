@@ -180,7 +180,7 @@ db-seed-test-user:
 # ─────────────────────────────────────────────
 #  EDGE FUNCTIONS
 # ─────────────────────────────────────────────
-FUNCTIONS := adapt-activity chat create-checkout extract-questions mp-webhook regenerate-question
+FUNCTIONS := adapt-activity chat create-checkout create-stripe-checkout extract-questions mp-webhook regenerate-question stripe-webhook
 
 .PHONY: fn-deploy-all
 fn-deploy-all:
