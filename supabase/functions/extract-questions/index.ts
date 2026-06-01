@@ -3,6 +3,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { sanitize } from "../_shared/sanitize.ts";
 import { logAiUsage } from "../_shared/logAiUsage.ts";
 import { getAiConfig } from "../_shared/aiConfig.ts";
+import { chargeCredits, refundCredits, type CreditRpcResult } from "../_shared/credits.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -166,55 +167,57 @@ serve(async (req) => {
 
     const uploadId = uploadRecord?.id ?? null;
 
-    // ── Deduct credits or claim free extraction (atomic) ─────────────────────
-    if (isFreeExtraction) {
-      const { data: claimed } = await admin
-        .from("profiles")
-        .update({ free_extraction_used: true })
-        .eq("id", user.id)
-        .eq("free_extraction_used", false)
-        .select("id");
-      // If another concurrent request already claimed the free slot, charge normally.
-      if ((claimed?.length ?? 0) === 0) {
-        const { data: dr } = await admin.rpc("deduct_credits", {
+    // ── Deduct credits or claim the free extraction (atomic) ─────────────────
+    // claimFree wins the one-time free slot when available; on a lost race (or
+    // no free tier) it falls through to deduct. Decision logic is shared + tested.
+    const charge = await chargeCredits({
+      cost: EXTRACTION_COST,
+      claimFree: async () => {
+        if (!isFreeExtraction) return false;
+        const { data: claimed } = await admin
+          .from("profiles")
+          .update({ free_extraction_used: true })
+          .eq("id", user.id)
+          .eq("free_extraction_used", false)
+          .select("id");
+        return (claimed?.length ?? 0) > 0;
+      },
+      deduct: async () => {
+        const { data, error } = await admin.rpc("deduct_credits", {
           p_user_id: user.id,
           p_amount: EXTRACTION_COST,
           p_type: "extract",
           p_ref_id: uploadId,
         });
-        if ((dr as { success: boolean; error?: string } | null)?.success === false) {
-          return new Response(
-            JSON.stringify({ error: "insufficient_credits", balance: profile.credit_balance }),
-            { status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" } },
-          );
-        }
+        return { data: data as CreditRpcResult | null, error };
+      },
+    });
+
+    // extract surfaces a single bespoke 402 for both insufficient and failure.
+    if (charge.status === "insufficient" || charge.status === "error") {
+      if (charge.status === "error" && charge.reason === "rpc") {
+        console.error("deduct_credits error:", charge.cause);
       }
-    } else {
-      const { data: dr } = await admin.rpc("deduct_credits", {
-        p_user_id: user.id,
-        p_amount: EXTRACTION_COST,
-        p_type: "extract",
-        p_ref_id: uploadId,
-      });
-      if ((dr as { success: boolean; error?: string } | null)?.success === false) {
-        return new Response(
-          JSON.stringify({ error: "insufficient_credits", balance: profile.credit_balance }),
-          { status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" } },
-        );
-      }
+      return new Response(
+        JSON.stringify({ error: "insufficient_credits", balance: profile.credit_balance }),
+        { status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
     }
 
-    const creditsCharged = isFreeExtraction ? 0 : EXTRACTION_COST;
+    const creditsCharged = charge.status === "charged" ? charge.creditsCharged : 0;
 
-    const refundIfNeeded = async () => {
-      if (creditsCharged > 0) {
-        await admin.rpc("grant_credits", {
-          p_user_id: user.id,
-          p_amount: creditsCharged,
-          p_type: "refund",
-        }).catch((e: unknown) => console.error("Extraction refund failed for user:", user.id, e));
-      }
-    };
+    const refundIfNeeded = () =>
+      refundCredits({
+        creditsCharged,
+        grant: async (amount) => {
+          await admin.rpc("grant_credits", {
+            p_user_id: user.id,
+            p_amount: amount,
+            p_type: "refund",
+          });
+        },
+        onError: (e) => console.error("Extraction refund failed for user:", user.id, e),
+      });
 
     // ── Build AI messages ─────────────────────────────────────────────────────
     const contentParts: any[] = [

@@ -3,6 +3,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { sanitize } from "../_shared/sanitize.ts";
 import { logAiUsage } from "../_shared/logAiUsage.ts";
 import { getAiConfig } from "../_shared/aiConfig.ts";
+import { chargeCredits, chargeErrorResponse, refundCredits, type CreditRpcResult } from "../_shared/credits.ts";
 
 // Complexity tiers mirroring src/lib/domain/barriers.ts — must stay in sync.
 const BARRIER_COMPLEXITY: Record<string, "low" | "medium" | "high"> = {
@@ -429,49 +430,41 @@ serve(async (req) => {
     )];
     const creditCost = calcAdaptationCost(barrierDimensions);
 
-    // Atomically claim first-free slot (UPDATE WHERE free_adaptation_used = false).
-    // If another concurrent request claims it first, update returns 0 rows → charge normally.
-    const { data: claimedFree } = await serviceClient
-      .from("profiles")
-      .update({ free_adaptation_used: true })
-      .eq("id", user.id)
-      .eq("free_adaptation_used", false)
-      .select("id");
+    // Claim the first-free slot, otherwise deduct. The free claim is an
+    // UPDATE WHERE free_adaptation_used = false: if a concurrent request wins it
+    // first, 0 rows come back and we charge normally.
+    const charge = await chargeCredits({
+      cost: creditCost,
+      claimFree: async () => {
+        const { data } = await serviceClient
+          .from("profiles")
+          .update({ free_adaptation_used: true })
+          .eq("id", user.id)
+          .eq("free_adaptation_used", false)
+          .select("id");
+        return (data?.length ?? 0) > 0;
+      },
+      deduct: async () => {
+        const { data, error } = await serviceClient.rpc("deduct_credits", {
+          p_user_id: user.id,
+          p_amount: creditCost,
+          p_type: "adapt",
+        });
+        return { data: data as CreditRpcResult | null, error };
+      },
+    });
 
-    const isFirstFree = (claimedFree?.length ?? 0) > 0;
-    let creditsCharged = 0;
-
-    if (!isFirstFree) {
-      const { data: deductResult, error: deductError } = await serviceClient.rpc("deduct_credits", {
-        p_user_id: user.id,
-        p_amount: creditCost,
-        p_type: "adapt",
+    const chargeError = chargeErrorResponse(charge, creditCost);
+    if (chargeError) {
+      if (charge.status === "error") console.error("deduct_credits error:", charge.cause ?? "unexpected failure", "user:", user.id);
+      return new Response(JSON.stringify(chargeError.body), {
+        status: chargeError.status,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
-
-      if (deductError) {
-        console.error("deduct_credits error:", deductError);
-        return new Response(JSON.stringify({ error: "Erro ao processar créditos." }), {
-          status: 500,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      }
-
-      if ((deductResult as { success: boolean; error?: string; balance?: number } | null)?.success === false) {
-        const r = deductResult as { error: string; balance?: number };
-        if (r.error === "insufficient_credits") {
-          return new Response(
-            JSON.stringify({ error: "Créditos insuficientes.", balance: r.balance, required: creditCost }),
-            { status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" } },
-          );
-        }
-        return new Response(JSON.stringify({ error: "Erro ao processar créditos." }), {
-          status: 500,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      }
-
-      creditsCharged = creditCost;
     }
+
+    const isFirstFree = charge.status === "free";
+    const creditsCharged = charge.status === "charged" ? charge.creditsCharged : 0;
     // ─── End credit deduction ───────────────────────────────────────────────────
 
     const sanitizedActivity = sanitize(original_activity, 15000);
@@ -508,19 +501,18 @@ BARREIRAS OBSERVÁVEIS:
     let aiData: unknown;
     let aiDurationMs: number;
 
-    const refundIfNeeded = async () => {
-      if (creditsCharged > 0) {
-        try {
+    const refundIfNeeded = () =>
+      refundCredits({
+        creditsCharged,
+        grant: async (amount) => {
           await serviceClient.rpc("grant_credits", {
             p_user_id: user.id,
-            p_amount: creditsCharged,
+            p_amount: amount,
             p_type: "refund",
           });
-        } catch (e: unknown) {
-          console.error("Refund failed for user:", user.id, e);
-        }
-      }
-    };
+        },
+        onError: (e) => console.error("Refund failed for user:", user.id, e),
+      });
 
     try {
       aiResponse = await fetch(`${ai.baseUrl}/chat/completions`, {

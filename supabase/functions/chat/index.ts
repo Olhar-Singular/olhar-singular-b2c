@@ -2,6 +2,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { logAiUsage } from "../_shared/logAiUsage.ts";
 import { getAiConfig } from "../_shared/aiConfig.ts";
+import { chargeCredits, type CreditRpcResult } from "../_shared/credits.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -109,32 +110,37 @@ serve(async (req) => {
         );
       }
 
-      // Deduct 3 credits via service_role RPC (atomic)
-      const { data: creditData, error: creditError } = await admin.rpc("deduct_credits", {
-        p_user_id: user.id,
-        p_amount: SESSION_CREDIT_COST,
-        p_type: "chat",
+      // Deduct 3 credits for the new session (no free tier). The charge decision
+      // lives in the shared, unit-tested chargeCredits; chat keeps its own copy.
+      const charge = await chargeCredits({
+        cost: SESSION_CREDIT_COST,
+        claimFree: () => Promise.resolve(false),
+        deduct: async () => {
+          const { data, error } = await admin.rpc("deduct_credits", {
+            p_user_id: user.id,
+            p_amount: SESSION_CREDIT_COST,
+            p_type: "chat",
+          });
+          return { data: data as CreditRpcResult | null, error };
+        },
       });
 
-      if (creditError) {
-        console.error("deduct_credits error:", creditError);
-        return new Response(JSON.stringify({ error: "Erro ao verificar créditos." }), {
-          status: 500,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
+      if (charge.status === "insufficient") {
+        return new Response(
+          JSON.stringify({ error: "Créditos insuficientes.", balance: charge.balance ?? 0 }),
+          { status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
       }
-
-      if (creditData?.success === false) {
-        if (creditData.error === "insufficient_credits") {
-          return new Response(
-            JSON.stringify({ error: "Créditos insuficientes.", balance: creditData.balance ?? 0 }),
-            { status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-          );
-        }
-        return new Response(JSON.stringify({ error: "Erro interno ao processar créditos." }), {
-          status: 500,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
+      if (charge.status === "error") {
+        if (charge.reason === "rpc") console.error("deduct_credits error:", charge.cause);
+        return new Response(
+          JSON.stringify({
+            error: charge.reason === "rpc"
+              ? "Erro ao verificar créditos."
+              : "Erro interno ao processar créditos.",
+          }),
+          { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
       }
 
       // Title: first 60 chars of first user message
