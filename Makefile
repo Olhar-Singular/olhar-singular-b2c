@@ -31,6 +31,7 @@ help:
 	@echo "    make sb-stop            Parar Supabase local"
 	@echo "    make sb-status          Exibir URLs e keys do Supabase local"
 	@echo "    make sb-reset           Resetar banco local (reaplica migrations)"
+	@echo "    make test-db            Testes pgTAP do banco (supabase test db)"
 	@echo ""
 	@echo "  Supabase — Setup Remoto"
 	@echo "    make sb-login           Autenticar no Supabase"
@@ -130,6 +131,12 @@ sb-status:
 sb-reset:
 	supabase db reset
 
+# Roda os testes pgTAP (supabase/tests/database/*.test.sql) contra o DB local.
+# Exige Supabase local no ar (make sb-start). Roda no host (precisa de Docker).
+.PHONY: test-db
+test-db:
+	supabase test db
+
 # ─────────────────────────────────────────────
 #  SUPABASE — SETUP REMOTO
 # ─────────────────────────────────────────────
@@ -173,7 +180,7 @@ db-seed-test-user:
 # ─────────────────────────────────────────────
 #  EDGE FUNCTIONS
 # ─────────────────────────────────────────────
-FUNCTIONS := adapt-activity chat check-and-deduct-credits create-checkout extract-questions mp-webhook regenerate-question
+FUNCTIONS := adapt-activity chat create-checkout extract-questions mp-webhook regenerate-question
 
 .PHONY: fn-deploy-all
 fn-deploy-all:
