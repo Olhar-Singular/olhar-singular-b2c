@@ -19,6 +19,10 @@ vi.mock("@/pages/CreditsPage", () => ({ default: () => <div data-testid="credits
 vi.mock("@/pages/AdaptarPage", () => ({ default: () => <div data-testid="adaptar-page" /> }));
 vi.mock("@/pages/ChatPage", () => ({ default: () => <div data-testid="chat-page" /> }));
 vi.mock("@/pages/QuestionBankPage", () => ({ default: () => <div data-testid="qb-page" /> }));
+vi.mock("@/pages/AdminPage", () => ({ default: () => <div data-testid="admin-page" /> }));
+vi.mock("@/components/common/SuperAdminRoute", () => ({
+  SuperAdminRoute: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+}));
 vi.mock("@/components/ui/sonner", () => ({ Toaster: () => <div data-testid="toaster-stub" /> }));
 
 import App from "./App";
@@ -38,6 +42,12 @@ describe("App", () => {
 
   it("renders the layout stub on protected /dashboard route", async () => {
     window.history.pushState({}, "", "/dashboard");
+    render(<App />);
+    await waitFor(() => expect(screen.getByTestId("layout-stub")).toBeInTheDocument());
+  });
+
+  it("renders the layout stub on protected /admin route", async () => {
+    window.history.pushState({}, "", "/admin");
     render(<App />);
     await waitFor(() => expect(screen.getByTestId("layout-stub")).toBeInTheDocument());
   });

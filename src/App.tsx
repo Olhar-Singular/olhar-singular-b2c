@@ -3,7 +3,9 @@ import { BrowserRouter, Route, Routes } from "react-router-dom";
 import { Toaster } from "@/components/ui/sonner";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { ProtectedRoute } from "@/components/common/ProtectedRoute";
+import { SuperAdminRoute } from "@/components/common/SuperAdminRoute";
 import AuthPage from "@/pages/AuthPage";
+import AdminPage from "@/pages/AdminPage";
 import DashboardPage from "@/pages/DashboardPage";
 import BarrierProfilesPage from "@/pages/BarrierProfilesPage";
 import CreditsPage from "@/pages/CreditsPage";
@@ -36,6 +38,14 @@ export default function App() {
               <Route path="/chat" element={<ChatPage />} />
               <Route path="/banco-questoes" element={<QuestionBankPage />} />
               <Route path="/creditos" element={<CreditsPage />} />
+              <Route
+                path="/admin"
+                element={
+                  <SuperAdminRoute>
+                    <AdminPage />
+                  </SuperAdminRoute>
+                }
+              />
               <Route
                 path="/creditos/sucesso"
                 element={

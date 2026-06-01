@@ -48,6 +48,18 @@ describe("Layout", () => {
     expect(screen.getAllByRole("link", { name: /Crédit/i }).length).toBeGreaterThan(0);
   });
 
+  it("shows the Admin nav link for super-admins", () => {
+    setAuth({ profile: { is_super_admin: true } });
+    renderWithProviders(<Layout />, { route: "/dashboard" });
+    expect(screen.getAllByRole("link", { name: /^Admin/i }).length).toBeGreaterThan(0);
+  });
+
+  it("hides the Admin nav link for non super-admins", () => {
+    setAuth({ profile: { is_super_admin: false } });
+    renderWithProviders(<Layout />, { route: "/dashboard" });
+    expect(screen.queryByRole("link", { name: /^Admin/i })).toBeNull();
+  });
+
   it("marks the active route with aria-current=page", () => {
     setAuth();
     renderWithProviders(<Layout />, { route: "/adaptar/foo" });

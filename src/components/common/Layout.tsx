@@ -1,7 +1,7 @@
 import { Link, useLocation, Outlet, useNavigate } from "react-router-dom";
 import {
   LayoutDashboard, Wand2, Users, MessageSquare,
-  Coins, LogOut, Menu, X, BookOpen,
+  Coins, LogOut, Menu, X, BookOpen, ShieldCheck,
 } from "lucide-react";
 import { useState } from "react";
 import { useAuth } from "@/hooks/useAuth";
@@ -15,11 +15,15 @@ const NAV_ITEMS = [
   { path: "/banco-questoes",  label: "Banco de Questões",   icon: BookOpen },
 ];
 
+const ADMIN_ITEM = { path: "/admin", label: "Admin", icon: ShieldCheck };
+
 export default function Layout({ children }: { children?: React.ReactNode }) {
   const location = useLocation();
   const navigate = useNavigate();
   const { signOut, profile } = useAuth();
   const [mobileOpen, setMobileOpen] = useState(false);
+
+  const navItems = profile?.is_super_admin ? [...NAV_ITEMS, ADMIN_ITEM] : NAV_ITEMS;
 
   const isActive = (path: string) =>
     path === "/dashboard"
@@ -66,7 +70,7 @@ export default function Layout({ children }: { children?: React.ReactNode }) {
 
         {/* Nav links */}
         <nav className="flex-1 px-3 space-y-0.5" aria-label="Navegação do app">
-          {NAV_ITEMS.map((item) => (
+          {navItems.map((item) => (
             <Link
               key={item.path}
               to={item.path}
@@ -148,7 +152,7 @@ export default function Layout({ children }: { children?: React.ReactNode }) {
             onClick={(e) => e.stopPropagation()}
             aria-label="Menu de navegação mobile"
           >
-            {NAV_ITEMS.map((item) => (
+            {navItems.map((item) => (
               <Link
                 key={item.path}
                 to={item.path}
