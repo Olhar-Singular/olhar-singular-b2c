@@ -52,7 +52,7 @@ describe("AuthPage", () => {
   it("renders login form by default", () => {
     renderAuthPage();
     expect(screen.getByLabelText(/e-mail/i)).toBeInTheDocument();
-    expect(screen.getByLabelText(/senha/i)).toBeInTheDocument();
+    expect(screen.getByLabelText("Senha")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /entrar/i })).toBeInTheDocument();
   });
 
@@ -68,7 +68,7 @@ describe("AuthPage", () => {
     fireEvent.change(screen.getByLabelText(/e-mail/i), {
       target: { value: "a@b.com" },
     });
-    fireEvent.change(screen.getByLabelText(/senha/i), {
+    fireEvent.change(screen.getByLabelText("Senha"), {
       target: { value: "123456" },
     });
     fireEvent.click(screen.getByRole("button", { name: /entrar/i }));
@@ -86,7 +86,7 @@ describe("AuthPage", () => {
     await user.click(screen.getByRole("button", { name: /cadastre-se/i }));
     await user.type(screen.getByLabelText(/nome/i), "Ana");
     await user.type(screen.getByLabelText(/e-mail/i), "ana@b.com");
-    await user.type(screen.getByLabelText(/senha/i), "123456");
+    await user.type(screen.getByLabelText("Senha"), "123456");
     await user.click(screen.getByRole("button", { name: /criar conta/i }));
     await waitFor(() =>
       expect(supabase.auth.signUp).toHaveBeenCalledWith({
@@ -105,7 +105,7 @@ describe("AuthPage", () => {
     fireEvent.change(screen.getByLabelText(/e-mail/i), {
       target: { value: "a@b.com" },
     });
-    fireEvent.change(screen.getByLabelText(/senha/i), {
+    fireEvent.change(screen.getByLabelText("Senha"), {
       target: { value: "errada" },
     });
     fireEvent.click(screen.getByRole("button", { name: /entrar/i }));
@@ -139,7 +139,7 @@ describe("AuthPage", () => {
     renderAuthPage();
     await user.click(screen.getByRole("button", { name: /cadastre-se/i }));
     fireEvent.change(screen.getByLabelText(/e-mail/i), { target: { value: "a@b.com" } });
-    fireEvent.change(screen.getByLabelText(/senha/i), { target: { value: "123456" } });
+    fireEvent.change(screen.getByLabelText("Senha"), { target: { value: "123456" } });
     fireEvent.click(screen.getByRole("button", { name: /criar conta/i }));
     expect(screen.getByRole("alert")).toHaveTextContent(/Informe seu nome/i);
   });
@@ -147,7 +147,7 @@ describe("AuthPage", () => {
   it("shows validation error when password is shorter than 6", () => {
     renderAuthPage();
     fireEvent.change(screen.getByLabelText(/e-mail/i), { target: { value: "a@b.com" } });
-    fireEvent.change(screen.getByLabelText(/senha/i), { target: { value: "123" } });
+    fireEvent.change(screen.getByLabelText("Senha"), { target: { value: "123" } });
     fireEvent.click(screen.getByRole("button", { name: /entrar/i }));
     expect(screen.getByRole("alert")).toHaveTextContent(/pelo menos 6 caracteres/i);
   });
@@ -158,7 +158,7 @@ describe("AuthPage", () => {
     } as never);
     renderAuthPage();
     fireEvent.change(screen.getByLabelText(/e-mail/i), { target: { value: "a@b.com" } });
-    fireEvent.change(screen.getByLabelText(/senha/i), { target: { value: "123456" } });
+    fireEvent.change(screen.getByLabelText("Senha"), { target: { value: "123456" } });
     fireEvent.click(screen.getByRole("button", { name: /entrar/i }));
     await waitFor(() =>
       expect(screen.getByRole("alert")).toHaveTextContent(/Erro ao acessar a conta/i)
@@ -174,7 +174,7 @@ describe("AuthPage", () => {
     await user.click(screen.getByRole("button", { name: /cadastre-se/i }));
     await user.type(screen.getByLabelText(/nome/i), "Ana");
     await user.type(screen.getByLabelText(/e-mail/i), "ana@b.com");
-    await user.type(screen.getByLabelText(/senha/i), "123456");
+    await user.type(screen.getByLabelText("Senha"), "123456");
     await user.click(screen.getByRole("button", { name: /criar conta/i }));
     await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent(/já está cadastrado/i));
   });
@@ -206,11 +206,33 @@ describe("AuthPage", () => {
     await user.click(screen.getByRole("button", { name: /cadastre-se/i }));
     await user.type(screen.getByLabelText(/nome/i), "Ana");
     await user.type(screen.getByLabelText(/e-mail/i), "ana@b.com");
-    await user.type(screen.getByLabelText(/senha/i), "123456");
+    await user.type(screen.getByLabelText("Senha"), "123456");
     await user.click(screen.getByRole("button", { name: /criar conta/i }));
     await waitFor(() =>
       expect(screen.getByRole("alert")).toHaveTextContent(/Erro ao criar conta/i)
     );
+  });
+
+  it("hides the password by default and toggles visibility with the eye button", async () => {
+    const user = userEvent.setup();
+    renderAuthPage();
+    const passwordInput = screen.getByLabelText("Senha");
+    expect(passwordInput).toHaveAttribute("type", "password");
+
+    const toggle = screen.getByRole("button", { name: /mostrar senha/i });
+    await user.click(toggle);
+    expect(passwordInput).toHaveAttribute("type", "text");
+    expect(screen.getByRole("button", { name: /ocultar senha/i })).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: /ocultar senha/i }));
+    expect(passwordInput).toHaveAttribute("type", "password");
+  });
+
+  it("provides the password visibility toggle in signup mode too", async () => {
+    const user = userEvent.setup();
+    renderAuthPage();
+    await user.click(screen.getByRole("button", { name: /cadastre-se/i }));
+    expect(screen.getByRole("button", { name: /mostrar senha/i })).toBeInTheDocument();
   });
 
   it("shows fallback error 'Erro ao entrar.' when login returns error with no message (line 47 binary-expr branch)", async () => {
@@ -219,7 +241,7 @@ describe("AuthPage", () => {
     } as never);
     renderAuthPage();
     fireEvent.change(screen.getByLabelText(/e-mail/i), { target: { value: "a@b.com" } });
-    fireEvent.change(screen.getByLabelText(/senha/i), { target: { value: "123456" } });
+    fireEvent.change(screen.getByLabelText("Senha"), { target: { value: "123456" } });
     fireEvent.click(screen.getByRole("button", { name: /entrar/i }));
     await waitFor(() =>
       expect(screen.getByRole("alert")).toHaveTextContent(/Erro ao entrar/i)
