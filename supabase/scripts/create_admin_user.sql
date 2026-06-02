@@ -6,25 +6,32 @@
 --   * psql:  psql "$DATABASE_URL" -f supabase/scripts/create_admin_user.sql
 --            (local:  postgresql://postgres:postgres@127.0.0.1:54322/postgres)
 --
--- IMPORTANTE:
---   * Edite `v_email` antes de rodar.
---   * `v_password` é gerada ALEATORIAMENTE por padrão. Anote a senha exibida no
---     aviso (NOTICE) ao final e troque-a no primeiro acesso — ou defina a sua
---     própria em `v_password` antes de executar.
---   * Idempotente: se o e-mail já existir, apenas promove a conta a super-admin.
+-- ANTES DE RODAR, edite no bloco DECLARE:
+--   * v_email    -> e-mail do super-admin
+--   * v_password -> a SENHA que você quer (mínimo 8 caracteres)
 --
--- Por que SQL e não a coluna direto: o trigger anti-escalação bloqueia mudanças
--- em is_super_admin vindas de requests autenticados (anon/authenticated). Rodando
--- como `postgres`/`service_role` (SQL editor) a promoção é permitida.
+-- Comportamento:
+--   * Se o e-mail NÃO existir: cria a conta (já confirmada) com essa senha.
+--   * Se já existir: REDEFINE a senha para v_password e promove a super-admin.
+--   Depois é só logar normalmente em /auth com esse e-mail + senha.
+--
+-- Por que SQL e não mexer na coluna direto: o trigger anti-escalação bloqueia
+-- mudanças em is_super_admin vindas de requests autenticados (anon/authenticated).
+-- Rodando como `postgres`/`service_role` (SQL editor) a promoção é permitida.
 -- ============================================================================
 
 DO $$
 DECLARE
-  v_email    text := 'admin@orientador.local';                          -- << EDITE
+  v_email    text := 'admin@orientador.local';   -- << EDITE: e-mail do admin
+  v_password text := 'troque-esta-senha';        -- << EDITE: defina a SUA senha (mín. 8 caracteres)
   v_name     text := 'Super Admin';
-  v_password text := encode(extensions.gen_random_bytes(12), 'base64');  -- aleatória; ou defina a sua
   v_user_id  uuid;
 BEGIN
+  -- Trava de segurança: não roda com o placeholder nem com senha curta.
+  IF v_password IN ('troque-esta-senha', '') OR length(v_password) < 8 THEN
+    RAISE EXCEPTION 'Defina v_password (mínimo 8 caracteres) antes de rodar o script.';
+  END IF;
+
   SELECT id INTO v_user_id FROM auth.users WHERE email = v_email;
 
   IF v_user_id IS NULL THEN
@@ -59,13 +66,16 @@ BEGIN
       now(), now(), now()
     );
 
-    RAISE NOTICE '--------------------------------------------------------------';
-    RAISE NOTICE 'Super-admin CRIADO.';
-    RAISE NOTICE '  E-mail: %', v_email;
-    RAISE NOTICE '  Senha : %   (troque após o primeiro acesso)', v_password;
-    RAISE NOTICE '--------------------------------------------------------------';
+    RAISE NOTICE 'Super-admin CRIADO: %  (use a senha que você definiu).', v_email;
   ELSE
-    RAISE NOTICE 'Usuário % já existe — apenas promovendo a super-admin.', v_email;
+    -- Já existe: redefine a senha para a que você escolheu.
+    UPDATE auth.users
+       SET encrypted_password = extensions.crypt(v_password, extensions.gen_salt('bf')),
+           email_confirmed_at  = COALESCE(email_confirmed_at, now()),
+           updated_at          = now()
+     WHERE id = v_user_id;
+
+    RAISE NOTICE 'Usuário % já existia — senha REDEFINIDA e promovendo a super-admin.', v_email;
   END IF;
 
   -- O trigger handle_new_user já criou o profile; aqui promovemos a super-admin.
@@ -74,5 +84,5 @@ BEGIN
          full_name = COALESCE(NULLIF(full_name, ''), v_name)
    WHERE id = v_user_id;
 
-  RAISE NOTICE 'OK: % agora é super-admin (is_super_admin = true).', v_email;
+  RAISE NOTICE 'OK: % agora é super-admin. Faça login em /auth com esse e-mail e senha.', v_email;
 END $$;
