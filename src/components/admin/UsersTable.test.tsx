@@ -47,12 +47,14 @@ function bodyRows() {
 
 describe("UsersTable", () => {
   let onToggleStatus: ReturnType<typeof vi.fn>;
+  let onGrantCredits: ReturnType<typeof vi.fn>;
   beforeEach(() => {
     onToggleStatus = vi.fn();
+    onGrantCredits = vi.fn();
   });
 
   it("renders users sorted by spend desc, with formatted cells and badges", () => {
-    render(<UsersTable users={users} onToggleStatus={onToggleStatus} />);
+    render(<UsersTable users={users} onToggleStatus={onToggleStatus} onGrantCredits={onGrantCredits} />);
 
     const rows = bodyRows();
     expect(rows[0]).toHaveTextContent("Bob"); // 10 usd
@@ -69,7 +71,7 @@ describe("UsersTable", () => {
   });
 
   it("filters by name and by email", () => {
-    render(<UsersTable users={users} onToggleStatus={onToggleStatus} />);
+    render(<UsersTable users={users} onToggleStatus={onToggleStatus} onGrantCredits={onGrantCredits} />);
     const search = screen.getByPlaceholderText(/buscar por nome ou e-mail/i);
 
     fireEvent.change(search, { target: { value: "ali" } });
@@ -82,7 +84,7 @@ describe("UsersTable", () => {
   });
 
   it("shows an empty state when nothing matches", () => {
-    render(<UsersTable users={users} onToggleStatus={onToggleStatus} />);
+    render(<UsersTable users={users} onToggleStatus={onToggleStatus} onGrantCredits={onGrantCredits} />);
     fireEvent.change(screen.getByPlaceholderText(/buscar por nome ou e-mail/i), {
       target: { value: "zzz" },
     });
@@ -90,7 +92,7 @@ describe("UsersTable", () => {
   });
 
   it("reactivates an inactive user immediately, without confirmation", () => {
-    render(<UsersTable users={users} onToggleStatus={onToggleStatus} />);
+    render(<UsersTable users={users} onToggleStatus={onToggleStatus} onGrantCredits={onGrantCredits} />);
     // sorted: [Bob(off), Alice(on), Admin(disabled)]
     const switches = screen.getAllByRole("switch");
     fireEvent.click(switches[0]); // Bob off -> on
@@ -99,7 +101,7 @@ describe("UsersTable", () => {
   });
 
   it("confirms before deactivating an active user", () => {
-    render(<UsersTable users={users} onToggleStatus={onToggleStatus} />);
+    render(<UsersTable users={users} onToggleStatus={onToggleStatus} onGrantCredits={onGrantCredits} />);
     const switches = screen.getAllByRole("switch");
     fireEvent.click(switches[1]); // Alice on -> off
 
@@ -111,7 +113,7 @@ describe("UsersTable", () => {
   });
 
   it("does not deactivate when the confirmation is cancelled", () => {
-    render(<UsersTable users={users} onToggleStatus={onToggleStatus} />);
+    render(<UsersTable users={users} onToggleStatus={onToggleStatus} onGrantCredits={onGrantCredits} />);
     const switches = screen.getAllByRole("switch");
     fireEvent.click(switches[1]); // Alice on -> off
     fireEvent.click(screen.getByRole("button", { name: "Cancelar" }));
@@ -120,16 +122,24 @@ describe("UsersTable", () => {
   });
 
   it("disables the toggle for super-admins", () => {
-    render(<UsersTable users={users} onToggleStatus={onToggleStatus} />);
+    render(<UsersTable users={users} onToggleStatus={onToggleStatus} onGrantCredits={onGrantCredits} />);
     const switches = screen.getAllByRole("switch");
     expect(switches[2]).toBeDisabled(); // admin row
     expect(switches[0]).not.toBeDisabled();
   });
 
   it("disables all toggles while an update is in flight", () => {
-    render(<UsersTable users={users} onToggleStatus={onToggleStatus} isUpdating />);
+    render(<UsersTable users={users} onToggleStatus={onToggleStatus} onGrantCredits={onGrantCredits} isUpdating />);
     for (const sw of screen.getAllByRole("switch")) {
       expect(sw).toBeDisabled();
     }
+  });
+
+  it("grants free credits to a user from the row", () => {
+    render(<UsersTable users={users} onToggleStatus={onToggleStatus} onGrantCredits={onGrantCredits} />);
+    // Bob (u2) is the top row (highest spend); open his grant dialog.
+    fireEvent.click(screen.getByRole("button", { name: /Adicionar créditos para Bob/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Adicionar" }));
+    expect(onGrantCredits).toHaveBeenCalledWith({ userId: "u2", amount: 10 });
   });
 });

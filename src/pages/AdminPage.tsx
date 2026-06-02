@@ -1,4 +1,4 @@
-import { useAdminDashboard, useSetUserStatus } from "@/hooks/useAdminDashboard";
+import { useAdminDashboard, useSetUserStatus, useGrantCredits } from "@/hooks/useAdminDashboard";
 import { StatCards } from "@/components/admin/StatCards";
 import { CostChart } from "@/components/admin/CostChart";
 import { UsersTable } from "@/components/admin/UsersTable";
@@ -7,6 +7,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 export default function AdminPage() {
   const { data, isLoading, isError, error } = useAdminDashboard();
   const setStatus = useSetUserStatus();
+  const grant = useGrantCredits();
 
   return (
     <div className="mx-auto max-w-6xl space-y-6 p-4 lg:p-8">
@@ -43,7 +44,9 @@ export default function AdminPage() {
             <UsersTable
               users={data.users}
               onToggleStatus={(input) => setStatus.mutate(input)}
+              onGrantCredits={(input) => grant.mutate(input)}
               isUpdating={setStatus.isPending}
+              isGranting={grant.isPending}
             />
           </section>
         </>

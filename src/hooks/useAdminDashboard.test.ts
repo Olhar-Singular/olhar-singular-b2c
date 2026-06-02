@@ -2,7 +2,7 @@ import { renderHook, waitFor, act } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { createElement } from "react";
-import { useAdminDashboard, useSetUserStatus } from "./useAdminDashboard";
+import { useAdminDashboard, useSetUserStatus, useGrantCredits } from "./useAdminDashboard";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { MSG_NETWORK } from "@/lib/utils/errors";
@@ -107,6 +107,57 @@ describe("useSetUserStatus", () => {
     await act(async () => {
       try {
         await result.current.mutateAsync({ userId: "u1", action: "ban" });
+      } catch {
+        /* expected */
+      }
+    });
+
+    expect(toast.error).toHaveBeenCalledWith(MSG_NETWORK);
+  });
+});
+
+describe("useGrantCredits", () => {
+  it("invokes admin-grant-credits, invalidates the dashboard and toasts the amount", async () => {
+    mockInvoke.mockResolvedValue({ data: { success: true, new_balance: 60 }, error: null });
+    const { qc, wrapper } = makeWrapper();
+    const invalidateSpy = vi.spyOn(qc, "invalidateQueries");
+
+    const { result } = renderHook(() => useGrantCredits(), { wrapper });
+    await act(async () => {
+      await result.current.mutateAsync({ userId: "u1", amount: 50 });
+    });
+
+    expect(mockInvoke).toHaveBeenCalledWith("admin-grant-credits", {
+      body: { userId: "u1", amount: 50 },
+    });
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ["admin", "dashboard"] });
+    expect(toast.success).toHaveBeenCalledWith("50 crédito(s) adicionado(s).");
+  });
+
+  it("shows an error toast when the function returns an error", async () => {
+    mockInvoke.mockResolvedValue({ data: null, error: new Error("falhou") });
+    const { wrapper } = makeWrapper();
+
+    const { result } = renderHook(() => useGrantCredits(), { wrapper });
+    await act(async () => {
+      try {
+        await result.current.mutateAsync({ userId: "u1", amount: 10 });
+      } catch {
+        /* expected */
+      }
+    });
+
+    expect(toast.error).toHaveBeenCalledWith("falhou");
+  });
+
+  it("maps a raw network rejection to the friendly connection message", async () => {
+    mockInvoke.mockRejectedValue(new TypeError("Failed to fetch"));
+    const { wrapper } = makeWrapper();
+
+    const { result } = renderHook(() => useGrantCredits(), { wrapper });
+    await act(async () => {
+      try {
+        await result.current.mutateAsync({ userId: "u1", amount: 10 });
       } catch {
         /* expected */
       }

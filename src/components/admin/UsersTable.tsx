@@ -14,15 +14,24 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { formatUsd, formatLastAccess, userDisplayName } from "@/lib/utils/adminFormat";
-import type { AdminUser, SetUserStatusInput } from "@/types/admin";
+import { GrantCreditsButton } from "@/components/admin/GrantCreditsButton";
+import type { AdminUser, SetUserStatusInput, GrantCreditsInput } from "@/types/admin";
 
 interface UsersTableProps {
   users: AdminUser[];
   onToggleStatus: (input: SetUserStatusInput) => void;
+  onGrantCredits: (input: GrantCreditsInput) => void;
   isUpdating?: boolean;
+  isGranting?: boolean;
 }
 
-export function UsersTable({ users, onToggleStatus, isUpdating = false }: UsersTableProps) {
+export function UsersTable({
+  users,
+  onToggleStatus,
+  onGrantCredits,
+  isUpdating = false,
+  isGranting = false,
+}: UsersTableProps) {
   const [query, setQuery] = useState("");
   const [confirmUser, setConfirmUser] = useState<AdminUser | null>(null);
 
@@ -88,7 +97,12 @@ export function UsersTable({ users, onToggleStatus, isUpdating = false }: UsersT
                   </td>
                   <td className="px-3 py-2 text-muted-foreground">{user.email || "—"}</td>
                   <td className="px-3 py-2 text-muted-foreground">{formatLastAccess(user.last_sign_in_at)}</td>
-                  <td className="px-3 py-2 text-right tabular-nums">{user.credit_balance}</td>
+                  <td className="px-3 py-2 text-right tabular-nums">
+                    <div className="flex items-center justify-end gap-2">
+                      <span>{user.credit_balance}</span>
+                      <GrantCreditsButton user={user} onGrant={onGrantCredits} disabled={isGranting} />
+                    </div>
+                  </td>
                   <td className="px-3 py-2 text-right tabular-nums">{formatUsd(user.total_usd)}</td>
                   <td className="px-3 py-2">
                     <Badge variant={user.is_active ? "secondary" : "destructive"}>

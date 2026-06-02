@@ -38,3 +38,8 @@ export interface SetUserStatusInput {
   userId: string;
   action: AdminUserAction;
 }
+
+export interface GrantCreditsInput {
+  userId: string;
+  amount: number;
+}

@@ -12,14 +12,17 @@ vi.mock("@/components/admin/UsersTable", () => ({
   UsersTable: ({
     users,
     onToggleStatus,
+    onGrantCredits,
     isUpdating,
   }: {
     users: unknown[];
     onToggleStatus: (i: unknown) => void;
+    onGrantCredits: (i: unknown) => void;
     isUpdating: boolean;
   }) => (
     <div data-testid="userstable" data-count={users.length} data-updating={String(isUpdating)}>
       <button onClick={() => onToggleStatus({ userId: "u1", action: "ban" })}>toggle</button>
+      <button onClick={() => onGrantCredits({ userId: "u1", amount: 10 })}>grant</button>
     </div>
   ),
 }));
@@ -27,9 +30,10 @@ vi.mock("@/components/admin/UsersTable", () => ({
 vi.mock("@/hooks/useAdminDashboard", () => ({
   useAdminDashboard: vi.fn(),
   useSetUserStatus: vi.fn(),
+  useGrantCredits: vi.fn(),
 }));
 
-import { useAdminDashboard, useSetUserStatus } from "@/hooks/useAdminDashboard";
+import { useAdminDashboard, useSetUserStatus, useGrantCredits } from "@/hooks/useAdminDashboard";
 
 const dashboard = {
   metrics: { total_usd: 7, today_usd: 1, month_usd: 3, daily: [], monthly: [] },
@@ -47,9 +51,12 @@ function mockDashboard(over: Record<string, unknown>) {
 }
 
 let mutate: ReturnType<typeof vi.fn>;
+let grantMutate: ReturnType<typeof vi.fn>;
 beforeEach(() => {
   mutate = vi.fn();
+  grantMutate = vi.fn();
   vi.mocked(useSetUserStatus).mockReturnValue({ mutate, isPending: false } as never);
+  vi.mocked(useGrantCredits).mockReturnValue({ mutate: grantMutate, isPending: false } as never);
 });
 
 describe("AdminPage", () => {
@@ -83,6 +90,9 @@ describe("AdminPage", () => {
 
     fireEvent.click(screen.getByText("toggle"));
     expect(mutate).toHaveBeenCalledWith({ userId: "u1", action: "ban" });
+
+    fireEvent.click(screen.getByText("grant"));
+    expect(grantMutate).toHaveBeenCalledWith({ userId: "u1", amount: 10 });
   });
 
   it("renders only the header when there is no data, error, or loading", () => {
