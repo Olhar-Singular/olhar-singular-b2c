@@ -150,6 +150,19 @@ describe("BarrierProfilesPage", () => {
     await waitFor(() => expect(mockCreate).toHaveBeenCalled());
   });
 
+  it("prefills an empty name when editing a profile that has no name (line 189 ?? branch)", async () => {
+    const user = userEvent.setup();
+    const m = await import("@/hooks/useBarrierProfiles");
+    vi.mocked(m.useBarrierProfiles).mockReturnValue({
+      data: [{ ...mockProfiles[0], name: null }],
+      isLoading: false,
+    } as never);
+    renderPage();
+    await user.click(screen.getByRole("button", { name: /editar/i }));
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+    expect((screen.getByLabelText(/Nome do perfil/i) as HTMLInputElement).value).toBe("");
+  });
+
   it("shows profile name as card heading when name is present", () => {
     renderPage();
     expect(screen.getByText("Perfil TEA")).toBeInTheDocument();

@@ -309,6 +309,13 @@ describe("StepBarrierSelection", () => {
     expect(mockOnNext).not.toHaveBeenCalled();
   });
 
+  it("shows empty-state hint when there are no barrier profiles (line 114 true branch)", async () => {
+    const { useBarrierProfiles } = await import("@/hooks/useBarrierProfiles");
+    vi.mocked(useBarrierProfiles).mockReturnValueOnce({ data: [], isLoading: false } as never);
+    renderStep();
+    expect(screen.getByText(/Nenhum perfil criado/i)).toBeInTheDocument();
+  });
+
   it("shows profile name in dropdown instead of barrier count", () => {
     renderStep();
     const select = screen.getByRole("combobox");

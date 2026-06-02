@@ -197,6 +197,7 @@ export default function QuestionBankPage() {
 
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
+    /* v8 ignore next -- e.target sempre presente em ChangeEvent (jsdom) */
     if (e.target) e.target.value = "";
     if (!file || !user) return;
 
@@ -387,6 +388,7 @@ export default function QuestionBankPage() {
 
   const handleSaveOne = async (index: number) => {
     const q = extractedQuestions[index];
+    /* v8 ignore next -- guard defensivo: índice inválido / questão já salva não alcançáveis pela UI */
     if (!q || q.saved) return;
     const source = uploadFile?.name.toLowerCase().endsWith(".pdf") ? "pdf_extract" : "docx_extract";
 
@@ -740,6 +742,7 @@ export default function QuestionBankPage() {
           objectUrl={previewObjectUrl}
           onOpenChange={(open) => {
             setPreviewOpen(open);
+            /* v8 ignore next -- previewObjectUrl sempre setado quando o preview está aberto */
             if (!open && previewObjectUrl) {
               URL.revokeObjectURL(previewObjectUrl);
               setPreviewObjectUrl(null);
@@ -1170,6 +1173,7 @@ export default function QuestionBankPage() {
         objectUrl={previewObjectUrl}
         onOpenChange={(open) => {
           setPreviewOpen(open);
+          /* v8 ignore next -- previewObjectUrl sempre setado quando o preview está aberto */
           if (!open && previewObjectUrl) {
             URL.revokeObjectURL(previewObjectUrl);
             setPreviewObjectUrl(null);

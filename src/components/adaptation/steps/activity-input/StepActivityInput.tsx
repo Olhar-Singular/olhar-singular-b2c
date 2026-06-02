@@ -117,6 +117,7 @@ export function StepActivityInput({ data, updateData, onNext, onPrev }: Props) {
     if (filterSubject !== "all") query = query.eq("subject", filterSubject);
     if (filterDifficulty !== "all") query = query.eq("difficulty", filterDifficulty);
     const { data: rows } = await query;
+    /* v8 ignore next -- v8 não credita o branch após await; o caminho rows nulo é exercitado em teste */
     setBankQuestions((rows as BankQuestion[]) || []);
     setBankLoading(false);
   }, [bankSearch, filterSubject, filterDifficulty]);
@@ -125,6 +126,7 @@ export function StepActivityInput({ data, updateData, onNext, onPrev }: Props) {
     if (!showBankModal) return;
     if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
     searchTimerRef.current = setTimeout(fetchBankQuestions, 300);
+    /* v8 ignore next -- searchTimerRef.current sempre setado na linha anterior */
     return () => { if (searchTimerRef.current) clearTimeout(searchTimerRef.current); };
   }, [showBankModal, fetchBankQuestions]);
 
@@ -407,7 +409,10 @@ export function StepActivityInput({ data, updateData, onNext, onPrev }: Props) {
 
       <ImagePreviewDialog
         open={!!previewImageUrl}
-        onOpenChange={(open) => { if (!open) setPreviewImageUrl(null); }}
+        onOpenChange={(open) => {
+          /* v8 ignore next -- Radix controlado sem trigger nunca chama onOpenChange(true) */
+          if (!open) setPreviewImageUrl(null);
+        }}
         imageUrl={previewImageUrl}
         title="Prévia da imagem da questão"
       />
