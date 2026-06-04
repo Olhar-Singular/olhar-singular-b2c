@@ -36,7 +36,7 @@ export interface PMNode {
 // Inline mapping
 // ---------------------------------------------------------------------------
 
-function inlineToPM(node: Inline): PMNode {
+export function inlineToPM(node: Inline): PMNode {
   if (node.type === "inlineMath") {
     const attrs: Record<string, unknown> = { latex: node.latex };
     if (node.alt !== undefined) attrs.alt = node.alt;
@@ -56,7 +56,7 @@ function inlineToPM(node: Inline): PMNode {
 }
 
 /** Convert RichText (inline array) to PM inline content. */
-function richTextToPM(rich: RichText): PMNode[] {
+export function richTextToPM(rich: RichText): PMNode[] {
   return rich.map(inlineToPM);
 }
 

@@ -54,7 +54,7 @@ function withBase<T extends { id: string; style?: NodeStyle }>(
 // Inline mapping
 // ---------------------------------------------------------------------------
 
-function pmToInline(node: PMNode): Inline {
+export function pmToInline(node: PMNode): Inline {
   if (node.type === "inlineMath") {
     const a = attrs(node);
     const inline: Inline = { type: "inlineMath", latex: a.latex as string };
@@ -83,7 +83,7 @@ function pmToInline(node: PMNode): Inline {
   return text;
 }
 
-function pmToRichText(content: PMNode[] | undefined): RichText {
+export function pmToRichText(content: PMNode[] | undefined): RichText {
   return (content ?? []).map(pmToInline);
 }
 
