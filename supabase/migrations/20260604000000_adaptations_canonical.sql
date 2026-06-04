@@ -6,6 +6,8 @@
 --                          closes the historic empty-activity bug)
 --   - activity_type      : the selected activity type (nullable; UI-driven)
 --   - barriers_used      : the barriers snapshot used for this adaptation
+--   - observation_notes  : free-text notes the user typed in the wizard
+--                          (nullable; persisted so they survive a reopen)
 --   - adaptation_result  : the full canonical AdaptationResult jsonb
 --                          ({ schemaVersion, document, strategies_applied,
 --                             pedagogical_justification, implementation_tips })
@@ -27,6 +29,7 @@ ALTER TABLE public.adaptations
   ADD COLUMN IF NOT EXISTS original_activity text NOT NULL DEFAULT '',
   ADD COLUMN IF NOT EXISTS activity_type     text,
   ADD COLUMN IF NOT EXISTS barriers_used     jsonb NOT NULL DEFAULT '[]',
+  ADD COLUMN IF NOT EXISTS observation_notes text,
   ADD COLUMN IF NOT EXISTS adaptation_result jsonb NOT NULL DEFAULT '{}',
   ADD COLUMN IF NOT EXISTS status            text  NOT NULL DEFAULT 'draft';
 

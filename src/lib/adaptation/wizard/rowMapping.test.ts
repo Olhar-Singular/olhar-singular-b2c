@@ -14,6 +14,7 @@ const ROW: AdaptationRow = {
   barriers_used: [
     { dimension: "tea", barrier_key: "abstracao", label: "Abstração", is_active: true },
   ],
+  observation_notes: "Notas do professor",
   adaptation_result: validResult,
   status: "draft",
   credits_spent: 0,
@@ -29,11 +30,17 @@ describe("rowToWizardData", () => {
     expect(data.barrierProfileId).toBe("bp1");
     expect(data.barriers).toHaveLength(1);
     expect(data.result).toEqual(validResult);
+    expect(data.observationNotes).toBe("Notas do professor");
   });
 
   it("defaults barriers to [] when barriers_used is not an array", () => {
     const data = rowToWizardData({ ...ROW, barriers_used: null });
     expect(data.barriers).toEqual([]);
+  });
+
+  it("rehydrates observationNotes as undefined when the column is null", () => {
+    const data = rowToWizardData({ ...ROW, observation_notes: null });
+    expect(data.observationNotes).toBeUndefined();
   });
 });
 
@@ -62,6 +69,7 @@ describe("wizardDataToPayload", () => {
       activityText: "Texto da atividade",
       barrierProfileId: "bp1",
       barriers: [],
+      observationNotes: "Observações",
       result: validResult,
     };
     const payload = wizardDataToPayload(data, "u1");
@@ -72,7 +80,14 @@ describe("wizardDataToPayload", () => {
       activity_type: "prova",
       barrier_profile_id: "bp1",
       barriers_used: [],
+      observation_notes: "Observações",
       adaptation_result: validResult,
     });
+  });
+
+  it("maps an absent observationNotes to a null column value", () => {
+    const data = { ...INITIAL_WIZARD_DATA, activityText: "X", result: validResult };
+    const payload = wizardDataToPayload(data, "u1");
+    expect(payload.observation_notes).toBeNull();
   });
 });

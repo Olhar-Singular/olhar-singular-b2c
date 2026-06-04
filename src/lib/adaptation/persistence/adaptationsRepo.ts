@@ -41,6 +41,7 @@ export type AdaptationRow = {
   original_activity: string;
   activity_type: string | null;
   barriers_used: unknown;
+  observation_notes: string | null;
   adaptation_result: AdaptationResult;
   status: AdaptationStatus;
   credits_spent: number;
@@ -59,11 +60,16 @@ export type AdaptationPayload = {
   activity_type: string | null;
   barrier_profile_id: string | null;
   barriers_used: unknown;
+  observation_notes: string | null;
   adaptation_result: AdaptationResult;
 };
 
 export type UpdateResult =
   | { ok: true; row: AdaptationRow }
+  | { ok: false; conflict: true };
+
+export type MarkReadyResult =
+  | { ok: true; updatedAt: string }
   | { ok: false; conflict: true };
 
 // ---------------------------------------------------------------------------
@@ -142,22 +148,34 @@ export async function updateAdaptation(
   return { ok: true, row: parseRow(data as Record<string, unknown>) };
 }
 
-/** Flip an adaptation to the 'ready' status. */
-export async function markReady(id: string): Promise<AdaptationRow> {
+/**
+ * Flip an adaptation to the 'ready' status under optimistic concurrency.
+ *
+ * The update only matches while `updated_at` still equals `expectedUpdatedAt`;
+ * if another writer advanced the row first, 0 rows match → conflict. On success
+ * the freshly-bumped `updated_at` is returned so the caller can keep its
+ * optimistic token in sync (the BEFORE UPDATE trigger bumps it on every write).
+ */
+export async function markReady(
+  id: string,
+  expectedUpdatedAt: string,
+): Promise<MarkReadyResult> {
   const { data, error } = await table()
     .update({ status: "ready" } as never)
     .eq("id", id)
-    .select("*")
-    .single();
+    .eq("updated_at", expectedUpdatedAt)
+    .select("updated_at")
+    .maybeSingle();
   if (error) throw error;
-  return parseRow(data as Record<string, unknown>);
+  if (!data) return { ok: false, conflict: true };
+  return { ok: true, updatedAt: (data as { updated_at: string }).updated_at };
 }
 
 /** List the current user's adaptations, newest-updated first (no result blob). */
 export async function listAdaptations(): Promise<AdaptationListItem[]> {
   const { data, error } = await table()
     .select(
-      "id,user_id,barrier_profile_id,title,original_activity,activity_type,barriers_used,status,credits_spent,created_at,updated_at",
+      "id,user_id,barrier_profile_id,title,original_activity,activity_type,barriers_used,observation_notes,status,credits_spent,created_at,updated_at",
     )
     .order("updated_at", { ascending: false });
   if (error) throw error;

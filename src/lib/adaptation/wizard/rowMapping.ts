@@ -17,6 +17,7 @@ export function rowToWizardData(row: AdaptationRow): WizardData {
       ? (row.barriers_used as BarrierItem[])
       : [],
     barrierProfileId: row.barrier_profile_id,
+    observationNotes: row.observation_notes ?? undefined,
     result: row.adaptation_result,
   };
 }
@@ -43,6 +44,7 @@ export function wizardDataToPayload(
     activity_type: data.activityType,
     barrier_profile_id: data.barrierProfileId,
     barriers_used: data.barriers,
+    observation_notes: data.observationNotes ?? null,
     adaptation_result: data.result,
   };
 }

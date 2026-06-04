@@ -23,6 +23,7 @@ const baseRow = {
   original_activity: "atividade",
   activity_type: "prova",
   barriers_used: [],
+  observation_notes: "minhas notas",
   adaptation_result: validResult,
   status: "draft",
   credits_spent: 0,
@@ -37,6 +38,7 @@ const payload: AdaptationPayload = {
   activity_type: "prova",
   barrier_profile_id: null,
   barriers_used: [],
+  observation_notes: "minhas notas",
   adaptation_result: validResult,
 };
 
@@ -66,7 +68,11 @@ describe("adaptationsRepo", () => {
       const row = await saveDraft(payload);
       expect(supabase.from).toHaveBeenCalledWith("adaptations");
       expect(chain.insert).toHaveBeenCalledWith(
-        expect.objectContaining({ status: "draft", user_id: "u1" }),
+        expect.objectContaining({
+          status: "draft",
+          user_id: "u1",
+          observation_notes: "minhas notas",
+        }),
       );
       expect(row.id).toBe("a1");
       expect(row.adaptation_result).toEqual(validResult);
@@ -96,6 +102,15 @@ describe("adaptationsRepo", () => {
       expect(chain.eq).toHaveBeenCalledWith("id", "a1");
       expect(chain.eq).toHaveBeenCalledWith("updated_at", "2026-01-01T00:00:00Z");
       expect(res).toEqual({ ok: true, row: expect.objectContaining({ title: "New" }) });
+    });
+
+    it("persists observation_notes in the update patch", async () => {
+      const chain = buildChain({ data: baseRow, error: null });
+      vi.mocked(supabase.from).mockReturnValue(chain as never);
+      await updateAdaptation("a1", { observation_notes: "nota nova" }, "2026-01-01T00:00:00Z");
+      expect(chain.update).toHaveBeenCalledWith(
+        expect.objectContaining({ observation_notes: "nota nova" }),
+      );
     });
 
     it("validates the result blob when present in the patch", async () => {
@@ -132,20 +147,28 @@ describe("adaptationsRepo", () => {
   });
 
   describe("markReady", () => {
-    it("updates status to ready", async () => {
-      const ready = { ...baseRow, status: "ready" };
+    it("flips status to ready with an optimistic guard and returns the new updated_at", async () => {
+      const ready = { ...baseRow, status: "ready", updated_at: "2026-01-03T00:00:00Z" };
       const chain = buildChain({ data: ready, error: null });
       vi.mocked(supabase.from).mockReturnValue(chain as never);
-      const row = await markReady("a1");
+      const res = await markReady("a1", "2026-01-01T00:00:00Z");
       expect(chain.update).toHaveBeenCalledWith({ status: "ready" });
       expect(chain.eq).toHaveBeenCalledWith("id", "a1");
-      expect(row.status).toBe("ready");
+      expect(chain.eq).toHaveBeenCalledWith("updated_at", "2026-01-01T00:00:00Z");
+      expect(res).toEqual({ ok: true, updatedAt: "2026-01-03T00:00:00Z" });
+    });
+
+    it("returns a conflict result when 0 rows match (stale updated_at)", async () => {
+      const chain = buildChain({ data: null, error: null });
+      vi.mocked(supabase.from).mockReturnValue(chain as never);
+      const res = await markReady("a1", "stale");
+      expect(res).toEqual({ ok: false, conflict: true });
     });
 
     it("throws on supabase error", async () => {
       const chain = buildChain({ data: null, error: { message: "no" } });
       vi.mocked(supabase.from).mockReturnValue(chain as never);
-      await expect(markReady("a1")).rejects.toEqual({ message: "no" });
+      await expect(markReady("a1", "t")).rejects.toEqual({ message: "no" });
     });
   });
 
