@@ -25,7 +25,11 @@ describe("CanonicalRenderer (rich fixture)", () => {
   it("applies per-node style (spacing + page break) on paragraph", () => {
     const { container } = render(<CanonicalRenderer document={renderDocument} />);
     const para = container.querySelector("p");
-    expect(para).toHaveStyle({ marginBottom: "12px", breakBefore: "page", fontFamily: "Georgia" });
+    expect(para).toHaveStyle({
+      marginBottom: "12px",
+      breakBefore: "page",
+      fontFamily: "Times New Roman, Times, serif",
+    });
   });
 
   it("renders inline math with MathML and aria for accessibility", () => {

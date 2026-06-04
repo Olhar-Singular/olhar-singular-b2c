@@ -15,12 +15,13 @@
 import type { Style } from "@react-pdf/types";
 import type { NodeStyle } from "@/lib/adaptation/canonical/schema";
 import { isAllowedColor } from "@/lib/adaptation/canonical/colors";
+import { fontFamilyToPdf } from "@/lib/adaptation/canonical/fontFamily";
 
 export function nodeStyleToPdf(style?: NodeStyle): Style {
   const out: Style = {};
   if (!style) return out;
 
-  if (style.fontFamily !== undefined) out.fontFamily = style.fontFamily;
+  if (style.fontFamily !== undefined) out.fontFamily = fontFamilyToPdf(style.fontFamily);
   if (style.fontSize !== undefined) out.fontSize = style.fontSize;
   if (style.align !== undefined) out.textAlign = style.align;
   if (style.color !== undefined && isAllowedColor(style.color)) out.color = style.color;

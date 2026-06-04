@@ -68,7 +68,7 @@ describe("StylingSurface", () => {
     const onChange = vi.fn();
     render(<StylingSurface document={baseDoc()} onChange={onChange} />);
 
-    fireEvent.change(screen.getByLabelText("Fonte"), { target: { value: "Georgia" } });
+    fireEvent.change(screen.getByLabelText("Fonte"), { target: { value: "serif" } });
     fireEvent.change(screen.getByLabelText("Tamanho (px)"), { target: { value: "24" } });
     fireEvent.change(screen.getByLabelText("Alinhamento"), { target: { value: "center" } });
     fireEvent.change(screen.getByLabelText("Cor"), { target: { value: "#DC2626" } });
@@ -102,7 +102,7 @@ describe("StylingSurface", () => {
     const onChange = vi.fn();
     const doc = baseDoc();
     doc.blocks[0].style = {
-      fontFamily: "Georgia",
+      fontFamily: "serif",
       color: "#DC2626",
       spacingAfter: 10,
       pageBreakBefore: true,

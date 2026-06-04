@@ -29,7 +29,7 @@ export const renderDocument: CanonicalDocument = {
         { type: "inlineMath", latex: "\\frac{a}{b}", alt: "a sobre b" },
         { type: "text", text: ".", marks: ["strike"] },
       ],
-      style: { spacingAfter: 12, pageBreakBefore: true, fontFamily: "Georgia" },
+      style: { spacingAfter: 12, pageBreakBefore: true, fontFamily: "serif" },
     },
     {
       id: id(3),

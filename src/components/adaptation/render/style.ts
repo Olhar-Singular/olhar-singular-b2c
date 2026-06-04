@@ -7,12 +7,13 @@
 import type { CSSProperties } from "react";
 import type { NodeStyle } from "@/lib/adaptation/canonical/schema";
 import { isAllowedColor } from "@/lib/adaptation/canonical/colors";
+import { fontFamilyToCss } from "@/lib/adaptation/canonical/fontFamily";
 
 export function nodeStyleToCss(style?: NodeStyle): CSSProperties {
   const css: CSSProperties = {};
   if (!style) return css;
 
-  if (style.fontFamily !== undefined) css.fontFamily = style.fontFamily;
+  if (style.fontFamily !== undefined) css.fontFamily = fontFamilyToCss(style.fontFamily);
   if (style.fontSize !== undefined) css.fontSize = `${style.fontSize}px`;
   if (style.align !== undefined) css.textAlign = style.align;
   if (style.color !== undefined && isAllowedColor(style.color)) css.color = style.color;

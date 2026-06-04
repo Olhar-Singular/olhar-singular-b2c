@@ -6,22 +6,26 @@ describe("nodeStyleToPdf", () => {
     expect(nodeStyleToPdf(undefined)).toEqual({});
   });
 
-  it("maps every supported field", () => {
+  it("maps every supported field (logical token → built-in family)", () => {
     expect(
       nodeStyleToPdf({
-        fontFamily: "Georgia",
+        fontFamily: "serif",
         fontSize: 14,
         align: "center",
         color: "#2563EB",
         spacingAfter: 12,
       }),
     ).toEqual({
-      fontFamily: "Georgia",
+      fontFamily: "Times-Roman",
       fontSize: 14,
       textAlign: "center",
       color: "#2563EB",
       marginBottom: 12,
     });
+  });
+
+  it("passes an unknown fontFamily through unchanged (legacy docs)", () => {
+    expect(nodeStyleToPdf({ fontFamily: "Georgia" }).fontFamily).toBe("Georgia");
   });
 
   it("drops a disallowed color (palette guard)", () => {

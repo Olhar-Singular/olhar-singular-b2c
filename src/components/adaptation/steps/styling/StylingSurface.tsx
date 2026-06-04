@@ -12,6 +12,7 @@ import { Label } from "@/components/ui/label";
 import { CanonicalRenderer } from "@/components/adaptation/render/CanonicalRenderer";
 import { setBlockStyle } from "@/lib/adaptation/canonical/style";
 import { ALLOWED_COLORS } from "@/lib/adaptation/canonical/colors";
+import { FONT_FAMILY_OPTIONS } from "@/lib/adaptation/canonical/fontFamily";
 import type { Block, CanonicalDocument, NodeStyle } from "@/lib/adaptation/canonical/schema";
 
 type Props = {
@@ -19,7 +20,6 @@ type Props = {
   onChange: (doc: CanonicalDocument) => void;
 };
 
-const FONT_FAMILIES = ["", "Georgia", "Arial", "Times New Roman", "Verdana"] as const;
 const ALIGNMENTS: { value: NodeStyle["align"]; label: string }[] = [
   { value: "left", label: "Esquerda" },
   { value: "center", label: "Centro" },
@@ -116,9 +116,10 @@ export function StylingSurface({ document, onChange }: Props) {
             value={style.fontFamily ?? ""}
             onChange={(e) => patch({ fontFamily: e.target.value || undefined })}
           >
-            {FONT_FAMILIES.map((f) => (
-              <option key={f} value={f}>
-                {f === "" ? "Padrão" : f}
+            <option value="">Herdar</option>
+            {FONT_FAMILY_OPTIONS.map((f) => (
+              <option key={f.value} value={f.value}>
+                {f.label}
               </option>
             ))}
           </select>

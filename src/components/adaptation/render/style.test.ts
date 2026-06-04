@@ -8,7 +8,12 @@ describe("nodeStyleToCss", () => {
   it("returns empty object for empty style", () => {
     expect(nodeStyleToCss({})).toEqual({});
   });
-  it("maps fontFamily", () => {
+  it("maps a logical fontFamily token to a CSS stack", () => {
+    expect(nodeStyleToCss({ fontFamily: "serif" })).toEqual({
+      fontFamily: "Times New Roman, Times, serif",
+    });
+  });
+  it("passes an unknown fontFamily through unchanged (legacy docs)", () => {
     expect(nodeStyleToCss({ fontFamily: "Arial" })).toEqual({ fontFamily: "Arial" });
   });
   it("maps fontSize (number) to px", () => {
