@@ -21,16 +21,21 @@ import StarterKit from "@tiptap/starter-kit";
 import Underline from "@tiptap/extension-underline";
 import TextStyle from "@tiptap/extension-text-style";
 import Color from "@tiptap/extension-color";
-import { Node, Mark } from "@tiptap/core";
+import { Node, Mark, mergeAttributes } from "@tiptap/core";
 
 // ---------------------------------------------------------------------------
 // Shared attribute helpers
 // ---------------------------------------------------------------------------
 
-/** `id` + `style` attributes shared by every block node (mirrors BlockBase). */
+/**
+ * `id` + `style` attributes shared by every block node (mirrors BlockBase).
+ * `style` is an object held in the model only — `rendered: false` keeps it out
+ * of HTML serialization (it would otherwise stringify to "[object Object]").
+ * The canonical round-trip is JSON-based (toJSON), so this does not affect it.
+ */
 const blockBaseAttributes = {
   id: { default: null as string | null },
-  style: { default: null as Record<string, unknown> | null },
+  style: { default: null as Record<string, unknown> | null, rendered: false },
 };
 
 // ---------------------------------------------------------------------------
@@ -48,6 +53,17 @@ export const InlineMathNode = Node.create({
       latex: { default: "" },
       alt: { default: null as string | null },
     };
+  },
+  parseHTML() {
+    return [{ tag: "span[data-type='inline-math']" }];
+  },
+  renderHTML({ HTMLAttributes, node }) {
+    // `latex` always defaults to "" (never null), so no nullish branch here.
+    return [
+      "span",
+      mergeAttributes(HTMLAttributes, { "data-type": "inline-math" }),
+      String(node.attrs.latex),
+    ];
   },
 });
 
@@ -67,6 +83,17 @@ export const BlockMathNode = Node.create({
       alt: { default: null as string | null },
     };
   },
+  parseHTML() {
+    return [{ tag: "div[data-type='block-math']" }];
+  },
+  renderHTML({ HTMLAttributes, node }) {
+    // `latex` always defaults to "" (never null), so no nullish branch here.
+    return [
+      "div",
+      mergeAttributes(HTMLAttributes, { "data-type": "block-math" }),
+      String(node.attrs.latex),
+    ];
+  },
 });
 
 // ---------------------------------------------------------------------------
@@ -85,9 +112,15 @@ export const ImageBlockNode = Node.create({
       alt: { default: "" },
       width: { default: null as number | null },
       alignment: { default: null as string | null },
-      // RichText (array) stored as JSON attr to stay lossless.
-      caption: { default: null as unknown },
+      // RichText (array) stored as JSON attr to stay lossless; model-only.
+      caption: { default: null as unknown, rendered: false },
     };
+  },
+  parseHTML() {
+    return [{ tag: "img[data-type='canonical-image']" }];
+  },
+  renderHTML({ HTMLAttributes }) {
+    return ["img", mergeAttributes(HTMLAttributes, { "data-type": "canonical-image" })];
   },
 });
 
@@ -103,8 +136,15 @@ export const ScaffoldingNode = Node.create({
   addAttributes() {
     return {
       ...blockBaseAttributes,
-      items: { default: [] as string[] },
+      // string[] held in the model only.
+      items: { default: [] as string[], rendered: false },
     };
+  },
+  parseHTML() {
+    return [{ tag: "div[data-type='scaffolding']" }];
+  },
+  renderHTML({ HTMLAttributes }) {
+    return ["div", mergeAttributes(HTMLAttributes, { "data-type": "scaffolding" })];
   },
 });
 
@@ -119,6 +159,12 @@ export const DividerNode = Node.create({
   selectable: true,
   addAttributes() {
     return { ...blockBaseAttributes };
+  },
+  parseHTML() {
+    return [{ tag: "hr[data-type='divider']" }];
+  },
+  renderHTML({ HTMLAttributes }) {
+    return ["hr", mergeAttributes(HTMLAttributes, { "data-type": "divider" })];
   },
 });
 
@@ -139,12 +185,19 @@ export const QuestionNode = Node.create({
       number: { default: null as number | null },
       points: { default: null as number | null },
       difficulty: { default: null as string | null },
-      // RichText stored as JSON attr.
-      instruction: { default: null as unknown },
+      // RichText stored as JSON attr; model-only.
+      instruction: { default: null as unknown, rendered: false },
       // QuestionAnswer (discriminated union) stored as JSON attr — this is
       // what keeps deep structures (alternatives, gaps, pairs, …) lossless.
-      answer: { default: null as unknown },
+      // Model-only (an object); never serialized to HTML attributes.
+      answer: { default: null as unknown, rendered: false },
     };
+  },
+  parseHTML() {
+    return [{ tag: "div[data-type='question']" }];
+  },
+  renderHTML({ HTMLAttributes }) {
+    return ["div", mergeAttributes(HTMLAttributes, { "data-type": "question" }), 0];
   },
 });
 
@@ -163,7 +216,7 @@ export const BlockIdStyle = Mark.create({
         types: ["heading", "paragraph"],
         attributes: {
           id: { default: null as string | null },
-          style: { default: null as Record<string, unknown> | null },
+          style: { default: null as Record<string, unknown> | null, rendered: false },
         },
       },
     ];
