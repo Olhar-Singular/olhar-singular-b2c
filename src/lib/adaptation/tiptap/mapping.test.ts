@@ -28,7 +28,7 @@ describe("canonical <-> ProseMirror mapping", () => {
       expect(back).toEqual(richDocument);
     });
 
-    it("preserves deep question structures (alternatives, nested, gaps)", () => {
+    it("preserves deep question structures (alternatives, gaps)", () => {
       const back = proseMirrorToCanonical(pmRoundTrip(richDocument));
       const q = back.blocks.find((b) => b.id === uid(7));
       expect(q).toEqual(richDocument.blocks.find((b) => b.id === uid(7)));

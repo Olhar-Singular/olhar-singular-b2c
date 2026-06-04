@@ -86,13 +86,6 @@ export const richDocument: CanonicalDocument = {
             id: id(11),
             content: [{ type: "text", text: "Brasília" }],
             correct: true,
-            nested: [
-              {
-                id: id(12),
-                type: "paragraph",
-                content: [{ type: "text", text: "Desde 1960." }],
-              },
-            ],
           },
           { id: id(13), content: [{ type: "text", text: "Rio de Janeiro" }], correct: false },
         ],

@@ -21,7 +21,6 @@ function baseDoc(): CanonicalDocument {
               id: id(4),
               content: [{ type: "text", text: "alt" }],
               correct: true,
-              nested: [{ id: id(5), type: "paragraph", content: [{ type: "text", text: "nested" }] }],
             },
             { id: id(6), content: [{ type: "text", text: "alt2" }], correct: false },
           ],
@@ -51,14 +50,6 @@ describe("setBlockStyle", () => {
     expect(validateDocument(next)).toBeTruthy();
   });
 
-  it("sets the style on a block nested inside a multipleChoice alternative", () => {
-    const next = setBlockStyle(baseDoc(), id(5), { fontSize: 20 });
-    const q = next.blocks[1] as Extract<CanonicalDocument["blocks"][number], { type: "question" }>;
-    const alt = (q.answer as { alternatives: Array<{ nested?: Array<{ style?: unknown }> }> }).alternatives[0];
-    expect(alt.nested?.[0].style).toEqual({ fontSize: 20 });
-    expect(validateDocument(next)).toBeTruthy();
-  });
-
   it("removes the style when given an empty object", () => {
     const withStyle = setBlockStyle(baseDoc(), id(1), { align: "center" });
     expect(withStyle.blocks[0].style).toBeDefined();
@@ -73,11 +64,10 @@ describe("setBlockStyle", () => {
     expect(next.blocks[0].style).toBeUndefined();
   });
 
-  it("leaves questions without nested alternatives untouched", () => {
+  it("sets the style on a question block itself", () => {
     const next = setBlockStyle(baseDoc(), id(2), { spacingAfter: 8 });
     const q = next.blocks[1] as Extract<CanonicalDocument["blocks"][number], { type: "question" }>;
     expect(q.style).toEqual({ spacingAfter: 8 });
-    const alt2 = (q.answer as { alternatives: Array<{ nested?: unknown }> }).alternatives[1];
-    expect(alt2.nested).toBeUndefined();
+    expect(validateDocument(next)).toBeTruthy();
   });
 });

@@ -85,9 +85,9 @@ const BlockBase = z.object({ id: Id, style: NodeStyleSchema.optional() });
 // Task 1.5 — Block nodes (forward declaration for recursion)
 // ---------------------------------------------------------------------------
 
-// We use an interface + z.lazy for the recursive Block type.
-// BlockSchema is declared as a lazy schema so AlternativeSchema.nested and
-// Question.stem can reference it without a temporal dead zone.
+// We use a forward declaration + z.lazy for the recursive Block type.
+// BlockSchema is declared up front so Question.stem can reference it via z.lazy
+// without a temporal dead zone.
 type BlockInput = z.input<typeof _BlockUnion>;
 type BlockOutput = z.output<typeof _BlockUnion>;
 
@@ -102,10 +102,6 @@ export const AlternativeSchema = z.object({
   id: Id,
   content: RichTextSchema,
   correct: z.boolean(),
-  // z.lazy defers resolution of BlockSchema until runtime
-  nested: z
-    .lazy(() => z.array(BlockSchema))
-    .optional(),
 });
 
 const AnswerOpen = z.object({

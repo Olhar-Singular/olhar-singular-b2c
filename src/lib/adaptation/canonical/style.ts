@@ -2,9 +2,9 @@
  * Pure style-mutation helpers for the canonical document.
  *
  * `setBlockStyle` returns a new document with the matching block's `style`
- * replaced. It walks the full block tree (top-level blocks plus question stems
- * and multipleChoice nested blocks) so any block id in the document can be
- * targeted. An empty style object is normalized to "no style".
+ * replaced. It walks the full block tree (top-level blocks plus question stems)
+ * so any block id in the document can be targeted. An empty style object is
+ * normalized to "no style".
  */
 
 import type { Block, CanonicalDocument, NodeStyle } from "./schema";
@@ -22,18 +22,7 @@ function applyToBlock(block: Block, blockId: string, style: NodeStyle): Block {
 
   if (block.type === "question") {
     const stem = block.stem.map((b) => applyToBlock(b, blockId, style));
-    let answer = block.answer;
-    if (answer.kind === "multipleChoice") {
-      answer = {
-        ...answer,
-        alternatives: answer.alternatives.map((alt) =>
-          alt.nested
-            ? { ...alt, nested: alt.nested.map((b) => applyToBlock(b, blockId, style)) }
-            : alt,
-        ),
-      };
-    }
-    return { ...block, stem, answer };
+    return { ...block, stem };
   }
 
   return block;
