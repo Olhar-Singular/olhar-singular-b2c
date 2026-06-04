@@ -50,6 +50,34 @@ describe("useAdaptationDraft", () => {
     expect(repo.updateAdaptation).not.toHaveBeenCalled();
   });
 
+  it("CREATE flow: autosave runs once the draft id + updated_at arrive via props", async () => {
+    // Mount with no draft yet (the wizard's create flow), then the draft gets
+    // created and its id/updated_at propagate as props. Autosave must engage.
+    const { rerender } = renderHook((p) => useAdaptationDraft(p), {
+      initialProps: {
+        draftId: null as string | null,
+        result: validResult,
+        initialUpdatedAt: null as string | null,
+        debounceMs: 1200,
+      },
+    });
+    // Draft just got created: id + updated_at become set, and the result changes.
+    rerender({
+      draftId: "d1",
+      result: edited("created"),
+      initialUpdatedAt: "2026-06-04T00:00:00Z",
+      debounceMs: 1200,
+    });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1200);
+    });
+    expect(repo.updateAdaptation).toHaveBeenCalledWith(
+      "d1",
+      { adaptation_result: edited("created") },
+      "2026-06-04T00:00:00Z",
+    );
+  });
+
   it("debounces and saves an edit after the window elapses", async () => {
     const { rerender, result } = renderHook(
       (props) => useAdaptationDraft(props),

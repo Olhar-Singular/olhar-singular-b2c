@@ -20,12 +20,30 @@ vi.mock("@/hooks/useAuth", () => ({ useAuth: () => ({ user: { id: "u1" } }) }));
 vi.mock("@/lib/adaptation/persistence/adaptationsRepo");
 
 const mockDraftStatus = { value: "idle" as string };
+const mockFlush = vi.fn().mockResolvedValue(undefined);
+// Captures the latest props the wizard passes into the hook + the onConflict cb.
+const draftHookCalls: Array<{
+  draftId: string | null;
+  initialUpdatedAt: string | null;
+  onConflict?: () => void;
+}> = [];
 vi.mock("@/hooks/useAdaptationDraft", () => ({
-  useAdaptationDraft: () => ({
-    status: mockDraftStatus.value,
-    flush: vi.fn(),
-    restoreFromMirror: vi.fn(),
-  }),
+  useAdaptationDraft: (opts: {
+    draftId: string | null;
+    initialUpdatedAt: string | null;
+    onConflict?: () => void;
+  }) => {
+    draftHookCalls.push({
+      draftId: opts.draftId,
+      initialUpdatedAt: opts.initialUpdatedAt,
+      onConflict: opts.onConflict,
+    });
+    return {
+      status: mockDraftStatus.value,
+      flush: mockFlush,
+      restoreFromMirror: vi.fn(),
+    };
+  },
 }));
 
 const mockMarkReady = vi.fn();
@@ -144,6 +162,7 @@ function advanceToContent() {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  draftHookCalls.length = 0;
   mockDraftStatus.value = "idle";
   vi.mocked(repo.saveDraft).mockResolvedValue(DRAFT_ROW);
   vi.mocked(repo.getAdaptation).mockResolvedValue(DRAFT_ROW);
@@ -350,5 +369,49 @@ describe("CanonicalAdaptationWizard", () => {
     expect(screen.getByTestId("edit-content")).toHaveTextContent("gerado");
     // No new draft is created in edit mode.
     expect(repo.saveDraft).not.toHaveBeenCalled();
+  });
+
+  it("passes draftId + updated_at into the autosave hook from STATE after generation", async () => {
+    renderWithProviders(<CanonicalAdaptationWizard />);
+    // Before generation the hook is wired with a null draft.
+    expect(draftHookCalls[0]).toMatchObject({ draftId: null, initialUpdatedAt: null });
+    advanceToContent();
+    await waitFor(() => expect(repo.saveDraft).toHaveBeenCalled());
+    // After generation the latest hook call carries the row's id + updated_at,
+    // proving the values propagated as props (state, not a ref).
+    await waitFor(() => {
+      const last = draftHookCalls[draftHookCalls.length - 1];
+      expect(last.draftId).toBe(DRAFT_ROW.id);
+      expect(last.initialUpdatedAt).toBe(DRAFT_ROW.updated_at);
+    });
+  });
+
+  it("Salvar flushes the pending autosave before marking ready", async () => {
+    renderWithProviders(<CanonicalAdaptationWizard />);
+    advanceToContent();
+    await waitFor(() => expect(repo.saveDraft).toHaveBeenCalled());
+    fireEvent.click(screen.getByRole("button", { name: /Avançar para estilo/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Avançar para exportação/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Salvar/i }));
+    await waitFor(() => expect(mockMarkReady).toHaveBeenCalledWith("draft-1"));
+    // flush must have run, and before markReady.
+    expect(mockFlush).toHaveBeenCalled();
+    expect(mockFlush.mock.invocationCallOrder[0]).toBeLessThan(
+      mockMarkReady.mock.invocationCallOrder[0],
+    );
+  });
+
+  it("onConflict surfaces a toast and reloads via navigate(0)", async () => {
+    const { toast } = await import("sonner");
+    renderWithProviders(<CanonicalAdaptationWizard />);
+    advanceToContent();
+    await waitFor(() => expect(repo.saveDraft).toHaveBeenCalled());
+    const onConflict = draftHookCalls[draftHookCalls.length - 1].onConflict;
+    expect(onConflict).toBeTypeOf("function");
+    onConflict!();
+    expect(toast.error).toHaveBeenCalledWith(
+      expect.stringMatching(/alterada em outro lugar/i),
+    );
+    expect(mockNavigate).toHaveBeenCalledWith(0);
   });
 });

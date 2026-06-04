@@ -1,5 +1,26 @@
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { describe, it, expect } from "vitest";
 import { ALLOWED_COLORS, isAllowedColor } from "./colors";
+
+/**
+ * Drift guard: ALLOWED_COLORS mirrors the TEXT_COLORS + HIGHLIGHT_COLORS
+ * palette in QuestionRichEditor.tsx (whose consts are not exported). Read the
+ * source and extract the hex `value`s so adding a swatch there without updating
+ * this allowlist fails the build — mirroring the adaptationCost sync test.
+ */
+function paletteHexFromEditor(): string[] {
+  const path = resolve(
+    process.cwd(),
+    "src/components/forms/QuestionRichEditor.tsx",
+  );
+  const src = readFileSync(path, "utf8");
+  const block = src.slice(
+    src.indexOf("const HIGHLIGHT_COLORS"),
+    src.indexOf("const FONT_FAMILIES"),
+  );
+  return [...block.matchAll(/value:\s*"(#[0-9A-Fa-f]{6})"/g)].map((m) => m[1]);
+}
 
 describe("ALLOWED_COLORS", () => {
   it("contains the text and highlight palette hex values", () => {
@@ -11,6 +32,12 @@ describe("ALLOWED_COLORS", () => {
 
   it("is a non-empty readonly array", () => {
     expect(ALLOWED_COLORS.length).toBeGreaterThan(0);
+  });
+
+  it("stays in sync with the QuestionRichEditor palette (no drift)", () => {
+    const editorHex = paletteHexFromEditor();
+    expect(editorHex.length).toBe(12); // 6 highlight + 6 text
+    expect([...ALLOWED_COLORS].sort()).toEqual([...editorHex].sort());
   });
 });
 

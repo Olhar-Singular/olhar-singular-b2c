@@ -77,6 +77,15 @@ export function useAdaptationDraft({
   draftIdRef.current = draftId;
   onConflictRef.current = onConflict;
 
+  // CREATE flow: the draft is born after mount, so `initialUpdatedAt` arrives
+  // as a later prop. Adopt it once — but never clobber a fresher value already
+  // advanced by a successful save (only sync while the ref is still null).
+  useEffect(() => {
+    if (initialUpdatedAt && expectedUpdatedAtRef.current === null) {
+      expectedUpdatedAtRef.current = initialUpdatedAt;
+    }
+  }, [initialUpdatedAt]);
+
   /** Run one save now (no debounce). No-op when nothing to persist / not dirty. */
   const performSave = useCallback(async () => {
     const id = draftIdRef.current;

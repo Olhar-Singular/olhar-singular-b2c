@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef } from "react";
+import { useState, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import {
@@ -88,18 +88,27 @@ export default function CanonicalAdaptationWizard({ editMode }: Props = {}) {
   const [stepIndex, setStepIndex] = useState(editMode ? CONTENT_INDEX : 0);
   const [confirmRegenerate, setConfirmRegenerate] = useState(false);
 
-  // Draft persistence state. In edit mode we already have a row.
+  // Draft persistence state. In edit mode we already have a row. Both the id
+  // and updated_at live in REACT STATE so that, in the create flow, the values
+  // set after the first generation actually re-render and propagate as props
+  // into the autosave hook (a ref would never reach it).
   const [draftId, setDraftId] = useState<string | null>(
     editMode ? editMode.adaptationId : null,
   );
-  const initialUpdatedAtRef = useRef<string | null>(
+  const [draftUpdatedAt, setDraftUpdatedAt] = useState<string | null>(
     editMode ? editMode.initialUpdatedAt : null,
   );
 
-  const { status: saveStatus } = useAdaptationDraft({
+  const handleConflict = useCallback(() => {
+    toast.error("Esta adaptação foi alterada em outro lugar. Recarregue.");
+    navigate(0);
+  }, [navigate]);
+
+  const { status: saveStatus, flush } = useAdaptationDraft({
     draftId,
     result: data.result,
-    initialUpdatedAt: initialUpdatedAtRef.current,
+    initialUpdatedAt: draftUpdatedAt,
+    onConflict: handleConflict,
   });
 
   const currentKey = STEPS[stepIndex];
@@ -135,7 +144,7 @@ export default function CanonicalAdaptationWizard({ editMode }: Props = {}) {
         );
         const row = await saveDraft(payload);
         setDraftId(row.id);
-        initialUpdatedAtRef.current = row.updated_at;
+        setDraftUpdatedAt(row.updated_at);
       } catch (err) {
         toast.error(parseDbError(err, "Erro ao salvar o rascunho."));
       }
@@ -151,7 +160,7 @@ export default function CanonicalAdaptationWizard({ editMode }: Props = {}) {
     setData(INITIAL_WIZARD_DATA);
     setStepIndex(0);
     setDraftId(null);
-    initialUpdatedAtRef.current = null;
+    setDraftUpdatedAt(null);
   }
 
   function confirmRegenerateNow() {
@@ -164,10 +173,13 @@ export default function CanonicalAdaptationWizard({ editMode }: Props = {}) {
   const handleSave = useCallback(async () => {
     /* v8 ignore next -- guard: the Salvar button is disabled until a draft exists */
     if (!draftId) return;
+    // Flush any pending autosave first so an edit made within the debounce
+    // window lands in adaptation_result before the row is flipped to ready.
+    await flush();
     await markReady.mutateAsync(draftId);
     toast.success("Adaptação salva!");
     navigate("/historico");
-  }, [draftId, markReady, navigate]);
+  }, [draftId, flush, markReady, navigate]);
 
   const renderStep = () => {
     switch (currentKey) {
