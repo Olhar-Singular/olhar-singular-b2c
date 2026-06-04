@@ -42,14 +42,14 @@ describe("buildCanonicalEditorExtensions", () => {
   it("wires a NodeView onto each custom node and appends UniqueId", () => {
     const exts = buildCanonicalEditorExtensions();
     // ReactNodeViewRenderer is invoked once per custom node (question, image,
-    // blockMath, scaffolding).
-    expect(vi.mocked(ReactNodeViewRenderer)).toHaveBeenCalledTimes(4);
+    // blockMath, inlineMath, scaffolding).
+    expect(vi.mocked(ReactNodeViewRenderer)).toHaveBeenCalledTimes(5);
     expect(exts.some((e) => e.name === "uniqueId")).toBe(true);
 
     // Each custom node exposes an addNodeView factory returning the renderer.
-    const customNames = ["question", "image", "blockMath", "scaffolding"];
+    const customNames = ["question", "image", "blockMath", "inlineMath", "scaffolding"];
     const customized = exts.filter((e) => customNames.includes(e.name));
-    expect(customized).toHaveLength(4);
+    expect(customized).toHaveLength(5);
     for (const ext of customized) {
       const addNodeView = (ext.config as { addNodeView?: () => unknown }).addNodeView;
       expect(addNodeView?.()).toEqual({ __nodeView: true });

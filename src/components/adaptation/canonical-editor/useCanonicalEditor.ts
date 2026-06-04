@@ -21,6 +21,7 @@ import { canonicalToProseMirror, type PMNode } from "@/lib/adaptation/tiptap/fro
 import { tryProseMirrorToCanonical } from "@/lib/adaptation/tiptap/toCanonical";
 import { UniqueId } from "@/lib/adaptation/tiptap/uniqueId";
 import {
+  InlineMathNode,
   BlockMathNode,
   ImageBlockNode,
   ScaffoldingNode,
@@ -29,6 +30,7 @@ import {
 import { QuestionNodeView } from "./nodeviews/QuestionNodeView";
 import { ImageNodeView } from "./nodeviews/ImageNodeView";
 import { BlockMathNodeView } from "./nodeviews/BlockMathNodeView";
+import { InlineMathNodeView } from "./nodeviews/InlineMathNodeView";
 import { ScaffoldNodeView } from "./nodeviews/ScaffoldNodeView";
 
 /** Deep structural equality for two canonical documents. */
@@ -48,6 +50,7 @@ export function buildCanonicalEditorExtensions() {
     [QuestionNode.name]: ReactNodeViewRenderer(QuestionNodeView),
     [ImageBlockNode.name]: ReactNodeViewRenderer(ImageNodeView),
     [BlockMathNode.name]: ReactNodeViewRenderer(BlockMathNodeView),
+    [InlineMathNode.name]: ReactNodeViewRenderer(InlineMathNodeView),
     [ScaffoldingNode.name]: ReactNodeViewRenderer(ScaffoldNodeView),
   };
 

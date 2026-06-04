@@ -1,10 +1,6 @@
-import { describe, it, expect, vi } from "vitest";
-import { parsePositiveNumber, captionFromPlain, latexToHtml } from "./nodeViewUtils";
-
-const renderMathToHtml = vi.fn((s: string) => `<span>${s}</span>`);
-vi.mock("@/lib/domain/latexRenderer", () => ({
-  renderMathToHtml: (s: string) => renderMathToHtml(s),
-}));
+import { describe, it, expect } from "vitest";
+import { parsePositiveNumber, captionFromPlain, latexToHtml, inlineLatexToHtml } from "./nodeViewUtils";
+import { renderLatexToHtml } from "@/lib/domain/latexRenderer";
 
 describe("parsePositiveNumber", () => {
   it("returns a positive number", () => {
@@ -27,8 +23,15 @@ describe("captionFromPlain", () => {
 });
 
 describe("latexToHtml", () => {
-  it("wraps the latex in $…$ and delegates to renderMathToHtml", () => {
-    latexToHtml("a+b");
-    expect(renderMathToHtml).toHaveBeenCalledWith("$a+b$");
+  it("renders bare KaTeX in display mode, identical to the read-only renderer", () => {
+    // Same engine + displayMode as BlockMathView so editor preview can never
+    // diverge from the final render.
+    expect(latexToHtml("a+b")).toBe(renderLatexToHtml("a+b", true));
+  });
+});
+
+describe("inlineLatexToHtml", () => {
+  it("renders bare KaTeX inline, identical to the read-only RichTextView", () => {
+    expect(inlineLatexToHtml("x^2")).toBe(renderLatexToHtml("x^2", false));
   });
 });

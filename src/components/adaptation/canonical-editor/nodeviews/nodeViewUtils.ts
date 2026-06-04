@@ -4,7 +4,7 @@
  */
 
 import type { RichText } from "@/lib/adaptation/canonical/schema";
-import { renderMathToHtml } from "@/lib/domain/latexRenderer";
+import { renderLatexToHtml } from "@/lib/domain/latexRenderer";
 
 /** Parse a numeric input value to a positive number or null. */
 export function parsePositiveNumber(raw: string): number | null {
@@ -17,7 +17,19 @@ export function captionFromPlain(text: string): RichText | undefined {
   return text === "" ? undefined : [{ type: "text", text }];
 }
 
-/** Render a latex string to KaTeX HTML (wrapped in `$…$` for the renderer). */
+/**
+ * Render a bare latex string to KaTeX HTML in display mode — the SAME engine
+ * and display mode the read-only renderer (`BlockMathView`) uses, so the editor
+ * preview can never diverge from the final render.
+ */
 export function latexToHtml(latex: string): string {
-  return renderMathToHtml(`$${latex}$`);
+  return renderLatexToHtml(latex, true);
+}
+
+/**
+ * Render a bare latex string to inline KaTeX HTML — the SAME engine and (inline)
+ * display mode the read-only renderer (`RichTextView`) uses for inlineMath runs.
+ */
+export function inlineLatexToHtml(latex: string): string {
+  return renderLatexToHtml(latex, false);
 }

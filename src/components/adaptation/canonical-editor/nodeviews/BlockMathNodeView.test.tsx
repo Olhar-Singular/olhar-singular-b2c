@@ -7,9 +7,9 @@ vi.mock("@tiptap/react", () => ({
   NodeViewWrapper: ({ children, ...rest }: { children: React.ReactNode }) => <div {...rest}>{children}</div>,
 }));
 
-const renderMathToHtml = vi.fn((s: string) => `<span>${s}</span>`);
+const renderLatexToHtml = vi.fn((s: string) => `<span>${s}</span>`);
 vi.mock("@/lib/domain/latexRenderer", () => ({
-  renderMathToHtml: (s: string) => renderMathToHtml(s),
+  renderLatexToHtml: (s: string, displayMode?: boolean) => renderLatexToHtml(s, displayMode),
 }));
 
 function makeProps(attrs: Record<string, unknown> = {}, editable = true) {
