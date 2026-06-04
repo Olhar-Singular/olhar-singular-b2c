@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { QuestionAnswer } from "./schema";
+import { QuestionAnswerSchema } from "./schema";
 import { newId } from "./ids";
 
 const validId = () => newId();
@@ -7,25 +7,25 @@ const textContent = [{ type: "text" as const, text: "content" }];
 
 describe("QuestionAnswer — open", () => {
   it("accepts minimal open answer", () => {
-    expect(QuestionAnswer.safeParse({ kind: "open" }).success).toBe(true);
+    expect(QuestionAnswerSchema.safeParse({ kind: "open" }).success).toBe(true);
   });
 
   it("accepts open with answerLines", () => {
     expect(
-      QuestionAnswer.safeParse({ kind: "open", answerLines: 5 }).success
+      QuestionAnswerSchema.safeParse({ kind: "open", answerLines: 5 }).success
     ).toBe(true);
   });
 
   it("rejects open with non-positive answerLines", () => {
     expect(
-      QuestionAnswer.safeParse({ kind: "open", answerLines: 0 }).success
+      QuestionAnswerSchema.safeParse({ kind: "open", answerLines: 0 }).success
     ).toBe(false);
   });
 });
 
 describe("QuestionAnswer — multipleChoice", () => {
   it("accepts exactly one correct alternative", () => {
-    const result = QuestionAnswer.safeParse({
+    const result = QuestionAnswerSchema.safeParse({
       kind: "multipleChoice",
       alternatives: [
         { id: validId(), content: textContent, correct: true },
@@ -37,7 +37,7 @@ describe("QuestionAnswer — multipleChoice", () => {
   });
 
   it("rejects zero correct alternatives", () => {
-    const result = QuestionAnswer.safeParse({
+    const result = QuestionAnswerSchema.safeParse({
       kind: "multipleChoice",
       alternatives: [
         { id: validId(), content: textContent, correct: false },
@@ -48,7 +48,7 @@ describe("QuestionAnswer — multipleChoice", () => {
   });
 
   it("rejects two correct alternatives", () => {
-    const result = QuestionAnswer.safeParse({
+    const result = QuestionAnswerSchema.safeParse({
       kind: "multipleChoice",
       alternatives: [
         { id: validId(), content: textContent, correct: true },
@@ -59,7 +59,7 @@ describe("QuestionAnswer — multipleChoice", () => {
   });
 
   it("rejects empty alternatives array", () => {
-    const result = QuestionAnswer.safeParse({
+    const result = QuestionAnswerSchema.safeParse({
       kind: "multipleChoice",
       alternatives: [],
     });
@@ -67,7 +67,7 @@ describe("QuestionAnswer — multipleChoice", () => {
   });
 
   it("rejects alternative with invalid id", () => {
-    const result = QuestionAnswer.safeParse({
+    const result = QuestionAnswerSchema.safeParse({
       kind: "multipleChoice",
       alternatives: [
         { id: "not-a-uuid", content: textContent, correct: true },
@@ -79,7 +79,7 @@ describe("QuestionAnswer — multipleChoice", () => {
 
 describe("QuestionAnswer — trueFalse", () => {
   it("accepts trueFalse items", () => {
-    const result = QuestionAnswer.safeParse({
+    const result = QuestionAnswerSchema.safeParse({
       kind: "trueFalse",
       items: [
         { id: validId(), content: textContent, value: true },
@@ -92,7 +92,7 @@ describe("QuestionAnswer — trueFalse", () => {
 
 describe("QuestionAnswer — checkbox", () => {
   it("accepts checkbox items", () => {
-    const result = QuestionAnswer.safeParse({
+    const result = QuestionAnswerSchema.safeParse({
       kind: "checkbox",
       items: [
         { id: validId(), content: textContent, checked: true },
@@ -105,7 +105,7 @@ describe("QuestionAnswer — checkbox", () => {
 
 describe("QuestionAnswer — matching", () => {
   it("accepts matching pairs", () => {
-    const result = QuestionAnswer.safeParse({
+    const result = QuestionAnswerSchema.safeParse({
       kind: "matching",
       pairs: [
         { id: validId(), left: textContent, right: textContent },
@@ -117,7 +117,7 @@ describe("QuestionAnswer — matching", () => {
 
 describe("QuestionAnswer — ordering", () => {
   it("accepts ordering items", () => {
-    const result = QuestionAnswer.safeParse({
+    const result = QuestionAnswerSchema.safeParse({
       kind: "ordering",
       items: [
         { id: validId(), content: textContent, position: 1 },
@@ -130,7 +130,7 @@ describe("QuestionAnswer — ordering", () => {
 
 describe("QuestionAnswer — fillBlank", () => {
   it("accepts fillBlank gaps", () => {
-    const result = QuestionAnswer.safeParse({
+    const result = QuestionAnswerSchema.safeParse({
       kind: "fillBlank",
       gaps: [
         { id: validId(), answer: "Paris", alternatives: ["paris"], tip: "Capital of France" },
@@ -140,7 +140,7 @@ describe("QuestionAnswer — fillBlank", () => {
   });
 
   it("accepts fillBlank gap without optional fields", () => {
-    const result = QuestionAnswer.safeParse({
+    const result = QuestionAnswerSchema.safeParse({
       kind: "fillBlank",
       gaps: [{ id: validId(), answer: "Paris" }],
     });
@@ -150,7 +150,7 @@ describe("QuestionAnswer — fillBlank", () => {
 
 describe("QuestionAnswer — table", () => {
   it("accepts table rows", () => {
-    const result = QuestionAnswer.safeParse({
+    const result = QuestionAnswerSchema.safeParse({
       kind: "table",
       rows: [[textContent, textContent], [textContent, textContent]],
     });
@@ -160,7 +160,7 @@ describe("QuestionAnswer — table", () => {
 
 describe("QuestionAnswer — unknown kind", () => {
   it("rejects unknown kind", () => {
-    const result = QuestionAnswer.safeParse({
+    const result = QuestionAnswerSchema.safeParse({
       kind: "unknown",
       data: "whatever",
     });

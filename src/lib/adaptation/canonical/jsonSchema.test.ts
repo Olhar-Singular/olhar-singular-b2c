@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi, afterEach } from "vitest";
 import { documentResultJsonSchema } from "./jsonSchema";
 
 describe("documentResultJsonSchema", () => {
@@ -35,5 +35,32 @@ describe("documentResultJsonSchema", () => {
     const s2 = documentResultJsonSchema();
     expect(s1).not.toBe(s2); // different references
     expect(JSON.stringify(s1)).toBe(JSON.stringify(s2)); // same content
+  });
+});
+
+describe("documentResultJsonSchema — recursion regression", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("does NOT emit console.warn (no recursive-reference warning)", () => {
+    const warnSpy = vi.spyOn(console, "warn");
+    documentResultJsonSchema();
+    expect(warnSpy).not.toHaveBeenCalled();
+  });
+
+  it("does NOT contain degraded empty items ({}) in the serialized schema", () => {
+    const serialized = JSON.stringify(documentResultJsonSchema());
+    expect(serialized).not.toContain('"items":{}');
+  });
+
+  it("root type is still 'object' after $refStrategy change", () => {
+    const schema = documentResultJsonSchema() as Record<string, unknown>;
+    expect(schema.type).toBe("object");
+  });
+
+  it("additionalProperties is still false at root after $refStrategy change", () => {
+    const schema = documentResultJsonSchema() as Record<string, unknown>;
+    expect(schema.additionalProperties).toBe(false);
   });
 });

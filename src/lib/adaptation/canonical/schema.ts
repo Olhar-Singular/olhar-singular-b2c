@@ -1,6 +1,12 @@
 /**
  * Canonical document schema — single source of truth for the Adaptar feature.
  * Built incrementally through M1 tasks; each task adds its section.
+ *
+ * Naming convention:
+ *   - Zod schema constants: <Name>Schema (e.g. RichTextSchema, BlockSchema)
+ *   - Inferred TypeScript types: <Name> (e.g. RichText, Block)
+ * This avoids the value/type collision that previously required an awkward
+ * `*Type` suffix on the inferred types (RichTextType, InlineType, etc.).
  */
 
 import { z } from "zod";
@@ -34,15 +40,15 @@ const InlineMath = z.object({
   alt: z.string().optional(),
 });
 
-export const Inline = z.discriminatedUnion("type", [InlineText, InlineMath]);
+export const InlineSchema = z.discriminatedUnion("type", [InlineText, InlineMath]);
 
-export const RichText = z.array(Inline);
+export const RichTextSchema = z.array(InlineSchema);
 
 // ---------------------------------------------------------------------------
 // Task 1.5b — Per-node style attributes
 // ---------------------------------------------------------------------------
 
-const NodeStyle = z
+export const NodeStyleSchema = z
   .object({
     fontFamily: z.string().optional(),
     fontSize: z.number().positive().optional(),
@@ -58,32 +64,32 @@ const NodeStyle = z
 // ---------------------------------------------------------------------------
 
 const Id = z.string().refine(isId, "id must be a valid UUID");
-const BlockBase = z.object({ id: Id, style: NodeStyle.optional() });
+const BlockBase = z.object({ id: Id, style: NodeStyleSchema.optional() });
 
 // ---------------------------------------------------------------------------
 // Task 1.5 — Block nodes (forward declaration for recursion)
 // ---------------------------------------------------------------------------
 
 // We use an interface + z.lazy for the recursive Block type.
-// Block is declared as a lazy schema so Alternative.nested and Question.stem
-// can reference it without a temporal dead zone.
+// BlockSchema is declared as a lazy schema so AlternativeSchema.nested and
+// Question.stem can reference it without a temporal dead zone.
 type BlockInput = z.input<typeof _BlockUnion>;
 type BlockOutput = z.output<typeof _BlockUnion>;
 
 // eslint-disable-next-line prefer-const
-export let Block: z.ZodType<BlockOutput, z.ZodTypeDef, BlockInput>;
+export let BlockSchema: z.ZodType<BlockOutput, z.ZodTypeDef, BlockInput>;
 
 // ---------------------------------------------------------------------------
 // Task 1.4 — Question interaction (QuestionAnswer)
 // ---------------------------------------------------------------------------
 
-const Alternative = z.object({
+export const AlternativeSchema = z.object({
   id: Id,
-  content: RichText,
+  content: RichTextSchema,
   correct: z.boolean(),
-  // z.lazy defers resolution of Block until runtime
+  // z.lazy defers resolution of BlockSchema until runtime
   nested: z
-    .lazy(() => z.array(Block))
+    .lazy(() => z.array(BlockSchema))
     .optional(),
 });
 
@@ -94,7 +100,7 @@ const AnswerOpen = z.object({
 
 const AnswerMultipleChoice = z.object({
   kind: z.literal("multipleChoice"),
-  alternatives: z.array(Alternative).min(1),
+  alternatives: z.array(AlternativeSchema).min(1),
 });
 
 const AnswerTrueFalse = z.object({
@@ -102,7 +108,7 @@ const AnswerTrueFalse = z.object({
   items: z.array(
     z.object({
       id: Id,
-      content: RichText,
+      content: RichTextSchema,
       value: z.boolean(),
     })
   ),
@@ -113,7 +119,7 @@ const AnswerCheckbox = z.object({
   items: z.array(
     z.object({
       id: Id,
-      content: RichText,
+      content: RichTextSchema,
       checked: z.boolean(),
     })
   ),
@@ -124,8 +130,8 @@ const AnswerMatching = z.object({
   pairs: z.array(
     z.object({
       id: Id,
-      left: RichText,
-      right: RichText,
+      left: RichTextSchema,
+      right: RichTextSchema,
     })
   ),
 });
@@ -135,7 +141,7 @@ const AnswerOrdering = z.object({
   items: z.array(
     z.object({
       id: Id,
-      content: RichText,
+      content: RichTextSchema,
       position: z.number().int(),
     })
   ),
@@ -155,7 +161,7 @@ const AnswerFillBlank = z.object({
 
 const AnswerTable = z.object({
   kind: z.literal("table"),
-  rows: z.array(z.array(RichText)),
+  rows: z.array(z.array(RichTextSchema)),
 });
 
 const _QuestionAnswerUnion = z.discriminatedUnion("kind", [
@@ -169,7 +175,7 @@ const _QuestionAnswerUnion = z.discriminatedUnion("kind", [
   AnswerTable,
 ]);
 
-export const QuestionAnswer = _QuestionAnswerUnion.superRefine((data, ctx) => {
+export const QuestionAnswerSchema = _QuestionAnswerUnion.superRefine((data, ctx) => {
   if (data.kind === "multipleChoice") {
     const correctCount = data.alternatives.filter((a) => a.correct).length;
     if (correctCount !== 1) {
@@ -189,12 +195,12 @@ export const QuestionAnswer = _QuestionAnswerUnion.superRefine((data, ctx) => {
 const Heading = BlockBase.extend({
   type: z.literal("heading"),
   level: z.union([z.literal(1), z.literal(2), z.literal(3)]),
-  content: RichText,
+  content: RichTextSchema,
 });
 
 const Paragraph = BlockBase.extend({
   type: z.literal("paragraph"),
-  content: RichText,
+  content: RichTextSchema,
 });
 
 const BlockMath = BlockBase.extend({
@@ -209,7 +215,7 @@ const ImageBlock = BlockBase.extend({
   alt: z.string(),
   width: z.number().positive().optional(),
   alignment: z.enum(["left", "center", "right"]).optional(),
-  caption: RichText.optional(),
+  caption: RichTextSchema.optional(),
 });
 
 const Scaffolding = BlockBase.extend({
@@ -221,15 +227,15 @@ const Divider = BlockBase.extend({
   type: z.literal("divider"),
 });
 
-// Question.stem is recursive — references Block via z.lazy
+// Question.stem is recursive — references BlockSchema via z.lazy
 const Question = BlockBase.extend({
   type: z.literal("question"),
   number: z.number().int().positive().optional(),
   points: z.number().positive().optional(),
   difficulty: z.enum(["facil", "medio", "dificil"]).optional(),
-  stem: z.lazy(() => z.array(Block)),
-  instruction: RichText.optional(),
-  answer: QuestionAnswer,
+  stem: z.lazy(() => z.array(BlockSchema)),
+  instruction: RichTextSchema.optional(),
+  answer: QuestionAnswerSchema,
 });
 
 // The actual union — evaluated once all variants are defined.
@@ -245,7 +251,7 @@ const _BlockUnion = z.discriminatedUnion("type", [
 
 // Now assign the forward declaration. All z.lazy references above will resolve
 // correctly because they are evaluated lazily at parse time.
-Block = _BlockUnion;
+BlockSchema = _BlockUnion;
 
 // ---------------------------------------------------------------------------
 // Task 1.6 — CanonicalDocument + AdaptationResult
@@ -253,12 +259,15 @@ Block = _BlockUnion;
 
 export const CanonicalDocumentSchema = z.object({
   schemaVersion: z.literal(SCHEMA_VERSION),
-  blocks: z.array(Block).min(1),
+  blocks: z.array(BlockSchema).min(1),
 });
 
 export const AdaptationResultSchema = z.object({
   schemaVersion: z.literal(SCHEMA_VERSION),
   document: CanonicalDocumentSchema,
+  // snake_case intentional: these field names are part of the AI edge-function
+  // output contract and are persisted verbatim in the adaptation_result jsonb
+  // column. Renaming to camelCase would break the AI prompt and DB contract.
   strategies_applied: z.array(z.string()),
   pedagogical_justification: z.string(),
   implementation_tips: z.array(z.string()),
@@ -272,8 +281,22 @@ export type CanonicalDocument = z.infer<typeof CanonicalDocumentSchema>;
 export type AdaptationResult = z.infer<typeof AdaptationResultSchema>;
 // Block type uses _BlockUnion for the concrete inferred type
 export type Block = z.infer<typeof _BlockUnion>;
-export type RichTextType = z.infer<typeof RichText>;
-export type InlineType = z.infer<typeof Inline>;
-export type QuestionAnswerType = z.infer<typeof QuestionAnswer>;
-export type AlternativeType = z.infer<typeof Alternative>;
-export type NodeStyleType = z.infer<typeof NodeStyle>;
+export type RichText = z.infer<typeof RichTextSchema>;
+export type Inline = z.infer<typeof InlineSchema>;
+export type QuestionAnswer = z.infer<typeof QuestionAnswerSchema>;
+export type Alternative = z.infer<typeof AlternativeSchema>;
+export type NodeStyle = z.infer<typeof NodeStyleSchema>;
+
+// ---------------------------------------------------------------------------
+// Backward-compatible type aliases (deprecated — use clean names above)
+// ---------------------------------------------------------------------------
+/** @deprecated Use RichText */
+export type RichTextType = RichText;
+/** @deprecated Use Inline */
+export type InlineType = Inline;
+/** @deprecated Use QuestionAnswer */
+export type QuestionAnswerType = QuestionAnswer;
+/** @deprecated Use Alternative */
+export type AlternativeType = Alternative;
+/** @deprecated Use NodeStyle */
+export type NodeStyleType = NodeStyle;

@@ -82,7 +82,7 @@ describe("validateDocument", () => {
     } catch (e) {
       errorMsg = (e as Error).message;
     }
-    expect(errorMsg.length).toBeGreaterThan(0);
+    expect(errorMsg).toContain("Invalid CanonicalDocument");
   });
 });
 

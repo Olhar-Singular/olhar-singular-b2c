@@ -8,16 +8,16 @@ import type {
   CanonicalDocument,
   AdaptationResult,
   Block,
-  RichTextType,
-  InlineType,
-  QuestionAnswerType,
-  AlternativeType,
-  NodeStyleType,
+  RichText,
+  Inline,
+  QuestionAnswer,
+  Alternative,
+  NodeStyle,
 } from "./schema";
 import { newId } from "./ids";
 
 const id = () => newId();
-const textContent: RichTextType = [{ type: "text", text: "hello" }];
+const textContent: RichText = [{ type: "text", text: "hello" }];
 
 const validParagraph: Block = {
   id: id(),
@@ -122,23 +122,23 @@ describe("Exported TypeScript types", () => {
     expect(block.type).toBe("paragraph");
   });
 
-  it("RichTextType type is assignable", () => {
-    const rt: RichTextType = textContent;
+  it("RichText type is assignable", () => {
+    const rt: RichText = textContent;
     expect(rt).toHaveLength(1);
   });
 
-  it("InlineType type is assignable", () => {
-    const inline: InlineType = { type: "text", text: "test" };
+  it("Inline type is assignable", () => {
+    const inline: Inline = { type: "text", text: "test" };
     expect(inline.type).toBe("text");
   });
 
-  it("QuestionAnswerType type is assignable", () => {
-    const answer: QuestionAnswerType = { kind: "open" };
+  it("QuestionAnswer type is assignable", () => {
+    const answer: QuestionAnswer = { kind: "open" };
     expect(answer.kind).toBe("open");
   });
 
-  it("AlternativeType type is assignable", () => {
-    const alt: AlternativeType = {
+  it("Alternative type is assignable", () => {
+    const alt: Alternative = {
       id: id(),
       content: textContent,
       correct: true,
@@ -146,8 +146,8 @@ describe("Exported TypeScript types", () => {
     expect(alt.correct).toBe(true);
   });
 
-  it("NodeStyleType type is assignable", () => {
-    const style: NodeStyleType = { fontSize: 14, align: "left" };
+  it("NodeStyle type is assignable", () => {
+    const style: NodeStyle = { fontSize: 14, align: "left" };
     expect(style.fontSize).toBe(14);
   });
 });

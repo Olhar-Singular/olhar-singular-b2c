@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { Block } from "./schema";
+import { BlockSchema } from "./schema";
 import { newId } from "./ids";
 import { ALLOWED_COLORS } from "./colors";
 
@@ -18,16 +18,16 @@ function para(style?: Record<string, unknown>) {
 
 describe("NodeStyle — all block types accept style", () => {
   it("accepts paragraph without style (style optional)", () => {
-    expect(Block.safeParse(para()).success).toBe(true);
+    expect(BlockSchema.safeParse(para()).success).toBe(true);
   });
 
   it("accepts paragraph with empty style object", () => {
-    expect(Block.safeParse(para({})).success).toBe(true);
+    expect(BlockSchema.safeParse(para({})).success).toBe(true);
   });
 
   it("accepts all style fields with valid values", () => {
     expect(
-      Block.safeParse(
+      BlockSchema.safeParse(
         para({
           fontFamily: "OpenDyslexic",
           fontSize: 14,
@@ -42,41 +42,41 @@ describe("NodeStyle — all block types accept style", () => {
 
   it("accepts left/right/justify align values", () => {
     for (const align of ["left", "right", "justify"] as const) {
-      expect(Block.safeParse(para({ align })).success).toBe(true);
+      expect(BlockSchema.safeParse(para({ align })).success).toBe(true);
     }
   });
 
   it("accepts spacingAfter = 0 (nonnegative)", () => {
-    expect(Block.safeParse(para({ spacingAfter: 0 })).success).toBe(true);
+    expect(BlockSchema.safeParse(para({ spacingAfter: 0 })).success).toBe(true);
   });
 
   it("rejects spacingAfter < 0", () => {
-    expect(Block.safeParse(para({ spacingAfter: -1 })).success).toBe(false);
+    expect(BlockSchema.safeParse(para({ spacingAfter: -1 })).success).toBe(false);
   });
 
   it("rejects fontSize = 0 (must be positive)", () => {
-    expect(Block.safeParse(para({ fontSize: 0 })).success).toBe(false);
+    expect(BlockSchema.safeParse(para({ fontSize: 0 })).success).toBe(false);
   });
 
   it("rejects fontSize < 0", () => {
-    expect(Block.safeParse(para({ fontSize: -2 })).success).toBe(false);
+    expect(BlockSchema.safeParse(para({ fontSize: -2 })).success).toBe(false);
   });
 
   it("rejects invalid align value", () => {
-    expect(Block.safeParse(para({ align: "middle" })).success).toBe(false);
+    expect(BlockSchema.safeParse(para({ align: "middle" })).success).toBe(false);
   });
 
   it("rejects color outside allowlist", () => {
-    expect(Block.safeParse(para({ color: "#000000" })).success).toBe(false);
+    expect(BlockSchema.safeParse(para({ color: "#000000" })).success).toBe(false);
   });
 
   it("rejects extra/unknown style properties (strict)", () => {
-    expect(Block.safeParse(para({ unknownProp: "foo" })).success).toBe(false);
+    expect(BlockSchema.safeParse(para({ unknownProp: "foo" })).success).toBe(false);
   });
 
   it("style works on heading blocks too", () => {
     expect(
-      Block.safeParse({
+      BlockSchema.safeParse({
         id: id(),
         type: "heading",
         level: 2,
@@ -88,7 +88,7 @@ describe("NodeStyle — all block types accept style", () => {
 
   it("style works on image blocks", () => {
     expect(
-      Block.safeParse({
+      BlockSchema.safeParse({
         id: id(),
         type: "image",
         src: "https://x.com/img.png",
@@ -100,7 +100,7 @@ describe("NodeStyle — all block types accept style", () => {
 
   it("style works on divider blocks", () => {
     expect(
-      Block.safeParse({
+      BlockSchema.safeParse({
         id: id(),
         type: "divider",
         style: { spacingAfter: 4 },
@@ -110,7 +110,7 @@ describe("NodeStyle — all block types accept style", () => {
 
   it("style works on blockMath blocks", () => {
     expect(
-      Block.safeParse({
+      BlockSchema.safeParse({
         id: id(),
         type: "blockMath",
         latex: "x^2",
@@ -121,7 +121,7 @@ describe("NodeStyle — all block types accept style", () => {
 
   it("style works on scaffolding blocks", () => {
     expect(
-      Block.safeParse({
+      BlockSchema.safeParse({
         id: id(),
         type: "scaffolding",
         items: ["step 1"],
@@ -132,7 +132,7 @@ describe("NodeStyle — all block types accept style", () => {
 
   it("style works on question blocks", () => {
     expect(
-      Block.safeParse({
+      BlockSchema.safeParse({
         id: id(),
         type: "question",
         stem: [],
