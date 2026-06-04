@@ -193,6 +193,20 @@ describe("adaptationsRepo", () => {
       vi.mocked(supabase.from).mockReturnValue(chain as never);
       await expect(getAdaptation("a1")).rejects.toBeInstanceOf(Error);
     });
+
+    it("surfaces a controlled error for an unknown schemaVersion (forward-compat routing)", async () => {
+      const future = { ...validResult, schemaVersion: 99 };
+      const chain = buildChain({ data: { ...baseRow, adaptation_result: future }, error: null });
+      vi.mocked(supabase.from).mockReturnValue(chain as never);
+      await expect(getAdaptation("a1")).rejects.toThrow(/Unsupported adaptation_result schemaVersion/);
+    });
+
+    it("passes a schemaVersion:1 blob through migration into the parsed row", async () => {
+      const chain = buildChain({ data: baseRow, error: null });
+      vi.mocked(supabase.from).mockReturnValue(chain as never);
+      const row = await getAdaptation("a1");
+      expect(row.adaptation_result).toEqual(validResult);
+    });
   });
 
   describe("deleteAdaptation", () => {

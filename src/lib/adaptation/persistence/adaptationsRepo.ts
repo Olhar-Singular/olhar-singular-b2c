@@ -25,6 +25,7 @@ import {
   AdaptationResultSchema,
   type AdaptationResult,
 } from "@/lib/adaptation/canonical/schema";
+import { migrateByVersion } from "@/lib/adaptation/canonical/migrate";
 
 // ---------------------------------------------------------------------------
 // Types — defined here, decoupled from the generated types.ts
@@ -82,9 +83,22 @@ function assertValidResult(result: AdaptationResult): AdaptationResult {
   return AdaptationResultSchema.parse(result);
 }
 
-/** Validate the result blob coming back from the DB; throws on malformed data. */
+/**
+ * Validate the result blob coming back from the DB; throws on malformed data.
+ *
+ * The blob is first routed through `migrateByVersion`, which inspects its
+ * `schemaVersion` and rejects unknown/missing versions BEFORE the Zod parse.
+ * This gives forward-compat version routing a single read-path home and turns a
+ * future-version blob into a clear read error instead of an opaque Zod failure.
+ */
 function parseRow(raw: Record<string, unknown>): AdaptationRow {
-  const adaptation_result = AdaptationResultSchema.parse(raw.adaptation_result);
+  const migrated = migrateByVersion(raw.adaptation_result);
+  if (!migrated.ok) {
+    throw new Error(
+      "Unsupported adaptation_result schemaVersion (unknown or missing)",
+    );
+  }
+  const adaptation_result = AdaptationResultSchema.parse(migrated.value);
   return { ...(raw as unknown as AdaptationRow), adaptation_result };
 }
 
