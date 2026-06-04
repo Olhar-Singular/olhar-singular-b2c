@@ -1,0 +1,94 @@
+/**
+ * useCanonicalEditor — wraps Tiptap's `useEditor` for the canonical model.
+ *
+ * - Builds the canonical extension list (`buildExtensions()`), adds `UniqueId`
+ *   and wires the React NodeViews onto the custom nodes via
+ *   `ReactNodeViewRenderer`.
+ * - Seeds the editor with `canonicalToProseMirror(value)` once.
+ * - On every editor update, converts the PM JSON back to canonical and emits
+ *   `onChange` ONLY when the canonical document actually changed (deep compare)
+ *   — this prevents render/onChange feedback loops.
+ *
+ * All non-trivial decision logic (`docsEqual`, `buildCanonicalEditorExtensions`)
+ * is extracted into pure, unit-testable functions.
+ */
+
+import { useRef } from "react";
+import { useEditor, ReactNodeViewRenderer, type Editor } from "@tiptap/react";
+import type { CanonicalDocument } from "@/lib/adaptation/canonical/schema";
+import { buildExtensions } from "@/lib/adaptation/tiptap/getEditorSchema";
+import { canonicalToProseMirror, type PMNode } from "@/lib/adaptation/tiptap/fromCanonical";
+import { proseMirrorToCanonical } from "@/lib/adaptation/tiptap/toCanonical";
+import { UniqueId } from "@/lib/adaptation/tiptap/uniqueId";
+import {
+  BlockMathNode,
+  ImageBlockNode,
+  ScaffoldingNode,
+  QuestionNode,
+} from "@/lib/adaptation/tiptap/schema";
+import { QuestionNodeView } from "./nodeviews/QuestionNodeView";
+import { ImageNodeView } from "./nodeviews/ImageNodeView";
+import { BlockMathNodeView } from "./nodeviews/BlockMathNodeView";
+import { ScaffoldNodeView } from "./nodeviews/ScaffoldNodeView";
+
+/** Deep structural equality for two canonical documents. */
+export function docsEqual(a: CanonicalDocument, b: CanonicalDocument): boolean {
+  return JSON.stringify(a) === JSON.stringify(b);
+}
+
+/**
+ * Build the editor extension list: canonical schema + UniqueId, with the React
+ * NodeViews bound to the custom nodes.
+ */
+export function buildCanonicalEditorExtensions() {
+  // Eagerly resolve a React NodeView renderer per custom node. `addNodeView`
+  // must be a function returning the renderer, so each entry closes over a
+  // single pre-built renderer (built here so the wiring is covered by tests).
+  const renderers: Record<string, () => unknown> = {
+    [QuestionNode.name]: ReactNodeViewRenderer(QuestionNodeView),
+    [ImageBlockNode.name]: ReactNodeViewRenderer(ImageNodeView),
+    [BlockMathNode.name]: ReactNodeViewRenderer(BlockMathNodeView),
+    [ScaffoldingNode.name]: ReactNodeViewRenderer(ScaffoldNodeView),
+  };
+
+  const extensions = buildExtensions().map((ext) => {
+    const renderer = renderers[ext.name];
+    return renderer ? ext.extend({ addNodeView: () => renderer }) : ext;
+  });
+
+  return [...extensions, UniqueId];
+}
+
+export interface UseCanonicalEditorOptions {
+  value: CanonicalDocument;
+  onChange: (doc: CanonicalDocument) => void;
+  disabled?: boolean;
+}
+
+export interface UseCanonicalEditorResult {
+  editor: Editor | null;
+}
+
+export function useCanonicalEditor({
+  value,
+  onChange,
+  disabled = false,
+}: UseCanonicalEditorOptions): UseCanonicalEditorResult {
+  // Seed content once and track the last-known canonical doc to guard emits.
+  const initialContentRef = useRef<PMNode>(canonicalToProseMirror(value));
+  const lastDocRef = useRef<CanonicalDocument>(value);
+
+  const editor = useEditor({
+    extensions: buildCanonicalEditorExtensions(),
+    content: initialContentRef.current,
+    editable: !disabled,
+    onUpdate: ({ editor }) => {
+      const next = proseMirrorToCanonical(editor.getJSON() as PMNode);
+      if (docsEqual(next, lastDocRef.current)) return;
+      lastDocRef.current = next;
+      onChange(next);
+    },
+  });
+
+  return { editor };
+}
