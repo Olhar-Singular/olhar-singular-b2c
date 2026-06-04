@@ -51,7 +51,7 @@ function IconButton({
   children: React.ReactNode;
 }) {
   return (
-    <Button type="button" variant="ghost" size="icon" className="h-7 w-7" onClick={onClick} title={title} disabled={disabled}>
+    <Button type="button" variant="ghost" size="icon" className="h-7 w-7" onClick={onClick} title={title} aria-label={title} disabled={disabled}>
       {children}
     </Button>
   );

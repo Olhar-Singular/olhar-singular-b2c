@@ -36,6 +36,7 @@ export function ScaffoldNodeView({ node, updateAttributes, editor }: NodeViewPro
               disabled={disabled}
               onClick={() => updateAttributes({ items: removeStep(items, index) })}
               title="Remover passo"
+              aria-label={`Remover passo ${index + 1}`}
             >
               <Trash2 className="h-3.5 w-3.5" />
             </Button>

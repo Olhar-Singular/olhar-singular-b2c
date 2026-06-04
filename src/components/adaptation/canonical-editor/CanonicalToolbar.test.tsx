@@ -72,4 +72,13 @@ describe("CanonicalToolbar", () => {
     render(<CanonicalToolbar editor={makeEditor()} disabled />);
     expect(screen.getByTitle("Negrito")).toBeDisabled();
   });
+
+  it("exposes accessible names on icon-only buttons (a11y)", () => {
+    render(<CanonicalToolbar editor={makeEditor()} />);
+    // getByRole(name) matches the accessible name (aria-label), which screen
+    // readers announce — `title` alone is not reliably announced.
+    expect(screen.getByRole("button", { name: /negrito/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /cor do texto/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /inserir fórmula/i })).toBeInTheDocument();
+  });
 });

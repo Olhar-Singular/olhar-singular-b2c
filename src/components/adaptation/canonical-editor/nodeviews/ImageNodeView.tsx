@@ -21,9 +21,9 @@ import { richTextToPlain } from "../richText";
 import { captionFromPlain } from "./nodeViewUtils";
 
 const ALIGNMENTS = [
-  { value: "left", Icon: AlignLeft },
-  { value: "center", Icon: AlignCenter },
-  { value: "right", Icon: AlignRight },
+  { value: "left", Icon: AlignLeft, label: "Alinhar à esquerda" },
+  { value: "center", Icon: AlignCenter, label: "Centralizar" },
+  { value: "right", Icon: AlignRight, label: "Alinhar à direita" },
 ] as const;
 
 export function ImageNodeView({ node, updateAttributes, editor }: NodeViewProps) {
@@ -51,7 +51,7 @@ export function ImageNodeView({ node, updateAttributes, editor }: NodeViewProps)
           onResize={(w) => updateAttributes({ width: w })}
         />
         <div className="flex flex-wrap items-center gap-1">
-          {ALIGNMENTS.map(({ value, Icon }) => (
+          {ALIGNMENTS.map(({ value, Icon, label }) => (
             <Button
               key={value}
               type="button"
@@ -60,7 +60,8 @@ export function ImageNodeView({ node, updateAttributes, editor }: NodeViewProps)
               className="h-7 w-7"
               disabled={disabled}
               onClick={() => updateAttributes({ alignment: value })}
-              title={`Alinhar ${value}`}
+              title={label}
+              aria-label={label}
             >
               <Icon className="h-3.5 w-3.5" />
             </Button>

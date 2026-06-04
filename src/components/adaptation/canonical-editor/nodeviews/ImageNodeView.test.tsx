@@ -51,7 +51,7 @@ describe("ImageNodeView", () => {
   it("updates alignment", () => {
     const { props, updateAttributes } = makeProps({ alignment: "left" });
     render(<ImageNodeView {...props} />);
-    fireEvent.click(screen.getByTitle("Alinhar center"));
+    fireEvent.click(screen.getByRole("button", { name: "Centralizar" }));
     expect(updateAttributes).toHaveBeenCalledWith({ alignment: "center" });
   });
 

@@ -76,6 +76,7 @@ function ToolbarButton({
       className={cn("h-7 w-7", active && "bg-accent text-accent-foreground")}
       onClick={onClick}
       title={title}
+      aria-label={title}
       disabled={disabled}
     >
       {children}
@@ -106,7 +107,7 @@ export function CanonicalToolbar({ editor, disabled = false }: CanonicalToolbarP
           ALLOWED_COLORS allowlist. */}
       <DropdownMenu>
         <DropdownMenuTrigger asChild disabled={disabled}>
-          <Button type="button" variant="ghost" size="icon" className="h-7 w-7" title="Cor do texto">
+          <Button type="button" variant="ghost" size="icon" className="h-7 w-7" title="Cor do texto" aria-label="Cor do texto">
             <Palette className="h-3.5 w-3.5" />
           </Button>
         </DropdownMenuTrigger>
