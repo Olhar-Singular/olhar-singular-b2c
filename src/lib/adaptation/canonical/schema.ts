@@ -297,17 +297,3 @@ export type Inline = z.infer<typeof InlineSchema>;
 export type QuestionAnswer = z.infer<typeof QuestionAnswerSchema>;
 export type Alternative = z.infer<typeof AlternativeSchema>;
 export type NodeStyle = z.infer<typeof NodeStyleSchema>;
-
-// ---------------------------------------------------------------------------
-// Backward-compatible type aliases (deprecated — use clean names above)
-// ---------------------------------------------------------------------------
-/** @deprecated Use RichText */
-export type RichTextType = RichText;
-/** @deprecated Use Inline */
-export type InlineType = Inline;
-/** @deprecated Use QuestionAnswer */
-export type QuestionAnswerType = QuestionAnswer;
-/** @deprecated Use Alternative */
-export type AlternativeType = Alternative;
-/** @deprecated Use NodeStyle */
-export type NodeStyleType = NodeStyle;
