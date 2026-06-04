@@ -1,5 +1,5 @@
-import AdaptationWizard from "@/components/adaptation/AdaptationWizard";
+import CanonicalAdaptationWizard from "@/components/adaptation/CanonicalAdaptationWizard";
 
 export default function AdaptarPage() {
-  return <AdaptationWizard />;
+  return <CanonicalAdaptationWizard />;
 }
