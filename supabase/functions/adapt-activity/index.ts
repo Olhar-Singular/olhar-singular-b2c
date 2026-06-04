@@ -4,29 +4,7 @@ import { sanitize } from "../_shared/sanitize.ts";
 import { logAiUsage } from "../_shared/logAiUsage.ts";
 import { getAiConfig } from "../_shared/aiConfig.ts";
 import { chargeCredits, chargeErrorResponse, refundCredits, type CreditRpcResult } from "../_shared/credits.ts";
-
-// Complexity tiers mirroring src/lib/domain/barriers.ts — must stay in sync.
-const BARRIER_COMPLEXITY: Record<string, "low" | "medium" | "high"> = {
-  tea: "high",
-  tdah: "medium",
-  tod: "medium",
-  sindrome_down: "high",
-  altas_habilidades: "high",
-  dislexia: "low",
-  discalculia: "low",
-  disgrafia: "low",
-  tourette: "medium",
-  dispraxia: "low",
-  toc: "medium",
-};
-const ADAPTATION_CREDITS = { low: 5, medium: 8, high: 12 } as const;
-
-function calcAdaptationCost(dimensions: string[]): number {
-  if (dimensions.length === 0) return ADAPTATION_CREDITS.medium;
-  const tiers = dimensions.map((d) => BARRIER_COMPLEXITY[d] ?? "medium");
-  const tier = tiers.includes("high") ? "high" : tiers.includes("medium") ? "medium" : "low";
-  return ADAPTATION_CREDITS[tier];
-}
+import { calcAdaptationCost } from "../_shared/adaptationCost.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
