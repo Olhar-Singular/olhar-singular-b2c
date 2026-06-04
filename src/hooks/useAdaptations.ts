@@ -43,14 +43,20 @@ export function useAdaptation(id: string | undefined) {
   });
 }
 
-/** Flip an adaptation to 'ready'. Invalidates the list + detail. */
+/**
+ * Flip an adaptation to 'ready' under optimistic concurrency. On success the
+ * list + detail are invalidated; a conflict (stale updated_at) is returned to
+ * the caller so it can warn + reload instead of navigating away blind.
+ */
 export function useMarkReady() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (id: string) => markReady(id),
-    onSuccess: (row) => {
+    mutationFn: ({ id, expectedUpdatedAt }: { id: string; expectedUpdatedAt: string }) =>
+      markReady(id, expectedUpdatedAt),
+    onSuccess: (res, { id }) => {
+      if (!res.ok) return;
       qc.invalidateQueries({ queryKey: adaptationKeys.list() });
-      qc.invalidateQueries({ queryKey: adaptationKeys.detail(row.id) });
+      qc.invalidateQueries({ queryKey: adaptationKeys.detail(id) });
     },
     onError: (err: Error) => toast.error(parseDbError(err, "Erro ao salvar a adaptação.")),
   });

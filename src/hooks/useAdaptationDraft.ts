@@ -19,6 +19,7 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { toast } from "sonner";
 import { updateAdaptation } from "@/lib/adaptation/persistence/adaptationsRepo";
 import {
   writeMirror,
@@ -49,10 +50,21 @@ export type UseAdaptationDraftOptions = {
 
 export type UseAdaptationDraftResult = {
   status: SaveStatus;
-  /** Force an immediate flush of any pending edit (e.g. before navigating). */
-  flush: () => Promise<void>;
+  /**
+   * Force an immediate flush of any pending edit (e.g. before navigating).
+   * Resolves with the freshest known `updated_at` AFTER the flush — so a caller
+   * that flushes-then-markReady uses the token the flush itself produced, not a
+   * stale render-time value.
+   */
+  flush: () => Promise<string | null>;
   /** Read the crash mirror for this draft, if any. */
   restoreFromMirror: () => Promise<AdaptationResult | null>;
+  /**
+   * The latest known `updated_at` for the draft row — advanced after every
+   * successful autosave. The caller passes this to `markReady` so the
+   * optimistic-concurrency token never goes stale.
+   */
+  currentUpdatedAt: string | null;
 };
 
 export function useAdaptationDraft({
@@ -63,8 +75,16 @@ export function useAdaptationDraft({
   debounceMs = AUTOSAVE_DEBOUNCE_MS,
 }: UseAdaptationDraftOptions): UseAdaptationDraftResult {
   const [status, setStatus] = useState<SaveStatus>("idle");
+  // Mirror of the optimistic token in state so the wizard can read the latest
+  // value (e.g. to pass into markReady). The ref drives the save path; the
+  // state drives the render-visible value — they advance together.
+  const [currentUpdatedAt, setCurrentUpdatedAt] = useState<string | null>(initialUpdatedAt);
 
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Whether we have already toasted for the current error streak. Set on the
+  // first failure, cleared on any non-error terminal outcome (success/conflict),
+  // so the user is told once per error episode — not on every failed retry.
+  const errorToastedRef = useRef(false);
   const lastSavedRef = useRef<string | null>(
     result ? serializeResult(result) : null,
   );
@@ -83,8 +103,30 @@ export function useAdaptationDraft({
   useEffect(() => {
     if (initialUpdatedAt && expectedUpdatedAtRef.current === null) {
       expectedUpdatedAtRef.current = initialUpdatedAt;
+      setCurrentUpdatedAt(initialUpdatedAt);
     }
   }, [initialUpdatedAt]);
+
+  /**
+   * Move to a new status, firing the autosave-failure toast exactly once per
+   * error episode (a user may navigate away mid-error and lose sight of the
+   * status indicator — the crash mirror keeps the edit, so we reassure). The
+   * toast is suppressed on subsequent failed retries and re-armed once a save
+   * recovers (any non-error terminal status).
+   */
+  const transition = useCallback((next: SaveStatus) => {
+    if (next === "error") {
+      if (!errorToastedRef.current) {
+        errorToastedRef.current = true;
+        toast.error(
+          "Não foi possível salvar automaticamente. Suas alterações estão guardadas localmente.",
+        );
+      }
+    } else if (next === "saved" || next === "conflict") {
+      errorToastedRef.current = false;
+    }
+    setStatus(next);
+  }, []);
 
   /** Run one save now (no debounce). No-op when nothing to persist / not dirty. */
   const performSave = useCallback(async () => {
@@ -94,7 +136,7 @@ export function useAdaptationDraft({
     if (!id || !current || !expected) return;
     if (!isDirty(current, lastSavedRef.current)) return;
 
-    setStatus("saving");
+    transition("saving");
     // Crash mirror first: if the network save fails, the edit survives.
     await writeMirror(id, current);
 
@@ -103,23 +145,25 @@ export function useAdaptationDraft({
       if (res.ok) {
         lastSavedRef.current = serializeResult(current);
         expectedUpdatedAtRef.current = res.row.updated_at;
+        setCurrentUpdatedAt(res.row.updated_at);
         await clearMirror(id);
-        setStatus(nextStatusAfterSave("success"));
+        transition(nextStatusAfterSave("success"));
         return;
       }
-      setStatus(nextStatusAfterSave("conflict"));
+      transition(nextStatusAfterSave("conflict"));
       onConflictRef.current?.();
     } catch {
-      setStatus(nextStatusAfterSave("error"));
+      transition(nextStatusAfterSave("error"));
     }
-  }, []);
+  }, [transition]);
 
-  const flush = useCallback(async () => {
+  const flush = useCallback(async (): Promise<string | null> => {
     if (timerRef.current) {
       clearTimeout(timerRef.current);
       timerRef.current = null;
     }
     await performSave();
+    return expectedUpdatedAtRef.current;
   }, [performSave]);
 
   const restoreFromMirror = useCallback(async () => {
@@ -160,5 +204,5 @@ export function useAdaptationDraft({
     };
   }, []);
 
-  return { status, flush, restoreFromMirror };
+  return { status, flush, restoreFromMirror, currentUpdatedAt };
 }

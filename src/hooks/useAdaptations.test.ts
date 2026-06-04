@@ -81,13 +81,23 @@ describe("useAdaptation", () => {
 describe("useMarkReady", () => {
   beforeEach(() => vi.clearAllMocks());
 
-  it("marks ready and invalidates queries", async () => {
-    vi.mocked(repo.markReady).mockResolvedValue(ROW);
+  it("marks ready with the optimistic token and invalidates queries on success", async () => {
+    vi.mocked(repo.markReady).mockResolvedValue({ ok: true, updatedAt: "2026-01-02T00:00:00Z" });
     const { result } = renderHook(() => useMarkReady(), { wrapper });
     await act(async () => {
-      await result.current.mutateAsync("a1");
+      await result.current.mutateAsync({ id: "a1", expectedUpdatedAt: "2026-01-01T00:00:00Z" });
     });
-    expect(repo.markReady).toHaveBeenCalledWith("a1");
+    expect(repo.markReady).toHaveBeenCalledWith("a1", "2026-01-01T00:00:00Z");
+  });
+
+  it("does not invalidate when the mark-ready conflicts", async () => {
+    vi.mocked(repo.markReady).mockResolvedValue({ ok: false, conflict: true });
+    const { result } = renderHook(() => useMarkReady(), { wrapper });
+    let res: Awaited<ReturnType<typeof repo.markReady>> | undefined;
+    await act(async () => {
+      res = await result.current.mutateAsync({ id: "a1", expectedUpdatedAt: "stale" });
+    });
+    expect(res).toEqual({ ok: false, conflict: true });
   });
 
   it("toasts on error", async () => {
@@ -96,7 +106,7 @@ describe("useMarkReady", () => {
     const { result } = renderHook(() => useMarkReady(), { wrapper });
     await act(async () => {
       try {
-        await result.current.mutateAsync("a1");
+        await result.current.mutateAsync({ id: "a1", expectedUpdatedAt: "t" });
       } catch {
         /* expected */
       }

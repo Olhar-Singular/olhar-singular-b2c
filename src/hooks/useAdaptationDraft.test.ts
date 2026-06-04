@@ -8,6 +8,7 @@ import type { AdaptationResult } from "@/lib/adaptation/canonical/schema";
 
 vi.mock("@/lib/adaptation/persistence/adaptationsRepo");
 vi.mock("@/lib/adaptation/persistence/draftMirror");
+vi.mock("sonner", () => ({ toast: { error: vi.fn(), success: vi.fn() } }));
 
 const ROW = {
   id: "d1",
@@ -150,7 +151,8 @@ describe("useAdaptationDraft", () => {
     expect(onConflict).toHaveBeenCalled();
   });
 
-  it("sets error status when the repo throws", async () => {
+  it("sets error status and toasts once when the repo throws", async () => {
+    const { toast } = await import("sonner");
     vi.mocked(repo.updateAdaptation).mockRejectedValue(new Error("net"));
     const props = {
       draftId: "d1",
@@ -162,6 +164,51 @@ describe("useAdaptationDraft", () => {
     rerender({ ...props, result: edited("y") });
     await act(async () => { await vi.advanceTimersByTimeAsync(500); });
     expect(result.current.status).toBe("error");
+    expect(toast.error).toHaveBeenCalledTimes(1);
+    expect(toast.error).toHaveBeenCalledWith(
+      expect.stringMatching(/guardadas localmente/i),
+    );
+  });
+
+  it("does not re-toast on a consecutive failed retry (one toast per error transition)", async () => {
+    const { toast } = await import("sonner");
+    vi.mocked(repo.updateAdaptation).mockRejectedValue(new Error("net"));
+    const props = {
+      draftId: "d1",
+      result: validResult,
+      initialUpdatedAt: "2026-01-01T00:00:00Z",
+      debounceMs: 500,
+    };
+    const { rerender } = renderHook((p) => useAdaptationDraft(p), { initialProps: props });
+    rerender({ ...props, result: edited("a") });
+    await act(async () => { await vi.advanceTimersByTimeAsync(500); });
+    // A second failing edit while already in error → no new toast.
+    rerender({ ...props, result: edited("b") });
+    await act(async () => { await vi.advanceTimersByTimeAsync(500); });
+    expect(toast.error).toHaveBeenCalledTimes(1);
+  });
+
+  it("re-toasts after recovering then failing again (new error transition)", async () => {
+    const { toast } = await import("sonner");
+    vi.mocked(repo.updateAdaptation).mockRejectedValueOnce(new Error("net"));
+    const props = {
+      draftId: "d1",
+      result: validResult,
+      initialUpdatedAt: "2026-01-01T00:00:00Z",
+      debounceMs: 500,
+    };
+    const { rerender } = renderHook((p) => useAdaptationDraft(p), { initialProps: props });
+    rerender({ ...props, result: edited("fail") });
+    await act(async () => { await vi.advanceTimersByTimeAsync(500); });
+    expect(toast.error).toHaveBeenCalledTimes(1);
+    // Next save succeeds (default mock) → status leaves error.
+    rerender({ ...props, result: edited("ok") });
+    await act(async () => { await vi.advanceTimersByTimeAsync(500); });
+    // Now fail again → a fresh transition into error toasts again.
+    vi.mocked(repo.updateAdaptation).mockRejectedValueOnce(new Error("net2"));
+    rerender({ ...props, result: edited("fail2") });
+    await act(async () => { await vi.advanceTimersByTimeAsync(500); });
+    expect(toast.error).toHaveBeenCalledTimes(2);
   });
 
   it("flush() saves immediately without waiting for the debounce", async () => {
