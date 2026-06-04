@@ -1,6 +1,71 @@
 import { describe, it, expect } from "vitest";
-import { RichTextSchema, InlineSchema } from "./schema";
+import { RichTextSchema, InlineSchema, isSafeImageSrc, CanonicalDocumentSchema } from "./schema";
 import { ALLOWED_COLORS } from "./colors";
+
+const uuid = (n: number): string =>
+  `00000000-0000-4000-8000-${String(n).padStart(12, "0")}`;
+
+function imageDoc(src: string) {
+  return {
+    schemaVersion: 1,
+    blocks: [{ id: uuid(1), type: "image", src, alt: "" }],
+  };
+}
+
+describe("isSafeImageSrc", () => {
+  it("accepts https URLs", () => {
+    expect(isSafeImageSrc("https://example.com/a.png")).toBe(true);
+  });
+
+  it("accepts http URLs", () => {
+    expect(isSafeImageSrc("http://example.com/a.png")).toBe(true);
+  });
+
+  it("accepts data:image URLs", () => {
+    expect(isSafeImageSrc("data:image/png;base64,AAAA")).toBe(true);
+  });
+
+  it("is case-insensitive and trims surrounding whitespace", () => {
+    expect(isSafeImageSrc("  HTTPS://Example.com/A.PNG  ")).toBe(true);
+    expect(isSafeImageSrc("DATA:IMAGE/PNG;base64,AAAA")).toBe(true);
+  });
+
+  it("rejects javascript: URLs", () => {
+    expect(isSafeImageSrc("javascript:alert(1)")).toBe(false);
+  });
+
+  it("rejects vbscript: URLs", () => {
+    expect(isSafeImageSrc("vbscript:msgbox(1)")).toBe(false);
+  });
+
+  it("rejects non-image data: URLs", () => {
+    expect(isSafeImageSrc("data:text/html,<script>alert(1)</script>")).toBe(false);
+  });
+
+  it("rejects a bare/relative path", () => {
+    expect(isSafeImageSrc("not-a-url")).toBe(false);
+  });
+});
+
+describe("image block src allowlist (schema)", () => {
+  it("accepts an https image src", () => {
+    expect(CanonicalDocumentSchema.safeParse(imageDoc("https://x.com/a.png")).success).toBe(true);
+  });
+
+  it("accepts a data:image src", () => {
+    expect(CanonicalDocumentSchema.safeParse(imageDoc("data:image/png;base64,AAAA")).success).toBe(
+      true,
+    );
+  });
+
+  it("rejects a javascript: image src", () => {
+    expect(CanonicalDocumentSchema.safeParse(imageDoc("javascript:alert(1)")).success).toBe(false);
+  });
+
+  it("rejects a data:text image src", () => {
+    expect(CanonicalDocumentSchema.safeParse(imageDoc("data:text/html,x")).success).toBe(false);
+  });
+});
 
 describe("RichText / Inline", () => {
   it("accepts a plain text inline node", () => {

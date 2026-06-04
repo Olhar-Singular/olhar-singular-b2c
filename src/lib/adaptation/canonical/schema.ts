@@ -23,6 +23,21 @@ const Color = z.string().refine(isAllowedColor, "cor não permitida");
 
 const Mark = z.enum(["bold", "italic", "underline", "strike"]);
 
+/**
+ * Allowlist guard for image `src` URLs. Only `https://`, `http://`, and
+ * `data:image/` sources are permitted; everything else (`javascript:`,
+ * `vbscript:`, `data:text/...`, etc.) is rejected. Centralizing this here means
+ * editor, screen render, and PDF all enforce the same rule via the schema.
+ */
+export function isSafeImageSrc(src: string): boolean {
+  const normalized = src.trim().toLowerCase();
+  return (
+    normalized.startsWith("https://") ||
+    normalized.startsWith("http://") ||
+    normalized.startsWith("data:image/")
+  );
+}
+
 // ---------------------------------------------------------------------------
 // Task 1.3 — Inline nodes
 // ---------------------------------------------------------------------------
@@ -211,7 +226,7 @@ const BlockMath = BlockBase.extend({
 
 const ImageBlock = BlockBase.extend({
   type: z.literal("image"),
-  src: z.string().min(1),
+  src: z.string().min(1).refine(isSafeImageSrc, "src protocol não permitido"),
   alt: z.string(),
   width: z.number().positive().optional(),
   alignment: z.enum(["left", "center", "right"]).optional(),

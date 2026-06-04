@@ -19,7 +19,7 @@ function baseDoc(): CanonicalDocument {
       { id: id(1), type: "heading", level: 1, content: [{ type: "text", text: "Tit" }] },
       { id: id(2), type: "paragraph", content: [{ type: "text", text: "p" }] },
       { id: id(3), type: "blockMath", latex: "a" },
-      { id: id(4), type: "image", src: "x.png", alt: "fig" },
+      { id: id(4), type: "image", src: "https://example.com/x.png", alt: "fig" },
       { id: id(5), type: "scaffolding", items: ["a"] },
       { id: id(6), type: "divider" },
       {

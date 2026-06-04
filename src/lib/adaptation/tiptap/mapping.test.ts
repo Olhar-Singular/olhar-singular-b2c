@@ -164,7 +164,7 @@ describe("canonical <-> ProseMirror mapping", () => {
     it("handles image without optional fields", () => {
       const doc: CanonicalDocument = {
         schemaVersion: 1,
-        blocks: [{ id: uid(104), type: "image", src: "s.png", alt: "" }],
+        blocks: [{ id: uid(104), type: "image", src: "https://example.com/s.png", alt: "" }],
       };
       expect(proseMirrorToCanonical(pmRoundTrip(doc))).toEqual(doc);
     });
