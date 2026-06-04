@@ -73,7 +73,14 @@ function makeProps(
     priorQuestions = 0,
     upable = true,
     downable = true,
-  }: { editable?: boolean; priorQuestions?: number; upable?: boolean; downable?: boolean } = {}
+    getPosUndefined = false,
+  }: {
+    editable?: boolean;
+    priorQuestions?: number;
+    upable?: boolean;
+    downable?: boolean;
+    getPosUndefined?: boolean;
+  } = {}
 ) {
   const updateAttributes = vi.fn();
   const deleteNode = vi.fn();
@@ -90,7 +97,7 @@ function makeProps(
     node: { attrs: { answer } },
     updateAttributes,
     deleteNode,
-    getPos: () => pos,
+    getPos: () => (getPosUndefined ? undefined : pos),
     editor: { isEditable: editable, state: { doc }, view: { dispatch } },
   } as unknown as NodeViewProps;
   return { props, updateAttributes, deleteNode, dispatch };
@@ -124,6 +131,23 @@ describe("QuestionNodeView", () => {
     const { props } = makeProps(mc, { priorQuestions: 2 });
     render(<QuestionNodeView {...props} />);
     expect(screen.getByTestId("question-ordinal")).toHaveTextContent("Questão 3");
+  });
+
+  it("survives a transient undefined getPos() without crashing (no ordinal, actions guarded)", () => {
+    // Tiptap can return undefined from getPos() during initial mount; the view
+    // must not call questionOrdinal/canMove*/transactions with an invalid pos.
+    const { props, dispatch } = makeProps(mc, { getPosUndefined: true });
+    expect(() => render(<QuestionNodeView {...props} />)).not.toThrow();
+    // ordinal label has no number; move + add-image are disabled.
+    expect(screen.getByTestId("question-ordinal")).toHaveTextContent("Questão");
+    expect(screen.getByLabelText("Mover questão para cima")).toBeDisabled();
+    expect(screen.getByLabelText("Mover questão para baixo")).toBeDisabled();
+    expect(screen.getByLabelText("Adicionar imagem à questão")).toBeDisabled();
+    // delete still works (deleteNode doesn't need a position)
+    fireEvent.click(screen.getByLabelText("Excluir questão"));
+    expect(props.deleteNode).toHaveBeenCalledTimes(1);
+    // move handler is a no-op (button disabled, but guard also returns early)
+    expect(dispatch).not.toHaveBeenCalled();
   });
 
   it("writes back answer edits via updateAttributes({ answer })", () => {

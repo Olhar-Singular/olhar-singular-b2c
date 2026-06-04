@@ -29,12 +29,19 @@ export function QuestionNodeView({ node, updateAttributes, editor, getPos, delet
   const [modalOpen, setModalOpen] = useState(false);
   const answer = node.attrs.answer as QuestionAnswer;
   const disabled = !editor.isEditable;
-  const pos = getPos();
-  const ordinal = questionOrdinal(editor.state.doc, pos);
-  const upDisabled = disabled || !canMoveUp(editor.state.doc, pos);
-  const downDisabled = disabled || !canMoveDown(editor.state.doc, pos);
+  // Tiptap's `getPos()` can return `undefined` transiently (e.g. during the
+  // initial mount / edit-mode rehydration). Guard it: a non-number position
+  // must never reach `questionOrdinal`/`canMove*`/the transactions, which
+  // resolve it against the doc and would throw "Position undefined out of range".
+  const rawPos = getPos();
+  const pos = typeof rawPos === "number" ? rawPos : null;
+  const ordinal = pos === null ? undefined : questionOrdinal(editor.state.doc, pos);
+  const upDisabled = disabled || pos === null || !canMoveUp(editor.state.doc, pos);
+  const downDisabled = disabled || pos === null || !canMoveDown(editor.state.doc, pos);
 
   const move = (dir: MoveDirection) => {
+    /* v8 ignore next -- defensive type-narrow; the move buttons are disabled when pos is null */
+    if (pos === null) return;
     const tr = buildMoveTransaction(editor.state, pos, dir);
     if (tr) editor.view.dispatch(tr);
   };
@@ -42,6 +49,8 @@ export function QuestionNodeView({ node, updateAttributes, editor, getPos, delet
   const handlePick = (images: ImageItem[]) => {
     const first = images[0];
     if (!first) return;
+    /* v8 ignore next -- defensive type-narrow; the add-image button is disabled when pos is null */
+    if (pos === null) return;
     const tr = buildStemImageTransaction(editor.state, pos, {
       id: newId(),
       src: first.src,
@@ -86,7 +95,7 @@ export function QuestionNodeView({ node, updateAttributes, editor, getPos, delet
             variant="ghost"
             size="icon"
             className="h-7 w-7"
-            disabled={disabled}
+            disabled={disabled || pos === null}
             onClick={() => setModalOpen(true)}
             title="Adicionar imagem à questão"
             aria-label="Adicionar imagem à questão"
