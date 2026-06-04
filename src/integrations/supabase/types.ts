@@ -7,40 +7,75 @@ export type Json =
   | Json[]
 
 export type Database = {
-  // Allows to automatically instantiate createClient with right options
-  // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
-  __InternalSupabase: {
-    PostgrestVersion: "14.5"
+  graphql_public: {
+    Tables: {
+      [_ in never]: never
+    }
+    Views: {
+      [_ in never]: never
+    }
+    Functions: {
+      graphql: {
+        Args: {
+          extensions?: Json
+          operationName?: string
+          query?: string
+          variables?: Json
+        }
+        Returns: Json
+      }
+    }
+    Enums: {
+      [_ in never]: never
+    }
+    CompositeTypes: {
+      [_ in never]: never
+    }
   }
   public: {
     Tables: {
       adaptations: {
         Row: {
+          activity_type: string | null
+          adaptation_result: Json
           barrier_profile_id: string | null
-          content: Json
+          barriers_used: Json
           created_at: string
           credits_spent: number
           id: string
+          observation_notes: string | null
+          original_activity: string
+          status: string
           title: string
           updated_at: string
           user_id: string
         }
         Insert: {
+          activity_type?: string | null
+          adaptation_result?: Json
           barrier_profile_id?: string | null
-          content?: Json
+          barriers_used?: Json
           created_at?: string
           credits_spent?: number
           id?: string
+          observation_notes?: string | null
+          original_activity?: string
+          status?: string
           title?: string
           updated_at?: string
           user_id: string
         }
         Update: {
+          activity_type?: string | null
+          adaptation_result?: Json
           barrier_profile_id?: string | null
-          content?: Json
+          barriers_used?: Json
           created_at?: string
           credits_spent?: number
           id?: string
+          observation_notes?: string | null
+          original_activity?: string
+          status?: string
           title?: string
           updated_at?: string
           user_id?: string
@@ -417,6 +452,10 @@ export type Database = {
           total_usd: number
         }[]
       }
+      admin_grant_credits: {
+        Args: { p_amount: number; p_user_id: string }
+        Returns: Json
+      }
       admin_user_spending: {
         Args: never
         Returns: {
@@ -573,7 +612,11 @@ export type CompositeTypes<
     : never
 
 export const Constants = {
+  graphql_public: {
+    Enums: {},
+  },
   public: {
     Enums: {},
   },
 } as const
+

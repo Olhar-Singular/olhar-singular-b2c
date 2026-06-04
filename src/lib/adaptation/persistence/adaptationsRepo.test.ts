@@ -124,6 +124,16 @@ describe("adaptationsRepo", () => {
       expect(res.ok).toBe(true);
     });
 
+    it("passes barriers_used through the patch when present", async () => {
+      const chain = buildChain({ data: baseRow, error: null });
+      vi.mocked(supabase.from).mockReturnValue(chain as never);
+      const barriers = [{ dimension: "tea", barrier_key: "x", is_active: true }];
+      await updateAdaptation("a1", { barriers_used: barriers }, "2026-01-01T00:00:00Z");
+      expect(chain.update).toHaveBeenCalledWith(
+        expect.objectContaining({ barriers_used: barriers }),
+      );
+    });
+
     it("returns a conflict result when 0 rows match (stale updated_at)", async () => {
       const chain = buildChain({ data: null, error: null });
       vi.mocked(supabase.from).mockReturnValue(chain as never);
