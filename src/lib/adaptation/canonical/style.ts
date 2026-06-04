@@ -7,7 +7,7 @@
  * normalized to "no style".
  */
 
-import type { Block, CanonicalDocument, NodeStyle } from "./schema";
+import type { Block, CanonicalDocument, NodeStyle } from "./schema.ts";
 
 function styleOrUndefined(style: NodeStyle): NodeStyle | undefined {
   return Object.keys(style).length > 0 ? style : undefined;

@@ -4,8 +4,8 @@
  */
 
 import { z } from "zod";
-import { CanonicalDocumentSchema } from "./schema";
-import type { CanonicalDocument } from "./schema";
+import { CanonicalDocumentSchema } from "./schema.ts";
+import type { CanonicalDocument } from "./schema.ts";
 
 // ---------------------------------------------------------------------------
 // Types

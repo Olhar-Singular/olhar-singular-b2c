@@ -4,7 +4,7 @@
  * Today only v1 exists; future versions add cases to the switch.
  */
 
-import { SCHEMA_VERSION } from "./schema";
+import { SCHEMA_VERSION } from "./schema.ts";
 
 // ---------------------------------------------------------------------------
 // Types

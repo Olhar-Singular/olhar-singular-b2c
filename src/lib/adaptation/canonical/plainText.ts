@@ -4,7 +4,7 @@
  * (stem, instruction, then answers) without any markup.
  */
 
-import type { Block, CanonicalDocument, QuestionAnswer, RichText } from "./schema";
+import type { Block, CanonicalDocument, QuestionAnswer, RichText } from "./schema.ts";
 import { indexToLetter } from "@/components/adaptation/render/letters";
 
 function richTextToText(rt: RichText): string {

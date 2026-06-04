@@ -10,8 +10,8 @@
  */
 
 import { z } from "zod";
-import { isAllowedColor } from "./colors";
-import { isId } from "./ids";
+import { isAllowedColor } from "./colors.ts";
+import { isId } from "./ids.ts";
 
 // ---------------------------------------------------------------------------
 // Primitives

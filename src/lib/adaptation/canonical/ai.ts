@@ -21,9 +21,9 @@ import {
   type CanonicalDocument,
   type AdaptationResult,
   type RichText,
-} from "./schema";
-import { newId } from "./ids";
-import { validateDocument } from "./validate";
+} from "./schema.ts";
+import { newId } from "./ids.ts";
+import { validateDocument } from "./validate.ts";
 
 // ---------------------------------------------------------------------------
 // 1. AI schemas — NO ids, NO recursion, NO per-node style
