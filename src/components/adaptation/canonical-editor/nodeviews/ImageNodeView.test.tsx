@@ -64,6 +64,13 @@ describe("ImageNodeView", () => {
     expect(updateAttributes).toHaveBeenCalledWith({ alt: "altx" });
   });
 
+  it("sets a caption when there was none (null caption maps to undefined existing)", () => {
+    const { props, updateAttributes } = makeProps({ caption: null });
+    render(<ImageNodeView {...props} />);
+    fireEvent.change(screen.getByLabelText("Legenda da imagem"), { target: { value: "first" } });
+    expect(updateAttributes).toHaveBeenCalledWith({ caption: [{ type: "text", text: "first" }] });
+  });
+
   it("opens the modal and applies the first picked image", () => {
     const { props, updateAttributes } = makeProps();
     render(<ImageNodeView {...props} />);

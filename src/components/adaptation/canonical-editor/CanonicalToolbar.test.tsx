@@ -47,13 +47,14 @@ describe("CanonicalToolbar", () => {
     );
   });
 
-  it("inserts image / math / scaffold blocks via commands", () => {
+  it("inserts image / math / scaffold / divider blocks via commands", () => {
     render(<CanonicalToolbar editor={makeEditor()} />);
     fireEvent.click(screen.getByTitle("Inserir imagem"));
     fireEvent.click(screen.getByTitle("Inserir fórmula"));
     fireEvent.click(screen.getByTitle("Inserir andaime"));
+    fireEvent.click(screen.getByTitle("Inserir divisória"));
     const inserts = chain.calls.filter((c) => c === "insertContent");
-    expect(inserts).toHaveLength(3);
+    expect(inserts).toHaveLength(4);
   });
 
   it("shows the active state on toggle buttons", () => {

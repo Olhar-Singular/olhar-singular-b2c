@@ -99,3 +99,9 @@ export function buildScaffoldNode(generate: Generate = newId): PMNode {
   const block: Block = { id: generate(), type: "scaffolding", items: [""] };
   return blockToNode(block);
 }
+
+/** Build a divider PM node. */
+export function buildDivider(generate: Generate = newId): PMNode {
+  const block: Block = { id: generate(), type: "divider" };
+  return blockToNode(block);
+}

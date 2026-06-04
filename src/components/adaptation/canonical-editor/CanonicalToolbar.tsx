@@ -14,6 +14,7 @@ import {
   ImageIcon,
   Sigma,
   ListTree,
+  Minus,
 } from "lucide-react";
 import type { Editor } from "@tiptap/react";
 import { Button } from "@/components/ui/button";
@@ -31,6 +32,7 @@ import {
   buildImageNode,
   buildMathNode,
   buildScaffoldNode,
+  buildDivider,
   type QuestionKind,
 } from "./commands";
 
@@ -147,6 +149,9 @@ export function CanonicalToolbar({ editor, disabled = false }: CanonicalToolbarP
       </ToolbarButton>
       <ToolbarButton onClick={() => insert(buildScaffoldNode())} title="Inserir andaime" disabled={disabled}>
         <ListTree className="h-3.5 w-3.5" />
+      </ToolbarButton>
+      <ToolbarButton onClick={() => insert(buildDivider())} title="Inserir divisória" disabled={disabled}>
+        <Minus className="h-3.5 w-3.5" />
       </ToolbarButton>
     </div>
   );

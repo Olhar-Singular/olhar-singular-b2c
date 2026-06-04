@@ -4,6 +4,7 @@ import {
   buildImageNode,
   buildMathNode,
   buildScaffoldNode,
+  buildDivider,
   emptyAnswer,
   type QuestionKind,
 } from "./commands";
@@ -110,5 +111,14 @@ describe("buildScaffoldNode", () => {
     expect(Array.isArray(node.attrs?.items)).toBe(true);
     const doc = proseMirrorToCanonical(wrapDoc(node));
     expect(doc.blocks[0].type).toBe("scaffolding");
+  });
+});
+
+describe("buildDivider", () => {
+  it("builds a divider PM node whose round-trip is a valid divider block", () => {
+    const node = buildDivider(gen);
+    expect(node.type).toBe("divider");
+    const doc = proseMirrorToCanonical(wrapDoc(node));
+    expect(doc.blocks[0].type).toBe("divider");
   });
 });

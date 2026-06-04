@@ -292,6 +292,11 @@ describe("canonical <-> ProseMirror mapping", () => {
       expect(tryProseMirrorToCanonical({ type: "doc", content: [] }).ok).toBe(false);
     });
 
+    it("returns ok:false (no throw) when the doc has no content array at all", () => {
+      expect(() => tryProseMirrorToCanonical({ type: "doc" })).not.toThrow();
+      expect(tryProseMirrorToCanonical({ type: "doc" }).ok).toBe(false);
+    });
+
     it("returns ok:false (instead of throwing) on an unmappable node type", () => {
       const unmappable = {
         type: "doc",
