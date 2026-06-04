@@ -67,6 +67,11 @@ const TABS: { key: Tab; label: string; icon: React.ElementType }[] = [
   { key: "banco", label: "Banco de Questões", icon: Database },
 ];
 
+// Most recent questions shown in the bank picker.
+const BANK_QUERY_LIMIT = 50;
+// Debounce (ms) before re-running the bank search as the user types.
+const BANK_SEARCH_DEBOUNCE_MS = 300;
+
 function buildActivityText(questions: SelectedQuestion[]): string {
   return questions
     .map((q, i) => {
@@ -83,11 +88,21 @@ export function StepActivityInput({ data, updateData, onNext, onPrev }: Props) {
   const [tab, setTab] = useState<Tab>("manual");
   const [error, setError] = useState("");
 
-  // Set default tab based on whether the user has questions in their bank
+  // Set default tab based on whether the user has questions in their bank.
+  // A failed probe is non-fatal (the user can still pick the tab manually), so
+  // it is logged rather than surfaced — but it must NOT be silently swallowed.
   useEffect(() => {
-    supabase.from("question_bank").select("id").limit(1).then(({ data: rows }) => {
-      if (rows && rows.length > 0) setTab("banco");
-    });
+    supabase
+      .from("question_bank")
+      .select("id")
+      .limit(1)
+      .then(({ data: rows, error }) => {
+        if (error) {
+          console.error("question_bank probe failed:", error);
+          return;
+        }
+        if (rows && rows.length > 0) setTab("banco");
+      });
   }, []);
 
   // Bank modal state
@@ -95,6 +110,7 @@ export function StepActivityInput({ data, updateData, onNext, onPrev }: Props) {
   const [bankQuestions, setBankQuestions] = useState<BankQuestion[]>([]);
   const [bankSearch, setBankSearch] = useState("");
   const [bankLoading, setBankLoading] = useState(false);
+  const [bankError, setBankError] = useState(false);
   const [checkedIds, setCheckedIds] = useState<Set<string>>(new Set());
   const [filterSubject, setFilterSubject] = useState("all");
   const [filterDifficulty, setFilterDifficulty] = useState("all");
@@ -108,24 +124,33 @@ export function StepActivityInput({ data, updateData, onNext, onPrev }: Props) {
 
   const fetchBankQuestions = useCallback(async () => {
     setBankLoading(true);
+    setBankError(false);
     let query = supabase
       .from("question_bank")
       .select("id, text, subject, topic, difficulty, image_url, options")
       .order("created_at", { ascending: false })
-      .limit(50);
+      .limit(BANK_QUERY_LIMIT);
     if (bankSearch.trim()) query = query.ilike("text", `%${bankSearch.trim()}%`);
     if (filterSubject !== "all") query = query.eq("subject", filterSubject);
     if (filterDifficulty !== "all") query = query.eq("difficulty", filterDifficulty);
-    const { data: rows } = await query;
-    /* v8 ignore next -- v8 não credita o branch após await; o caminho rows nulo é exercitado em teste */
-    setBankQuestions((rows as BankQuestion[]) || []);
+    const { data: rows, error } = await query;
+    if (error) {
+      // A failed bank query must NOT masquerade as an empty bank: tell the user.
+      console.error("question_bank query failed:", error);
+      setBankError(true);
+      setBankQuestions([]);
+      toast.error("Erro ao carregar o banco de questões. Tente novamente.");
+    } else {
+      /* v8 ignore next -- v8 não credita o branch após await; o caminho rows nulo é exercitado em teste */
+      setBankQuestions((rows as BankQuestion[]) || []);
+    }
     setBankLoading(false);
   }, [bankSearch, filterSubject, filterDifficulty]);
 
   useEffect(() => {
     if (!showBankModal) return;
     if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
-    searchTimerRef.current = setTimeout(fetchBankQuestions, 300);
+    searchTimerRef.current = setTimeout(fetchBankQuestions, BANK_SEARCH_DEBOUNCE_MS);
     /* v8 ignore next -- searchTimerRef.current sempre setado na linha anterior */
     return () => { if (searchTimerRef.current) clearTimeout(searchTimerRef.current); };
   }, [showBankModal, fetchBankQuestions]);
@@ -341,6 +366,10 @@ export function StepActivityInput({ data, updateData, onNext, onPrev }: Props) {
               <div className="flex items-center justify-center py-12">
                 <Loader2 className="w-6 h-6 animate-spin text-primary" />
               </div>
+            ) : bankError ? (
+              <p role="alert" className="text-sm text-destructive py-8 text-center">
+                Erro ao carregar o banco de questões. Tente novamente.
+              </p>
             ) : bankQuestions.length === 0 ? (
               <p className="text-sm text-muted-foreground py-8 text-center">Nenhuma questão encontrada.</p>
             ) : (
