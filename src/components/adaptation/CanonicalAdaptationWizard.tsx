@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import {
@@ -27,6 +27,8 @@ import {
 } from "@/lib/adaptation/wizard/wizardState";
 import { wizardDataToPayload } from "@/lib/adaptation/wizard/rowMapping";
 import { saveDraft } from "@/lib/adaptation/persistence/adaptationsRepo";
+import { readMirror, clearMirror, type MirrorEntry } from "@/lib/adaptation/persistence/draftMirror";
+import { shouldOfferRestore } from "@/lib/adaptation/persistence/restoreDecision";
 import { useAdaptationDraft } from "@/hooks/useAdaptationDraft";
 import { useMarkReady } from "@/hooks/useAdaptations";
 import { useAuth } from "@/hooks/useAuth";
@@ -87,6 +89,11 @@ export default function CanonicalAdaptationWizard({ editMode }: Props = {}) {
   );
   const [stepIndex, setStepIndex] = useState(editMode ? CONTENT_INDEX : 0);
   const [confirmRegenerate, setConfirmRegenerate] = useState(false);
+  // Crash-mirror recovery: a surviving mirror newer than the loaded row means a
+  // save was lost. We hold it here and prompt the user to recover it.
+  const [pendingMirror, setPendingMirror] = useState<MirrorEntry | null>(null);
+  // Mirror-check runs once per draftId so we never re-prompt after a decision.
+  const checkedMirrorFor = useRef<string | null>(null);
 
   // Draft persistence state. In edit mode we already have a row. Both the id
   // and updated_at live in REACT STATE so that, in the create flow, the values
@@ -104,7 +111,46 @@ export default function CanonicalAdaptationWizard({ editMode }: Props = {}) {
     navigate(0);
   }, [navigate]);
 
-  const { status: saveStatus, flush } = useAdaptationDraft({
+  // Once a draftId is known (edit mode at mount, or a create-flow draft just
+  // created), check the crash mirror. A surviving mirror that is newer than the
+  // loaded server state means an autosave was lost — offer to recover it.
+  useEffect(() => {
+    if (!draftId || checkedMirrorFor.current === draftId) return;
+    checkedMirrorFor.current = draftId;
+    let cancelled = false;
+    void (async () => {
+      const mirror = await readMirror(draftId);
+      const serverUpdatedAt = editMode ? editMode.initialUpdatedAt : null;
+      if (cancelled) return;
+      if (shouldOfferRestore(mirror, serverUpdatedAt)) {
+        setPendingMirror(mirror);
+      } else if (mirror) {
+        // Stale/older mirror: clear it so it never lingers to mislead later.
+        void clearMirror(draftId);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [draftId, editMode]);
+
+  // Both handlers run only while the prompt is open, i.e. pendingMirror is set;
+  // the early return is a defensive guard that never triggers in practice.
+  const confirmRestore = useCallback(() => {
+    /* v8 ignore next -- the prompt only renders while pendingMirror is set */
+    if (!pendingMirror) return;
+    setData((prev) => setResult(prev, pendingMirror.result));
+    setPendingMirror(null);
+  }, [pendingMirror]);
+
+  const dismissRestore = useCallback(() => {
+    /* v8 ignore next -- the mirror is keyed by draftId, always present here */
+    if (!pendingMirror) return;
+    void clearMirror(pendingMirror.draftId);
+    setPendingMirror(null);
+  }, [pendingMirror]);
+
+  const { status: saveStatus, flush, currentUpdatedAt } = useAdaptationDraft({
     draftId,
     result: data.result,
     initialUpdatedAt: draftUpdatedAt,
@@ -175,11 +221,22 @@ export default function CanonicalAdaptationWizard({ editMode }: Props = {}) {
     if (!draftId) return;
     // Flush any pending autosave first so an edit made within the debounce
     // window lands in adaptation_result before the row is flipped to ready.
-    await flush();
-    await markReady.mutateAsync(draftId);
+    // The flush returns the freshest updated_at it produced, so markReady's
+    // optimistic guard uses a token that cannot be stale from this same save.
+    const latestUpdatedAt = (await flush()) ?? currentUpdatedAt;
+    /* v8 ignore next -- guard: a draft always has a known updated_at by now */
+    if (!latestUpdatedAt) return;
+    // markReady uses the latest known updated_at (advanced by every autosave) so
+    // the optimistic-concurrency guard does not desync. A conflict means another
+    // writer touched the row — warn + reload instead of navigating away blind.
+    const res = await markReady.mutateAsync({ id: draftId, expectedUpdatedAt: latestUpdatedAt });
+    if (!res.ok) {
+      handleConflict();
+      return;
+    }
     toast.success("Adaptação salva!");
     navigate("/historico");
-  }, [draftId, flush, markReady, navigate]);
+  }, [draftId, currentUpdatedAt, flush, markReady, navigate, handleConflict]);
 
   const renderStep = () => {
     switch (currentKey) {
@@ -287,6 +344,27 @@ export default function CanonicalAdaptationWizard({ editMode }: Props = {}) {
       </div>
 
       <div className="min-h-[400px]">{renderStep()}</div>
+
+      <AlertDialog
+        open={!!pendingMirror}
+        onOpenChange={(open) => {
+          /* v8 ignore next -- no trigger opens this; Radix only fires open=false */
+          if (!open) dismissRestore();
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Recuperar alterações não salvas?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Encontramos edições que não chegaram a ser salvas. Deseja recuperá-las? Caso contrário, elas serão descartadas.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={dismissRestore}>Descartar</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmRestore}>Recuperar</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <AlertDialog open={confirmRegenerate} onOpenChange={setConfirmRegenerate}>
         <AlertDialogContent>

@@ -1,10 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent, within, waitFor } from "@testing-library/react";
+import { render, screen, fireEvent, within, waitFor, act } from "@testing-library/react";
 import { renderWithProviders } from "@/test/helpers";
 import CanonicalAdaptationWizard from "./CanonicalAdaptationWizard";
 import type { AdaptationResult, CanonicalDocument } from "@/lib/adaptation/canonical/schema";
 import { validateDocument } from "@/lib/adaptation/canonical/validate";
 import * as repo from "@/lib/adaptation/persistence/adaptationsRepo";
+import * as mirror from "@/lib/adaptation/persistence/draftMirror";
 
 vi.mock("sonner", () => ({ toast: { error: vi.fn(), success: vi.fn() } }));
 
@@ -18,9 +19,11 @@ vi.mock("react-router-dom", async (orig) => ({
 vi.mock("@/hooks/useAuth", () => ({ useAuth: () => ({ user: { id: "u1" } }) }));
 
 vi.mock("@/lib/adaptation/persistence/adaptationsRepo");
+vi.mock("@/lib/adaptation/persistence/draftMirror");
 
 const mockDraftStatus = { value: "idle" as string };
-const mockFlush = vi.fn().mockResolvedValue(undefined);
+const mockCurrentUpdatedAt = { value: "2026-01-01T00:00:00Z" as string | null };
+const mockFlush = vi.fn().mockResolvedValue("2026-01-01T00:00:00Z");
 // Captures the latest props the wizard passes into the hook + the onConflict cb.
 const draftHookCalls: Array<{
   draftId: string | null;
@@ -41,7 +44,8 @@ vi.mock("@/hooks/useAdaptationDraft", () => ({
     return {
       status: mockDraftStatus.value,
       flush: mockFlush,
-      restoreFromMirror: vi.fn(),
+      restoreFromMirror: vi.fn().mockResolvedValue(null),
+      currentUpdatedAt: mockCurrentUpdatedAt.value,
     };
   },
 }));
@@ -164,9 +168,13 @@ beforeEach(() => {
   vi.clearAllMocks();
   draftHookCalls.length = 0;
   mockDraftStatus.value = "idle";
+  mockCurrentUpdatedAt.value = "2026-01-01T00:00:00Z";
+  mockFlush.mockResolvedValue("2026-01-01T00:00:00Z");
   vi.mocked(repo.saveDraft).mockResolvedValue(DRAFT_ROW);
   vi.mocked(repo.getAdaptation).mockResolvedValue(DRAFT_ROW);
-  mockMarkReady.mockResolvedValue(DRAFT_ROW);
+  vi.mocked(mirror.readMirror).mockResolvedValue(null);
+  vi.mocked(mirror.clearMirror).mockResolvedValue(undefined);
+  mockMarkReady.mockResolvedValue({ ok: true, updatedAt: "2026-01-02T00:00:00Z" });
 });
 
 describe("CanonicalAdaptationWizard", () => {
@@ -328,9 +336,66 @@ describe("CanonicalAdaptationWizard", () => {
     fireEvent.click(screen.getByRole("button", { name: /Avançar para estilo/i }));
     fireEvent.click(screen.getByRole("button", { name: /Avançar para exportação/i }));
     fireEvent.click(screen.getByRole("button", { name: /Salvar/i }));
-    await waitFor(() => expect(mockMarkReady).toHaveBeenCalledWith("draft-1"));
+    await waitFor(() =>
+      expect(mockMarkReady).toHaveBeenCalledWith({
+        id: "draft-1",
+        expectedUpdatedAt: "2026-01-01T00:00:00Z",
+      }),
+    );
     expect(toast.success).toHaveBeenCalled();
     expect(mockNavigate).toHaveBeenCalledWith("/historico");
+  });
+
+  it("Salvar uses the freshest updated_at returned by flush for the guard", async () => {
+    // flush advanced the row (autosave landed) → its returned token, not the
+    // render-time currentUpdatedAt, must be the one markReady receives.
+    mockFlush.mockResolvedValue("2026-09-09T00:00:00Z");
+    renderWithProviders(<CanonicalAdaptationWizard />);
+    advanceToContent();
+    await waitFor(() => expect(repo.saveDraft).toHaveBeenCalled());
+    fireEvent.click(screen.getByRole("button", { name: /Avançar para estilo/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Avançar para exportação/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Salvar/i }));
+    await waitFor(() =>
+      expect(mockMarkReady).toHaveBeenCalledWith({
+        id: "draft-1",
+        expectedUpdatedAt: "2026-09-09T00:00:00Z",
+      }),
+    );
+  });
+
+  it("Salvar falls back to currentUpdatedAt when flush returns null", async () => {
+    mockFlush.mockResolvedValue(null);
+    renderWithProviders(<CanonicalAdaptationWizard />);
+    advanceToContent();
+    await waitFor(() => expect(repo.saveDraft).toHaveBeenCalled());
+    fireEvent.click(screen.getByRole("button", { name: /Avançar para estilo/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Avançar para exportação/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Salvar/i }));
+    await waitFor(() =>
+      expect(mockMarkReady).toHaveBeenCalledWith({
+        id: "draft-1",
+        expectedUpdatedAt: "2026-01-01T00:00:00Z",
+      }),
+    );
+  });
+
+  it("Salvar surfaces a conflict (toast + reload) instead of navigating", async () => {
+    const { toast } = await import("sonner");
+    mockMarkReady.mockResolvedValue({ ok: false, conflict: true });
+    renderWithProviders(<CanonicalAdaptationWizard />);
+    advanceToContent();
+    await waitFor(() => expect(repo.saveDraft).toHaveBeenCalled());
+    fireEvent.click(screen.getByRole("button", { name: /Avançar para estilo/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Avançar para exportação/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Salvar/i }));
+    await waitFor(() => expect(mockMarkReady).toHaveBeenCalled());
+    expect(toast.error).toHaveBeenCalledWith(
+      expect.stringMatching(/alterada em outro lugar/i),
+    );
+    expect(mockNavigate).toHaveBeenCalledWith(0);
+    expect(mockNavigate).not.toHaveBeenCalledWith("/historico");
+    expect(toast.success).not.toHaveBeenCalled();
   });
 
   it("does not create a second draft when regenerating", async () => {
@@ -345,6 +410,122 @@ describe("CanonicalAdaptationWizard", () => {
     fireEvent.click(screen.getByTestId("do-generate"));
     await waitFor(() => expect(screen.getByTestId("edit-content")).toHaveTextContent("gerado"));
     expect(repo.saveDraft).toHaveBeenCalledTimes(1);
+  });
+
+  // --- C1-a crash-mirror restore -------------------------------------------
+
+  function editSeed(updatedAt = "2026-01-01T00:00:00Z") {
+    return {
+      adaptationId: "edit-1",
+      initialData: {
+        activityType: "exercício",
+        activityText: "texto",
+        selectedQuestions: [],
+        barriers: [],
+        barrierProfileId: null,
+        result: makeResult(),
+      },
+      initialUpdatedAt: updatedAt,
+    };
+  }
+
+  function mirrorResult(text: string): AdaptationResult {
+    return {
+      schemaVersion: 1,
+      document: {
+        schemaVersion: 1,
+        blocks: [{ id: id(2), type: "paragraph", content: [{ type: "text", text }] }],
+      },
+      strategies_applied: [],
+      pedagogical_justification: "",
+      implementation_tips: [],
+    };
+  }
+
+  it("offers restore when a newer mirror survives, and recovers the doc on confirm", async () => {
+    vi.mocked(mirror.readMirror).mockResolvedValue({
+      draftId: "edit-1",
+      result: mirrorResult("RECUPERADO"),
+      savedAt: Date.parse("2026-02-01T00:00:00Z"), // newer than the row
+    });
+    renderWithProviders(<CanonicalAdaptationWizard editMode={editSeed()} />);
+    // Seeded doc shows first.
+    expect(screen.getByTestId("edit-content")).toHaveTextContent("gerado");
+    // Prompt appears.
+    const dialog = await screen.findByRole("alertdialog");
+    expect(within(dialog).getByText(/Recuperar alterações não salvas/i)).toBeInTheDocument();
+    fireEvent.click(within(dialog).getByRole("button", { name: /Recuperar/i }));
+    // Doc is re-seeded from the mirror.
+    await waitFor(() =>
+      expect(screen.getByTestId("edit-content")).toHaveTextContent("RECUPERADO"),
+    );
+  });
+
+  it("dismissing the restore prompt clears the mirror and keeps the loaded doc", async () => {
+    vi.mocked(mirror.readMirror).mockResolvedValue({
+      draftId: "edit-1",
+      result: mirrorResult("RECUPERADO"),
+      savedAt: Date.parse("2026-02-01T00:00:00Z"),
+    });
+    renderWithProviders(<CanonicalAdaptationWizard editMode={editSeed()} />);
+    const dialog = await screen.findByRole("alertdialog");
+    fireEvent.click(within(dialog).getByRole("button", { name: /Descartar/i }));
+    await waitFor(() => expect(mirror.clearMirror).toHaveBeenCalledWith("edit-1"));
+    expect(screen.getByTestId("edit-content")).toHaveTextContent("gerado");
+  });
+
+  it("does not prompt and clears an older mirror (server row is newer)", async () => {
+    vi.mocked(mirror.readMirror).mockResolvedValue({
+      draftId: "edit-1",
+      result: mirrorResult("OLD"),
+      savedAt: Date.parse("2025-01-01T00:00:00Z"), // older than the row
+    });
+    renderWithProviders(<CanonicalAdaptationWizard editMode={editSeed()} />);
+    await waitFor(() => expect(mirror.clearMirror).toHaveBeenCalledWith("edit-1"));
+    expect(screen.queryByText(/Recuperar alterações não salvas/i)).not.toBeInTheDocument();
+  });
+
+  it("ignores a late mirror read after unmount (no state update)", async () => {
+    let resolveRead: (e: Awaited<ReturnType<typeof mirror.readMirror>>) => void = () => {};
+    vi.mocked(mirror.readMirror).mockImplementation(
+      () => new Promise((res) => { resolveRead = res; }),
+    );
+    const { unmount } = renderWithProviders(<CanonicalAdaptationWizard editMode={editSeed()} />);
+    await waitFor(() => expect(mirror.readMirror).toHaveBeenCalledWith("edit-1"));
+    // Unmount BEFORE the read resolves → the cancelled guard must short-circuit.
+    unmount();
+    await act(async () => {
+      resolveRead({ draftId: "edit-1", result: mirrorResult("LATE"), savedAt: Date.now() });
+      await Promise.resolve();
+    });
+    // No prompt was ever shown.
+    expect(screen.queryByText(/Recuperar alterações não salvas/i)).not.toBeInTheDocument();
+  });
+
+  it("does not prompt when no mirror exists", async () => {
+    vi.mocked(mirror.readMirror).mockResolvedValue(null);
+    renderWithProviders(<CanonicalAdaptationWizard editMode={editSeed()} />);
+    await waitFor(() => expect(mirror.readMirror).toHaveBeenCalledWith("edit-1"));
+    expect(screen.queryByText(/Recuperar alterações não salvas/i)).not.toBeInTheDocument();
+    expect(mirror.clearMirror).not.toHaveBeenCalled();
+  });
+
+  it("offers restore in the create flow for any surviving mirror", async () => {
+    // Create flow: no editMode, draft is created on first generation. Mirror
+    // appears keyed by the new draft id → any surviving mirror is unsaved.
+    vi.mocked(mirror.readMirror).mockResolvedValue({
+      draftId: "draft-1",
+      result: mirrorResult("CREATE-RECOVER"),
+      savedAt: 1,
+    });
+    renderWithProviders(<CanonicalAdaptationWizard />);
+    advanceToContent();
+    await waitFor(() => expect(repo.saveDraft).toHaveBeenCalled());
+    const dialog = await screen.findByRole("alertdialog");
+    fireEvent.click(within(dialog).getByRole("button", { name: /Recuperar/i }));
+    await waitFor(() =>
+      expect(screen.getByTestId("edit-content")).toHaveTextContent("CREATE-RECOVER"),
+    );
   });
 
   it("opens in edit mode at the content step seeded from a row", () => {
@@ -393,7 +574,11 @@ describe("CanonicalAdaptationWizard", () => {
     fireEvent.click(screen.getByRole("button", { name: /Avançar para estilo/i }));
     fireEvent.click(screen.getByRole("button", { name: /Avançar para exportação/i }));
     fireEvent.click(screen.getByRole("button", { name: /Salvar/i }));
-    await waitFor(() => expect(mockMarkReady).toHaveBeenCalledWith("draft-1"));
+    await waitFor(() =>
+      expect(mockMarkReady).toHaveBeenCalledWith(
+        expect.objectContaining({ id: "draft-1" }),
+      ),
+    );
     // flush must have run, and before markReady.
     expect(mockFlush).toHaveBeenCalled();
     expect(mockFlush.mock.invocationCallOrder[0]).toBeLessThan(
