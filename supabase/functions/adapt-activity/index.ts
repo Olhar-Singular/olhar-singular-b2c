@@ -3,8 +3,19 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { sanitize } from "../_shared/sanitize.ts";
 import { logAiUsage } from "../_shared/logAiUsage.ts";
 import { getAiConfig } from "../_shared/aiConfig.ts";
-import { chargeCredits, chargeErrorResponse, refundCredits, type CreditRpcResult } from "../_shared/credits.ts";
+import { chargeCredits, chargeErrorResponse, type CreditRpcResult } from "../_shared/credits.ts";
+import { createRefundGuard } from "../_shared/creditGuard.ts";
 import { calcAdaptationCost } from "../_shared/adaptationCost.ts";
+import {
+  buildRequestBody,
+  interpretAiResponse,
+  nextReaskMessage,
+  type ChatMessage,
+} from "../_shared/adaptActivityCore.ts";
+import { aiActivityJsonSchema } from "../../src/lib/adaptation/canonical/ai.ts";
+
+// Max total attempts at getting a valid structured response (1 initial + 2 reasks).
+const MAX_ATTEMPTS = 3;
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -175,7 +186,7 @@ PILAR 1 — BARREIRAS IDENTIFICADAS
 PILAR 2 — CONTEXTO DA AVALIAÇÃO
 - Analise o conteúdo cobrado e os objetivos pedagógicos
 - Preserve o nível cognitivo (Taxonomia de Bloom)
-- Mantenha equivalência avaliativa entre versões
+- Mantenha equivalência avaliativa com o original
 
 MISSÃO
 Adaptar atividades escolares para REMOVER BARREIRAS à aprendizagem, preservando rigorosamente os objetivos pedagógicos e o nível cognitivo original.
@@ -217,143 +228,28 @@ PRINCÍPIOS GERAIS DE ADAPTAÇÃO EM EXATAS
 - Diversificar avaliação
 
 ADAPTAÇÃO POR TIPO DE ATIVIDADE
-PROVA:
-- Mantenha o rigor avaliativo; adapte o FORMATO, não o CONTEÚDO conceitual
-- Preserve o mesmo número de questões ou justifique a redução
-- Garanta equivalência avaliativa entre versão universal e direcionada
-
-EXERCÍCIO:
-- Pode incluir scaffolding mais intenso (dicas, exemplos parciais)
-- Pode adicionar questões preparatórias que construam o raciocínio gradualmente
-- Permita maior flexibilidade no formato de resposta
-
-ATIVIDADE DE CASA:
-- Considere que o aluno não terá mediação do professor
-- Inclua instruções mais detalhadas e autoexplicativas
-- Sugira recursos de apoio (vídeos, materiais complementares)
-
-TRABALHO:
-- Divida em etapas com entregas parciais
-- Forneça rubrica clara de avaliação
-- Ofereça templates e organizadores para estruturar o trabalho
+PROVA: mantenha o rigor avaliativo; adapte o FORMATO, não o CONTEÚDO conceitual; preserve o número de questões ou justifique a redução.
+EXERCÍCIO: pode incluir scaffolding mais intenso (dicas, exemplos parciais) e questões preparatórias; maior flexibilidade no formato de resposta.
+ATIVIDADE DE CASA: instruções mais detalhadas e autoexplicativas, considerando ausência de mediação.
+TRABALHO: divida em etapas com entregas parciais; forneça rubrica e templates.
 
 TAXONOMIA DE BLOOM — PRESERVAÇÃO
-Identifique o nível cognitivo de cada questão e PRESERVE-O na adaptação:
-- Lembrar → mantenha como lembrar
-- Compreender → mantenha como compreender
-- Aplicar → mantenha como aplicar
-- Analisar → mantenha como analisar
-- Avaliar → mantenha como avaliar
-- Criar → mantenha como criar
-A adaptação remove BARREIRAS DE ACESSO, não reduz o nível cognitivo.
+Identifique o nível cognitivo de cada questão e PRESERVE-O na adaptação (lembrar, compreender, aplicar, analisar, avaliar, criar). A adaptação remove BARREIRAS DE ACESSO, não reduz o nível cognitivo.
 
-REGRAS DE FORMATAÇÃO
-1. FRAÇÕES: SEMPRE envolva expressões LaTeX com delimitadores de cifrão. Exemplos: $\\frac{a}{b}$, $\\sqrt{2}$
-2. Notação escolar Unicode para variáveis: v₀, v², Δv
-3. Preserve fórmulas, símbolos e unidades integralmente
-4. NUNCA use asteriscos (**) ou nenhum marcador markdown no texto.
-5. NUNCA escreva comandos LaTeX sem delimitadores $...$. Sempre use $...$
+FORMATO DE SAÍDA (OBRIGATÓRIO — JSON ESTRUTURADO)
+Você DEVE responder APENAS com um objeto JSON que satisfaz o schema fornecido (response_format). NÃO use marcadores de seção (===), NÃO use markdown, NÃO escreva prosa fora do JSON.
 
-FORMATO DE RESPOSTA OBRIGATÓRIO
-Responda EXATAMENTE com as 5 seções abaixo, separadas pelos marcadores ===.
-ATENÇÃO: As seções ===VERSAO_UNIVERSAL=== e ===VERSAO_DIRECIONADA=== devem conter APENAS questões numeradas no formato DSL abaixo. Nenhum texto de prosa, passo a passo, parágrafo explicativo ou guia narrativo — apenas questões e apoios.
-
-===VERSAO_UNIVERSAL===
-> Instrução geral da atividade (opcional).
-
-# Título da Seção
-
-1) Enunciado da questão de múltipla escolha
-a) Primeira alternativa
-b*) Alternativa correta (marque com * na letra da correta)
-c) Terceira alternativa
-> Apoio: Dica de scaffolding.
-
-2) Questão discursiva aberta
-[linhas:4]
-> Apoio: Passo a passo resumido.
-
-3) Complete: O resultado de $\\frac{1}{2} + \\frac{1}{4}$ é ___.
-[banco: 3/4, 1/2, 1/3]
-
-4) Marque Verdadeiro ou Falso:
-( ) O Sol é uma estrela.
-( ) A Lua é um planeta.
-
-===VERSAO_DIRECIONADA===
-REGRA CRÍTICA: A versão direcionada DEVE ter os MESMOS números de questões que a universal (1, 2, 3, 4...) no MESMO formato DSL. A diferença está no conteúdo: enunciados mais simples, mais alternativas com scaffolding, apoios mais detalhados. NÃO escreva guias, passo a passo narrativo ou parágrafos de explicação — apenas questões DSL com > Apoio:.
-
-> Instrução adaptada ao perfil identificado.
-
-# Título da Seção
-
-1) Enunciado simplificado da mesma questão 1
-a) Primeira alternativa
-b*) Alternativa correta
-c) Terceira alternativa
-> Apoio: Dica mais detalhada adaptada às barreiras.
-
-2) Enunciado simplificado da mesma questão 2
-[linhas:4]
-> Apoio: Apoio passo a passo mais estruturado.
-
-3) Complete: O resultado de $\\frac{1}{2} + \\frac{1}{4}$ é ___.
-[banco: 3/4, 1/2, 1/3]
-> Apoio: Dica contextualizada.
-
-4) Marque Verdadeiro ou Falso:
-( ) O Sol é uma estrela.
-( ) A Lua é um planeta.
-> Apoio: Pense em cada afirmação separadamente.
-
-===ESTRATEGIAS===
-- Estratégia pedagógica 1
-- Estratégia pedagógica 2
-
-===JUSTIFICATIVA===
-Texto da justificativa pedagógica das adaptações realizadas.
-
-===DICAS===
-- Dica prática 1 para o professor implementar
-- Dica prática 2`;
-}
-
-function parseDslResponse(content: string): Record<string, unknown> {
-  type Marker = { key: string; marker: string };
-  const markers: Marker[] = [
-    { key: "version_universal", marker: "===VERSAO_UNIVERSAL===" },
-    { key: "version_directed", marker: "===VERSAO_DIRECIONADA===" },
-    { key: "strategies_raw", marker: "===ESTRATEGIAS===" },
-    { key: "justification_raw", marker: "===JUSTIFICATIVA===" },
-    { key: "tips_raw", marker: "===DICAS===" },
-  ];
-
-  const sections: Record<string, string> = {};
-  for (let i = 0; i < markers.length; i++) {
-    const start = content.indexOf(markers[i].marker);
-    if (start === -1) {
-      console.warn(`parseDslResponse: marcador '${markers[i].marker}' não encontrado`);
-      continue;
-    }
-    const afterMarker = start + markers[i].marker.length;
-    const nextMarkerIdx = markers[i + 1]
-      ? content.indexOf(markers[i + 1].marker)
-      : -1;
-    sections[markers[i].key] = content
-      .slice(afterMarker, nextMarkerIdx !== -1 ? nextMarkerIdx : undefined)
-      .trim();
-  }
-
-  const parseList = (raw: string): string[] =>
-    raw.split("\n").map((l) => l.replace(/^[-•*]\s*/, "").trim()).filter(Boolean);
-
-  return {
-    version_universal: sections.version_universal || "",
-    version_directed: sections.version_directed || "",
-    strategies_applied: parseList(sections.strategies_raw || ""),
-    pedagogical_justification: sections.justification_raw || "",
-    implementation_tips: parseList(sections.tips_raw || ""),
-  };
+Regras do conteúdo do JSON:
+- "blocks": a atividade adaptada como uma lista ORDENADA de blocos. Cada bloco é um bloco de conteúdo (heading, paragraph, blockMath, image, scaffolding) ou uma questão (type "question").
+- Questões usam "answer.kind" como ENUM: "open", "multipleChoice", "trueFalse", "checkbox", "matching", "ordering", "fillBlank", "table".
+- Em "multipleChoice", marque a alternativa correta com o BOOLEAN "correct": true (EXATAMENTE UMA correta). Em "trueFalse" use o BOOLEAN "value". Em "checkbox" use o BOOLEAN "checked".
+- MATEMÁTICA: use "inlineMath"/"blockMath" com o campo "latex" (LaTeX puro, SEM delimitadores de cifrão). Nunca escreva LaTeX dentro de texto comum.
+- IMAGENS: o bloco "image" exige "src" (URL) e "alt" (texto alternativo descritivo).
+- Texto rico: o campo "content" é um array de inlines {type:"text", text:"..."} e/ou {type:"inlineMath", latex:"..."}.
+- "strategies_applied": array de strings (estratégias pedagógicas aplicadas).
+- "pedagogical_justification": string única (justificativa pedagógica das adaptações).
+- "implementation_tips": array de strings (dicas práticas para o professor).
+- Produza UMA ÚNICA versão adaptada da atividade (não gere "universal" e "direcionada" separadas).`;
 }
 
 serve(async (req) => {
@@ -400,7 +296,7 @@ serve(async (req) => {
       });
     }
 
-    // ─── Credit deduction ───────────────────────────────────────────────────────
+    // ─── Credit deduction (reserve upfront to avoid races) ──────────────────────
     const barrierDimensions = [...new Set(
       (barriers as Array<{ dimension?: string }>)
         .map((b) => b.dimension)
@@ -408,9 +304,6 @@ serve(async (req) => {
     )];
     const creditCost = calcAdaptationCost(barrierDimensions);
 
-    // Claim the first-free slot, otherwise deduct. The free claim is an
-    // UPDATE WHERE free_adaptation_used = false: if a concurrent request wins it
-    // first, 0 rows come back and we charge normally.
     const charge = await chargeCredits({
       cost: creditCost,
       claimFree: async () => {
@@ -445,187 +338,199 @@ serve(async (req) => {
     const creditsCharged = charge.status === "charged" ? charge.creditsCharged : 0;
     // ─── End credit deduction ───────────────────────────────────────────────────
 
-    const sanitizedActivity = sanitize(original_activity, 15000);
-    const sanitizedType = sanitize(activity_type, 100);
-    const sanitizedObservations = observation_notes ? sanitize(observation_notes, 2000) : "";
+    // CREDIT INVARIANT: from this point on the user has been charged. ANY exit
+    // other than a fully validated success MUST refund. The refund guard makes
+    // this idempotent (at most one grant) and best-effort (never masks errors).
+    const refundGuard = createRefundGuard({
+      creditsCharged,
+      grant: async (amount) => {
+        await serviceClient.rpc("grant_credits", {
+          p_user_id: user.id,
+          p_amount: amount,
+          p_type: "refund",
+        });
+      },
+      onError: (e) => console.error("Refund failed for user:", user.id, e),
+    });
 
-    const activeBarriersList = (barriers as Array<{ dimension?: string; barrier_key?: string; notes?: string }>)
-      .map((b) => {
-        const parts = [b.barrier_key || b.dimension || "barreira"];
-        if (b.dimension) parts.push(`(dimensão: ${b.dimension})`);
-        if (b.notes) parts.push(`— nota: ${b.notes}`);
-        return parts.join(" ");
-      })
-      .join("\n- ");
+    // Helper: refund then build an error Response in one shot, so no error path
+    // can return without refunding first.
+    const failure = async (status: number, message: string): Promise<Response> => {
+      await refundGuard.refundIfNeeded();
+      return new Response(
+        JSON.stringify({ error: message }),
+        { status, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    };
 
-    let userPrompt = `TIPO DE ATIVIDADE: ${sanitizedType}
+    try {
+      const sanitizedActivity = sanitize(original_activity, 15000);
+      const sanitizedType = sanitize(activity_type, 100);
+      const sanitizedObservations = observation_notes ? sanitize(observation_notes, 2000) : "";
+
+      const activeBarriersList = (barriers as Array<{ dimension?: string; barrier_key?: string; notes?: string }>)
+        .map((b) => {
+          const parts = [b.barrier_key || b.dimension || "barreira"];
+          if (b.dimension) parts.push(`(dimensão: ${b.dimension})`);
+          if (b.notes) parts.push(`— nota: ${b.notes}`);
+          return parts.join(" ");
+        })
+        .join("\n- ");
+
+      let userPrompt = `TIPO DE ATIVIDADE: ${sanitizedType}
 
 BARREIRAS OBSERVÁVEIS:
 - ${activeBarriersList}`;
 
-    if (sanitizedObservations) {
-      userPrompt += `\n\nOBSERVAÇÕES DO PROFESSOR:\n${sanitizedObservations}`;
-    }
+      if (sanitizedObservations) {
+        userPrompt += `\n\nOBSERVAÇÕES DO PROFESSOR:\n${sanitizedObservations}`;
+      }
 
-    userPrompt += `\n\nATIVIDADE ORIGINAL:\n${sanitizedActivity}`;
+      userPrompt += `\n\nATIVIDADE ORIGINAL:\n${sanitizedActivity}`;
 
-    const systemPrompt = buildSystemPrompt(barriers);
+      const systemPrompt = buildSystemPrompt(barriers);
+      const jsonSchema = aiActivityJsonSchema();
 
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 90_000);
-    const aiStartTime = Date.now();
+      // Attempt loop: 1 initial call + up to 2 reasks (MAX_ATTEMPTS total).
+      const reaskMessages: ChatMessage[] = [];
+      let lastErrors: string[] = [];
+      let totalTokens: number | null = null;
 
-    let aiResponse: Response;
-    let aiData: unknown;
-    let aiDurationMs: number;
+      for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+        const requestBody = buildRequestBody(
+          { model: modelName, systemPrompt, userPrompt, extraMessages: reaskMessages },
+          jsonSchema,
+        );
 
-    const refundIfNeeded = () =>
-      refundCredits({
-        creditsCharged,
-        grant: async (amount) => {
-          await serviceClient.rpc("grant_credits", {
-            p_user_id: user.id,
-            p_amount: amount,
-            p_type: "refund",
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 90_000);
+        const aiStartTime = Date.now();
+        let aiResponse: Response;
+        let aiDurationMs: number;
+
+        try {
+          aiResponse = await fetch(`${ai.baseUrl}/chat/completions`, {
+            method: "POST",
+            headers: {
+              Authorization: `Bearer ${ai.apiKey}`,
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify(requestBody),
+            signal: controller.signal,
           });
-        },
-        onError: (e) => console.error("Refund failed for user:", user.id, e),
-      });
+          aiDurationMs = Date.now() - aiStartTime;
+        } catch (fetchErr: unknown) {
+          aiDurationMs = Date.now() - aiStartTime;
+          const isTimeout = (fetchErr as { name?: string })?.name === "AbortError";
+          logAiUsage({
+            user_id: user.id,
+            action_type: "adaptation",
+            model: modelName,
+            input_tokens: 0,
+            output_tokens: 0,
+            prompt_text: userPrompt,
+            request_duration_ms: aiDurationMs,
+            status: isTimeout ? "timeout" : "error",
+            error_message: isTimeout ? "Request timed out after 90s" : ((fetchErr as Error)?.message || "Network error"),
+            metadata: { activity_type: sanitizedType, barriers_count: barriers.length, attempt },
+          }).catch(() => {});
+          return await failure(
+            502,
+            isTimeout ? "A IA demorou demais para responder. Tente novamente." : "Falha na conexão com a IA.",
+          );
+        } finally {
+          clearTimeout(timeoutId);
+        }
 
-    try {
-      aiResponse = await fetch(`${ai.baseUrl}/chat/completions`, {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${ai.apiKey}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
+        if (!aiResponse.ok) {
+          const errText = await aiResponse.text();
+          console.error("AI gateway error:", aiResponse.status, errText);
+          logAiUsage({
+            user_id: user.id,
+            action_type: "adaptation",
+            model: modelName,
+            input_tokens: 0,
+            output_tokens: 0,
+            prompt_text: userPrompt,
+            request_duration_ms: aiDurationMs,
+            status: "error",
+            error_message: `HTTP ${aiResponse.status}: ${errText.slice(0, 200)}`,
+            metadata: { activity_type: sanitizedType, barriers_count: barriers.length, http_status: aiResponse.status, attempt },
+          }).catch(() => {});
+
+          if (aiResponse.status === 429) {
+            return await failure(429, "Limite de requisições IA atingido. Tente novamente em alguns minutos.");
+          }
+          return await failure(500, "Falha na geração da adaptação.");
+        }
+
+        const aiData = await aiResponse.json();
+        const responseContent: string =
+          (aiData as { choices?: Array<{ message?: { content?: string } }> })?.choices?.[0]?.message?.content || "";
+        totalTokens = (aiData as { usage?: { total_tokens?: number } })?.usage?.total_tokens ?? null;
+
+        if (!responseContent) {
+          return await failure(500, "Resposta vazia da IA.");
+        }
+
+        const interpreted = interpretAiResponse(responseContent);
+        if (interpreted.ok) {
+          logAiUsage({
+            user_id: user.id,
+            action_type: "adaptation",
+            model: modelName,
+            input_tokens: (aiData as { usage?: { prompt_tokens?: number } })?.usage?.prompt_tokens || 0,
+            output_tokens: (aiData as { usage?: { completion_tokens?: number } })?.usage?.completion_tokens || 0,
+            request_duration_ms: aiDurationMs,
+            status: "success",
+            metadata: { activity_type: sanitizedType, barriers_count: barriers.length, attempt },
+          }).catch(() => {});
+
+          return new Response(
+            JSON.stringify({
+              adaptation: interpreted.result,
+              model_used: modelName,
+              tokens_used: totalTokens,
+              credits_charged: creditsCharged,
+              is_first_free: isFirstFree,
+              disclaimer: "Ferramenta pedagógica. Não realiza diagnóstico. A decisão final é sempre do profissional.",
+            }),
+            { headers: { ...corsHeaders, "Content-Type": "application/json" } },
+          );
+        }
+
+        // Validation failed — record and (if attempts remain) reask.
+        lastErrors = interpreted.errors;
+        logAiUsage({
+          user_id: user.id,
+          action_type: "adaptation",
           model: modelName,
-          messages: [
-            { role: "system", content: systemPrompt },
-            { role: "user", content: userPrompt },
-          ],
-        }),
-        signal: controller.signal,
-      });
-      aiDurationMs = Date.now() - aiStartTime;
-    } catch (fetchErr: unknown) {
-      aiDurationMs = Date.now() - aiStartTime;
-      const isTimeout = (fetchErr as { name?: string })?.name === "AbortError";
-      logAiUsage({
-        user_id: user.id,
-        action_type: "adaptation",
-        model: modelName,
-        input_tokens: 0,
-        output_tokens: 0,
-        prompt_text: userPrompt,
-        request_duration_ms: aiDurationMs,
-        status: isTimeout ? "timeout" : "error",
-        error_message: isTimeout
-          ? "Request timed out after 90s"
-          : ((fetchErr as Error)?.message || "Network error"),
-        metadata: { activity_type: sanitizedType, barriers_count: barriers.length },
-      }).catch(() => {});
-      await refundIfNeeded();
-      throw new Error(
-        isTimeout
-          ? "A IA demorou demais para responder. Tente novamente."
-          : "Falha na conexão com a IA."
-      );
-    } finally {
-      clearTimeout(timeoutId);
-    }
+          input_tokens: 0,
+          output_tokens: 0,
+          request_duration_ms: aiDurationMs,
+          status: "error",
+          error_message: `Validation failed (attempt ${attempt}): ${interpreted.errors.slice(0, 5).join("; ").slice(0, 300)}`,
+          metadata: { activity_type: sanitizedType, barriers_count: barriers.length, attempt },
+        }).catch(() => {});
 
-    if (!aiResponse.ok) {
-      const errText = await aiResponse.text();
-      console.error("AI gateway error:", aiResponse.status, errText);
-      logAiUsage({
-        user_id: user.id,
-        action_type: "adaptation",
-        model: modelName,
-        input_tokens: 0,
-        output_tokens: 0,
-        prompt_text: userPrompt,
-        request_duration_ms: aiDurationMs,
-        status: "error",
-        error_message: `HTTP ${aiResponse.status}: ${errText.slice(0, 200)}`,
-        metadata: { activity_type: sanitizedType, barriers_count: barriers.length, http_status: aiResponse.status },
-      }).catch(() => {});
-      await refundIfNeeded();
-
-      if (aiResponse.status === 429) {
-        return new Response(
-          JSON.stringify({ error: "Limite de requisições IA atingido. Tente novamente em alguns minutos." }),
-          { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
+        if (attempt < MAX_ATTEMPTS) {
+          reaskMessages.push(nextReaskMessage(interpreted.errors));
+        }
       }
-      return new Response(
-        JSON.stringify({ error: "Falha na geração da adaptação." }),
-        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+
+      // Exhausted all attempts without a valid document.
+      console.error("adapt-activity validation exhausted for user:", user.id, lastErrors.slice(0, 5));
+      return await failure(502, "Não foi possível gerar uma adaptação válida. Tente novamente.");
+    } catch (inner) {
+      // Backstop: any unexpected error after the charge must still refund.
+      console.error("adapt-activity post-charge error:", inner);
+      return await failure(500, inner instanceof Error ? inner.message : "Erro desconhecido");
     }
-
-    aiData = await aiResponse.json();
-    const responseContent: string =
-      (aiData as { choices?: Array<{ message?: { content?: string } }> })
-        ?.choices?.[0]?.message?.content || "";
-    const tokensUsed =
-      (aiData as { usage?: { total_tokens?: number } })?.usage?.total_tokens ?? null;
-
-    if (!responseContent) {
-      return new Response(
-        JSON.stringify({ error: "Resposta vazia da IA." }),
-        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-
-    logAiUsage({
-      user_id: user.id,
-      action_type: "adaptation",
-      model: modelName,
-      input_tokens: (aiData as { usage?: { prompt_tokens?: number } })?.usage?.prompt_tokens || 0,
-      output_tokens: (aiData as { usage?: { completion_tokens?: number } })?.usage?.completion_tokens || 0,
-      request_duration_ms: aiDurationMs,
-      status: "success",
-      metadata: { activity_type: sanitizedType, barriers_count: barriers.length },
-    }).catch(() => {});
-
-    const adaptationResult = parseDslResponse(responseContent);
-
-    const requiredFields = [
-      "version_universal",
-      "version_directed",
-      "strategies_applied",
-      "pedagogical_justification",
-      "implementation_tips",
-    ] as const;
-    for (const field of requiredFields) {
-      const value = adaptationResult[field];
-      const isEmpty = !value || (Array.isArray(value) && value.length === 0);
-      if (isEmpty) {
-        return new Response(
-          JSON.stringify({ error: `Resposta da IA incompleta: campo '${field}' ausente.` }),
-          { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
-      }
-    }
-
-    return new Response(
-      JSON.stringify({
-        adaptation: adaptationResult,
-        model_used: modelName,
-        tokens_used: tokensUsed,
-        credits_charged: creditsCharged,
-        is_first_free: isFirstFree,
-        disclaimer: "Ferramenta pedagógica. Não realiza diagnóstico. A decisão final é sempre do profissional.",
-      }),
-      { headers: { ...corsHeaders, "Content-Type": "application/json" } }
-    );
   } catch (e) {
     console.error("adapt-activity error:", e);
     return new Response(
       JSON.stringify({ error: e instanceof Error ? e.message : "Erro desconhecido" }),
-      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
   }
 });
