@@ -18,7 +18,7 @@ import { useEditor, ReactNodeViewRenderer, type Editor } from "@tiptap/react";
 import type { CanonicalDocument } from "@/lib/adaptation/canonical/schema";
 import { buildExtensions } from "@/lib/adaptation/tiptap/getEditorSchema";
 import { canonicalToProseMirror, type PMNode } from "@/lib/adaptation/tiptap/fromCanonical";
-import { proseMirrorToCanonical } from "@/lib/adaptation/tiptap/toCanonical";
+import { tryProseMirrorToCanonical } from "@/lib/adaptation/tiptap/toCanonical";
 import { UniqueId } from "@/lib/adaptation/tiptap/uniqueId";
 import {
   BlockMathNode,
@@ -83,7 +83,13 @@ export function useCanonicalEditor({
     content: initialContentRef.current,
     editable: !disabled,
     onUpdate: ({ editor }) => {
-      const next = proseMirrorToCanonical(editor.getJSON() as PMNode);
+      // Ordinary edits produce transient-invalid states (image with empty src,
+      // cleared math latex, all blocks deleted). Validate without throwing: when
+      // the doc isn't valid we keep the live ProseMirror state as the working
+      // source and do NOT emit — the parent keeps its last valid document.
+      const result = tryProseMirrorToCanonical(editor.getJSON() as PMNode);
+      if (!result.ok) return;
+      const next = result.value;
       if (docsEqual(next, lastDocRef.current)) return;
       lastDocRef.current = next;
       onChange(next);

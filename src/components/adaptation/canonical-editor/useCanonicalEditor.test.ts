@@ -110,6 +110,25 @@ describe("useCanonicalEditor", () => {
     expect(onChange).not.toHaveBeenCalled();
   });
 
+  it("does NOT throw and does NOT emit when the update yields an invalid doc", () => {
+    const onChange = vi.fn();
+    let onUpdate: ((args: { editor: { getJSON: () => unknown } }) => void) | undefined;
+    vi.mocked(useEditor).mockImplementation((c: unknown) => {
+      onUpdate = (c as { onUpdate: typeof onUpdate }).onUpdate;
+      return { getJSON: () => canonicalToProseMirror(docA) } as never;
+    });
+    renderHook(() => useCanonicalEditor({ value: docA, onChange }));
+    // A transient-invalid state: an image with an empty src.
+    const invalidDoc = {
+      type: "doc",
+      content: [
+        { type: "image", attrs: { id: "11111111-1111-4111-8111-111111111111", src: "", alt: "" } },
+      ],
+    };
+    expect(() => onUpdate?.({ editor: { getJSON: () => invalidDoc } })).not.toThrow();
+    expect(onChange).not.toHaveBeenCalled();
+  });
+
   it("returns the editor instance", () => {
     const editor = { getJSON: () => ({}) };
     vi.mocked(useEditor).mockReturnValue(editor as never);

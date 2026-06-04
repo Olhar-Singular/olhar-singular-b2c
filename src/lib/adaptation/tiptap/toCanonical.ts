@@ -11,7 +11,7 @@
  */
 
 import type { PMMark, PMNode } from "./fromCanonical";
-import { validateDocument } from "../canonical/validate";
+import { validateDocument, safeParseDocument } from "../canonical/validate";
 import type {
   Block,
   CanonicalDocument,
@@ -158,8 +158,10 @@ function pmToBlock(node: PMNode): Block {
       }
       return block;
     }
-    /* v8 ignore next 2 -- exhaustive switch; schema admits no other node type */
     default:
+      // Reached when the editor produces a node the canonical model can't
+      // represent (e.g. a degraded paste left a list/blockquote behind, or a
+      // future StarterKit node). `tryProseMirrorToCanonical` catches this.
       throw new Error(`Unknown PM node type: ${node.type}`);
   }
 }
@@ -178,4 +180,29 @@ export function proseMirrorToCanonical(pmDocJSON: PMNode): CanonicalDocument {
   const blocks = (pmDocJSON.content as PMNode[]).map(pmToBlock);
   const doc = { schemaVersion: 1 as const, blocks };
   return validateDocument(doc);
+}
+
+export type TryToCanonicalResult =
+  | { ok: true; value: CanonicalDocument }
+  | { ok: false };
+
+/**
+ * Non-throwing variant of `proseMirrorToCanonical`. Returns `{ ok: false }`
+ * instead of throwing whenever the PM JSON cannot be mapped to a VALID
+ * canonical document — e.g. a transient-invalid editing state (image with an
+ * empty src, math with empty latex, no blocks) or a node type the canonical
+ * model can't represent. The live ProseMirror state remains the working source
+ * of truth in those cases; the caller keeps its last valid document.
+ */
+export function tryProseMirrorToCanonical(pmDocJSON: PMNode): TryToCanonicalResult {
+  let doc: unknown;
+  try {
+    const blocks = (pmDocJSON.content as PMNode[] | undefined ?? []).map(pmToBlock);
+    doc = { schemaVersion: 1 as const, blocks };
+  } catch {
+    // `pmToBlock` threw on an unmappable node type.
+    return { ok: false };
+  }
+  const parsed = safeParseDocument(doc);
+  return parsed.ok ? { ok: true, value: parsed.value } : { ok: false };
 }

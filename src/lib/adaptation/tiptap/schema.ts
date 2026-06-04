@@ -180,10 +180,24 @@ export const BlockIdStyle = Mark.create({
  */
 export function buildCanonicalExtensions() {
   return [
-    // StarterKit gives us doc, paragraph, heading, text, bold, italic, strike,
-    // and more. We keep heading (levels 1-3) and disable nothing extra here.
+    // StarterKit ships many nodes/marks the canonical model can't represent.
+    // We keep ONLY what the canonical schema maps losslessly — doc, paragraph,
+    // heading (levels 1-3), text, hardBreak, the bold/italic/strike marks, plus
+    // the history/dropcursor/gapcursor editing plugins — and disable everything
+    // else. Otherwise those nodes/marks are live but unmapped: `pmToBlock`
+    // throws on a stray list/blockquote/codeBlock/horizontalRule, and the
+    // inline `code` mark is silently dropped on round-trip. Disabling them makes
+    // a paste/insert of an unsupported construct DEGRADE to plain paragraph text
+    // (ProseMirror drops schema-absent nodes) instead of crashing or losing data.
     StarterKit.configure({
       heading: { levels: [1, 2, 3] },
+      bulletList: false,
+      orderedList: false,
+      listItem: false,
+      blockquote: false,
+      codeBlock: false,
+      horizontalRule: false,
+      code: false,
     }),
     Underline,
     TextStyle,

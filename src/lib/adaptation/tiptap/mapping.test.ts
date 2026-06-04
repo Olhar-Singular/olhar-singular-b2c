@@ -1,8 +1,8 @@
 import { describe, it, expect } from "vitest";
-import { Node as PMNode } from "@tiptap/pm/model";
+import { Node as PMNode, DOMParser as DOMParser2 } from "@tiptap/pm/model";
 import { getEditorSchema } from "./getEditorSchema";
 import { canonicalToProseMirror } from "./fromCanonical";
-import { proseMirrorToCanonical } from "./toCanonical";
+import { proseMirrorToCanonical, tryProseMirrorToCanonical } from "./toCanonical";
 import { richDocument } from "./__fixtures__/richDocument";
 import { validateDocument } from "@/lib/adaptation/canonical/validate";
 import type { CanonicalDocument } from "@/lib/adaptation/canonical/schema";
@@ -215,6 +215,90 @@ describe("canonical <-> ProseMirror mapping", () => {
         blocks: [{ id: uid(110), type: "blockMath", latex: "x=1" }],
       };
       expect(proseMirrorToCanonical(pmRoundTrip(doc))).toEqual(doc);
+    });
+  });
+
+  describe("StarterKit hardening (only canonical-mappable nodes/marks live)", () => {
+    it("does not register nodes/marks the canonical model can't represent", () => {
+      // Disabled StarterKit nodes/marks.
+      for (const name of ["bulletList", "orderedList", "listItem", "blockquote", "codeBlock", "horizontalRule"]) {
+        expect(schema.nodes[name]).toBeUndefined();
+      }
+      expect(schema.marks.code).toBeUndefined();
+      // Kept nodes/marks.
+      expect(schema.nodes.paragraph).toBeDefined();
+      expect(schema.nodes.heading).toBeDefined();
+      expect(schema.marks.bold).toBeDefined();
+      expect(schema.marks.italic).toBeDefined();
+      expect(schema.marks.strike).toBeDefined();
+    });
+
+    it("degrades a pasted list to plain paragraph text (no schema-absent nodes)", () => {
+      const dom = new DOMParser().parseFromString(
+        "<ul><li>one</li><li>two</li></ul>",
+        "text/html",
+      );
+      const node = DOMParser2.fromSchema(schema).parse(dom.body);
+      const json = node.toJSON();
+      // No list/listItem nodes survive — they degrade to paragraphs.
+      const types = new Set<string>();
+      const walk = (n: { type: string; content?: { type: string }[] }) => {
+        types.add(n.type);
+        (n.content as typeof json.content)?.forEach(walk);
+      };
+      walk(json);
+      expect(types.has("bulletList")).toBe(false);
+      expect(types.has("listItem")).toBe(false);
+      // The round-trip no longer throws on the degraded doc.
+      expect(() => tryProseMirrorToCanonical(json)).not.toThrow();
+    });
+
+    it("degrades inline `code` to plain text (mark dropped, text preserved)", () => {
+      const dom = new DOMParser().parseFromString(
+        "<p>a <code>b</code> c</p>",
+        "text/html",
+      );
+      const json = DOMParser2.fromSchema(schema).parse(dom.body).toJSON() as {
+        content: { content?: { text?: string; marks?: { type: string }[] }[] }[];
+      };
+      const runs = json.content[0].content ?? [];
+      // The text content survives intact (no silent loss)...
+      expect(runs.map((r) => r.text ?? "").join("")).toBe("a b c");
+      // ...and no `code` mark survived (the mark is absent from the schema).
+      for (const run of runs) {
+        expect((run.marks ?? []).some((m) => m.type === "code")).toBe(false);
+      }
+    });
+  });
+
+  describe("tryProseMirrorToCanonical (non-throwing)", () => {
+    it("returns ok with the validated doc for a valid PM JSON", () => {
+      const valid = canonicalToProseMirror(richDocument);
+      const result = tryProseMirrorToCanonical(valid);
+      expect(result.ok).toBe(true);
+      if (result.ok) expect(result.value).toEqual(richDocument);
+    });
+
+    it("returns ok:false for a transient-invalid doc (empty image src) without throwing", () => {
+      const invalid = {
+        type: "doc",
+        content: [{ type: "image", attrs: { id: uid(200), src: "", alt: "" } }],
+      };
+      expect(() => tryProseMirrorToCanonical(invalid)).not.toThrow();
+      expect(tryProseMirrorToCanonical(invalid).ok).toBe(false);
+    });
+
+    it("returns ok:false for an empty document (all blocks deleted)", () => {
+      expect(tryProseMirrorToCanonical({ type: "doc", content: [] }).ok).toBe(false);
+    });
+
+    it("returns ok:false (instead of throwing) on an unmappable node type", () => {
+      const unmappable = {
+        type: "doc",
+        content: [{ type: "bulletList", content: [] }],
+      };
+      expect(() => tryProseMirrorToCanonical(unmappable)).not.toThrow();
+      expect(tryProseMirrorToCanonical(unmappable).ok).toBe(false);
     });
   });
 });
