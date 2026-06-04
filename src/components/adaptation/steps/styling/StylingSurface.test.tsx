@@ -5,8 +5,16 @@ import { validateDocument } from "@/lib/adaptation/canonical/validate";
 import type { CanonicalDocument } from "@/lib/adaptation/canonical/schema";
 
 vi.mock("@/components/adaptation/render/CanonicalRenderer", () => ({
-  CanonicalRenderer: ({ document }: { document: CanonicalDocument }) => (
-    <div data-testid="preview">{document.blocks.length} blocos</div>
+  CanonicalRenderer: ({
+    document,
+    selectedId,
+  }: {
+    document: CanonicalDocument;
+    selectedId?: string;
+  }) => (
+    <div data-testid="preview" data-selected-id={selectedId ?? ""}>
+      {document.blocks.length} blocos
+    </div>
   ),
 }));
 
@@ -61,6 +69,13 @@ describe("StylingSurface", () => {
   it("renders the live preview from the same document", () => {
     render(<StylingSurface document={baseDoc()} onChange={vi.fn()} />);
     expect(screen.getByTestId("preview")).toHaveTextContent("8 blocos");
+  });
+
+  it("passes the selected block id to the preview and updates it on selection", () => {
+    render(<StylingSurface document={baseDoc()} onChange={vi.fn()} />);
+    expect(screen.getByTestId("preview")).toHaveAttribute("data-selected-id", id(1));
+    fireEvent.change(screen.getByLabelText("Bloco"), { target: { value: id(8) } });
+    expect(screen.getByTestId("preview")).toHaveAttribute("data-selected-id", id(8));
   });
 
   it("applies font, size, align, color, spacing and pageBreak to the selected block", () => {

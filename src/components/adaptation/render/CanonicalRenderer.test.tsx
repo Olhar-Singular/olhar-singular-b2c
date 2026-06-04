@@ -269,6 +269,53 @@ describe("CanonicalRenderer (defaults / edge branches)", () => {
     expect(table.querySelectorAll("td")).toHaveLength(0);
   });
 
+  it("highlights only the block whose id matches selectedId", () => {
+    const { container } = render(
+      <CanonicalRenderer
+        document={wrap([
+          { id: id(1), type: "heading", level: 1, content: [{ type: "text", text: "H1" }] },
+          { id: id(2), type: "paragraph", content: [{ type: "text", text: "p" }] },
+        ])}
+        selectedId={id(2)}
+      />
+    );
+    const selected = container.querySelectorAll('[data-selected="true"]');
+    expect(selected).toHaveLength(1);
+    expect(selected[0]).toHaveTextContent("p");
+    expect(selected[0]).toHaveClass("ring-2", "ring-primary");
+    expect(container.querySelectorAll('[data-selected="false"]')).toHaveLength(1);
+  });
+
+  it("highlights a block inside a question stem when selected", () => {
+    const { container } = render(
+      <CanonicalRenderer
+        document={wrap([
+          {
+            id: id(1),
+            type: "question",
+            stem: [{ id: id(2), type: "paragraph", content: [{ type: "text", text: "stem" }] }],
+            answer: { kind: "open" },
+          },
+        ])}
+        selectedId={id(2)}
+      />
+    );
+    const selected = container.querySelectorAll('[data-selected="true"]');
+    expect(selected).toHaveLength(1);
+    expect(selected[0]).toHaveTextContent("stem");
+  });
+
+  it("highlights nothing when selectedId is undefined", () => {
+    const { container } = render(
+      <CanonicalRenderer
+        document={wrap([
+          { id: id(1), type: "heading", level: 1, content: [{ type: "text", text: "H1" }] },
+        ])}
+      />
+    );
+    expect(container.querySelectorAll('[data-selected="true"]')).toHaveLength(0);
+  });
+
   it("table with empty rows renders no header", () => {
     render(
       <CanonicalRenderer

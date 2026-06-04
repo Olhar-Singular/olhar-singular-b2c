@@ -13,12 +13,19 @@ import type { CanonicalDocument } from "@/lib/adaptation/canonical/schema";
 import { BlockView } from "./BlockView";
 import { questionNumbers } from "./questionNumbering";
 
-export function CanonicalRenderer({ document }: { document: CanonicalDocument }) {
+export function CanonicalRenderer({
+  document,
+  selectedId,
+}: {
+  document: CanonicalDocument;
+  /** Highlights the matching block in the preview (styling step). */
+  selectedId?: string;
+}) {
   const numbers = questionNumbers(document.blocks);
   return (
     <div data-testid="canonical-renderer" className="space-y-3">
       {document.blocks.map((block, i) => (
-        <BlockView key={block.id} block={block} number={numbers[i]} />
+        <BlockView key={block.id} block={block} number={numbers[i]} selectedId={selectedId} />
       ))}
     </div>
   );

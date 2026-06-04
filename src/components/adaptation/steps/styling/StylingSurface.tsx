@@ -208,7 +208,7 @@ export function StylingSurface({ document, onChange }: Props) {
 
       {/* RIGHT — live preview */}
       <div className="rounded-md border border-input bg-background p-4">
-        <CanonicalRenderer document={document} />
+        <CanonicalRenderer document={document} selectedId={selectedId} />
       </div>
     </div>
   );

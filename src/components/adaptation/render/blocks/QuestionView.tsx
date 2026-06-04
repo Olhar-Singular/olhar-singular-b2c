@@ -18,7 +18,15 @@ import { questionNumbers } from "../questionNumbering";
 
 type QuestionBlock = Extract<Block, { type: "question" }>;
 
-export function QuestionView({ block, number }: { block: QuestionBlock; number: number }) {
+export function QuestionView({
+  block,
+  number,
+  selectedId,
+}: {
+  block: QuestionBlock;
+  number: number;
+  selectedId?: string;
+}) {
   const stemNumbers = questionNumbers(block.stem);
   return (
     <div data-testid="question" className="space-y-2" style={nodeStyleToCss(block.style)}>
@@ -30,7 +38,7 @@ export function QuestionView({ block, number }: { block: QuestionBlock; number: 
 
       <div className="space-y-2">
         {block.stem.map((child, i) => (
-          <BlockView key={child.id} block={child} number={stemNumbers[i]} />
+          <BlockView key={child.id} block={child} number={stemNumbers[i]} selectedId={selectedId} />
         ))}
       </div>
 
