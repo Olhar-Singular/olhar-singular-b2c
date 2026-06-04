@@ -89,6 +89,23 @@ describe("documentToPlainText", () => {
     expect(documentToPlainText(doc)).toBe("Figura 1");
   });
 
+  it("renders a question with an empty stem (no prefix to apply)", () => {
+    const doc: CanonicalDocument = {
+      schemaVersion: 1,
+      blocks: [
+        {
+          id: id(1),
+          type: "question",
+          number: 5,
+          stem: [],
+          instruction: [{ type: "text", text: "Responda." }],
+          answer: { kind: "open" },
+        },
+      ],
+    };
+    expect(documentToPlainText(doc)).toBe("Responda.");
+  });
+
   it("renders an image with no caption as an empty block", () => {
     const doc: CanonicalDocument = {
       schemaVersion: 1,
