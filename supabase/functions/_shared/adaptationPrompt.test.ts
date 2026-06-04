@@ -56,6 +56,17 @@ describe("buildSystemPrompt", () => {
     expect(prompt).toContain("FORMATO DE SAÍDA (OBRIGATÓRIO — JSON ESTRUTURADO)");
     expect(prompt).toContain("UMA ÚNICA versão adaptada");
   });
+
+  it("instructs turning an [IMAGEM: <url>] marker into an image block (exact src, alt, no literal marker)", () => {
+    const prompt = buildSystemPrompt([{ dimension: "tea" }]);
+    // Mentions the marker syntax and the image-block contract.
+    expect(prompt).toContain("[IMAGEM:");
+    expect(prompt).toContain('bloco de imagem (type "image")');
+    expect(prompt).toContain('"src" EXATAMENTE igual');
+    expect(prompt).toContain('"alt"');
+    // And tells the model not to leak the literal marker.
+    expect(prompt).toContain("NÃO deixe o marcador literal");
+  });
 });
 
 describe("named constants", () => {

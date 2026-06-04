@@ -30,6 +30,7 @@ import {
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import ImagePreviewDialog from "@/components/dialogs/ImagePreviewDialog";
+import { buildActivityText } from "./buildActivityText";
 import type { WizardData, SelectedQuestion } from "@/lib/adaptation/wizard/wizardState";
 
 type Props = {
@@ -71,18 +72,6 @@ const TABS: { key: Tab; label: string; icon: React.ElementType }[] = [
 const BANK_QUERY_LIMIT = 50;
 // Debounce (ms) before re-running the bank search as the user types.
 const BANK_SEARCH_DEBOUNCE_MS = 300;
-
-function buildActivityText(questions: SelectedQuestion[]): string {
-  return questions
-    .map((q, i) => {
-      let text = `${i + 1}) ${q.text}`;
-      if (q.options && Array.isArray(q.options)) {
-        text += "\n" + q.options.map((o: string, j: number) => `   ${String.fromCharCode(65 + j)}) ${o}`).join("\n");
-      }
-      return text;
-    })
-    .join("\n\n");
-}
 
 export function StepActivityInput({ data, updateData, onNext, onPrev }: Props) {
   const [tab, setTab] = useState<Tab>("manual");

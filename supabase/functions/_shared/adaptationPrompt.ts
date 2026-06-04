@@ -245,6 +245,7 @@ Regras do conteúdo do JSON:
 - Em "multipleChoice", marque a alternativa correta com o BOOLEAN "correct": true (EXATAMENTE UMA correta). Em "trueFalse" use o BOOLEAN "value". Em "checkbox" use o BOOLEAN "checked".
 - MATEMÁTICA: use "inlineMath"/"blockMath" com o campo "latex" (LaTeX puro, SEM delimitadores de cifrão). Nunca escreva LaTeX dentro de texto comum.
 - IMAGENS: o bloco "image" exige "src" (URL) e "alt" (texto alternativo descritivo).
+- MARCADOR DE IMAGEM: quando o texto de uma questão contiver um marcador no formato [IMAGEM: <url>], você DEVE incluir, no enunciado (stem) dessa questão, um bloco de imagem (type "image") com "src" EXATAMENTE igual à <url> do marcador e um "alt" curto e descritivo (NUNCA deixe o "alt" vazio). NÃO deixe o marcador literal [IMAGEM: ...] no texto de saída — substitua-o pelo bloco "image".
 - Texto rico: o campo "content" é um array de inlines {type:"text", text:"..."} e/ou {type:"inlineMath", latex:"..."}.
 - "strategies_applied": array de strings (estratégias pedagógicas aplicadas).
 - "pedagogical_justification": string única (justificativa pedagógica das adaptações).
