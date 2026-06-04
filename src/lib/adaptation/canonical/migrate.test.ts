@@ -52,4 +52,17 @@ describe("migrateByVersion", () => {
   it("returns ok:false for non-object", () => {
     expect(migrateByVersion("string").ok).toBe(false);
   });
+
+  it("returns ok:false when property access throws (e.g. Proxy)", () => {
+    // Cover the catch branch — migrateByVersion must never rethrow
+    const evil = new Proxy(
+      {},
+      {
+        get() {
+          throw new Error("property access denied");
+        },
+      }
+    );
+    expect(migrateByVersion(evil).ok).toBe(false);
+  });
 });

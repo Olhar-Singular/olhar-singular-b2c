@@ -85,3 +85,15 @@ describe("validateDocument", () => {
     expect(errorMsg.length).toBeGreaterThan(0);
   });
 });
+
+describe("formatIssues — root-level path coverage", () => {
+  it("uses '(root)' when issue has an empty path (null input)", () => {
+    // Passing null triggers a root-level issue with empty path
+    const result = safeParseDocument(null);
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      // At least one error must use the (root) placeholder
+      expect(result.errors.some((e) => e.startsWith("(root)"))).toBe(true);
+    }
+  });
+});
