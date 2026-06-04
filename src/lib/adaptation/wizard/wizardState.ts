@@ -10,7 +10,24 @@
  */
 
 import type { AdaptationResult, CanonicalDocument } from "@/lib/adaptation/canonical/schema";
-import type { BarrierItem, SelectedQuestion } from "@/lib/domain/adaptationWizardHelpers";
+
+export type BarrierItem = {
+  dimension: string;
+  barrier_key: string;
+  label: string;
+  is_active: boolean;
+  notes?: string;
+};
+
+export type SelectedQuestion = {
+  id: string;
+  text: string;
+  image_url: string | null;
+  options: string[] | null;
+  subject: string;
+  topic: string | null;
+  difficulty: string | null;
+};
 
 export type WizardData = {
   activityType: string | null;

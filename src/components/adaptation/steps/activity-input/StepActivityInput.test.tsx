@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { StepActivityInput } from "./StepActivityInput";
-import type { WizardData } from "@/lib/domain/adaptationWizardHelpers";
+import type { WizardData } from "@/lib/adaptation/wizard/wizardState";
 
 // ── Supabase mock (bank query + auth session) ──────────────────────────────
 

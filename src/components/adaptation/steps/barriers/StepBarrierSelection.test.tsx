@@ -3,7 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { StepBarrierSelection } from "./StepBarrierSelection";
-import type { WizardData } from "@/lib/domain/adaptationWizardHelpers";
+import type { WizardData } from "@/lib/adaptation/wizard/wizardState";
 
 const mockBarrierProfiles = [
   {

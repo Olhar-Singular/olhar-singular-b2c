@@ -11,7 +11,7 @@ import {
   calcAdaptationCost,
   getComplexityTier,
 } from "@/lib/domain/barriers";
-import type { WizardData, BarrierItem } from "@/lib/domain/adaptationWizardHelpers";
+import type { WizardData, BarrierItem } from "@/lib/adaptation/wizard/wizardState";
 
 type Props = {
   data: WizardData;
