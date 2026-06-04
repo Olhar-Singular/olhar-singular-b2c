@@ -1,9 +1,31 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
-import type { QuestionAnswer } from "@/lib/adaptation/canonical/schema";
+import type { RichText, QuestionAnswer } from "@/lib/adaptation/canonical/schema";
 import { AnswerEditor } from "./AnswerEditor";
 
-const t = (text: string) => [{ type: "text" as const, text }];
+// Mock RichTextField: render a plain textbox keyed by ariaLabel and expose an
+// onChange that emits a single text run, so we can drive the content fields
+// without the real ProseMirror editor.
+vi.mock("../RichTextField", () => ({
+  RichTextField: ({
+    onChange,
+    ariaLabel,
+    disabled,
+  }: {
+    value: RichText;
+    onChange: (rt: RichText) => void;
+    ariaLabel?: string;
+    disabled?: boolean;
+  }) => (
+    <input
+      aria-label={ariaLabel}
+      disabled={disabled}
+      onChange={(e) => onChange([{ type: "text", text: e.target.value }])}
+    />
+  ),
+}));
+
+const t = (text: string): RichText => [{ type: "text", text }];
 
 beforeEach(() => vi.clearAllMocks());
 
@@ -16,14 +38,22 @@ describe("AnswerEditor — multipleChoice", () => {
     ],
   };
 
-  it("sets correct via radio, edits text, removes and adds", () => {
+  it("sets correct via radio, edits content, removes and adds", () => {
     const onChange = vi.fn();
     render(<AnswerEditor answer={answer} onChange={onChange} />);
     fireEvent.click(screen.getAllByLabelText("Marcar como correta")[1]);
-    fireEvent.change(screen.getAllByPlaceholderText("Alternativa")[0], { target: { value: "z" } });
+    fireEvent.change(screen.getAllByLabelText("Alternativa")[0], { target: { value: "z" } });
     fireEvent.click(screen.getAllByTitle("Remover alternativa")[0]);
     fireEvent.click(screen.getByText("Alternativa"));
     expect(onChange).toHaveBeenCalledTimes(4);
+    expect(onChange).toHaveBeenCalledWith(
+      expect.objectContaining({
+        kind: "multipleChoice",
+        alternatives: expect.arrayContaining([
+          expect.objectContaining({ content: [{ type: "text", text: "z" }] }),
+        ]),
+      })
+    );
   });
 });
 
@@ -33,10 +63,10 @@ describe("AnswerEditor — trueFalse", () => {
     items: [{ id: "33333333-3333-4333-8333-333333333333", content: t("x"), value: false }],
   };
 
-  it("edits text and toggles value", () => {
+  it("edits content and toggles value", () => {
     const onChange = vi.fn();
     render(<AnswerEditor answer={answer} onChange={onChange} />);
-    fireEvent.change(screen.getByPlaceholderText("Afirmação"), { target: { value: "y" } });
+    fireEvent.change(screen.getByLabelText("Afirmação"), { target: { value: "y" } });
     fireEvent.click(screen.getByTitle("Alternar Verdadeiro/Falso"));
     expect(onChange).toHaveBeenCalledTimes(2);
   });
@@ -57,11 +87,11 @@ describe("AnswerEditor — checkbox", () => {
     items: [{ id: "55555555-5555-4555-8555-555555555555", content: t("c"), checked: false }],
   };
 
-  it("toggles and edits text", () => {
+  it("toggles and edits content", () => {
     const onChange = vi.fn();
     render(<AnswerEditor answer={answer} onChange={onChange} />);
     fireEvent.click(screen.getByLabelText("Marcar opção"));
-    fireEvent.change(screen.getByPlaceholderText("Opção"), { target: { value: "z" } });
+    fireEvent.change(screen.getByLabelText("Opção"), { target: { value: "z" } });
     expect(onChange).toHaveBeenCalledTimes(2);
   });
 });
@@ -78,8 +108,8 @@ describe("AnswerEditor — matching", () => {
   it("edits both sides, adds and removes", () => {
     const onChange = vi.fn();
     render(<AnswerEditor answer={answer} onChange={onChange} />);
-    fireEvent.change(screen.getAllByPlaceholderText("Coluna A")[0], { target: { value: "L" } });
-    fireEvent.change(screen.getAllByPlaceholderText("Coluna B")[0], { target: { value: "R" } });
+    fireEvent.change(screen.getAllByLabelText("Coluna A")[0], { target: { value: "L" } });
+    fireEvent.change(screen.getAllByLabelText("Coluna B")[0], { target: { value: "R" } });
     fireEvent.click(screen.getAllByTitle("Remover par")[0]);
     fireEvent.click(screen.getByText("Par"));
     expect(onChange).toHaveBeenCalledTimes(4);
@@ -95,10 +125,10 @@ describe("AnswerEditor — ordering", () => {
     ],
   };
 
-  it("edits text and reorders up/down", () => {
+  it("edits content and reorders up/down", () => {
     const onChange = vi.fn();
     render(<AnswerEditor answer={answer} onChange={onChange} />);
-    fireEvent.change(screen.getAllByPlaceholderText("Item")[0], { target: { value: "x" } });
+    fireEvent.change(screen.getAllByLabelText("Item")[0], { target: { value: "x" } });
     fireEvent.click(screen.getAllByTitle("Mover para baixo")[0]);
     fireEvent.click(screen.getAllByTitle("Mover para cima")[1]);
     expect(onChange).toHaveBeenCalledTimes(3);
@@ -114,13 +144,20 @@ describe("AnswerEditor — fillBlank", () => {
     ],
   };
 
-  it("edits gap, removes and adds", () => {
+  it("edits gap (plain text), removes and adds", () => {
     const onChange = vi.fn();
     render(<AnswerEditor answer={answer} onChange={onChange} />);
     fireEvent.change(screen.getAllByPlaceholderText("Resposta")[0], { target: { value: "n" } });
     fireEvent.click(screen.getAllByTitle("Remover lacuna")[0]);
     fireEvent.click(screen.getByText("Lacuna"));
     expect(onChange).toHaveBeenCalledTimes(3);
+    // fillBlank gap answers stay plain strings (literal expected answers).
+    expect(onChange).toHaveBeenCalledWith(
+      expect.objectContaining({
+        kind: "fillBlank",
+        gaps: expect.arrayContaining([expect.objectContaining({ answer: "n" })]),
+      })
+    );
   });
 });
 
@@ -133,7 +170,7 @@ describe("AnswerEditor — table", () => {
   it("edits a cell", () => {
     const onChange = vi.fn();
     render(<AnswerEditor answer={answer} onChange={onChange} />);
-    fireEvent.change(screen.getAllByPlaceholderText("Célula")[0], { target: { value: "z" } });
+    fireEvent.change(screen.getAllByLabelText("Célula")[0], { target: { value: "z" } });
     expect(onChange).toHaveBeenCalledTimes(1);
   });
 });

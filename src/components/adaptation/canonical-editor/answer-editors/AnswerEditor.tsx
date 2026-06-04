@@ -11,20 +11,20 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import type { QuestionAnswer } from "@/lib/adaptation/canonical/schema";
-import { richTextToPlain } from "../richText";
+import { RichTextField } from "../RichTextField";
 import {
   setCorrectAlternative,
   addAlternative,
   removeAlternative,
-  setAlternativeText,
+  setAlternativeContent,
   setTrueFalseValue,
-  setTrueFalseText,
+  setTrueFalseContent,
   toggleCheckbox,
-  setCheckboxText,
+  setCheckboxContent,
   setMatchingSide,
   addMatchingPair,
   removeMatchingPair,
-  setOrderingText,
+  setOrderingContent,
   reorderOrdering,
   setGapAnswer,
   addGap,
@@ -73,11 +73,12 @@ export function AnswerEditor({ answer, onChange, disabled = false }: AnswerEdito
                 title="Marcar como correta"
                 aria-label="Marcar como correta"
               />
-              <Input
-                value={richTextToPlain(alt.content)}
+              <RichTextField
+                value={alt.content}
                 disabled={disabled}
-                onChange={(e) => onChange(setAlternativeText(answer, alt.id, e.target.value))}
+                onChange={(rt) => onChange(setAlternativeContent(answer, alt.id, rt))}
                 placeholder="Alternativa"
+                ariaLabel="Alternativa"
               />
               <IconButton onClick={() => onChange(removeAlternative(answer, alt.id))} title="Remover alternativa" disabled={disabled}>
                 <Trash2 className="w-3.5 h-3.5" />
@@ -95,11 +96,12 @@ export function AnswerEditor({ answer, onChange, disabled = false }: AnswerEdito
         <div className="flex flex-col gap-1.5" data-testid="answer-trueFalse">
           {answer.items.map((item) => (
             <div key={item.id} className="flex items-center gap-2">
-              <Input
-                value={richTextToPlain(item.content)}
+              <RichTextField
+                value={item.content}
                 disabled={disabled}
-                onChange={(e) => onChange(setTrueFalseText(answer, item.id, e.target.value))}
+                onChange={(rt) => onChange(setTrueFalseContent(answer, item.id, rt))}
                 placeholder="Afirmação"
+                ariaLabel="Afirmação"
               />
               <Button
                 type="button"
@@ -127,11 +129,12 @@ export function AnswerEditor({ answer, onChange, disabled = false }: AnswerEdito
                 onCheckedChange={() => onChange(toggleCheckbox(answer, item.id))}
                 aria-label="Marcar opção"
               />
-              <Input
-                value={richTextToPlain(item.content)}
+              <RichTextField
+                value={item.content}
                 disabled={disabled}
-                onChange={(e) => onChange(setCheckboxText(answer, item.id, e.target.value))}
+                onChange={(rt) => onChange(setCheckboxContent(answer, item.id, rt))}
                 placeholder="Opção"
+                ariaLabel="Opção"
               />
             </div>
           ))}
@@ -143,18 +146,20 @@ export function AnswerEditor({ answer, onChange, disabled = false }: AnswerEdito
         <div className="flex flex-col gap-1.5" data-testid="answer-matching">
           {answer.pairs.map((pair) => (
             <div key={pair.id} className="flex items-center gap-2">
-              <Input
-                value={richTextToPlain(pair.left)}
+              <RichTextField
+                value={pair.left}
                 disabled={disabled}
-                onChange={(e) => onChange(setMatchingSide(answer, pair.id, "left", e.target.value))}
+                onChange={(rt) => onChange(setMatchingSide(answer, pair.id, "left", rt))}
                 placeholder="Coluna A"
+                ariaLabel="Coluna A"
               />
               <span className="text-muted-foreground">↔</span>
-              <Input
-                value={richTextToPlain(pair.right)}
+              <RichTextField
+                value={pair.right}
                 disabled={disabled}
-                onChange={(e) => onChange(setMatchingSide(answer, pair.id, "right", e.target.value))}
+                onChange={(rt) => onChange(setMatchingSide(answer, pair.id, "right", rt))}
                 placeholder="Coluna B"
+                ariaLabel="Coluna B"
               />
               <IconButton onClick={() => onChange(removeMatchingPair(answer, pair.id))} title="Remover par" disabled={disabled}>
                 <Trash2 className="w-3.5 h-3.5" />
@@ -173,11 +178,12 @@ export function AnswerEditor({ answer, onChange, disabled = false }: AnswerEdito
           {answer.items.map((item, index) => (
             <div key={item.id} className="flex items-center gap-2">
               <span className="text-xs text-muted-foreground w-5">{index + 1}.</span>
-              <Input
-                value={richTextToPlain(item.content)}
+              <RichTextField
+                value={item.content}
                 disabled={disabled}
-                onChange={(e) => onChange(setOrderingText(answer, item.id, e.target.value))}
+                onChange={(rt) => onChange(setOrderingContent(answer, item.id, rt))}
                 placeholder="Item"
+                ariaLabel="Item"
               />
               <IconButton onClick={() => onChange(reorderOrdering(answer, index, index - 1))} title="Mover para cima" disabled={disabled}>
                 <ArrowUp className="w-3.5 h-3.5" />
@@ -219,12 +225,13 @@ export function AnswerEditor({ answer, onChange, disabled = false }: AnswerEdito
           {answer.rows.map((row, ri) => (
             <div key={ri} className="flex gap-1">
               {row.map((cell, ci) => (
-                <Input
+                <RichTextField
                   key={ci}
-                  value={richTextToPlain(cell)}
+                  value={cell}
                   disabled={disabled}
-                  onChange={(e) => onChange(setTableCell(answer, ri, ci, e.target.value))}
+                  onChange={(rt) => onChange(setTableCell(answer, ri, ci, rt))}
                   placeholder="Célula"
+                  ariaLabel="Célula"
                 />
               ))}
             </div>

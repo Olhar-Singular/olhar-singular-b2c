@@ -1,18 +1,19 @@
 import { describe, it, expect } from "vitest";
 import type { QuestionAnswer } from "@/lib/adaptation/canonical/schema";
+import type { RichText } from "@/lib/adaptation/canonical/schema";
 import {
   setCorrectAlternative,
   addAlternative,
   removeAlternative,
-  setAlternativeText,
+  setAlternativeContent,
   setTrueFalseValue,
-  setTrueFalseText,
+  setTrueFalseContent,
   toggleCheckbox,
-  setCheckboxText,
+  setCheckboxContent,
   setMatchingSide,
   addMatchingPair,
   removeMatchingPair,
-  setOrderingText,
+  setOrderingContent,
   reorderOrdering,
   setGapAnswer,
   addGap,
@@ -20,6 +21,8 @@ import {
   setAnswerLines,
   setTableCell,
 } from "./answerOps";
+
+const rt = (text: string): RichText => [{ type: "text", text }];
 
 // Helpers -------------------------------------------------------------------
 
@@ -154,96 +157,84 @@ describe("removeAlternative", () => {
   });
 });
 
-describe("setAlternativeText", () => {
-  it("replaces an alternative's content with a plain text run", () => {
-    const next = setAlternativeText(mc, mc.alternatives[0].id, "new");
+describe("setAlternativeContent", () => {
+  it("replaces an alternative's content with the given RichText", () => {
+    const next = setAlternativeContent(mc, mc.alternatives[0].id, rt("new"));
     expect(next.alternatives[0].content).toEqual([{ type: "text", text: "new" }]);
   });
 
-  it("clears content to empty array when text is empty", () => {
-    const next = setAlternativeText(mc, mc.alternatives[0].id, "");
+  it("preserves marks + inlineMath in the RichText (no flattening)", () => {
+    const rich: RichText = [
+      { type: "text", text: "x = ", marks: ["bold"] },
+      { type: "inlineMath", latex: "x^2" },
+    ];
+    const next = setAlternativeContent(mc, mc.alternatives[0].id, rich);
+    expect(next.alternatives[0].content).toBe(rich);
+  });
+
+  it("sets content to empty array when given an empty RichText", () => {
+    const next = setAlternativeContent(mc, mc.alternatives[0].id, []);
     expect(next.alternatives[0].content).toEqual([]);
   });
 
   it("leaves other alternatives untouched", () => {
-    const next = setAlternativeText(mc, mc.alternatives[0].id, "new");
+    const next = setAlternativeContent(mc, mc.alternatives[0].id, rt("new"));
     expect(next.alternatives[1].content).toEqual(mc.alternatives[1].content);
   });
 
   it("returns unchanged for non-multipleChoice", () => {
-    expect(setAlternativeText(tf, "x", "n")).toBe(tf);
+    expect(setAlternativeContent(tf, "x", rt("n"))).toBe(tf);
   });
 });
 
-describe("preserve formatting when the visible text is unchanged (B5)", () => {
-  const richAlt: Extract<QuestionAnswer, { kind: "multipleChoice" }> = {
-    kind: "multipleChoice",
-    alternatives: [
-      {
-        id: "11111111-1111-4111-8111-111111111111",
-        content: [
-          { type: "text", text: "x = ", marks: ["bold"] },
-          { type: "inlineMath", latex: "x^2" },
-        ],
-        correct: true,
-      },
-      { id: "22222222-2222-4222-8222-222222222222", content: text("b"), correct: false },
-    ],
-  };
-  // richTextToPlain(richAlt.alternatives[0].content) === "x = $x^2$"
-
-  it("preserves marks + inlineMath when the plain text equals the flattened value", () => {
-    const next = setAlternativeText(richAlt, richAlt.alternatives[0].id, "x = $x^2$");
-    if (next.kind !== "multipleChoice") throw new Error("unexpected");
-    expect(next.alternatives[0].content).toBe(richAlt.alternatives[0].content);
-  });
-
-  it("flattens to a plain run when the visible text actually changed", () => {
-    const next = setAlternativeText(richAlt, richAlt.alternatives[0].id, "y = 1");
-    if (next.kind !== "multipleChoice") throw new Error("unexpected");
-    expect(next.alternatives[0].content).toEqual([{ type: "text", text: "y = 1" }]);
-  });
-
-  it("preserves the content reference across the other plain-text setters", () => {
+describe("content setters take RichText directly (no flattening)", () => {
+  it("preserves the exact RichText (marks/inlineMath) across every content setter", () => {
     const tfRich: Extract<QuestionAnswer, { kind: "trueFalse" }> = {
       kind: "trueFalse",
-      items: [{ id: "33333333-3333-4333-8333-333333333333", content: [{ type: "text", text: "p", marks: ["italic"] }], value: true }],
+      items: [{ id: "33333333-3333-4333-8333-333333333333", content: text("p"), value: true }],
     };
-    const tfNext = setTrueFalseText(tfRich, tfRich.items[0].id, "p");
+    const tfContent: RichText = [{ type: "text", text: "p", marks: ["italic"] }];
+    const tfNext = setTrueFalseContent(tfRich, tfRich.items[0].id, tfContent);
     if (tfNext.kind !== "trueFalse") throw new Error("unexpected");
-    expect(tfNext.items[0].content).toBe(tfRich.items[0].content);
+    expect(tfNext.items[0].content).toBe(tfContent);
 
     const cbRich: Extract<QuestionAnswer, { kind: "checkbox" }> = {
       kind: "checkbox",
-      items: [{ id: "44444444-4444-4444-8444-444444444444", content: [{ type: "text", text: "q", marks: ["italic"] }], checked: false }],
+      items: [{ id: "44444444-4444-4444-8444-444444444444", content: text("q"), checked: false }],
     };
-    const cbNext = setCheckboxText(cbRich, cbRich.items[0].id, "q");
+    const cbContent: RichText = [{ type: "text", text: "q", marks: ["bold"] }, { type: "inlineMath", latex: "y" }];
+    const cbNext = setCheckboxContent(cbRich, cbRich.items[0].id, cbContent);
     if (cbNext.kind !== "checkbox") throw new Error("unexpected");
-    expect(cbNext.items[0].content).toBe(cbRich.items[0].content);
+    expect(cbNext.items[0].content).toBe(cbContent);
 
     const matchRich: Extract<QuestionAnswer, { kind: "matching" }> = {
       kind: "matching",
-      pairs: [{ id: "55555555-5555-4555-8555-555555555555", left: [{ type: "text", text: "L", marks: ["bold"] }], right: text("R") }],
+      pairs: [{ id: "55555555-5555-4555-8555-555555555555", left: text("L"), right: text("R") }],
     };
-    const matchNext = setMatchingSide(matchRich, matchRich.pairs[0].id, "left", "L");
+    const leftContent: RichText = [{ type: "text", text: "L", marks: ["bold"] }];
+    const matchNext = setMatchingSide(matchRich, matchRich.pairs[0].id, "left", leftContent);
     if (matchNext.kind !== "matching") throw new Error("unexpected");
-    expect(matchNext.pairs[0].left).toBe(matchRich.pairs[0].left);
+    expect(matchNext.pairs[0].left).toBe(leftContent);
+    expect(matchNext.pairs[0].right).toEqual(matchRich.pairs[0].right);
 
     const ordRich: Extract<QuestionAnswer, { kind: "ordering" }> = {
       kind: "ordering",
-      items: [{ id: "66666666-6666-4666-8666-666666666666", content: [{ type: "text", text: "o", marks: ["bold"] }], position: 0 }],
+      items: [{ id: "66666666-6666-4666-8666-666666666666", content: text("o"), position: 0 }],
     };
-    const ordNext = setOrderingText(ordRich, ordRich.items[0].id, "o");
+    const ordContent: RichText = [{ type: "text", text: "o", color: "#DC2626" }];
+    const ordNext = setOrderingContent(ordRich, ordRich.items[0].id, ordContent);
     if (ordNext.kind !== "ordering") throw new Error("unexpected");
-    expect(ordNext.items[0].content).toBe(ordRich.items[0].content);
+    expect(ordNext.items[0].content).toBe(ordContent);
 
     const tableRich: Extract<QuestionAnswer, { kind: "table" }> = {
       kind: "table",
-      rows: [[[{ type: "text", text: "c", marks: ["bold"] }], text("d")]],
+      rows: [[text("c"), text("d")]],
     };
-    const tableNext = setTableCell(tableRich, 0, 0, "c");
+    const cellContent: RichText = [{ type: "text", text: "c", marks: ["strike"] }];
+    const tableNext = setTableCell(tableRich, 0, 0, cellContent);
     if (tableNext.kind !== "table") throw new Error("unexpected");
-    expect(tableNext.rows[0][0]).toBe(tableRich.rows[0][0]);
+    expect(tableNext.rows[0][0]).toBe(cellContent);
+    expect(tableNext.rows[0][1]).toEqual(tableRich.rows[0][1]);
   });
 });
 
@@ -261,14 +252,14 @@ describe("setTrueFalseValue", () => {
   });
 });
 
-describe("setTrueFalseText", () => {
+describe("setTrueFalseContent", () => {
   it("replaces the item content", () => {
-    const next = setTrueFalseText(tf, tf.items[0].id, "z");
+    const next = setTrueFalseContent(tf, tf.items[0].id, rt("z"));
     expect(next.items[0].content).toEqual([{ type: "text", text: "z" }]);
   });
 
   it("returns unchanged for non-trueFalse", () => {
-    expect(setTrueFalseText(mc, "x", "z")).toBe(mc);
+    expect(setTrueFalseContent(mc, "x", rt("z"))).toBe(mc);
   });
 });
 
@@ -286,14 +277,14 @@ describe("toggleCheckbox", () => {
   });
 });
 
-describe("setCheckboxText", () => {
+describe("setCheckboxContent", () => {
   it("replaces the item content", () => {
-    const next = setCheckboxText(cb, cb.items[1].id, "z");
+    const next = setCheckboxContent(cb, cb.items[1].id, rt("z"));
     expect(next.items[1].content).toEqual([{ type: "text", text: "z" }]);
   });
 
   it("returns unchanged for non-checkbox", () => {
-    expect(setCheckboxText(mc, "x", "z")).toBe(mc);
+    expect(setCheckboxContent(mc, "x", rt("z"))).toBe(mc);
   });
 });
 
@@ -301,18 +292,18 @@ describe("setCheckboxText", () => {
 
 describe("setMatchingSide", () => {
   it("updates the left side", () => {
-    const next = setMatchingSide(matching, matching.pairs[0].id, "left", "L");
+    const next = setMatchingSide(matching, matching.pairs[0].id, "left", rt("L"));
     expect(next.pairs[0].left).toEqual([{ type: "text", text: "L" }]);
     expect(next.pairs[0].right).toEqual(matching.pairs[0].right);
   });
 
   it("updates the right side", () => {
-    const next = setMatchingSide(matching, matching.pairs[1].id, "right", "R");
+    const next = setMatchingSide(matching, matching.pairs[1].id, "right", rt("R"));
     expect(next.pairs[1].right).toEqual([{ type: "text", text: "R" }]);
   });
 
   it("returns unchanged for non-matching", () => {
-    expect(setMatchingSide(mc, "x", "left", "L")).toBe(mc);
+    expect(setMatchingSide(mc, "x", "left", rt("L"))).toBe(mc);
   });
 });
 
@@ -350,14 +341,14 @@ describe("removeMatchingPair", () => {
 
 // ordering ------------------------------------------------------------------
 
-describe("setOrderingText", () => {
+describe("setOrderingContent", () => {
   it("replaces the item content", () => {
-    const next = setOrderingText(ordering, ordering.items[0].id, "z");
+    const next = setOrderingContent(ordering, ordering.items[0].id, rt("z"));
     expect(next.items[0].content).toEqual([{ type: "text", text: "z" }]);
   });
 
   it("returns unchanged for non-ordering", () => {
-    expect(setOrderingText(mc, "x", "z")).toBe(mc);
+    expect(setOrderingContent(mc, "x", rt("z"))).toBe(mc);
   });
 });
 
@@ -459,18 +450,18 @@ describe("setAnswerLines", () => {
 
 describe("setTableCell", () => {
   it("updates a single cell content", () => {
-    const next = setTableCell(table, 0, 1, "z");
+    const next = setTableCell(table, 0, 1, rt("z"));
     expect(next.rows[0][1]).toEqual([{ type: "text", text: "z" }]);
     expect(next.rows[0][0]).toEqual(table.rows[0][0]);
     expect(next.rows[1]).toEqual(table.rows[1]);
   });
 
   it("returns unchanged when row/col out of range", () => {
-    expect(setTableCell(table, 9, 0, "z")).toBe(table);
-    expect(setTableCell(table, 0, 9, "z")).toBe(table);
+    expect(setTableCell(table, 9, 0, rt("z"))).toBe(table);
+    expect(setTableCell(table, 0, 9, rt("z"))).toBe(table);
   });
 
   it("returns unchanged for non-table", () => {
-    expect(setTableCell(mc, 0, 0, "z")).toBe(mc);
+    expect(setTableCell(mc, 0, 0, rt("z"))).toBe(mc);
   });
 });

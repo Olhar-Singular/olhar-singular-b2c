@@ -13,25 +13,8 @@
 
 import type { QuestionAnswer, RichText } from "@/lib/adaptation/canonical/schema";
 import { newId } from "@/lib/adaptation/canonical/ids";
-import { richTextToPlain } from "../richText";
 
 type Generate = () => string;
-
-/**
- * Resolve the new RichText for a plain-text answer input.
- *
- * The answer editors are plain `<input>`s that render the existing RichText via
- * `richTextToPlain`. When the typed text equals the flattened plain text of the
- * current value, the user did NOT change the visible text (e.g. a focus/blur or
- * editing a sibling field re-fired onChange) — so we PRESERVE the existing
- * RichText, keeping its marks/color/inlineMath instead of flattening it into a
- * single plain run. Only a real visible-text change flattens (full rich-text
- * answer editing remains a roadmap item).
- */
-function plainText(existing: RichText | undefined, next: string): RichText {
-  if (existing !== undefined && richTextToPlain(existing) === next) return existing;
-  return next === "" ? [] : [{ type: "text", text: next }];
-}
 
 // multipleChoice ------------------------------------------------------------
 
@@ -64,12 +47,12 @@ export function removeAlternative(answer: QuestionAnswer, id: string): QuestionA
   return { ...answer, alternatives };
 }
 
-export function setAlternativeText(answer: QuestionAnswer, id: string, text: string): QuestionAnswer {
+export function setAlternativeContent(answer: QuestionAnswer, id: string, content: RichText): QuestionAnswer {
   if (answer.kind !== "multipleChoice") return answer;
   return {
     ...answer,
     alternatives: answer.alternatives.map((alt) =>
-      alt.id === id ? { ...alt, content: plainText(alt.content, text) } : alt
+      alt.id === id ? { ...alt, content } : alt
     ),
   };
 }
@@ -84,11 +67,11 @@ export function setTrueFalseValue(answer: QuestionAnswer, id: string, value: boo
   };
 }
 
-export function setTrueFalseText(answer: QuestionAnswer, id: string, text: string): QuestionAnswer {
+export function setTrueFalseContent(answer: QuestionAnswer, id: string, content: RichText): QuestionAnswer {
   if (answer.kind !== "trueFalse") return answer;
   return {
     ...answer,
-    items: answer.items.map((item) => (item.id === id ? { ...item, content: plainText(item.content, text) } : item)),
+    items: answer.items.map((item) => (item.id === id ? { ...item, content } : item)),
   };
 }
 
@@ -104,11 +87,11 @@ export function toggleCheckbox(answer: QuestionAnswer, id: string): QuestionAnsw
   };
 }
 
-export function setCheckboxText(answer: QuestionAnswer, id: string, text: string): QuestionAnswer {
+export function setCheckboxContent(answer: QuestionAnswer, id: string, content: RichText): QuestionAnswer {
   if (answer.kind !== "checkbox") return answer;
   return {
     ...answer,
-    items: answer.items.map((item) => (item.id === id ? { ...item, content: plainText(item.content, text) } : item)),
+    items: answer.items.map((item) => (item.id === id ? { ...item, content } : item)),
   };
 }
 
@@ -118,13 +101,13 @@ export function setMatchingSide(
   answer: QuestionAnswer,
   id: string,
   side: "left" | "right",
-  text: string
+  content: RichText
 ): QuestionAnswer {
   if (answer.kind !== "matching") return answer;
   return {
     ...answer,
     pairs: answer.pairs.map((pair) =>
-      pair.id === id ? { ...pair, [side]: plainText(pair[side], text) } : pair
+      pair.id === id ? { ...pair, [side]: content } : pair
     ),
   };
 }
@@ -145,11 +128,11 @@ export function removeMatchingPair(answer: QuestionAnswer, id: string): Question
 
 // ordering ------------------------------------------------------------------
 
-export function setOrderingText(answer: QuestionAnswer, id: string, text: string): QuestionAnswer {
+export function setOrderingContent(answer: QuestionAnswer, id: string, content: RichText): QuestionAnswer {
   if (answer.kind !== "ordering") return answer;
   return {
     ...answer,
-    items: answer.items.map((item) => (item.id === id ? { ...item, content: plainText(item.content, text) } : item)),
+    items: answer.items.map((item) => (item.id === id ? { ...item, content } : item)),
   };
 }
 
@@ -205,7 +188,7 @@ export function setTableCell(
   answer: QuestionAnswer,
   row: number,
   col: number,
-  text: string
+  content: RichText
 ): QuestionAnswer {
   if (answer.kind !== "table") return answer;
   if (row < 0 || row >= answer.rows.length) return answer;
@@ -213,7 +196,7 @@ export function setTableCell(
   return {
     ...answer,
     rows: answer.rows.map((r, ri) =>
-      ri === row ? r.map((cell, ci) => (ci === col ? plainText(cell, text) : cell)) : r
+      ri === row ? r.map((cell, ci) => (ci === col ? content : cell)) : r
     ),
   };
 }

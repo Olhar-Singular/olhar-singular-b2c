@@ -32,7 +32,34 @@ vi.mock("./blockMove", () => ({
   canMoveDown: (...args: unknown[]) => canMoveDown(...args),
 }));
 
-vi.mock("@/lib/adaptation/canonical/ids", () => ({ newId: () => "new-id" }));
+vi.mock("@/lib/adaptation/canonical/ids", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/adaptation/canonical/ids")>();
+  return { ...actual, newId: () => "new-id" };
+});
+
+// The nested AnswerEditor now renders RichTextField (a real Tiptap editor) per
+// content field; stub it so the QuestionNodeView tests stay focused on the
+// question shell, not the inline editor internals.
+vi.mock("../RichTextField", () => ({
+  RichTextField: ({
+    onChange,
+    ariaLabel,
+    placeholder,
+    disabled,
+  }: {
+    onChange: (rt: { type: "text"; text: string }[]) => void;
+    ariaLabel?: string;
+    placeholder?: string;
+    disabled?: boolean;
+  }) => (
+    <input
+      aria-label={ariaLabel}
+      placeholder={placeholder}
+      disabled={disabled}
+      onChange={(e) => onChange([{ type: "text", text: e.target.value }])}
+    />
+  ),
+}));
 
 /**
  * Build NodeViewProps with a fake editor doc that yields `priorQuestions`
