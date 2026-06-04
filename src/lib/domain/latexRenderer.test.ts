@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { hasMathContent, renderMathToHtml } from "./latexRenderer";
+import { hasMathContent, renderMathToHtml, renderLatexToHtml } from "./latexRenderer";
 
 describe("hasMathContent", () => {
   it("returns false for empty string", () => {
@@ -96,6 +96,38 @@ describe("renderMathToHtml", () => {
     try {
       const result = renderMathToHtml("$myexpr$");
       expect(result).toContain("myexpr");
+    } finally {
+      katex.renderToString = original;
+    }
+  });
+});
+
+describe("renderLatexToHtml", () => {
+  it("renders a raw latex string to KaTeX HTML", () => {
+    const result = renderLatexToHtml("x^2");
+    expect(result).toContain("katex");
+  });
+  it("includes MathML output for accessibility (htmlAndMathml)", () => {
+    const result = renderLatexToHtml("\\frac{a}{b}");
+    expect(result).toContain("katex-mathml");
+    expect(result).toContain("<math");
+  });
+  it("renders inline by default (no katex-display wrapper)", () => {
+    const result = renderLatexToHtml("x+1");
+    expect(result).not.toContain("katex-display");
+  });
+  it("renders in display mode when requested", () => {
+    const result = renderLatexToHtml("x+1", true);
+    expect(result).toContain("katex-display");
+  });
+  it("returns the raw LaTeX when KaTeX renderToString throws", async () => {
+    const katex = (await import("katex")).default;
+    const original = katex.renderToString;
+    katex.renderToString = (() => {
+      throw new Error("forced");
+    }) as typeof katex.renderToString;
+    try {
+      expect(renderLatexToHtml("broken")).toBe("broken");
     } finally {
       katex.renderToString = original;
     }

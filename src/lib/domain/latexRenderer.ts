@@ -1,11 +1,28 @@
 import katex from "katex";
 
-function renderKatex(latex: string): string {
+function renderKatex(latex: string, displayMode = false): string {
   try {
-    return katex.renderToString(latex, { throwOnError: false, displayMode: false, strict: false });
+    // output "htmlAndMathml" emits both the visual HTML and a MathML tree
+    // (plus aria) so screen readers can announce the expression — required for
+    // this accessibility-focused product.
+    return katex.renderToString(latex, {
+      throwOnError: false,
+      displayMode,
+      strict: false,
+      output: "htmlAndMathml",
+    });
   } catch {
     return latex;
   }
+}
+
+/**
+ * Render a raw LaTeX string (no `$…$` delimiters) directly to KaTeX HTML with
+ * MathML output for accessibility. Use this for canonical inline/block math
+ * nodes whose `latex` field already holds the bare expression.
+ */
+export function renderLatexToHtml(latex: string, displayMode = false): string {
+  return renderKatex(latex, displayMode);
 }
 
 export function renderMathToHtml(text: string): string {
