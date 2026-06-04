@@ -194,3 +194,66 @@
   border-color: hsl(var(--primary));
   outline: 2px solid hsl(var(--primary) / 0.3);
 }
+
+/*
+ * "Tudo dentro de blocos": every DIRECT top-level block of the editor reads as a
+ * contained block. Questions already render as cards (QuestionNodeView, a
+ * div[data-type='question']); these rules only contain the previously-loose
+ * top-level heading/paragraph blocks (activity title + general instructions).
+ * The `>` combinator scopes this to DIRECT children of .ProseMirror, so nested
+ * paragraphs inside a question stem are NOT affected.
+ */
+.tiptap > h1,
+.tiptap > h2,
+.tiptap > h3,
+.tiptap > p {
+  position: relative;
+  margin: 0.75rem 0;
+  padding: 1.5rem 0.75rem 0.5rem;
+  border-left: 4px solid hsl(var(--muted-foreground) / 0.4);
+  border-radius: 0.375rem;
+  background-color: hsl(var(--muted) / 0.3);
+}
+
+/* Discrete type label, pure CSS — no JS, so the coverage gate is unaffected. */
+.tiptap > h1::before,
+.tiptap > h2::before,
+.tiptap > h3::before,
+.tiptap > p::before {
+  position: absolute;
+  top: 0.375rem;
+  left: 0.75rem;
+  font-size: 0.625rem;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: hsl(var(--muted-foreground));
+  pointer-events: none;
+}
+
+.tiptap > h1::before {
+  content: "Título";
+}
+
+.tiptap > h2::before,
+.tiptap > h3::before {
+  content: "Seção";
+}
+
+.tiptap > p::before {
+  content: "Instrução";
+}
+
+/* The empty-editor placeholder paragraph keeps no container/label — the
+ * higher-specificity placeholder rule above already restores its ::before. */
+.tiptap > p.is-editor-empty:first-child {
+  padding: 0;
+  border-left: 0;
+  background-color: transparent;
+}
+
+/* Keep top-level question cards spaced consistently with the new containers
+ * (margin only — the card already has its own border; do NOT double-border). */
+.tiptap > [data-type="question"] {
+  margin: 0.75rem 0;
+}
