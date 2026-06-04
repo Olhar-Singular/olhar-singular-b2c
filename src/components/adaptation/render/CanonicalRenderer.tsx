@@ -11,12 +11,14 @@
 import "katex/dist/katex.min.css";
 import type { CanonicalDocument } from "@/lib/adaptation/canonical/schema";
 import { BlockView } from "./BlockView";
+import { questionNumbers } from "./questionNumbering";
 
 export function CanonicalRenderer({ document }: { document: CanonicalDocument }) {
+  const numbers = questionNumbers(document.blocks);
   return (
     <div data-testid="canonical-renderer" className="space-y-3">
-      {document.blocks.map((block) => (
-        <BlockView key={block.id} block={block} />
+      {document.blocks.map((block, i) => (
+        <BlockView key={block.id} block={block} number={numbers[i]} />
       ))}
     </div>
   );

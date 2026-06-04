@@ -29,7 +29,9 @@ const ALIGNMENTS: { value: NodeStyle["align"]; label: string }[] = [
 
 type Selectable = { id: string; label: string };
 
-function blockLabel(block: Block, index: number): string {
+// `questionNumber` is the question's automatic 1-based ordinal (in document
+// order); only used for `question` blocks, which store no number themselves.
+function blockLabel(block: Block, index: number, questionNumber: number): string {
   switch (block.type) {
     case "heading":
       return `Título (H${block.level})`;
@@ -44,18 +46,20 @@ function blockLabel(block: Block, index: number): string {
     case "divider":
       return "Divisória";
     case "question":
-      return block.number !== undefined ? `Questão ${block.number}` : "Questão";
+      return `Questão ${questionNumber}`;
   }
 }
 
 /** Top-level blocks plus question-stem blocks, in document order. */
 function collectSelectable(document: CanonicalDocument): Selectable[] {
   const out: Selectable[] = [];
+  let questionCount = 0;
   document.blocks.forEach((block, i) => {
-    out.push({ id: block.id, label: blockLabel(block, i) });
+    const n = block.type === "question" ? ++questionCount : 0;
+    out.push({ id: block.id, label: blockLabel(block, i, n) });
     if (block.type === "question") {
       block.stem.forEach((sb, j) => {
-        out.push({ id: sb.id, label: `↳ ${blockLabel(sb, j)}` });
+        out.push({ id: sb.id, label: `↳ ${blockLabel(sb, j, 0)}` });
       });
     }
   });

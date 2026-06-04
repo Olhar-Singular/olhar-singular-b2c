@@ -6,6 +6,10 @@
  *
  * A node requesting `pageBreakBefore` is wrapped in a <View break /> so
  * react-pdf paginates before it.
+ *
+ * `number` is the automatic question ordinal computed by the caller (the PDF
+ * walker assigns it from document order). It is only meaningful for `question`
+ * blocks.
  */
 
 import { View } from "@react-pdf/renderer";
@@ -15,7 +19,7 @@ import { PdfHeading, PdfParagraph, PdfImage, PdfScaffolding, PdfDivider } from "
 import { PdfMath } from "./PdfMath";
 import { PdfQuestion } from "./PdfQuestion";
 
-function dispatch(block: Block) {
+function dispatch(block: Block, number: number) {
   switch (block.type) {
     case "heading":
       return <PdfHeading block={block} />;
@@ -30,12 +34,12 @@ function dispatch(block: Block) {
     case "divider":
       return <PdfDivider block={block} />;
     case "question":
-      return <PdfQuestion block={block} />;
+      return <PdfQuestion block={block} number={number} />;
   }
 }
 
-export function PdfBlock({ block }: { block: Block }) {
-  const node = dispatch(block);
+export function PdfBlock({ block, number = 1 }: { block: Block; number?: number }) {
+  const node = dispatch(block, number);
   if (pageBreakBefore(block.style)) {
     return <View break>{node}</View>;
   }

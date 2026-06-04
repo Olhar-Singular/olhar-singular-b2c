@@ -13,6 +13,7 @@ import type { CanonicalDocument } from "@/lib/adaptation/canonical/schema";
 import type { PanelSettings, HeaderSettings } from "@/components/adaptation/export/panelSettings";
 import { DEFAULT_PANEL_SETTINGS, hasHeaderContent } from "@/components/adaptation/export/panelSettings";
 import { PdfBlock } from "./PdfBlock";
+import { questionNumbers } from "../questionNumbering";
 
 export function PdfHeader({ header }: { header: HeaderSettings }) {
   if (!hasHeaderContent(header)) return null;
@@ -51,17 +52,20 @@ export function AdaptationPdf({ document, settings = DEFAULT_PANEL_SETTINGS }: P
         style={{ padding: 40, fontFamily: settings.fontFamily, fontSize: 12, lineHeight: 1.4 }}
       >
         <PdfHeader header={settings.header} />
-        {document.blocks.map((block, i) => {
-          const forceBreak =
-            settings.pageBreakPerQuestion && block.type === "question" && i > 0;
-          return forceBreak ? (
-            <View key={block.id} break>
-              <PdfBlock block={block} />
-            </View>
-          ) : (
-            <PdfBlock key={block.id} block={block} />
-          );
-        })}
+        {(() => {
+          const numbers = questionNumbers(document.blocks);
+          return document.blocks.map((block, i) => {
+            const forceBreak =
+              settings.pageBreakPerQuestion && block.type === "question" && i > 0;
+            return forceBreak ? (
+              <View key={block.id} break>
+                <PdfBlock block={block} number={numbers[i]} />
+              </View>
+            ) : (
+              <PdfBlock key={block.id} block={block} number={numbers[i]} />
+            );
+          });
+        })()}
       </Page>
     </Document>
   );

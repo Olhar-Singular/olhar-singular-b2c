@@ -67,11 +67,14 @@ describe("CanonicalRenderer (rich fixture)", () => {
     expect(screen.getByTestId("divider")).toBeInTheDocument();
   });
 
-  it("renders question header (number, points, difficulty) and instruction", () => {
+  it("auto-numbers questions by document order and renders no points/difficulty", () => {
     render(<CanonicalRenderer document={renderDocument} />);
-    expect(screen.getAllByTestId("question-number")[0]).toHaveTextContent("1.");
-    expect(screen.getByTestId("question-points")).toHaveTextContent("2 pts");
-    expect(screen.getByTestId("question-difficulty")).toHaveTextContent("Fácil");
+    const numbers = screen.getAllByTestId("question-number");
+    expect(numbers[0]).toHaveTextContent("1.");
+    expect(numbers[1]).toHaveTextContent("2.");
+    expect(numbers[2]).toHaveTextContent("3.");
+    expect(screen.queryByTestId("question-points")).toBeNull();
+    expect(screen.queryByTestId("question-difficulty")).toBeNull();
     expect(screen.getByTestId("question-instruction")).toHaveTextContent("Escolha a opção correta.");
   });
 
@@ -211,7 +214,7 @@ describe("CanonicalRenderer (defaults / edge branches)", () => {
     expect(screen.getByTestId("inline-math")).toHaveAttribute("aria-label", "z+1");
   });
 
-  it("question with no number/points/difficulty/instruction renders bare", () => {
+  it("question with no instruction renders the auto number but no instruction", () => {
     render(
       <CanonicalRenderer
         document={wrap([
@@ -224,37 +227,12 @@ describe("CanonicalRenderer (defaults / edge branches)", () => {
         ])}
       />
     );
-    expect(screen.queryByTestId("question-number")).toBeNull();
+    expect(screen.getByTestId("question-number")).toHaveTextContent("1.");
     expect(screen.queryByTestId("question-points")).toBeNull();
     expect(screen.queryByTestId("question-difficulty")).toBeNull();
     expect(screen.queryByTestId("question-instruction")).toBeNull();
     // open default lines = 3
     expect(screen.getByTestId("answer-open").children).toHaveLength(3);
-  });
-
-  it("renders medio/dificil difficulty labels", () => {
-    render(
-      <CanonicalRenderer
-        document={wrap([
-          {
-            id: id(10),
-            type: "question",
-            difficulty: "medio",
-            stem: [{ id: id(11), type: "paragraph", content: [{ type: "text", text: "Q" }] }],
-            answer: { kind: "open" },
-          },
-          {
-            id: id(12),
-            type: "question",
-            difficulty: "dificil",
-            stem: [{ id: id(13), type: "paragraph", content: [{ type: "text", text: "Q" }] }],
-            answer: { kind: "open" },
-          },
-        ])}
-      />
-    );
-    expect(screen.getAllByTestId("question-difficulty")[0]).toHaveTextContent("Médio");
-    expect(screen.getAllByTestId("question-difficulty")[1]).toHaveTextContent("Difícil");
   });
 
   it("fill-blank gap with empty alternatives array shows no 'também'", () => {

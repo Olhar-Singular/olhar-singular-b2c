@@ -64,7 +64,7 @@ describe("documentToPlainText", () => {
     expect(documentToPlainText(doc)).toBe("x^2");
   });
 
-  it("omits the prefix for questions without a number and produces no answer lines for open", () => {
+  it("auto-prefixes the first question with 1) and produces no answer lines for open", () => {
     const doc: CanonicalDocument = {
       schemaVersion: 1,
       blocks: [
@@ -76,7 +76,7 @@ describe("documentToPlainText", () => {
         },
       ],
     };
-    expect(documentToPlainText(doc)).toBe("Explique.");
+    expect(documentToPlainText(doc)).toBe("1) Explique.");
   });
 
   it("renders an image caption when present", () => {
@@ -96,7 +96,6 @@ describe("documentToPlainText", () => {
         {
           id: id(1),
           type: "question",
-          number: 5,
           stem: [],
           instruction: [{ type: "text", text: "Responda." }],
           answer: { kind: "open" },
@@ -104,6 +103,29 @@ describe("documentToPlainText", () => {
       ],
     };
     expect(documentToPlainText(doc)).toBe("Responda.");
+  });
+
+  it("auto-numbers a question nested inside another question's stem", () => {
+    const doc: CanonicalDocument = {
+      schemaVersion: 1,
+      blocks: [
+        {
+          id: id(1),
+          type: "question",
+          stem: [
+            {
+              id: id(2),
+              type: "question",
+              stem: [{ id: id(3), type: "paragraph", content: [{ type: "text", text: "inner" }] }],
+              answer: { kind: "open" },
+            },
+          ],
+          answer: { kind: "open" },
+        },
+      ],
+    };
+    // Outer question is 1) ; the nested stem question restarts at 1) within the stem.
+    expect(documentToPlainText(doc)).toBe("1) 1) inner");
   });
 
   it("renders an image with no caption as an empty block", () => {

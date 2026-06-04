@@ -170,33 +170,31 @@ describe("PdfBlock — page break", () => {
   });
 });
 
-describe("PdfQuestion — meta header", () => {
-  it("omits the meta line when no number/points/difficulty", () => {
+describe("PdfQuestion — auto number header", () => {
+  it("renders the automatic number passed in, and no points/difficulty", () => {
     const block: Extract<Block, { type: "question" }> = {
       id: id(1),
       type: "question",
       stem: [{ id: id(2), type: "paragraph", content: rt("s") }],
       answer: { kind: "open" },
     };
-    const txt = textOf(PdfQuestion({ block }));
+    const txt = textOf(PdfQuestion({ block, number: 1 }));
+    expect(txt).toContain("1.");
     expect(txt).toContain("s");
+    expect(txt).not.toContain("pts");
+    expect(txt).not.toContain("Difícil");
   });
 
-  it("renders number, points, difficulty and instruction", () => {
+  it("renders the instruction alongside the auto number", () => {
     const block: Extract<Block, { type: "question" }> = {
       id: id(1),
       type: "question",
-      number: 3,
-      points: 2,
-      difficulty: "dificil",
       stem: [{ id: id(2), type: "paragraph", content: rt("stem") }],
       instruction: rt("faça assim"),
       answer: { kind: "open" },
     };
-    const txt = textOf(PdfQuestion({ block }));
+    const txt = textOf(PdfQuestion({ block, number: 3 }));
     expect(txt).toContain("3.");
-    expect(txt).toContain("(2 pts)");
-    expect(txt).toContain("Difícil");
     expect(txt).toContain("faça assim");
   });
 });

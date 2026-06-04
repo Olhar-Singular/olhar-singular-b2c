@@ -9,12 +9,27 @@ vi.mock("@tiptap/react", () => ({
   NodeViewContent: () => <div data-testid="node-view-content" />,
 }));
 
-function makeProps(answer: QuestionAnswer, attrs: Record<string, unknown> = {}, editable = true) {
+/**
+ * Build NodeViewProps with a fake editor doc that yields `priorQuestions`
+ * question nodes positioned before this node (at pos 100), so the ordinal
+ * label resolves to `priorQuestions + 1`.
+ */
+function makeProps(
+  answer: QuestionAnswer,
+  { editable = true, priorQuestions = 0 }: { editable?: boolean; priorQuestions?: number } = {}
+) {
   const updateAttributes = vi.fn();
+  const pos = 100;
+  const doc = {
+    descendants(fn: (node: { type: { name: string } }, pos: number) => void) {
+      for (let i = 0; i < priorQuestions; i++) fn({ type: { name: "question" } }, i);
+    },
+  };
   const props = {
-    node: { attrs: { number: null, points: null, difficulty: null, answer, ...attrs } },
+    node: { attrs: { answer } },
     updateAttributes,
-    editor: { isEditable: editable },
+    getPos: () => pos,
+    editor: { isEditable: editable, state: { doc } },
   } as unknown as NodeViewProps;
   return { props, updateAttributes };
 }
@@ -34,24 +49,16 @@ describe("QuestionNodeView", () => {
     expect(screen.getByTestId("answer-multipleChoice")).toBeInTheDocument();
   });
 
-  it("updates number / points via inputs", () => {
-    const { props, updateAttributes } = makeProps(mc);
+  it("renders a read-only ordinal label from document order", () => {
+    const { props } = makeProps(mc, { priorQuestions: 0 });
     render(<QuestionNodeView {...props} />);
-    fireEvent.change(screen.getByLabelText("Número da questão"), { target: { value: "5" } });
-    fireEvent.change(screen.getByLabelText("Pontos da questão"), { target: { value: "2" } });
-    expect(updateAttributes).toHaveBeenCalledWith({ number: 5 });
-    expect(updateAttributes).toHaveBeenCalledWith({ points: 2 });
+    expect(screen.getByTestId("question-ordinal")).toHaveTextContent("Questão 1");
   });
 
-  it("toggles difficulty on and off", () => {
-    const { props, updateAttributes } = makeProps(mc, { difficulty: "facil" });
+  it("reflects later positions in the ordinal label", () => {
+    const { props } = makeProps(mc, { priorQuestions: 2 });
     render(<QuestionNodeView {...props} />);
-    // facil currently selected -> clicking it clears (null)
-    fireEvent.click(screen.getByText("Fácil"));
-    expect(updateAttributes).toHaveBeenCalledWith({ difficulty: null });
-    // medio not selected -> selects it
-    fireEvent.click(screen.getByText("Médio"));
-    expect(updateAttributes).toHaveBeenCalledWith({ difficulty: "medio" });
+    expect(screen.getByTestId("question-ordinal")).toHaveTextContent("Questão 3");
   });
 
   it("writes back answer edits via updateAttributes({ answer })", () => {
@@ -63,9 +70,9 @@ describe("QuestionNodeView", () => {
     });
   });
 
-  it("renders disabled inputs when editor is not editable", () => {
-    const { props } = makeProps(mc, {}, false);
+  it("passes disabled to the answer editor when not editable", () => {
+    const { props } = makeProps(mc, { editable: false });
     render(<QuestionNodeView {...props} />);
-    expect(screen.getByLabelText("Número da questão")).toBeDisabled();
+    expect(screen.getByPlaceholderText("Alternativa")).toBeDisabled();
   });
 });

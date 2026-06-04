@@ -44,7 +44,12 @@ function answerToLines(answer: QuestionAnswer): string[] {
   }
 }
 
-function blockToLines(block: Block): string[] {
+/**
+ * Project a block to plain-text lines. Questions are auto-numbered: `number` is
+ * the question's 1-based ordinal in document order, computed by the caller (the
+ * block itself stores no number). Non-question blocks ignore `number`.
+ */
+function blockToLines(block: Block, number: number): string[] {
   switch (block.type) {
     case "heading":
     case "paragraph":
@@ -58,8 +63,11 @@ function blockToLines(block: Block): string[] {
     case "divider":
       return ["---"];
     case "question": {
-      const prefix = block.number !== undefined ? `${block.number}) ` : "";
-      const stem = block.stem.flatMap(blockToLines);
+      const prefix = `${number}) `;
+      let questionCount = 0;
+      const stem = block.stem.flatMap((child) =>
+        blockToLines(child, child.type === "question" ? ++questionCount : 0),
+      );
       if (stem.length > 0) stem[0] = prefix + stem[0];
       const instruction = block.instruction ? [richTextToText(block.instruction)] : [];
       return [...stem, ...instruction, ...answerToLines(block.answer)];
@@ -69,7 +77,10 @@ function blockToLines(block: Block): string[] {
 
 /** Project a CanonicalDocument to plain text (blocks separated by blank lines). */
 export function documentToPlainText(document: CanonicalDocument): string {
+  let questionCount = 0;
   return document.blocks
-    .map((block) => blockToLines(block).join("\n"))
+    .map((block) =>
+      blockToLines(block, block.type === "question" ? ++questionCount : 0).join("\n"),
+    )
     .join("\n\n");
 }

@@ -25,7 +25,6 @@ function baseDoc(): CanonicalDocument {
       {
         id: id(7),
         type: "question",
-        number: 1,
         stem: [{ id: id(8), type: "paragraph", content: [{ type: "text", text: "stem" }] }],
         answer: { kind: "open" },
       },
@@ -40,7 +39,7 @@ function baseDoc(): CanonicalDocument {
 }
 
 describe("StylingSurface", () => {
-  it("lists every block type label including stem children and unnumbered questions", () => {
+  it("lists every block type label including stem children and auto-numbered questions", () => {
     render(<StylingSurface document={baseDoc()} onChange={vi.fn()} />);
     const select = screen.getByLabelText("Bloco") as HTMLSelectElement;
     const labels = Array.from(select.options).map((o) => o.textContent);
@@ -54,7 +53,7 @@ describe("StylingSurface", () => {
         "Divisória",
         "Questão 1",
         "↳ Parágrafo 1",
-        "Questão",
+        "Questão 2",
       ]),
     );
   });

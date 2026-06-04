@@ -7,10 +7,27 @@ import type { RichText } from "@/lib/adaptation/canonical/schema";
 import { renderLatexToHtml } from "@/lib/domain/latexRenderer";
 import { richTextToPlain } from "../richText";
 
-/** Parse a numeric input value to a positive number or null. */
-export function parsePositiveNumber(raw: string): number | null {
-  const n = Number(raw);
-  return Number.isFinite(n) && n > 0 ? n : null;
+/**
+ * Minimal structural view of a ProseMirror doc node — just enough for
+ * `questionOrdinal` to walk it without importing prosemirror-model types.
+ */
+export interface OrdinalDoc {
+  descendants(fn: (node: { type: { name: string } }, pos: number) => void): void;
+}
+
+/**
+ * Compute the 1-based ordinal of the question node at `pos` among all question
+ * nodes in the document, in document order. The displayed question number is
+ * derived purely from position — questions carry no stored `number` field.
+ *
+ * Counts question nodes whose position is strictly before `pos`, then adds 1.
+ */
+export function questionOrdinal(doc: OrdinalDoc, pos: number): number {
+  let before = 0;
+  doc.descendants((node, nodePos) => {
+    if (node.type.name === "question" && nodePos < pos) before += 1;
+  });
+  return before + 1;
 }
 
 /**

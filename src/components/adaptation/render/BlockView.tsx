@@ -4,6 +4,9 @@
  * Kept in its own module (separate from CanonicalRenderer) so QuestionView can
  * import it to render recursive stem blocks without a circular module cycle.
  * The `type` discriminant is exhaustive over the typed Block union.
+ *
+ * `number` is the automatic question ordinal computed by the caller (the
+ * renderer walks blocks in order). It is only meaningful for `question` blocks.
  */
 
 import type { Block } from "@/lib/adaptation/canonical/schema";
@@ -15,7 +18,7 @@ import { ScaffoldingView } from "./blocks/ScaffoldingView";
 import { DividerView } from "./blocks/DividerView";
 import { QuestionView } from "./blocks/QuestionView";
 
-export function BlockView({ block }: { block: Block }) {
+export function BlockView({ block, number = 1 }: { block: Block; number?: number }) {
   switch (block.type) {
     case "heading":
       return <HeadingBlockView block={block} />;
@@ -30,7 +33,7 @@ export function BlockView({ block }: { block: Block }) {
     case "divider":
       return <DividerView block={block} />;
     case "question":
-      return <QuestionView block={block} />;
+      return <QuestionView block={block} number={number} />;
   }
 }
 

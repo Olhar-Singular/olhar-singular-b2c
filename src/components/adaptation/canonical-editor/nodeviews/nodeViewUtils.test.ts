@@ -1,16 +1,49 @@
 import { describe, it, expect } from "vitest";
-import { parsePositiveNumber, captionFromPlain, latexToHtml, inlineLatexToHtml } from "./nodeViewUtils";
+import {
+  questionOrdinal,
+  captionFromPlain,
+  latexToHtml,
+  inlineLatexToHtml,
+  type OrdinalDoc,
+} from "./nodeViewUtils";
 import { renderLatexToHtml } from "@/lib/domain/latexRenderer";
 import type { RichText } from "@/lib/adaptation/canonical/schema";
 
-describe("parsePositiveNumber", () => {
-  it("returns a positive number", () => {
-    expect(parsePositiveNumber("3")).toBe(3);
+describe("questionOrdinal", () => {
+  /** Build a fake doc from a list of [typeName, pos] node descriptors. */
+  const docOf = (nodes: Array<[string, number]>): OrdinalDoc => ({
+    descendants(fn) {
+      for (const [name, pos] of nodes) fn({ type: { name } }, pos);
+    },
   });
-  it("returns null for zero/negative/non-numeric", () => {
-    expect(parsePositiveNumber("0")).toBeNull();
-    expect(parsePositiveNumber("-2")).toBeNull();
-    expect(parsePositiveNumber("abc")).toBeNull();
+
+  it("returns 1 for the first question (no questions before it)", () => {
+    const doc = docOf([
+      ["paragraph", 0],
+      ["question", 1],
+      ["question", 10],
+    ]);
+    expect(questionOrdinal(doc, 1)).toBe(1);
+  });
+
+  it("counts only question nodes positioned before the target", () => {
+    const doc = docOf([
+      ["question", 0],
+      ["paragraph", 5],
+      ["question", 8],
+      ["question", 20],
+    ]);
+    expect(questionOrdinal(doc, 8)).toBe(2);
+    expect(questionOrdinal(doc, 20)).toBe(3);
+  });
+
+  it("ignores non-question nodes before the target", () => {
+    const doc = docOf([
+      ["heading", 0],
+      ["paragraph", 2],
+      ["question", 6],
+    ]);
+    expect(questionOrdinal(doc, 6)).toBe(1);
   });
 });
 
