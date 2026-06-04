@@ -112,9 +112,6 @@ function blockToPM(block: Block): PMNode {
       return { type: "divider", attrs: baseAttrs(block) };
     case "question": {
       const attrs = baseAttrs(block);
-      if (block.number !== undefined) attrs.number = block.number;
-      if (block.points !== undefined) attrs.points = block.points;
-      if (block.difficulty !== undefined) attrs.difficulty = block.difficulty;
       if (block.instruction !== undefined) attrs.instruction = block.instruction;
       attrs.answer = block.answer;
       return {

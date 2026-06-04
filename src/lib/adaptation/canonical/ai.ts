@@ -188,14 +188,9 @@ export type AiContentBlock = z.infer<typeof AiContentBlockSchema>;
  * stem uses AiContentBlock (no recursion, no nested questions).
  */
 export const AiQuestionSchema = z.object({
-  // Match canonical Question constraints exactly: number is int+positive,
-  // points is positive (may be fractional, e.g. 2.5). Keeping these in lockstep
-  // with schema.ts means an AI emitting number:0 / points:0 fails parseAiActivity
-  // up front instead of throwing later in normalizeAiActivity→validateDocument.
+  // Questions carry no number/points/difficulty: the displayed number is derived
+  // automatically from document order, so the AI never emits these fields.
   type: z.literal("question"),
-  number: z.number().int().positive().optional(),
-  points: z.number().positive().optional(),
-  difficulty: z.enum(["facil", "medio", "dificil"]).optional(),
   stem: z.array(AiContentBlockSchema),
   instruction: RichTextSchema.optional(),
   answer: AiQuestionAnswerSchema,
@@ -349,9 +344,6 @@ export function normalizeAiActivity(ai: AiActivity): CanonicalDocument {
       return {
         id,
         type: "question",
-        ...(block.number !== undefined && { number: block.number }),
-        ...(block.points !== undefined && { points: block.points }),
-        ...(block.difficulty !== undefined && { difficulty: block.difficulty }),
         stem: stemBlocks,
         ...(block.instruction !== undefined && { instruction: block.instruction }),
         answer,

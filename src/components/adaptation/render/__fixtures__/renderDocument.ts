@@ -55,9 +55,6 @@ export const renderDocument: CanonicalDocument = {
     {
       id: id(10),
       type: "question",
-      number: 1,
-      points: 2,
-      difficulty: "facil",
       stem: [
         {
           id: id(11),
@@ -78,7 +75,6 @@ export const renderDocument: CanonicalDocument = {
     {
       id: id(20),
       type: "question",
-      number: 2,
       stem: [{ id: id(21), type: "paragraph", content: [{ type: "text", text: "Verdadeiro ou falso?" }] }],
       answer: {
         kind: "trueFalse",

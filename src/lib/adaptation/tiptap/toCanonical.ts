@@ -144,15 +144,6 @@ function pmToBlock(node: PMNode): Block {
         stem: (node.content as PMNode[]).map(pmToBlock),
         answer: a.answer as Extract<Block, { type: "question" }>["answer"],
       });
-      if (a.number !== undefined && a.number !== null) {
-        block.number = a.number as number;
-      }
-      if (a.points !== undefined && a.points !== null) {
-        block.points = a.points as number;
-      }
-      if (a.difficulty !== undefined && a.difficulty !== null) {
-        block.difficulty = a.difficulty as "facil" | "medio" | "dificil";
-      }
       if (a.instruction !== undefined && a.instruction !== null) {
         block.instruction = a.instruction as RichText;
       }

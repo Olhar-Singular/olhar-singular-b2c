@@ -38,9 +38,6 @@ export const validRichActivity: AiActivity = {
     },
     {
       type: "question",
-      number: 1,
-      points: 2,
-      difficulty: "facil",
       stem: [
         {
           type: "paragraph",
@@ -59,8 +56,6 @@ export const validRichActivity: AiActivity = {
     },
     {
       type: "question",
-      number: 2,
-      difficulty: "medio",
       stem: [
         {
           type: "paragraph",
@@ -83,8 +78,6 @@ export const validRichActivity: AiActivity = {
     },
     {
       type: "question",
-      number: 3,
-      difficulty: "dificil",
       stem: [
         {
           type: "paragraph",

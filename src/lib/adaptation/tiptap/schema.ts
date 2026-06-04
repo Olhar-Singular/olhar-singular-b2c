@@ -10,8 +10,9 @@
  *  - Every block node carries `id` and `style` attrs (mirrors BlockBase).
  *  - `blockMath`, `image`, `inlineMath` are atoms holding their data in attrs.
  *  - `scaffolding` stores its `items` (string[]) as a JSON attr.
- *  - `question` stores its rich interaction (`answer`) plus `number`, `points`,
- *    `difficulty` and `instruction` as attrs; its `stem` is child block content.
+ *  - `question` stores its rich interaction (`answer`) plus `instruction` as
+ *    attrs; its `stem` is child block content. It carries no number/points/
+ *    difficulty — the displayed number is derived from document order.
  *    Storing the structured `answer` (alternatives, gaps, pairs, …) as a JSON
  *    attr is what guarantees a lossless round-trip — no construct is flattened
  *    into text.
@@ -182,9 +183,6 @@ export const QuestionNode = Node.create({
   addAttributes() {
     return {
       ...blockBaseAttributes,
-      number: { default: null as number | null },
-      points: { default: null as number | null },
-      difficulty: { default: null as string | null },
       // RichText stored as JSON attr; model-only.
       instruction: { default: null as unknown, rendered: false },
       // QuestionAnswer (discriminated union) stored as JSON attr — this is

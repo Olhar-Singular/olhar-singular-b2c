@@ -238,12 +238,11 @@ const Divider = BlockBase.extend({
   type: z.literal("divider"),
 });
 
-// Question.stem is recursive — references BlockSchema via z.lazy
+// Question.stem is recursive — references BlockSchema via z.lazy.
+// Questions have no editable number/points/difficulty: the displayed number is
+// derived automatically from the question's position in the document.
 const Question = BlockBase.extend({
   type: z.literal("question"),
-  number: z.number().int().positive().optional(),
-  points: z.number().positive().optional(),
-  difficulty: z.enum(["facil", "medio", "dificil"]).optional(),
   stem: z.lazy(() => z.array(BlockSchema)),
   instruction: RichTextSchema.optional(),
   answer: QuestionAnswerSchema,

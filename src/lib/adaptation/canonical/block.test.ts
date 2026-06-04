@@ -148,40 +148,11 @@ describe("Block — question", () => {
       BlockSchema.safeParse({
         id: id(),
         type: "question",
-        number: 1,
-        points: 2.5,
-        difficulty: "medio",
         stem: [{ id: id(), type: "paragraph", content: textContent }],
         instruction: textContent,
         answer: openAnswer,
       }).success
     ).toBe(true);
-  });
-
-  it("accepts valid difficulty values", () => {
-    for (const difficulty of ["facil", "medio", "dificil"] as const) {
-      expect(
-        BlockSchema.safeParse({
-          id: id(),
-          type: "question",
-          difficulty,
-          stem: [],
-          answer: openAnswer,
-        }).success
-      ).toBe(true);
-    }
-  });
-
-  it("rejects invalid difficulty", () => {
-    expect(
-      BlockSchema.safeParse({
-        id: id(),
-        type: "question",
-        difficulty: "easy",
-        stem: [],
-        answer: openAnswer,
-      }).success
-    ).toBe(false);
   });
 
   it("accepts recursive stem (question inside question)", () => {

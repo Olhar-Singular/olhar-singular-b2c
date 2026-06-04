@@ -62,9 +62,6 @@ export const richDocument: CanonicalDocument = {
     {
       id: id(7),
       type: "question",
-      number: 1,
-      points: 2.5,
-      difficulty: "medio",
       stem: [
         {
           id: id(8),
