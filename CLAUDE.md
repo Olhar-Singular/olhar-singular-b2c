@@ -185,6 +185,16 @@ Regras:
 - `.env` no `.gitignore`.
 - Auth via Supabase com session em localStorage + auto-refresh.
 
+## Skills do Projeto
+
+Skills ficam em `.claude/skills/<nome>/SKILL.md` (frontmatter `name` + `description`); subagentes em `.claude/agents/`; comandos em `.claude/commands/`.
+
+| Skill | Quando usar |
+|-------|-------------|
+| `validate-adaptar` | Validar o fluxo "Adaptar" (ou qualquer fluxo de UI) de ponta a ponta no ambiente REAL — não só `make test`. Cobre testes → banco (migration/pgTAP/round-trip) → bundle Deno → IA real → UI no browser, e os truques de dirigir o app via Chrome DevTools. Existe porque cobertura 100% não pega bugs de integração (mock de Tiptap esconde crash de render; Vitest não exercita o bundle Deno). |
+
+**Mantenha as skills atualizadas.** Sempre que aprender algo reutilizável — um padrão novo, um gotcha que custou tempo, um procedimento de validação, uma armadilha de integração, ou quando um passo de uma skill ficar obsoleto (ex.: o E2E manual virar Playwright) — **crie ou edite a skill correspondente** em `.claude/skills/` (use a skill `superpowers:writing-skills` como guia). Skill desatualizada engana mais do que ajuda. Quando uma skill referenciar um plano/doc que foi implementado, atualize-a para apontar pro código/comando real.
+
 ## Modo de discussão
 
 - Quando eu disser "vamos discutir" ou "quero explorar uma ideia", entre em modo de brainstorming: faça perguntas clarificadoras antes de implementar.
