@@ -3,7 +3,8 @@
  *
  * - Shows the image via the reused `ImageResizer` (width edits write `width`).
  * - Alignment buttons update `alignment`.
- * - Caption / alt are editable text inputs.
+ * - Caption is an inline rich-text field (RichText, so formatting + inline math
+ *   survive); alt is a plain accessibility text input.
  * - "Trocar imagem" opens the reused `ImageManagerModal`; the first picked image
  *   updates `src`.
  */
@@ -17,8 +18,7 @@ import ImageResizer from "@/components/editor/ImageResizer";
 import ImageManagerModal from "@/components/editor/ImageManagerModal";
 import type { ImageItem } from "@/components/editor/imageManagerUtils";
 import type { RichText } from "@/lib/adaptation/canonical/schema";
-import { richTextToPlain } from "../richText";
-import { captionFromPlain } from "./nodeViewUtils";
+import { RichTextField } from "../RichTextField";
 
 const ALIGNMENTS = [
   { value: "left", Icon: AlignLeft, label: "Alinhar à esquerda" },
@@ -77,12 +77,12 @@ export function ImageNodeView({ node, updateAttributes, editor }: NodeViewProps)
             <ImageIcon className="h-3.5 w-3.5" /> Trocar imagem
           </Button>
         </div>
-        <Input
-          value={richTextToPlain(caption ?? undefined)}
+        <RichTextField
+          value={caption ?? []}
           placeholder="Legenda"
           disabled={disabled}
-          onChange={(e) => updateAttributes({ caption: captionFromPlain(caption ?? undefined, e.target.value) })}
-          aria-label="Legenda da imagem"
+          onChange={(rt) => updateAttributes({ caption: rt.length > 0 ? rt : null })}
+          ariaLabel="Legenda da imagem"
         />
         <Input
           value={alt}

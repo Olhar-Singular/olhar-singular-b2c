@@ -3,9 +3,7 @@
  * so the React Fast-Refresh lint rule stays happy and the logic stays unit-testable.
  */
 
-import type { RichText } from "@/lib/adaptation/canonical/schema";
 import { renderLatexToHtml } from "@/lib/domain/latexRenderer";
-import { richTextToPlain } from "../richText";
 
 /**
  * Minimal structural view of a ProseMirror doc node — just enough for
@@ -28,20 +26,6 @@ export function questionOrdinal(doc: OrdinalDoc, pos: number): number {
     if (node.type.name === "question" && nodePos < pos) before += 1;
   });
   return before + 1;
-}
-
-/**
- * Resolve the new caption RichText from a plain-text input.
- *
- * The caption input renders `existing` via `richTextToPlain`. When the typed
- * text equals the flattened plain text of the current caption, the visible text
- * did not change (e.g. focus/blur or editing a sibling field) — so we PRESERVE
- * the existing RichText (marks/color/inlineMath) instead of flattening it. Only
- * a real visible-text change flattens; empty text clears the caption.
- */
-export function captionFromPlain(existing: RichText | undefined, text: string): RichText | undefined {
-  if (existing !== undefined && richTextToPlain(existing) === text) return existing;
-  return text === "" ? undefined : [{ type: "text", text }];
 }
 
 /**

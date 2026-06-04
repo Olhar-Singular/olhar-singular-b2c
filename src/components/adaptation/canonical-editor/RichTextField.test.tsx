@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 import type { RichText } from "@/lib/adaptation/canonical/schema";
-import { RichTextField, richTextFromDoc, docFromRichText } from "./RichTextField";
+import { RichTextField } from "./RichTextField";
 
 // Stub TipTap so we can test the toolbar / mapping without ProseMirror DOM.
 let capturedConfig: { content?: unknown; onUpdate?: (a: { editor: unknown }) => void } | undefined;
@@ -55,24 +55,6 @@ beforeEach(() => {
 });
 
 const t = (text: string): RichText => [{ type: "text", text }];
-
-describe("RichTextField — pure mapping helpers", () => {
-  it("docFromRichText wraps the value in a single paragraph", () => {
-    expect(docFromRichText(t("hi"))).toEqual({
-      type: "doc",
-      content: [{ type: "paragraph", content: [{ type: "text", text: "hi" }] }],
-    });
-  });
-
-  it("richTextFromDoc reads the single paragraph's inline content", () => {
-    const doc = docFromRichText([{ type: "text", text: "x", marks: ["bold"] }]);
-    expect(richTextFromDoc(doc)).toEqual([{ type: "text", text: "x", marks: ["bold"] }]);
-  });
-
-  it("richTextFromDoc handles an empty doc (no content)", () => {
-    expect(richTextFromDoc({ type: "doc" })).toEqual([]);
-  });
-});
 
 describe("RichTextField — component", () => {
   it("returns null when editor is not ready", () => {

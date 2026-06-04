@@ -8,6 +8,34 @@ vi.mock("@tiptap/react", () => ({
   NodeViewWrapper: ({ children, ...rest }: { children: React.ReactNode }) => <div {...rest}>{children}</div>,
 }));
 
+// Stub the inline rich-text field used for the caption; emit a single text run
+// (or empty array) on change so we can drive the caption without the real editor.
+let captionInitialValue: unknown;
+vi.mock("../RichTextField", () => ({
+  RichTextField: ({
+    value,
+    onChange,
+    ariaLabel,
+    disabled,
+  }: {
+    value: { type: "text"; text: string }[];
+    onChange: (rt: { type: "text"; text: string }[]) => void;
+    ariaLabel?: string;
+    disabled?: boolean;
+  }) => {
+    captionInitialValue = value;
+    const initialText = value.map((n) => n.text).join("");
+    return (
+      <input
+        aria-label={ariaLabel}
+        disabled={disabled}
+        defaultValue={initialText}
+        onChange={(e) => onChange(e.target.value === "" ? [] : [{ type: "text", text: e.target.value }])}
+      />
+    );
+  },
+}));
+
 vi.mock("@/components/editor/ImageResizer", () => ({
   default: ({ onResize }: { onResize: (w: number) => void }) => (
     <button data-testid="resizer" onClick={() => onResize(123)}>resizer</button>
@@ -38,6 +66,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   modalOnConfirm = undefined;
   modalOnClose = undefined;
+  captionInitialValue = undefined;
 });
 
 describe("ImageNodeView", () => {
@@ -55,20 +84,35 @@ describe("ImageNodeView", () => {
     expect(updateAttributes).toHaveBeenCalledWith({ alignment: "center" });
   });
 
-  it("edits caption and alt", () => {
+  it("edits caption (rich text) and alt", () => {
     const { props, updateAttributes } = makeProps({ caption: [{ type: "text", text: "cap" }] });
     render(<ImageNodeView {...props} />);
+    // RichTextField is seeded with the caption RichText.
+    expect(captionInitialValue).toEqual([{ type: "text", text: "cap" }]);
     fireEvent.change(screen.getByLabelText("Legenda da imagem"), { target: { value: "new" } });
     fireEvent.change(screen.getByLabelText("Texto alternativo"), { target: { value: "altx" } });
     expect(updateAttributes).toHaveBeenCalledWith({ caption: [{ type: "text", text: "new" }] });
     expect(updateAttributes).toHaveBeenCalledWith({ alt: "altx" });
   });
 
-  it("sets a caption when there was none (null caption maps to undefined existing)", () => {
+  it("seeds the caption field with an empty array when caption is null", () => {
+    const { props } = makeProps({ caption: null });
+    render(<ImageNodeView {...props} />);
+    expect(captionInitialValue).toEqual([]);
+  });
+
+  it("sets a caption when there was none", () => {
     const { props, updateAttributes } = makeProps({ caption: null });
     render(<ImageNodeView {...props} />);
     fireEvent.change(screen.getByLabelText("Legenda da imagem"), { target: { value: "first" } });
     expect(updateAttributes).toHaveBeenCalledWith({ caption: [{ type: "text", text: "first" }] });
+  });
+
+  it("clears the caption to null when emptied", () => {
+    const { props, updateAttributes } = makeProps({ caption: [{ type: "text", text: "cap" }] });
+    render(<ImageNodeView {...props} />);
+    fireEvent.change(screen.getByLabelText("Legenda da imagem"), { target: { value: "" } });
+    expect(updateAttributes).toHaveBeenCalledWith({ caption: null });
   });
 
   it("opens the modal and applies the first picked image", () => {

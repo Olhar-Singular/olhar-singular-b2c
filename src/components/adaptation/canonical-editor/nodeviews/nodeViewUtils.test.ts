@@ -1,13 +1,11 @@
 import { describe, it, expect } from "vitest";
 import {
   questionOrdinal,
-  captionFromPlain,
   latexToHtml,
   inlineLatexToHtml,
   type OrdinalDoc,
 } from "./nodeViewUtils";
 import { renderLatexToHtml } from "@/lib/domain/latexRenderer";
-import type { RichText } from "@/lib/adaptation/canonical/schema";
 
 describe("questionOrdinal", () => {
   /** Build a fake doc from a list of [typeName, pos] node descriptors. */
@@ -44,31 +42,6 @@ describe("questionOrdinal", () => {
       ["question", 6],
     ]);
     expect(questionOrdinal(doc, 6)).toBe(1);
-  });
-});
-
-describe("captionFromPlain", () => {
-  it("returns undefined for empty string (no existing)", () => {
-    expect(captionFromPlain(undefined, "")).toBeUndefined();
-  });
-  it("wraps changed text into a plain RichText", () => {
-    expect(captionFromPlain(undefined, "hi")).toEqual([{ type: "text", text: "hi" }]);
-  });
-  it("preserves the existing RichText (marks/inlineMath) when the plain text is unchanged", () => {
-    const existing: RichText = [
-      { type: "text", text: "x = ", marks: ["bold"] },
-      { type: "inlineMath", latex: "x^2" },
-    ];
-    // richTextToPlain(existing) === "x = $x^2$"
-    expect(captionFromPlain(existing, "x = $x^2$")).toBe(existing);
-  });
-  it("flattens to a plain run when the visible text actually changed", () => {
-    const existing: RichText = [{ type: "text", text: "hi", marks: ["bold"] }];
-    expect(captionFromPlain(existing, "bye")).toEqual([{ type: "text", text: "bye" }]);
-  });
-  it("clears the caption when the existing text is emptied", () => {
-    const existing: RichText = [{ type: "text", text: "hi" }];
-    expect(captionFromPlain(existing, "")).toBeUndefined();
   });
 });
 

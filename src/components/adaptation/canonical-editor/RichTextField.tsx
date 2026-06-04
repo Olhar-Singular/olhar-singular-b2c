@@ -47,9 +47,9 @@ import { cn } from "@/lib/utils";
 import type { RichText } from "@/lib/adaptation/canonical/schema";
 import { ALLOWED_COLORS } from "@/lib/adaptation/canonical/colors";
 import { InlineMathNode } from "@/lib/adaptation/tiptap/schema";
-import { richTextToPM, type PMNode } from "@/lib/adaptation/tiptap/fromCanonical";
-import { pmToRichText } from "@/lib/adaptation/tiptap/toCanonical";
+import { type PMNode } from "@/lib/adaptation/tiptap/fromCanonical";
 import { InlineMathNodeView } from "./nodeviews/InlineMathNodeView";
+import { docFromRichText, richTextFromDoc, richTextEqual } from "./richTextFieldMapping";
 
 /** Build the InlineMath node with its React NodeView bound (so math renders). */
 function buildInlineMathExtension() {
@@ -62,24 +62,6 @@ function buildInlineMathExtension() {
 
 /** Single-paragraph Document — content is exactly one paragraph, no blocks. */
 const SingleParagraphDocument = Document.extend({ content: "paragraph" });
-
-/** Read the single paragraph's inline content from a PM doc JSON. */
-export function richTextFromDoc(docJSON: PMNode): RichText {
-  const paragraph = docJSON.content?.[0];
-  return pmToRichText(paragraph?.content);
-}
-
-/** Build the PM doc JSON that seeds the editor from a RichText value. */
-export function docFromRichText(value: RichText): PMNode {
-  return {
-    type: "doc",
-    content: [{ type: "paragraph", content: richTextToPM(value) }],
-  };
-}
-
-function richTextEqual(a: RichText, b: RichText): boolean {
-  return JSON.stringify(a) === JSON.stringify(b);
-}
 
 interface RichTextFieldProps {
   value: RichText;
