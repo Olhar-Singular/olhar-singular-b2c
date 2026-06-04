@@ -80,7 +80,7 @@ export function ImageNodeView({ node, updateAttributes, editor }: NodeViewProps)
           value={richTextToPlain(caption ?? undefined)}
           placeholder="Legenda"
           disabled={disabled}
-          onChange={(e) => updateAttributes({ caption: captionFromPlain(e.target.value) })}
+          onChange={(e) => updateAttributes({ caption: captionFromPlain(caption ?? undefined, e.target.value) })}
           aria-label="Legenda da imagem"
         />
         <Input

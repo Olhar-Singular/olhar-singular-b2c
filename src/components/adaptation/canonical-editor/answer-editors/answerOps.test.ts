@@ -175,6 +175,78 @@ describe("setAlternativeText", () => {
   });
 });
 
+describe("preserve formatting when the visible text is unchanged (B5)", () => {
+  const richAlt: Extract<QuestionAnswer, { kind: "multipleChoice" }> = {
+    kind: "multipleChoice",
+    alternatives: [
+      {
+        id: "11111111-1111-4111-8111-111111111111",
+        content: [
+          { type: "text", text: "x = ", marks: ["bold"] },
+          { type: "inlineMath", latex: "x^2" },
+        ],
+        correct: true,
+      },
+      { id: "22222222-2222-4222-8222-222222222222", content: text("b"), correct: false },
+    ],
+  };
+  // richTextToPlain(richAlt.alternatives[0].content) === "x = $x^2$"
+
+  it("preserves marks + inlineMath when the plain text equals the flattened value", () => {
+    const next = setAlternativeText(richAlt, richAlt.alternatives[0].id, "x = $x^2$");
+    if (next.kind !== "multipleChoice") throw new Error("unexpected");
+    expect(next.alternatives[0].content).toBe(richAlt.alternatives[0].content);
+  });
+
+  it("flattens to a plain run when the visible text actually changed", () => {
+    const next = setAlternativeText(richAlt, richAlt.alternatives[0].id, "y = 1");
+    if (next.kind !== "multipleChoice") throw new Error("unexpected");
+    expect(next.alternatives[0].content).toEqual([{ type: "text", text: "y = 1" }]);
+  });
+
+  it("preserves the content reference across the other plain-text setters", () => {
+    const tfRich: Extract<QuestionAnswer, { kind: "trueFalse" }> = {
+      kind: "trueFalse",
+      items: [{ id: "33333333-3333-4333-8333-333333333333", content: [{ type: "text", text: "p", marks: ["italic"] }], value: true }],
+    };
+    const tfNext = setTrueFalseText(tfRich, tfRich.items[0].id, "p");
+    if (tfNext.kind !== "trueFalse") throw new Error("unexpected");
+    expect(tfNext.items[0].content).toBe(tfRich.items[0].content);
+
+    const cbRich: Extract<QuestionAnswer, { kind: "checkbox" }> = {
+      kind: "checkbox",
+      items: [{ id: "44444444-4444-4444-8444-444444444444", content: [{ type: "text", text: "q", marks: ["italic"] }], checked: false }],
+    };
+    const cbNext = setCheckboxText(cbRich, cbRich.items[0].id, "q");
+    if (cbNext.kind !== "checkbox") throw new Error("unexpected");
+    expect(cbNext.items[0].content).toBe(cbRich.items[0].content);
+
+    const matchRich: Extract<QuestionAnswer, { kind: "matching" }> = {
+      kind: "matching",
+      pairs: [{ id: "55555555-5555-4555-8555-555555555555", left: [{ type: "text", text: "L", marks: ["bold"] }], right: text("R") }],
+    };
+    const matchNext = setMatchingSide(matchRich, matchRich.pairs[0].id, "left", "L");
+    if (matchNext.kind !== "matching") throw new Error("unexpected");
+    expect(matchNext.pairs[0].left).toBe(matchRich.pairs[0].left);
+
+    const ordRich: Extract<QuestionAnswer, { kind: "ordering" }> = {
+      kind: "ordering",
+      items: [{ id: "66666666-6666-4666-8666-666666666666", content: [{ type: "text", text: "o", marks: ["bold"] }], position: 0 }],
+    };
+    const ordNext = setOrderingText(ordRich, ordRich.items[0].id, "o");
+    if (ordNext.kind !== "ordering") throw new Error("unexpected");
+    expect(ordNext.items[0].content).toBe(ordRich.items[0].content);
+
+    const tableRich: Extract<QuestionAnswer, { kind: "table" }> = {
+      kind: "table",
+      rows: [[[{ type: "text", text: "c", marks: ["bold"] }], text("d")]],
+    };
+    const tableNext = setTableCell(tableRich, 0, 0, "c");
+    if (tableNext.kind !== "table") throw new Error("unexpected");
+    expect(tableNext.rows[0][0]).toBe(tableRich.rows[0][0]);
+  });
+});
+
 // trueFalse -----------------------------------------------------------------
 
 describe("setTrueFalseValue", () => {

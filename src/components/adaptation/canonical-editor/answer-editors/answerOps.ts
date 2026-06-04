@@ -13,12 +13,24 @@
 
 import type { QuestionAnswer, RichText } from "@/lib/adaptation/canonical/schema";
 import { newId } from "@/lib/adaptation/canonical/ids";
+import { richTextToPlain } from "../richText";
 
 type Generate = () => string;
 
-/** Build a plain RichText from a string (empty string -> empty array). */
-function plainText(text: string): RichText {
-  return text === "" ? [] : [{ type: "text", text }];
+/**
+ * Resolve the new RichText for a plain-text answer input.
+ *
+ * The answer editors are plain `<input>`s that render the existing RichText via
+ * `richTextToPlain`. When the typed text equals the flattened plain text of the
+ * current value, the user did NOT change the visible text (e.g. a focus/blur or
+ * editing a sibling field re-fired onChange) — so we PRESERVE the existing
+ * RichText, keeping its marks/color/inlineMath instead of flattening it into a
+ * single plain run. Only a real visible-text change flattens (full rich-text
+ * answer editing remains a roadmap item).
+ */
+function plainText(existing: RichText | undefined, next: string): RichText {
+  if (existing !== undefined && richTextToPlain(existing) === next) return existing;
+  return next === "" ? [] : [{ type: "text", text: next }];
 }
 
 // multipleChoice ------------------------------------------------------------
@@ -57,7 +69,7 @@ export function setAlternativeText(answer: QuestionAnswer, id: string, text: str
   return {
     ...answer,
     alternatives: answer.alternatives.map((alt) =>
-      alt.id === id ? { ...alt, content: plainText(text) } : alt
+      alt.id === id ? { ...alt, content: plainText(alt.content, text) } : alt
     ),
   };
 }
@@ -76,7 +88,7 @@ export function setTrueFalseText(answer: QuestionAnswer, id: string, text: strin
   if (answer.kind !== "trueFalse") return answer;
   return {
     ...answer,
-    items: answer.items.map((item) => (item.id === id ? { ...item, content: plainText(text) } : item)),
+    items: answer.items.map((item) => (item.id === id ? { ...item, content: plainText(item.content, text) } : item)),
   };
 }
 
@@ -96,7 +108,7 @@ export function setCheckboxText(answer: QuestionAnswer, id: string, text: string
   if (answer.kind !== "checkbox") return answer;
   return {
     ...answer,
-    items: answer.items.map((item) => (item.id === id ? { ...item, content: plainText(text) } : item)),
+    items: answer.items.map((item) => (item.id === id ? { ...item, content: plainText(item.content, text) } : item)),
   };
 }
 
@@ -112,7 +124,7 @@ export function setMatchingSide(
   return {
     ...answer,
     pairs: answer.pairs.map((pair) =>
-      pair.id === id ? { ...pair, [side]: plainText(text) } : pair
+      pair.id === id ? { ...pair, [side]: plainText(pair[side], text) } : pair
     ),
   };
 }
@@ -137,7 +149,7 @@ export function setOrderingText(answer: QuestionAnswer, id: string, text: string
   if (answer.kind !== "ordering") return answer;
   return {
     ...answer,
-    items: answer.items.map((item) => (item.id === id ? { ...item, content: plainText(text) } : item)),
+    items: answer.items.map((item) => (item.id === id ? { ...item, content: plainText(item.content, text) } : item)),
   };
 }
 
@@ -201,7 +213,7 @@ export function setTableCell(
   return {
     ...answer,
     rows: answer.rows.map((r, ri) =>
-      ri === row ? r.map((cell, ci) => (ci === col ? plainText(text) : cell)) : r
+      ri === row ? r.map((cell, ci) => (ci === col ? plainText(cell, text) : cell)) : r
     ),
   };
 }
