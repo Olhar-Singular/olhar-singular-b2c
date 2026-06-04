@@ -17,6 +17,7 @@ import { zodToJsonSchema } from "zod-to-json-schema";
 import {
   RichTextSchema,
   SCHEMA_VERSION,
+  isSafeImageSrc,
   type CanonicalDocument,
   type AdaptationResult,
   type RichText,
@@ -157,7 +158,7 @@ const AiBlockMath = z.object({
 
 const AiImage = z.object({
   type: z.literal("image"),
-  src: z.string().min(1),
+  src: z.string().min(1).refine(isSafeImageSrc, "src protocol não permitido"),
   alt: z.string(),
   width: z.number().positive().optional(),
   alignment: z.enum(["left", "center", "right"]).optional(),
@@ -187,9 +188,13 @@ export type AiContentBlock = z.infer<typeof AiContentBlockSchema>;
  * stem uses AiContentBlock (no recursion, no nested questions).
  */
 export const AiQuestionSchema = z.object({
+  // Match canonical Question constraints exactly: number is int+positive,
+  // points is positive (may be fractional, e.g. 2.5). Keeping these in lockstep
+  // with schema.ts means an AI emitting number:0 / points:0 fails parseAiActivity
+  // up front instead of throwing later in normalizeAiActivity→validateDocument.
   type: z.literal("question"),
-  number: z.number().optional(),
-  points: z.number().optional(),
+  number: z.number().int().positive().optional(),
+  points: z.number().positive().optional(),
   difficulty: z.enum(["facil", "medio", "dificil"]).optional(),
   stem: z.array(AiContentBlockSchema),
   instruction: RichTextSchema.optional(),

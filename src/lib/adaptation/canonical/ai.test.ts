@@ -9,6 +9,8 @@ import { describe, it, expect, vi, afterEach } from "vitest";
 
 import {
   AiActivitySchema,
+  AiContentBlockSchema,
+  AiQuestionSchema,
   aiActivityJsonSchema,
   normalizeAiActivity,
   buildAdaptationResult,
@@ -369,5 +371,66 @@ describe("parseAiActivity — adversarial rejections", () => {
     if (!result.ok) {
       expect(result.errors.length).toBeGreaterThan(0);
     }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// A1 — AI image src allowlist
+// ---------------------------------------------------------------------------
+
+describe("AiContentBlockSchema — image src allowlist", () => {
+  const img = (src: string) => ({ type: "image" as const, src, alt: "" });
+
+  it("accepts an https image src", () => {
+    expect(AiContentBlockSchema.safeParse(img("https://x.com/a.png")).success).toBe(true);
+  });
+
+  it("accepts a data:image src", () => {
+    expect(AiContentBlockSchema.safeParse(img("data:image/png;base64,AAAA")).success).toBe(true);
+  });
+
+  it("rejects a javascript: image src", () => {
+    expect(AiContentBlockSchema.safeParse(img("javascript:alert(1)")).success).toBe(false);
+  });
+
+  it("rejects a data:text image src", () => {
+    expect(AiContentBlockSchema.safeParse(img("data:text/html,x")).success).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// A2 — AI numeric constraints match canonical (number/points)
+// ---------------------------------------------------------------------------
+
+describe("AiQuestionSchema — number/points constraints", () => {
+  const question = (extra: Record<string, unknown>) => ({
+    type: "question" as const,
+    stem: [{ type: "paragraph" as const, content: [{ type: "text" as const, text: "q" }] }],
+    answer: { kind: "open" as const },
+    ...extra,
+  });
+
+  it("accepts a positive integer number and positive points", () => {
+    expect(AiQuestionSchema.safeParse(question({ number: 1, points: 2.5 })).success).toBe(true);
+  });
+
+  it("rejects number: 0", () => {
+    expect(AiQuestionSchema.safeParse(question({ number: 0 })).success).toBe(false);
+  });
+
+  it("rejects a non-integer number", () => {
+    expect(AiQuestionSchema.safeParse(question({ number: 1.5 })).success).toBe(false);
+  });
+
+  it("rejects a negative number", () => {
+    expect(AiQuestionSchema.safeParse(question({ number: -2 })).success).toBe(false);
+  });
+
+  it("rejects points: 0", () => {
+    expect(AiQuestionSchema.safeParse(question({ points: 0 })).success).toBe(false);
+  });
+
+  it("rejects negative points", () => {
+    expect(AiQuestionSchema.safeParse(question({ points: -1 })).success).toBe(false);
   });
 });
