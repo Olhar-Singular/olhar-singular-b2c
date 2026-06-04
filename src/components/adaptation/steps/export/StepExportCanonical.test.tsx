@@ -26,9 +26,23 @@ const result: AdaptationResult = {
 
 beforeEach(() => vi.clearAllMocks());
 
+function renderStep(overrides: Partial<React.ComponentProps<typeof StepExportCanonical>> = {}) {
+  return render(
+    <StepExportCanonical
+      result={result}
+      canSave
+      saving={false}
+      onSave={vi.fn()}
+      onPrev={vi.fn()}
+      onRestart={vi.fn()}
+      {...overrides}
+    />,
+  );
+}
+
 describe("StepExportCanonical", () => {
   it("renders the read-only canonical renderer", () => {
-    render(<StepExportCanonical result={result} onPrev={vi.fn()} onRestart={vi.fn()} />);
+    renderStep();
     expect(screen.getByTestId("renderer")).toHaveTextContent("1");
   });
 
@@ -36,7 +50,7 @@ describe("StepExportCanonical", () => {
     const writeText = vi.fn().mockResolvedValue(undefined);
     Object.assign(navigator, { clipboard: { writeText } });
     const { toast } = await import("sonner");
-    render(<StepExportCanonical result={result} onPrev={vi.fn()} onRestart={vi.fn()} />);
+    renderStep();
     fireEvent.click(screen.getByRole("button", { name: /Copiar/i }));
     await waitFor(() => expect(writeText).toHaveBeenCalledWith("olá mundo"));
     await waitFor(() => expect(toast.success).toHaveBeenCalled());
@@ -46,21 +60,37 @@ describe("StepExportCanonical", () => {
     const writeText = vi.fn().mockRejectedValue(new Error("denied"));
     Object.assign(navigator, { clipboard: { writeText } });
     const { toast } = await import("sonner");
-    render(<StepExportCanonical result={result} onPrev={vi.fn()} onRestart={vi.fn()} />);
+    renderStep();
     fireEvent.click(screen.getByRole("button", { name: /Copiar/i }));
     await waitFor(() => expect(toast.error).toHaveBeenCalledWith("Erro ao copiar."));
   });
 
-  it("leaves Salvar and Exportar PDF disabled as deferred seams", () => {
-    render(<StepExportCanonical result={result} onPrev={vi.fn()} onRestart={vi.fn()} />);
+  it("fires onSave when Salvar is clicked", () => {
+    const onSave = vi.fn();
+    renderStep({ onSave });
+    fireEvent.click(screen.getByRole("button", { name: /Salvar/i }));
+    expect(onSave).toHaveBeenCalled();
+  });
+
+  it("disables Salvar when there is no draft to save", () => {
+    renderStep({ canSave: false });
     expect(screen.getByRole("button", { name: /Salvar/i })).toBeDisabled();
+  });
+
+  it("disables Salvar and shows a spinner while saving", () => {
+    renderStep({ saving: true });
+    expect(screen.getByRole("button", { name: /Salvar/i })).toBeDisabled();
+  });
+
+  it("leaves Exportar PDF disabled as a deferred seam", () => {
+    renderStep();
     expect(screen.getByRole("button", { name: /Exportar PDF/i })).toBeDisabled();
   });
 
   it("fires onPrev and onRestart", () => {
     const onPrev = vi.fn();
     const onRestart = vi.fn();
-    render(<StepExportCanonical result={result} onPrev={onPrev} onRestart={onRestart} />);
+    renderStep({ onPrev, onRestart });
     fireEvent.click(screen.getByRole("button", { name: /Voltar/i }));
     fireEvent.click(screen.getByRole("button", { name: /Nova adaptação/i }));
     expect(onPrev).toHaveBeenCalled();

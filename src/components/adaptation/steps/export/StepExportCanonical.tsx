@@ -1,5 +1,5 @@
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, Copy, RotateCcw, Save, FileDown } from "lucide-react";
+import { ArrowLeft, Copy, RotateCcw, Save, FileDown, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { CanonicalRenderer } from "@/components/adaptation/render/CanonicalRenderer";
 import { documentToPlainText } from "@/lib/adaptation/canonical/plainText";
@@ -7,11 +7,16 @@ import type { AdaptationResult } from "@/lib/adaptation/canonical/schema";
 
 type Props = {
   result: AdaptationResult;
+  /** Whether a draft row exists to mark ready. */
+  canSave: boolean;
+  /** True while the markReady mutation is in flight. */
+  saving: boolean;
+  onSave: () => void;
   onPrev: () => void;
   onRestart: () => void;
 };
 
-export function StepExportCanonical({ result, onPrev, onRestart }: Props) {
+export function StepExportCanonical({ result, canSave, saving, onSave, onPrev, onRestart }: Props) {
   const document = result.document;
 
   const handleCopy = async () => {
@@ -31,9 +36,13 @@ export function StepExportCanonical({ result, onPrev, onRestart }: Props) {
         <Button variant="outline" onClick={handleCopy}>
           <Copy className="w-4 h-4 mr-1" /> Copiar
         </Button>
-        {/* TODO(M6): persistence — wire to adaptations insert + grant_credits seam. */}
-        <Button variant="outline" disabled title="Em breve">
-          <Save className="w-4 h-4 mr-1" /> Salvar
+        <Button variant="outline" onClick={onSave} disabled={!canSave || saving}>
+          {saving ? (
+            <Loader2 className="w-4 h-4 mr-1 animate-spin" />
+          ) : (
+            <Save className="w-4 h-4 mr-1" />
+          )}
+          Salvar
         </Button>
         {/* TODO(M7): PDF export — wire to the canonical → PDF mapper. */}
         <Button variant="outline" disabled title="Em breve">

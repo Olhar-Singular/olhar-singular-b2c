@@ -1,11 +1,52 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent, within } from "@testing-library/react";
+import { render, screen, fireEvent, within, waitFor } from "@testing-library/react";
 import { renderWithProviders } from "@/test/helpers";
 import CanonicalAdaptationWizard from "./CanonicalAdaptationWizard";
 import type { AdaptationResult, CanonicalDocument } from "@/lib/adaptation/canonical/schema";
 import { validateDocument } from "@/lib/adaptation/canonical/validate";
+import * as repo from "@/lib/adaptation/persistence/adaptationsRepo";
 
 vi.mock("sonner", () => ({ toast: { error: vi.fn(), success: vi.fn() } }));
+
+// --- persistence seams ------------------------------------------------------
+const mockNavigate = vi.fn();
+vi.mock("react-router-dom", async (orig) => ({
+  ...(await orig<typeof import("react-router-dom")>()),
+  useNavigate: () => mockNavigate,
+}));
+
+vi.mock("@/hooks/useAuth", () => ({ useAuth: () => ({ user: { id: "u1" } }) }));
+
+vi.mock("@/lib/adaptation/persistence/adaptationsRepo");
+
+const mockDraftStatus = { value: "idle" as string };
+vi.mock("@/hooks/useAdaptationDraft", () => ({
+  useAdaptationDraft: () => ({
+    status: mockDraftStatus.value,
+    flush: vi.fn(),
+    restoreFromMirror: vi.fn(),
+  }),
+}));
+
+const mockMarkReady = vi.fn();
+vi.mock("@/hooks/useAdaptations", () => ({
+  useMarkReady: () => ({ mutateAsync: mockMarkReady, isPending: false }),
+}));
+
+const DRAFT_ROW = {
+  id: "draft-1",
+  user_id: "u1",
+  barrier_profile_id: null,
+  title: "T",
+  original_activity: "",
+  activity_type: "exercício",
+  barriers_used: [],
+  adaptation_result: {} as AdaptationResult,
+  status: "draft" as const,
+  credits_spent: 0,
+  created_at: "2026-01-01T00:00:00Z",
+  updated_at: "2026-01-01T00:00:00Z",
+};
 
 const id = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, "0")}`;
 
@@ -101,7 +142,13 @@ function advanceToContent() {
   fireEvent.click(screen.getByTestId("do-generate"));
 }
 
-beforeEach(() => vi.clearAllMocks());
+beforeEach(() => {
+  vi.clearAllMocks();
+  mockDraftStatus.value = "idle";
+  vi.mocked(repo.saveDraft).mockResolvedValue(DRAFT_ROW);
+  vi.mocked(repo.getAdaptation).mockResolvedValue(DRAFT_ROW);
+  mockMarkReady.mockResolvedValue(DRAFT_ROW);
+});
 
 describe("CanonicalAdaptationWizard", () => {
   it("walks the input steps and renders the content step after generation", () => {
@@ -225,5 +272,83 @@ describe("CanonicalAdaptationWizard", () => {
     fireEvent.click(screen.getByRole("button", { name: /Avançar para exportação/i }));
     fireEvent.click(screen.getByRole("button", { name: /Voltar/i }));
     expect(screen.getByLabelText("Alinhamento")).toBeInTheDocument();
+  });
+
+  // --- M6 persistence wiring -------------------------------------------------
+
+  it("creates a draft on first generation", async () => {
+    renderWithProviders(<CanonicalAdaptationWizard />);
+    advanceToContent();
+    await waitFor(() => expect(repo.saveDraft).toHaveBeenCalledTimes(1));
+    expect(repo.saveDraft).toHaveBeenCalledWith(
+      expect.objectContaining({ user_id: "u1", activity_type: "exercício" }),
+    );
+  });
+
+  it("toasts when draft creation fails", async () => {
+    vi.mocked(repo.saveDraft).mockRejectedValue(new Error("db down"));
+    const { toast } = await import("sonner");
+    renderWithProviders(<CanonicalAdaptationWizard />);
+    advanceToContent();
+    await waitFor(() => expect(toast.error).toHaveBeenCalled());
+  });
+
+  it("shows the autosave status indicator once a draft exists", async () => {
+    mockDraftStatus.value = "saving";
+    renderWithProviders(<CanonicalAdaptationWizard />);
+    advanceToContent();
+    await waitFor(() => expect(repo.saveDraft).toHaveBeenCalled());
+    expect(await screen.findByRole("status")).toHaveTextContent(/Salvando/i);
+  });
+
+  it("Salvar marks the draft ready, toasts, and navigates to history", async () => {
+    const { toast } = await import("sonner");
+    renderWithProviders(<CanonicalAdaptationWizard />);
+    advanceToContent();
+    await waitFor(() => expect(repo.saveDraft).toHaveBeenCalled());
+    fireEvent.click(screen.getByRole("button", { name: /Avançar para estilo/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Avançar para exportação/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Salvar/i }));
+    await waitFor(() => expect(mockMarkReady).toHaveBeenCalledWith("draft-1"));
+    expect(toast.success).toHaveBeenCalled();
+    expect(mockNavigate).toHaveBeenCalledWith("/historico");
+  });
+
+  it("does not create a second draft when regenerating", async () => {
+    renderWithProviders(<CanonicalAdaptationWizard />);
+    advanceToContent();
+    await waitFor(() => expect(repo.saveDraft).toHaveBeenCalledTimes(1));
+
+    // regenerate, then generate again — draftId already exists, so no new draft
+    fireEvent.click(screen.getByRole("button", { name: /Regerar/i }));
+    const dialog = screen.getByRole("alertdialog");
+    fireEvent.click(within(dialog).getByRole("button", { name: /^Regerar$/i }));
+    fireEvent.click(screen.getByTestId("do-generate"));
+    await waitFor(() => expect(screen.getByTestId("edit-content")).toHaveTextContent("gerado"));
+    expect(repo.saveDraft).toHaveBeenCalledTimes(1);
+  });
+
+  it("opens in edit mode at the content step seeded from a row", () => {
+    const seededResult = makeResult();
+    renderWithProviders(
+      <CanonicalAdaptationWizard
+        editMode={{
+          adaptationId: "edit-1",
+          initialData: {
+            activityType: "exercício",
+            activityText: "texto",
+            selectedQuestions: [],
+            barriers: [],
+            barrierProfileId: null,
+            result: seededResult,
+          },
+          initialUpdatedAt: "2026-01-01T00:00:00Z",
+        }}
+      />,
+    );
+    // Lands directly on the content step with the seeded document.
+    expect(screen.getByTestId("edit-content")).toHaveTextContent("gerado");
+    // No new draft is created in edit mode.
+    expect(repo.saveDraft).not.toHaveBeenCalled();
   });
 });

@@ -1,4 +1,6 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useRef } from "react";
+import { useNavigate } from "react-router-dom";
+import { toast } from "sonner";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -23,6 +25,12 @@ import {
   clearResult,
   type WizardData,
 } from "@/lib/adaptation/wizard/wizardState";
+import { wizardDataToPayload } from "@/lib/adaptation/wizard/rowMapping";
+import { saveDraft } from "@/lib/adaptation/persistence/adaptationsRepo";
+import { useAdaptationDraft } from "@/hooks/useAdaptationDraft";
+import { useMarkReady } from "@/hooks/useAdaptations";
+import { useAuth } from "@/hooks/useAuth";
+import { parseDbError } from "@/lib/utils/errors";
 import type { AdaptationResult, CanonicalDocument } from "@/lib/adaptation/canonical/schema";
 
 const STEPS = [
@@ -48,11 +56,51 @@ const STEP_LABELS: Record<StepKey, string> = {
 };
 
 const GENERATE_INDEX = STEPS.indexOf("generate");
+const CONTENT_INDEX = STEPS.indexOf("content");
+const EXPORT_INDEX = STEPS.indexOf("export");
 
-export default function CanonicalAdaptationWizard() {
-  const [data, setData] = useState<WizardData>(INITIAL_WIZARD_DATA);
-  const [stepIndex, setStepIndex] = useState(0);
+export type EditModeSeed = {
+  adaptationId: string;
+  initialData: WizardData;
+  initialUpdatedAt: string;
+};
+
+type Props = {
+  /** When provided, the wizard opens an existing adaptation at the content step. */
+  editMode?: EditModeSeed;
+};
+
+const SAVE_STATUS_LABEL: Record<string, string> = {
+  saving: "Salvando…",
+  saved: "Salvo",
+  error: "Erro ao salvar",
+  conflict: "Conflito — recarregue",
+};
+
+export default function CanonicalAdaptationWizard({ editMode }: Props = {}) {
+  const navigate = useNavigate();
+  const { user } = useAuth();
+  const markReady = useMarkReady();
+
+  const [data, setData] = useState<WizardData>(
+    editMode ? editMode.initialData : INITIAL_WIZARD_DATA,
+  );
+  const [stepIndex, setStepIndex] = useState(editMode ? CONTENT_INDEX : 0);
   const [confirmRegenerate, setConfirmRegenerate] = useState(false);
+
+  // Draft persistence state. In edit mode we already have a row.
+  const [draftId, setDraftId] = useState<string | null>(
+    editMode ? editMode.adaptationId : null,
+  );
+  const initialUpdatedAtRef = useRef<string | null>(
+    editMode ? editMode.initialUpdatedAt : null,
+  );
+
+  const { status: saveStatus } = useAdaptationDraft({
+    draftId,
+    result: data.result,
+    initialUpdatedAt: initialUpdatedAtRef.current,
+  });
 
   const currentKey = STEPS[stepIndex];
 
@@ -72,9 +120,28 @@ export default function CanonicalAdaptationWizard() {
     setStepIndex(target);
   }
 
-  const handleResult = useCallback((result: AdaptationResult) => {
-    setData((prev) => setResult(prev, result));
-  }, []);
+  // First generation creates the draft row so autosave has somewhere to write.
+  const handleResult = useCallback(
+    async (result: AdaptationResult) => {
+      setData((prev) => setResult(prev, result));
+      // Draft already exists (e.g. regenerate) → autosave handles the update.
+      if (draftId) return;
+      /* v8 ignore next -- user is guaranteed by ProtectedRoute */
+      if (!user) return;
+      try {
+        const payload = wizardDataToPayload(
+          { ...data, result },
+          user.id,
+        );
+        const row = await saveDraft(payload);
+        setDraftId(row.id);
+        initialUpdatedAtRef.current = row.updated_at;
+      } catch (err) {
+        toast.error(parseDbError(err, "Erro ao salvar o rascunho."));
+      }
+    },
+    [draftId, user, data],
+  );
 
   const handleDocumentChange = useCallback((document: CanonicalDocument) => {
     setData((prev) => setDocument(prev, document));
@@ -83,6 +150,8 @@ export default function CanonicalAdaptationWizard() {
   function handleRestart() {
     setData(INITIAL_WIZARD_DATA);
     setStepIndex(0);
+    setDraftId(null);
+    initialUpdatedAtRef.current = null;
   }
 
   function confirmRegenerateNow() {
@@ -90,6 +159,15 @@ export default function CanonicalAdaptationWizard() {
     setData((prev) => clearResult(prev));
     setStepIndex(GENERATE_INDEX);
   }
+
+  // "Salvar": mark the draft ready (save happens before the export screen).
+  const handleSave = useCallback(async () => {
+    /* v8 ignore next -- guard: the Salvar button is disabled until a draft exists */
+    if (!draftId) return;
+    await markReady.mutateAsync(draftId);
+    toast.success("Adaptação salva!");
+    navigate("/historico");
+  }, [draftId, markReady, navigate]);
 
   const renderStep = () => {
     switch (currentKey) {
@@ -137,7 +215,16 @@ export default function CanonicalAdaptationWizard() {
       case "export":
         /* v8 ignore next -- guard: export step is only reachable once a result exists */
         if (!data.result) return null;
-        return <StepExportCanonical result={data.result} onPrev={onPrev} onRestart={handleRestart} />;
+        return (
+          <StepExportCanonical
+            result={data.result}
+            canSave={!!draftId}
+            saving={markReady.isPending}
+            onSave={handleSave}
+            onPrev={onPrev}
+            onRestart={handleRestart}
+          />
+        );
     }
   };
 
@@ -171,9 +258,21 @@ export default function CanonicalAdaptationWizard() {
         ))}
       </div>
 
-      <p className="text-xs text-muted-foreground">
-        Passo {stepIndex + 1} de {STEPS.length}
-      </p>
+      <div className="flex items-center justify-between">
+        <p className="text-xs text-muted-foreground">
+          Passo {stepIndex + 1} de {STEPS.length}
+        </p>
+        {/* Autosave status — shown once a draft exists and from the content step on. */}
+        {draftId && stepIndex >= CONTENT_INDEX && stepIndex <= EXPORT_INDEX && saveStatus !== "idle" && (
+          <p
+            className="text-xs text-muted-foreground"
+            role="status"
+            aria-live="polite"
+          >
+            {SAVE_STATUS_LABEL[saveStatus]}
+          </p>
+        )}
+      </div>
 
       <div className="min-h-[400px]">{renderStep()}</div>
 
