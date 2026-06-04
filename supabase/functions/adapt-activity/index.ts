@@ -9,10 +9,10 @@ import { calcAdaptationCost } from "../_shared/adaptationCost.ts";
 import {
   buildRequestBody,
   interpretAiResponse,
-  nextReaskMessage,
+  buildReaskMessages,
   type ChatMessage,
 } from "../_shared/adaptActivityCore.ts";
-import { aiActivityJsonSchema } from "../../src/lib/adaptation/canonical/ai.ts";
+import { aiActivityJsonSchema } from "../../../src/lib/adaptation/canonical/ai.ts";
 
 // Max total attempts at getting a valid structured response (1 initial + 2 reasks).
 const MAX_ATTEMPTS = 3;
@@ -514,7 +514,7 @@ BARREIRAS OBSERVÁVEIS:
         }).catch(() => {});
 
         if (attempt < MAX_ATTEMPTS) {
-          reaskMessages.push(nextReaskMessage(interpreted.errors));
+          reaskMessages.push(...buildReaskMessages(responseContent, interpreted.errors));
         }
       }
 
@@ -527,6 +527,10 @@ BARREIRAS OBSERVÁVEIS:
       return await failure(500, inner instanceof Error ? inner.message : "Erro desconhecido");
     }
   } catch (e) {
+    // This outer catch is only reachable for errors that occur BEFORE or DURING
+    // the credit charge (e.g. auth, body parse, chargeCredits itself). No charge
+    // has been committed at this point, so refund is intentionally NOT called
+    // here. Do NOT move any post-charge code above this boundary.
     console.error("adapt-activity error:", e);
     return new Response(
       JSON.stringify({ error: e instanceof Error ? e.message : "Erro desconhecido" }),

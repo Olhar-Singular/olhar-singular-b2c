@@ -4,6 +4,7 @@ import {
   buildRequestBody,
   interpretAiResponse,
   nextReaskMessage,
+  buildReaskMessages,
   type AdaptRequestInput,
 } from "./adaptActivityCore";
 
@@ -193,5 +194,33 @@ describe("nextReaskMessage", () => {
   it("handles a single error", () => {
     const msg = nextReaskMessage(["(root): Invalid"]);
     expect(msg.content).toContain("(root): Invalid");
+  });
+});
+
+describe("buildReaskMessages", () => {
+  it("returns exactly two messages", () => {
+    const msgs = buildReaskMessages('{"bad":"json"}', ["blocks: Required"]);
+    expect(msgs).toHaveLength(2);
+  });
+
+  it("first message is an assistant turn with the raw failed content", () => {
+    const raw = '{"broken": true}';
+    const msgs = buildReaskMessages(raw, ["blocks: Required"]);
+    expect(msgs[0]).toEqual({ role: "assistant", content: raw });
+  });
+
+  it("second message is a user turn with the validation errors", () => {
+    const errors = ["blocks: Required", "pedagogical_justification: Required"];
+    const msgs = buildReaskMessages("{}", errors);
+    expect(msgs[1].role).toBe("user");
+    for (const e of errors) {
+      expect(msgs[1].content).toContain(e);
+    }
+  });
+
+  it("second message is identical to nextReaskMessage output", () => {
+    const errors = ["answer: Invalid enum value"];
+    const msgs = buildReaskMessages("{}", errors);
+    expect(msgs[1]).toEqual(nextReaskMessage(errors));
   });
 });

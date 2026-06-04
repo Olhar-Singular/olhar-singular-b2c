@@ -12,8 +12,8 @@
 import {
   parseAiActivity,
   buildAdaptationResult,
-} from "../../../src/lib/adaptation/canonical/ai";
-import type { AdaptationResult } from "../../../src/lib/adaptation/canonical/schema";
+} from "../../../src/lib/adaptation/canonical/ai.ts";
+import type { AdaptationResult } from "../../../src/lib/adaptation/canonical/schema.ts";
 
 /** A chat message in the OpenAI-compatible format used by the AI gateway. */
 export interface ChatMessage {
@@ -121,4 +121,22 @@ export function nextReaskMessage(errors: string[]): ChatMessage {
       "Corrija EXATAMENTE os seguintes problemas e responda novamente apenas com o JSON válido:\n" +
       list,
   };
+}
+
+/**
+ * Build the pair of messages to append for a reask round-trip.
+ *
+ * Appending the model's raw (failed) output as an assistant turn is required so
+ * the model has full context of what it produced before being asked to fix it.
+ * The conversation structure becomes:
+ *   [system, user(original), ..., assistant(bad_json), user(fix errors), ...]
+ */
+export function buildReaskMessages(
+  rawContent: string,
+  errors: string[],
+): ChatMessage[] {
+  return [
+    { role: "assistant", content: rawContent },
+    nextReaskMessage(errors),
+  ];
 }
