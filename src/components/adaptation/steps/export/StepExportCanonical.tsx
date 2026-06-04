@@ -1,8 +1,7 @@
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, Copy, RotateCcw, Save, FileDown, Loader2 } from "lucide-react";
-import { toast } from "sonner";
+import { ArrowLeft, RotateCcw, Save, Loader2 } from "lucide-react";
 import { CanonicalRenderer } from "@/components/adaptation/render/CanonicalRenderer";
-import { documentToPlainText } from "@/lib/adaptation/canonical/plainText";
+import { ExportPanel } from "@/components/adaptation/export/ExportPanel";
 import type { AdaptationResult } from "@/lib/adaptation/canonical/schema";
 
 type Props = {
@@ -19,23 +18,13 @@ type Props = {
 export function StepExportCanonical({ result, canSave, saving, onSave, onPrev, onRestart }: Props) {
   const document = result.document;
 
-  const handleCopy = async () => {
-    try {
-      await navigator.clipboard.writeText(documentToPlainText(document));
-      toast.success("Copiado para a área de transferência!");
-    } catch {
-      toast.error("Erro ao copiar.");
-    }
-  };
-
   return (
     <div className="space-y-6">
       <h2 className="text-lg font-semibold text-foreground">Exportar</h2>
 
+      <ExportPanel document={document} />
+
       <div className="flex flex-wrap gap-2">
-        <Button variant="outline" onClick={handleCopy}>
-          <Copy className="w-4 h-4 mr-1" /> Copiar
-        </Button>
         <Button variant="outline" onClick={onSave} disabled={!canSave || saving}>
           {saving ? (
             <Loader2 className="w-4 h-4 mr-1 animate-spin" />
@@ -43,10 +32,6 @@ export function StepExportCanonical({ result, canSave, saving, onSave, onPrev, o
             <Save className="w-4 h-4 mr-1" />
           )}
           Salvar
-        </Button>
-        {/* TODO(M7): PDF export — wire to the canonical → PDF mapper. */}
-        <Button variant="outline" disabled title="Em breve">
-          <FileDown className="w-4 h-4 mr-1" /> Exportar PDF
         </Button>
       </div>
 

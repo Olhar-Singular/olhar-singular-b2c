@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { render, screen, fireEvent } from "@testing-library/react";
 import { StepExportCanonical } from "./StepExportCanonical";
 import type { AdaptationResult, CanonicalDocument } from "@/lib/adaptation/canonical/schema";
 
@@ -9,7 +9,11 @@ vi.mock("@/components/adaptation/render/CanonicalRenderer", () => ({
   ),
 }));
 
-vi.mock("sonner", () => ({ toast: { error: vi.fn(), success: vi.fn() } }));
+vi.mock("@/components/adaptation/export/ExportPanel", () => ({
+  ExportPanel: ({ document }: { document: CanonicalDocument }) => (
+    <div data-testid="export-panel">{document.blocks.length}</div>
+  ),
+}));
 
 const id = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, "0")}`;
 
@@ -46,23 +50,9 @@ describe("StepExportCanonical", () => {
     expect(screen.getByTestId("renderer")).toHaveTextContent("1");
   });
 
-  it("copies the plain-text projection of the document", async () => {
-    const writeText = vi.fn().mockResolvedValue(undefined);
-    Object.assign(navigator, { clipboard: { writeText } });
-    const { toast } = await import("sonner");
+  it("renders the export panel wired to the document", () => {
     renderStep();
-    fireEvent.click(screen.getByRole("button", { name: /Copiar/i }));
-    await waitFor(() => expect(writeText).toHaveBeenCalledWith("olá mundo"));
-    await waitFor(() => expect(toast.success).toHaveBeenCalled());
-  });
-
-  it("shows an error toast when copy fails", async () => {
-    const writeText = vi.fn().mockRejectedValue(new Error("denied"));
-    Object.assign(navigator, { clipboard: { writeText } });
-    const { toast } = await import("sonner");
-    renderStep();
-    fireEvent.click(screen.getByRole("button", { name: /Copiar/i }));
-    await waitFor(() => expect(toast.error).toHaveBeenCalledWith("Erro ao copiar."));
+    expect(screen.getByTestId("export-panel")).toHaveTextContent("1");
   });
 
   it("fires onSave when Salvar is clicked", () => {
@@ -80,11 +70,6 @@ describe("StepExportCanonical", () => {
   it("disables Salvar and shows a spinner while saving", () => {
     renderStep({ saving: true });
     expect(screen.getByRole("button", { name: /Salvar/i })).toBeDisabled();
-  });
-
-  it("leaves Exportar PDF disabled as a deferred seam", () => {
-    renderStep();
-    expect(screen.getByRole("button", { name: /Exportar PDF/i })).toBeDisabled();
   });
 
   it("fires onPrev and onRestart", () => {
