@@ -23,7 +23,6 @@ import { Popover, PopoverContent } from "@/components/ui/popover";
 import { Button } from "@/components/ui/button";
 import { Paintbrush } from "lucide-react";
 import { useCanonicalEditor } from "@/components/adaptation/canonical-editor/useCanonicalEditor";
-import { CanonicalToolbar } from "@/components/adaptation/canonical-editor/CanonicalToolbar";
 import { EditorModeProvider } from "@/components/adaptation/canonical-editor/EditorMode";
 import { setBlockStyle } from "@/lib/adaptation/canonical/style";
 import type { CanonicalDocument, NodeStyle } from "@/lib/adaptation/canonical/schema";
@@ -129,8 +128,6 @@ export function StylingSurface({ document, onChange }: Props) {
       </div>
 
       <div className="rounded-md border border-input bg-background">
-        <CanonicalToolbar editor={editor} />
-
         <div ref={containerRef} className="relative">
           <EditorModeProvider value="style">
             <EditorContent editor={editor} className="px-4 py-3 text-base" />

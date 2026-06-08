@@ -53,10 +53,6 @@ vi.mock("@/components/ui/popover", () => ({
   PopoverTrigger: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
 }));
 
-vi.mock("@/components/adaptation/canonical-editor/CanonicalToolbar", () => ({
-  CanonicalToolbar: () => <div data-testid="toolbar" />,
-}));
-
 const useCanonicalEditor = vi.fn();
 let capturedSelectionHandler: ((editor: Editor) => void) | undefined;
 let capturedExtraExtensions: unknown;
