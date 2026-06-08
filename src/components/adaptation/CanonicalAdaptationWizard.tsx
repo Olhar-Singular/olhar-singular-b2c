@@ -298,7 +298,7 @@ export default function CanonicalAdaptationWizard({ editMode }: Props = {}) {
   };
 
   return (
-    <div className="mx-auto max-w-5xl px-4 py-6 space-y-6">
+    <div className="mx-auto max-w-6xl px-4 py-6 space-y-6">
       {/* Step indicator */}
       <div className="flex items-center gap-1 overflow-x-auto pb-1">
         {STEPS.map((key, i) => (
