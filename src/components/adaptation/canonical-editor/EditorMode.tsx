@@ -25,6 +25,7 @@ export function EditorModeProvider({
 }
 
 /** Returns the current editor mode, defaulting to `"content"` outside a provider. */
+// eslint-disable-next-line react-refresh/only-export-components -- provider + hook colocated by design (mirrors AuthContext)
 export function useEditorMode(): EditorMode {
   return useContext(EditorModeContext);
 }
