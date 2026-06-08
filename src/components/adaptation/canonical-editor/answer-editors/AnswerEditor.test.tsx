@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 import type { RichText, QuestionAnswer } from "@/lib/adaptation/canonical/schema";
 import { AnswerEditor } from "./AnswerEditor";
+import { EditorModeProvider } from "../EditorMode";
 
 // Mock RichTextField: render a plain textbox keyed by ariaLabel and expose an
 // onChange that emits a single text run, so we can drive the content fields
@@ -203,5 +204,98 @@ describe("AnswerEditor — open", () => {
     const answer: QuestionAnswer = { kind: "open", answerLines: 3 };
     render(<AnswerEditor answer={answer} onChange={vi.fn()} disabled />);
     expect(screen.getByRole("spinbutton")).toBeDisabled();
+  });
+});
+
+/**
+ * In the Estilo (style) step the user FORMATS content; structural add/remove and
+ * answer-key controls are hidden. Content fields stay visible so their text can
+ * be selected/formatted. Mirrors QuestionNodeView's style-mode gating.
+ */
+function renderStyle(ui: Parameters<typeof render>[0]) {
+  return render(<EditorModeProvider value="style">{ui}</EditorModeProvider>);
+}
+
+describe("AnswerEditor — style mode hides structural / answer-key controls", () => {
+  it("multipleChoice: hides correct radio, remove, and add; keeps the content field", () => {
+    const answer: QuestionAnswer = {
+      kind: "multipleChoice",
+      alternatives: [{ id: "11111111-1111-4111-8111-111111111111", content: t("a"), correct: true }],
+    };
+    renderStyle(<AnswerEditor answer={answer} onChange={vi.fn()} />);
+    expect(screen.queryByLabelText("Marcar como correta")).not.toBeInTheDocument();
+    expect(screen.queryByTitle("Remover alternativa")).not.toBeInTheDocument();
+    expect(screen.queryByText("Alternativa")).not.toBeInTheDocument();
+    expect(screen.getByLabelText("Alternativa")).toBeInTheDocument();
+  });
+
+  it("trueFalse: hides the V/F answer toggle; keeps the affirmation field", () => {
+    const answer: QuestionAnswer = {
+      kind: "trueFalse",
+      items: [{ id: "33333333-3333-4333-8333-333333333333", content: t("x"), value: false }],
+    };
+    renderStyle(<AnswerEditor answer={answer} onChange={vi.fn()} />);
+    expect(screen.queryByTitle("Alternar Verdadeiro/Falso")).not.toBeInTheDocument();
+    expect(screen.getByLabelText("Afirmação")).toBeInTheDocument();
+  });
+
+  it("checkbox: hides the mark-correct checkbox; keeps the option field", () => {
+    const answer: QuestionAnswer = {
+      kind: "checkbox",
+      items: [{ id: "55555555-5555-4555-8555-555555555555", content: t("c"), checked: false }],
+    };
+    renderStyle(<AnswerEditor answer={answer} onChange={vi.fn()} />);
+    expect(screen.queryByLabelText("Marcar opção")).not.toBeInTheDocument();
+    expect(screen.getByLabelText("Opção")).toBeInTheDocument();
+  });
+
+  it("matching: hides remove + add; keeps both side fields", () => {
+    const answer: QuestionAnswer = {
+      kind: "matching",
+      pairs: [{ id: "77777777-7777-4777-8777-777777777777", left: t("l"), right: t("r") }],
+    };
+    renderStyle(<AnswerEditor answer={answer} onChange={vi.fn()} />);
+    expect(screen.queryByTitle("Remover par")).not.toBeInTheDocument();
+    expect(screen.queryByText("Par")).not.toBeInTheDocument();
+    expect(screen.getByLabelText("Coluna A")).toBeInTheDocument();
+    expect(screen.getByLabelText("Coluna B")).toBeInTheDocument();
+  });
+
+  it("ordering: hides reorder up/down; keeps the item field", () => {
+    const answer: QuestionAnswer = {
+      kind: "ordering",
+      items: [
+        { id: "99999999-9999-4999-8999-999999999999", content: t("o1"), position: 0 },
+        { id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", content: t("o2"), position: 1 },
+      ],
+    };
+    renderStyle(<AnswerEditor answer={answer} onChange={vi.fn()} />);
+    expect(screen.queryByTitle("Mover para cima")).not.toBeInTheDocument();
+    expect(screen.queryByTitle("Mover para baixo")).not.toBeInTheDocument();
+    expect(screen.getAllByLabelText("Item")).toHaveLength(2);
+  });
+
+  it("fillBlank: hides remove + add; keeps the gap answer visible but read-only", () => {
+    const answer: QuestionAnswer = {
+      kind: "fillBlank",
+      gaps: [{ id: "cccccccc-cccc-4ccc-8ccc-cccccccccccc", answer: "g1" }],
+    };
+    renderStyle(<AnswerEditor answer={answer} onChange={vi.fn()} />);
+    expect(screen.queryByTitle("Remover lacuna")).not.toBeInTheDocument();
+    expect(screen.queryByText("Lacuna")).not.toBeInTheDocument();
+    // The gap answer is an answer key (plain text, not formattable): visible but disabled.
+    expect(screen.getByPlaceholderText("Resposta")).toBeDisabled();
+  });
+
+  it("open: hides the answer-lines config (answer key, not formattable text)", () => {
+    const answer: QuestionAnswer = { kind: "open", answerLines: 3 };
+    renderStyle(<AnswerEditor answer={answer} onChange={vi.fn()} />);
+    expect(screen.queryByRole("spinbutton")).not.toBeInTheDocument();
+  });
+
+  it("table: keeps cell fields editable (cells are formattable content)", () => {
+    const answer: QuestionAnswer = { kind: "table", rows: [[t("a"), t("b")]] };
+    renderStyle(<AnswerEditor answer={answer} onChange={vi.fn()} />);
+    expect(screen.getAllByLabelText("Célula")).toHaveLength(2);
   });
 });

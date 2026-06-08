@@ -4,6 +4,13 @@
  * Presentational only: it renders the correct UI per `answer.kind` and dispatches
  * the pure `answerOps` mutations, calling `onChange` with the new answer. All the
  * mutation logic lives in `answerOps.ts` (100% unit-tested).
+ *
+ * In the Estilo (style) step the user FORMATS content — structural controls
+ * (add/remove alternative·par·lacuna, reorder) and answer-key controls (the
+ * "correct" radio/checkbox, the V/F toggle, the gap answer key, the answer-lines
+ * config) are content, so they hide in style mode (see `EditorMode`). The
+ * formattable content fields stay visible/editable; the fillBlank gap answer
+ * stays visible but read-only.
  */
 
 import { Plus, Trash2, ArrowUp, ArrowDown } from "lucide-react";
@@ -12,6 +19,7 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import type { QuestionAnswer } from "@/lib/adaptation/canonical/schema";
 import { RichTextField } from "../RichTextField";
+import { useEditorMode } from "../EditorMode";
 import {
   setCorrectAlternative,
   addAlternative,
@@ -58,21 +66,26 @@ function IconButton({
 }
 
 export function AnswerEditor({ answer, onChange, disabled = false }: AnswerEditorProps) {
+  // Structural (add/remove/reorder) and answer-key controls are content — shown
+  // only in the Content step. In the Estilo step you format, not restructure.
+  const showStructure = useEditorMode() === "content";
   switch (answer.kind) {
     case "multipleChoice":
       return (
         <div className="flex flex-col gap-2" data-testid="answer-multipleChoice">
           {answer.alternatives.map((alt) => (
             <div key={alt.id} className="flex items-center gap-2 min-w-0">
-              <input
-                type="radio"
-                name={`mc-correct`}
-                checked={alt.correct}
-                disabled={disabled}
-                onChange={() => onChange(setCorrectAlternative(answer, alt.id))}
-                title="Marcar como correta"
-                aria-label="Marcar como correta"
-              />
+              {showStructure && (
+                <input
+                  type="radio"
+                  name={`mc-correct`}
+                  checked={alt.correct}
+                  disabled={disabled}
+                  onChange={() => onChange(setCorrectAlternative(answer, alt.id))}
+                  title="Marcar como correta"
+                  aria-label="Marcar como correta"
+                />
+              )}
               <RichTextField
                 value={alt.content}
                 disabled={disabled}
@@ -80,14 +93,18 @@ export function AnswerEditor({ answer, onChange, disabled = false }: AnswerEdito
                 placeholder="Alternativa"
                 ariaLabel="Alternativa"
               />
-              <IconButton onClick={() => onChange(removeAlternative(answer, alt.id))} title="Remover alternativa" disabled={disabled}>
-                <Trash2 className="w-3.5 h-3.5" />
-              </IconButton>
+              {showStructure && (
+                <IconButton onClick={() => onChange(removeAlternative(answer, alt.id))} title="Remover alternativa" disabled={disabled}>
+                  <Trash2 className="w-3.5 h-3.5" />
+                </IconButton>
+              )}
             </div>
           ))}
-          <Button type="button" variant="outline" size="sm" className="self-start gap-1" onClick={() => onChange(addAlternative(answer))} disabled={disabled}>
-            <Plus className="w-3.5 h-3.5" /> Alternativa
-          </Button>
+          {showStructure && (
+            <Button type="button" variant="outline" size="sm" className="self-start gap-1" onClick={() => onChange(addAlternative(answer))} disabled={disabled}>
+              <Plus className="w-3.5 h-3.5" /> Alternativa
+            </Button>
+          )}
         </div>
       );
 
@@ -103,16 +120,18 @@ export function AnswerEditor({ answer, onChange, disabled = false }: AnswerEdito
                 placeholder="Afirmação"
                 ariaLabel="Afirmação"
               />
-              <Button
-                type="button"
-                variant={item.value ? "default" : "outline"}
-                size="sm"
-                onClick={() => onChange(setTrueFalseValue(answer, item.id, !item.value))}
-                disabled={disabled}
-                title="Alternar Verdadeiro/Falso"
-              >
-                {item.value ? "V" : "F"}
-              </Button>
+              {showStructure && (
+                <Button
+                  type="button"
+                  variant={item.value ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => onChange(setTrueFalseValue(answer, item.id, !item.value))}
+                  disabled={disabled}
+                  title="Alternar Verdadeiro/Falso"
+                >
+                  {item.value ? "V" : "F"}
+                </Button>
+              )}
             </div>
           ))}
         </div>
@@ -123,12 +142,14 @@ export function AnswerEditor({ answer, onChange, disabled = false }: AnswerEdito
         <div className="flex flex-col gap-2" data-testid="answer-checkbox">
           {answer.items.map((item) => (
             <div key={item.id} className="flex items-center gap-2 min-w-0">
-              <Checkbox
-                checked={item.checked}
-                disabled={disabled}
-                onCheckedChange={() => onChange(toggleCheckbox(answer, item.id))}
-                aria-label="Marcar opção"
-              />
+              {showStructure && (
+                <Checkbox
+                  checked={item.checked}
+                  disabled={disabled}
+                  onCheckedChange={() => onChange(toggleCheckbox(answer, item.id))}
+                  aria-label="Marcar opção"
+                />
+              )}
               <RichTextField
                 value={item.content}
                 disabled={disabled}
@@ -161,14 +182,18 @@ export function AnswerEditor({ answer, onChange, disabled = false }: AnswerEdito
                 placeholder="Coluna B"
                 ariaLabel="Coluna B"
               />
-              <IconButton onClick={() => onChange(removeMatchingPair(answer, pair.id))} title="Remover par" disabled={disabled}>
-                <Trash2 className="w-3.5 h-3.5" />
-              </IconButton>
+              {showStructure && (
+                <IconButton onClick={() => onChange(removeMatchingPair(answer, pair.id))} title="Remover par" disabled={disabled}>
+                  <Trash2 className="w-3.5 h-3.5" />
+                </IconButton>
+              )}
             </div>
           ))}
-          <Button type="button" variant="outline" size="sm" className="self-start gap-1" onClick={() => onChange(addMatchingPair(answer))} disabled={disabled}>
-            <Plus className="w-3.5 h-3.5" /> Par
-          </Button>
+          {showStructure && (
+            <Button type="button" variant="outline" size="sm" className="self-start gap-1" onClick={() => onChange(addMatchingPair(answer))} disabled={disabled}>
+              <Plus className="w-3.5 h-3.5" /> Par
+            </Button>
+          )}
         </div>
       );
 
@@ -185,12 +210,16 @@ export function AnswerEditor({ answer, onChange, disabled = false }: AnswerEdito
                 placeholder="Item"
                 ariaLabel="Item"
               />
-              <IconButton onClick={() => onChange(reorderOrdering(answer, index, index - 1))} title="Mover para cima" disabled={disabled}>
-                <ArrowUp className="w-3.5 h-3.5" />
-              </IconButton>
-              <IconButton onClick={() => onChange(reorderOrdering(answer, index, index + 1))} title="Mover para baixo" disabled={disabled}>
-                <ArrowDown className="w-3.5 h-3.5" />
-              </IconButton>
+              {showStructure && (
+                <>
+                  <IconButton onClick={() => onChange(reorderOrdering(answer, index, index - 1))} title="Mover para cima" disabled={disabled}>
+                    <ArrowUp className="w-3.5 h-3.5" />
+                  </IconButton>
+                  <IconButton onClick={() => onChange(reorderOrdering(answer, index, index + 1))} title="Mover para baixo" disabled={disabled}>
+                    <ArrowDown className="w-3.5 h-3.5" />
+                  </IconButton>
+                </>
+              )}
             </div>
           ))}
         </div>
@@ -202,20 +231,26 @@ export function AnswerEditor({ answer, onChange, disabled = false }: AnswerEdito
           {answer.gaps.map((gap, index) => (
             <div key={gap.id} className="flex items-center gap-2">
               <span className="text-xs text-muted-foreground w-12">Lacuna {index + 1}</span>
+              {/* The gap answer is an answer key (plain text, not formattable):
+                  visible for reference but read-only in the Estilo step. */}
               <Input
                 value={gap.answer}
-                disabled={disabled}
+                disabled={disabled || !showStructure}
                 onChange={(e) => onChange(setGapAnswer(answer, gap.id, e.target.value))}
                 placeholder="Resposta"
               />
-              <IconButton onClick={() => onChange(removeGap(answer, gap.id))} title="Remover lacuna" disabled={disabled}>
-                <Trash2 className="w-3.5 h-3.5" />
-              </IconButton>
+              {showStructure && (
+                <IconButton onClick={() => onChange(removeGap(answer, gap.id))} title="Remover lacuna" disabled={disabled}>
+                  <Trash2 className="w-3.5 h-3.5" />
+                </IconButton>
+              )}
             </div>
           ))}
-          <Button type="button" variant="outline" size="sm" className="self-start gap-1" onClick={() => onChange(addGap(answer))} disabled={disabled}>
-            <Plus className="w-3.5 h-3.5" /> Lacuna
-          </Button>
+          {showStructure && (
+            <Button type="button" variant="outline" size="sm" className="self-start gap-1" onClick={() => onChange(addGap(answer))} disabled={disabled}>
+              <Plus className="w-3.5 h-3.5" /> Lacuna
+            </Button>
+          )}
         </div>
       );
 
@@ -244,15 +279,20 @@ export function AnswerEditor({ answer, onChange, disabled = false }: AnswerEdito
     default:
       return (
         <div className="flex items-center gap-2" data-testid="answer-open">
-          <span className="text-xs text-muted-foreground">Linhas de resposta:</span>
-          <Input
-            type="number"
-            min={0}
-            className="w-20"
-            value={answer.answerLines ?? 0}
-            disabled={disabled}
-            onChange={(e) => onChange(setAnswerLines(answer, Number(e.target.value)))}
-          />
+          {/* answerLines is answer config (no formattable text) — content-step only. */}
+          {showStructure && (
+            <>
+              <span className="text-xs text-muted-foreground">Linhas de resposta:</span>
+              <Input
+                type="number"
+                min={0}
+                className="w-20"
+                value={answer.answerLines ?? 0}
+                disabled={disabled}
+                onChange={(e) => onChange(setAnswerLines(answer, Number(e.target.value)))}
+              />
+            </>
+          )}
         </div>
       );
   }
