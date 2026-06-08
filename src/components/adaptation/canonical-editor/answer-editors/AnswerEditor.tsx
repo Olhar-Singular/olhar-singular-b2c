@@ -61,7 +61,7 @@ export function AnswerEditor({ answer, onChange, disabled = false }: AnswerEdito
   switch (answer.kind) {
     case "multipleChoice":
       return (
-        <div className="flex flex-col gap-1.5" data-testid="answer-multipleChoice">
+        <div className="flex flex-col gap-2" data-testid="answer-multipleChoice">
           {answer.alternatives.map((alt) => (
             <div key={alt.id} className="flex items-center gap-2 min-w-0">
               <input
@@ -93,7 +93,7 @@ export function AnswerEditor({ answer, onChange, disabled = false }: AnswerEdito
 
     case "trueFalse":
       return (
-        <div className="flex flex-col gap-1.5" data-testid="answer-trueFalse">
+        <div className="flex flex-col gap-2" data-testid="answer-trueFalse">
           {answer.items.map((item) => (
             <div key={item.id} className="flex items-center gap-2 min-w-0">
               <RichTextField
@@ -120,7 +120,7 @@ export function AnswerEditor({ answer, onChange, disabled = false }: AnswerEdito
 
     case "checkbox":
       return (
-        <div className="flex flex-col gap-1.5" data-testid="answer-checkbox">
+        <div className="flex flex-col gap-2" data-testid="answer-checkbox">
           {answer.items.map((item) => (
             <div key={item.id} className="flex items-center gap-2 min-w-0">
               <Checkbox
@@ -143,7 +143,7 @@ export function AnswerEditor({ answer, onChange, disabled = false }: AnswerEdito
 
     case "matching":
       return (
-        <div className="flex flex-col gap-1.5" data-testid="answer-matching">
+        <div className="flex flex-col gap-2" data-testid="answer-matching">
           {answer.pairs.map((pair) => (
             <div key={pair.id} className="flex items-center gap-2 min-w-0">
               <RichTextField
@@ -174,7 +174,7 @@ export function AnswerEditor({ answer, onChange, disabled = false }: AnswerEdito
 
     case "ordering":
       return (
-        <div className="flex flex-col gap-1.5" data-testid="answer-ordering">
+        <div className="flex flex-col gap-2" data-testid="answer-ordering">
           {answer.items.map((item, index) => (
             <div key={item.id} className="flex items-center gap-2 min-w-0">
               <span className="text-xs text-muted-foreground w-5">{index + 1}.</span>
@@ -198,7 +198,7 @@ export function AnswerEditor({ answer, onChange, disabled = false }: AnswerEdito
 
     case "fillBlank":
       return (
-        <div className="flex flex-col gap-1.5" data-testid="answer-fillBlank">
+        <div className="flex flex-col gap-2" data-testid="answer-fillBlank">
           {answer.gaps.map((gap, index) => (
             <div key={gap.id} className="flex items-center gap-2">
               <span className="text-xs text-muted-foreground w-12">Lacuna {index + 1}</span>
@@ -221,7 +221,7 @@ export function AnswerEditor({ answer, onChange, disabled = false }: AnswerEdito
 
     case "table":
       return (
-        <div className="flex flex-col gap-1" data-testid="answer-table">
+        <div className="flex flex-col gap-1.5" data-testid="answer-table">
           {answer.rows.map((row, ri) => (
             <div key={ri} className="flex gap-1 min-w-0">
               {row.map((cell, ci) => (

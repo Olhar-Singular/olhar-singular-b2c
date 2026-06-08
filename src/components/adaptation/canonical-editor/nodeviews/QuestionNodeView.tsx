@@ -14,7 +14,6 @@
 import { useState } from "react";
 import { ArrowUp, ArrowDown, ImagePlus, Trash2 } from "lucide-react";
 import { NodeViewWrapper, NodeViewContent, type NodeViewProps } from "@tiptap/react";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import ImageManagerModal from "@/components/editor/ImageManagerModal";
 import type { ImageItem } from "@/components/editor/imageManagerUtils";
@@ -64,11 +63,14 @@ export function QuestionNodeView({ node, updateAttributes, editor, getPos, delet
   };
 
   return (
-    <NodeViewWrapper className="my-3 rounded-lg border border-border p-3" data-testid="question-node">
-      <div className="mb-2 flex flex-wrap items-center gap-2">
-        <Badge variant="secondary" data-testid="question-ordinal">
+    <NodeViewWrapper className="my-4 space-y-3 rounded-xl border border-border/60 p-4" data-testid="question-node">
+      <div className="flex flex-wrap items-center gap-2">
+        <span
+          className="text-xs font-medium uppercase tracking-wide text-muted-foreground"
+          data-testid="question-ordinal"
+        >
           Questão {ordinal}
-        </Badge>
+        </span>
         {showStructureActions && (
           <div className="ml-auto flex items-center gap-1" contentEditable={false}>
             <Button
@@ -123,12 +125,12 @@ export function QuestionNodeView({ node, updateAttributes, editor, getPos, delet
         )}
       </div>
 
-      <div className="mb-2 rounded border border-dashed border-border p-2">
+      <div className="px-0.5">
         <NodeViewContent />
       </div>
 
-      <div className="mt-2" contentEditable={false}>
-        <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Resposta</p>
+      <div className="space-y-2 border-t border-border/60 pt-3" contentEditable={false}>
+        <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Resposta</p>
         <AnswerEditor
           answer={answer}
           disabled={disabled}
