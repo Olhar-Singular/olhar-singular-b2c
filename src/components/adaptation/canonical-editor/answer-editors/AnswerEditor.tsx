@@ -63,7 +63,7 @@ export function AnswerEditor({ answer, onChange, disabled = false }: AnswerEdito
       return (
         <div className="flex flex-col gap-1.5" data-testid="answer-multipleChoice">
           {answer.alternatives.map((alt) => (
-            <div key={alt.id} className="flex items-center gap-2">
+            <div key={alt.id} className="flex items-center gap-2 min-w-0">
               <input
                 type="radio"
                 name={`mc-correct`}
@@ -95,7 +95,7 @@ export function AnswerEditor({ answer, onChange, disabled = false }: AnswerEdito
       return (
         <div className="flex flex-col gap-1.5" data-testid="answer-trueFalse">
           {answer.items.map((item) => (
-            <div key={item.id} className="flex items-center gap-2">
+            <div key={item.id} className="flex items-center gap-2 min-w-0">
               <RichTextField
                 value={item.content}
                 disabled={disabled}
@@ -122,7 +122,7 @@ export function AnswerEditor({ answer, onChange, disabled = false }: AnswerEdito
       return (
         <div className="flex flex-col gap-1.5" data-testid="answer-checkbox">
           {answer.items.map((item) => (
-            <div key={item.id} className="flex items-center gap-2">
+            <div key={item.id} className="flex items-center gap-2 min-w-0">
               <Checkbox
                 checked={item.checked}
                 disabled={disabled}
@@ -145,7 +145,7 @@ export function AnswerEditor({ answer, onChange, disabled = false }: AnswerEdito
       return (
         <div className="flex flex-col gap-1.5" data-testid="answer-matching">
           {answer.pairs.map((pair) => (
-            <div key={pair.id} className="flex items-center gap-2">
+            <div key={pair.id} className="flex items-center gap-2 min-w-0">
               <RichTextField
                 value={pair.left}
                 disabled={disabled}
@@ -176,7 +176,7 @@ export function AnswerEditor({ answer, onChange, disabled = false }: AnswerEdito
       return (
         <div className="flex flex-col gap-1.5" data-testid="answer-ordering">
           {answer.items.map((item, index) => (
-            <div key={item.id} className="flex items-center gap-2">
+            <div key={item.id} className="flex items-center gap-2 min-w-0">
               <span className="text-xs text-muted-foreground w-5">{index + 1}.</span>
               <RichTextField
                 value={item.content}
@@ -223,7 +223,7 @@ export function AnswerEditor({ answer, onChange, disabled = false }: AnswerEdito
       return (
         <div className="flex flex-col gap-1" data-testid="answer-table">
           {answer.rows.map((row, ri) => (
-            <div key={ri} className="flex gap-1">
+            <div key={ri} className="flex gap-1 min-w-0">
               {row.map((cell, ci) => (
                 <RichTextField
                   key={ci}

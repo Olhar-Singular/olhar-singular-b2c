@@ -55,6 +55,15 @@ describe("AnswerEditor — multipleChoice", () => {
       })
     );
   });
+
+  it("lays the alternative field in a shrinkable flex row (min-w-0 so it wraps)", () => {
+    render(<AnswerEditor answer={answer} onChange={vi.fn()} />);
+    // The row holds [radio, field, trash]. min-w-0 lets the flex child (field)
+    // shrink below content width so long alternatives wrap instead of scrolling.
+    const row = screen.getAllByLabelText("Alternativa")[0].closest("div") as HTMLElement;
+    expect(row.className).toContain("flex");
+    expect(row.className).toContain("min-w-0");
+  });
 });
 
 describe("AnswerEditor — trueFalse", () => {
