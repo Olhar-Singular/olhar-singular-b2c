@@ -1,15 +1,14 @@
 /**
- * CanonicalToolbar — inline mark buttons + insert-block buttons for the
- * canonical editor. Mark toggles use `editor.chain()`; inserts build node JSON
- * via `commands.ts` and call `editor.commands.insertContent`.
+ * CanonicalToolbar — insert-block buttons for the canonical editor (questão,
+ * imagem, fórmula, andaime, divisória). Inserts build node JSON via `commands.ts`
+ * and call `editor.commands.insertContent`.
+ *
+ * Text formatting (bold / italic / underline / strike / color) is NOT here: it
+ * lives in the Estilo step, exposed only when the editor runs in `"style"` mode
+ * (see `EditorMode`). The Content step stays plain: text + math + structure.
  */
 
 import {
-  Bold,
-  Italic,
-  Underline as UnderlineIcon,
-  Strikethrough,
-  Palette,
   HelpCircle,
   ImageIcon,
   Sigma,
@@ -18,15 +17,12 @@ import {
 } from "lucide-react";
 import type { Editor } from "@tiptap/react";
 import { Button } from "@/components/ui/button";
-import { Separator } from "@/components/ui/separator";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { cn } from "@/lib/utils";
-import { ALLOWED_COLORS } from "@/lib/adaptation/canonical/colors";
 import {
   buildQuestionNode,
   buildImageNode,
@@ -47,9 +43,6 @@ const QUESTION_KINDS: { kind: QuestionKind; label: string }[] = [
   { kind: "table", label: "Tabela" },
 ];
 
-// Only the text colors (first 6) make sense for the foreground color picker.
-const TEXT_COLORS = ALLOWED_COLORS.slice(0, 6);
-
 interface CanonicalToolbarProps {
   editor: Editor;
   disabled?: boolean;
@@ -57,13 +50,11 @@ interface CanonicalToolbarProps {
 
 function ToolbarButton({
   onClick,
-  active,
   title,
   disabled,
   children,
 }: {
   onClick: () => void;
-  active?: boolean;
   title: string;
   disabled?: boolean;
   children: React.ReactNode;
@@ -73,7 +64,7 @@ function ToolbarButton({
       type="button"
       variant="ghost"
       size="icon"
-      className={cn("h-7 w-7", active && "bg-accent text-accent-foreground")}
+      className="h-7 w-7"
       onClick={onClick}
       title={title}
       aria-label={title}
@@ -89,43 +80,9 @@ export function CanonicalToolbar({ editor, disabled = false }: CanonicalToolbarP
 
   return (
     <div className="flex flex-wrap items-center gap-0.5 border-b border-border bg-muted/30 px-1.5 py-1">
-      <ToolbarButton onClick={() => editor.chain().focus().toggleBold().run()} active={editor.isActive("bold")} title="Negrito" disabled={disabled}>
-        <Bold className="h-3.5 w-3.5" />
-      </ToolbarButton>
-      <ToolbarButton onClick={() => editor.chain().focus().toggleItalic().run()} active={editor.isActive("italic")} title="Itálico" disabled={disabled}>
-        <Italic className="h-3.5 w-3.5" />
-      </ToolbarButton>
-      <ToolbarButton onClick={() => editor.chain().focus().toggleUnderline().run()} active={editor.isActive("underline")} title="Sublinhado" disabled={disabled}>
-        <UnderlineIcon className="h-3.5 w-3.5" />
-      </ToolbarButton>
-      <ToolbarButton onClick={() => editor.chain().focus().toggleStrike().run()} active={editor.isActive("strike")} title="Tachado" disabled={disabled}>
-        <Strikethrough className="h-3.5 w-3.5" />
-      </ToolbarButton>
-
       {/* v8 ignore start -- Radix DropdownMenuItem onClick fires inside a Portal
-          jsdom doesn't open via fireEvent; the color values come from the tested
-          ALLOWED_COLORS allowlist. */}
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild disabled={disabled}>
-          <Button type="button" variant="ghost" size="icon" className="h-7 w-7" title="Cor do texto" aria-label="Cor do texto">
-            <Palette className="h-3.5 w-3.5" />
-          </Button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="start" className="min-w-[140px]">
-          {TEXT_COLORS.map((color) => (
-            <DropdownMenuItem key={color} onClick={() => editor.chain().focus().setColor(color).run()} className="flex items-center gap-2">
-              <span className="h-4 w-4 rounded-full border border-border" style={{ backgroundColor: color }} />
-              {color}
-            </DropdownMenuItem>
-          ))}
-          <DropdownMenuItem onClick={() => editor.chain().focus().unsetColor().run()} className="text-muted-foreground">
-            Cor padrão
-          </DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
-
-      <Separator orientation="vertical" className="mx-1 h-5" />
-
+          jsdom doesn't open via fireEvent; the question kinds come from the
+          tested QUESTION_KINDS list. */}
       <DropdownMenu>
         <DropdownMenuTrigger asChild disabled={disabled}>
           <Button type="button" variant="ghost" size="sm" className="h-7 gap-1 px-1.5 text-xs" title="Inserir questão">

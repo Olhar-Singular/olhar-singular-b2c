@@ -36,17 +36,6 @@ beforeEach(() => {
 });
 
 describe("CanonicalToolbar", () => {
-  it("dispatches mark toggles", () => {
-    render(<CanonicalToolbar editor={makeEditor()} />);
-    fireEvent.click(screen.getByTitle("Negrito"));
-    fireEvent.click(screen.getByTitle("Itálico"));
-    fireEvent.click(screen.getByTitle("Sublinhado"));
-    fireEvent.click(screen.getByTitle("Tachado"));
-    expect(chain.calls).toEqual(
-      expect.arrayContaining(["toggleBold", "toggleItalic", "toggleUnderline", "toggleStrike"])
-    );
-  });
-
   it("inserts image / math / scaffold / divider blocks via commands", () => {
     render(<CanonicalToolbar editor={makeEditor()} />);
     fireEvent.click(screen.getByTitle("Inserir imagem"));
@@ -57,28 +46,30 @@ describe("CanonicalToolbar", () => {
     expect(inserts).toHaveLength(4);
   });
 
-  it("shows the active state on toggle buttons", () => {
-    render(<CanonicalToolbar editor={makeEditor(true)} />);
-    expect(screen.getByTitle("Negrito").className).toContain("accent");
-  });
-
-  it("renders the question and color dropdown triggers", () => {
+  it("renders the question insert dropdown trigger", () => {
     render(<CanonicalToolbar editor={makeEditor()} />);
     expect(screen.getByTitle("Inserir questão")).toBeInTheDocument();
-    expect(screen.getByTitle("Cor do texto")).toBeInTheDocument();
   });
 
-  it("disables buttons when disabled", () => {
+  it("does NOT render text-format buttons (they move to the Estilo step)", () => {
+    render(<CanonicalToolbar editor={makeEditor()} />);
+    expect(screen.queryByTitle("Negrito")).not.toBeInTheDocument();
+    expect(screen.queryByTitle("Itálico")).not.toBeInTheDocument();
+    expect(screen.queryByTitle("Sublinhado")).not.toBeInTheDocument();
+    expect(screen.queryByTitle("Tachado")).not.toBeInTheDocument();
+    expect(screen.queryByTitle("Cor do texto")).not.toBeInTheDocument();
+  });
+
+  it("disables insert buttons when disabled", () => {
     render(<CanonicalToolbar editor={makeEditor()} disabled />);
-    expect(screen.getByTitle("Negrito")).toBeDisabled();
+    expect(screen.getByTitle("Inserir imagem")).toBeDisabled();
   });
 
   it("exposes accessible names on icon-only buttons (a11y)", () => {
     render(<CanonicalToolbar editor={makeEditor()} />);
     // getByRole(name) matches the accessible name (aria-label), which screen
     // readers announce — `title` alone is not reliably announced.
-    expect(screen.getByRole("button", { name: /negrito/i })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /cor do texto/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /inserir imagem/i })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /inserir fórmula/i })).toBeInTheDocument();
   });
 });
