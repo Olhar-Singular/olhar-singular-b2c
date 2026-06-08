@@ -15,6 +15,7 @@
 
 import { useRef } from "react";
 import { useEditor, ReactNodeViewRenderer, type Editor } from "@tiptap/react";
+import type { Extensions } from "@tiptap/core";
 import type { CanonicalDocument } from "@/lib/adaptation/canonical/schema";
 import { buildExtensions } from "@/lib/adaptation/tiptap/getEditorSchema";
 import { canonicalToProseMirror, type PMNode } from "@/lib/adaptation/tiptap/fromCanonical";
@@ -66,6 +67,14 @@ export interface UseCanonicalEditorOptions {
   value: CanonicalDocument;
   onChange: (doc: CanonicalDocument) => void;
   disabled?: boolean;
+  /**
+   * Extra Tiptap extensions appended after the canonical set (e.g. the Estilo
+   * step's current-block highlight). Kept optional so the Content step uses the
+   * same hook with no extras.
+   */
+  extraExtensions?: Extensions;
+  /** Called on every editor selection change (e.g. to track the current block). */
+  onSelectionUpdate?: (editor: Editor) => void;
 }
 
 export interface UseCanonicalEditorResult {
@@ -76,15 +85,18 @@ export function useCanonicalEditor({
   value,
   onChange,
   disabled = false,
+  extraExtensions,
+  onSelectionUpdate,
 }: UseCanonicalEditorOptions): UseCanonicalEditorResult {
   // Seed content once and track the last-known canonical doc to guard emits.
   const initialContentRef = useRef<PMNode>(canonicalToProseMirror(value));
   const lastDocRef = useRef<CanonicalDocument>(value);
 
   const editor = useEditor({
-    extensions: buildCanonicalEditorExtensions(),
+    extensions: [...buildCanonicalEditorExtensions(), ...(extraExtensions ?? [])],
     content: initialContentRef.current,
     editable: !disabled,
+    onSelectionUpdate: ({ editor }) => onSelectionUpdate?.(editor),
     onUpdate: ({ editor }) => {
       // Ordinary edits produce transient-invalid states (image with empty src,
       // cleared math latex, all blocks deleted). Validate without throwing: when

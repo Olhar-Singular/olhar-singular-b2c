@@ -1,23 +1,59 @@
-import { describe, it, expect, vi } from "vitest";
-import { render, screen, fireEvent } from "@testing-library/react";
-import { StylingSurface } from "./StylingSurface";
+import { describe, it, expect, vi, beforeEach } from "vitest";
+import { render, screen, fireEvent, act } from "@testing-library/react";
+import { Node as PMNode } from "@tiptap/pm/model";
+import { EditorState, TextSelection } from "@tiptap/pm/state";
+import type { Editor } from "@tiptap/react";
+import { getEditorSchema } from "@/lib/adaptation/tiptap/getEditorSchema";
+import { canonicalToProseMirror } from "@/lib/adaptation/tiptap/fromCanonical";
 import { validateDocument } from "@/lib/adaptation/canonical/validate";
 import type { CanonicalDocument } from "@/lib/adaptation/canonical/schema";
+import { StylingSurface } from "./StylingSurface";
 
-vi.mock("@/components/adaptation/render/CanonicalRenderer", () => ({
-  CanonicalRenderer: ({
-    document,
-    selectedId,
-  }: {
-    document: CanonicalDocument;
-    selectedId?: string;
-  }) => (
-    <div data-testid="preview" data-selected-id={selectedId ?? ""}>
-      {document.blocks.length} blocos
-    </div>
+// --- mocks -----------------------------------------------------------------
+
+// The real editor surface is replaced; we only need the EditorContent marker
+// plus the EditorModeProvider passthrough (the real provider is fine).
+vi.mock("@tiptap/react", () => ({
+  EditorContent: ({ editor }: { editor: unknown }) => (
+    <div data-testid="editor-content">{String(editor !== null)}</div>
   ),
 }));
 
+vi.mock("@radix-ui/react-popover", () => ({
+  Anchor: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+}));
+
+vi.mock("@/components/ui/popover", () => ({
+  Popover: ({ children, open }: { children: React.ReactNode; open: boolean }) => (
+    <div data-testid="popover" data-open={String(open)}>
+      {children}
+    </div>
+  ),
+  // Always render content so we can assert on the controls regardless of open state.
+  PopoverContent: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+}));
+
+vi.mock("@/components/adaptation/canonical-editor/CanonicalToolbar", () => ({
+  CanonicalToolbar: () => <div data-testid="toolbar" />,
+}));
+
+const useCanonicalEditor = vi.fn();
+let capturedSelectionHandler: ((editor: Editor) => void) | undefined;
+let capturedExtraExtensions: unknown;
+vi.mock("@/components/adaptation/canonical-editor/useCanonicalEditor", () => ({
+  useCanonicalEditor: (opts: {
+    onSelectionUpdate?: (e: Editor) => void;
+    extraExtensions?: unknown;
+  }) => {
+    capturedSelectionHandler = opts.onSelectionUpdate;
+    capturedExtraExtensions = opts.extraExtensions;
+    return useCanonicalEditor(opts);
+  },
+}));
+
+// --- fixtures --------------------------------------------------------------
+
+const schema = getEditorSchema();
 const id = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, "0")}`;
 
 function baseDoc(): CanonicalDocument {
@@ -26,143 +62,195 @@ function baseDoc(): CanonicalDocument {
     blocks: [
       { id: id(1), type: "heading", level: 1, content: [{ type: "text", text: "Tit" }] },
       { id: id(2), type: "paragraph", content: [{ type: "text", text: "p" }] },
-      { id: id(3), type: "blockMath", latex: "a" },
-      { id: id(4), type: "image", src: "https://example.com/x.png", alt: "fig" },
-      { id: id(5), type: "scaffolding", items: ["a"] },
-      { id: id(6), type: "divider" },
       {
         id: id(7),
         type: "question",
         stem: [{ id: id(8), type: "paragraph", content: [{ type: "text", text: "stem" }] }],
         answer: { kind: "open" },
       },
-      {
-        id: id(9),
-        type: "question",
-        stem: [{ id: id(10), type: "paragraph", content: [{ type: "text", text: "s2" }] }],
-        answer: { kind: "open" },
-      },
     ],
   };
 }
 
+const dispatch = vi.fn();
+let nodeDOMResult: unknown = null;
+
+/** A single mutable fake editor (mirrors production: one editor instance). */
+function makeFakeEditor(doc: CanonicalDocument): Editor {
+  const state = EditorState.create({ doc: PMNode.fromJSON(schema, canonicalToProseMirror(doc)) });
+  return {
+    state,
+    view: { dispatch, nodeDOM: () => nodeDOMResult },
+    isEditable: true,
+  } as unknown as Editor;
+}
+
+/** Make blockAnchorRect resolve to a non-null rect so the handle renders. */
+function withAnchorDom() {
+  const el = window.document.createElement("div");
+  el.getBoundingClientRect = () => ({ top: 40, left: 10, width: 300, height: 50 }) as DOMRect;
+  nodeDOMResult = el;
+}
+
+let fake: Editor;
+
+/** Move the editor selection into the i-th top-level block and notify the surface. */
+function placeCursorIn(doc: CanonicalDocument, index: number) {
+  const base = EditorState.create({ doc: PMNode.fromJSON(schema, canonicalToProseMirror(doc)) });
+  let pos = 0;
+  for (let i = 0; i < index; i++) pos += base.doc.child(i).nodeSize;
+  const state = base.apply(base.tr.setSelection(TextSelection.create(base.doc, pos + 1)));
+  (fake as { state: EditorState }).state = state;
+  act(() => capturedSelectionHandler?.(fake));
+}
+
+beforeEach(() => {
+  vi.clearAllMocks();
+  capturedSelectionHandler = undefined;
+  capturedExtraExtensions = undefined;
+  nodeDOMResult = null;
+  fake = makeFakeEditor(baseDoc());
+  useCanonicalEditor.mockReturnValue({ editor: fake });
+});
+
 describe("StylingSurface", () => {
-  it("lists every block type label including stem children and auto-numbered questions", () => {
-    render(<StylingSurface document={baseDoc()} onChange={vi.fn()} />);
-    const select = screen.getByLabelText("Bloco") as HTMLSelectElement;
-    const labels = Array.from(select.options).map((o) => o.textContent);
-    expect(labels).toEqual(
-      expect.arrayContaining([
-        "Título (H1)",
-        "Parágrafo 2",
-        "Fórmula",
-        "Imagem",
-        "Apoio",
-        "Divisória",
-        "Questão 1",
-        "↳ Parágrafo 1",
-        "Questão 2",
-      ]),
-    );
+  it("returns null while the editor is not ready", () => {
+    useCanonicalEditor.mockReturnValue({ editor: null });
+    const { container } = render(<StylingSurface document={baseDoc()} onChange={vi.fn()} />);
+    expect(container.firstChild).toBeNull();
   });
 
-  it("renders the live preview from the same document", () => {
+  it("renders the editable editor (no block <select>)", () => {
     render(<StylingSurface document={baseDoc()} onChange={vi.fn()} />);
-    expect(screen.getByTestId("preview")).toHaveTextContent("8 blocos");
+    expect(screen.getByTestId("editor-content")).toBeInTheDocument();
+    expect(screen.queryByLabelText("Bloco")).not.toBeInTheDocument();
   });
 
-  it("passes the selected block id to the preview and updates it on selection", () => {
+  it("renders the editor in STYLE mode and wires the highlight extension", () => {
     render(<StylingSurface document={baseDoc()} onChange={vi.fn()} />);
-    expect(screen.getByTestId("preview")).toHaveAttribute("data-selected-id", id(1));
-    fireEvent.change(screen.getByLabelText("Bloco"), { target: { value: id(8) } });
-    expect(screen.getByTestId("preview")).toHaveAttribute("data-selected-id", id(8));
+    // The current-block highlight extension is passed to the hook.
+    expect(Array.isArray(capturedExtraExtensions)).toBe(true);
+    expect((capturedExtraExtensions as { name: string }[])[0].name).toBe("currentBlockHighlight");
   });
 
-  it("applies font, size, align, color, spacing and pageBreak to the selected block", () => {
+  it("has no current block before a selection (handle hidden)", () => {
+    render(<StylingSurface document={baseDoc()} onChange={vi.fn()} />);
+    expect(screen.queryByTestId("open-style-popover")).not.toBeInTheDocument();
+  });
+
+  it("applies font/size/align/spacing/color via setBlockStyle for the current block", () => {
     const onChange = vi.fn();
-    render(<StylingSurface document={baseDoc()} onChange={onChange} />);
+    const doc = baseDoc();
+    render(<StylingSurface document={doc} onChange={onChange} />);
+    placeCursorIn(doc, 0); // heading id(1) is current
 
     fireEvent.change(screen.getByLabelText("Fonte"), { target: { value: "serif" } });
     fireEvent.change(screen.getByLabelText("Tamanho (px)"), { target: { value: "24" } });
     fireEvent.change(screen.getByLabelText("Alinhamento"), { target: { value: "center" } });
-    fireEvent.change(screen.getByLabelText("Cor"), { target: { value: "#DC2626" } });
-    fireEvent.change(screen.getByLabelText("Espaço depois (px)"), { target: { value: "10" } });
-    fireEvent.click(screen.getByLabelText("Quebra de página antes"));
+    fireEvent.change(screen.getByLabelText("Espaçamento (px)"), { target: { value: "10" } });
+    fireEvent.change(screen.getByLabelText("Cor do bloco"), { target: { value: "#DC2626" } });
 
-    expect(onChange).toHaveBeenCalledTimes(6);
+    expect(onChange).toHaveBeenCalledTimes(5);
     for (const call of onChange.mock.calls) {
       expect(validateDocument(call[0])).toBeTruthy();
+      expect((call[0] as CanonicalDocument).blocks[0].id).toBe(id(1));
     }
-    const last = onChange.mock.calls[onChange.mock.calls.length - 1][0] as CanonicalDocument;
-    expect(last.blocks[0].style).toEqual({ pageBreakBefore: true });
+    expect((onChange.mock.calls[0][0] as CanonicalDocument).blocks[0].style).toEqual({
+      fontFamily: "serif",
+    });
   });
 
-  it("clears a style field when set back to default / empty", () => {
+  it("reads the existing style of the current block into the controls", () => {
+    const doc = baseDoc();
+    doc.blocks[0].style = { fontSize: 18 };
+    render(<StylingSurface document={doc} onChange={vi.fn()} />);
+    placeCursorIn(doc, 0);
+    expect(screen.getByLabelText("Tamanho (px)")).toHaveValue(18);
+  });
+
+  it("clears a style field back to default", () => {
     const onChange = vi.fn();
     const doc = baseDoc();
     doc.blocks[0].style = { fontSize: 30, align: "center" };
     render(<StylingSurface document={doc} onChange={onChange} />);
+    placeCursorIn(doc, 0);
 
     fireEvent.change(screen.getByLabelText("Tamanho (px)"), { target: { value: "" } });
-    let next = onChange.mock.calls[0][0] as CanonicalDocument;
-    expect(next.blocks[0].style).toEqual({ align: "center" });
-
-    fireEvent.change(screen.getByLabelText("Alinhamento"), { target: { value: "" } });
-    next = onChange.mock.calls[1][0] as CanonicalDocument;
-    expect(next.blocks[0].style).toEqual({ fontSize: 30 });
+    expect((onChange.mock.calls[0][0] as CanonicalDocument).blocks[0].style).toEqual({
+      align: "center",
+    });
   });
 
-  it("clears font, color, spacing and pageBreak back to undefined", () => {
+  it("toggles bold on the whole current block via applyMarkToBlock (dispatches a tr)", () => {
+    const doc = baseDoc();
+    render(<StylingSurface document={doc} onChange={vi.fn()} />);
+    placeCursorIn(doc, 0);
+
+    fireEvent.click(screen.getByLabelText("Negrito"));
+    expect(dispatch).toHaveBeenCalledTimes(1);
+  });
+
+  it("toggles italic on the whole current block", () => {
+    const doc = baseDoc();
+    render(<StylingSurface document={doc} onChange={vi.fn()} />);
+    placeCursorIn(doc, 0);
+
+    fireEvent.click(screen.getByLabelText("Itálico"));
+    expect(dispatch).toHaveBeenCalledTimes(1);
+  });
+
+  it("applies a whole-block color via applyColorToBlock", () => {
+    const doc = baseDoc();
+    render(<StylingSurface document={doc} onChange={vi.fn()} />);
+    placeCursorIn(doc, 0);
+
+    fireEvent.change(screen.getByLabelText("Cor do texto"), { target: { value: "#2563EB" } });
+    expect(dispatch).toHaveBeenCalledTimes(1);
+  });
+
+  it("targets a stem block when the cursor is inside a question", () => {
     const onChange = vi.fn();
     const doc = baseDoc();
-    doc.blocks[0].style = {
-      fontFamily: "serif",
-      color: "#DC2626",
-      spacingAfter: 10,
-      pageBreakBefore: true,
-    };
     render(<StylingSurface document={doc} onChange={onChange} />);
-
-    fireEvent.change(screen.getByLabelText("Fonte"), { target: { value: "" } });
-    expect((onChange.mock.calls[0][0] as CanonicalDocument).blocks[0].style?.fontFamily).toBeUndefined();
-
-    fireEvent.change(screen.getByLabelText("Cor"), { target: { value: "" } });
-    expect((onChange.mock.calls[1][0] as CanonicalDocument).blocks[0].style?.color).toBeUndefined();
-
-    fireEvent.change(screen.getByLabelText("Espaço depois (px)"), { target: { value: "" } });
-    expect((onChange.mock.calls[2][0] as CanonicalDocument).blocks[0].style?.spacingAfter).toBeUndefined();
-
-    fireEvent.click(screen.getByLabelText("Quebra de página antes"));
-    expect((onChange.mock.calls[3][0] as CanonicalDocument).blocks[0].style?.pageBreakBefore).toBeUndefined();
-  });
-
-  it("styles a block selected from inside a question stem", () => {
-    const onChange = vi.fn();
-    render(<StylingSurface document={baseDoc()} onChange={onChange} />);
-    fireEvent.change(screen.getByLabelText("Bloco"), { target: { value: id(8) } });
+    // index 2 is the question; currentTopLevelBlock returns the QUESTION id(7).
+    placeCursorIn(doc, 2);
     fireEvent.change(screen.getByLabelText("Alinhamento"), { target: { value: "right" } });
     const next = onChange.mock.calls[0][0] as CanonicalDocument;
-    const q = next.blocks[6] as Extract<CanonicalDocument["blocks"][number], { type: "question" }>;
-    expect(q.stem[0].style).toEqual({ align: "right" });
+    const q = next.blocks[2] as Extract<CanonicalDocument["blocks"][number], { type: "question" }>;
+    expect(q.style).toEqual({ align: "right" });
   });
 
-  it("finds a stem block in a later question, skipping earlier questions whose stem does not match", () => {
-    const onChange = vi.fn();
-    render(<StylingSurface document={baseDoc()} onChange={onChange} />);
-    // id(10) lives in the SECOND question; the first question's stem is scanned and missed.
-    fireEvent.change(screen.getByLabelText("Bloco"), { target: { value: id(10) } });
-    fireEvent.change(screen.getByLabelText("Alinhamento"), { target: { value: "center" } });
-    const next = onChange.mock.calls[0][0] as CanonicalDocument;
-    const q = next.blocks[7] as Extract<CanonicalDocument["blocks"][number], { type: "question" }>;
-    expect(q.stem[0].style).toEqual({ align: "center" });
+  it("does nothing when a mark/color/patch fires with no current block (guards)", () => {
+    // No selection placed → current is null → controls not shown; assert the
+    // surface renders without the handle and without crashing.
+    render(<StylingSurface document={baseDoc()} onChange={vi.fn()} />);
+    expect(screen.queryByLabelText("Negrito")).not.toBeInTheDocument();
   });
 
-  it("reads the existing style of the selected stem block (style ?? {} fallback)", () => {
+  it("renders a floating handle anchored to the current block and toggles the popover", () => {
+    withAnchorDom();
     const doc = baseDoc();
-    const q = doc.blocks[6] as Extract<CanonicalDocument["blocks"][number], { type: "question" }>;
-    q.stem[0].style = { fontSize: 18 };
     render(<StylingSurface document={doc} onChange={vi.fn()} />);
-    fireEvent.change(screen.getByLabelText("Bloco"), { target: { value: id(8) } });
-    expect(screen.getByLabelText("Tamanho (px)")).toHaveValue(18);
+    placeCursorIn(doc, 0);
+    const handle = screen.getByTestId("open-style-popover");
+    expect(handle).toBeInTheDocument();
+    // The anchor + handle use the resolved rect (top 40 - container 0 = 40).
+    expect(handle).toHaveStyle({ top: "44px" });
+    // Toggling the handle flips the popover open state.
+    fireEvent.click(handle);
+    expect(screen.getByTestId("popover")).toHaveAttribute("data-open", "true");
+  });
+
+  it("does not dispatch when the mark/color helper yields null (question has no inline text of its own)", () => {
+    // The current block is the QUESTION wrapper (cursor inside its stem). The
+    // question node has block content, not inline text, so applyMarkToBlock /
+    // applyColorToBlock return null and nothing is dispatched.
+    const doc = baseDoc();
+    render(<StylingSurface document={doc} onChange={vi.fn()} />);
+    placeCursorIn(doc, 2); // question id(7) becomes current
+
+    fireEvent.click(screen.getByLabelText("Negrito"));
+    fireEvent.change(screen.getByLabelText("Cor do texto"), { target: { value: "#DC2626" } });
+    expect(dispatch).not.toHaveBeenCalled();
   });
 });

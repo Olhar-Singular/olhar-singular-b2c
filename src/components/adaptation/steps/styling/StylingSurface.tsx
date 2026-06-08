@@ -1,214 +1,172 @@
 /**
- * StylingSurface — per-node style panel (LEFT) + live preview (RIGHT).
+ * StylingSurface — the Estilo step as a click-to-edit surface.
  *
- * Selecting a block reveals controls for its `style` (fontFamily, fontSize,
- * align, color, spacingAfter, pageBreakBefore). Editing a control calls
- * `setBlockStyle` on the SAME document and emits it via `onChange`; the preview
- * re-renders from that one document. There is no sidecar style store.
+ * The big editable preview IS the canonical editor, rendered in STYLE mode
+ * (`EditorModeProvider value="style"`) so the toolbar/quick formats apply but
+ * the question structure actions are hidden. There is NO block dropdown: the
+ * "current" block is simply the top-level block holding the editor selection
+ * (clicking a block places the cursor → it becomes current), highlighted by the
+ * `CurrentBlockHighlight` decoration. A floating "Estilo" handle anchored to that
+ * block opens a popover with its `NodeStyle` controls plus whole-block
+ * bold/italic/color toggles.
+ *
+ * All document mutations go through tested pure helpers — `setBlockStyle`,
+ * `applyMarkToBlock`, `applyColorToBlock`, `findBlockStyle`, `currentTopLevelBlock`.
+ * The popover-anchor geometry (`blockAnchorRect`) is the only browser-coupled
+ * glue and is read defensively (guarded position reads; never throws).
  */
 
-import { useState } from "react";
-import { Label } from "@/components/ui/label";
-import { CanonicalRenderer } from "@/components/adaptation/render/CanonicalRenderer";
+import { useCallback, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { EditorContent, type Editor } from "@tiptap/react";
+import { Anchor as PopoverAnchor } from "@radix-ui/react-popover";
+import { Popover, PopoverContent } from "@/components/ui/popover";
+import { Button } from "@/components/ui/button";
+import { Paintbrush } from "lucide-react";
+import { useCanonicalEditor } from "@/components/adaptation/canonical-editor/useCanonicalEditor";
+import { CanonicalToolbar } from "@/components/adaptation/canonical-editor/CanonicalToolbar";
+import { EditorModeProvider } from "@/components/adaptation/canonical-editor/EditorMode";
 import { setBlockStyle } from "@/lib/adaptation/canonical/style";
-import { ALLOWED_COLORS } from "@/lib/adaptation/canonical/colors";
-import { FONT_FAMILY_OPTIONS } from "@/lib/adaptation/canonical/fontFamily";
-import type { Block, CanonicalDocument, NodeStyle } from "@/lib/adaptation/canonical/schema";
+import type { CanonicalDocument, NodeStyle } from "@/lib/adaptation/canonical/schema";
+import "katex/dist/katex.min.css";
+import { currentTopLevelBlock, type CurrentBlock } from "./currentBlock";
+import { CurrentBlockHighlight } from "./styleDecoration";
+import { applyMarkToBlock, applyColorToBlock, type BlockToggleMark } from "./blockMarks";
+import { findBlockStyle } from "./findBlockStyle";
+import { blockAnchorRect, type AnchorRect } from "./anchorRect";
+import { StyleControls } from "./StyleControls";
 
 type Props = {
   document: CanonicalDocument;
   onChange: (doc: CanonicalDocument) => void;
 };
 
-const ALIGNMENTS: { value: NodeStyle["align"]; label: string }[] = [
-  { value: "left", label: "Esquerda" },
-  { value: "center", label: "Centro" },
-  { value: "right", label: "Direita" },
-  { value: "justify", label: "Justificado" },
-];
-
-type Selectable = { id: string; label: string };
-
-// `questionNumber` is the question's automatic 1-based ordinal (in document
-// order); only used for `question` blocks, which store no number themselves.
-function blockLabel(block: Block, index: number, questionNumber: number): string {
-  switch (block.type) {
-    case "heading":
-      return `Título (H${block.level})`;
-    case "paragraph":
-      return `Parágrafo ${index + 1}`;
-    case "blockMath":
-      return "Fórmula";
-    case "image":
-      return "Imagem";
-    case "scaffolding":
-      return "Apoio";
-    case "divider":
-      return "Divisória";
-    case "question":
-      return `Questão ${questionNumber}`;
-  }
-}
-
-/** Top-level blocks plus question-stem blocks, in document order. */
-function collectSelectable(document: CanonicalDocument): Selectable[] {
-  const out: Selectable[] = [];
-  let questionCount = 0;
-  document.blocks.forEach((block, i) => {
-    const n = block.type === "question" ? ++questionCount : 0;
-    out.push({ id: block.id, label: blockLabel(block, i, n) });
-    if (block.type === "question") {
-      block.stem.forEach((sb, j) => {
-        out.push({ id: sb.id, label: `↳ ${blockLabel(sb, j, 0)}` });
-      });
-    }
-  });
-  return out;
-}
-
-function findStyle(document: CanonicalDocument, blockId: string): NodeStyle {
-  for (const block of document.blocks) {
-    if (block.id === blockId) return block.style ?? {};
-    if (block.type === "question") {
-      const sb = block.stem.find((s) => s.id === blockId);
-      if (sb) return sb.style ?? {};
-    }
-  }
-  /* v8 ignore next -- selection ids always come from collectSelectable */
-  return {};
-}
-
 export function StylingSurface({ document, onChange }: Props) {
-  const selectable = collectSelectable(document);
-  const [selectedId, setSelectedId] = useState<string>(selectable[0].id);
+  const [current, setCurrent] = useState<CurrentBlock | null>(null);
+  const [rect, setRect] = useState<AnchorRect | null>(null);
+  const [open, setOpen] = useState(false);
+  const editorRef = useRef<Editor | null>(null);
+  const containerRef = useRef<HTMLDivElement | null>(null);
 
-  const style = findStyle(document, selectedId);
+  const handleSelection = useCallback((editor: Editor) => {
+    editorRef.current = editor;
+    setCurrent(currentTopLevelBlock(editor.state));
+  }, []);
 
-  function patch(partial: Partial<NodeStyle>) {
-    const next: NodeStyle = { ...style, ...partial };
-    for (const key of Object.keys(next) as (keyof NodeStyle)[]) {
-      if (next[key] === undefined) delete next[key];
-    }
-    onChange(setBlockStyle(document, selectedId, next));
-  }
+  const { editor } = useCanonicalEditor({
+    value: document,
+    onChange,
+    extraExtensions: [CurrentBlockHighlight],
+    onSelectionUpdate: handleSelection,
+  });
+  if (editor) editorRef.current = editor;
+
+  // Recompute the floating handle's position whenever the current block changes.
+  useLayoutEffect(() => {
+    setRect(blockAnchorRect(editorRef.current, current?.pos, containerRef.current));
+    // Closing the popover when the block changes keeps it from pointing at a
+    // stale anchor.
+    setOpen(false);
+  }, [current]);
+
+  const style: NodeStyle = useMemo(
+    () => (current ? findBlockStyle(document, current.id) : {}),
+    [current, document],
+  );
+
+  const patch = useCallback(
+    (partial: Partial<NodeStyle>) => {
+      /* v8 ignore next -- defensive: the controls only render with a current block */
+      if (!current) return;
+      const next: NodeStyle = { ...style, ...partial };
+      for (const key of Object.keys(next) as (keyof NodeStyle)[]) {
+        if (next[key] === undefined) delete next[key];
+      }
+      onChange(setBlockStyle(document, current.id, next));
+    },
+    [current, style, document, onChange],
+  );
+
+  const toggleMark = useCallback(
+    (mark: BlockToggleMark) => {
+      const ed = editorRef.current;
+      /* v8 ignore next -- defensive: the controls only render with a ready editor + current block */
+      if (!ed || !current) return;
+      const tr = applyMarkToBlock(ed.state, current.id, mark);
+      if (tr) ed.view.dispatch(tr);
+    },
+    [current],
+  );
+
+  const colorBlock = useCallback(
+    (color: string | null) => {
+      const ed = editorRef.current;
+      /* v8 ignore next -- defensive: the controls only render with a ready editor + current block */
+      if (!ed || !current) return;
+      const tr = applyColorToBlock(ed.state, current.id, color);
+      if (tr) ed.view.dispatch(tr);
+    },
+    [current],
+  );
+
+  if (!editor) return null;
 
   return (
-    <div className="grid gap-6 lg:grid-cols-2">
-      {/* LEFT — block list + style controls */}
-      <div className="space-y-4">
-        <div className="space-y-2">
-          <Label htmlFor="block-select">Bloco</Label>
-          <select
-            id="block-select"
-            className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-            value={selectedId}
-            onChange={(e) => setSelectedId(e.target.value)}
-          >
-            {selectable.map((s) => (
-              <option key={s.id} value={s.id}>
-                {s.label}
-              </option>
-            ))}
-          </select>
-        </div>
+    <div className="space-y-3">
+      <p className="text-sm text-muted-foreground">
+        Clique em um bloco para selecioná-lo; use a paleta ao lado dele para ajustar a aparência.
+      </p>
 
-        <div className="space-y-2">
-          <Label htmlFor="style-font">Fonte</Label>
-          <select
-            id="style-font"
-            className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-            value={style.fontFamily ?? ""}
-            onChange={(e) => patch({ fontFamily: e.target.value || undefined })}
-          >
-            <option value="">Herdar</option>
-            {FONT_FAMILY_OPTIONS.map((f) => (
-              <option key={f.value} value={f.value}>
-                {f.label}
-              </option>
-            ))}
-          </select>
-        </div>
+      <div className="rounded-md border border-input bg-background">
+        <CanonicalToolbar editor={editor} />
 
-        <div className="space-y-2">
-          <Label htmlFor="style-size">Tamanho (px)</Label>
-          <input
-            id="style-size"
-            type="number"
-            min={1}
-            className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-            value={style.fontSize ?? ""}
-            onChange={(e) =>
-              patch({ fontSize: e.target.value === "" ? undefined : Number(e.target.value) })
-            }
-          />
-        </div>
+        <div ref={containerRef} className="relative">
+          <EditorModeProvider value="style">
+            <EditorContent editor={editor} className="px-4 py-3 text-base" />
+          </EditorModeProvider>
 
-        <div className="space-y-2">
-          <Label htmlFor="style-align">Alinhamento</Label>
-          <select
-            id="style-align"
-            className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-            value={style.align ?? ""}
-            onChange={(e) =>
-              patch({ align: (e.target.value || undefined) as NodeStyle["align"] })
-            }
-          >
-            <option value="">Padrão</option>
-            {ALIGNMENTS.map((a) => (
-              <option key={a.value} value={a.value}>
-                {a.label}
-              </option>
-            ))}
-          </select>
-        </div>
+          <Popover open={open} onOpenChange={setOpen}>
+            {/* The anchor floats over the current block; the handle button is
+                positioned at its top-right corner. */}
+            <PopoverAnchor asChild>
+              <div
+                aria-hidden
+                className="pointer-events-none absolute"
+                style={
+                  rect
+                    ? { top: rect.top, left: rect.left, width: rect.width, height: rect.height }
+                    : { top: 0, left: 0 }
+                }
+              />
+            </PopoverAnchor>
 
-        <div className="space-y-2">
-          <Label htmlFor="style-color">Cor</Label>
-          <select
-            id="style-color"
-            className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-            value={style.color ?? ""}
-            onChange={(e) => patch({ color: e.target.value || undefined })}
-          >
-            <option value="">Padrão</option>
-            {ALLOWED_COLORS.map((c) => (
-              <option key={c} value={c}>
-                {c}
-              </option>
-            ))}
-          </select>
-        </div>
+            {current && rect && (
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                aria-label="Abrir estilo do bloco"
+                data-testid="open-style-popover"
+                className="absolute z-10 h-7 gap-1 px-2 text-xs shadow-sm"
+                style={{ top: rect.top + 4, left: rect.left + rect.width - 88 }}
+                onClick={() => setOpen((v) => !v)}
+              >
+                <Paintbrush className="h-3.5 w-3.5" />
+                Estilo
+              </Button>
+            )}
 
-        <div className="space-y-2">
-          <Label htmlFor="style-spacing">Espaço depois (px)</Label>
-          <input
-            id="style-spacing"
-            type="number"
-            min={0}
-            className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-            value={style.spacingAfter ?? ""}
-            onChange={(e) =>
-              patch({ spacingAfter: e.target.value === "" ? undefined : Number(e.target.value) })
-            }
-          />
+            <PopoverContent align="end" side="top" className="w-80">
+              {current && (
+                <StyleControls
+                  style={style}
+                  onPatch={patch}
+                  onToggleMark={toggleMark}
+                  onColorBlock={colorBlock}
+                />
+              )}
+            </PopoverContent>
+          </Popover>
         </div>
-
-        <div className="flex items-center gap-2">
-          <input
-            id="style-pagebreak"
-            type="checkbox"
-            checked={style.pageBreakBefore ?? false}
-            onChange={(e) => patch({ pageBreakBefore: e.target.checked || undefined })}
-          />
-          <Label htmlFor="style-pagebreak" className="font-normal cursor-pointer">
-            Quebra de página antes
-          </Label>
-        </div>
-      </div>
-
-      {/* RIGHT — live preview */}
-      <div className="rounded-md border border-input bg-background p-4">
-        <CanonicalRenderer document={document} selectedId={selectedId} />
       </div>
     </div>
   );

@@ -20,7 +20,7 @@ export function StepStyling({ document, onDocumentChange, onRegenerate, onNext, 
           <div>
             <h2 className="text-xl font-semibold">Estilo</h2>
             <p className="text-sm text-muted-foreground">
-              Ajuste a aparência de cada bloco e veja a prévia ao lado.
+              Clique em um bloco e ajuste a aparência direto na prévia.
             </p>
           </div>
         </div>

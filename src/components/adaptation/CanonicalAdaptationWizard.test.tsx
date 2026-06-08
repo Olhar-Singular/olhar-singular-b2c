@@ -148,10 +148,40 @@ vi.mock("./canonical-editor/CanonicalEditor", () => ({
   ),
 }));
 
-// CanonicalRenderer (used by StepStyling + export) — exposes the doc as JSON.
+// CanonicalRenderer (used by the export step) — exposes the doc as JSON.
 vi.mock("./render/CanonicalRenderer", () => ({
   CanonicalRenderer: ({ document }: { document: CanonicalDocument }) => (
     <pre data-testid="render-doc">{JSON.stringify(document)}</pre>
+  ),
+}));
+
+// StylingSurface (the click-to-edit editor surface) — the wizard test only
+// cares about SSOT wiring, not the editor internals (covered by its own tests).
+// Expose a readout of the live document and a button that applies a block style.
+vi.mock("./steps/styling/StylingSurface", () => ({
+  StylingSurface: ({
+    document,
+    onChange,
+  }: {
+    document: CanonicalDocument;
+    onChange: (d: CanonicalDocument) => void;
+  }) => (
+    <div>
+      <pre data-testid="style-doc">{JSON.stringify(document)}</pre>
+      <button
+        data-testid="edit-style"
+        onClick={() =>
+          onChange({
+            ...document,
+            blocks: document.blocks.map((b, i) =>
+              i === 0 ? { ...b, style: { align: "center" } } : b,
+            ),
+          })
+        }
+      >
+        editar estilo
+      </button>
+    </div>
   ),
 }));
 
@@ -187,9 +217,9 @@ describe("CanonicalAdaptationWizard", () => {
   it("generation sets a valid canonical document", () => {
     renderWithProviders(<CanonicalAdaptationWizard />);
     advanceToContent();
-    // Move to styling to read the document out of the renderer.
+    // Move to styling to read the document out of the surface.
     fireEvent.click(screen.getByRole("button", { name: /Avançar para estilo/i }));
-    const doc = JSON.parse(screen.getByTestId("render-doc").textContent!);
+    const doc = JSON.parse(screen.getByTestId("style-doc").textContent!);
     expect(validateDocument(doc)).toBeTruthy();
   });
 
@@ -204,8 +234,8 @@ describe("CanonicalAdaptationWizard", () => {
     renderWithProviders(<CanonicalAdaptationWizard />);
     advanceToContent();
     fireEvent.click(screen.getByRole("button", { name: /Avançar para estilo/i }));
-    fireEvent.change(screen.getByLabelText("Alinhamento"), { target: { value: "center" } });
-    const doc = JSON.parse(screen.getByTestId("render-doc").textContent!) as CanonicalDocument;
+    fireEvent.click(screen.getByTestId("edit-style"));
+    const doc = JSON.parse(screen.getByTestId("style-doc").textContent!) as CanonicalDocument;
     expect(doc.blocks[0].style).toEqual({ align: "center" });
   });
 
@@ -218,7 +248,7 @@ describe("CanonicalAdaptationWizard", () => {
 
     // 2) go to styling, edit a style
     fireEvent.click(screen.getByRole("button", { name: /Avançar para estilo/i }));
-    fireEvent.change(screen.getByLabelText("Cor"), { target: { value: "#2563EB" } });
+    fireEvent.click(screen.getByTestId("edit-style"));
 
     // 3) go back to content — content edit must still be there
     fireEvent.click(screen.getByRole("button", { name: /Voltar/i }));
@@ -226,9 +256,9 @@ describe("CanonicalAdaptationWizard", () => {
 
     // 4) forward to styling again — both edits present in the one document
     fireEvent.click(screen.getByRole("button", { name: /Avançar para estilo/i }));
-    const doc = JSON.parse(screen.getByTestId("render-doc").textContent!) as CanonicalDocument;
+    const doc = JSON.parse(screen.getByTestId("style-doc").textContent!) as CanonicalDocument;
     expect((doc.blocks[0] as { content: { text: string }[] }).content[0].text).toBe("EDITADO");
-    expect(doc.blocks[0].style).toEqual({ color: "#2563EB" });
+    expect(doc.blocks[0].style).toEqual({ align: "center" });
   });
 
   it("the step indicator navigates back to a visited step", () => {
@@ -298,7 +328,7 @@ describe("CanonicalAdaptationWizard", () => {
     fireEvent.click(screen.getByRole("button", { name: /Avançar para estilo/i }));
     fireEvent.click(screen.getByRole("button", { name: /Avançar para exportação/i }));
     fireEvent.click(screen.getByRole("button", { name: /Voltar/i }));
-    expect(screen.getByLabelText("Alinhamento")).toBeInTheDocument();
+    expect(screen.getByTestId("edit-style")).toBeInTheDocument();
   });
 
   // --- M6 persistence wiring -------------------------------------------------

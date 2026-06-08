@@ -135,4 +135,38 @@ describe("useCanonicalEditor", () => {
     const { result } = renderHook(() => useCanonicalEditor({ value: docA, onChange: vi.fn() }));
     expect(result.current.editor).toBe(editor);
   });
+
+  it("appends extraExtensions after the canonical set", () => {
+    let cfg: { extensions?: { name: string }[] } | undefined;
+    vi.mocked(useEditor).mockImplementation((c: unknown) => {
+      cfg = c as { extensions?: { name: string }[] };
+      return { getJSON: () => ({}) } as never;
+    });
+    const extra = { name: "extra-ext" } as never;
+    renderHook(() => useCanonicalEditor({ value: docA, onChange: vi.fn(), extraExtensions: [extra] }));
+    expect(cfg?.extensions?.[cfg.extensions.length - 1]).toBe(extra);
+  });
+
+  it("forwards selection updates to onSelectionUpdate", () => {
+    const onSelectionUpdate = vi.fn();
+    let onSel: ((args: { editor: unknown }) => void) | undefined;
+    vi.mocked(useEditor).mockImplementation((c: unknown) => {
+      onSel = (c as { onSelectionUpdate: typeof onSel }).onSelectionUpdate;
+      return { getJSON: () => ({}) } as never;
+    });
+    const editor = { id: "ed" };
+    renderHook(() => useCanonicalEditor({ value: docA, onChange: vi.fn(), onSelectionUpdate }));
+    onSel?.({ editor });
+    expect(onSelectionUpdate).toHaveBeenCalledWith(editor);
+  });
+
+  it("is a no-op selection handler when onSelectionUpdate is omitted", () => {
+    let onSel: ((args: { editor: unknown }) => void) | undefined;
+    vi.mocked(useEditor).mockImplementation((c: unknown) => {
+      onSel = (c as { onSelectionUpdate: typeof onSel }).onSelectionUpdate;
+      return { getJSON: () => ({}) } as never;
+    });
+    renderHook(() => useCanonicalEditor({ value: docA, onChange: vi.fn() }));
+    expect(() => onSel?.({ editor: {} })).not.toThrow();
+  });
 });
