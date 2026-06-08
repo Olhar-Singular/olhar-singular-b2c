@@ -34,6 +34,9 @@ import { applyMarkToBlock, applyColorToBlock, type BlockToggleMark } from "./blo
 import { findBlockStyle } from "./findBlockStyle";
 import { blockAnchorRect, type AnchorRect } from "./anchorRect";
 import { StyleControls } from "./StyleControls";
+import { SelectionBubbleMenu } from "./SelectionBubbleMenu";
+import { DocumentStyleControl } from "./DocumentStyleControl";
+import { applyStyleToAllBlocks } from "@/lib/adaptation/canonical/applyStyleToAll";
 
 type Props = {
   document: CanonicalDocument;
@@ -108,13 +111,22 @@ export function StylingSurface({ document, onChange }: Props) {
     [current],
   );
 
+  const applyToAll = useCallback(
+    (style: NodeStyle) => onChange(applyStyleToAllBlocks(document, style)),
+    [document, onChange],
+  );
+
   if (!editor) return null;
 
   return (
     <div className="space-y-3">
-      <p className="text-sm text-muted-foreground">
-        Clique em um bloco para selecioná-lo; use a paleta ao lado dele para ajustar a aparência.
-      </p>
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-sm text-muted-foreground">
+          Clique em um bloco para selecioná-lo; use a paleta ao lado dele para ajustar a aparência.
+          Selecione um trecho de texto para formatá-lo.
+        </p>
+        <DocumentStyleControl onApplyToAll={applyToAll} />
+      </div>
 
       <div className="rounded-md border border-input bg-background">
         <CanonicalToolbar editor={editor} />
@@ -122,6 +134,7 @@ export function StylingSurface({ document, onChange }: Props) {
         <div ref={containerRef} className="relative">
           <EditorModeProvider value="style">
             <EditorContent editor={editor} className="px-4 py-3 text-base" />
+            <SelectionBubbleMenu editor={editor} />
           </EditorModeProvider>
 
           <Popover open={open} onOpenChange={setOpen}>

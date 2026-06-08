@@ -17,6 +17,25 @@ vi.mock("@tiptap/react", () => ({
   EditorContent: ({ editor }: { editor: unknown }) => (
     <div data-testid="editor-content">{String(editor !== null)}</div>
   ),
+  BubbleMenu: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+}));
+
+// The selection bubble menu and document-style control are tested in isolation;
+// here we only assert the surface wires them with the editor / apply-to-all.
+let bubbleEditor: unknown;
+vi.mock("./SelectionBubbleMenu", () => ({
+  SelectionBubbleMenu: ({ editor }: { editor: unknown }) => {
+    bubbleEditor = editor;
+    return <div data-testid="bubble-menu" />;
+  },
+}));
+
+let capturedApplyToAll: ((style: unknown) => void) | undefined;
+vi.mock("./DocumentStyleControl", () => ({
+  DocumentStyleControl: ({ onApplyToAll }: { onApplyToAll: (s: unknown) => void }) => {
+    capturedApplyToAll = onApplyToAll;
+    return <button type="button" data-testid="doc-style" onClick={() => onApplyToAll({ align: "center" })} />;
+  },
 }));
 
 vi.mock("@radix-ui/react-popover", () => ({
@@ -31,6 +50,7 @@ vi.mock("@/components/ui/popover", () => ({
   ),
   // Always render content so we can assert on the controls regardless of open state.
   PopoverContent: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+  PopoverTrigger: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
 }));
 
 vi.mock("@/components/adaptation/canonical-editor/CanonicalToolbar", () => ({
@@ -109,6 +129,8 @@ beforeEach(() => {
   capturedSelectionHandler = undefined;
   capturedExtraExtensions = undefined;
   nodeDOMResult = null;
+  bubbleEditor = undefined;
+  capturedApplyToAll = undefined;
   fake = makeFakeEditor(baseDoc());
   useCanonicalEditor.mockReturnValue({ editor: fake });
 });
@@ -239,6 +261,27 @@ describe("StylingSurface", () => {
     // Toggling the handle flips the popover open state.
     fireEvent.click(handle);
     expect(screen.getByTestId("popover")).toHaveAttribute("data-open", "true");
+  });
+
+  it("mounts the selection bubble menu wired to the editor", () => {
+    render(<StylingSurface document={baseDoc()} onChange={vi.fn()} />);
+    expect(screen.getByTestId("bubble-menu")).toBeInTheDocument();
+    expect(bubbleEditor).toBe(fake);
+  });
+
+  it("applies a document-level style to all blocks via applyStyleToAllBlocks", () => {
+    const onChange = vi.fn();
+    const doc = baseDoc();
+    render(<StylingSurface document={doc} onChange={onChange} />);
+    expect(typeof capturedApplyToAll).toBe("function");
+    fireEvent.click(screen.getByTestId("doc-style")); // applies { align: "center" }
+    const next = onChange.mock.calls[0][0] as CanonicalDocument;
+    expect(validateDocument(next)).toBeTruthy();
+    expect(next.blocks[0].style).toEqual({ align: "center" });
+    expect(next.blocks[1].style).toEqual({ align: "center" });
+    const q = next.blocks[2] as Extract<CanonicalDocument["blocks"][number], { type: "question" }>;
+    expect(q.style).toEqual({ align: "center" });
+    expect(q.stem[0].style).toEqual({ align: "center" });
   });
 
   it("does not dispatch when the mark/color helper yields null (question has no inline text of its own)", () => {
