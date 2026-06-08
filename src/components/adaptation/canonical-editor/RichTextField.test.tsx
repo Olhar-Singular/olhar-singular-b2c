@@ -89,14 +89,15 @@ describe("RichTextField — component", () => {
     expect(screen.getByTestId("editor-content")).toBeInTheDocument();
   });
 
-  it("style mode: shows the format buttons (B/I/U/S/color) plus math", () => {
+  it("style mode: shows ONLY the format buttons (B/I/U/S/color), not math", () => {
     renderStyle(<RichTextField value={t("a")} onChange={vi.fn()} />);
     expect(screen.getByLabelText("Negrito")).toBeInTheDocument();
     expect(screen.getByLabelText("Itálico")).toBeInTheDocument();
     expect(screen.getByLabelText("Sublinhado")).toBeInTheDocument();
     expect(screen.getByLabelText("Tachado")).toBeInTheDocument();
     expect(screen.getByLabelText("Cor do texto")).toBeInTheDocument();
-    expect(screen.getByLabelText("Inserir fórmula inline")).toBeInTheDocument();
+    // Math is CONTENT — hidden in the Estilo step.
+    expect(screen.queryByLabelText("Inserir fórmula inline")).not.toBeInTheDocument();
   });
 
   it("style mode: format buttons dispatch the right editor commands", () => {
@@ -192,13 +193,17 @@ describe("RichTextField — component", () => {
     expect(attrs?.["data-placeholder"]).toBeDefined();
   });
 
-  it("style mode: disables format and math buttons when disabled", () => {
-    const promptSpy = vi.spyOn(window, "prompt");
+  it("style mode: disables the format buttons when disabled", () => {
     // The color dropdown items live in a Radix portal; assert the trigger
     // exists and disabled is respected (portal items covered by v8 ignore).
     renderStyle(<RichTextField value={t("a")} onChange={vi.fn()} disabled />);
     expect(screen.getByLabelText("Negrito")).toBeDisabled();
+    // Math button is content-only; absent in style mode.
+    expect(screen.queryByLabelText("Inserir fórmula inline")).not.toBeInTheDocument();
+  });
+
+  it("content mode: disables the math button when disabled", () => {
+    render(<RichTextField value={t("a")} onChange={vi.fn()} disabled />);
     expect(screen.getByLabelText("Inserir fórmula inline")).toBeDisabled();
-    promptSpy.mockRestore();
   });
 });

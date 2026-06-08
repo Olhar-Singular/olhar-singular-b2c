@@ -18,8 +18,9 @@
  *
  * The text-format buttons (bold / italic / underline / strike / color) render
  * ONLY in `"style"` mode (see `EditorMode`) — formatting lives in the Estilo
- * step. The inline-math button is ALWAYS shown (math is content). The value
- * contract is unchanged: the field always emits canonical `RichText`.
+ * step. The inline-math button renders ONLY in `"content"` mode (math is
+ * content). Net: content mode = math + text; style mode = format + text. The
+ * value contract is unchanged: the field always emits canonical `RichText`.
  */
 
 import { useRef } from "react";
@@ -215,18 +216,20 @@ export function RichTextField({
           </>
         )}
 
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon"
-          className="h-6 w-6"
-          onClick={insertMath}
-          disabled={disabled}
-          title="Inserir fórmula inline"
-          aria-label="Inserir fórmula inline"
-        >
-          <Sigma className="h-3.5 w-3.5" />
-        </Button>
+        {!showFormatting && (
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="h-6 w-6"
+            onClick={insertMath}
+            disabled={disabled}
+            title="Inserir fórmula inline"
+            aria-label="Inserir fórmula inline"
+          >
+            <Sigma className="h-3.5 w-3.5" />
+          </Button>
+        )}
       </div>
 
       <EditorContent editor={editor} />
