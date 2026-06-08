@@ -21,12 +21,16 @@ import type { ImageItem } from "@/components/editor/imageManagerUtils";
 import type { QuestionAnswer } from "@/lib/adaptation/canonical/schema";
 import { newId } from "@/lib/adaptation/canonical/ids";
 import { AnswerEditor } from "../answer-editors/AnswerEditor";
+import { useEditorMode } from "../EditorMode";
 import { questionOrdinal } from "./nodeViewUtils";
 import { canMoveUp, canMoveDown, type MoveDirection } from "./blockMove";
 import { buildMoveTransaction, buildStemImageTransaction } from "./blockTransactions";
 
 export function QuestionNodeView({ node, updateAttributes, editor, getPos, deleteNode }: NodeViewProps) {
   const [modalOpen, setModalOpen] = useState(false);
+  // Structure actions (move / add-image / delete) belong to the CONTENT step.
+  // In the Estilo step you're formatting, not restructuring — hide them.
+  const showStructureActions = useEditorMode() === "content";
   const answer = node.attrs.answer as QuestionAnswer;
   const disabled = !editor.isEditable;
   // Tiptap's `getPos()` can return `undefined` transiently (e.g. during the
@@ -65,56 +69,58 @@ export function QuestionNodeView({ node, updateAttributes, editor, getPos, delet
         <Badge variant="secondary" data-testid="question-ordinal">
           Questão {ordinal}
         </Badge>
-        <div className="ml-auto flex items-center gap-1" contentEditable={false}>
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            className="h-7 w-7"
-            disabled={upDisabled}
-            onClick={() => move("up")}
-            title="Mover questão para cima"
-            aria-label="Mover questão para cima"
-          >
-            <ArrowUp className="h-3.5 w-3.5" />
-          </Button>
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            className="h-7 w-7"
-            disabled={downDisabled}
-            onClick={() => move("down")}
-            title="Mover questão para baixo"
-            aria-label="Mover questão para baixo"
-          >
-            <ArrowDown className="h-3.5 w-3.5" />
-          </Button>
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            className="h-7 w-7"
-            disabled={disabled || pos === null}
-            onClick={() => setModalOpen(true)}
-            title="Adicionar imagem à questão"
-            aria-label="Adicionar imagem à questão"
-          >
-            <ImagePlus className="h-3.5 w-3.5" />
-          </Button>
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            className="h-7 w-7 text-destructive"
-            disabled={disabled}
-            onClick={() => deleteNode()}
-            title="Excluir questão"
-            aria-label="Excluir questão"
-          >
-            <Trash2 className="h-3.5 w-3.5" />
-          </Button>
-        </div>
+        {showStructureActions && (
+          <div className="ml-auto flex items-center gap-1" contentEditable={false}>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="h-7 w-7"
+              disabled={upDisabled}
+              onClick={() => move("up")}
+              title="Mover questão para cima"
+              aria-label="Mover questão para cima"
+            >
+              <ArrowUp className="h-3.5 w-3.5" />
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="h-7 w-7"
+              disabled={downDisabled}
+              onClick={() => move("down")}
+              title="Mover questão para baixo"
+              aria-label="Mover questão para baixo"
+            >
+              <ArrowDown className="h-3.5 w-3.5" />
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="h-7 w-7"
+              disabled={disabled || pos === null}
+              onClick={() => setModalOpen(true)}
+              title="Adicionar imagem à questão"
+              aria-label="Adicionar imagem à questão"
+            >
+              <ImagePlus className="h-3.5 w-3.5" />
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="h-7 w-7 text-destructive"
+              disabled={disabled}
+              onClick={() => deleteNode()}
+              title="Excluir questão"
+              aria-label="Excluir questão"
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+            </Button>
+          </div>
+        )}
       </div>
 
       <div className="mb-2 rounded border border-dashed border-border p-2">

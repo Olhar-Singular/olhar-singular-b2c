@@ -4,6 +4,7 @@ import type { NodeViewProps } from "@tiptap/react";
 import type { QuestionAnswer } from "@/lib/adaptation/canonical/schema";
 import type { ImageItem } from "@/components/editor/imageManagerUtils";
 import { QuestionNodeView } from "./QuestionNodeView";
+import { EditorModeProvider } from "../EditorMode";
 
 vi.mock("@tiptap/react", () => ({
   NodeViewWrapper: ({ children, ...rest }: { children: React.ReactNode }) => <div {...rest}>{children}</div>,
@@ -172,6 +173,20 @@ describe("QuestionNodeView", () => {
     expect(screen.getByLabelText("Mover questão para baixo")).toBeInTheDocument();
     expect(screen.getByLabelText("Adicionar imagem à questão")).toBeInTheDocument();
     expect(screen.getByLabelText("Excluir questão")).toBeInTheDocument();
+  });
+
+  it("hides the structure actions in style mode but keeps the ordinal label", () => {
+    const { props } = makeProps(mc);
+    render(
+      <EditorModeProvider value="style">
+        <QuestionNodeView {...props} />
+      </EditorModeProvider>,
+    );
+    expect(screen.getByTestId("question-ordinal")).toHaveTextContent("Questão 1");
+    expect(screen.queryByLabelText("Mover questão para cima")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Mover questão para baixo")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Adicionar imagem à questão")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Excluir questão")).not.toBeInTheDocument();
   });
 
   it("deletes the question via deleteNode", () => {
