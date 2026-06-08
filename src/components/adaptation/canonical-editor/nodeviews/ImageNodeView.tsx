@@ -7,6 +7,11 @@
  *   survive); alt is a plain accessibility text input.
  * - "Trocar imagem" opens the reused `ImageManagerModal`; the first picked image
  *   updates `src`.
+ *
+ * The swap ("Trocar imagem") and inline alignment buttons MUTATE content/layout,
+ * so they render ONLY in CONTENT mode (see `EditorMode`). In the Estilo step the
+ * block-style popover already offers alignment; the image stays visible and the
+ * caption + alt remain editable.
  */
 
 import { useState } from "react";
@@ -19,6 +24,7 @@ import ImageManagerModal from "@/components/editor/ImageManagerModal";
 import type { ImageItem } from "@/components/editor/imageManagerUtils";
 import type { RichText } from "@/lib/adaptation/canonical/schema";
 import { RichTextField } from "../RichTextField";
+import { useEditorMode } from "../EditorMode";
 
 const ALIGNMENTS = [
   { value: "left", Icon: AlignLeft, label: "Alinhar à esquerda" },
@@ -28,6 +34,9 @@ const ALIGNMENTS = [
 
 export function ImageNodeView({ node, updateAttributes, editor }: NodeViewProps) {
   const [modalOpen, setModalOpen] = useState(false);
+  // Swap + inline alignment MUTATE content/layout — content-step only. In the
+  // Estilo step alignment comes from the block-style popover.
+  const showStructureActions = useEditorMode() === "content";
   const { src, alt, width, alignment, caption } = node.attrs as {
     src: string;
     alt: string;
@@ -50,33 +59,35 @@ export function ImageNodeView({ node, updateAttributes, editor }: NodeViewProps)
           initialWidth={width ?? undefined}
           onResize={(w) => updateAttributes({ width: w })}
         />
-        <div className="flex flex-wrap items-center gap-1">
-          {ALIGNMENTS.map(({ value, Icon, label }) => (
+        {showStructureActions && (
+          <div className="flex flex-wrap items-center gap-1">
+            {ALIGNMENTS.map(({ value, Icon, label }) => (
+              <Button
+                key={value}
+                type="button"
+                variant={alignment === value ? "default" : "ghost"}
+                size="icon"
+                className="h-7 w-7"
+                disabled={disabled}
+                onClick={() => updateAttributes({ alignment: value })}
+                title={label}
+                aria-label={label}
+              >
+                <Icon className="h-3.5 w-3.5" />
+              </Button>
+            ))}
             <Button
-              key={value}
               type="button"
-              variant={alignment === value ? "default" : "ghost"}
-              size="icon"
-              className="h-7 w-7"
+              variant="outline"
+              size="sm"
+              className="gap-1"
               disabled={disabled}
-              onClick={() => updateAttributes({ alignment: value })}
-              title={label}
-              aria-label={label}
+              onClick={() => setModalOpen(true)}
             >
-              <Icon className="h-3.5 w-3.5" />
+              <ImageIcon className="h-3.5 w-3.5" /> Trocar imagem
             </Button>
-          ))}
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            className="gap-1"
-            disabled={disabled}
-            onClick={() => setModalOpen(true)}
-          >
-            <ImageIcon className="h-3.5 w-3.5" /> Trocar imagem
-          </Button>
-        </div>
+          </div>
+        )}
         <RichTextField
           value={caption ?? []}
           placeholder="Legenda"
