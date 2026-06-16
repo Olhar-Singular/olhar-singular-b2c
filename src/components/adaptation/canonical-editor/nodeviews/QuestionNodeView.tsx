@@ -1,41 +1,54 @@
 /**
- * QuestionNodeView — renders a question block in the editor.
+ * QuestionNodeView — orchestrates a question block's two states (plano §6.3):
  *
- * - The header shows a READ-ONLY "Questão N" label, where N is the question's
- *   automatic ordinal (its 1-based position among all question nodes in the
- *   document). Questions have no editable number/points/difficulty.
- * - Header actions (right side): move up/down among top-level blocks, add an
- *   image to the stem, and delete the question.
- * - the stem is editable rich content via `NodeViewContent`.
- * - the discriminated `answer` is edited through `AnswerEditor`, whose changes
- *   are written back via `updateAttributes({ answer })`.
+ * - PREVIEW (at rest): the folha as printed — positional ordinal, editable stem
+ *   (NodeViewContent), light inline instruction, and the print-faithful answer
+ *   with NO gabarito. A hover rail offers ✎ editar + move / image / delete.
+ * - CARD (expanded): the structural editor — stem, named instruction field, the
+ *   full AnswerEditor (answer key visible), Concluir.
+ *
+ * Expansion is coordinated outside the canonical document (round-trip stays
+ * intact, §9.3): a per-editor store keeps a single card open; Esc/Concluir close.
+ * There is no editor mode — structure always lives in the expanded card.
  */
 
-import { useState } from "react";
-import { ArrowUp, ArrowDown, ImagePlus, Trash2 } from "lucide-react";
+import { useEffect, useState } from "react";
+import { ArrowUp, ArrowDown, ImagePlus, Pencil, Trash2 } from "lucide-react";
 import { NodeViewWrapper, NodeViewContent, type NodeViewProps } from "@tiptap/react";
 import { Button } from "@/components/ui/button";
 import ImageManagerModal from "@/components/editor/ImageManagerModal";
 import type { ImageItem } from "@/components/editor/imageManagerUtils";
-import type { QuestionAnswer } from "@/lib/adaptation/canonical/schema";
+import type { QuestionAnswer, RichText } from "@/lib/adaptation/canonical/schema";
 import { newId } from "@/lib/adaptation/canonical/ids";
-import { AnswerEditor } from "../answer-editors/AnswerEditor";
-import { useEditorMode } from "../EditorMode";
 import { questionOrdinal } from "./nodeViewUtils";
 import { canMoveUp, canMoveDown, type MoveDirection } from "./blockMove";
 import { buildMoveTransaction, buildStemImageTransaction } from "./blockTransactions";
+import { useQuestionCard } from "./questionCardState";
+import { QuestionPreview } from "./QuestionPreview";
+import { QuestionCard } from "./QuestionCard";
 
 export function QuestionNodeView({ node, updateAttributes, editor, getPos, deleteNode }: NodeViewProps) {
   const [modalOpen, setModalOpen] = useState(false);
-  // Structure actions (move / add-image / delete) belong to the CONTENT step.
-  // In the Estilo step you're formatting, not restructuring — hide them.
-  const showStructureActions = useEditorMode() === "content";
   const answer = node.attrs.answer as QuestionAnswer;
+  const instruction = node.attrs.instruction as RichText | null;
+  const id = node.attrs.id as string;
   const disabled = !editor.isEditable;
-  // Tiptap's `getPos()` can return `undefined` transiently (e.g. during the
-  // initial mount / edit-mode rehydration). Guard it: a non-number position
-  // must never reach `questionOrdinal`/`canMove*`/the transactions, which
-  // resolve it against the doc and would throw "Position undefined out of range".
+
+  const { expanded, expand, collapse } = useQuestionCard(editor, id);
+
+  // Esc closes the open card (coordination is React/editor state, not the doc).
+  useEffect(() => {
+    if (!expanded) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") collapse();
+    };
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [expanded, collapse]);
+
+  // Tiptap's `getPos()` can return `undefined` transiently (initial mount /
+  // edit-mode rehydration). Guard it: a non-number position must never reach
+  // questionOrdinal/canMove*/the transactions, which would throw out of range.
   const rawPos = getPos();
   const pos = typeof rawPos === "number" ? rawPos : null;
   const ordinal = pos === null ? undefined : questionOrdinal(editor.state.doc, pos);
@@ -54,89 +67,70 @@ export function QuestionNodeView({ node, updateAttributes, editor, getPos, delet
     if (!first) return;
     /* v8 ignore next -- defensive type-narrow; the add-image button is disabled when pos is null */
     if (pos === null) return;
-    const tr = buildStemImageTransaction(editor.state, pos, {
-      id: newId(),
-      src: first.src,
-      alt: "",
-    });
+    const tr = buildStemImageTransaction(editor.state, pos, { id: newId(), src: first.src, alt: "" });
     editor.view.dispatch(tr);
   };
 
+  const onAnswerChange = (next: QuestionAnswer) => updateAttributes({ answer: next });
+  const onInstructionChange = (next: RichText | null) => updateAttributes({ instruction: next });
+
+  const rail = (
+    <div
+      className="absolute right-0 top-0 z-10 hidden items-center gap-1 rounded-md border border-surface-line-2 bg-surface-paper p-0.5 shadow-sm group-hover:flex group-focus-within:flex"
+      contentEditable={false}
+    >
+      <Button
+        type="button"
+        variant="ghost"
+        size="icon"
+        className="h-7 w-7 text-surface-accent"
+        disabled={disabled}
+        onClick={expand}
+        title="Editar questão"
+        aria-label="Editar questão"
+      >
+        <Pencil className="h-3.5 w-3.5" />
+      </Button>
+      <Button type="button" variant="ghost" size="icon" className="h-7 w-7" disabled={upDisabled} onClick={() => move("up")} title="Mover questão para cima" aria-label="Mover questão para cima">
+        <ArrowUp className="h-3.5 w-3.5" />
+      </Button>
+      <Button type="button" variant="ghost" size="icon" className="h-7 w-7" disabled={downDisabled} onClick={() => move("down")} title="Mover questão para baixo" aria-label="Mover questão para baixo">
+        <ArrowDown className="h-3.5 w-3.5" />
+      </Button>
+      <Button type="button" variant="ghost" size="icon" className="h-7 w-7" disabled={disabled || pos === null} onClick={() => setModalOpen(true)} title="Adicionar imagem à questão" aria-label="Adicionar imagem à questão">
+        <ImagePlus className="h-3.5 w-3.5" />
+      </Button>
+      <Button type="button" variant="ghost" size="icon" className="h-7 w-7 text-destructive" disabled={disabled} onClick={() => deleteNode()} title="Excluir questão" aria-label="Excluir questão">
+        <Trash2 className="h-3.5 w-3.5" />
+      </Button>
+    </div>
+  );
+
   return (
-    <NodeViewWrapper className="my-4 space-y-3 rounded-xl border border-border/60 p-4" data-testid="question-node">
-      <div className="flex flex-wrap items-center gap-2">
-        <span
-          className="text-xs font-medium uppercase tracking-wide text-muted-foreground"
-          data-testid="question-ordinal"
-        >
-          Questão {ordinal}
-        </span>
-        {showStructureActions && (
-          <div className="ml-auto flex items-center gap-1" contentEditable={false}>
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              className="h-7 w-7"
-              disabled={upDisabled}
-              onClick={() => move("up")}
-              title="Mover questão para cima"
-              aria-label="Mover questão para cima"
-            >
-              <ArrowUp className="h-3.5 w-3.5" />
-            </Button>
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              className="h-7 w-7"
-              disabled={downDisabled}
-              onClick={() => move("down")}
-              title="Mover questão para baixo"
-              aria-label="Mover questão para baixo"
-            >
-              <ArrowDown className="h-3.5 w-3.5" />
-            </Button>
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              className="h-7 w-7"
-              disabled={disabled || pos === null}
-              onClick={() => setModalOpen(true)}
-              title="Adicionar imagem à questão"
-              aria-label="Adicionar imagem à questão"
-            >
-              <ImagePlus className="h-3.5 w-3.5" />
-            </Button>
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              className="h-7 w-7 text-destructive"
-              disabled={disabled}
-              onClick={() => deleteNode()}
-              title="Excluir questão"
-              aria-label="Excluir questão"
-            >
-              <Trash2 className="h-3.5 w-3.5" />
-            </Button>
-          </div>
-        )}
-      </div>
-
-      <div className="px-0.5">
-        <NodeViewContent />
-      </div>
-
-      <div className="space-y-2 border-t border-border/60 pt-3" contentEditable={false}>
-        <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Resposta</p>
-        <AnswerEditor
+    <NodeViewWrapper className="group relative my-3" data-testid="question-node">
+      {expanded ? (
+        <QuestionCard
+          num={ordinal}
           answer={answer}
+          instruction={instruction}
           disabled={disabled}
-          onChange={(next) => updateAttributes({ answer: next })}
+          onAnswerChange={onAnswerChange}
+          onInstructionChange={onInstructionChange}
+          onDone={collapse}
+          stem={<NodeViewContent />}
         />
-      </div>
+      ) : (
+        <QuestionPreview
+          num={ordinal}
+          answer={answer}
+          instruction={instruction}
+          disabled={disabled}
+          onAnswerChange={onAnswerChange}
+          onInstructionChange={onInstructionChange}
+          stem={<NodeViewContent />}
+          rail={rail}
+        />
+      )}
 
       <ImageManagerModal open={modalOpen} onClose={() => setModalOpen(false)} onConfirm={handlePick} />
     </NodeViewWrapper>

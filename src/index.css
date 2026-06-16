@@ -3,23 +3,70 @@
 /* OpenDyslexic - Accessibility font for dyslexia */
 @font-face {
   font-family: 'OpenDyslexic';
-  src: url('/fonts/OpenDyslexic-Regular.otf') format('opentype');
+  src: url('/fonts/OpenDyslexic-Regular.ttf') format('opentype');
   font-weight: normal;
   font-style: normal;
   font-display: swap;
 }
 @font-face {
   font-family: 'OpenDyslexic';
-  src: url('/fonts/OpenDyslexic-Bold.otf') format('opentype');
+  src: url('/fonts/OpenDyslexic-Bold.ttf') format('opentype');
   font-weight: bold;
   font-style: normal;
   font-display: swap;
 }
 @font-face {
   font-family: 'OpenDyslexic';
-  src: url('/fonts/OpenDyslexic-Italic.otf') format('opentype');
+  src: url('/fonts/OpenDyslexic-Italic.ttf') format('opentype');
   font-weight: normal;
   font-style: italic;
+  font-display: swap;
+}
+
+/* Atkinson Hyperlegible - Accessibility font (low vision). Self-hosted so the
+   same files feed both the screen (@font-face) and the PDF (Font.register). */
+@font-face {
+  font-family: 'Atkinson Hyperlegible';
+  src: url('/fonts/AtkinsonHyperlegible-Regular.ttf') format('truetype');
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Atkinson Hyperlegible';
+  src: url('/fonts/AtkinsonHyperlegible-Bold.ttf') format('truetype');
+  font-weight: bold;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Atkinson Hyperlegible';
+  src: url('/fonts/AtkinsonHyperlegible-Italic.ttf') format('truetype');
+  font-weight: normal;
+  font-style: italic;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Atkinson Hyperlegible';
+  src: url('/fonts/AtkinsonHyperlegible-BoldItalic.ttf') format('truetype');
+  font-weight: bold;
+  font-style: italic;
+  font-display: swap;
+}
+
+/* Lexend - Accessibility font (reading proficiency). */
+@font-face {
+  font-family: 'Lexend';
+  src: url('/fonts/Lexend-Regular.ttf') format('truetype');
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Lexend';
+  src: url('/fonts/Lexend-Bold.ttf') format('truetype');
+  font-weight: bold;
+  font-style: normal;
   font-display: swap;
 }
 
@@ -73,6 +120,27 @@
     --card-shadow: 0 1px 3px 0 hsl(195 35% 12% / 0.06), 0 1px 2px -1px hsl(195 35% 12% / 0.06);
     --card-shadow-hover: 0 10px 25px -5px hsl(195 35% 12% / 0.08), 0 8px 10px -6px hsl(195 35% 12% / 0.06);
     --glow-accent: 0 4px 20px hsl(40 55% 50% / 0.25);
+
+    /* Adaptar "Revisar" surface tokens (paleta da folha).
+       Namespaced --sf-* to avoid colliding with the shadcn --accent etc.
+       Surface is paper-metaphor LIGHT-ONLY (the folha mirrors the always-white
+       PDF) — intentionally no .dark overrides. */
+    --sf-mesa: 38 19% 88%;
+    --sf-mesa-2: 39 18% 84%;
+    --sf-paper: 0 0% 100%;
+    --sf-ink: 40 10% 12%;
+    --sf-ink-soft: 37 6% 39%;
+    --sf-ink-faint: 38 9% 64%;
+    --sf-line: 38 22% 90%;
+    --sf-line-2: 39 18% 85%;
+    --sf-accent: 216 57% 40%;
+    --sf-accent-soft: 216 56% 95%;
+    --sf-accent-ink: 216 60% 33%;
+    --sf-correct: 147 46% 34%;
+    --sf-chrome: 45 33% 98%;
+    --sf-chrome-line: 37 20% 87%;
+    --sf-paper-shadow: 0 1px 2px rgba(40, 35, 25, 0.04), 0 10px 30px rgba(40, 35, 25, 0.08);
+    --sf-mesa-gradient: radial-gradient(120% 60% at 50% 0, hsl(var(--sf-mesa)) 40%, hsl(var(--sf-mesa-2)));
   }
 
   .dark {
@@ -203,22 +271,24 @@
  * The `>` combinator scopes this to DIRECT children of .ProseMirror, so nested
  * paragraphs inside a question stem are NOT affected.
  */
-.tiptap > h1,
-.tiptap > h2,
-.tiptap > h3,
-.tiptap > p {
+.tiptap:not(.rich-text-field) > h1,
+.tiptap:not(.rich-text-field) > h2,
+.tiptap:not(.rich-text-field) > h3,
+.tiptap:not(.rich-text-field) > p {
   position: relative;
-  margin: 1rem 0;
+  /* Document-level block spacing (Aparência, plano §6.5). Default 1rem = 16px,
+     so a document without `pageStyle` renders exactly as before. */
+  margin: var(--doc-block-spacing, 1rem) 0;
   padding: 1.75rem 1rem 0.5rem;
   border-left: 2px solid hsl(var(--muted-foreground) / 0.25);
   border-radius: 0.5rem;
 }
 
 /* Discrete type label, pure CSS — no JS, so the coverage gate is unaffected. */
-.tiptap > h1::before,
-.tiptap > h2::before,
-.tiptap > h3::before,
-.tiptap > p::before {
+.tiptap:not(.rich-text-field) > h1::before,
+.tiptap:not(.rich-text-field) > h2::before,
+.tiptap:not(.rich-text-field) > h3::before,
+.tiptap:not(.rich-text-field) > p::before {
   position: absolute;
   top: 0.5rem;
   left: 1rem;
@@ -230,29 +300,50 @@
   pointer-events: none;
 }
 
-.tiptap > h1::before {
+.tiptap:not(.rich-text-field) > h1::before {
   content: "Título";
 }
 
-.tiptap > h2::before,
-.tiptap > h3::before {
+.tiptap:not(.rich-text-field) > h2::before,
+.tiptap:not(.rich-text-field) > h3::before {
   content: "Seção";
 }
 
-.tiptap > p::before {
+.tiptap:not(.rich-text-field) > p::before {
   content: "Instrução";
+}
+
+/* Tipografia distinta por tipo de seção (Título / Seção / Instrução). */
+.tiptap:not(.rich-text-field) > h1 {
+  font-size: 1.5rem;
+  font-weight: 700;
+  text-align: center;
+  border-left-color: transparent;
+}
+.tiptap:not(.rich-text-field) > h2,
+.tiptap:not(.rich-text-field) > h3 {
+  font-size: 1.2rem;
+  font-weight: 700;
+  color: hsl(var(--primary));
+  border-left-width: 3px;
+  border-left-color: hsl(var(--primary));
+  background-color: hsl(var(--primary) / 0.06);
+}
+.tiptap:not(.rich-text-field) > p {
+  font-style: italic;
+  color: hsl(var(--muted-foreground));
 }
 
 /* The empty-editor placeholder paragraph keeps no container/label — the
  * higher-specificity placeholder rule above already restores its ::before. */
-.tiptap > p.is-editor-empty:first-child {
+.tiptap:not(.rich-text-field) > p.is-editor-empty:first-child {
   padding: 0;
   border-left: 0;
 }
 
 /* Keep top-level question cards spaced consistently with the new containers
  * (margin only — the card already has its own border; do NOT double-border). */
-.tiptap > [data-type="question"] {
+.tiptap:not(.rich-text-field) > [data-type="question"] {
   margin: 0.75rem 0;
 }
 
@@ -269,7 +360,10 @@
   transition: background-color 0.15s ease, box-shadow 0.15s ease;
 }
 
-.adaptar-current-block::before {
+/* Accent bar uses ::after so it never collides with the type-label ::before
+ * (which carries the "Título"/"Seção"/"Instrução" text). Sharing ::before made
+ * the label inherit the bar's width:2px and wrap one letter per line (vertical). */
+.adaptar-current-block::after {
   content: "";
   position: absolute;
   left: 0;

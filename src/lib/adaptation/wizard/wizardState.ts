@@ -9,7 +9,7 @@
  * new object (or the same reference when there is nothing to change).
  */
 
-import type { AdaptationResult, CanonicalDocument } from "@/lib/adaptation/canonical/schema";
+import type { AdaptationResult, CanonicalDocument, PageStyle } from "@/lib/adaptation/canonical/schema";
 
 export type BarrierItem = {
   dimension: string;
@@ -66,4 +66,13 @@ export function clearResult(data: WizardData): WizardData {
 export function setDocument(data: WizardData, document: CanonicalDocument): WizardData {
   if (!data.result) return data;
   return { ...data, result: { ...data.result, document } };
+}
+
+/**
+ * Set the document-wide presentation style (plano §7.1), preserving the document
+ * and the surrounding metadata. No-op when there is no result yet.
+ */
+export function setPageStyle(data: WizardData, pageStyle: PageStyle): WizardData {
+  if (!data.result) return data;
+  return { ...data, result: { ...data.result, pageStyle } };
 }

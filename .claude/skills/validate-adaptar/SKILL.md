@@ -123,7 +123,9 @@ list_console_messages({ types:["error"] })
 Foi assim que o crash do editor (`node.type.spec.toDOM is not a function`) foi diagnosticado.
 
 ### Sequência do happy-path do Adaptar
-1 Tipo (clicar "Prova") → 2 Atividade (preencher textarea, "Próximo") → 3 Barreiras (selecionar perfil no `<select>`, "Editar", marcar 1 barreira, "Próximo") → 4 **Gerar** (auto-dispara a IA; aguardar) → 5 **Conteúdo** (`.ProseMirror` deve renderizar; **checar console**) → 6 Estilo → 7 Exportar (Salvar). Indicador "Salvo" = autosave gravou o draft.
+1 Tipo (clicar "Prova") → 2 Atividade (preencher textarea, "Próximo") → 3 Barreiras (selecionar perfil no `<select>`, "Editar", marcar 1 barreira, "Próximo") → 4 **Gerar** (auto-dispara a IA; aguardar) → 5 **Revisar** (superfície única: `.ProseMirror` deve renderizar na folha; edição inline + card da questão + Aparência + "Sobre esta adaptação"; **checar console**) → 6 Exportar (Salvar). Indicador "Salvo" = autosave gravou o draft.
+
+> O wizard tem **um só passo de edição** ("Revisar") — os antigos Conteúdo + Estilo foram fundidos. Não existe mais passo "Estilo".
 
 ## Verificar no banco (persistência real)
 

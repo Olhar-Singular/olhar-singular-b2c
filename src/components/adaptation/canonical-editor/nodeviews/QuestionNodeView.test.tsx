@@ -1,10 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 import type { NodeViewProps } from "@tiptap/react";
-import type { QuestionAnswer } from "@/lib/adaptation/canonical/schema";
+import type { QuestionAnswer, RichText } from "@/lib/adaptation/canonical/schema";
 import type { ImageItem } from "@/components/editor/imageManagerUtils";
 import { QuestionNodeView } from "./QuestionNodeView";
-import { EditorModeProvider } from "../EditorMode";
 
 vi.mock("@tiptap/react", () => ({
   NodeViewWrapper: ({ children, ...rest }: { children: React.ReactNode }) => <div {...rest}>{children}</div>,
@@ -38,9 +37,8 @@ vi.mock("@/lib/adaptation/canonical/ids", async (importOriginal) => {
   return { ...actual, newId: () => "new-id" };
 });
 
-// The nested AnswerEditor now renders RichTextField (a real Tiptap editor) per
-// content field; stub it so the QuestionNodeView tests stay focused on the
-// question shell, not the inline editor internals.
+// Stub RichTextField (used by preview + card fields) so we can drive inline
+// edits without the real ProseMirror editor.
 vi.mock("../RichTextField", () => ({
   RichTextField: ({
     onChange,
@@ -48,7 +46,7 @@ vi.mock("../RichTextField", () => ({
     placeholder,
     disabled,
   }: {
-    onChange: (rt: { type: "text"; text: string }[]) => void;
+    onChange: (rt: RichText) => void;
     ariaLabel?: string;
     placeholder?: string;
     disabled?: boolean;
@@ -57,16 +55,11 @@ vi.mock("../RichTextField", () => ({
       aria-label={ariaLabel}
       placeholder={placeholder}
       disabled={disabled}
-      onChange={(e) => onChange([{ type: "text", text: e.target.value }])}
+      onChange={(e) => onChange(e.target.value ? [{ type: "text", text: e.target.value }] : [])}
     />
   ),
 }));
 
-/**
- * Build NodeViewProps with a fake editor doc that yields `priorQuestions`
- * question nodes positioned before this node (at pos 100), so the ordinal
- * label resolves to `priorQuestions + 1`.
- */
 function makeProps(
   answer: QuestionAnswer,
   {
@@ -75,12 +68,18 @@ function makeProps(
     upable = true,
     downable = true,
     getPosUndefined = false,
+    instruction = null,
+    id = "q-1",
+    editor: sharedEditor,
   }: {
     editable?: boolean;
     priorQuestions?: number;
     upable?: boolean;
     downable?: boolean;
     getPosUndefined?: boolean;
+    instruction?: RichText | null;
+    id?: string;
+    editor?: NodeViewProps["editor"];
   } = {}
 ) {
   const updateAttributes = vi.fn();
@@ -94,14 +93,15 @@ function makeProps(
   };
   canMoveUp.mockReturnValue(upable);
   canMoveDown.mockReturnValue(downable);
+  const editor = sharedEditor ?? ({ isEditable: editable, state: { doc }, view: { dispatch } } as unknown as NodeViewProps["editor"]);
   const props = {
-    node: { attrs: { answer } },
+    node: { attrs: { answer, instruction, id } },
     updateAttributes,
     deleteNode,
     getPos: () => (getPosUndefined ? undefined : pos),
-    editor: { isEditable: editable, state: { doc }, view: { dispatch } },
+    editor,
   } as unknown as NodeViewProps;
-  return { props, updateAttributes, deleteNode, dispatch };
+  return { props, updateAttributes, deleteNode, dispatch, editor };
 }
 
 const mc: QuestionAnswer = {
@@ -109,98 +109,114 @@ const mc: QuestionAnswer = {
   alternatives: [{ id: "11111111-1111-4111-8111-111111111111", content: [{ type: "text", text: "a" }], correct: true }],
 };
 
+const rt = (text: string): RichText => [{ type: "text", text }];
+
+// One seed per answer.kind — the 4 in the data doc (mc/open/fillBlank/matching)
+// plus the 4 with no DB seed (trueFalse/checkbox/ordering/table), per Fase 2.
+const SEEDS: QuestionAnswer[] = [
+  { kind: "open", answerLines: 3 },
+  mc,
+  {
+    kind: "trueFalse",
+    items: [
+      { id: "33333333-3333-4333-8333-333333333333", content: rt("Afirmação V"), value: true },
+      { id: "34333333-3333-4333-8333-333333333333", content: rt("Afirmação F"), value: false },
+    ],
+  },
+  {
+    kind: "checkbox",
+    items: [
+      { id: "55555555-5555-4555-8555-555555555555", content: rt("Opção 1"), checked: true },
+      { id: "56555555-5555-4555-8555-555555555555", content: rt("Opção 2"), checked: false },
+    ],
+  },
+  {
+    kind: "matching",
+    pairs: [{ id: "77777777-7777-4777-8777-777777777777", left: rt("A"), right: rt("1") }],
+  },
+  {
+    kind: "ordering",
+    items: [
+      { id: "99999999-9999-4999-8999-999999999999", content: rt("Primeiro"), position: 0 },
+      { id: "9a999999-9999-4999-8999-999999999999", content: rt("Segundo"), position: 1 },
+    ],
+  },
+  { kind: "fillBlank", gaps: [{ id: "cccccccc-cccc-4ccc-8ccc-cccccccccccc", answer: "resposta" }] },
+  {
+    kind: "table",
+    rows: [
+      [rt("Cabeçalho A"), rt("Cabeçalho B")],
+      [rt("a"), rt("b")],
+    ],
+  },
+];
+
 beforeEach(() => {
   vi.clearAllMocks();
   modalOnConfirm = undefined;
 });
 
-describe("QuestionNodeView", () => {
-  it("renders the stem NodeViewContent and the answer editor", () => {
+describe("QuestionNodeView — preview at rest", () => {
+  it("renders the positional ordinal, the stem, and the print-faithful answer (no card)", () => {
     const { props } = makeProps(mc);
     render(<QuestionNodeView {...props} />);
+    expect(screen.getByTestId("question-ordinal")).toHaveTextContent("1.");
     expect(screen.getByTestId("node-view-content")).toBeInTheDocument();
-    expect(screen.getByTestId("answer-multipleChoice")).toBeInTheDocument();
+    expect(screen.getByTestId("answer-preview-multipleChoice")).toBeInTheDocument();
+    expect(screen.queryByTestId("question-card")).not.toBeInTheDocument();
   });
 
-  it("renders a read-only ordinal label from document order", () => {
-    const { props } = makeProps(mc, { priorQuestions: 0 });
-    render(<QuestionNodeView {...props} />);
-    expect(screen.getByTestId("question-ordinal")).toHaveTextContent("Questão 1");
-  });
-
-  it("reflects later positions in the ordinal label", () => {
+  it("reflects later positions in the ordinal", () => {
     const { props } = makeProps(mc, { priorQuestions: 2 });
     render(<QuestionNodeView {...props} />);
-    expect(screen.getByTestId("question-ordinal")).toHaveTextContent("Questão 3");
+    expect(screen.getByTestId("question-ordinal")).toHaveTextContent("3.");
   });
 
-  it("survives a transient undefined getPos() without crashing (no ordinal, actions guarded)", () => {
-    // Tiptap can return undefined from getPos() during initial mount; the view
-    // must not call questionOrdinal/canMove*/transactions with an invalid pos.
-    const { props, dispatch } = makeProps(mc, { getPosUndefined: true });
-    expect(() => render(<QuestionNodeView {...props} />)).not.toThrow();
-    // ordinal label has no number; move + add-image are disabled.
-    expect(screen.getByTestId("question-ordinal")).toHaveTextContent("Questão");
-    expect(screen.getByLabelText("Mover questão para cima")).toBeDisabled();
-    expect(screen.getByLabelText("Mover questão para baixo")).toBeDisabled();
-    expect(screen.getByLabelText("Adicionar imagem à questão")).toBeDisabled();
-    // delete still works (deleteNode doesn't need a position)
-    fireEvent.click(screen.getByLabelText("Excluir questão"));
-    expect(props.deleteNode).toHaveBeenCalledTimes(1);
-    // move handler is a no-op (button disabled, but guard also returns early)
-    expect(dispatch).not.toHaveBeenCalled();
-  });
-
-  it("writes back answer edits via updateAttributes({ answer })", () => {
-    const { props, updateAttributes } = makeProps(mc);
-    render(<QuestionNodeView {...props} />);
-    fireEvent.change(screen.getByPlaceholderText("Alternativa"), { target: { value: "new" } });
-    expect(updateAttributes).toHaveBeenCalledWith({
-      answer: expect.objectContaining({ kind: "multipleChoice" }),
-    });
-  });
-
-  it("passes disabled to the answer editor when not editable", () => {
-    const { props } = makeProps(mc, { editable: false });
-    render(<QuestionNodeView {...props} />);
-    expect(screen.getByPlaceholderText("Alternativa")).toBeDisabled();
-  });
-
-  it("renders the action buttons with pt-BR aria-labels", () => {
+  it("hides the gabarito in the preview (no correct-answer control)", () => {
     const { props } = makeProps(mc);
     render(<QuestionNodeView {...props} />);
+    expect(screen.queryByLabelText("Marcar como correta")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("answer-multipleChoice")).not.toBeInTheDocument();
+  });
+
+  it("does not render the question node with a card border at rest (flat)", () => {
+    const { props } = makeProps(mc);
+    const { getByTestId } = render(<QuestionNodeView {...props} />);
+    expect(getByTestId("question-node").className).not.toMatch(/border|rounded-xl/);
+  });
+
+  it("writes inline alternative edits from the preview", () => {
+    const { props, updateAttributes } = makeProps(mc);
+    render(<QuestionNodeView {...props} />);
+    fireEvent.change(screen.getByLabelText("Alternativa"), { target: { value: "new" } });
+    expect(updateAttributes).toHaveBeenCalledWith({ answer: expect.objectContaining({ kind: "multipleChoice" }) });
+  });
+
+  it("shows an editable inline instruction when present, and writes edits back", () => {
+    const { props, updateAttributes } = makeProps(mc, { instruction: [{ type: "text", text: "Marque." }] });
+    render(<QuestionNodeView {...props} />);
+    const field = screen.getByLabelText("Instrução da questão");
+    expect(field).toBeInTheDocument();
+    fireEvent.change(field, { target: { value: "Nova" } });
+    expect(updateAttributes).toHaveBeenCalledWith({ instruction: [{ type: "text", text: "Nova" }] });
+  });
+
+  it("does not render an inline instruction when absent", () => {
+    const { props } = makeProps(mc);
+    render(<QuestionNodeView {...props} />);
+    expect(screen.queryByLabelText("Instrução da questão")).not.toBeInTheDocument();
+  });
+});
+
+describe("QuestionNodeView — rail actions", () => {
+  it("renders the rail with pt-BR aria-labels (✎ editar first)", () => {
+    const { props } = makeProps(mc);
+    render(<QuestionNodeView {...props} />);
+    expect(screen.getByLabelText("Editar questão")).toBeInTheDocument();
     expect(screen.getByLabelText("Mover questão para cima")).toBeInTheDocument();
     expect(screen.getByLabelText("Mover questão para baixo")).toBeInTheDocument();
     expect(screen.getByLabelText("Adicionar imagem à questão")).toBeInTheDocument();
     expect(screen.getByLabelText("Excluir questão")).toBeInTheDocument();
-  });
-
-  it("hides the structure actions in style mode but keeps the ordinal label", () => {
-    const { props } = makeProps(mc);
-    render(
-      <EditorModeProvider value="style">
-        <QuestionNodeView {...props} />
-      </EditorModeProvider>,
-    );
-    expect(screen.getByTestId("question-ordinal")).toHaveTextContent("Questão 1");
-    expect(screen.queryByLabelText("Mover questão para cima")).not.toBeInTheDocument();
-    expect(screen.queryByLabelText("Mover questão para baixo")).not.toBeInTheDocument();
-    expect(screen.queryByLabelText("Adicionar imagem à questão")).not.toBeInTheDocument();
-    expect(screen.queryByLabelText("Excluir questão")).not.toBeInTheDocument();
-  });
-
-  it("deletes the question via deleteNode", () => {
-    const { props, deleteNode } = makeProps(mc);
-    render(<QuestionNodeView {...props} />);
-    fireEvent.click(screen.getByLabelText("Excluir questão"));
-    expect(deleteNode).toHaveBeenCalledTimes(1);
-  });
-
-  it("disables up/down at the document ends", () => {
-    const { props } = makeProps(mc, { upable: false, downable: false });
-    render(<QuestionNodeView {...props} />);
-    expect(screen.getByLabelText("Mover questão para cima")).toBeDisabled();
-    expect(screen.getByLabelText("Mover questão para baixo")).toBeDisabled();
   });
 
   it("dispatches the move transaction when moving up", () => {
@@ -231,16 +247,21 @@ describe("QuestionNodeView", () => {
     expect(dispatch).not.toHaveBeenCalled();
   });
 
+  it("disables up/down at the document ends", () => {
+    const { props } = makeProps(mc, { upable: false, downable: false });
+    render(<QuestionNodeView {...props} />);
+    expect(screen.getByLabelText("Mover questão para cima")).toBeDisabled();
+    expect(screen.getByLabelText("Mover questão para baixo")).toBeDisabled();
+  });
+
   it("opens the image modal and inserts the picked image into the stem", () => {
     const tr = { isImage: true };
     buildStemImageTransaction.mockReturnValue(tr);
     const { props, dispatch } = makeProps(mc);
     render(<QuestionNodeView {...props} />);
-
     expect(screen.queryByTestId("image-modal")).not.toBeInTheDocument();
     fireEvent.click(screen.getByLabelText("Adicionar imagem à questão"));
     expect(screen.getByTestId("image-modal")).toBeInTheDocument();
-
     modalOnConfirm?.([{ id: "x", src: "https://example.com/a.png", align: "center" }]);
     expect(buildStemImageTransaction).toHaveBeenCalledWith(props.editor.state, 100, {
       id: "new-id",
@@ -265,5 +286,108 @@ describe("QuestionNodeView", () => {
     fireEvent.click(screen.getByLabelText("Adicionar imagem à questão"));
     fireEvent.click(screen.getByTestId("image-modal"));
     expect(screen.queryByTestId("image-modal")).not.toBeInTheDocument();
+  });
+
+  it("deletes the question via deleteNode", () => {
+    const { props, deleteNode } = makeProps(mc);
+    render(<QuestionNodeView {...props} />);
+    fireEvent.click(screen.getByLabelText("Excluir questão"));
+    expect(deleteNode).toHaveBeenCalledTimes(1);
+  });
+
+  it("survives a transient undefined getPos() (empty ordinal, move/image guarded, delete works)", () => {
+    const { props, dispatch } = makeProps(mc, { getPosUndefined: true });
+    expect(() => render(<QuestionNodeView {...props} />)).not.toThrow();
+    expect(screen.getByTestId("question-ordinal")).toHaveTextContent("");
+    expect(screen.getByLabelText("Mover questão para cima")).toBeDisabled();
+    expect(screen.getByLabelText("Mover questão para baixo")).toBeDisabled();
+    expect(screen.getByLabelText("Adicionar imagem à questão")).toBeDisabled();
+    fireEvent.click(screen.getByLabelText("Excluir questão"));
+    expect(props.deleteNode).toHaveBeenCalledTimes(1);
+    expect(dispatch).not.toHaveBeenCalled();
+  });
+});
+
+describe("QuestionNodeView — preview ↔ card", () => {
+  it("opens the card via ✎ Editar: AnswerEditor + gabarito + Concluir, preview gone", () => {
+    const { props } = makeProps(mc);
+    render(<QuestionNodeView {...props} />);
+    fireEvent.click(screen.getByLabelText("Editar questão"));
+    expect(screen.getByTestId("question-card")).toBeInTheDocument();
+    expect(screen.getByTestId("answer-multipleChoice")).toBeInTheDocument();
+    expect(screen.getByLabelText("Marcar como correta")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Concluir" })).toBeInTheDocument();
+    expect(screen.queryByTestId("answer-preview-multipleChoice")).not.toBeInTheDocument();
+  });
+
+  it("returns to the preview via Concluir", () => {
+    const { props } = makeProps(mc);
+    render(<QuestionNodeView {...props} />);
+    fireEvent.click(screen.getByLabelText("Editar questão"));
+    fireEvent.click(screen.getByRole("button", { name: "Concluir" }));
+    expect(screen.queryByTestId("question-card")).not.toBeInTheDocument();
+    expect(screen.getByTestId("answer-preview-multipleChoice")).toBeInTheDocument();
+  });
+
+  it("closes the card on Escape", () => {
+    const { props } = makeProps(mc);
+    render(<QuestionNodeView {...props} />);
+    fireEvent.click(screen.getByLabelText("Editar questão"));
+    expect(screen.getByTestId("question-card")).toBeInTheDocument();
+    fireEvent.keyDown(document, { key: "Escape" });
+    expect(screen.queryByTestId("question-card")).not.toBeInTheDocument();
+  });
+
+  it("ignores non-Escape keys while the card is open", () => {
+    const { props } = makeProps(mc);
+    render(<QuestionNodeView {...props} />);
+    fireEvent.click(screen.getByLabelText("Editar questão"));
+    fireEvent.keyDown(document, { key: "a" });
+    expect(screen.getByTestId("question-card")).toBeInTheDocument();
+  });
+
+  it("keeps only one card open at a time on the same editor", () => {
+    const editor = { isEditable: true, state: { doc: { descendants() {} } }, view: { dispatch: vi.fn() } } as unknown as NodeViewProps["editor"];
+    const { props: pa } = makeProps(mc, { id: "q-a", editor });
+    const { props: pb } = makeProps(mc, { id: "q-b", editor });
+    render(
+      <>
+        <QuestionNodeView {...pa} />
+        <QuestionNodeView {...pb} />
+      </>,
+    );
+    expect(screen.queryByTestId("question-card")).not.toBeInTheDocument();
+    fireEvent.click(screen.getAllByLabelText("Editar questão")[0]);
+    expect(screen.getAllByTestId("question-card")).toHaveLength(1);
+    // only the still-collapsed question keeps a rail with "Editar questão"
+    fireEvent.click(screen.getByLabelText("Editar questão"));
+    expect(screen.getAllByTestId("question-card")).toHaveLength(1);
+  });
+});
+
+describe("QuestionNodeView — not editable", () => {
+  it("disables the inline preview fields and the rail", () => {
+    const { props } = makeProps(mc, { editable: false });
+    render(<QuestionNodeView {...props} />);
+    expect(screen.getByLabelText("Alternativa")).toBeDisabled();
+    expect(screen.getByLabelText("Excluir questão")).toBeDisabled();
+  });
+});
+
+describe("QuestionNodeView — all 8 answer kinds render in preview and card", () => {
+  it.each(SEEDS.map((answer) => [answer.kind, answer] as const))("%s", (kind, answer) => {
+    const { props } = makeProps(answer, { id: `q-${kind}` });
+    render(<QuestionNodeView {...props} />);
+    // preview: renders without crashing, stem present, no card yet
+    expect(screen.getByTestId("question-node")).toBeInTheDocument();
+    expect(screen.getByTestId("node-view-content")).toBeInTheDocument();
+    expect(screen.queryByTestId("question-card")).not.toBeInTheDocument();
+    // fillBlank has no preview answer block (its gaps live in the stem)
+    if (kind !== "fillBlank") {
+      expect(screen.getByTestId(`answer-preview-${kind}`)).toBeInTheDocument();
+    }
+    // card: opens with the structural AnswerEditor for this kind
+    fireEvent.click(screen.getByLabelText("Editar questão"));
+    expect(screen.getByTestId(`answer-${kind}`)).toBeInTheDocument();
   });
 });

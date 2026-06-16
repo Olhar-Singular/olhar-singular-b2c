@@ -78,33 +78,42 @@ describe("CanonicalRenderer (rich fixture)", () => {
     expect(screen.getByTestId("question-instruction")).toHaveTextContent("Escolha a opção correta.");
   });
 
-  it("marks the correct multiple-choice alternative authoritatively", () => {
+  it("hides answer key — no correct-marker on multiple-choice alternatives", () => {
     render(<CanonicalRenderer document={renderDocument} />);
     const mc = screen.getByTestId("answer-multipleChoice");
     const items = within(mc).getAllByRole("listitem");
-    expect(items[0]).toHaveAttribute("data-correct", "true");
-    expect(items[1]).toHaveAttribute("data-correct", "false");
-    expect(within(items[0]).getByTestId("correct-marker")).toBeInTheDocument();
-    // letter labels
+    // letter labels still present
     expect(items[0]).toHaveTextContent("a)");
     expect(items[1]).toHaveTextContent("b)");
+    // no correct-marker rendered — answer key hidden
+    expect(within(mc).queryByTestId("correct-marker")).toBeNull();
+    // no data-correct attribute leaking the answer in the DOM
+    items.forEach((item) => expect(item).not.toHaveAttribute("data-correct"));
   });
 
-  it("renders true/false markers from authored values", () => {
+  it("hides answer key — true/false shows blank markers, not V/F values", () => {
     render(<CanonicalRenderer document={renderDocument} />);
     const tf = screen.getByTestId("answer-trueFalse");
     const items = within(tf).getAllByRole("listitem");
-    expect(items[0]).toHaveTextContent("(V)");
-    expect(items[1]).toHaveTextContent("(F)");
+    // blank markers present — use aria-label to verify, exact text has multiple spaces
+    // that testing-library normalises; query by aria-label instead
+    expect(within(items[0]).getByLabelText("Marque Verdadeiro ou Falso")).toBeInTheDocument();
+    expect(within(items[1]).getByLabelText("Marque Verdadeiro ou Falso")).toBeInTheDocument();
+    // answer values not revealed
+    expect(within(tf).queryByText("(V)")).toBeNull();
+    expect(within(tf).queryByText("(F)")).toBeNull();
+    // no data-value attribute leaking the answer
+    items.forEach((item) => expect(item).not.toHaveAttribute("data-value"));
   });
 
-  it("renders checkbox key from authored checked flags", () => {
+  it("hides answer key — checkbox shows empty boxes for all items", () => {
     render(<CanonicalRenderer document={renderDocument} />);
     const cb = screen.getByTestId("answer-checkbox");
     const items = within(cb).getAllByRole("listitem");
-    expect(items[0]).toHaveAttribute("data-checked", "true");
-    expect(within(items[0]).getByTestId("checked-marker")).toBeInTheDocument();
-    expect(within(items[1]).queryByTestId("checked-marker")).toBeNull();
+    // no check-mark rendered for any item
+    expect(within(cb).queryByTestId("checked-marker")).toBeNull();
+    // no data-checked attribute leaking the answer
+    items.forEach((item) => expect(item).not.toHaveAttribute("data-checked"));
   });
 
   it("renders matching pairs left and right", () => {
@@ -114,23 +123,25 @@ describe("CanonicalRenderer (rich fixture)", () => {
     expect(within(m).getByText("Brasília")).toBeInTheDocument();
   });
 
-  it("renders ordering items sorted by position", () => {
+  it("hides answer key — ordering shows items in array order with blank markers", () => {
     render(<CanonicalRenderer document={renderDocument} />);
     const ord = screen.getByTestId("answer-ordering");
     const items = within(ord).getAllByRole("listitem");
-    expect(items[0]).toHaveTextContent("Primeiro");
-    expect(items[1]).toHaveTextContent("Segundo");
+    // fixture array order: Segundo (position 2) first, Primeiro (position 1) second
+    // no sort by position — student writes the order
+    expect(items[0]).toHaveTextContent("Segundo");
+    expect(items[1]).toHaveTextContent("Primeiro");
+    // blank order slot present for each item
+    expect(within(items[0]).getByText("____")).toBeInTheDocument();
+    expect(within(items[1]).getByText("____")).toBeInTheDocument();
   });
 
-  it("renders fill-blank gaps with answer, alternatives and tip", () => {
+  it("hides answer key — fill-blank renders nothing (gaps live inline in stem)", () => {
     render(<CanonicalRenderer document={renderDocument} />);
-    const fb = screen.getByTestId("answer-fillBlank");
-    const gaps = within(fb).getAllByTestId("gap-answer");
-    expect(gaps[0]).toHaveTextContent("3/4");
-    expect(within(fb).getByText(/também: 0.75/)).toBeInTheDocument();
-    expect(within(fb).getByText("some os numeradores")).toBeInTheDocument();
-    // second gap has no alternatives/tip
-    expect(gaps[1]).toHaveTextContent("1");
+    // FillBlankView returns null — no answer-fillBlank element
+    expect(screen.queryByTestId("answer-fillBlank")).toBeNull();
+    expect(screen.queryByTestId("gap-answer")).toBeNull();
+    expect(screen.queryByText(/também:/)).toBeNull();
   });
 
   it("renders table with header and body cells", () => {
@@ -235,7 +246,7 @@ describe("CanonicalRenderer (defaults / edge branches)", () => {
     expect(screen.getByTestId("answer-open").children).toHaveLength(3);
   });
 
-  it("fill-blank gap with empty alternatives array shows no 'também'", () => {
+  it("fill-blank renders nothing — answer key hidden (gaps live inline in stem)", () => {
     render(
       <CanonicalRenderer
         document={wrap([
@@ -248,6 +259,7 @@ describe("CanonicalRenderer (defaults / edge branches)", () => {
         ])}
       />
     );
+    expect(screen.queryByTestId("answer-fillBlank")).toBeNull();
     expect(screen.queryByText(/também:/)).toBeNull();
   });
 

@@ -3,7 +3,6 @@ import { render, screen, fireEvent } from "@testing-library/react";
 import type { NodeViewProps } from "@tiptap/react";
 import type { ImageItem } from "@/components/editor/imageManagerUtils";
 import { ImageNodeView } from "./ImageNodeView";
-import { EditorModeProvider } from "../EditorMode";
 
 vi.mock("@tiptap/react", () => ({
   NodeViewWrapper: ({ children, ...rest }: { children: React.ReactNode }) => <div {...rest}>{children}</div>,
@@ -70,7 +69,17 @@ beforeEach(() => {
   captionInitialValue = undefined;
 });
 
+function renderImage(attrs: Record<string, unknown> = {}, editable = true) {
+  const { props } = makeProps(attrs, editable);
+  return render(<ImageNodeView {...props} />);
+}
+
 describe("ImageNodeView", () => {
+  it("container da imagem é flat (sem borda de card)", () => {
+    const { getByTestId } = renderImage();
+    expect(getByTestId("image-node").className).not.toMatch(/rounded-xl|border border-border\/60/);
+  });
+
   it("updates width on resize", () => {
     const { props, updateAttributes } = makeProps();
     render(<ImageNodeView {...props} />);
@@ -148,28 +157,12 @@ describe("ImageNodeView", () => {
     expect(screen.getByLabelText("Texto alternativo")).toBeDisabled();
   });
 
-  it("shows swap + alignment buttons in content mode", () => {
+  it("sempre mostra os controles de alinhamento + trocar imagem (superfície única)", () => {
     const { props } = makeProps({ alignment: "left" });
     render(<ImageNodeView {...props} />);
     expect(screen.getByRole("button", { name: "Alinhar à esquerda" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Centralizar" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Alinhar à direita" })).toBeInTheDocument();
     expect(screen.getByText("Trocar imagem")).toBeInTheDocument();
-  });
-
-  it("hides swap + alignment buttons in style mode but keeps the caption + alt editable", () => {
-    const { props } = makeProps({ alignment: "left", caption: [{ type: "text", text: "cap" }] });
-    render(
-      <EditorModeProvider value="style">
-        <ImageNodeView {...props} />
-      </EditorModeProvider>,
-    );
-    expect(screen.queryByRole("button", { name: "Alinhar à esquerda" })).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Centralizar" })).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Alinhar à direita" })).not.toBeInTheDocument();
-    expect(screen.queryByText("Trocar imagem")).not.toBeInTheDocument();
-    // Content stays: caption (formattable) and alt remain.
-    expect(screen.getByLabelText("Legenda da imagem")).toBeInTheDocument();
-    expect(screen.getByLabelText("Texto alternativo")).toBeInTheDocument();
   });
 });

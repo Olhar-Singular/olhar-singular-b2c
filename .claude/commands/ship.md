@@ -120,9 +120,9 @@ Rode esta auditoria **apenas se o PR tocou alguma dessas áreas**:
 
 | Se o PR tocou... | Revise o agente |
 | ---------------- | --------------- |
-| `src/test/helpers.ts`, `src/test/fixtures.ts`, `src/test/setup.ts` | `.claude/agents/test-writer.md` |
+| `src/test/helpers.ts`, `src/test/setup.ts` | `.claude/agents/test-writer.md` |
 | `supabase/functions/_shared/*` ou qualquer edge function nova | `.claude/agents/edge-fn-writer.md` |
-| `src/lib/pdf/*` (layout, templates, parser) | `.claude/agents/pdf-debugger.md` |
+| `src/components/adaptation/render/pdf/*` (mappers, math, paridade) | `.claude/agents/pdf-debugger.md` |
 | `supabase/migrations/*` (nova convenção, mudança em `is_super_admin`, novo padrão de policy) | `.claude/agents/migration-reviewer.md` + `.claude/agents/rls-policy-writer.md` |
 | `src/hooks/*` (novo padrão de query/mutation, mudança em `useAuth`) | `.claude/agents/hook-writer.md` |
 
@@ -133,23 +133,22 @@ Se nenhuma dessas áreas foi tocada, pule pra "Commit de documentação".
 Pra cada agente a revisar, rode os greps relevantes e confirme que os símbolos citados ainda existem:
 
 ```bash
-# test-writer
-grep -q "mockAuthHook\|createSupabaseMock\|createTestWrapper" src/test/helpers.ts
-grep -q "MOCK_USER\|MOCK_SESSION\|MOCK_PROFILE" src/test/fixtures.ts
+# test-writer  (helpers.ts existe; NÃO há fixtures.ts)
+grep -q "buildAuthState\|createQueryChain\|renderWithProviders" src/test/helpers.ts
 
 # edge-fn-writer
-test -f supabase/functions/_shared/aiConfig.ts && test -f supabase/functions/_shared/logAiUsage.ts
+test -f supabase/functions/_shared/aiConfig.ts && test -f supabase/functions/_shared/logAiUsage.ts && test -f supabase/functions/_shared/credits.ts
 grep -q "getAiConfig" supabase/functions/_shared/aiConfig.ts
-grep -q "logAiUsage" supabase/functions/_shared/logAiUsage.ts
+grep -q "chargeCredits" supabase/functions/_shared/credits.ts
 
-# pdf-debugger
-test -f src/lib/pdf/index.tsx && test -f src/lib/pdf/textParser.ts && test -f src/lib/pdf/htmlToPdfElements.ts
+# pdf-debugger  (PDF mora em components/adaptation/render/pdf/, não src/lib/pdf/)
+test -f src/components/adaptation/render/pdf/AdaptationPdf.tsx && test -f src/components/adaptation/export/exportPdf.ts
 
 # migration-reviewer + rls-policy-writer
 grep -rq "is_super_admin" supabase/migrations/
 
 # hook-writer
-test -f src/hooks/useAuth.tsx && test -f src/hooks/useUserSchool.ts
+test -f src/hooks/useAuth.ts
 grep -q "@tanstack/react-query" package.json
 ```
 

@@ -200,3 +200,99 @@ export function setTableCell(
     ),
   };
 }
+
+// changeAnswerKind ----------------------------------------------------------
+
+type CarryItem = { content: RichText; flag: boolean };
+
+/**
+ * Item texts (+ their correctness flag) of a "carry" source — only the kinds
+ * the §6.3 matrix lets carry text: `multipleChoice` (flag = correct) and
+ * `checkbox` (flag = checked). Every other kind returns null.
+ */
+function carrySource(answer: QuestionAnswer): CarryItem[] | null {
+  if (answer.kind === "multipleChoice")
+    return answer.alternatives.map((a) => ({ content: a.content, flag: a.correct }));
+  if (answer.kind === "checkbox")
+    return answer.items.map((i) => ({ content: i.content, flag: i.checked }));
+  return null;
+}
+
+/**
+ * Best-effort conversion of an answer to a different `kind` (plano §6.3 / D8) —
+ * what the question card's "Tipo" dropdown dispatches. Pure and immutable like
+ * the rest of this module; stem and instruction live OUTSIDE the answer, so they
+ * are never touched here.
+ *
+ * Strict to the §6.3 matrix: only `multipleChoice`/`checkbox` carry their item
+ * texts, and only to another list kind (multipleChoice, checkbox, trueFalse,
+ * ordering) — the correct/checked/true flag maps between them. Every other
+ * source→list-target combination, and any→open/fillBlank/matching/table, yields
+ * the empty default structure. Losing answer data is acceptable (undo recovers).
+ * Same kind in/out is a no-op (referential identity).
+ */
+export function changeAnswerKind(
+  answer: QuestionAnswer,
+  target: QuestionAnswer["kind"],
+  generate: Generate = newId
+): QuestionAnswer {
+  if (answer.kind === target) return answer;
+
+  const source = carrySource(answer);
+  const carried = source && source.length > 0 ? source : null;
+
+  switch (target) {
+    case "multipleChoice": {
+      if (!carried) {
+        return {
+          kind: "multipleChoice",
+          alternatives: [
+            { id: generate(), content: [], correct: true },
+            { id: generate(), content: [], correct: false },
+          ],
+        };
+      }
+      // MC needs exactly one correct: the first flagged item, else the first.
+      const found = carried.findIndex((it) => it.flag);
+      const correctIdx = found === -1 ? 0 : found;
+      return {
+        kind: "multipleChoice",
+        alternatives: carried.map((it, i) => ({
+          id: generate(),
+          content: it.content,
+          correct: i === correctIdx,
+        })),
+      };
+    }
+    case "checkbox": {
+      if (!carried) return { kind: "checkbox", items: [{ id: generate(), content: [], checked: false }] };
+      return {
+        kind: "checkbox",
+        items: carried.map((it) => ({ id: generate(), content: it.content, checked: it.flag })),
+      };
+    }
+    case "trueFalse": {
+      if (!carried) return { kind: "trueFalse", items: [{ id: generate(), content: [], value: true }] };
+      return {
+        kind: "trueFalse",
+        items: carried.map((it) => ({ id: generate(), content: it.content, value: it.flag })),
+      };
+    }
+    case "ordering": {
+      if (!carried) return { kind: "ordering", items: [{ id: generate(), content: [], position: 0 }] };
+      return {
+        kind: "ordering",
+        items: carried.map((it, i) => ({ id: generate(), content: it.content, position: i })),
+      };
+    }
+    case "open":
+      return { kind: "open", answerLines: 3 };
+    case "fillBlank":
+      return { kind: "fillBlank", gaps: [] };
+    case "matching":
+      return { kind: "matching", pairs: [{ id: generate(), left: [], right: [] }] };
+    /* v8 ignore next 2 -- exhaustive switch; QuestionKind admits no other value */
+    case "table":
+      return { kind: "table", rows: [[[], []]] };
+  }
+}

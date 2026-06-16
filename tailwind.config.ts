@@ -60,6 +60,23 @@ export default {
           border: "hsl(var(--sidebar-border))",
           ring: "hsl(var(--sidebar-ring))",
         },
+        // Adaptar "Revisar" surface palette (plano §4). Maps the --sf-* tokens.
+        surface: {
+          mesa: "hsl(var(--sf-mesa))",
+          "mesa-2": "hsl(var(--sf-mesa-2))",
+          paper: "hsl(var(--sf-paper))",
+          ink: "hsl(var(--sf-ink))",
+          "ink-soft": "hsl(var(--sf-ink-soft))",
+          "ink-faint": "hsl(var(--sf-ink-faint))",
+          line: "hsl(var(--sf-line))",
+          "line-2": "hsl(var(--sf-line-2))",
+          accent: "hsl(var(--sf-accent))",
+          "accent-soft": "hsl(var(--sf-accent-soft))",
+          "accent-ink": "hsl(var(--sf-accent-ink))",
+          correct: "hsl(var(--sf-correct))",
+          chrome: "hsl(var(--sf-chrome))",
+          "chrome-line": "hsl(var(--sf-chrome-line))",
+        },
       },
       borderRadius: {
         lg: "var(--radius)",

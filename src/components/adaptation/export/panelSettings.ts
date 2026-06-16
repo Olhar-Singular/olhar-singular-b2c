@@ -1,12 +1,13 @@
 /**
  * PanelSettings — user-facing export options held by the ExportPanel and passed
- * to the PDF builder: an optional header (title/school/teacher/date), a base
- * font family for the document, and a global page-break-per-question toggle.
+ * to the PDF builder: an optional header (title/school/teacher/date) and a
+ * global page-break-per-question toggle.
+ *
+ * Since Fase 4a, font family/size/spacing come from the document-level
+ * `pageStyle` (resolved via `resolvePageStyle` in the PDF renderer), NOT from a
+ * panel font select. The `fontFamily` field and `PDF_FONTS`/`PdfFont` have been
+ * removed.
  */
-
-/** The three built-in react-pdf fonts (no Font.register needed). */
-export const PDF_FONTS = ["Helvetica", "Times-Roman", "Courier"] as const;
-export type PdfFont = (typeof PDF_FONTS)[number];
 
 export type HeaderSettings = {
   title?: string;
@@ -17,13 +18,11 @@ export type HeaderSettings = {
 
 export type PanelSettings = {
   header: HeaderSettings;
-  fontFamily: PdfFont;
   pageBreakPerQuestion: boolean;
 };
 
 export const DEFAULT_PANEL_SETTINGS: PanelSettings = {
   header: {},
-  fontFamily: "Helvetica",
   pageBreakPerQuestion: false,
 };
 

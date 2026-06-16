@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { ExportPanel } from "./ExportPanel";
-import type { CanonicalDocument } from "@/lib/adaptation/canonical/schema";
+import type { CanonicalDocument, PageStyle } from "@/lib/adaptation/canonical/schema";
 import type { PanelSettings } from "./panelSettings";
 
 vi.mock("sonner", () => ({ toast: { error: vi.fn(), success: vi.fn() } }));
@@ -44,8 +44,8 @@ describe("ExportPanel", () => {
     await waitFor(() => expect(toast.error).toHaveBeenCalledWith("Erro ao copiar."));
   });
 
-  it("builds the PDF with header, font and page-break settings from the inputs", async () => {
-    const onDownload = vi.fn<(d: CanonicalDocument, s: PanelSettings) => Promise<void>>().mockResolvedValue(undefined);
+  it("builds the PDF with header and page-break settings from the inputs (no font select)", async () => {
+    const onDownload = vi.fn<(d: CanonicalDocument, s: PanelSettings, ps?: PageStyle) => Promise<void>>().mockResolvedValue(undefined);
     const { toast } = await import("sonner");
     render(<ExportPanel document={document} onDownload={onDownload} />);
 
@@ -53,7 +53,6 @@ describe("ExportPanel", () => {
     fireEvent.change(screen.getByLabelText("Escola"), { target: { value: "Escola X" } });
     fireEvent.change(screen.getByLabelText("Professor(a)"), { target: { value: "Ana" } });
     fireEvent.change(screen.getByLabelText("Data"), { target: { value: "2026-06-04" } });
-    fireEvent.change(screen.getByLabelText("Fonte"), { target: { value: "Times-Roman" } });
     fireEvent.click(screen.getByRole("switch"));
 
     fireEvent.click(screen.getByRole("button", { name: /Exportar PDF/i }));
@@ -63,10 +62,27 @@ describe("ExportPanel", () => {
     expect(doc).toBe(document);
     expect(settings).toEqual({
       header: { title: "Minha Prova", school: "Escola X", teacher: "Ana", date: "2026-06-04" },
-      fontFamily: "Times-Roman",
       pageBreakPerQuestion: true,
     });
+    // No fontFamily in settings anymore — font comes from pageStyle.
+    expect("fontFamily" in settings).toBe(false);
     await waitFor(() => expect(toast.success).toHaveBeenCalledWith("PDF gerado!"));
+  });
+
+  it("does not render a font select (font comes from pageStyle, not the panel)", () => {
+    render(<ExportPanel document={document} onDownload={vi.fn()} />);
+    expect(screen.queryByLabelText("Fonte")).toBeNull();
+  });
+
+  it("passes pageStyle from props to onDownload", async () => {
+    const onDownload = vi.fn<(d: CanonicalDocument, s: PanelSettings, ps?: PageStyle) => Promise<void>>().mockResolvedValue(undefined);
+    const pageStyle: PageStyle = { fontFamily: "lexend", fontSize: 14 };
+    render(<ExportPanel document={document} onDownload={onDownload} pageStyle={pageStyle} />);
+
+    fireEvent.click(screen.getByRole("button", { name: /Exportar PDF/i }));
+    await waitFor(() => expect(onDownload).toHaveBeenCalled());
+    const [, , ps] = onDownload.mock.calls[0];
+    expect(ps).toBe(pageStyle);
   });
 
   it("shows an error toast when the export fails", async () => {

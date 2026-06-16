@@ -1,9 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import type { ReactElement } from "react";
 import { render, screen, fireEvent } from "@testing-library/react";
 import type { RichText } from "@/lib/adaptation/canonical/schema";
 import { RichTextField } from "./RichTextField";
-import { EditorModeProvider } from "./EditorMode";
 
 // Stub TipTap so we can test the toolbar / mapping without ProseMirror DOM.
 let capturedConfig: { content?: unknown; onUpdate?: (a: { editor: unknown }) => void } | undefined;
@@ -58,16 +56,19 @@ beforeEach(() => {
 
 const t = (text: string): RichText => [{ type: "text", text }];
 
-/** Render the field wrapped in the "style" editor mode (formatting visible). */
-function renderStyle(ui: ReactElement) {
-  return render(<EditorModeProvider value="style">{ui}</EditorModeProvider>);
-}
-
 describe("RichTextField — component", () => {
   it("returns null when editor is not ready", () => {
     vi.mocked(useEditor).mockReturnValueOnce(null as never);
     const { container } = render(<RichTextField value={t("a")} onChange={vi.fn()} />);
     expect(container.firstChild).toBeNull();
+  });
+
+  it("plain mode renders the editor with no toolbar and no border (worksheet-faithful)", () => {
+    const { container } = render(<RichTextField plain value={t("a")} onChange={vi.fn()} />);
+    expect(screen.getByTestId("editor-content")).toBeInTheDocument();
+    // no chrome: neither the inline-math button nor the bordered wrapper
+    expect(screen.queryByLabelText("Inserir fórmula inline")).not.toBeInTheDocument();
+    expect(container.querySelector(".border-input")).toBeNull();
   });
 
   it("seeds editor content from value", () => {
@@ -78,7 +79,7 @@ describe("RichTextField — component", () => {
     });
   });
 
-  it("content mode: shows only the math button (no format buttons)", () => {
+  it("shows only the math button — no format buttons (formatting lives in the BubbleMenu)", () => {
     render(<RichTextField value={t("a")} onChange={vi.fn()} />);
     expect(screen.queryByLabelText("Negrito")).not.toBeInTheDocument();
     expect(screen.queryByLabelText("Itálico")).not.toBeInTheDocument();
@@ -87,35 +88,6 @@ describe("RichTextField — component", () => {
     expect(screen.queryByLabelText("Cor do texto")).not.toBeInTheDocument();
     expect(screen.getByLabelText("Inserir fórmula inline")).toBeInTheDocument();
     expect(screen.getByTestId("editor-content")).toBeInTheDocument();
-  });
-
-  it("style mode: shows ONLY the format buttons (B/I/U/S/color), not math", () => {
-    renderStyle(<RichTextField value={t("a")} onChange={vi.fn()} />);
-    expect(screen.getByLabelText("Negrito")).toBeInTheDocument();
-    expect(screen.getByLabelText("Itálico")).toBeInTheDocument();
-    expect(screen.getByLabelText("Sublinhado")).toBeInTheDocument();
-    expect(screen.getByLabelText("Tachado")).toBeInTheDocument();
-    expect(screen.getByLabelText("Cor do texto")).toBeInTheDocument();
-    // Math is CONTENT — hidden in the Estilo step.
-    expect(screen.queryByLabelText("Inserir fórmula inline")).not.toBeInTheDocument();
-  });
-
-  it("style mode: format buttons dispatch the right editor commands", () => {
-    renderStyle(<RichTextField value={t("a")} onChange={vi.fn()} />);
-    fireEvent.click(screen.getByLabelText("Negrito"));
-    expect(lastChain?.__calls).toContain("toggleBold:[]");
-    fireEvent.click(screen.getByLabelText("Itálico"));
-    expect(lastChain?.__calls).toContain("toggleItalic:[]");
-    fireEvent.click(screen.getByLabelText("Sublinhado"));
-    expect(lastChain?.__calls).toContain("toggleUnderline:[]");
-    fireEvent.click(screen.getByLabelText("Tachado"));
-    expect(lastChain?.__calls).toContain("toggleStrike:[]");
-  });
-
-  it("style mode: marks active buttons with the accent class", () => {
-    editorMock.isActive = vi.fn().mockReturnValue(true);
-    renderStyle(<RichTextField value={t("a")} onChange={vi.fn()} />);
-    expect(screen.getByLabelText("Negrito").className).toContain("accent");
   });
 
   it("inserts inline math when prompt returns a latex string", () => {
@@ -193,16 +165,7 @@ describe("RichTextField — component", () => {
     expect(attrs?.["data-placeholder"]).toBeDefined();
   });
 
-  it("style mode: disables the format buttons when disabled", () => {
-    // The color dropdown items live in a Radix portal; assert the trigger
-    // exists and disabled is respected (portal items covered by v8 ignore).
-    renderStyle(<RichTextField value={t("a")} onChange={vi.fn()} disabled />);
-    expect(screen.getByLabelText("Negrito")).toBeDisabled();
-    // Math button is content-only; absent in style mode.
-    expect(screen.queryByLabelText("Inserir fórmula inline")).not.toBeInTheDocument();
-  });
-
-  it("content mode: disables the math button when disabled", () => {
+  it("disables the math button when disabled", () => {
     render(<RichTextField value={t("a")} onChange={vi.fn()} disabled />);
     expect(screen.getByLabelText("Inserir fórmula inline")).toBeDisabled();
   });

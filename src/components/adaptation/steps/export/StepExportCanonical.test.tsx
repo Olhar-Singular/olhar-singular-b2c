@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 import { StepExportCanonical } from "./StepExportCanonical";
-import type { AdaptationResult, CanonicalDocument } from "@/lib/adaptation/canonical/schema";
+import type { AdaptationResult, CanonicalDocument, PageStyle } from "@/lib/adaptation/canonical/schema";
 
 vi.mock("@/components/adaptation/render/CanonicalRenderer", () => ({
   CanonicalRenderer: ({ document }: { document: CanonicalDocument }) => (
@@ -10,8 +10,10 @@ vi.mock("@/components/adaptation/render/CanonicalRenderer", () => ({
 }));
 
 vi.mock("@/components/adaptation/export/ExportPanel", () => ({
-  ExportPanel: ({ document }: { document: CanonicalDocument }) => (
-    <div data-testid="export-panel">{document.blocks.length}</div>
+  ExportPanel: ({ document, pageStyle }: { document: CanonicalDocument; pageStyle?: PageStyle }) => (
+    <div data-testid="export-panel" data-page-style={pageStyle?.fontFamily ?? "none"}>
+      {document.blocks.length}
+    </div>
   ),
 }));
 
@@ -26,6 +28,11 @@ const result: AdaptationResult = {
   strategies_applied: [],
   pedagogical_justification: "",
   implementation_tips: [],
+};
+
+const resultWithPageStyle: AdaptationResult = {
+  ...result,
+  pageStyle: { fontFamily: "lexend", fontSize: 14 },
 };
 
 beforeEach(() => vi.clearAllMocks());
@@ -53,6 +60,16 @@ describe("StepExportCanonical", () => {
   it("renders the export panel wired to the document", () => {
     renderStep();
     expect(screen.getByTestId("export-panel")).toHaveTextContent("1");
+  });
+
+  it("passes pageStyle from result to ExportPanel", () => {
+    renderStep({ result: resultWithPageStyle });
+    expect(screen.getByTestId("export-panel").dataset.pageStyle).toBe("lexend");
+  });
+
+  it("passes undefined pageStyle to ExportPanel when result has none", () => {
+    renderStep({ result });
+    expect(screen.getByTestId("export-panel").dataset.pageStyle).toBe("none");
   });
 
   it("fires onSave when Salvar is clicked", () => {

@@ -272,6 +272,21 @@ export const CanonicalDocumentSchema = z.object({
   blocks: z.array(BlockSchema).min(1),
 });
 
+/**
+ * Document-wide presentation style (plano §7.1) — additive, optional sibling of
+ * `document` inside `adaptation_result`. Controls font/size/spacing for the whole
+ * sheet via the "Aparência" popover. Absent → renderers fall back to current
+ * defaults, so legacy documents (no `pageStyle`) round-trip byte-for-byte. Units:
+ * `fontSize` in pt (mirrors page tokens / PDF), `blockSpacing` in px.
+ */
+export const PageStyleSchema = z
+  .object({
+    fontFamily: z.string().optional(),
+    fontSize: z.number().positive().optional(),
+    blockSpacing: z.number().nonnegative().optional(),
+  })
+  .strict();
+
 export const AdaptationResultSchema = z.object({
   schemaVersion: z.literal(SCHEMA_VERSION),
   document: CanonicalDocumentSchema,
@@ -281,6 +296,8 @@ export const AdaptationResultSchema = z.object({
   strategies_applied: z.array(z.string()),
   pedagogical_justification: z.string(),
   implementation_tips: z.array(z.string()),
+  // Additive & optional: never injected on read, so legacy docs parse identically.
+  pageStyle: PageStyleSchema.optional(),
 });
 
 // ---------------------------------------------------------------------------
@@ -296,3 +313,4 @@ export type Inline = z.infer<typeof InlineSchema>;
 export type QuestionAnswer = z.infer<typeof QuestionAnswerSchema>;
 export type Alternative = z.infer<typeof AlternativeSchema>;
 export type NodeStyle = z.infer<typeof NodeStyleSchema>;
+export type PageStyle = z.infer<typeof PageStyleSchema>;

@@ -1,11 +1,15 @@
 /**
  * ExportPanel — export controls for the canonical document.
  *
- * Holds `PanelSettings` (header fields, base font family, global
- * page-break-per-question toggle) and exposes two actions:
- *   - "Exportar PDF" → builds the PDF from the current document + settings and
- *     triggers a download.
+ * Holds `PanelSettings` (header fields, global page-break-per-question toggle)
+ * and exposes two actions:
+ *   - "Exportar PDF" → builds the PDF from the current document + settings +
+ *     optional pageStyle and triggers a download.
  *   - "Copiar" → copies the plain-text projection to the clipboard.
+ *
+ * Since Fase 4a, font family/size/spacing come from the document-level
+ * `pageStyle` prop (set by the "Aparência" popover upstream), NOT from a panel
+ * font select. Pass `pageStyle` in from the parent (StepExportCanonical).
  */
 
 import { useState } from "react";
@@ -15,23 +19,20 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-import type { CanonicalDocument } from "@/lib/adaptation/canonical/schema";
+import type { CanonicalDocument, PageStyle } from "@/lib/adaptation/canonical/schema";
 import { documentToPlainText } from "@/lib/adaptation/canonical/plainText";
 import { downloadPdf } from "./exportPdf";
-import {
-  DEFAULT_PANEL_SETTINGS,
-  PDF_FONTS,
-  type PanelSettings,
-  type PdfFont,
-} from "./panelSettings";
+import { DEFAULT_PANEL_SETTINGS, type PanelSettings } from "./panelSettings";
 
 type Props = {
   document: CanonicalDocument;
+  /** Document-level presentation style (font, size, spacing). Comes from pageStyle in the result. */
+  pageStyle?: PageStyle;
   /** Override the download trigger (used in tests). */
-  onDownload?: (document: CanonicalDocument, settings: PanelSettings) => Promise<void>;
+  onDownload?: (document: CanonicalDocument, settings: PanelSettings, pageStyle?: PageStyle) => Promise<void>;
 };
 
-export function ExportPanel({ document, onDownload = downloadPdf }: Props) {
+export function ExportPanel({ document, pageStyle, onDownload = downloadPdf }: Props) {
   const [settings, setSettings] = useState<PanelSettings>(DEFAULT_PANEL_SETTINGS);
   const [exporting, setExporting] = useState(false);
 
@@ -50,7 +51,7 @@ export function ExportPanel({ document, onDownload = downloadPdf }: Props) {
   const handleExport = async () => {
     setExporting(true);
     try {
-      await onDownload(document, settings);
+      await onDownload(document, settings, pageStyle);
       toast.success("PDF gerado!");
     } catch {
       toast.error("Erro ao gerar PDF.");
@@ -93,23 +94,6 @@ export function ExportPanel({ document, onDownload = downloadPdf }: Props) {
             value={settings.header.date ?? ""}
             onChange={(e) => setHeader("date", e.target.value)}
           />
-        </div>
-        <div className="space-y-1">
-          <Label htmlFor="pdf-font">Fonte</Label>
-          <select
-            id="pdf-font"
-            className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-            value={settings.fontFamily}
-            onChange={(e) =>
-              setSettings((s) => ({ ...s, fontFamily: e.target.value as PdfFont }))
-            }
-          >
-            {PDF_FONTS.map((font) => (
-              <option key={font} value={font}>
-                {font}
-              </option>
-            ))}
-          </select>
         </div>
       </div>
 

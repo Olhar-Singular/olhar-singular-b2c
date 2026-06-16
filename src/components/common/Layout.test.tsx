@@ -45,7 +45,15 @@ describe("Layout", () => {
     expect(screen.getAllByRole("link", { name: /Perfis de Barreira/i }).length).toBeGreaterThan(0);
     expect(screen.getAllByRole("link", { name: /Chat com a ISA/i }).length).toBeGreaterThan(0);
     expect(screen.getAllByRole("link", { name: /Banco de Quest/i }).length).toBeGreaterThan(0);
+    expect(screen.getAllByRole("link", { name: /Histórico/i }).length).toBeGreaterThan(0);
     expect(screen.getAllByRole("link", { name: /Crédit/i }).length).toBeGreaterThan(0);
+  });
+
+  it("Histórico nav link points to /historico", () => {
+    setAuth();
+    renderWithProviders(<Layout />, { route: "/dashboard" });
+    const links = screen.getAllByRole("link", { name: /Histórico/i });
+    expect(links.some((l) => l.getAttribute("href") === "/historico")).toBe(true);
   });
 
   it("shows the Admin nav link for super-admins", () => {

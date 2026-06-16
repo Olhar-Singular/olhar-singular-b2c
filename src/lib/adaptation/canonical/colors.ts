@@ -3,8 +3,10 @@
  * Values mirror the palette defined in QuestionRichEditor.tsx.
  */
 
-/** Text colors (from TEXT_COLORS in QuestionRichEditor.tsx). */
-const TEXT_COLORS = [
+/** Text colors (from TEXT_COLORS in QuestionRichEditor.tsx). Reused by the
+ * selection bubble's color swatches (plano §6.2) — keep in sync with the editor
+ * palette via the drift guard in colors.test.ts. */
+export const TEXT_COLORS = [
   "#1F2937",
   "#DC2626",
   "#2563EB",

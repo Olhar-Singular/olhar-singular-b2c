@@ -5,7 +5,44 @@ import {
   dataUrlToBlob,
   autoCropFromBbox,
   fetchWithRetry,
+  stripOptionMarker,
 } from "./extraction-utils";
+
+describe("stripOptionMarker", () => {
+  it("strips lowercase letter marker with paren", () => {
+    expect(stripOptionMarker("a) sucos.")).toBe("sucos.");
+  });
+  it("strips uppercase letter marker with paren", () => {
+    expect(stripOptionMarker("B) sanduíches.")).toBe("sanduíches.");
+  });
+  it("strips letter marker with dot", () => {
+    expect(stripOptionMarker("c. garrafa de água")).toBe("garrafa de água");
+  });
+  it("strips parenthesized marker", () => {
+    expect(stripOptionMarker("(d) bebidas açucaradas")).toBe("bebidas açucaradas");
+  });
+  it("strips dash-style marker", () => {
+    expect(stripOptionMarker("a - primeira opção")).toBe("primeira opção");
+  });
+  it("strips numeric marker", () => {
+    expect(stripOptionMarker("1) primeira")).toBe("primeira");
+  });
+  it("leaves text without a marker untouched", () => {
+    expect(stripOptionMarker("A bola é azul")).toBe("A bola é azul");
+  });
+  it("leaves a sentence that merely starts with a letter untouched", () => {
+    expect(stripOptionMarker("Verdadeiro")).toBe("Verdadeiro");
+  });
+  it("does not empty an option that is only a marker", () => {
+    expect(stripOptionMarker("a)")).toBe("a)");
+  });
+  it("trims surrounding whitespace", () => {
+    expect(stripOptionMarker("  a) sucos.  ")).toBe("sucos.");
+  });
+  it("returns empty string unchanged", () => {
+    expect(stripOptionMarker("")).toBe("");
+  });
+});
 
 describe("normalizeTextForDedup", () => {
   it("lowercases text", () => {

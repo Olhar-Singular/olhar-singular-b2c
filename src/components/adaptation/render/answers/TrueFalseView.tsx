@@ -1,6 +1,7 @@
 /**
- * TrueFalseView — read-only render of true/false statements. Each statement's
- * authored `value` marks V (true) or F (false) authoritatively.
+ * TrueFalseView — read-only render of true/false statements.
+ * Answer key is hidden: blank "(  ) V  (  ) F" markers shown instead of the
+ * authored value. Mirrors PdfAnswer (trueFalse).
  */
 
 import type { QuestionAnswer } from "@/lib/adaptation/canonical/schema";
@@ -12,15 +13,12 @@ export function TrueFalseView({ answer }: { answer: TrueFalseAnswer }) {
   return (
     <ul data-testid="answer-trueFalse" className="space-y-2">
       {answer.items.map((item) => (
-        <li key={item.id} data-value={item.value} className="flex items-start gap-2">
-          <span
-            className="font-bold"
-            aria-label={item.value ? "Verdadeiro" : "Falso"}
-          >
-            ({item.value ? "V" : "F"})
-          </span>
+        <li key={item.id} className="flex items-start gap-2">
           <span className="flex-1">
             <RichTextView content={item.content} />
+          </span>
+          <span className="shrink-0 font-medium" aria-label="Marque Verdadeiro ou Falso">
+            (  ) V  (  ) F
           </span>
         </li>
       ))}

@@ -105,3 +105,15 @@ export function buildDivider(generate: Generate = newId): PMNode {
   const block: Block = { id: generate(), type: "divider" };
   return blockToNode(block);
 }
+
+/** Build a heading PM node (level 1 = título, 2 = seção). */
+export function buildHeadingNode(level: 1 | 2 | 3, generate: Generate = newId): PMNode {
+  const block: Block = { id: generate(), type: "heading", level, content: [] };
+  return blockToNode(block);
+}
+
+/** Build a paragraph PM node (instrução / texto). */
+export function buildParagraphNode(generate: Generate = newId): PMNode {
+  const block: Block = { id: generate(), type: "paragraph", content: [] };
+  return blockToNode(block);
+}

@@ -1,19 +1,18 @@
 import { describe, it, expect } from "vitest";
 import {
   DEFAULT_PANEL_SETTINGS,
-  PDF_FONTS,
   hasHeaderContent,
 } from "./panelSettings";
 
 describe("panelSettings", () => {
-  it("defaults to an empty header, the first built-in font, and no page breaks", () => {
+  it("defaults to an empty header and no page breaks", () => {
     expect(DEFAULT_PANEL_SETTINGS.header).toEqual({});
-    expect(DEFAULT_PANEL_SETTINGS.fontFamily).toBe("Helvetica");
     expect(DEFAULT_PANEL_SETTINGS.pageBreakPerQuestion).toBe(false);
   });
 
-  it("offers the three built-in react-pdf fonts", () => {
-    expect(PDF_FONTS).toEqual(["Helvetica", "Times-Roman", "Courier"]);
+  it("does not have a fontFamily field (font now comes from pageStyle)", () => {
+    // fontFamily was removed from PanelSettings in Fase 4a.
+    expect("fontFamily" in DEFAULT_PANEL_SETTINGS).toBe(false);
   });
 
   describe("hasHeaderContent", () => {

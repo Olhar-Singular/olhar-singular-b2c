@@ -5,6 +5,8 @@ import {
   buildMathNode,
   buildScaffoldNode,
   buildDivider,
+  buildHeadingNode,
+  buildParagraphNode,
   emptyAnswer,
   type QuestionKind,
 } from "./commands";
@@ -120,5 +122,38 @@ describe("buildDivider", () => {
     expect(node.type).toBe("divider");
     const doc = proseMirrorToCanonical(wrapDoc(node));
     expect(doc.blocks[0].type).toBe("divider");
+  });
+});
+
+describe("buildHeadingNode", () => {
+  it("builds a heading PM node with level 1 (título)", () => {
+    const node = buildHeadingNode(1, gen);
+    expect(node.type).toBe("heading");
+    expect(node.attrs?.level).toBe(1);
+    const doc = proseMirrorToCanonical(wrapDoc(node));
+    expect(doc.blocks[0].type).toBe("heading");
+  });
+
+  it("builds a heading PM node with level 2 (seção)", () => {
+    const node = buildHeadingNode(2, gen);
+    expect(node.type).toBe("heading");
+    expect(node.attrs?.level).toBe(2);
+    const doc = proseMirrorToCanonical(wrapDoc(node));
+    expect(doc.blocks[0].type).toBe("heading");
+  });
+
+  it("builds a heading PM node with level 3", () => {
+    const node = buildHeadingNode(3, gen);
+    expect(node.type).toBe("heading");
+    expect(node.attrs?.level).toBe(3);
+  });
+});
+
+describe("buildParagraphNode", () => {
+  it("builds a paragraph PM node (instrução)", () => {
+    const node = buildParagraphNode(gen);
+    expect(node.type).toBe("paragraph");
+    const doc = proseMirrorToCanonical(wrapDoc(node));
+    expect(doc.blocks[0].type).toBe("paragraph");
   });
 });

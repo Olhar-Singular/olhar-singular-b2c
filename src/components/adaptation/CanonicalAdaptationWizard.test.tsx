@@ -125,26 +125,49 @@ vi.mock("./steps/generate/StepGenerate", () => ({
   ),
 }));
 
-// CanonicalEditor (used by StepContent) — edits the first block's text.
-vi.mock("./canonical-editor/CanonicalEditor", () => ({
-  CanonicalEditor: ({
-    value,
-    onChange,
+// StepReview — the unified edit step is mocked at its boundary: the wizard test
+// only cares about SSOT/navigation wiring, not the editor internals (covered by
+// StepReview's own tests). `edit-content` doubles as a readout of the live
+// document and an edit trigger; `review-doc` exposes the whole document as JSON.
+vi.mock("./steps/review/StepReview", () => ({
+  StepReview: ({
+    document,
+    pageStyle,
+    onDocumentChange,
+    onPageStyleChange,
+    onRegenerate,
+    onNext,
+    onPrev,
   }: {
-    value: CanonicalDocument;
-    onChange: (d: CanonicalDocument) => void;
+    document: CanonicalDocument;
+    pageStyle?: unknown;
+    onDocumentChange: (d: CanonicalDocument) => void;
+    onPageStyleChange: (ps: { fontFamily?: string; fontSize?: number; blockSpacing?: number }) => void;
+    onRegenerate: () => void;
+    onNext: () => void;
+    onPrev: () => void;
   }) => (
-    <button
-      data-testid="edit-content"
-      onClick={() =>
-        onChange({
-          ...value,
-          blocks: [{ id: id(1), type: "paragraph", content: [{ type: "text", text: "EDITADO" }] }],
-        })
-      }
-    >
-      {(value.blocks[0] as { content: { text: string }[] }).content[0].text}
-    </button>
+    <div>
+      <pre data-testid="review-doc">{JSON.stringify(document)}</pre>
+      <pre data-testid="review-pagestyle">{JSON.stringify(pageStyle ?? null)}</pre>
+      <button
+        data-testid="edit-content"
+        onClick={() =>
+          onDocumentChange({
+            ...document,
+            blocks: [{ id: id(1), type: "paragraph", content: [{ type: "text", text: "EDITADO" }] }],
+          })
+        }
+      >
+        {(document.blocks[0] as { content: { text: string }[] }).content[0].text}
+      </button>
+      <button data-testid="set-pagestyle" onClick={() => onPageStyleChange({ fontFamily: "lexend", fontSize: 14 })}>
+        Aparência
+      </button>
+      <button onClick={onRegenerate}>Regerar</button>
+      <button aria-label="Voltar" onClick={onPrev}>Voltar</button>
+      <button aria-label="Avançar para exportação" onClick={onNext}>Exportar</button>
+    </div>
   ),
 }));
 
@@ -155,39 +178,9 @@ vi.mock("./render/CanonicalRenderer", () => ({
   ),
 }));
 
-// StylingSurface (the click-to-edit editor surface) — the wizard test only
-// cares about SSOT wiring, not the editor internals (covered by its own tests).
-// Expose a readout of the live document and a button that applies a block style.
-vi.mock("./steps/styling/StylingSurface", () => ({
-  StylingSurface: ({
-    document,
-    onChange,
-  }: {
-    document: CanonicalDocument;
-    onChange: (d: CanonicalDocument) => void;
-  }) => (
-    <div>
-      <pre data-testid="style-doc">{JSON.stringify(document)}</pre>
-      <button
-        data-testid="edit-style"
-        onClick={() =>
-          onChange({
-            ...document,
-            blocks: document.blocks.map((b, i) =>
-              i === 0 ? { ...b, style: { align: "center" } } : b,
-            ),
-          })
-        }
-      >
-        editar estilo
-      </button>
-    </div>
-  ),
-}));
-
 // --- helpers ----------------------------------------------------------------
 
-function advanceToContent() {
+function advanceToReview() {
   fireEvent.click(screen.getByTestId("pick-type"));
   fireEvent.click(screen.getByTestId("input-next"));
   fireEvent.click(screen.getByTestId("barriers-next"));
@@ -210,67 +203,73 @@ beforeEach(() => {
 describe("CanonicalAdaptationWizard", () => {
   it("walks the input steps and renders the content step after generation", () => {
     renderWithProviders(<CanonicalAdaptationWizard />);
-    advanceToContent();
+    advanceToReview();
     expect(screen.getByTestId("edit-content")).toHaveTextContent("gerado");
   });
 
   it("generation sets a valid canonical document", () => {
     renderWithProviders(<CanonicalAdaptationWizard />);
-    advanceToContent();
-    // Move to styling to read the document out of the surface.
-    fireEvent.click(screen.getByRole("button", { name: /Avançar para estilo/i }));
-    const doc = JSON.parse(screen.getByTestId("style-doc").textContent!);
+    advanceToReview();
+    const doc = JSON.parse(screen.getByTestId("review-doc").textContent!);
     expect(validateDocument(doc)).toBeTruthy();
   });
 
   it("content edits propagate into the single document", () => {
     renderWithProviders(<CanonicalAdaptationWizard />);
-    advanceToContent();
+    advanceToReview();
     fireEvent.click(screen.getByTestId("edit-content"));
     expect(screen.getByTestId("edit-content")).toHaveTextContent("EDITADO");
   });
 
-  it("styling edits propagate to the same document", () => {
+  it("SSOT: a content edit survives navigating review ↔ export", () => {
     renderWithProviders(<CanonicalAdaptationWizard />);
-    advanceToContent();
-    fireEvent.click(screen.getByRole("button", { name: /Avançar para estilo/i }));
-    fireEvent.click(screen.getByTestId("edit-style"));
-    const doc = JSON.parse(screen.getByTestId("style-doc").textContent!) as CanonicalDocument;
-    expect(doc.blocks[0].style).toEqual({ align: "center" });
-  });
-
-  it("SSOT: content edit + style edit both survive navigating content ↔ styling", () => {
-    renderWithProviders(<CanonicalAdaptationWizard />);
-    advanceToContent();
+    advanceToReview();
 
     // 1) edit content
     fireEvent.click(screen.getByTestId("edit-content"));
+    expect(screen.getByTestId("edit-content")).toHaveTextContent("EDITADO");
 
-    // 2) go to styling, edit a style
-    fireEvent.click(screen.getByRole("button", { name: /Avançar para estilo/i }));
-    fireEvent.click(screen.getByTestId("edit-style"));
-
-    // 3) go back to content — content edit must still be there
+    // 2) go to export, then back to review — the edit is still there
+    fireEvent.click(screen.getByRole("button", { name: /Avançar para exportação/i }));
     fireEvent.click(screen.getByRole("button", { name: /Voltar/i }));
     expect(screen.getByTestId("edit-content")).toHaveTextContent("EDITADO");
 
-    // 4) forward to styling again — both edits present in the one document
-    fireEvent.click(screen.getByRole("button", { name: /Avançar para estilo/i }));
-    const doc = JSON.parse(screen.getByTestId("style-doc").textContent!) as CanonicalDocument;
+    // 3) the single document carries the edit
+    const doc = JSON.parse(screen.getByTestId("review-doc").textContent!) as CanonicalDocument;
     expect((doc.blocks[0] as { content: { text: string }[] }).content[0].text).toBe("EDITADO");
-    expect(doc.blocks[0].style).toEqual({ align: "center" });
+  });
+
+  it("SSOT: a pageStyle change persists and survives navigating review ↔ export", () => {
+    renderWithProviders(<CanonicalAdaptationWizard />);
+    advanceToReview();
+
+    // no pageStyle initially
+    expect(screen.getByTestId("review-pagestyle")).toHaveTextContent("null");
+
+    // set a document-level appearance
+    fireEvent.click(screen.getByTestId("set-pagestyle"));
+    expect(screen.getByTestId("review-pagestyle")).toHaveTextContent(
+      JSON.stringify({ fontFamily: "lexend", fontSize: 14 }),
+    );
+
+    // it survives a round-trip to export and back (single source of truth)
+    fireEvent.click(screen.getByRole("button", { name: /Avançar para exportação/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Voltar/i }));
+    expect(screen.getByTestId("review-pagestyle")).toHaveTextContent(
+      JSON.stringify({ fontFamily: "lexend", fontSize: 14 }),
+    );
   });
 
   it("the step indicator navigates back to a visited step", () => {
     renderWithProviders(<CanonicalAdaptationWizard />);
-    advanceToContent();
+    advanceToReview();
     fireEvent.click(screen.getByRole("button", { name: /1.*Tipo/i }));
     expect(screen.getByTestId("pick-type")).toBeInTheDocument();
   });
 
   it("regenerate is confirmed and replaces the document via the generate step", () => {
     renderWithProviders(<CanonicalAdaptationWizard />);
-    advanceToContent();
+    advanceToReview();
 
     // edit content first so we can prove the replacement
     fireEvent.click(screen.getByTestId("edit-content"));
@@ -286,20 +285,9 @@ describe("CanonicalAdaptationWizard", () => {
     expect(screen.getByTestId("edit-content")).toHaveTextContent("gerado");
   });
 
-  it("regenerate can also be triggered from the styling step", () => {
-    renderWithProviders(<CanonicalAdaptationWizard />);
-    advanceToContent();
-    fireEvent.click(screen.getByRole("button", { name: /Avançar para estilo/i }));
-    fireEvent.click(screen.getByRole("button", { name: /Regerar/i }));
-    const dialog = screen.getByRole("alertdialog");
-    fireEvent.click(within(dialog).getByRole("button", { name: /^Regerar$/i }));
-    // lands back on the generate step
-    expect(screen.getByTestId("do-generate")).toBeInTheDocument();
-  });
-
   it("cancelling the regenerate dialog keeps the current document", () => {
     renderWithProviders(<CanonicalAdaptationWizard />);
-    advanceToContent();
+    advanceToReview();
     fireEvent.click(screen.getByTestId("edit-content"));
     fireEvent.click(screen.getByRole("button", { name: /Regerar/i }));
     const dialog = screen.getByRole("alertdialog");
@@ -311,8 +299,7 @@ describe("CanonicalAdaptationWizard", () => {
     const writeText = vi.fn().mockResolvedValue(undefined);
     Object.assign(navigator, { clipboard: { writeText } });
     renderWithProviders(<CanonicalAdaptationWizard />);
-    advanceToContent();
-    fireEvent.click(screen.getByRole("button", { name: /Avançar para estilo/i }));
+    advanceToReview();
     fireEvent.click(screen.getByRole("button", { name: /Avançar para exportação/i }));
 
     fireEvent.click(screen.getByRole("button", { name: /Copiar/i }));
@@ -322,20 +309,19 @@ describe("CanonicalAdaptationWizard", () => {
     expect(screen.getByTestId("pick-type")).toBeInTheDocument();
   });
 
-  it("export step navigates back to styling with Voltar", () => {
+  it("export step navigates back to review with Voltar", () => {
     renderWithProviders(<CanonicalAdaptationWizard />);
-    advanceToContent();
-    fireEvent.click(screen.getByRole("button", { name: /Avançar para estilo/i }));
+    advanceToReview();
     fireEvent.click(screen.getByRole("button", { name: /Avançar para exportação/i }));
     fireEvent.click(screen.getByRole("button", { name: /Voltar/i }));
-    expect(screen.getByTestId("edit-style")).toBeInTheDocument();
+    expect(screen.getByTestId("edit-content")).toBeInTheDocument();
   });
 
   // --- M6 persistence wiring -------------------------------------------------
 
   it("creates a draft on first generation", async () => {
     renderWithProviders(<CanonicalAdaptationWizard />);
-    advanceToContent();
+    advanceToReview();
     await waitFor(() => expect(repo.saveDraft).toHaveBeenCalledTimes(1));
     expect(repo.saveDraft).toHaveBeenCalledWith(
       expect.objectContaining({ user_id: "u1", activity_type: "exercício" }),
@@ -346,14 +332,14 @@ describe("CanonicalAdaptationWizard", () => {
     vi.mocked(repo.saveDraft).mockRejectedValue(new Error("db down"));
     const { toast } = await import("sonner");
     renderWithProviders(<CanonicalAdaptationWizard />);
-    advanceToContent();
+    advanceToReview();
     await waitFor(() => expect(toast.error).toHaveBeenCalled());
   });
 
   it("shows the autosave status indicator once a draft exists", async () => {
     mockDraftStatus.value = "saving";
     renderWithProviders(<CanonicalAdaptationWizard />);
-    advanceToContent();
+    advanceToReview();
     await waitFor(() => expect(repo.saveDraft).toHaveBeenCalled());
     expect(await screen.findByRole("status")).toHaveTextContent(/Salvando/i);
   });
@@ -361,9 +347,8 @@ describe("CanonicalAdaptationWizard", () => {
   it("Salvar marks the draft ready, toasts, and navigates to history", async () => {
     const { toast } = await import("sonner");
     renderWithProviders(<CanonicalAdaptationWizard />);
-    advanceToContent();
+    advanceToReview();
     await waitFor(() => expect(repo.saveDraft).toHaveBeenCalled());
-    fireEvent.click(screen.getByRole("button", { name: /Avançar para estilo/i }));
     fireEvent.click(screen.getByRole("button", { name: /Avançar para exportação/i }));
     fireEvent.click(screen.getByRole("button", { name: /Salvar/i }));
     await waitFor(() =>
@@ -381,9 +366,8 @@ describe("CanonicalAdaptationWizard", () => {
     // render-time currentUpdatedAt, must be the one markReady receives.
     mockFlush.mockResolvedValue("2026-09-09T00:00:00Z");
     renderWithProviders(<CanonicalAdaptationWizard />);
-    advanceToContent();
+    advanceToReview();
     await waitFor(() => expect(repo.saveDraft).toHaveBeenCalled());
-    fireEvent.click(screen.getByRole("button", { name: /Avançar para estilo/i }));
     fireEvent.click(screen.getByRole("button", { name: /Avançar para exportação/i }));
     fireEvent.click(screen.getByRole("button", { name: /Salvar/i }));
     await waitFor(() =>
@@ -397,9 +381,8 @@ describe("CanonicalAdaptationWizard", () => {
   it("Salvar falls back to currentUpdatedAt when flush returns null", async () => {
     mockFlush.mockResolvedValue(null);
     renderWithProviders(<CanonicalAdaptationWizard />);
-    advanceToContent();
+    advanceToReview();
     await waitFor(() => expect(repo.saveDraft).toHaveBeenCalled());
-    fireEvent.click(screen.getByRole("button", { name: /Avançar para estilo/i }));
     fireEvent.click(screen.getByRole("button", { name: /Avançar para exportação/i }));
     fireEvent.click(screen.getByRole("button", { name: /Salvar/i }));
     await waitFor(() =>
@@ -414,9 +397,8 @@ describe("CanonicalAdaptationWizard", () => {
     const { toast } = await import("sonner");
     mockMarkReady.mockResolvedValue({ ok: false, conflict: true });
     renderWithProviders(<CanonicalAdaptationWizard />);
-    advanceToContent();
+    advanceToReview();
     await waitFor(() => expect(repo.saveDraft).toHaveBeenCalled());
-    fireEvent.click(screen.getByRole("button", { name: /Avançar para estilo/i }));
     fireEvent.click(screen.getByRole("button", { name: /Avançar para exportação/i }));
     fireEvent.click(screen.getByRole("button", { name: /Salvar/i }));
     await waitFor(() => expect(mockMarkReady).toHaveBeenCalled());
@@ -430,7 +412,7 @@ describe("CanonicalAdaptationWizard", () => {
 
   it("does not create a second draft when regenerating", async () => {
     renderWithProviders(<CanonicalAdaptationWizard />);
-    advanceToContent();
+    advanceToReview();
     await waitFor(() => expect(repo.saveDraft).toHaveBeenCalledTimes(1));
 
     // regenerate, then generate again — draftId already exists, so no new draft
@@ -549,7 +531,7 @@ describe("CanonicalAdaptationWizard", () => {
       savedAt: 1,
     });
     renderWithProviders(<CanonicalAdaptationWizard />);
-    advanceToContent();
+    advanceToReview();
     await waitFor(() => expect(repo.saveDraft).toHaveBeenCalled());
     const dialog = await screen.findByRole("alertdialog");
     fireEvent.click(within(dialog).getByRole("button", { name: /Recuperar/i }));
@@ -558,7 +540,7 @@ describe("CanonicalAdaptationWizard", () => {
     );
   });
 
-  it("opens in edit mode at the content step seeded from a row", () => {
+  it("opens in edit mode at the review step seeded from a row", () => {
     const seededResult = makeResult();
     renderWithProviders(
       <CanonicalAdaptationWizard
@@ -586,7 +568,7 @@ describe("CanonicalAdaptationWizard", () => {
     renderWithProviders(<CanonicalAdaptationWizard />);
     // Before generation the hook is wired with a null draft.
     expect(draftHookCalls[0]).toMatchObject({ draftId: null, initialUpdatedAt: null });
-    advanceToContent();
+    advanceToReview();
     await waitFor(() => expect(repo.saveDraft).toHaveBeenCalled());
     // After generation the latest hook call carries the row's id + updated_at,
     // proving the values propagated as props (state, not a ref).
@@ -599,9 +581,8 @@ describe("CanonicalAdaptationWizard", () => {
 
   it("Salvar flushes the pending autosave before marking ready", async () => {
     renderWithProviders(<CanonicalAdaptationWizard />);
-    advanceToContent();
+    advanceToReview();
     await waitFor(() => expect(repo.saveDraft).toHaveBeenCalled());
-    fireEvent.click(screen.getByRole("button", { name: /Avançar para estilo/i }));
     fireEvent.click(screen.getByRole("button", { name: /Avançar para exportação/i }));
     fireEvent.click(screen.getByRole("button", { name: /Salvar/i }));
     await waitFor(() =>
@@ -619,7 +600,7 @@ describe("CanonicalAdaptationWizard", () => {
   it("onConflict surfaces a toast and reloads via navigate(0)", async () => {
     const { toast } = await import("sonner");
     renderWithProviders(<CanonicalAdaptationWizard />);
-    advanceToContent();
+    advanceToReview();
     await waitFor(() => expect(repo.saveDraft).toHaveBeenCalled());
     const onConflict = draftHookCalls[draftHookCalls.length - 1].onConflict;
     expect(onConflict).toBeTypeOf("function");

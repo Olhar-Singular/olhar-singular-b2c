@@ -3,7 +3,7 @@ services:
     build: .
     container_name: orientador-b2c-app
     ports:
-      - "8080:8080"
+      - "3000:8080"
     volumes:
       - .:/app
       - app_node_modules:/app/node_modules

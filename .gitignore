@@ -33,6 +33,12 @@ docker-compose.override.yml
 supabase/.temp/
 supabase/functions/.env
 
+# Backups de env/segredos — nunca commitar (ex.: supabase/functions/.env.bak)
+*.bak
+
+# Fixtures locais (PDFs de teste, amostras grandes) — não versionar
+fixtures/
+
 # Claude Code — artefatos locais/efêmeros
 .claude/debug/
 .claude/plans/

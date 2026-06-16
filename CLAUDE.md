@@ -1,201 +1,119 @@
 # Orientador Digital B2C
 
-Plataforma educacional B2C (em construção). Stack técnica idêntica à do projeto B2B `orientador-digital` de referência.
+Plataforma educacional B2C (em construção). Educadores adaptam atividades pedagógicas
+(provas, exercícios) para alunos com **barreiras de aprendizagem** (ex.: TEA) usando IA;
+monetização por **créditos** (1ª adaptação grátis, demais debitam). Stack idêntica ao
+projeto B2B de referência `orientador-digital`.
 
-## Regra de Commit
+## Contexto do projeto
 
-**Nunca fazer commit automaticamente.** Sempre aguardar confirmação explícita do usuário após validação e teste manual.
+Cada fluxo = uma página + um hook + (geralmente) uma edge function: **Adaptar**, **Perfis
+de barreira**, **Banco de questões**, **Chat**, **Créditos**, **Admin**, **Auth**.
 
-## Comandos Essenciais
+→ Mapa de domínio completo (fluxos → página/hook/edge function, onde mora cada camada de
+lógica, gotchas de dados como `credit_balance` e `adaptation_result->'document'`):
+**skill `dominio-orientador`** (carrega sozinha ao tocar uma área nova).
 
-### Docker (container do app)
+**Editor do Adaptar — superfície única "Revisar".** O wizard tem **um só** passo de edição
+(`src/components/adaptation/steps/review/`): a folha A4 como protagonista, chrome contextual.
+Fluxo: `Tipo → Atividade → Barreiras → Gerar → Revisar → Exportar` (os antigos Conteúdo +
+Estilo foram fundidos; não existe mais "modo de editor"). Regra mental que governa a
+interação: **"Se está impresso na folha, clique e digite. Se é estrutura, abra o card."**
+Texto edita inline; formatação de seleção vem do BubbleMenu; aparência do documento (fonte/
+tamanho/espaçamento) vem do popover Aparência sobre os page tokens (paridade com o PDF).
+Specs do redesign: **`docs/superpowers/specs/2026-06-03-adaptar-restructure-design.md`**.
 
-```bash
-make up                  # Subir container (build + start)
-make down                # Parar container
-make rebuild             # Rebuild após mudar dependências
-make shell               # Shell dentro do container
-make logs                # Logs do container
-```
+**Áreas frágeis** — isolar via ferramenta dedicada:
 
-### Dev (rodam dentro do container via make)
-
-```bash
-make dev                 # Dev server (Vite, porta 8080)
-make build               # Build produção
-make lint                # ESLint
-make test                # Vitest (single run)
-make test-watch          # Vitest (watch mode)
-make typecheck           # TypeScript check
-```
-
-### Supabase
-
-```bash
-make sb-start            # Subir Supabase local
-make sb-stop             # Parar Supabase local
-make sb-status           # Exibir URLs e keys locais
-make sb-reset            # Reset DB local (reaplica migrations)
-make sb-login            # Autenticar no Supabase (remoto)
-make sb-link             # Vincular ao projeto remoto (requer PROJECT_ID no Makefile)
-make db-push             # Aplicar migrations no remoto
-make gen-types           # Gerar tipos TypeScript do schema local
-make gen-types-remote    # Gerar tipos do schema remoto
-make fn-deploy-all       # Deploy de todas as edge functions
-make fn-serve            # Servir funções localmente
-```
-
-### Atalhos
-
-```bash
-make start               # Subir tudo (Supabase local + container app)
-make stop                # Parar tudo
-```
-
-## Setup Inicial
-
-```bash
-# 1. Instalar Supabase CLI
-curl -fsSL https://github.com/supabase/cli/releases/latest/download/supabase_linux_amd64.tar.gz \
-  | tar -xz -C ~/.local/bin supabase
-
-# 2. Configurar .env (copiar .env.example)
-cp .env.example .env
-
-# 3. Subir
-make start
-
-# 4. Copiar keys locais do supabase status para o .env
-make sb-status
-```
+- `src/lib/adaptation/` — documento **canônico** + schema **Tiptap**, **compartilhado com
+  a edge fn Deno** (import com extensão `.ts` explícita). Antes de mexer: skill `validate-adaptar`.
+- `src/components/adaptation/render/pdf/` — geração de PDF (`@react-pdf/renderer`). Agente `pdf-debugger`.
 
 ## Stack
 
-| Camada       | Tecnologia                                  |
-|-------------|---------------------------------------------|
-| Framework   | React 18 + TypeScript 5.8 + Vite 5          |
-| Estilo      | Tailwind CSS 3 + shadcn/ui (Radix)          |
-| Estado      | TanStack Query (server) + Context (auth)     |
-| Backend     | Supabase (auth, DB, edge functions)          |
-| Testes      | Vitest + Testing Library + jsdom             |
-| Deploy      | Vercel (GitHub Actions)                      |
-| Pacotes     | Bun (CI) / npm (dev)                         |
+| Camada    | Tecnologia                                |
+| --------- | ----------------------------------------- |
+| Framework | React 18 + TypeScript 5.8 + Vite 5        |
+| Estilo    | Tailwind CSS 3 + shadcn/ui (Radix)        |
+| Estado    | TanStack Query (server) + Context (auth)  |
+| Backend   | Supabase (auth, DB, edge functions)       |
+| Testes    | Vitest + Testing Library + jsdom · pgTAP  |
+| Deploy    | Vercel (GitHub Actions) · Bun (CI)/npm    |
 
-## Variáveis de Ambiente
+## Comandos
 
-As variáveis abaixo no `.env` (raiz) apontam para o **Supabase remoto** (produção). Use sempre estes nomes ao referenciar credenciais remotas em scripts, edge functions, comandos ou ferramentas — nunca hardcode URLs/keys.
-
-```bash
-VITE_SUPABASE_URL=             # URL do projeto remoto (ex.: https://<project-id>.supabase.co)
-VITE_SUPABASE_PUBLISHABLE_KEY= # Anon/publishable key (uso client-side)
-VITE_SUPABASE_PROJECT_ID=      # ID do projeto remoto (usado pelo MCP supabase e pelo CLI)
-```
-
-Opcionais (descomentar no `.env` quando precisar de acesso direto ao Postgres remoto, fora do client supabase-js):
+Tudo roda dentro do container via `make`. Referência completa: @.claude/docs/commands.md
 
 ```bash
-DATABASE_PASSWORD=             # Senha do role postgres (remoto)
-DATABASE_URL=                  # Connection string completa (remoto)
+make start        # Subir tudo (Supabase local + app)   ·  make stop
+make dev          # Dev server (Vite, porta 8080)
+make test         # Vitest (single run)                 ·  make test-watch
+make test-db      # pgTAP (RPC/RLS) — exige Docker
+make lint         # ESLint                              ·  make typecheck
+make build        # Build produção
+make sb-reset     # Reset DB local (reaplica migrations)
+make gen-types    # Gerar tipos do schema local
 ```
 
-> Para Supabase local (`make sb-start`), o `.env` aponta para `http://localhost:54321` e a anon key vem de `make sb-status`. As mesmas três variáveis (`VITE_SUPABASE_*`) servem aos dois ambientes — o que muda é o conteúdo do `.env`.
-
-### Acesso ao Supabase remoto (referência rápida)
-
-| Ferramenta              | Variável usada                                        |
-|-------------------------|-------------------------------------------------------|
-| MCP `supabase`          | `VITE_SUPABASE_PROJECT_ID`                            |
-| `make sb-link`          | `VITE_SUPABASE_PROJECT_ID` (via Makefile)             |
-| `make gen-types-remote` | `VITE_SUPABASE_PROJECT_ID`                            |
-| Client supabase-js      | `VITE_SUPABASE_URL` + `VITE_SUPABASE_PUBLISHABLE_KEY` |
-| Conexão Postgres direta | `DATABASE_URL` (ou `DATABASE_PASSWORD`)               |
-
-## MCP Servers
-
-| Servidor   | Transporte    | Uso                                                                                      |
-|------------|---------------|------------------------------------------------------------------------------------------|
-| `supabase` | HTTP          | Queries, migrations e edge functions no Supabase remoto (usa `VITE_SUPABASE_PROJECT_ID`) |
-| `context7` | stdio (`npx`) | Docs ao vivo: Radix, TanStack Query, Supabase, etc.                                      |
-
-Ao usar libs externas complexas, consultar Context7 antes de adivinhar assinaturas (`resolve-library-id` → `query-docs`).
-
-## Estrutura
-
-```
-src/
-├── components/
-│   └── ui/              # shadcn/ui — NÃO EDITAR manualmente
-├── integrations/
-│   └── supabase/        # Client (regenerar types.ts após primeira migration)
-├── lib/                 # utils (cn) e futuros utilitários de domínio
-├── App.tsx              # Router + providers
-└── main.tsx             # Entry point
-```
+Setup inicial de máquina nova: @.claude/docs/setup.md
 
 ## Convenções de Código
 
-- **Nomenclatura**: Componentes PascalCase. Hooks `use*`. Utilitários camelCase.
-- **Imports**: Alias `@/` para tudo em `src/`. Ordem: React → libs → módulos internos → tipos.
+- **Nomenclatura**: Componentes PascalCase · Hooks `use*` · Utilitários camelCase.
+- **Imports**: alias `@/` para tudo em `src/`. Ordem: React → libs → módulos internos → tipos.
 - **Idioma**: UI em pt-BR; código (variáveis, funções, comentários) em inglês.
-- **Testes**: ao adicionar o primeiro teste, criar `src/test/setup.ts` com mocks globais (matchMedia, ResizeObserver) e helpers em `src/test/helpers.ts`.
+- **Testes ao lado do arquivo** (`useFoo.test.ts`); `src/test/` guarda só infra global
+  (`setup.ts`, `helpers.ts`), fixtures inline no teste. Detalhe: @.claude/docs/testing.md
 
-## Fluxo TDD Obrigatório
+## Regras Importantes
 
-Toda alteração de código segue **Red → Green → Refactor**:
+- **Nunca commit automático.** Sempre aguardar aprovação explícita do usuário após teste
+  manual. (Redação da mensagem seguindo a convenção: skill `commit-crafting`.)
+- **Nunca push direto para `main`** — feature branch + PR.
+- **TDD obrigatório**: toda mudança segue Red → Green → Refactor; nunca editar código sem
+  teste que cubra a mudança. Ciclo guiado: comando `/tdd`.
+- **Gate de cobertura 100%** (statements/branches/functions/lines) travado em
+  `vitest.config.ts` — nunca baixar o threshold. Lógica de dinheiro/segurança (RPCs de
+  crédito, RLS) é coberta por **pgTAP**, não por mock. Detalhe: @.claude/docs/testing.md
+- **Arquivos protegidos — NÃO EDITAR**: `src/components/ui/*` (shadcn, usar
+  `npx shadcn-ui@latest add`), `src/integrations/supabase/types.ts` (gerado do schema).
+- **Segredos**: `.env` no `.gitignore`; nunca hardcodar URLs/keys — usar as vars do `.env`.
+  Auth via Supabase (session em localStorage + auto-refresh). Detalhe: @.claude/docs/environment.md
 
-1. **RED** — Escrever teste que falha. `test: describe failing test for <feature>`
-2. **GREEN** — Implementar o mínimo para passar. `feat: implement <feature>`
-3. **REFACTOR** — Limpar sem quebrar. Lint + tests limpos. `refactor: clean up <feature>`
+## Estrutura (anotações não-óbvias)
 
-Nunca pular uma fase. Nunca editar código sem teste que cubra a mudança.
+Árvore completa: @.claude/docs/architecture.md
 
-## Estratégia de Testes em Camadas
+- `src/lib/adaptation/` — núcleo do Adaptar (canônico + Tiptap). **Compartilhado c/ Deno.** FRÁGIL.
+- `src/components/adaptation/steps/review/` — superfície única "Revisar" (editor canônico +
+  Aparência + gaveta de metadados). `canonical-editor/` traz NodeViews, BubbleMenu e o
+  inserter "+". Não há mais `steps/content` nem `steps/styling` (fundidos em Revisar).
+- `src/components/adaptation/render/pdf/` — geração de PDF. FRÁGIL (agente `pdf-debugger`).
+- `src/components/ui/` e `src/integrations/supabase/types.ts` — gerados, **NÃO EDITAR**.
+- `supabase/functions/_shared/` — lógica testável das edge fns; `index.ts` é só glue HTTP.
+- `supabase/migrations/` — schema + RPCs de crédito + RLS owner-based (super-admin cross-tenant).
 
-O alvo é **100% de cobertura da lógica de negócio, sempre automatizado**. Cada camada tem sua ferramenta — escolha a certa para o que está testando:
+## MCP & Docs ao vivo
 
-| Camada | Ferramenta | Cobre | Comando |
-| ------ | --------- | ----- | ------- |
-| Lógica/unit (hooks, `lib/domain`, `_shared`) | **Vitest** | cálculo de custo, parsers, orquestração das functions extraída para `_shared/` | `make test` / `npm run test:coverage` |
-| Banco / RPC / RLS (`deduct_credits`, `grant_credits`, policies) | **pgTAP** | lock, saldo insuficiente, free-first, segurança RLS | `make test-db` (`supabase test db`) |
+- `supabase` (HTTP) — queries/migrations/functions no remoto (usa `VITE_SUPABASE_PROJECT_ID`).
+- `context7` (stdio) — docs ao vivo (Radix, TanStack Query, Supabase…). Consultar **antes de
+  adivinhar** assinaturas de libs externas (`resolve-library-id` → `query-docs`).
 
-Regras:
+## Skills, Agentes e Comandos
 
-- **Gate de cobertura 100%** travado em `vitest.config.ts` (statements/branches/functions/lines) — o CI quebra se cair. Mantenha-o em 100%; nunca baixe o threshold para "passar".
-- **Exclusões legítimas da cobertura** (código gerado/vendado, sem valor testar): `src/integrations/supabase/types.ts`, `src/components/ui/**`, e os `supabase/functions/**/index.ts` (glue HTTP). **Lógica de verdade não vai em `index.ts`** — extraia para `supabase/functions/_shared/` para que seja coberta pelo Vitest.
-- **Lógica sensível a dinheiro/segurança** (RPCs de crédito, RLS) é coberta por **pgTAP**, não por mock — mockar o client não testaria o lock nem as policies reais. Os testes ficam em `supabase/tests/database/*.test.sql`.
-- **Enforcement local**: Husky + lint-staged. `pre-commit` roda lint + testes afetados nos arquivos staged; `pre-push` roda `typecheck` + suíte Vitest. (`test-db` exige Docker; roda no CI.)
+| Tipo | Onde | Itens |
+| ---- | ---- | ----- |
+| Skills | `.claude/skills/` | `dominio-orientador`, `validate-adaptar`, `commit-crafting`, `supabase*` |
+| Agentes | `.claude/agents/` | `edge-fn-writer`, `hook-writer`, `migration-reviewer`, `rls-policy-writer`, `test-writer`, `pdf-debugger` |
+| Comandos | `.claude/commands/` | `/tdd`, `/plan`, `/ship`, `/debug` |
+| Skills vendoradas | `.agents/skills/` | Externas (Supabase) — geridas por `skills-lock.json`, não editar à mão. |
 
-## Arquivos Protegidos — NÃO EDITAR
-
-- `src/components/ui/*` — shadcn/ui (usar `npx shadcn-ui@latest add <component>`)
-- `src/integrations/supabase/types.ts` — gerado automaticamente do schema (após existir)
-
-## Memória e Performance
-
-- Testes: `NODE_OPTIONS='--max-old-space-size=19456'`
-- Vitest usa fork pool (max 4 workers)
-
-## CI/CD
-
-`.github/workflows/deploy.yml`: Lint → Test (Vitest com `npm run test:coverage`, **gate de 100% quebra o build**) → Build, instalando deps com `npm ci`. Um job `db-tests` sobe Supabase local (`supabase db start`) e roda os testes pgTAP (`supabase test db`). Deploy pelo Vercel via integração GitHub. `supabase.yml` deploya migrations/functions/types ao push em `supabase/**`.
-
-## Segurança
-
-- Nunca push direto para `main` — feature branches + PR.
-- `.env` no `.gitignore`.
-- Auth via Supabase com session em localStorage + auto-refresh.
-
-## Skills do Projeto
-
-Skills ficam em `.claude/skills/<nome>/SKILL.md` (frontmatter `name` + `description`); subagentes em `.claude/agents/`; comandos em `.claude/commands/`.
-
-| Skill | Quando usar |
-|-------|-------------|
-| `validate-adaptar` | Validar o fluxo "Adaptar" (ou qualquer fluxo de UI) de ponta a ponta no ambiente REAL — não só `make test`. Cobre testes → banco (migration/pgTAP/round-trip) → bundle Deno → IA real → UI no browser, e os truques de dirigir o app via Chrome DevTools. Existe porque cobertura 100% não pega bugs de integração (mock de Tiptap esconde crash de render; Vitest não exercita o bundle Deno). |
-
-**Mantenha as skills atualizadas.** Sempre que aprender algo reutilizável — um padrão novo, um gotcha que custou tempo, um procedimento de validação, uma armadilha de integração, ou quando um passo de uma skill ficar obsoleto (ex.: o E2E manual virar Playwright) — **crie ou edite a skill correspondente** em `.claude/skills/` (use a skill `superpowers:writing-skills` como guia). Skill desatualizada engana mais do que ajuda. Quando uma skill referenciar um plano/doc que foi implementado, atualize-a para apontar pro código/comando real.
+**Manter doc viva (obrigatório):** mexeu numa área que uma skill/agente descreve (caminho,
+coluna, contrato, passo de fluxo)? Atualize a skill/agente **na mesma tarefa** — skill
+portável `keeping-skills-current`.
 
 ## Modo de discussão
 
-- Quando eu disser "vamos discutir" ou "quero explorar uma ideia", entre em modo de brainstorming: faça perguntas clarificadoras antes de implementar.
-- Só comece a codar quando eu disser "pode implementar" ou "vai em frente".
+- "vamos discutir" / "quero explorar uma ideia" → modo brainstorming: perguntas
+  clarificadoras antes de implementar.
+- Só comece a codar quando eu disser "pode implementar" / "vai em frente".

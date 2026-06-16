@@ -1,7 +1,8 @@
 /**
- * OrderingView — read-only render of an ordering answer. Items are shown in
- * their authored correct sequence (sorted by `position`), numbered — this is
- * the answer key.
+ * OrderingView — read-only render of an ordering answer.
+ * Answer key is hidden: items shown in array order (no sort by position);
+ * each item has a blank "____" slot for the student to write the order.
+ * Mirrors PdfAnswer (ordering).
  */
 
 import type { QuestionAnswer } from "@/lib/adaptation/canonical/schema";
@@ -10,15 +11,17 @@ import { RichTextView } from "../RichTextView";
 type OrderingAnswer = Extract<QuestionAnswer, { kind: "ordering" }>;
 
 export function OrderingView({ answer }: { answer: OrderingAnswer }) {
-  const ordered = [...answer.items].sort((a, b) => a.position - b.position);
   return (
-    <ol data-testid="answer-ordering" className="list-decimal space-y-1 pl-6">
-      {ordered.map((item) => (
-        <li key={item.id}>
-          <RichTextView content={item.content} />
+    <ul data-testid="answer-ordering" className="space-y-1">
+      {answer.items.map((item) => (
+        <li key={item.id} className="flex items-start gap-2">
+          <span className="shrink-0 font-medium">____</span>
+          <span className="flex-1">
+            <RichTextView content={item.content} />
+          </span>
         </li>
       ))}
-    </ol>
+    </ul>
   );
 }
 

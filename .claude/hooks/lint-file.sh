@@ -10,9 +10,11 @@
 #   - exit 0: lint OK ou arquivo fora do escopo
 #   - exit 2: lint falhou (Claude lê stderr e corrige)
 #
-# Divisão rápido × lento:
-#   - Fast hook (este): ESLint no arquivo editado — feedback instantâneo (<5s)
-#   - Stop hook (test-suite.sh): vitest --changed ao fim do turno — cobre tudo
+# Escopo de validação:
+#   - Este hook: ESLint no arquivo editado — feedback instantâneo (<5s).
+#   - Testes NÃO rodam em hook do Claude. O gate de testes vive nos git hooks
+#     (Husky): pre-commit roda `vitest related` nos staged; pre-push roda
+#     typecheck + suíte completa. Ver .husky/.
 #
 # Typecheck NÃO roda neste hook porque:
 #   1. Cold run leva ~8s (estoura o target de <5s)

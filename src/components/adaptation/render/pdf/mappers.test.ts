@@ -1,10 +1,10 @@
 import { describe, it, expect } from "vitest";
 import { isValidElement, type ReactElement } from "react";
-import { View } from "@react-pdf/renderer";
+import { View, Text } from "@react-pdf/renderer";
 import { PdfBlock } from "./PdfBlock";
 import { PdfAnswer } from "./PdfAnswer";
 import { PdfQuestion } from "./PdfQuestion";
-import { PdfImage, PdfScaffolding } from "./PdfLeafBlocks";
+import { PdfHeading, PdfParagraph, PdfImage, PdfScaffolding } from "./PdfLeafBlocks";
 import { PdfMath } from "./PdfMath";
 import type { Block, QuestionAnswer } from "@/lib/adaptation/canonical/schema";
 
@@ -37,7 +37,7 @@ function textOf(node: unknown): string {
 }
 
 describe("PdfAnswer", () => {
-  it("marks the correct alternative with a check and letters the rest", () => {
+  it("letters alternatives a)/b) without revealing the correct answer", () => {
     const answer: QuestionAnswer = {
       kind: "multipleChoice",
       alternatives: [
@@ -48,26 +48,33 @@ describe("PdfAnswer", () => {
     const txt = textOf(PdfAnswer({ answer }));
     expect(txt).toContain("a)");
     expect(txt).toContain("b)");
-    expect(txt).toContain("✔");
+    expect(txt).not.toContain("✔");
   });
 
-  it("renders (V)/(F) prefixes for trueFalse", () => {
+  it("renders trueFalse without revealing the value — shows (  ) V and (  ) F markers", () => {
     const txt = textOf(
       PdfAnswer({
         answer: {
           kind: "trueFalse",
           items: [
-            { id: id(1), content: rt("t"), value: true },
-            { id: id(2), content: rt("f"), value: false },
+            { id: id(1), content: rt("afirmação verdadeira"), value: true },
+            { id: id(2), content: rt("afirmação falsa"), value: false },
           ],
         },
       }),
     );
-    expect(txt).toContain("(V)");
-    expect(txt).toContain("(F)");
+    // The affirmation text must appear.
+    expect(txt).toContain("afirmação verdadeira");
+    expect(txt).toContain("afirmação falsa");
+    // The empty V/F markers must be present.
+    expect(txt).toContain("(  ) V");
+    expect(txt).toContain("(  ) F");
+    // Must NOT reveal the authored value.
+    expect(txt).not.toContain("(V)");
+    expect(txt).not.toContain("(F)");
   });
 
-  it("renders [x]/[ ] for checkbox", () => {
+  it("renders checkbox with [ ] for all items — never reveals [x]", () => {
     const txt = textOf(
       PdfAnswer({
         answer: {
@@ -79,8 +86,8 @@ describe("PdfAnswer", () => {
         },
       }),
     );
-    expect(txt).toContain("[x]");
     expect(txt).toContain("[ ]");
+    expect(txt).not.toContain("[x]");
   });
 
   it("renders matching pairs with a connector", () => {
@@ -94,40 +101,44 @@ describe("PdfAnswer", () => {
     expect(txt).toContain("↔");
   });
 
-  it("sorts ordering items by position (the answer key)", () => {
-    const txt = textOf(
-      PdfAnswer({
-        answer: {
-          kind: "ordering",
-          items: [
-            { id: id(1), content: rt("Second"), position: 2 },
-            { id: id(2), content: rt("First"), position: 1 },
-          ],
-        },
-      }),
-    );
-    expect(txt.indexOf("First")).toBeLessThan(txt.indexOf("Second"));
-    expect(txt).toContain("1.");
-    expect(txt).toContain("2.");
+  it("renders ordering items in array order without position sort or numbering", () => {
+    const el = PdfAnswer({
+      answer: {
+        kind: "ordering",
+        items: [
+          { id: id(1), content: rt("Second"), position: 2 },
+          { id: id(2), content: rt("First"), position: 1 },
+        ],
+      },
+    }) as ReactElement;
+    const txt = textOf(el);
+    // Items appear in array order (Second before First — NOT sorted by position).
+    expect(txt.indexOf("Second")).toBeLessThan(txt.indexOf("First"));
+    // No positional numbering that would reveal the answer key.
+    expect(txt).not.toContain("1.");
+    expect(txt).not.toContain("2.");
+    // Both texts are still present.
+    expect(txt).toContain("Second");
+    expect(txt).toContain("First");
   });
 
-  it("renders fillBlank answers with alternatives and tip", () => {
-    const txt = textOf(
-      PdfAnswer({
-        answer: {
-          kind: "fillBlank",
-          gaps: [
-            { id: id(1), answer: "3/4", alternatives: ["0.75"], tip: "some" },
-            { id: id(2), answer: "1" },
-          ],
-        },
-      }),
-    );
-    expect(txt).toContain("3/4");
-    expect(txt).toContain("também: 0.75");
-    expect(txt).toContain("some");
-    expect(txt).toContain("(1)");
-    expect(txt).toContain("(2)");
+  it("renders fillBlank as an empty View — gaps live inline in the stem, no answer key", () => {
+    const el = PdfAnswer({
+      answer: {
+        kind: "fillBlank",
+        gaps: [
+          { id: id(1), answer: "3/4", alternatives: ["0.75"], tip: "some" },
+          { id: id(2), answer: "1" },
+        ],
+      },
+    }) as ReactElement;
+    // Must be non-null (parity contract); visually empty.
+    expect(el).not.toBeNull();
+    const txt = textOf(el);
+    // Must NOT reveal answers, alternatives or tips.
+    expect(txt).not.toContain("3/4");
+    expect(txt).not.toContain("também: 0.75");
+    expect(txt).not.toContain("some");
   });
 
   it("renders a table header row and body rows", () => {
@@ -243,14 +254,201 @@ describe("PdfScaffolding", () => {
 });
 
 describe("PdfMath", () => {
-  it("renders the latex source centered", () => {
+  it("renders the latex source in a centered inner Text inside a View wrapper", () => {
     const block: Extract<Block, { type: "blockMath" }> = {
       id: id(1),
       type: "blockMath",
       latex: "E=mc^2",
     };
     const el = PdfMath({ block }) as ReactElement;
-    expect((el.props.style as { textAlign: string }).textAlign).toBe("center");
+    // The outer element is now a <View> (block spacing); textAlign lives on the
+    // inner <Text> child.
+    expect(el.type).toBe(View);
+    const innerText = (el.props as { children: ReactElement }).children;
+    expect((innerText.props.style as { textAlign: string }).textAlign).toBe("center");
     expect(textOf(el)).toContain("E=mc^2");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Layout regression tests — vertical stacking / text overlap prevention
+// ---------------------------------------------------------------------------
+// These tests guard the structural invariants that prevent text overlap in the
+// generated PDF. The root cause was bare <Text> blocks used as column children
+// in react-pdf: their marginBottom was silently ignored by Yoga when mixed with
+// <View> siblings, causing consecutive text blocks to overlap.
+//
+// Fix: PdfParagraph, PdfHeading and PdfMath all wrap their content in a <View>
+// that carries the block-level marginBottom. The inner <Text> handles only text
+// styling. PdfAnswer row markers use flexShrink:0 to prevent collapsing.
+
+// DEFAULT_BLOCK_GAP_PT: 16px * 72/96 = 12pt (the doc-level default when no pageStyle)
+const DEFAULT_BLOCK_GAP_PT = 12;
+
+describe("Layout — PdfParagraph wraps content in a View (prevents overlap)", () => {
+  it("outer element is a View with a positive marginBottom by default", () => {
+    const block: Extract<Block, { type: "paragraph" }> = {
+      id: id(1),
+      type: "paragraph",
+      content: rt("hello world"),
+    };
+    const el = PdfParagraph({ block, blockGap: DEFAULT_BLOCK_GAP_PT }) as ReactElement;
+    expect(el.type).toBe(View);
+    const mb = (el.props.style as { marginBottom?: number }).marginBottom;
+    expect(mb).toBeGreaterThan(0);
+  });
+
+  it("uses blockGap as the default marginBottom (no spacingAfter on block)", () => {
+    const block: Extract<Block, { type: "paragraph" }> = {
+      id: id(1),
+      type: "paragraph",
+      content: rt("hello world"),
+    };
+    const el = PdfParagraph({ block, blockGap: DEFAULT_BLOCK_GAP_PT }) as ReactElement;
+    expect((el.props.style as { marginBottom?: number }).marginBottom).toBe(DEFAULT_BLOCK_GAP_PT);
+  });
+
+  it("outer View carries the spacingAfter from nodeStyle as marginBottom (overrides blockGap)", () => {
+    const block: Extract<Block, { type: "paragraph" }> = {
+      id: id(1),
+      type: "paragraph",
+      content: rt("spaced"),
+      style: { spacingAfter: 20 },
+    };
+    const el = PdfParagraph({ block, blockGap: DEFAULT_BLOCK_GAP_PT }) as ReactElement;
+    expect((el.props.style as { marginBottom?: number }).marginBottom).toBe(20);
+  });
+
+  it("outer View marginBottom is 0 when spacingAfter is explicitly 0 (author intent)", () => {
+    const block: Extract<Block, { type: "paragraph" }> = {
+      id: id(1),
+      type: "paragraph",
+      content: rt("no gap"),
+      style: { spacingAfter: 0 },
+    };
+    const el = PdfParagraph({ block, blockGap: DEFAULT_BLOCK_GAP_PT }) as ReactElement;
+    expect((el.props.style as { marginBottom?: number }).marginBottom).toBe(0);
+  });
+
+  it("inner element is a Text (not another View), preserving text wrapping", () => {
+    const block: Extract<Block, { type: "paragraph" }> = {
+      id: id(1),
+      type: "paragraph",
+      content: rt("content"),
+    };
+    const el = PdfParagraph({ block, blockGap: DEFAULT_BLOCK_GAP_PT }) as ReactElement;
+    const inner = (el.props as { children: ReactElement }).children;
+    expect(inner.type).toBe(Text);
+  });
+
+  it("text content is preserved inside the inner Text", () => {
+    const block: Extract<Block, { type: "paragraph" }> = {
+      id: id(1),
+      type: "paragraph",
+      content: rt("my paragraph"),
+    };
+    expect(textOf(PdfParagraph({ block, blockGap: DEFAULT_BLOCK_GAP_PT }))).toContain("my paragraph");
+  });
+});
+
+describe("Layout — PdfHeading wraps content in a View (prevents overlap)", () => {
+  it("outer element is a View with marginBottom", () => {
+    const block: Extract<Block, { type: "heading" }> = {
+      id: id(1),
+      type: "heading",
+      level: 1,
+      content: rt("Title"),
+    };
+    const el = PdfHeading({ block, blockGap: DEFAULT_BLOCK_GAP_PT }) as ReactElement;
+    expect(el.type).toBe(View);
+    const mb = (el.props.style as { marginBottom?: number }).marginBottom;
+    expect(mb).toBeGreaterThan(0);
+  });
+
+  it("uses blockGap as the default marginBottom (no spacingAfter on block)", () => {
+    const block: Extract<Block, { type: "heading" }> = {
+      id: id(1),
+      type: "heading",
+      level: 1,
+      content: rt("Title"),
+    };
+    const el = PdfHeading({ block, blockGap: DEFAULT_BLOCK_GAP_PT }) as ReactElement;
+    expect((el.props.style as { marginBottom?: number }).marginBottom).toBe(DEFAULT_BLOCK_GAP_PT);
+  });
+
+  it("inner Text carries the heading font size", () => {
+    const block: Extract<Block, { type: "heading" }> = {
+      id: id(1),
+      type: "heading",
+      level: 2,
+      content: rt("Sub"),
+    };
+    const el = PdfHeading({ block, blockGap: DEFAULT_BLOCK_GAP_PT }) as ReactElement;
+    const inner = (el.props as { children: ReactElement }).children;
+    expect(inner.type).toBe(Text);
+    expect((inner.props.style as { fontSize?: number }).fontSize).toBe(18);
+  });
+
+  it("spacingAfter from nodeStyle overrides the default marginBottom on the View (overrides blockGap)", () => {
+    const block: Extract<Block, { type: "heading" }> = {
+      id: id(1),
+      type: "heading",
+      level: 3,
+      content: rt("H3"),
+      style: { spacingAfter: 16 },
+    };
+    const el = PdfHeading({ block, blockGap: DEFAULT_BLOCK_GAP_PT }) as ReactElement;
+    expect((el.props.style as { marginBottom?: number }).marginBottom).toBe(16);
+  });
+});
+
+describe("Layout — PdfMath outer View carries block spacing (prevents overlap)", () => {
+  it("outer element is a View, not a bare Text", () => {
+    const block: Extract<Block, { type: "blockMath" }> = {
+      id: id(1),
+      type: "blockMath",
+      latex: "x^2",
+    };
+    expect((PdfMath({ block }) as ReactElement).type).toBe(View);
+  });
+});
+
+describe("Layout — PdfAnswer marker has flexShrink:0 (prevents row overlap)", () => {
+  it("multipleChoice marker Text has flexShrink:0 to prevent collapsing into content", () => {
+    const answer: QuestionAnswer = {
+      kind: "multipleChoice",
+      alternatives: [{ id: id(1), content: rt("opt"), correct: true }],
+    };
+    const el = PdfAnswer({ answer }) as ReactElement;
+    // Outer <View> → first row <View> → first child <Text> (the marker)
+    const firstRow = (el.props as { children: ReactElement[] }).children[0] as ReactElement;
+    const markerText = (firstRow.props as { children: ReactElement[] }).children[0] as ReactElement;
+    expect((markerText.props.style as { flexShrink?: number }).flexShrink).toBe(0);
+  });
+
+  it("matching connector has flexShrink:0 to prevent squeezing between FLEX columns", () => {
+    const answer: QuestionAnswer = {
+      kind: "matching",
+      pairs: [{ id: id(1), left: rt("A"), right: rt("B") }],
+    };
+    const el = PdfAnswer({ answer }) as ReactElement;
+    const firstRow = (el.props as { children: ReactElement[] }).children[0] as ReactElement;
+    // Row children: [leftView, connectorText, rightView]
+    const connector = (firstRow.props as { children: ReactElement[] }).children[1] as ReactElement;
+    expect((connector.props.style as { flexShrink?: number }).flexShrink).toBe(0);
+  });
+});
+
+describe("Layout — PdfQuestion uses column flex for proper block stacking", () => {
+  it("outer View has flexDirection:column so stem blocks stack vertically", () => {
+    const block: Extract<Block, { type: "question" }> = {
+      id: id(1),
+      type: "question",
+      stem: [{ id: id(2), type: "paragraph", content: rt("stem") }],
+      answer: { kind: "open" },
+    };
+    const el = PdfQuestion({ block, number: 1 }) as ReactElement;
+    expect(el.type).toBe(View);
+    expect((el.props.style as { flexDirection?: string }).flexDirection).toBe("column");
   });
 });

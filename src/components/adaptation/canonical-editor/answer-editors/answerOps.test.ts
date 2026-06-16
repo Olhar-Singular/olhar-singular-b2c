@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import type { QuestionAnswer } from "@/lib/adaptation/canonical/schema";
 import type { RichText } from "@/lib/adaptation/canonical/schema";
+import { QuestionAnswerSchema } from "@/lib/adaptation/canonical/schema";
 import {
   setCorrectAlternative,
   addAlternative,
@@ -20,6 +21,7 @@ import {
   removeGap,
   setAnswerLines,
   setTableCell,
+  changeAnswerKind,
 } from "./answerOps";
 
 const rt = (text: string): RichText => [{ type: "text", text }];
@@ -463,5 +465,176 @@ describe("setTableCell", () => {
 
   it("returns unchanged for non-table", () => {
     expect(setTableCell(mc, 0, 0, rt("z"))).toBe(mc);
+  });
+});
+
+// changeAnswerKind (Fase 3 — troca de tipo) ---------------------------------
+
+// Sequential, schema-valid UUIDs so conversions that mint several ids stay
+// deterministic AND pass QuestionAnswerSchema (which requires real UUIDs).
+function seqGen() {
+  let n = 0;
+  return () => `00000000-0000-4000-8000-${String(++n).padStart(12, "0")}`;
+}
+
+describe("changeAnswerKind", () => {
+  it("returns the same answer (referential) when the target is the current kind", () => {
+    expect(changeAnswerKind(mc, "multipleChoice")).toBe(mc);
+  });
+
+  // multipleChoice ↔ checkbox -----------------------------------------------
+  describe("multipleChoice ↔ checkbox (carry)", () => {
+    it("MC → checkbox keeps the texts and marks the correct one checked", () => {
+      const next = changeAnswerKind(mc, "checkbox", seqGen());
+      if (next.kind !== "checkbox") throw new Error("unexpected");
+      expect(next.items.map((i) => i.content)).toEqual([text("a"), text("b")]);
+      expect(next.items.map((i) => i.checked)).toEqual([true, false]);
+      expect(QuestionAnswerSchema.safeParse(next).success).toBe(true);
+    });
+
+    it("checkbox → MC keeps the texts and the first checked becomes the only correct", () => {
+      const next = changeAnswerKind(cb, "multipleChoice", seqGen());
+      if (next.kind !== "multipleChoice") throw new Error("unexpected");
+      expect(next.alternatives.map((a) => a.content)).toEqual([text("c1"), text("c2")]);
+      expect(next.alternatives.map((a) => a.correct)).toEqual([false, true]);
+      expect(QuestionAnswerSchema.safeParse(next).success).toBe(true);
+    });
+
+    it("checkbox → MC with none checked marks the first alternative correct", () => {
+      const cbNone: Extract<QuestionAnswer, { kind: "checkbox" }> = {
+        kind: "checkbox",
+        items: [
+          { id: "55555555-5555-4555-8555-555555555555", content: text("c1"), checked: false },
+          { id: "66666666-6666-4666-8666-666666666666", content: text("c2"), checked: false },
+        ],
+      };
+      const next = changeAnswerKind(cbNone, "multipleChoice", seqGen());
+      if (next.kind !== "multipleChoice") throw new Error("unexpected");
+      expect(next.alternatives.map((a) => a.correct)).toEqual([true, false]);
+      expect(QuestionAnswerSchema.safeParse(next).success).toBe(true);
+    });
+  });
+
+  // multipleChoice / checkbox → trueFalse -----------------------------------
+  describe("multipleChoice / checkbox → trueFalse (carry)", () => {
+    it("MC → trueFalse turns alternatives into statements; the correct one becomes value true", () => {
+      const next = changeAnswerKind(mc, "trueFalse", seqGen());
+      if (next.kind !== "trueFalse") throw new Error("unexpected");
+      expect(next.items.map((i) => i.content)).toEqual([text("a"), text("b")]);
+      expect(next.items.map((i) => i.value)).toEqual([true, false]);
+    });
+
+    it("checkbox → trueFalse maps checked onto value", () => {
+      const next = changeAnswerKind(cb, "trueFalse", seqGen());
+      if (next.kind !== "trueFalse") throw new Error("unexpected");
+      expect(next.items.map((i) => i.value)).toEqual([false, true]);
+    });
+  });
+
+  // multipleChoice / checkbox → ordering ------------------------------------
+  describe("multipleChoice / checkbox → ordering (carry)", () => {
+    it("MC → ordering keeps the texts in the current order, numbered by position", () => {
+      const next = changeAnswerKind(mc, "ordering", seqGen());
+      if (next.kind !== "ordering") throw new Error("unexpected");
+      expect(next.items.map((i) => i.content)).toEqual([text("a"), text("b")]);
+      expect(next.items.map((i) => i.position)).toEqual([0, 1]);
+    });
+
+    it("checkbox → ordering keeps the texts in the current order", () => {
+      const next = changeAnswerKind(cb, "ordering", seqGen());
+      if (next.kind !== "ordering") throw new Error("unexpected");
+      expect(next.items.map((i) => i.content)).toEqual([text("c1"), text("c2")]);
+      expect(next.items.map((i) => i.position)).toEqual([0, 1]);
+    });
+  });
+
+  // strict matrix: non-listed sources → list targets use the empty default ---
+  describe("non-carry source → list target falls back to the empty default (strict matrix)", () => {
+    it("trueFalse → MC drops the items and yields the empty MC default", () => {
+      const next = changeAnswerKind(tf, "multipleChoice", seqGen());
+      if (next.kind !== "multipleChoice") throw new Error("unexpected");
+      expect(next.alternatives).toHaveLength(2);
+      expect(next.alternatives.every((a) => a.content.length === 0)).toBe(true);
+      expect(next.alternatives.map((a) => a.correct)).toEqual([true, false]);
+      expect(QuestionAnswerSchema.safeParse(next).success).toBe(true);
+    });
+
+    it("ordering → checkbox yields one empty unchecked item", () => {
+      const next = changeAnswerKind(ordering, "checkbox", seqGen());
+      if (next.kind !== "checkbox") throw new Error("unexpected");
+      expect(next.items).toHaveLength(1);
+      expect(next.items[0]).toMatchObject({ content: [], checked: false });
+    });
+
+    it("open → trueFalse yields one empty item with value true", () => {
+      const next = changeAnswerKind(open, "trueFalse", seqGen());
+      if (next.kind !== "trueFalse") throw new Error("unexpected");
+      expect(next.items).toHaveLength(1);
+      expect(next.items[0]).toMatchObject({ content: [], value: true });
+    });
+
+    it("matching → ordering yields one empty item", () => {
+      const next = changeAnswerKind(matching, "ordering", seqGen());
+      if (next.kind !== "ordering") throw new Error("unexpected");
+      expect(next.items).toHaveLength(1);
+      expect(next.items[0]).toMatchObject({ content: [], position: 0 });
+    });
+
+    it("an empty checkbox → MC also falls back to the empty default", () => {
+      const cbEmpty: Extract<QuestionAnswer, { kind: "checkbox" }> = { kind: "checkbox", items: [] };
+      const next = changeAnswerKind(cbEmpty, "multipleChoice", seqGen());
+      if (next.kind !== "multipleChoice") throw new Error("unexpected");
+      expect(next.alternatives).toHaveLength(2);
+      expect(QuestionAnswerSchema.safeParse(next).success).toBe(true);
+    });
+  });
+
+  // any → non-list targets (structure ignores the source) -------------------
+  describe("any → non-list target (the structure ignores the source)", () => {
+    it("→ open yields three answer lines", () => {
+      expect(changeAnswerKind(mc, "open")).toEqual({ kind: "open", answerLines: 3 });
+    });
+
+    it("→ fillBlank yields empty gaps (matrix literal; the teacher adds them)", () => {
+      expect(changeAnswerKind(mc, "fillBlank")).toEqual({ kind: "fillBlank", gaps: [] });
+    });
+
+    it("→ matching yields one empty pair", () => {
+      const next = changeAnswerKind(mc, "matching", seqGen());
+      if (next.kind !== "matching") throw new Error("unexpected");
+      expect(next.pairs).toHaveLength(1);
+      expect(next.pairs[0]).toMatchObject({ left: [], right: [] });
+    });
+
+    it("→ table yields one row with two empty cells", () => {
+      expect(changeAnswerKind(mc, "table")).toEqual({ kind: "table", rows: [[[], []]] });
+    });
+  });
+
+  // invariants --------------------------------------------------------------
+  it("does not mutate the original answer", () => {
+    const snapshot = JSON.parse(JSON.stringify(mc));
+    changeAnswerKind(mc, "checkbox", seqGen());
+    expect(mc).toEqual(snapshot);
+  });
+
+  it("uses the injected id generator for the new items", () => {
+    const next = changeAnswerKind(mc, "checkbox", () => "abababab-abab-4bab-8bab-abababababab");
+    if (next.kind !== "checkbox") throw new Error("unexpected");
+    expect(next.items.every((i) => i.id === "abababab-abab-4bab-8bab-abababababab")).toBe(true);
+  });
+
+  // acceptance chain (plano §8 Fase 3) --------------------------------------
+  it("survives the chain MC → checkbox → trueFalse → open → MC, staying schema-valid", () => {
+    const g = seqGen();
+    const a1 = changeAnswerKind(mc, "checkbox", g);
+    expect(a1.kind).toBe("checkbox");
+    const a2 = changeAnswerKind(a1, "trueFalse", g);
+    expect(a2.kind).toBe("trueFalse");
+    const a3 = changeAnswerKind(a2, "open", g);
+    expect(a3).toEqual({ kind: "open", answerLines: 3 });
+    const a4 = changeAnswerKind(a3, "multipleChoice", g);
+    expect(a4.kind).toBe("multipleChoice");
+    expect(QuestionAnswerSchema.safeParse(a4).success).toBe(true);
   });
 });

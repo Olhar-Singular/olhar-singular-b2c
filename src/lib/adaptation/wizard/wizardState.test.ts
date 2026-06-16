@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   INITIAL_WIZARD_DATA,
   setDocument,
+  setPageStyle,
   setResult,
   clearResult,
   type WizardData,
@@ -93,5 +94,26 @@ describe("setDocument", () => {
     };
     setDocument(withResult, newDoc);
     expect(withResult.result?.document).toBe(doc);
+  });
+});
+
+describe("setPageStyle", () => {
+  it("sets result.pageStyle while preserving document and metadata", () => {
+    const withResult = setResult(INITIAL_WIZARD_DATA, result);
+    const next = setPageStyle(withResult, { fontFamily: "lexend", fontSize: 14 });
+    expect(next.result?.pageStyle).toEqual({ fontFamily: "lexend", fontSize: 14 });
+    expect(next.result?.document).toBe(doc);
+    expect(next.result?.strategies_applied).toEqual(["s"]);
+  });
+
+  it("is a no-op when there is no result", () => {
+    const data: WizardData = { ...INITIAL_WIZARD_DATA, result: null };
+    expect(setPageStyle(data, { fontSize: 12 })).toBe(data);
+  });
+
+  it("does not mutate the input result", () => {
+    const withResult = setResult(INITIAL_WIZARD_DATA, result);
+    setPageStyle(withResult, { blockSpacing: 24 });
+    expect(withResult.result?.pageStyle).toBeUndefined();
   });
 });

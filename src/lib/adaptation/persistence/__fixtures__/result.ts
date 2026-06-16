@@ -21,3 +21,9 @@ export const validResult: AdaptationResult = {
   pedagogical_justification: "Justificativa pedagógica.",
   implementation_tips: ["Dica 1"],
 };
+
+/** Same as {@link validResult} but carrying a document-level `pageStyle` (plano §7.1). */
+export const validResultWithPageStyle: AdaptationResult = {
+  ...validResult,
+  pageStyle: { fontFamily: "lexend", fontSize: 14, blockSpacing: 24 },
+};

@@ -2,7 +2,8 @@
  * PDF export trigger.
  *
  * `buildPdfDocument` is the pure, fully-tested entry: it returns the
- * `<AdaptationPdf>` element for a canonical document + panel settings.
+ * `<AdaptationPdf>` element for a canonical document + panel settings +
+ * optional page style (Fase 4a).
  *
  * `downloadPdf` is the thin side-effecting glue that turns that element into a
  * Blob via react-pdf and triggers a browser download. The blob/download
@@ -11,17 +12,20 @@
 
 import { createElement, type ReactElement } from "react";
 import { pdf } from "@react-pdf/renderer";
-import type { CanonicalDocument } from "@/lib/adaptation/canonical/schema";
+import type { CanonicalDocument, PageStyle } from "@/lib/adaptation/canonical/schema";
 import type { PanelSettings } from "./panelSettings";
 import { DEFAULT_PANEL_SETTINGS } from "./panelSettings";
 import { AdaptationPdf } from "@/components/adaptation/render/pdf/AdaptationPdf";
+import { registerPdfFonts } from "@/components/adaptation/render/pdf/registerFonts";
 
-/** Build the react-pdf <Document> element for the given document + settings. */
+/** Build the react-pdf <Document> element for the given document + settings + optional page style. */
 export function buildPdfDocument(
   document: CanonicalDocument,
   settings: PanelSettings = DEFAULT_PANEL_SETTINGS,
+  pageStyle?: PageStyle,
 ): ReactElement {
-  return createElement(AdaptationPdf, { document, settings });
+  registerPdfFonts();
+  return createElement(AdaptationPdf, { document, settings, pageStyle });
 }
 
 /** Derive a safe download filename from the panel header title. */
@@ -41,8 +45,9 @@ export function pdfFileName(settings: PanelSettings = DEFAULT_PANEL_SETTINGS): s
 export async function downloadPdf(
   document: CanonicalDocument,
   settings: PanelSettings = DEFAULT_PANEL_SETTINGS,
+  pageStyle?: PageStyle,
 ): Promise<void> {
-  const element = buildPdfDocument(document, settings);
+  const element = buildPdfDocument(document, settings, pageStyle);
   const blob = await pdf(element).toBlob();
   const url = URL.createObjectURL(blob);
   const link = window.document.createElement("a");

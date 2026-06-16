@@ -221,6 +221,25 @@ describe("validateExtractedQuestions — field mapping", () => {
     expect(questions[0].topic).toBe("Cinemática");
   });
 
+  it("maps optional resolution with trim", () => {
+    const { questions } = validateExtractedQuestions([
+      { text: LONG_TEXT, subject: "Física", resolution: "  A resposta é B porque...  " },
+    ]);
+    expect(questions[0].resolution).toBe("A resposta é B porque...");
+  });
+
+  it("resolution is undefined when absent", () => {
+    const { questions } = validateExtractedQuestions([{ text: LONG_TEXT, subject: "Física" }]);
+    expect(questions[0].resolution).toBeUndefined();
+  });
+
+  it("resolution is undefined when empty or whitespace", () => {
+    const { questions } = validateExtractedQuestions([
+      { text: LONG_TEXT, subject: "Física", resolution: "   " },
+    ]);
+    expect(questions[0].resolution).toBeUndefined();
+  });
+
   it("mixes valid and invalid questions, returning both correct lists", () => {
     const input = [
       { text: LONG_TEXT, subject: "Física" },           // valid

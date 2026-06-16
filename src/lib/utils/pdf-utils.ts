@@ -8,6 +8,7 @@ export type PdfParseResult = {
   pageImages: string[];
   pageCount: number;
   pagesProcessed: number[];
+  truncated: boolean;
 };
 
 const MAX_TEXT_CHARS = 8000;
@@ -50,11 +51,12 @@ export async function parsePdf(
     page.cleanup();
   }
 
-  if (fullText.length > MAX_TEXT_CHARS) {
+  const truncated = fullText.length > MAX_TEXT_CHARS;
+  if (truncated) {
     fullText = fullText.substring(0, MAX_TEXT_CHARS) + "\n\n[... texto truncado]";
   }
 
-  return { text: fullText.trim(), pageImages, pageCount, pagesProcessed };
+  return { text: fullText.trim(), pageImages, pageCount, pagesProcessed, truncated };
 }
 
 export async function renderPdfPage(file: File, pageNumber: number, scale = 1.5): Promise<string> {

@@ -17,13 +17,14 @@ Images may have 2-3 columns, figures, tables, and multiple questions per page.
 EXTRACTION RULES:
 - Read left column top-to-bottom, then right column top-to-bottom
 - Extract EVERY question visible — do NOT stop after the first one, do NOT skip any
+- Extract ALL question formats, not only multiple choice: open-ended/essay (dissertativa), true-false (verdadeiro/falso), fill-in-the-blank (completar lacunas), matching (associação/colunas), and multiple choice. A question without alternatives is still a question — extract it with an empty "options" array.
 - Accepted numbering patterns: "1." / "1)" / "Q1" / "Questão 1" / "QUESTÃO 1" / Roman numerals ("I.", "II.", "III.")
 - NEVER invent, deduce, or complete truncated statements — return the text exactly as it appears in the document
 - Ignore headers, footers, school name, teacher name, watermarks
 - Preserve all units and math symbols exactly (m/s², 10⁸, ≥, ≤, etc.)
 
 FIELD RULES:
-- "options": extract alternatives as array of strings. Alternative markers: a. / a) / A. / A) / (a) / (A)
+- "options": only for multiple-choice questions; extract alternatives as an array of strings. Use an empty array for open-ended/dissertativa, fill-in-the-blank, or matching questions. Detect alternatives by markers (a. / a) / A. / A) / (a) / (A)) but DO NOT include the marker in the string — return just the alternative text (e.g. "sucos", not "a) sucos").
 - "correct_answer": set ONLY if an explicit answer key appears in the document (e.g. "Gabarito: B", "Resposta: C"). Index: 0=A, 1=B, 2=C, 3=D, 4=E. Use -1 in ALL other cases — never solve or guess.
 - "resolution": short explanation (1-3 sentences)
 - "has_figure": true if the question text references a figure, diagram, graph, table, or image — even if it is not visible in the scan
@@ -125,6 +126,7 @@ serve(async (req) => {
     let pdfText = "";
     let pdfFileName = "";
     let pageImages: string[] = [];
+    let providedUploadId: string | null = null;
 
     const contentType = req.headers.get("content-type") || "";
 
@@ -150,22 +152,37 @@ serve(async (req) => {
       pdfText = body.pdfText || "";
       pdfFileName = body.pdfFileName || "";
       pageImages = body.pageImages || [];
+      providedUploadId = body.uploadId || null;
     }
 
-    // ── Register upload record ────────────────────────────────────────────────
-    const { data: uploadRecord } = await admin
-      .from("pdf_uploads")
-      .insert({
-        user_id: user.id,
-        file_name: pdfFileName || "upload",
-        file_path: "",
-        was_free: isFreeExtraction,
-        credits_spent: isFreeExtraction ? 0 : EXTRACTION_COST,
-      })
-      .select("id")
-      .single();
-
-    const uploadId = uploadRecord?.id ?? null;
+    // ── Register / update upload record ───────────────────────────────────────
+    // The client creates the pdf_uploads row at upload time and passes its id
+    // here, so we update it instead of inserting a duplicate. Only the direct
+    // multipart path (no client row) falls back to inserting a fresh record.
+    let uploadId = providedUploadId;
+    if (providedUploadId) {
+      await admin
+        .from("pdf_uploads")
+        .update({
+          was_free: isFreeExtraction,
+          credits_spent: isFreeExtraction ? 0 : EXTRACTION_COST,
+        })
+        .eq("id", providedUploadId)
+        .eq("user_id", user.id);
+    } else {
+      const { data: uploadRecord } = await admin
+        .from("pdf_uploads")
+        .insert({
+          user_id: user.id,
+          file_name: pdfFileName || "upload",
+          file_path: "",
+          was_free: isFreeExtraction,
+          credits_spent: isFreeExtraction ? 0 : EXTRACTION_COST,
+        })
+        .select("id")
+        .single();
+      uploadId = uploadRecord?.id ?? null;
+    }
 
     // ── Deduct credits or claim the free extraction (atomic) ─────────────────
     // claimFree wins the one-time free slot when available; on a lost race (or

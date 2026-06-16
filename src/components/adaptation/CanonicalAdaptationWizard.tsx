@@ -15,13 +15,13 @@ import { StepActivityType } from "./steps/activity-type/StepActivityType";
 import { StepActivityInput } from "./steps/activity-input/StepActivityInput";
 import { StepBarrierSelection } from "./steps/barriers/StepBarrierSelection";
 import { StepGenerate } from "./steps/generate/StepGenerate";
-import { StepContent } from "./steps/content/StepContent";
-import { StepStyling } from "./steps/styling/StepStyling";
+import { StepReview } from "./steps/review/StepReview";
 import { StepExportCanonical } from "./steps/export/StepExportCanonical";
 import {
   INITIAL_WIZARD_DATA,
   setResult,
   setDocument,
+  setPageStyle,
   clearResult,
   type WizardData,
 } from "@/lib/adaptation/wizard/wizardState";
@@ -33,15 +33,14 @@ import { useAdaptationDraft } from "@/hooks/useAdaptationDraft";
 import { useMarkReady } from "@/hooks/useAdaptations";
 import { useAuth } from "@/hooks/useAuth";
 import { parseDbError } from "@/lib/utils/errors";
-import type { AdaptationResult, CanonicalDocument } from "@/lib/adaptation/canonical/schema";
+import type { AdaptationResult, CanonicalDocument, PageStyle } from "@/lib/adaptation/canonical/schema";
 
 const STEPS = [
   "activity_type",
   "activity_input",
   "barriers",
   "generate",
-  "content",
-  "styling",
+  "review",
   "export",
 ] as const;
 
@@ -52,13 +51,12 @@ const STEP_LABELS: Record<StepKey, string> = {
   activity_input: "Atividade",
   barriers: "Barreiras",
   generate: "Gerar",
-  content: "Conteúdo",
-  styling: "Estilo",
+  review: "Revisar",
   export: "Exportar",
 };
 
 const GENERATE_INDEX = STEPS.indexOf("generate");
-const CONTENT_INDEX = STEPS.indexOf("content");
+const REVIEW_INDEX = STEPS.indexOf("review");
 const EXPORT_INDEX = STEPS.indexOf("export");
 
 export type EditModeSeed = {
@@ -68,7 +66,7 @@ export type EditModeSeed = {
 };
 
 type Props = {
-  /** When provided, the wizard opens an existing adaptation at the content step. */
+  /** When provided, the wizard opens an existing adaptation at the review step. */
   editMode?: EditModeSeed;
 };
 
@@ -87,7 +85,7 @@ export default function CanonicalAdaptationWizard({ editMode }: Props = {}) {
   const [data, setData] = useState<WizardData>(
     editMode ? editMode.initialData : INITIAL_WIZARD_DATA,
   );
-  const [stepIndex, setStepIndex] = useState(editMode ? CONTENT_INDEX : 0);
+  const [stepIndex, setStepIndex] = useState(editMode ? REVIEW_INDEX : 0);
   const [confirmRegenerate, setConfirmRegenerate] = useState(false);
   // Crash-mirror recovery: a surviving mirror newer than the loaded row means a
   // save was lost. We hold it here and prompt the user to recover it.
@@ -202,6 +200,10 @@ export default function CanonicalAdaptationWizard({ editMode }: Props = {}) {
     setData((prev) => setDocument(prev, document));
   }, []);
 
+  const handlePageStyleChange = useCallback((pageStyle: PageStyle) => {
+    setData((prev) => setPageStyle(prev, pageStyle));
+  }, []);
+
   function handleRestart() {
     setData(INITIAL_WIZARD_DATA);
     setStepIndex(0);
@@ -257,25 +259,20 @@ export default function CanonicalAdaptationWizard({ editMode }: Props = {}) {
         return (
           <StepGenerate data={data} onResult={handleResult} onNext={onNext} onPrev={onPrev} />
         );
-      case "content":
-        /* v8 ignore next -- guard: content step is only reachable once a result exists */
+      case "review":
+        /* v8 ignore next -- guard: review step is only reachable once a result exists */
         if (!data.result) return null;
         return (
-          <StepContent
+          <StepReview
             document={data.result.document}
+            metadata={{
+              strategiesApplied: data.result.strategies_applied,
+              implementationTips: data.result.implementation_tips,
+              pedagogicalJustification: data.result.pedagogical_justification,
+            }}
+            pageStyle={data.result.pageStyle}
             onDocumentChange={handleDocumentChange}
-            onRegenerate={() => setConfirmRegenerate(true)}
-            onNext={onNext}
-            onPrev={onPrev}
-          />
-        );
-      case "styling":
-        /* v8 ignore next -- guard: styling step is only reachable once a result exists */
-        if (!data.result) return null;
-        return (
-          <StepStyling
-            document={data.result.document}
-            onDocumentChange={handleDocumentChange}
+            onPageStyleChange={handlePageStyleChange}
             onRegenerate={() => setConfirmRegenerate(true)}
             onNext={onNext}
             onPrev={onPrev}
@@ -331,8 +328,8 @@ export default function CanonicalAdaptationWizard({ editMode }: Props = {}) {
         <p className="text-xs text-muted-foreground">
           Passo {stepIndex + 1} de {STEPS.length}
         </p>
-        {/* Autosave status — shown once a draft exists and from the content step on. */}
-        {draftId && stepIndex >= CONTENT_INDEX && stepIndex <= EXPORT_INDEX && saveStatus !== "idle" && (
+        {/* Autosave status — shown once a draft exists and from the review step on. */}
+        {draftId && stepIndex >= REVIEW_INDEX && stepIndex <= EXPORT_INDEX && saveStatus !== "idle" && (
           <p
             className="text-xs text-muted-foreground"
             role="status"
@@ -371,7 +368,7 @@ export default function CanonicalAdaptationWizard({ editMode }: Props = {}) {
           <AlertDialogHeader>
             <AlertDialogTitle>Regerar adaptação?</AlertDialogTitle>
             <AlertDialogDescription>
-              A adaptação atual será substituída por uma nova. As edições de conteúdo e estilo serão perdidas.
+              A adaptação atual será substituída por uma nova. As edições serão perdidas.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

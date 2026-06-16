@@ -10,6 +10,10 @@
  * `number` is the automatic question ordinal computed by the caller (the PDF
  * walker assigns it from document order). It is only meaningful for `question`
  * blocks.
+ *
+ * `blockGap` is the doc-level inter-block gap in pt (resolved from pageStyle).
+ * It is passed to leaf mappers as the default marginBottom when the block has
+ * no per-block `style.spacingAfter`.
  */
 
 import { View } from "@react-pdf/renderer";
@@ -19,14 +23,14 @@ import { PdfHeading, PdfParagraph, PdfImage, PdfScaffolding, PdfDivider } from "
 import { PdfMath } from "./PdfMath";
 import { PdfQuestion } from "./PdfQuestion";
 
-function dispatch(block: Block, number: number) {
+function dispatch(block: Block, number: number, blockGap: number) {
   switch (block.type) {
     case "heading":
-      return <PdfHeading block={block} />;
+      return <PdfHeading block={block} blockGap={blockGap} />;
     case "paragraph":
-      return <PdfParagraph block={block} />;
+      return <PdfParagraph block={block} blockGap={blockGap} />;
     case "blockMath":
-      return <PdfMath block={block} />;
+      return <PdfMath block={block} blockGap={blockGap} />;
     case "image":
       return <PdfImage block={block} />;
     case "scaffolding":
@@ -38,8 +42,16 @@ function dispatch(block: Block, number: number) {
   }
 }
 
-export function PdfBlock({ block, number = 1 }: { block: Block; number?: number }) {
-  const node = dispatch(block, number);
+export function PdfBlock({
+  block,
+  number = 1,
+  blockGap = 12,
+}: {
+  block: Block;
+  number?: number;
+  blockGap?: number;
+}) {
+  const node = dispatch(block, number, blockGap);
   if (pageBreakBefore(block.style)) {
     return <View break>{node}</View>;
   }

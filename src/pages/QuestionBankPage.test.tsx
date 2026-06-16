@@ -71,6 +71,7 @@ vi.mock("@/lib/utils/extraction-utils", () => ({
   autoCropFromBbox: vi.fn(),
   dataUrlToBlob: vi.fn(),
   findDuplicates: vi.fn(() => []),
+  stripOptionMarker: vi.fn((t: string) => t.replace(/^[a-eA-E]\)\s*/, "")),
 }));
 
 // ---------------------------------------------------------------------------
@@ -167,7 +168,11 @@ beforeEach(async () => {
   storageUploadSpy.mockResolvedValue({ data: { path: "u1/123.pdf" }, error: null });
   storageRemoveSpy.mockResolvedValue({ error: null });
   storageDownloadSpy.mockResolvedValue({ data: new Blob(["content"]), error: null });
-  pdfUploadsInsertSpy.mockResolvedValue({ error: null });
+  pdfUploadsInsertSpy.mockReturnValue({
+    select: vi.fn().mockReturnValue({
+      single: vi.fn().mockResolvedValue({ data: { id: "new-up" }, error: null }),
+    }),
+  });
   pdfUploadsDeleteEqSpy.mockResolvedValue({ error: null });
   (supabase.storage.from as ReturnType<typeof vi.fn>).mockReturnValue({
     upload: storageUploadSpy,
@@ -629,6 +634,80 @@ describe("QuestionBankPage", () => {
     });
   });
 
+  it("extract: passes the upload record id to the edge function (no duplicate pdf_uploads row)", async () => {
+    invokeSpy.mockResolvedValue({
+      data: { questions: [{ text: "Q1", subject: "Física" }], source_file_name: "prova.pdf" },
+      error: null,
+    });
+    render(<QuestionBankPage />, { wrapper });
+    fireEvent.click(screen.getByRole("tab", { name: /Provas/i }));
+    const input = document.querySelector("input[data-upload-input]") as HTMLInputElement;
+    fireEvent.change(input, { target: { files: [new File(["pdf"], "prova.pdf", { type: "application/pdf" })] } });
+    await waitFor(() => screen.getByRole("button", { name: /Extrair com IA/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Extrair com IA/i }));
+    await waitFor(() => {
+      expect(invokeSpy).toHaveBeenCalledWith(
+        "extract-questions",
+        expect.objectContaining({ body: expect.objectContaining({ uploadId: "new-up" }) }),
+      );
+    });
+  });
+
+  it("re-extract: passes the existing history upload id to the edge function", async () => {
+    invokeSpy.mockResolvedValue({
+      data: { questions: [{ text: "Q hist", subject: "Física" }], source_file_name: "Prova.pdf" },
+      error: null,
+    });
+    pdfUploadsRows = [
+      { id: "up1", file_name: "Prova.pdf", file_path: "u1/123_Prova.pdf", questions_extracted: 3, uploaded_at: "2026-05-01T10:00:00Z" },
+    ];
+    render(<QuestionBankPage />, { wrapper });
+    fireEvent.click(screen.getByRole("tab", { name: /Provas/i }));
+    await waitFor(() => screen.getByText("Prova.pdf"));
+    fireEvent.click(screen.getByRole("button", { name: /extrair questões/i }));
+    await waitFor(() => {
+      expect(invokeSpy).toHaveBeenCalledWith(
+        "extract-questions",
+        expect.objectContaining({ body: expect.objectContaining({ uploadId: "up1" }) }),
+      );
+    });
+  });
+
+  it("extract: sends null uploadId when the upload insert returns no row", async () => {
+    (supabase.from as ReturnType<typeof vi.fn>).mockImplementation((table: string) => {
+      if (table === "pdf_uploads") {
+        return {
+          select: vi.fn().mockReturnValue({
+            order: vi.fn().mockResolvedValue({ data: [], error: null }),
+          }),
+          insert: vi.fn().mockReturnValue({
+            select: vi.fn().mockReturnValue({
+              single: vi.fn().mockResolvedValue({ data: null, error: null }),
+            }),
+          }),
+          delete: vi.fn().mockReturnValue({ eq: pdfUploadsDeleteEqSpy }),
+        };
+      }
+      return {};
+    });
+    invokeSpy.mockResolvedValue({
+      data: { questions: [{ text: "Q1", subject: "Física" }], source_file_name: "prova.pdf" },
+      error: null,
+    });
+    render(<QuestionBankPage />, { wrapper });
+    fireEvent.click(screen.getByRole("tab", { name: /Provas/i }));
+    const input = document.querySelector("input[data-upload-input]") as HTMLInputElement;
+    fireEvent.change(input, { target: { files: [new File(["pdf"], "prova.pdf", { type: "application/pdf" })] } });
+    await waitFor(() => screen.getByRole("button", { name: /Extrair com IA/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Extrair com IA/i }));
+    await waitFor(() => {
+      expect(invokeSpy).toHaveBeenCalledWith(
+        "extract-questions",
+        expect.objectContaining({ body: expect.objectContaining({ uploadId: null }) }),
+      );
+    });
+  });
+
   it("successful extraction shows review mode with question cards and checkboxes", async () => {
     invokeSpy.mockResolvedValue({ data: { questions: [{ text: "Questão extraída", subject: "Física" }], source_file_name: "prova.pdf" }, error: null });
     render(<QuestionBankPage />, { wrapper });
@@ -970,6 +1049,134 @@ describe("QuestionBankPage", () => {
     expect(autoCropFromBbox).not.toHaveBeenCalled();
     const img = screen.getByAltText(/Imagem da questão/i);
     expect(img).toHaveAttribute("src", "data:image/png;base64,fullpage1");
+  });
+
+  it("extraction (docx): does not auto-crop embedded images even when a bbox is present", async () => {
+    const { autoCropFromBbox } = await import("@/lib/utils/extraction-utils");
+    const { extractDocxWithImages } = await import("@/lib/utils/docx-utils");
+    const { detectFileType } = await import("@/lib/utils/fileValidation");
+    (detectFileType as ReturnType<typeof vi.fn>).mockReturnValueOnce("docx").mockReturnValueOnce("docx");
+    (extractDocxWithImages as ReturnType<typeof vi.fn>).mockResolvedValue({
+      text: "Questão docx com figura",
+      images: ["data:image/png;base64,docximg"],
+    });
+    invokeSpy.mockResolvedValue({
+      data: {
+        questions: [{
+          text: "Questão docx com figura", subject: "Física",
+          has_figure: true, image_page: 1, figure_bbox: { x: 0.1, y: 0.1, width: 0.5, height: 0.3 },
+        }],
+      },
+      error: null,
+    });
+    render(<QuestionBankPage />, { wrapper });
+    fireEvent.click(screen.getByRole("tab", { name: /Provas/i }));
+    const input = document.querySelector("input[data-upload-input]") as HTMLInputElement;
+    fireEvent.change(input, { target: { files: [new File(["docx"], "prova.docx", { type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document" })] } });
+    await waitFor(() => screen.getByRole("button", { name: /Extrair com IA/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Extrair com IA/i }));
+    await waitFor(() => screen.getByText("Questão docx com figura"));
+    expect(autoCropFromBbox).not.toHaveBeenCalled();
+    const img = screen.getByAltText(/Imagem da questão/i);
+    expect(img).toHaveAttribute("src", "data:image/png;base64,docximg");
+  });
+
+  it("extraction (pdf): warns when the document text was truncated", async () => {
+    const { parsePdf } = await import("@/lib/utils/pdf-utils");
+    (parsePdf as ReturnType<typeof vi.fn>).mockResolvedValue({
+      text: "Questão extraída", pageImages: [], pageCount: 2, pagesProcessed: [1, 2], truncated: true,
+    });
+    invokeSpy.mockResolvedValue({
+      data: { questions: [{ text: "Q1", subject: "Física" }] }, error: null,
+    });
+    render(<QuestionBankPage />, { wrapper });
+    fireEvent.click(screen.getByRole("tab", { name: /Provas/i }));
+    const input = document.querySelector("input[data-upload-input]") as HTMLInputElement;
+    fireEvent.change(input, { target: { files: [new File(["pdf"], "prova.pdf", { type: "application/pdf" })] } });
+    await waitFor(() => screen.getByRole("button", { name: /Extrair com IA/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Extrair com IA/i }));
+    await waitFor(() => screen.getByText("Q1"));
+    expect(screen.getByText(/truncado/i)).toBeInTheDocument();
+  });
+
+  it("extraction (pdf): warns when the document has more pages than rendered images", async () => {
+    const { parsePdf } = await import("@/lib/utils/pdf-utils");
+    (parsePdf as ReturnType<typeof vi.fn>).mockResolvedValue({
+      text: "Questão extraída",
+      pageImages: ["data:image/png;base64,p1"],
+      pageCount: 12,
+      pagesProcessed: [1, 2, 3, 4, 5, 6, 7, 8],
+      truncated: false,
+    });
+    invokeSpy.mockResolvedValue({
+      data: { questions: [{ text: "Q1", subject: "Física" }] }, error: null,
+    });
+    render(<QuestionBankPage />, { wrapper });
+    fireEvent.click(screen.getByRole("tab", { name: /Provas/i }));
+    const input = document.querySelector("input[data-upload-input]") as HTMLInputElement;
+    fireEvent.change(input, { target: { files: [new File(["pdf"], "prova.pdf", { type: "application/pdf" })] } });
+    await waitFor(() => screen.getByRole("button", { name: /Extrair com IA/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Extrair com IA/i }));
+    await waitFor(() => screen.getByText("Q1"));
+    expect(screen.getByText(/primeiras 8 páginas/i)).toBeInTheDocument();
+  });
+
+  it("extraction strips embedded option markers so the UI marker is not duplicated", async () => {
+    invokeSpy.mockResolvedValue({
+      data: {
+        questions: [{
+          text: "Pergunta sobre bebidas saudáveis para o lanche escolar",
+          subject: "Ciências",
+          options: ["a) sucos.", "b) sanduíches."],
+        }],
+      },
+      error: null,
+    });
+    render(<QuestionBankPage />, { wrapper });
+    fireEvent.click(screen.getByRole("tab", { name: /Provas/i }));
+    const input = document.querySelector("input[data-upload-input]") as HTMLInputElement;
+    fireEvent.change(input, { target: { files: [new File(["pdf"], "prova.pdf", { type: "application/pdf" })] } });
+    await waitFor(() => screen.getByRole("button", { name: /Extrair com IA/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Extrair com IA/i }));
+    await waitFor(() => screen.getByText(/Pergunta sobre bebidas/));
+    expect(screen.getByText("A) sucos.")).toBeInTheDocument();
+    expect(screen.queryByText("A) a) sucos.")).toBeNull();
+  });
+
+  it("review: editing a question with options shows the OptionsEditor and persists the marked correct answer", async () => {
+    await goToReview([{ text: "Questão com alternativas para o lanche", subject: "Física", options: ["sucos", "pao"] }]);
+    fireEvent.click(screen.getByRole("button", { name: /^Editar$/i }));
+    fireEvent.click(screen.getByRole("button", { name: /alternativa B como correta/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Fechar edição/i }));
+    expect(screen.getByText("B) pao")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /Salvar todas/i }));
+    await waitFor(() => expect(mockInsertMutate).toHaveBeenCalledWith(
+      expect.arrayContaining([expect.objectContaining({ correct_answer: 1 })]),
+    ));
+  });
+
+  it("review: a dissertativa question can be turned into multiple choice while editing", async () => {
+    await goToReview([{ text: "Explique o ciclo da água detalhadamente", subject: "Ciências" }]);
+    fireEvent.click(screen.getByRole("button", { name: /^Editar$/i }));
+    fireEvent.click(screen.getByRole("button", { name: /transformar em múltipla escolha/i }));
+    expect(screen.getAllByPlaceholderText(/Alternativa/i)).toHaveLength(2);
+  });
+
+  it("review: editing one question's options leaves the other questions untouched", async () => {
+    await goToReview([
+      { text: "Primeira questão com alternativas para o lanche", subject: "Física", options: ["sucos", "pao"] },
+      { text: "Segunda questão dissertativa qualquer do banco", subject: "História" },
+    ]);
+    fireEvent.click(screen.getAllByRole("button", { name: /^Editar$/i })[0]);
+    fireEvent.click(screen.getByRole("button", { name: /alternativa B como correta/i }));
+    expect(screen.getByText("Segunda questão dissertativa qualquer do banco")).toBeInTheDocument();
+  });
+
+  it("review: removing the last option reverts the question to dissertativa", async () => {
+    await goToReview([{ text: "Questão objetiva com uma alternativa só", subject: "Física", options: ["única"] }]);
+    fireEvent.click(screen.getByRole("button", { name: /^Editar$/i }));
+    fireEvent.click(screen.getByRole("button", { name: /remover alternativa A/i }));
+    expect(screen.getByRole("button", { name: /transformar em múltipla escolha/i })).toBeInTheDocument();
   });
 
   // ── Image save pipeline ───────────────────────────────────────────────────

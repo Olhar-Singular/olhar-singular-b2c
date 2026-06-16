@@ -1,14 +1,15 @@
 import { describe, it, expect } from "vitest";
 import { isValidElement, type ReactElement } from "react";
-import { Document, Page, Text, View, Image } from "@react-pdf/renderer";
+import { Document, Page, Text, View } from "@react-pdf/renderer";
 import { AdaptationPdf, PdfHeader } from "./AdaptationPdf";
+import { pageTokensToPdf } from "../pageTokens";
 import { PdfBlock } from "./PdfBlock";
 import { PdfHeading, PdfParagraph, PdfImage, PdfScaffolding, PdfDivider } from "./PdfLeafBlocks";
 import { PdfMath } from "./PdfMath";
 import { PdfQuestion } from "./PdfQuestion";
 import { PdfAnswer } from "./PdfAnswer";
 import { renderDocument } from "../__fixtures__/renderDocument";
-import type { Block, CanonicalDocument, QuestionAnswer } from "@/lib/adaptation/canonical/schema";
+import type { Block, CanonicalDocument } from "@/lib/adaptation/canonical/schema";
 import type { PanelSettings } from "@/components/adaptation/export/panelSettings";
 
 const id = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, "0")}`;
@@ -49,7 +50,6 @@ function collect(node: unknown) {
 
 const settings: PanelSettings = {
   header: {},
-  fontFamily: "Helvetica",
   pageBreakPerQuestion: false,
 };
 
@@ -61,9 +61,43 @@ describe("AdaptationPdf", () => {
     expect(el.props.children.type).toBe(Page);
   });
 
-  it("applies the base font family from settings", () => {
-    const el = AdaptationPdf({ document: renderDocument, settings: { ...settings, fontFamily: "Courier" } });
-    expect(el.props.children.props.style.fontFamily).toBe("Courier");
+  it("applies font family from pageStyle (lexend → 'Lexend')", () => {
+    const el = AdaptationPdf({
+      document: renderDocument,
+      settings,
+      pageStyle: { fontFamily: "lexend" },
+    });
+    expect(el.props.children.props.style.fontFamily).toBe("Lexend");
+  });
+
+  it("applies fontSize from pageStyle to the <Page> style", () => {
+    const el = AdaptationPdf({
+      document: renderDocument,
+      settings,
+      pageStyle: { fontSize: 16 },
+    });
+    expect(el.props.children.props.style.fontSize).toBe(16);
+  });
+
+  it("a legacy doc (no pageStyle) still renders with default tokens", () => {
+    const el = AdaptationPdf({ document: renderDocument, settings });
+    // The <Page> must still have the default padding and fontSize.
+    expect(el.props.children.props.style.padding).toBe(40);
+    expect(el.props.children.props.style.fontSize).toBe(12);
+    // No fontFamily emitted when no pageStyle font is set.
+    expect(el.props.children.props.style.fontFamily).toBeUndefined();
+  });
+
+  it("does NOT use settings.fontFamily for the <Page> style (font now comes from pageStyle)", () => {
+    // Even if the caller still passes a settings object (e.g. from an old code path),
+    // the Page style must NOT use settings.fontFamily — it only uses pageStyle.
+    const el = AdaptationPdf({
+      document: renderDocument,
+      settings,
+      pageStyle: undefined,
+    });
+    // fontFamily should be absent from the Page style (no pageStyle → no override).
+    expect(el.props.children.props.style.fontFamily).toBeUndefined();
   });
 
   it("covers every block type via a PdfBlock per block", () => {
@@ -82,6 +116,13 @@ describe("AdaptationPdf", () => {
     const { text } = collect(AdaptationPdf({ document: renderDocument }));
     expect(text).toContain("\\frac{a}{b}"); // inline math
     expect(text).toContain("x^2 + y^2 = z^2"); // block math
+  });
+
+  it("aplica os tokens de página compartilhados no <Page>", () => {
+    // O <Page> base deve herdar padding/fontSize/lineHeight de pageTokensToPdf();
+    const base = pageTokensToPdf();
+    expect(base.padding).toBe(40);
+    expect(base.fontSize).toBe(12);
   });
 });
 
@@ -131,5 +172,24 @@ describe("AdaptationPdf — header + page-break wiring", () => {
       (c) => isValidElement(c) && c.type === View && (c.props as { break?: boolean }).break,
     );
     expect(breakViews).toHaveLength(1); // only the 2nd question breaks
+  });
+});
+
+describe("AdaptationPdf — blockGap threading", () => {
+  it("passes the resolved blockGap (12pt from default 16px) to blocks", () => {
+    // Default pageStyle → blockSpacing=16px → 16*72/96=12pt
+    const el = AdaptationPdf({ document: renderDocument, settings });
+    // Page children include the block nodes; we check that PdfBlock received a blockGap prop.
+    // We verify via the collect walk that PdfParagraph renders with marginBottom=12 (default gap).
+    // Since there are no per-block spacingAfter overrides in renderDocument, paragraphs use the gap.
+    const pageChildren = (el.props.children.props.children as unknown[]).flat();
+    // At least one PdfBlock element should have a blockGap prop.
+    const pdfBlockEls = pageChildren.filter(
+      (c) => isValidElement(c) && (c.type === PdfBlock),
+    );
+    expect(pdfBlockEls.length).toBeGreaterThan(0);
+    for (const blockEl of pdfBlockEls) {
+      expect((blockEl as ReactElement).props).toHaveProperty("blockGap");
+    }
   });
 });

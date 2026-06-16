@@ -22,7 +22,7 @@ export function StepExportCanonical({ result, canSave, saving, onSave, onPrev, o
     <div className="space-y-6">
       <h2 className="text-lg font-semibold text-foreground">Exportar</h2>
 
-      <ExportPanel document={document} />
+      <ExportPanel document={document} pageStyle={result.pageStyle} />
 
       <div className="flex flex-wrap gap-2">
         <Button variant="outline" onClick={onSave} disabled={!canSave || saving}>

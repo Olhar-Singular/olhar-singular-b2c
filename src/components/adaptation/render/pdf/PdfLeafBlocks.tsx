@@ -2,6 +2,17 @@
  * Leaf block PDF mappers — heading, paragraph, image, scaffolding, divider.
  * PDF analogues of the matching screen views. Each maps `nodeStyle` via
  * nodeStyleToPdf and reuses PdfRichText for inline content.
+ *
+ * Layout note: PdfHeading and PdfParagraph wrap their <Text> in a <View> so
+ * the block participates in Yoga layout as a proper flex-column child. A bare
+ * <Text> can lose its marginBottom in react-pdf when mixed with <View> siblings
+ * in the same column (the text measure path bypasses Yoga's margin accounting).
+ * The <View> carries the block margin; the inner <Text> handles text styling.
+ *
+ * `blockGap` (in pt) is the doc-level default inter-block gap resolved from
+ * pageStyle. A per-block `style.spacingAfter` (from nodeStyleToPdf) overrides
+ * it. image/scaffolding/divider have their own intrinsic structural spacing and
+ * do NOT use blockGap — but spacingAfter still overrides via nodeStyleToPdf spread.
  */
 
 import { View, Text, Image } from "@react-pdf/renderer";
@@ -17,19 +28,32 @@ type DividerBlock = Extract<Block, { type: "divider" }>;
 
 const HEADING_SIZE: Record<1 | 2 | 3, number> = { 1: 22, 2: 18, 3: 15 };
 
-export function PdfHeading({ block }: { block: HeadingBlock }) {
+export function PdfHeading({ block, blockGap = 12 }: { block: HeadingBlock; blockGap?: number }) {
+  // Extract marginBottom from nodeStyleToPdf (spacingAfter) and fall back to blockGap.
+  // Other text styles (fontSize, fontWeight, textAlign, color, fontFamily) stay on
+  // the inner <Text> so they apply to the text content, not the layout container.
+  const nodeStyle = nodeStyleToPdf(block.style);
+  const { marginBottom: nodeMarginBottom, ...textStyle } = nodeStyle;
+  const marginBottom = nodeMarginBottom ?? blockGap;
   return (
-    <Text style={{ fontSize: HEADING_SIZE[block.level], fontWeight: "bold", marginBottom: 4, ...nodeStyleToPdf(block.style) }}>
-      <PdfRichText content={block.content} />
-    </Text>
+    <View style={{ marginBottom }}>
+      <Text style={{ fontSize: HEADING_SIZE[block.level], fontWeight: "bold", ...textStyle }}>
+        <PdfRichText content={block.content} />
+      </Text>
+    </View>
   );
 }
 
-export function PdfParagraph({ block }: { block: ParagraphBlock }) {
+export function PdfParagraph({ block, blockGap = 12 }: { block: ParagraphBlock; blockGap?: number }) {
+  const nodeStyle = nodeStyleToPdf(block.style);
+  const { marginBottom: nodeMarginBottom, ...textStyle } = nodeStyle;
+  const marginBottom = nodeMarginBottom ?? blockGap;
   return (
-    <Text style={{ marginBottom: 4, ...nodeStyleToPdf(block.style) }}>
-      <PdfRichText content={block.content} />
-    </Text>
+    <View style={{ marginBottom }}>
+      <Text style={textStyle}>
+        <PdfRichText content={block.content} />
+      </Text>
+    </View>
   );
 }
 

@@ -4,16 +4,16 @@ Você vai implementar a feature/fix usando TDD estrito. Execute cada fase separa
 
 ## Contexto do Projeto
 
-- Testes em `src/test/` espelhando a estrutura de `src/`
-- Helpers: `mockAuthHook()`, `createSupabaseMock()`, `createTestWrapper()` de `src/test/helpers.ts`
-- Fixtures: `src/test/fixtures.ts`
-- Rodar testes: `npm run test`
-- Rodar lint: `npm run lint`
+- Testes **colocados ao lado do arquivo** (`useFoo.test.ts` ao lado de `useFoo.ts`); `src/test/` só guarda infra global
+- Helpers (`src/test/helpers.ts`): `renderWithProviders()`, `queryWrapper()`, `buildAuthState()`, `createQueryChain()`, `flushPromises()`
+- Setup global: `src/test/setup.ts` (matchMedia, ResizeObserver, etc.). **Não há `fixtures.ts`** — fixture inline no teste
+- Rodar testes: `npm run test` (ou `make test`)
+- Rodar lint: `npm run lint` (ou `make lint`)
 
 ## Fase 1: RED (Teste que falha)
 
 1. Identifique o comportamento a ser implementado
-2. Escreva o teste em `src/test/` usando os helpers existentes
+2. Escreva o teste **ao lado do arquivo alvo** (`<arquivo>.test.ts(x)`) usando os helpers de `src/test/helpers.ts`
 3. Rode `npm run test` — mostre que o teste FALHA
 4. Mostre ao usuário:
    - O teste escrito

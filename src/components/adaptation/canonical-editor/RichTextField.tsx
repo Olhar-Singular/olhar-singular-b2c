@@ -16,11 +16,11 @@
  * `richTextToPM` / `pmToRichText` mappers. `onChange` only fires when the mapped
  * RichText actually changed (deep compare) to avoid render/onChange loops.
  *
- * The text-format buttons (bold / italic / underline / strike / color) render
- * ONLY in `"style"` mode (see `EditorMode`) — formatting lives in the Estilo
- * step. The inline-math button renders ONLY in `"content"` mode (math is
- * content). Net: content mode = math + text; style mode = format + text. The
- * value contract is unchanged: the field always emits canonical `RichText`.
+ * The only chrome is an inline-math button (math is content). Inline marks
+ * (bold / italic / underline / strike / color) are still parsed and rendered —
+ * the extensions stay in the editor — but selection formatting now lives in the
+ * folha's BubbleMenu (§6.2), not in a per-field toolbar. The value contract is
+ * unchanged: the field always emits canonical `RichText`.
  */
 
 import { useRef } from "react";
@@ -34,29 +34,14 @@ import Underline from "@tiptap/extension-underline";
 import Strike from "@tiptap/extension-strike";
 import TextStyle from "@tiptap/extension-text-style";
 import Color from "@tiptap/extension-color";
-import {
-  Bold as BoldIcon,
-  Italic as ItalicIcon,
-  Underline as UnderlineIcon,
-  Strikethrough,
-  Palette,
-  Sigma,
-} from "lucide-react";
+import { Sigma } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
 import type { RichText } from "@/lib/adaptation/canonical/schema";
-import { ALLOWED_COLORS } from "@/lib/adaptation/canonical/colors";
 import { InlineMathNode } from "@/lib/adaptation/tiptap/schema";
 import { type PMNode } from "@/lib/adaptation/tiptap/fromCanonical";
 import { InlineMathNodeView } from "./nodeviews/InlineMathNodeView";
 import { docFromRichText, richTextFromDoc, richTextEqual } from "./richTextFieldMapping";
-import { useEditorMode } from "./EditorMode";
 
 /** Build the InlineMath node with its React NodeView bound (so math renders). */
 function buildInlineMathExtension() {
@@ -76,6 +61,12 @@ interface RichTextFieldProps {
   placeholder?: string;
   disabled?: boolean;
   ariaLabel?: string;
+  /**
+   * Worksheet-faithful variant: no border and no toolbar — just editable text.
+   * Used in the question PREVIEW so the folha at rest reads like the printed PDF
+   * (plano §6.3 / D2) while still being click-to-edit. The card uses the default.
+   */
+  plain?: boolean;
 }
 
 export function RichTextField({
@@ -84,13 +75,11 @@ export function RichTextField({
   placeholder = "Digite o texto...",
   disabled = false,
   ariaLabel,
+  plain = false,
 }: RichTextFieldProps) {
   // Seed once; track the last emitted RichText to guard against feedback loops.
   const initialContentRef = useRef<PMNode>(docFromRichText(value));
   const lastValueRef = useRef<RichText>(value);
-  // Formatting controls show only in the Estilo step; content editing stays
-  // plain (text + math). Defaults to "content" outside an EditorModeProvider.
-  const showFormatting = useEditorMode() === "style";
 
   const editor = useEditor({
     extensions: [
@@ -116,8 +105,10 @@ export function RichTextField({
     editorProps: {
       attributes: {
         class: cn(
-          // Wrap long answers to multiple lines instead of scrolling sideways.
-          "w-full px-2 py-1 text-sm focus:outline-none min-h-[2rem] whitespace-normal break-words",
+          // `rich-text-field` marks this as a NESTED inline editor so the folha's
+          // top-level block labels (`.tiptap > p` ⇒ "Instrução" etc., in index.css)
+          // never leak onto answer fields. Wrap long answers instead of scrolling.
+          "rich-text-field w-full px-2 py-1 text-sm focus:outline-none min-h-[2rem] whitespace-normal break-words",
           disabled && "opacity-50 cursor-not-allowed"
         ),
         ...(ariaLabel ? { "aria-label": ariaLabel } : {}),
@@ -135,102 +126,23 @@ export function RichTextField({
   };
 
   return (
-    <div className={cn("flex-1 min-w-0 rounded-md border border-input bg-background", disabled && "opacity-60")}>
+    <div className={cn("flex-1 min-w-0", !plain && "rounded-md border border-input bg-background", disabled && "opacity-60")}>
+      {!plain && (
       <div className="flex flex-wrap items-center gap-0.5 border-b border-border bg-muted/30 px-1 py-0.5">
-        {showFormatting && (
-          <>
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              className={cn("h-6 w-6", editor.isActive("bold") && "bg-accent text-accent-foreground")}
-              onClick={() => editor.chain().focus().toggleBold().run()}
-              disabled={disabled}
-              title="Negrito"
-              aria-label="Negrito"
-            >
-              <BoldIcon className="h-3.5 w-3.5" />
-            </Button>
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              className={cn("h-6 w-6", editor.isActive("italic") && "bg-accent text-accent-foreground")}
-              onClick={() => editor.chain().focus().toggleItalic().run()}
-              disabled={disabled}
-              title="Itálico"
-              aria-label="Itálico"
-            >
-              <ItalicIcon className="h-3.5 w-3.5" />
-            </Button>
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              className={cn("h-6 w-6", editor.isActive("underline") && "bg-accent text-accent-foreground")}
-              onClick={() => editor.chain().focus().toggleUnderline().run()}
-              disabled={disabled}
-              title="Sublinhado"
-              aria-label="Sublinhado"
-            >
-              <UnderlineIcon className="h-3.5 w-3.5" />
-            </Button>
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              className={cn("h-6 w-6", editor.isActive("strike") && "bg-accent text-accent-foreground")}
-              onClick={() => editor.chain().focus().toggleStrike().run()}
-              disabled={disabled}
-              title="Tachado"
-              aria-label="Tachado"
-            >
-              <Strikethrough className="h-3.5 w-3.5" />
-            </Button>
-
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild disabled={disabled}>
-                <Button type="button" variant="ghost" size="icon" className="h-6 w-6" title="Cor do texto" aria-label="Cor do texto">
-                  <Palette className="h-3.5 w-3.5" />
-                </Button>
-              </DropdownMenuTrigger>
-              {/* v8 ignore start -- Radix DropdownMenuItem onClick handlers fire
-                  inside a Portal that jsdom doesn't open via fireEvent.click */}
-              <DropdownMenuContent align="start" className="min-w-[140px]">
-                {ALLOWED_COLORS.map((color) => (
-                  <DropdownMenuItem
-                    key={color}
-                    onClick={() => editor.chain().focus().setColor(color).run()}
-                    className="flex items-center gap-2"
-                  >
-                    <span className="h-4 w-4 rounded-full border border-border" style={{ backgroundColor: color }} />
-                    {color}
-                  </DropdownMenuItem>
-                ))}
-                <DropdownMenuItem onClick={() => editor.chain().focus().unsetColor().run()} className="text-muted-foreground">
-                  Cor padrão
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-              {/* v8 ignore stop */}
-            </DropdownMenu>
-          </>
-        )}
-
-        {!showFormatting && (
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            className="h-6 w-6"
-            onClick={insertMath}
-            disabled={disabled}
-            title="Inserir fórmula inline"
-            aria-label="Inserir fórmula inline"
-          >
-            <Sigma className="h-3.5 w-3.5" />
-          </Button>
-        )}
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          className="h-6 w-6"
+          onClick={insertMath}
+          disabled={disabled}
+          title="Inserir fórmula inline"
+          aria-label="Inserir fórmula inline"
+        >
+          <Sigma className="h-3.5 w-3.5" />
+        </Button>
       </div>
+      )}
 
       <EditorContent editor={editor} />
     </div>

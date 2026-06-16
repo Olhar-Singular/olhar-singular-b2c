@@ -1,9 +1,28 @@
 import { describe, it, expect } from "vitest";
-import { RichTextSchema, InlineSchema, isSafeImageSrc, CanonicalDocumentSchema } from "./schema";
+import {
+  RichTextSchema,
+  InlineSchema,
+  isSafeImageSrc,
+  CanonicalDocumentSchema,
+  PageStyleSchema,
+  AdaptationResultSchema,
+  SCHEMA_VERSION,
+} from "./schema";
 import { ALLOWED_COLORS } from "./colors";
 
 const uuid = (n: number): string =>
   `00000000-0000-4000-8000-${String(n).padStart(12, "0")}`;
+
+const baseResult = () => ({
+  schemaVersion: SCHEMA_VERSION,
+  document: {
+    schemaVersion: SCHEMA_VERSION,
+    blocks: [{ id: uuid(1), type: "paragraph", content: [{ type: "text", text: "oi" }] }],
+  },
+  strategies_applied: [],
+  pedagogical_justification: "",
+  implementation_tips: [],
+});
 
 function imageDoc(src: string) {
   return {
@@ -136,5 +155,51 @@ describe("RichText / Inline", () => {
   it("rejects an inline node with unknown type", () => {
     const result = InlineSchema.safeParse({ type: "unknown", text: "a" });
     expect(result.success).toBe(false);
+  });
+});
+
+describe("PageStyleSchema", () => {
+  it("accepts a fully specified page style", () => {
+    const result = PageStyleSchema.safeParse({
+      fontFamily: "lexend",
+      fontSize: 13,
+      blockSpacing: 20,
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("accepts an empty object (all fields optional)", () => {
+    expect(PageStyleSchema.safeParse({}).success).toBe(true);
+  });
+
+  it("rejects unknown keys (strict)", () => {
+    expect(PageStyleSchema.safeParse({ color: "#fff" }).success).toBe(false);
+  });
+
+  it("rejects a non-positive fontSize", () => {
+    expect(PageStyleSchema.safeParse({ fontSize: 0 }).success).toBe(false);
+  });
+
+  it("rejects a negative blockSpacing", () => {
+    expect(PageStyleSchema.safeParse({ blockSpacing: -1 }).success).toBe(false);
+  });
+});
+
+describe("AdaptationResultSchema — pageStyle (additive, optional)", () => {
+  it("accepts a result WITHOUT pageStyle (back-compat)", () => {
+    expect(AdaptationResultSchema.safeParse(baseResult()).success).toBe(true);
+  });
+
+  it("does not inject a pageStyle default (round-trip identity)", () => {
+    const input = baseResult();
+    const parsed = AdaptationResultSchema.parse(input);
+    expect(parsed).toEqual(input);
+    expect("pageStyle" in parsed).toBe(false);
+  });
+
+  it("accepts a result WITH a pageStyle sibling", () => {
+    const input = { ...baseResult(), pageStyle: { fontFamily: "atkinson", fontSize: 14, blockSpacing: 24 } };
+    const parsed = AdaptationResultSchema.parse(input);
+    expect(parsed.pageStyle).toEqual({ fontFamily: "atkinson", fontSize: 14, blockSpacing: 24 });
   });
 });
