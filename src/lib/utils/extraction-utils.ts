@@ -13,6 +13,16 @@ export function stripOptionMarker(text: string): string {
   return stripped === "" ? text.trim() : stripped;
 }
 
+const OPTION_LINE = /^\s*\(?[A-Ea-e]\s*[).]\s/;
+
+export function stripOptionsFromText(text: string, hasOptions: boolean): string {
+  if (!hasOptions) return text;
+  const lines = text.split("\n");
+  const firstOptIdx = lines.findIndex((line) => OPTION_LINE.test(line));
+  if (firstOptIdx === -1) return text;
+  return lines.slice(0, firstOptIdx).join("\n").trim();
+}
+
 export function findDuplicates(
   newQuestions: { text: string }[],
   existingQuestions: { text: string }[]

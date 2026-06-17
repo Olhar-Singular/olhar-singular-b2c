@@ -458,6 +458,42 @@ describe("PdfPreviewModal (forms)", () => {
     expect(screen.getByRole("button", { name: /Confirmar Recorte/i })).toBeInTheDocument();
   });
 
+  // ── zoom controls ────────────────────────────────────────────────────────
+
+  describe("zoom controls", () => {
+    it("shows reduce/increase zoom buttons and initial 100%", async () => {
+      render(<PdfPreviewModal open onOpenChange={vi.fn()} file={fakePdfFile()} />);
+      await waitFor(() => screen.getByText(/Página 1 \/ 3/));
+      expect(screen.getByRole("button", { name: /reduzir zoom/i })).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: /aumentar zoom/i })).toBeInTheDocument();
+      expect(screen.getByText("100%")).toBeInTheDocument();
+    });
+
+    it("aumentar zoom increases to 125%", async () => {
+      render(<PdfPreviewModal open onOpenChange={vi.fn()} file={fakePdfFile()} />);
+      await waitFor(() => screen.getByText(/Página 1 \/ 3/));
+      fireEvent.click(screen.getByRole("button", { name: /aumentar zoom/i }));
+      expect(screen.getByText("125%")).toBeInTheDocument();
+    });
+
+    it("reduzir zoom decreases to 75%", async () => {
+      render(<PdfPreviewModal open onOpenChange={vi.fn()} file={fakePdfFile()} />);
+      await waitFor(() => screen.getByText(/Página 1 \/ 3/));
+      fireEvent.click(screen.getByRole("button", { name: /reduzir zoom/i }));
+      expect(screen.getByText("75%")).toBeInTheDocument();
+    });
+
+    it("zoom resets to 100% when dialog closes via handleClose", async () => {
+      render(<PdfPreviewModal open onOpenChange={vi.fn()} file={fakePdfFile()} />);
+      await waitFor(() => screen.getByText(/Página 1 \/ 3/));
+      fireEvent.click(screen.getByRole("button", { name: /aumentar zoom/i }));
+      expect(screen.getByText("125%")).toBeInTheDocument();
+      fireEvent.keyDown(document.body, { key: "Escape" });
+      await waitFor(() => expect(screen.queryByText("125%")).not.toBeInTheDocument());
+      expect(screen.getByText("100%")).toBeInTheDocument();
+    });
+  });
+
   // ── loadPage resets crop state ────────────────────────────────────────────
 
   it("loadPage clears cropStart and cropEnd when navigating to a new page", async () => {
@@ -598,11 +634,12 @@ describe("PdfPreviewModal (forms)", () => {
           //   5: useState(cropStart)
           //   6: useState(cropEnd)
           //   7: useState(isDragging)
-          //   8: useRef (imgRef)  ← this is what we want
-          //   9: useCallback (getRelativeCoords)
+          //   8: useState(zoom)
+          //   9: useRef (imgRef)  ← this is what we want
+          //  10: useCallback (getRelativeCoords)
           let hook = fiber.memoizedState;
           let i = 0;
-          while (hook && i < 8) { hook = hook.next; i++; }
+          while (hook && i < 9) { hook = hook.next; i++; }
           if (hook && hook.memoizedState && "current" in hook.memoizedState) {
             return hook.memoizedState as { current: HTMLImageElement | null };
           }

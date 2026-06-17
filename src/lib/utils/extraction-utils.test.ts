@@ -6,6 +6,7 @@ import {
   autoCropFromBbox,
   fetchWithRetry,
   stripOptionMarker,
+  stripOptionsFromText,
 } from "./extraction-utils";
 
 describe("stripOptionMarker", () => {
@@ -41,6 +42,44 @@ describe("stripOptionMarker", () => {
   });
   it("returns empty string unchanged", () => {
     expect(stripOptionMarker("")).toBe("");
+  });
+});
+
+describe("stripOptionsFromText", () => {
+  it("removes option lines (parenthesized markers) when options are present", () => {
+    const text = "A que mudança o personagem está se referindo?\n(A) Descartar o lixo.\n(B) Não desperdiçar água.\n(C) Mudar os móveis.\n(D) Mudar de endereço.";
+    const result = stripOptionsFromText(text, true);
+    expect(result).toBe("A que mudança o personagem está se referindo?");
+  });
+
+  it("removes option lines (bare paren markers) when options are present", () => {
+    const text = "Esse texto é uma\nA) reportagem.\nB) entrevista.\nC) crônica.\nD) fábula.";
+    expect(stripOptionsFromText(text, true)).toBe("Esse texto é uma");
+  });
+
+  it("handles multi-paragraph stem before options", () => {
+    const text = "O anel de vidro\nTenho um anel de vidro...\n\nEsse trecho do poema sugere\n(A) cansaço.\n(B) tristeza.";
+    expect(stripOptionsFromText(text, true)).toBe("O anel de vidro\nTenho um anel de vidro...\n\nEsse trecho do poema sugere");
+  });
+
+  it("returns original text unchanged when hasOptions is false", () => {
+    const text = "Descreva o processo fotossintético.\n(A) linha que não é opção";
+    expect(stripOptionsFromText(text, false)).toBe(text);
+  });
+
+  it("returns original text unchanged when no option lines are found", () => {
+    const text = "Calcule a área do triângulo com base 4 e altura 3.";
+    expect(stripOptionsFromText(text, true)).toBe(text);
+  });
+
+  it("handles dot-delimited markers", () => {
+    const text = "Qual é a capital?\nA. Brasília\nB. São Paulo\nC. Rio\nD. Curitiba";
+    expect(stripOptionsFromText(text, true)).toBe("Qual é a capital?");
+  });
+
+  it("does not strip text that merely starts with a letter word (no delimiter)", () => {
+    const text = "Assinale a alternativa correta.\nApenas Brasília é capital.";
+    expect(stripOptionsFromText(text, true)).toBe(text);
   });
 });
 

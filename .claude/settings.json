@@ -1,4 +1,41 @@
 {
+  "permissions": {
+    "allow": [
+      "Bash(make sb-start *)",
+      "PowerShell(Get-Command make -ErrorAction SilentlyContinue)",
+      "PowerShell(Get-Command supabase -ErrorAction SilentlyContinue)",
+      "PowerShell(supabase start)",
+      "PowerShell(supabase stop)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\\\\n\" \"http://127.0.0.1:54321/rest/v1/\" -H \"apikey: sb_publishable_ACJWlzQHlZjBrEguHvfOxg_3BJgxAaH\")",
+      "PowerShell(docker compose down 2>&1)",
+      "PowerShell(supabase stop 2>&1)",
+      "PowerShell(docker compose build --no-cache 2>&1)",
+      "PowerShell(supabase start 2>&1)",
+      "PowerShell(docker compose up -d 2>&1)",
+      "PowerShell(supabase db reset 2>&1)",
+      "PowerShell(Get-Command psql -ErrorAction SilentlyContinue)",
+      "Bash(cat /tmp/seed_custom_user.sql | docker exec -i supabase_db_orientador-digital-b2c psql -U postgres -d postgres -v ON_ERROR_STOP=1)",
+      "Read(//tmp/**)",
+      "Bash(curl -s -X POST http://127.0.0.1:54321/auth/v1/token?grant_type=password -H 'apikey: sb_publishable_ACJWlzQHlZjBrEguHvfOxg_3BJgxAaH' -H 'Content-Type: application/json' -d '{\"email\":\"teste@teste\",\"password\":\"123456\"}')",
+      "Bash(ls -la \"/c/Users/sagac/Desktop/projeto 10/\" 2>&1)",
+      "Read(//c/Users/sagac/Desktop/projeto 10//**)",
+      "Bash(python3 -c \"import fitz\")",
+      "Bash(\"/c/Python314/python\" --version)",
+      "Bash(\"/c/Python314/python\" -m pip --version)",
+      "Bash(\"/c/Python314/python\" -m pip install --quiet pymupdf)",
+      "Bash(mkdir -p /tmp/extract-test)",
+      "Bash(\"/c/Python314/python\" -)",
+      "Read(//c//**)",
+      "Bash(find /c -maxdepth 2 -iname \"tmp\")",
+      "Bash(\"/c/Python314/python\" -c \"import os; print\\(os.path.abspath\\('/tmp/extract-test'\\)\\)\")",
+      "Bash(\"/c/Python314/python\" -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\(d['access_token']\\)\")",
+      "Bash(curl -s -X POST http://127.0.0.1:54321/functions/v1/extract-questions -H 'apikey: sb_publishable_ACJWlzQHlZjBrEguHvfOxg_3BJgxAaH' -H 'Authorization: Bearer __CMDSUB_OUTPUT__' -H 'Content-Type: application/json' --data-binary @/c/tmp/extract-test/payload.json -o /c/tmp/extract-test/result_flash.json -w 'HTTP_STATUS:%{http_code} TIME:%{time_total}s\\\\n')",
+      "Bash(curl -s -X POST http://127.0.0.1:54321/functions/v1/extract-questions -H 'apikey: sb_publishable_ACJWlzQHlZjBrEguHvfOxg_3BJgxAaH' -H 'Authorization: Bearer __CMDSUB_OUTPUT__' -H 'Content-Type: application/json' --data-binary @/c/tmp/extract-test/payload.json -o /c/tmp/extract-test/result_pro.json -w 'HTTP_STATUS:%{http_code} TIME:%{time_total}s\\\\n')",
+      "Bash(curl -s -X POST http://127.0.0.1:54321/functions/v1/extract-questions -H 'apikey: sb_publishable_ACJWlzQHlZjBrEguHvfOxg_3BJgxAaH' -H 'Authorization: Bearer __TRACKED_VAR__' -H 'Content-Type: application/json' --data-binary @/c/tmp/extract-test/payload_s3.json -o /c/tmp/extract-test/result_flash_s3.json -w 'HTTP_STATUS:%{http_code} TIME:%{time_total}s\\\\n')",
+      "PowerShell(docker compose exec app sh -c \"ls node_modules/@react-pdf 2>&1; ls node_modules/zod-to-json-schema 2>&1; ls node_modules/recharts 2>&1\")",
+      "PowerShell(docker compose exec app npm install 2>&1)"
+    ]
+  },
   "hooks": {
     "SessionStart": [
       {

@@ -100,6 +100,19 @@ describe("pdf-utils — parsePdf", () => {
     expect(result.truncated).toBe(false);
   });
 
+  it("renders page images at RENDER_SCALE 3.0", async () => {
+    const pages = [makePage("hello world")];
+    getDocument.mockReturnValue({
+      promise: Promise.resolve({
+        numPages: 1,
+        getPage: (i: number) => Promise.resolve(pages[i - 1]),
+      }),
+    });
+
+    await parsePdf(fakeFile());
+    expect(pages[0].getViewport).toHaveBeenCalledWith({ scale: 3.0 });
+  });
+
   it("only renders the first 8 pages even when document has more", async () => {
     const pages = Array.from({ length: 12 }, () => makePage("p"));
     getDocument.mockReturnValue({

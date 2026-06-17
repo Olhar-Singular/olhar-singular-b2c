@@ -13,7 +13,7 @@ export type PdfParseResult = {
 
 const MAX_TEXT_CHARS = 8000;
 const MAX_IMAGE_PAGES = 8;
-const RENDER_SCALE = 2.0;
+const RENDER_SCALE = 3.0;
 
 export async function parsePdf(
   file: File,

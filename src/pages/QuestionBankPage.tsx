@@ -34,7 +34,7 @@ import {
 import {
   Loader2, Plus, BookOpen, Search, Gift, CreditCard,
   MoreVertical, Pencil, Trash2, FileText, AlertTriangle,
-  Upload, X, CheckCircle2, Eye, Crop, Folder,
+  Upload, X, CheckCircle2, Eye, Crop, Folder, ZoomIn, ZoomOut,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useAuthContext } from "@/contexts/AuthContext";
@@ -45,7 +45,7 @@ import { parsePdf } from "@/lib/utils/pdf-utils";
 import { extractDocxWithImages } from "@/lib/utils/docx-utils";
 import { detectFileType } from "@/lib/utils/fileValidation";
 import { resolveUniqueFileName } from "@/lib/utils/fileNameUtils";
-import { normalizeTextForDedup, autoCropFromBbox, dataUrlToBlob, stripOptionMarker } from "@/lib/utils/extraction-utils";
+import { normalizeTextForDedup, autoCropFromBbox, dataUrlToBlob, stripOptionMarker, stripOptionsFromText } from "@/lib/utils/extraction-utils";
 import { parseDbError, parseEdgeFnError } from "@/lib/utils/errors";
 import QuestionForm from "@/components/forms/QuestionForm";
 import OptionsEditor from "@/components/forms/OptionsEditor";
@@ -86,6 +86,27 @@ type ExtractedQuestion = {
   editing?: boolean;
 };
 
+function ImageZoomModal({ url, onClose }: { url: string | null; onClose: () => void }) {
+  return (
+    <Dialog open={!!url} onOpenChange={onClose}>
+      <DialogContent className="max-w-5xl max-h-[90vh] flex flex-col">
+        <DialogHeader>
+          <DialogTitle>Imagem da questão</DialogTitle>
+        </DialogHeader>
+        <div className="flex-1 overflow-auto flex justify-center items-start p-4">
+          {url && (
+            <img
+              src={url}
+              alt="Imagem ampliada"
+              className="max-w-full"
+            />
+          )}
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 function FilePreviewDialog({
   open, file, objectUrl, onOpenChange,
 }: {
@@ -94,16 +115,30 @@ function FilePreviewDialog({
   objectUrl: string | null;
   onOpenChange: (open: boolean) => void;
 }) {
+  const [zoom, setZoom] = useState(100);
+  useEffect(() => { if (!open) setZoom(100); }, [open]);
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-4xl h-[80vh] flex flex-col">
-        <DialogHeader>
-          <DialogTitle>{file?.name ?? "Prévia do arquivo"}</DialogTitle>
+        <DialogHeader className="pb-0">
+          <div className="flex items-center gap-3 flex-wrap">
+            <DialogTitle className="flex-1 truncate">{file?.name ?? "Prévia do arquivo"}</DialogTitle>
+            <div className="flex items-center gap-1.5 shrink-0">
+              <Button size="sm" variant="outline" aria-label="Reduzir zoom" onClick={() => setZoom((z) => Math.max(25, z - 25))}>
+                <ZoomOut className="w-4 h-4" />
+              </Button>
+              <span className="text-sm font-medium w-12 text-center">{zoom}%</span>
+              <Button size="sm" variant="outline" aria-label="Aumentar zoom" onClick={() => setZoom((z) => Math.min(300, z + 25))}>
+                <ZoomIn className="w-4 h-4" />
+              </Button>
+            </div>
+          </div>
         </DialogHeader>
         {objectUrl && (
           <iframe
-            src={`${objectUrl}#toolbar=0&navpanes=0`}
-            className="flex-1 w-full rounded border"
+            key={zoom}
+            src={`${objectUrl}#toolbar=0&navpanes=0&zoom=${zoom}`}
+            className="flex-1 w-full rounded border mt-3"
             title="Prévia do arquivo"
           />
         )}
@@ -159,6 +194,9 @@ export default function QuestionBankPage() {
   // PDF crop modal
   const [cropModalOpen, setCropModalOpen] = useState(false);
   const [cropTargetIndex, setCropTargetIndex] = useState<number | null>(null);
+
+  // Image zoom modal
+  const [zoomUrl, setZoomUrl] = useState<string | null>(null);
 
   const fileRef = useRef<HTMLInputElement>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -333,11 +371,13 @@ export default function QuestionBankPage() {
             imageUrl = images[q.image_page - 1];
           }
         }
+        const cleanedOptions = q.options ? q.options.map(stripOptionMarker) : undefined;
+        const rawText = (q.text || "").replace(/\\n/g, "\n");
         processed.push({
-          text: q.text || "",
+          text: stripOptionsFromText(rawText, Boolean(cleanedOptions?.length)),
           subject: q.subject || "Geral",
           topic: q.topic || undefined,
-          options: q.options ? q.options.map(stripOptionMarker) : undefined,
+          options: cleanedOptions,
           correct_answer: q.correct_answer != null ? q.correct_answer : undefined,
           resolution: q.resolution || undefined,
           has_figure: q.has_figure || false,
@@ -692,11 +732,21 @@ export default function QuestionBankPage() {
                     )}
 
                     {q.imageUrl && (
-                      <img
-                        src={q.imageUrl}
-                        alt="Imagem da questão"
-                        className="mt-2 max-h-48 rounded border"
-                      />
+                      <div className="relative mt-2 w-fit">
+                        <img
+                          src={q.imageUrl}
+                          alt="Imagem da questão"
+                          className="max-h-48 rounded border block"
+                        />
+                        <button
+                          type="button"
+                          className="absolute top-1.5 right-1.5 bg-primary text-primary-foreground hover:bg-primary/90 rounded-full p-1.5 shadow-md z-10"
+                          aria-label="Ampliar imagem"
+                          onClick={() => setZoomUrl(q.imageUrl!)}
+                        >
+                          <ZoomIn className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
                     )}
 
                     {q.editing && uploadFile && (
@@ -820,6 +870,8 @@ export default function QuestionBankPage() {
             setCropModalOpen(false);
           }}
         />
+
+        <ImageZoomModal url={zoomUrl} onClose={() => setZoomUrl(null)} />
       </div>
     );
   }

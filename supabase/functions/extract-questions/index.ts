@@ -15,6 +15,7 @@ const OCR_SYSTEM_PROMPT = `You are an expert OCR system for Brazilian educationa
 Images may have 2-3 columns, figures, tables, and multiple questions per page.
 
 EXTRACTION RULES:
+- If a "TEXTO NATIVO EXTRAÍDO" block is provided, it is the authoritative, ground-truth source for every question's text and alternatives — copy it verbatim instead of re-reading the pixels. Use the page images only to detect figures/diagrams, their position, and the reading order — never to override text that the native block already provides.
 - Read left column top-to-bottom, then right column top-to-bottom
 - Extract EVERY question visible — do NOT stop after the first one, do NOT skip any
 - Extract ALL question formats, not only multiple choice: open-ended/essay (dissertativa), true-false (verdadeiro/falso), fill-in-the-blank (completar lacunas), matching (associação/colunas), and multiple choice. A question without alternatives is still a question — extract it with an empty "options" array.
@@ -238,7 +239,7 @@ serve(async (req) => {
 
     // ── Build AI messages ─────────────────────────────────────────────────────
     const contentParts: any[] = [
-      { type: "text", text: `${EXTRACT_PROMPT}\n\nTexto extraído do documento "${sanitize(pdfFileName, 200)}":\n${sanitize(pdfText, 50000)}` },
+      { type: "text", text: `${EXTRACT_PROMPT}\n\nTEXTO NATIVO EXTRAÍDO do documento "${sanitize(pdfFileName, 200)}" (fonte de verdade quando presente):\n${sanitize(pdfText, 50000)}` },
     ];
     for (let i = 0; i < pageImages.length; i++) {
       contentParts.push({ type: "text", text: `\n[Página ${i + 1}]` });
@@ -251,15 +252,17 @@ serve(async (req) => {
     ];
 
     // ── Call Gemini ───────────────────────────────────────────────────────────
+    const extractModel = ai.resolveModel("google/gemini-2.5-pro");
     const extractStartTime = Date.now();
     const aiResponse = await fetch(`${ai.baseUrl}/chat/completions`, {
       method: "POST",
       headers: { Authorization: `Bearer ${ai.apiKey}`, "Content-Type": "application/json" },
       body: JSON.stringify({
-        model: ai.resolveModel("google/gemini-2.5-flash"),
+        model: extractModel,
         messages,
         tools: [TOOL_SCHEMA],
         tool_choice: { type: "function", function: { name: "save_questions" } },
+        max_tokens: 16384,
       }),
     });
 
@@ -283,7 +286,7 @@ serve(async (req) => {
     logAiUsage({
       user_id: user.id,
       action_type: "question_extraction",
-      model: "google/gemini-2.5-flash",
+      model: extractModel,
       input_tokens: aiData.usage?.prompt_tokens || 0,
       output_tokens: aiData.usage?.completion_tokens || 0,
       request_duration_ms: Date.now() - extractStartTime,

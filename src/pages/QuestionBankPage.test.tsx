@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import QuestionBankPage from "./QuestionBankPage";
 import { supabase } from "@/integrations/supabase/client";
 import { MSG_NETWORK } from "@/lib/utils/errors";
+import { parsePdf } from "@/lib/utils/pdf-utils";
 
 // ---------------------------------------------------------------------------
 // Hook / context mocks
@@ -72,6 +73,7 @@ vi.mock("@/lib/utils/extraction-utils", () => ({
   dataUrlToBlob: vi.fn(),
   findDuplicates: vi.fn(() => []),
   stripOptionMarker: vi.fn((t: string) => t.replace(/^[a-eA-E]\)\s*/, "")),
+  stripOptionsFromText: vi.fn((t: string) => t),
 }));
 
 // ---------------------------------------------------------------------------
@@ -2415,6 +2417,73 @@ describe("QuestionBankPage", () => {
     expect(URL.revokeObjectURL).toHaveBeenCalledWith("blob:provas-preview");
   });
 
+  // ── FilePreviewDialog: zoom controls ─────────────────────────────────────
+
+  describe("FilePreviewDialog: zoom controls", () => {
+    async function openProvasPreview() {
+      vi.stubGlobal("URL", {
+        createObjectURL: vi.fn().mockReturnValue("blob:preview"),
+        revokeObjectURL: vi.fn(),
+      });
+      render(<QuestionBankPage />, { wrapper });
+      fireEvent.click(screen.getByRole("tab", { name: /Provas/i }));
+      const input = document.querySelector("input[data-upload-input]") as HTMLInputElement;
+      fireEvent.change(input, { target: { files: [new File(["pdf"], "prova.pdf", { type: "application/pdf" })] } });
+      await waitFor(() => screen.getByRole("button", { name: /Visualizar/i }));
+      fireEvent.click(screen.getByRole("button", { name: /Visualizar/i }));
+      await waitFor(() => screen.getByRole("dialog"));
+    }
+
+    it("shows zoom controls inside preview dialog", async () => {
+      await openProvasPreview();
+      expect(screen.getByRole("button", { name: /reduzir zoom/i })).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: /aumentar zoom/i })).toBeInTheDocument();
+      expect(screen.getByText("100%")).toBeInTheDocument();
+    });
+
+    it("zoom in button increases percentage", async () => {
+      await openProvasPreview();
+      fireEvent.click(screen.getByRole("button", { name: /aumentar zoom/i }));
+      expect(screen.getByText("125%")).toBeInTheDocument();
+    });
+
+    it("zoom out button decreases percentage", async () => {
+      await openProvasPreview();
+      fireEvent.click(screen.getByRole("button", { name: /reduzir zoom/i }));
+      expect(screen.getByText("75%")).toBeInTheDocument();
+    });
+
+    it("zoom resets to 100% when dialog is closed and reopened", async () => {
+      await openProvasPreview();
+      fireEvent.click(screen.getByRole("button", { name: /aumentar zoom/i }));
+      expect(screen.getByText("125%")).toBeInTheDocument();
+      fireEvent.click(screen.getByRole("button", { name: /close/i }));
+      await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+      fireEvent.click(screen.getByRole("button", { name: /Visualizar/i }));
+      await waitFor(() => screen.getByRole("dialog"));
+      expect(screen.getByText("100%")).toBeInTheDocument();
+    });
+  });
+
+  // ── handleExtract: normalizes literal \n in text ──────────────────────────
+
+  it("extract: normalizes literal \\n sequences in question text to actual newlines", async () => {
+    invokeSpy.mockResolvedValueOnce({
+      data: { questions: [{ text: "Primeira linha\\nSegunda linha", subject: "Física" }] },
+      error: null,
+    });
+    render(<QuestionBankPage />, { wrapper });
+    fireEvent.click(screen.getByRole("tab", { name: /Provas/i }));
+    const input = document.querySelector("input[data-upload-input]") as HTMLInputElement;
+    fireEvent.change(input, { target: { files: [new File(["pdf"], "prova.pdf", { type: "application/pdf" })] } });
+    await waitFor(() => screen.getByRole("button", { name: /Extrair com IA/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Extrair com IA/i }));
+    await waitFor(() => screen.queryByText(/Primeira linha/));
+    const textEl = screen.getByText(/Primeira linha/);
+    expect(textEl.textContent).not.toMatch(/\\n/);
+    expect(textEl.textContent).toContain("\n");
+  });
+
   // ── handleExtract: canExtract=false with file set ────────────────────────
 
   it("re-extract: does nothing when canExtract is false", async () => {
@@ -2713,5 +2782,45 @@ describe("QuestionBankPage", () => {
     await waitFor(() => screen.getByText("Prova.pdf"));
     fireEvent.click(screen.getByRole("button", { name: /extrair questões/i }));
     await waitFor(() => expect(toast.error).toHaveBeenCalledWith(MSG_NETWORK));
+  });
+
+  // ── image zoom modal ────────────────────────────────────────────────────────
+
+  describe("review: image zoom modal", () => {
+  async function goToReviewWithImage() {
+    vi.mocked(parsePdf).mockResolvedValueOnce({
+      text: "extracted",
+      pageImages: ["data:image/jpeg;base64,FAKEIMAGE"],
+      pageCount: 1,
+      pagesProcessed: [1],
+      truncated: false,
+    });
+    await goToReview([{ text: "Q1", subject: "Física", has_figure: true, image_page: 1 } as any]);
+  }
+
+  it("shows zoom button on question image", async () => {
+    await goToReviewWithImage();
+    expect(screen.getByRole("button", { name: /ampliar imagem/i })).toBeInTheDocument();
+  });
+
+  it("clicking zoom button opens modal with enlarged image", async () => {
+    await goToReviewWithImage();
+    fireEvent.click(screen.getByRole("button", { name: /ampliar imagem/i }));
+    await waitFor(() => expect(screen.getByRole("dialog")).toBeInTheDocument());
+    expect(screen.getByAltText(/imagem ampliada/i)).toBeInTheDocument();
+  });
+
+  it("closing image modal hides the dialog", async () => {
+    await goToReviewWithImage();
+    fireEvent.click(screen.getByRole("button", { name: /ampliar imagem/i }));
+    await waitFor(() => screen.getByRole("dialog"));
+    fireEvent.click(screen.getByRole("button", { name: /close/i }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+  });
+
+  it("does not show zoom button when question has no image", async () => {
+    await goToReview([{ text: "Q sem imagem", subject: "Física" }]);
+    expect(screen.queryByRole("button", { name: /ampliar imagem/i })).not.toBeInTheDocument();
+  });
   });
 });
