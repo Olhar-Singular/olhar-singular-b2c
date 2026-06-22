@@ -3,23 +3,70 @@
 /* OpenDyslexic - Accessibility font for dyslexia */
 @font-face {
   font-family: 'OpenDyslexic';
-  src: url('/fonts/OpenDyslexic-Regular.otf') format('opentype');
+  src: url('/fonts/OpenDyslexic-Regular.ttf') format('opentype');
   font-weight: normal;
   font-style: normal;
   font-display: swap;
 }
 @font-face {
   font-family: 'OpenDyslexic';
-  src: url('/fonts/OpenDyslexic-Bold.otf') format('opentype');
+  src: url('/fonts/OpenDyslexic-Bold.ttf') format('opentype');
   font-weight: bold;
   font-style: normal;
   font-display: swap;
 }
 @font-face {
   font-family: 'OpenDyslexic';
-  src: url('/fonts/OpenDyslexic-Italic.otf') format('opentype');
+  src: url('/fonts/OpenDyslexic-Italic.ttf') format('opentype');
   font-weight: normal;
   font-style: italic;
+  font-display: swap;
+}
+
+/* Atkinson Hyperlegible - Accessibility font (low vision). Self-hosted so the
+   same files feed both the screen (@font-face) and the PDF (Font.register). */
+@font-face {
+  font-family: 'Atkinson Hyperlegible';
+  src: url('/fonts/AtkinsonHyperlegible-Regular.ttf') format('truetype');
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Atkinson Hyperlegible';
+  src: url('/fonts/AtkinsonHyperlegible-Bold.ttf') format('truetype');
+  font-weight: bold;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Atkinson Hyperlegible';
+  src: url('/fonts/AtkinsonHyperlegible-Italic.ttf') format('truetype');
+  font-weight: normal;
+  font-style: italic;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Atkinson Hyperlegible';
+  src: url('/fonts/AtkinsonHyperlegible-BoldItalic.ttf') format('truetype');
+  font-weight: bold;
+  font-style: italic;
+  font-display: swap;
+}
+
+/* Lexend - Accessibility font (reading proficiency). */
+@font-face {
+  font-family: 'Lexend';
+  src: url('/fonts/Lexend-Regular.ttf') format('truetype');
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Lexend';
+  src: url('/fonts/Lexend-Bold.ttf') format('truetype');
+  font-weight: bold;
+  font-style: normal;
   font-display: swap;
 }
 
@@ -73,6 +120,27 @@
     --card-shadow: 0 1px 3px 0 hsl(195 35% 12% / 0.06), 0 1px 2px -1px hsl(195 35% 12% / 0.06);
     --card-shadow-hover: 0 10px 25px -5px hsl(195 35% 12% / 0.08), 0 8px 10px -6px hsl(195 35% 12% / 0.06);
     --glow-accent: 0 4px 20px hsl(40 55% 50% / 0.25);
+
+    /* Adaptar "Revisar" surface tokens (paleta da folha).
+       Namespaced --sf-* to avoid colliding with the shadcn --accent etc.
+       Surface is paper-metaphor LIGHT-ONLY (the folha mirrors the always-white
+       PDF) — intentionally no .dark overrides. */
+    --sf-mesa: 38 19% 88%;
+    --sf-mesa-2: 39 18% 84%;
+    --sf-paper: 0 0% 100%;
+    --sf-ink: 40 10% 12%;
+    --sf-ink-soft: 37 6% 39%;
+    --sf-ink-faint: 38 9% 64%;
+    --sf-line: 38 22% 90%;
+    --sf-line-2: 39 18% 85%;
+    --sf-accent: 216 57% 40%;
+    --sf-accent-soft: 216 56% 95%;
+    --sf-accent-ink: 216 60% 33%;
+    --sf-correct: 147 46% 34%;
+    --sf-chrome: 45 33% 98%;
+    --sf-chrome-line: 37 20% 87%;
+    --sf-paper-shadow: 0 1px 2px rgba(40, 35, 25, 0.04), 0 10px 30px rgba(40, 35, 25, 0.08);
+    --sf-mesa-gradient: radial-gradient(120% 60% at 50% 0, hsl(var(--sf-mesa)) 40%, hsl(var(--sf-mesa-2)));
   }
 
   .dark {
@@ -194,3 +262,129 @@
   border-color: hsl(var(--primary));
   outline: 2px solid hsl(var(--primary) / 0.3);
 }
+
+/*
+ * "Tudo dentro de blocos": every DIRECT top-level block of the editor reads as a
+ * contained block. Questions already render as cards (QuestionNodeView, a
+ * div[data-type='question']); these rules only contain the previously-loose
+ * top-level heading/paragraph blocks (activity title + general instructions).
+ * The `>` combinator scopes this to DIRECT children of .ProseMirror, so nested
+ * paragraphs inside a question stem are NOT affected.
+ */
+.tiptap:not(.rich-text-field) > h1,
+.tiptap:not(.rich-text-field) > h2,
+.tiptap:not(.rich-text-field) > h3,
+.tiptap:not(.rich-text-field) > p {
+  position: relative;
+  /* Document-level block spacing (Aparência, plano §6.5). Default 1rem = 16px,
+     so a document without `pageStyle` renders exactly as before. */
+  margin: var(--doc-block-spacing, 1rem) 0;
+  padding: 1.75rem 1rem 0.5rem;
+  border-left: 2px solid hsl(var(--muted-foreground) / 0.25);
+  border-radius: 0.5rem;
+}
+
+/* Discrete type label, pure CSS — no JS, so the coverage gate is unaffected. */
+.tiptap:not(.rich-text-field) > h1::before,
+.tiptap:not(.rich-text-field) > h2::before,
+.tiptap:not(.rich-text-field) > h3::before,
+.tiptap:not(.rich-text-field) > p::before {
+  position: absolute;
+  top: 0.5rem;
+  left: 1rem;
+  font-size: 0.5625rem;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: hsl(var(--muted-foreground) / 0.7);
+  pointer-events: none;
+}
+
+.tiptap:not(.rich-text-field) > h1::before {
+  content: "Título";
+}
+
+.tiptap:not(.rich-text-field) > h2::before,
+.tiptap:not(.rich-text-field) > h3::before {
+  content: "Seção";
+}
+
+.tiptap:not(.rich-text-field) > p::before {
+  content: "Instrução";
+}
+
+/* Tipografia distinta por tipo de seção (Título / Seção / Instrução). */
+.tiptap:not(.rich-text-field) > h1 {
+  font-size: 1.5rem;
+  font-weight: 700;
+  text-align: center;
+  border-left-color: transparent;
+}
+.tiptap:not(.rich-text-field) > h2,
+.tiptap:not(.rich-text-field) > h3 {
+  font-size: 1.2rem;
+  font-weight: 700;
+  color: hsl(var(--primary));
+  border-left-width: 3px;
+  border-left-color: hsl(var(--primary));
+  background-color: hsl(var(--primary) / 0.06);
+}
+.tiptap:not(.rich-text-field) > p {
+  font-style: italic;
+  color: hsl(var(--muted-foreground));
+}
+
+/* The empty-editor placeholder paragraph keeps no container/label — the
+ * higher-specificity placeholder rule above already restores its ::before. */
+.tiptap:not(.rich-text-field) > p.is-editor-empty:first-child {
+  padding: 0;
+  border-left: 0;
+}
+
+/* Keep top-level question cards spaced consistently with the new containers
+ * (margin only — the card already has its own border; do NOT double-border). */
+.tiptap:not(.rich-text-field) > [data-type="question"] {
+  margin: 0.75rem 0;
+}
+
+/* Estilo step — highlight of the "current" top-level block (the one being
+ * styled). Minimal but obvious: a soft ring, a left accent bar, and a subtle
+ * background tint. Applied as a ProseMirror node decoration (see
+ * styleDecoration.ts → CURRENT_BLOCK_CLASS). */
+.adaptar-current-block {
+  position: relative;
+  border-radius: 0.5rem;
+  background-color: hsl(var(--primary) / 0.04);
+  box-shadow: inset 0 0 0 1px hsl(var(--primary) / 0.25);
+  padding-left: 0.5rem;
+  transition: background-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+/* Accent bar uses ::after so it never collides with the type-label ::before
+ * (which carries the "Título"/"Seção"/"Instrução" text). Sharing ::before made
+ * the label inherit the bar's width:2px and wrap one letter per line (vertical). */
+.adaptar-current-block::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0.25rem;
+  bottom: 0.25rem;
+  width: 2px;
+  border-radius: 9999px;
+  background-color: hsl(var(--primary) / 0.8);
+}
+
+/* When an image or block-math node lives inside a question's stem and the
+ * inner node is hovered, both the inner node's rail and the question's rail
+ * would appear simultaneously (nested .group hover propagates up). Suppress
+ * the question rail via :has() so only the inner node's own rail is visible. */
+[data-testid="question-node"]:has([data-testid="image-node"]:hover) [data-role="question-rail"],
+[data-testid="question-node"]:has([data-testid="blockmath-node"]:hover) [data-role="question-rail"] {
+  display: none;
+}
+
+/* Image controls (alignment, legenda, alt text) inside a question are hidden
+ * in preview mode and only revealed when the card is open (editar questão).
+ * Top-level images (not inside a question) always show their controls. */
+[data-testid="question-node"] [data-testid="image-controls"] { display: none; }
+[data-question-expanded="true"] [data-testid="image-controls"] { display: flex; flex-direction: column; gap: 0.5rem; }

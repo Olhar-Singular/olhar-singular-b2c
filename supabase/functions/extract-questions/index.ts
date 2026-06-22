@@ -15,15 +15,17 @@ const OCR_SYSTEM_PROMPT = `You are an expert OCR system for Brazilian educationa
 Images may have 2-3 columns, figures, tables, and multiple questions per page.
 
 EXTRACTION RULES:
+- If a "TEXTO NATIVO EXTRAÍDO" block is provided, it is the authoritative, ground-truth source for every question's text and alternatives — copy it verbatim instead of re-reading the pixels. Use the page images only to detect figures/diagrams, their position, and the reading order — never to override text that the native block already provides.
 - Read left column top-to-bottom, then right column top-to-bottom
 - Extract EVERY question visible — do NOT stop after the first one, do NOT skip any
+- Extract ALL question formats, not only multiple choice: open-ended/essay (dissertativa), true-false (verdadeiro/falso), fill-in-the-blank (completar lacunas), matching (associação/colunas), and multiple choice. A question without alternatives is still a question — extract it with an empty "options" array.
 - Accepted numbering patterns: "1." / "1)" / "Q1" / "Questão 1" / "QUESTÃO 1" / Roman numerals ("I.", "II.", "III.")
 - NEVER invent, deduce, or complete truncated statements — return the text exactly as it appears in the document
 - Ignore headers, footers, school name, teacher name, watermarks
 - Preserve all units and math symbols exactly (m/s², 10⁸, ≥, ≤, etc.)
 
 FIELD RULES:
-- "options": extract alternatives as array of strings. Alternative markers: a. / a) / A. / A) / (a) / (A)
+- "options": only for multiple-choice questions; extract alternatives as an array of strings. Use an empty array for open-ended/dissertativa, fill-in-the-blank, or matching questions. Detect alternatives by markers (a. / a) / A. / A) / (a) / (A)) but DO NOT include the marker in the string — return just the alternative text (e.g. "sucos", not "a) sucos").
 - "correct_answer": set ONLY if an explicit answer key appears in the document (e.g. "Gabarito: B", "Resposta: C"). Index: 0=A, 1=B, 2=C, 3=D, 4=E. Use -1 in ALL other cases — never solve or guess.
 - "resolution": short explanation (1-3 sentences)
 - "has_figure": true if the question text references a figure, diagram, graph, table, or image — even if it is not visible in the scan
@@ -125,6 +127,7 @@ serve(async (req) => {
     let pdfText = "";
     let pdfFileName = "";
     let pageImages: string[] = [];
+    let providedUploadId: string | null = null;
 
     const contentType = req.headers.get("content-type") || "";
 
@@ -150,22 +153,37 @@ serve(async (req) => {
       pdfText = body.pdfText || "";
       pdfFileName = body.pdfFileName || "";
       pageImages = body.pageImages || [];
+      providedUploadId = body.uploadId || null;
     }
 
-    // ── Register upload record ────────────────────────────────────────────────
-    const { data: uploadRecord } = await admin
-      .from("pdf_uploads")
-      .insert({
-        user_id: user.id,
-        file_name: pdfFileName || "upload",
-        file_path: "",
-        was_free: isFreeExtraction,
-        credits_spent: isFreeExtraction ? 0 : EXTRACTION_COST,
-      })
-      .select("id")
-      .single();
-
-    const uploadId = uploadRecord?.id ?? null;
+    // ── Register / update upload record ───────────────────────────────────────
+    // The client creates the pdf_uploads row at upload time and passes its id
+    // here, so we update it instead of inserting a duplicate. Only the direct
+    // multipart path (no client row) falls back to inserting a fresh record.
+    let uploadId = providedUploadId;
+    if (providedUploadId) {
+      await admin
+        .from("pdf_uploads")
+        .update({
+          was_free: isFreeExtraction,
+          credits_spent: isFreeExtraction ? 0 : EXTRACTION_COST,
+        })
+        .eq("id", providedUploadId)
+        .eq("user_id", user.id);
+    } else {
+      const { data: uploadRecord } = await admin
+        .from("pdf_uploads")
+        .insert({
+          user_id: user.id,
+          file_name: pdfFileName || "upload",
+          file_path: "",
+          was_free: isFreeExtraction,
+          credits_spent: isFreeExtraction ? 0 : EXTRACTION_COST,
+        })
+        .select("id")
+        .single();
+      uploadId = uploadRecord?.id ?? null;
+    }
 
     // ── Deduct credits or claim the free extraction (atomic) ─────────────────
     // claimFree wins the one-time free slot when available; on a lost race (or
@@ -221,7 +239,7 @@ serve(async (req) => {
 
     // ── Build AI messages ─────────────────────────────────────────────────────
     const contentParts: any[] = [
-      { type: "text", text: `${EXTRACT_PROMPT}\n\nTexto extraído do documento "${sanitize(pdfFileName, 200)}":\n${sanitize(pdfText, 50000)}` },
+      { type: "text", text: `${EXTRACT_PROMPT}\n\nTEXTO NATIVO EXTRAÍDO do documento "${sanitize(pdfFileName, 200)}" (fonte de verdade quando presente):\n${sanitize(pdfText, 50000)}` },
     ];
     for (let i = 0; i < pageImages.length; i++) {
       contentParts.push({ type: "text", text: `\n[Página ${i + 1}]` });
@@ -234,15 +252,17 @@ serve(async (req) => {
     ];
 
     // ── Call Gemini ───────────────────────────────────────────────────────────
+    const extractModel = ai.resolveModel("google/gemini-2.5-pro");
     const extractStartTime = Date.now();
     const aiResponse = await fetch(`${ai.baseUrl}/chat/completions`, {
       method: "POST",
       headers: { Authorization: `Bearer ${ai.apiKey}`, "Content-Type": "application/json" },
       body: JSON.stringify({
-        model: ai.resolveModel("google/gemini-2.5-flash"),
+        model: extractModel,
         messages,
         tools: [TOOL_SCHEMA],
         tool_choice: { type: "function", function: { name: "save_questions" } },
+        max_tokens: 16384,
       }),
     });
 
@@ -266,7 +286,7 @@ serve(async (req) => {
     logAiUsage({
       user_id: user.id,
       action_type: "question_extraction",
-      model: "google/gemini-2.5-flash",
+      model: extractModel,
       input_tokens: aiData.usage?.prompt_tokens || 0,
       output_tokens: aiData.usage?.completion_tokens || 0,
       request_duration_ms: Date.now() - extractStartTime,

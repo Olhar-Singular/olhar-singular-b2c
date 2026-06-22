@@ -1,1 +1,6 @@
-npm run typecheck && npm test
+# Roda typecheck + suíte DENTRO do container (mesmo motivo do pre-commit).
+if ! docker compose exec -T app true 2>/dev/null; then
+  echo "⚠️  Container 'app' não está rodando. Rode 'make start' antes do push." >&2
+  exit 1
+fi
+docker compose exec -T app npm run typecheck && docker compose exec -T app npm test

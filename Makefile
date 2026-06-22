@@ -180,7 +180,7 @@ db-seed-test-user:
 # ─────────────────────────────────────────────
 #  EDGE FUNCTIONS
 # ─────────────────────────────────────────────
-FUNCTIONS := adapt-activity chat create-checkout create-stripe-checkout extract-questions mp-webhook regenerate-question stripe-webhook
+FUNCTIONS := adapt-activity admin-dashboard admin-grant-credits admin-user-status chat create-checkout create-stripe-checkout extract-questions mp-webhook stripe-webhook
 
 .PHONY: fn-deploy-all
 fn-deploy-all:
@@ -202,7 +202,7 @@ fn-list:
 
 .PHONY: fn-serve
 fn-serve:
-	supabase functions serve --env-file supabase/functions/.env
+	supabase functions serve --env-file .env
 
 .PHONY: fn-new
 fn-new:

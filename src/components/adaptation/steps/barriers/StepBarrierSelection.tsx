@@ -1,9 +1,15 @@
-import { useState } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
-import { Checkbox } from "@/components/ui/checkbox";
-import { ArrowLeft, ArrowRight, User, Coins, Pencil } from "lucide-react";
-import { useBarrierProfiles } from "@/hooks/useBarrierProfiles";
+import { Badge } from "@/components/ui/badge";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { ArrowLeft, Sparkles, User, Coins, Plus } from "lucide-react";
+import { useBarrierProfiles, useCreateBarrierProfile } from "@/hooks/useBarrierProfiles";
 import { useAuth } from "@/hooks/useAuth";
 import {
   BARRIER_DIMENSIONS,
@@ -11,7 +17,9 @@ import {
   calcAdaptationCost,
   getComplexityTier,
 } from "@/lib/domain/barriers";
-import type { WizardData, BarrierItem } from "@/lib/domain/adaptationWizardHelpers";
+import type { WizardData, BarrierItem } from "@/lib/adaptation/wizard/wizardState";
+import { BarrierProfileForm } from "@/components/forms/BarrierProfileForm";
+import type { BarrierProfileFormValues } from "@/components/forms/BarrierProfileForm";
 
 type Props = {
   data: WizardData;
@@ -20,30 +28,13 @@ type Props = {
   onPrev: () => void;
 };
 
-function barrierIsActive(barriers: BarrierItem[], dimension: string, key: string) {
-  return barriers.some((b) => b.dimension === dimension && b.barrier_key === key && b.is_active);
-}
-
-function toggleBarrier(
-  barriers: BarrierItem[],
-  dimension: string,
-  barrierKey: string,
-  label: string,
-  checked: boolean,
-): BarrierItem[] {
-  if (checked) {
-    /* v8 ignore next -- defensive guard: Radix Checkbox fires onCheckedChange(false) for checked items, so duplicate-add is unreachable via normal UI */
-    if (barrierIsActive(barriers, dimension, barrierKey)) return barriers;
-    return [...barriers, { dimension, barrier_key: barrierKey, label, is_active: true }];
-  }
-  return barriers.filter((b) => !(b.dimension === dimension && b.barrier_key === barrierKey));
-}
-
 export function StepBarrierSelection({ data, updateData, onNext, onPrev }: Props) {
   const { data: profiles = [] } = useBarrierProfiles();
   const { profile } = useAuth();
+  const createProfile = useCreateBarrierProfile();
   const [error, setError] = useState("");
-  const [locked, setLocked] = useState(data.barrierProfileId !== null);
+  const [creatingProfile, setCreatingProfile] = useState(false);
+  const [selectNewest, setSelectNewest] = useState(false);
 
   const activeDimensions = [...new Set(
     data.barriers.filter((b) => b.is_active).map((b) => b.dimension).filter(Boolean),
@@ -53,17 +44,16 @@ export function StepBarrierSelection({ data, updateData, onNext, onPrev }: Props
   const creditCost = calcAdaptationCost(activeDimensions);
   const complexityTier = getComplexityTier(activeDimensions);
 
-  function handleProfileChange(profileId: string) {
+  const handleProfileChange = useCallback((profileId: string) => {
     if (!profileId) {
       updateData({ barrierProfileId: null, barriers: [] });
-      setLocked(false);
       return;
     }
-    const profile = profiles.find((p) => p.id === profileId);
-    /* v8 ignore next -- defensive guard: select options are generated from profiles, so an unknown profileId is unreachable via normal UI */
-    if (!profile) return;
+    const p = profiles.find((p) => p.id === profileId);
+    /* v8 ignore next -- defensive guard: select options are generated from profiles list */
+    if (!p) return;
 
-    const barriers: BarrierItem[] = profile.barriers.map((key: string) => {
+    const barriers: BarrierItem[] = p.barriers.map((key: string) => {
       for (const dim of BARRIER_DIMENSIONS) {
         const b = dim.barriers.find((b) => b.key === key);
         if (b) return { dimension: dim.key, barrier_key: key, label: b.label, is_active: true };
@@ -72,12 +62,22 @@ export function StepBarrierSelection({ data, updateData, onNext, onPrev }: Props
     });
 
     updateData({ barrierProfileId: profileId, barriers });
-    setLocked(true);
-  }
+  }, [profiles, updateData]);
 
-  function handleCheckboxChange(dimKey: string, barrierKey: string, label: string, checked: boolean) {
-    const next = toggleBarrier(data.barriers, dimKey, barrierKey, label, checked);
-    updateData({ barriers: next });
+  useEffect(() => {
+    if (!selectNewest || profiles.length === 0) return;
+    handleProfileChange(profiles[0].id);
+    setSelectNewest(false);
+  }, [selectNewest, profiles, handleProfileChange]);
+
+  async function handleCreateProfile(values: BarrierProfileFormValues) {
+    await createProfile.mutateAsync({
+      name: values.name,
+      barriers: values.barriers,
+      observation: values.observation,
+    });
+    setCreatingProfile(false);
+    setSelectNewest(true);
   }
 
   function handleNext() {
@@ -85,25 +85,26 @@ export function StepBarrierSelection({ data, updateData, onNext, onPrev }: Props
       setError("Selecione um perfil de barreira antes de continuar.");
       return;
     }
-    const active = data.barriers.filter((b) => b.is_active);
-    if (active.length === 0) {
-      setError("Selecione pelo menos uma barreira de aprendizagem.");
+    if (data.barriers.filter((b) => b.is_active).length === 0) {
+      setError("O perfil selecionado não possui barreiras. Crie um novo perfil com ao menos uma barreira.");
       return;
     }
     setError("");
     onNext();
   }
 
+  const selectedProfile = profiles.find((p) => p.id === data.barrierProfileId);
+
   return (
     <div className="space-y-5">
       <div>
         <h2 className="text-xl font-semibold text-foreground">Barreiras de aprendizagem</h2>
         <p className="text-sm text-muted-foreground mt-1">
-          Selecione as barreiras que serão consideradas na adaptação.
+          Selecione um perfil de barreira para a adaptação.
         </p>
       </div>
 
-      {/* Profile selector — always shown, selection is mandatory */}
+      {/* Profile selector */}
       <div className="space-y-2">
         <Label htmlFor="profile-select" className="flex items-center gap-1.5">
           <User className="w-3.5 h-3.5" />
@@ -111,10 +112,12 @@ export function StepBarrierSelection({ data, updateData, onNext, onPrev }: Props
           <span className="text-destructive ml-0.5">*</span>
         </Label>
         {profiles.length === 0 ? (
-          <p className="text-sm text-muted-foreground">
-            Nenhum perfil criado. Crie um perfil em{" "}
-            <strong>Perfis de Barreira</strong> antes de continuar.
-          </p>
+          <div className="flex items-center gap-3">
+            <p className="text-sm text-muted-foreground">Nenhum perfil criado.</p>
+            <Button size="sm" variant="outline" onClick={() => setCreatingProfile(true)}>
+              <Plus className="w-3 h-3 mr-1" /> Criar perfil
+            </Button>
+          </div>
         ) : (
           <div className="flex gap-2 items-center">
             <select
@@ -130,79 +133,50 @@ export function StepBarrierSelection({ data, updateData, onNext, onPrev }: Props
                 </option>
               ))}
             </select>
-            {data.barrierProfileId && locked && (
-              <Button size="sm" variant="outline" onClick={() => setLocked(false)}>
-                <Pencil className="w-3 h-3 mr-1" /> Editar
-              </Button>
-            )}
+            <Button size="sm" variant="outline" onClick={() => setCreatingProfile(true)}>
+              <Plus className="w-3 h-3 mr-1" /> Novo
+            </Button>
           </div>
         )}
       </div>
 
-      {/* Barrier checkboxes grouped by dimension */}
-      <div className="space-y-4 max-h-[400px] overflow-y-auto pr-1">
-        {BARRIER_DIMENSIONS.map((dim) => (
-          <div key={dim.key} className="space-y-2">
-            <p className="text-sm font-semibold text-foreground">{dim.label}</p>
-            <div className="grid sm:grid-cols-2 gap-2 pl-1">
-              {dim.barriers.map((b) => {
-                const checked = barrierIsActive(data.barriers, dim.key, b.key);
-                return (
-                  <div key={b.key} className="flex items-center gap-2">
-                    <Checkbox
-                      id={`barrier-${b.key}`}
-                      checked={checked}
-                      onCheckedChange={(v) =>
-                        handleCheckboxChange(dim.key, b.key, b.label, !!v)
-                      }
-                      disabled={locked}
-                    />
-                    <Label htmlFor={`barrier-${b.key}`} className="text-sm font-normal cursor-pointer">
-                      {b.label}
-                    </Label>
-                  </div>
-                );
-              })}
-            </div>
+      {/* Barrier tags — read-only summary of the selected profile */}
+      {selectedProfile && data.barriers.length > 0 && (
+        <div className="space-y-2">
+          <p className="text-sm font-medium text-muted-foreground">Barreiras do perfil</p>
+          <div className="flex flex-wrap gap-1.5">
+            {data.barriers.map((b) => (
+              <Badge key={b.barrier_key} variant="secondary">{b.label}</Badge>
+            ))}
           </div>
-        ))}
-      </div>
-
-      {/* Observation notes */}
-      <div className="space-y-2">
-        <Label htmlFor="obs-notes">Observações adicionais (opcional)</Label>
-        <textarea
-          id="obs-notes"
-          value={data.observationNotes ?? ""}
-          onChange={(e) => updateData({ observationNotes: e.target.value })}
-          placeholder="Contexto extra sobre o aluno ou turma..."
-          className="w-full min-h-[80px] resize-y rounded-md border border-input bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          maxLength={1000}
-        />
-      </div>
+        </div>
+      )}
 
       {error && (
         <p role="alert" className="text-sm text-destructive">{error}</p>
       )}
 
       {hasBarriers && (
-        <div className="flex items-center gap-2 p-3 bg-primary/5 rounded-lg border border-primary/20">
-          <Coins className="w-4 h-4 text-primary shrink-0" />
-          {isFreeAdaptation ? (
+        isFreeAdaptation ? (
+          <div className="flex items-center gap-2 p-3 bg-primary/5 rounded-lg border border-primary/20">
+            <Coins className="w-4 h-4 text-primary shrink-0" />
             <p className="text-sm">
               <strong>Grátis</strong>
               <span className="text-muted-foreground ml-1">(primeira adaptação por IA)</span>
             </p>
-          ) : (
-            <p className="text-sm">
-              Adaptação por IA:{" "}
+          </div>
+        ) : (
+          <div className="flex items-center gap-2 p-3 bg-amber-50 rounded-lg border border-amber-200">
+            <Coins className="w-4 h-4 text-amber-600 shrink-0" />
+            <p className="text-sm text-amber-800">
+              Esta adaptação consumirá{" "}
               <strong>{creditCost} créditos</strong>
-              <span className="text-muted-foreground ml-1">
+              <span className="ml-1 text-amber-600">
                 (complexidade {COMPLEXITY_LABELS[complexityTier]})
               </span>
             </p>
-          )}
-        </div>
+          </div>
+        )
       )}
 
       <div className="flex justify-between pt-2">
@@ -210,11 +184,28 @@ export function StepBarrierSelection({ data, updateData, onNext, onPrev }: Props
           <ArrowLeft className="w-4 h-4 mr-2" />
           Voltar
         </Button>
-        <Button onClick={handleNext} aria-label="Próximo">
-          Próximo
-          <ArrowRight className="w-4 h-4 ml-2" />
+        <Button
+          onClick={handleNext}
+          aria-label="Adaptar"
+          className="gap-2 shadow-md shadow-primary/40 ring-2 ring-primary/30 ring-offset-2 hover:shadow-lg hover:shadow-primary/50 hover:ring-primary/50 transition-all duration-200"
+        >
+          <Sparkles className="w-4 h-4" />
+          Adaptar
         </Button>
       </div>
+
+      {/* Inline profile creation dialog */}
+      <Dialog open={creatingProfile} onOpenChange={setCreatingProfile}>
+        <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Criar perfil de barreira</DialogTitle>
+          </DialogHeader>
+          <BarrierProfileForm
+            onSubmit={handleCreateProfile}
+            isPending={createProfile.isPending}
+          />
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

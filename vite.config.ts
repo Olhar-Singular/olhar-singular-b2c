@@ -10,6 +10,11 @@ export default defineConfig({
     hmr: {
       overlay: false,
     },
+    // Docker bind-mount on Windows/Mac doesn't emit inotify events; polling
+    // is required for HMR to detect source changes automatically.
+    watch: {
+      usePolling: true,
+    },
   },
   plugins: [react()],
   resolve: {

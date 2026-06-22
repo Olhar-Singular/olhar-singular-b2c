@@ -1,0 +1,365 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Mockup — Adaptar: Conteúdo + Estilo (folha tipo Word)</title>
+<style>
+  /* ----------------------------------------------------------------------
+     MOCKUP DESCARTÁVEL — passos "Conteúdo" (editor) e "Estilo" do fluxo Adaptar.
+     Conteúdo REAL do banco (adaptations/bb9f01a9 "Combatendo a Dengue" + math 54d9157d).
+     Valores espelham os tokens reais do PDF (@react-pdf):
+       A4 210×297mm · margem 40pt(≈53px) · fonte base 12pt(≈16px) · lh 1.4
+       fontes: Helvetica(sans) / Times(serif) / Courier(mono)
+     Os dois passos compartilham a MESMA folha A4; muda só a "chrome":
+       - Conteúdo = editar O QUE diz (estrutura, alternativas, inserir blocos)
+       - Estilo   = editar COMO aparece (régua tipo Word)
+     Interatividade mínima só pra "sentir". Nada disso é código do app.
+  ---------------------------------------------------------------------- */
+  :root {
+    --desk: #6b7280; --desk-2: #4b5563;
+    --ink: #1f2937; --muted: #6b7280; --ring: #2563eb;
+    --bar-border: #e5e7eb; --btn-hover: #f3f4f6; --btn-active: #dbeafe;
+    --page-pad: 53px; --base-size: 16px; --base-lh: 1.4;
+    --green: #166534;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; }
+  body { font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif; color: var(--ink); background: #f8fafc;
+    display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
+  /* topo fixo (header + tabs + régua + dicas); só a .desk rola */
+  .topbar { flex: 0 0 auto; background: #f8fafc; }
+
+  /* ---- mostrar/esconder por modo ---- */
+  .content-only { display: none; }
+  .style-only { display: none; }
+  body.mode-content .content-only { display: var(--co-disp, flex); }
+  body.mode-style   .style-only   { display: var(--so-disp, flex); }
+
+  /* ---- Step header + tabs ---- */
+  .step-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 14px 20px 8px; }
+  .step-head h1 { font-size: 20px; margin: 0; display: flex; align-items: center; gap: 10px; }
+  .step-head .sub { font-size: 13px; color: var(--muted); margin-top: 2px; }
+  .pill { font-size: 11px; color: #92400e; background: #fef3c7; border: 1px solid #fde68a; padding: 3px 8px; border-radius: 999px; }
+  .icon { width: 22px; height: 22px; color: var(--ring); }
+  .tabs { display: flex; gap: 6px; padding: 0 20px 8px; }
+  .tab { border: 1px solid var(--bar-border); background: #fff; border-radius: 999px; padding: 6px 16px; font-size: 13px; cursor: pointer; color: var(--muted); display: flex; align-items: center; gap: 8px; }
+  .tab .step-n { width: 18px; height: 18px; border-radius: 999px; background: #e5e7eb; color: #374151; font-size: 11px; display: inline-flex; align-items: center; justify-content: center; }
+  .tab.active { border-color: var(--ring); color: var(--ink); font-weight: 600; box-shadow: 0 0 0 2px #dbeafe; }
+  .tab.active .step-n { background: var(--ring); color: #fff; }
+
+  /* ---- toolbars (régua) ---- */
+  .ribbon { position: sticky; top: 0; z-index: 20; display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 8px 12px; background: #fff; border-top: 1px solid var(--bar-border); border-bottom: 1px solid var(--bar-border); box-shadow: 0 1px 3px rgba(0,0,0,.04); }
+  body.mode-content #stylebar { display: none; }
+  body.mode-style   #contentbar { display: none; }
+  .grp { display: flex; align-items: center; gap: 4px; }
+  .sep { width: 1px; height: 24px; background: var(--bar-border); margin: 0 4px; }
+  .ribbon select, .ribbon input[type=number] { height: 32px; border: 1px solid var(--bar-border); border-radius: 8px; background: #fff; padding: 0 8px; font-size: 13px; color: var(--ink); }
+  .ribbon input[type=number] { width: 56px; }
+  .btn { height: 32px; min-width: 32px; padding: 0 8px; border: 1px solid var(--bar-border); border-radius: 8px; background: #fff; font-size: 14px; cursor: pointer; color: var(--ink); display: inline-flex; align-items: center; justify-content: center; gap: 6px; }
+  .btn:hover { background: var(--btn-hover); }
+  .btn.on { background: var(--btn-active); border-color: #bfdbfe; }
+  .btn.primary { background: #111827; color: #fff; border-color: #111827; }
+  .btn .lbl { font-size: 13px; }
+  .colors { display: flex; gap: 3px; align-items: center; }
+  .colors button { width: 18px; height: 18px; border-radius: 4px; border: 1px solid rgba(0,0,0,.15); cursor: pointer; padding: 0; }
+
+  .hint { font-size: 12px; color: var(--muted); padding: 6px 14px 0; }
+  .hint b { color: var(--ink); }
+  .removed-note { font-size: 12px; color: #b91c1c; padding: 4px 14px 0; }
+  .removed-note s { color: #9ca3af; }
+
+  /* ---- Mesa + folha ---- */
+  .desk { background: linear-gradient(var(--desk), var(--desk-2)); padding: 28px 16px 60px; flex: 1 1 auto; overflow: auto; }
+  .sheet { width: 794px; min-height: 1000px; margin: 0 auto; background: #fff; padding: var(--page-pad); box-shadow: 0 10px 30px rgba(0,0,0,.25); font-size: var(--base-size); line-height: var(--base-lh); font-family: Helvetica, Arial, sans-serif; }
+
+  /* ---- Cabeçalho do documento ---- */
+  .doc-header { border-bottom: 1px solid #333; padding-bottom: 8px; margin-bottom: 16px; }
+  .doc-header .title { font-size: 24px; font-weight: 700; text-align: center; }
+  .doc-header .row { display: flex; justify-content: space-between; font-size: 13px; margin-top: 6px; }
+
+  /* ---- Blocos (flat, sem chrome de card) ---- */
+  .block { position: relative; outline: none; border-radius: 6px; padding: 2px 4px; margin: 0 -4px 12px; }
+  .block:hover { background: #f8fafc; }
+  body.mode-style .block.sel { background: #eff6ff; box-shadow: 0 0 0 2px var(--ring) inset; }
+  h2.block { font-size: 19px; font-weight: 700; margin-top: 4px; }
+  p.block { margin-block: 0; }
+
+  .q .stem { display: flex; gap: 8px; }
+  .q .num { font-weight: 700; }
+  .q .opts { list-style: none; padding: 0; margin: 8px 0 0; }
+  .q .opts li { display: flex; gap: 8px; padding: 3px 0; align-items: baseline; }
+  .q .opts .key { font-weight: 600; min-width: 18px; }
+  .q .opts .correct { color: var(--green); font-weight: 600; }
+  body.mode-style .q .opts .correct::after { content: " ✓"; }
+
+  .math { text-align: center; font-family: 'Times New Roman', serif; font-size: 18px; padding: 8px 0; letter-spacing: .5px; }
+  .imath { font-family: 'Times New Roman', serif; font-style: italic; }
+  .imath sup { font-style: normal; }
+  .q .meta { margin-left: auto; font-size: 12px; color: var(--muted); white-space: nowrap; padding-left: 12px; }
+  .instr { font-size: 13px; color: var(--muted); font-style: italic; margin: 6px 0 0; }
+  .answerline { border-bottom: 1px solid #cbd5e1; height: 28px; margin-top: 8px; }
+  .imgph { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 16px; border: 1px dashed #cbd5e1; border-radius: 8px; color: var(--muted); }
+  .imgph .box { width: 220px; height: 120px; background: repeating-linear-gradient(45deg,#eef2f7,#eef2f7 8px,#e5e9f0 8px,#e5e9f0 16px); border-radius: 6px; }
+  .divider { border: none; border-top: 1px solid #d1d5db; margin: 16px 0; }
+
+  /* ---- CHROME do passo CONTEÚDO (edição estrutural) ---- */
+  /* trilho de ações por bloco, aparece ao passar o mouse / no bloco ativo */
+  .rail { display: none; position: absolute; top: 2px; right: 4px; gap: 2px; background: #fff; border: 1px solid var(--bar-border); border-radius: 8px; padding: 2px; box-shadow: 0 1px 4px rgba(0,0,0,.08); }
+  body.mode-content .block:hover > .rail, body.mode-content .block.sel > .rail { display: flex; }
+  .rail .mini { width: 26px; height: 26px; border: none; background: transparent; border-radius: 6px; cursor: pointer; font-size: 13px; color: #475569; display: inline-flex; align-items: center; justify-content: center; }
+  .rail .mini:hover { background: var(--btn-hover); }
+  .rail .mini.danger:hover { background: #fee2e2; color: #b91c1c; }
+  body.mode-content .block.sel { box-shadow: 0 0 0 1px #cbd5e1 inset; background: #fcfdff; }
+
+  /* controles de alternativa (correta / remover / adicionar) */
+  .opt-correct { width: 16px; height: 16px; border-radius: 999px; border: 2px solid #cbd5e1; cursor: pointer; background: #fff; flex: 0 0 auto; align-self: center; }
+  .opt-correct.is { border-color: var(--green); background: var(--green); box-shadow: inset 0 0 0 2px #fff; }
+  .opt-rm { margin-left: auto; border: none; background: transparent; color: #cbd5e1; cursor: pointer; font-size: 14px; }
+  .opt-rm:hover { color: #b91c1c; }
+  .add-alt { margin-top: 6px; font-size: 13px; color: var(--ring); background: none; border: 1px dashed #bfdbfe; border-radius: 6px; padding: 4px 10px; cursor: pointer; }
+  .add-alt:hover { background: #eff6ff; }
+  /* esconder a coluna de edição de alternativa fora do conteúdo */
+  .opt-correct, .opt-rm, .add-alt { display: none; }
+  body.mode-content .opt-correct { display: inline-block; }
+  body.mode-content .opt-rm { display: inline-block; }
+  body.mode-content .add-alt { display: inline-block; }
+</style>
+</head>
+<body class="mode-content">
+  <div class="topbar">
+  <div class="step-head">
+    <div>
+      <h1>
+        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 19l8-8-3-3-8 8v3z"/><path d="M14 6l3 3"/></svg>
+        <span id="title">Conteúdo</span>
+      </h1>
+      <div class="sub" id="subtitle">Edite o texto, as questões e a estrutura. Insira blocos pela barra acima.</div>
+    </div>
+    <span class="pill">MOCKUP — dados reais do banco</span>
+  </div>
+
+  <div class="tabs">
+    <button class="tab active" data-mode="content"><span class="step-n">5</span> Conteúdo</button>
+    <button class="tab" data-mode="style"><span class="step-n">6</span> Estilo</button>
+  </div>
+
+  <!-- ===== TOOLBAR do passo CONTEÚDO: inserir blocos + fórmula ===== -->
+  <div class="ribbon" id="contentbar">
+    <div class="grp">
+      <button class="btn"><span class="lbl">＋ Questão</span></button>
+      <button class="btn"><span class="lbl">🖼 Imagem</span></button>
+      <button class="btn"><span class="lbl">∑ Fórmula</span></button>
+      <button class="btn"><span class="lbl">🪜 Andaime</span></button>
+      <button class="btn"><span class="lbl">— Divisória</span></button>
+    </div>
+    <div class="sep"></div>
+    <div class="grp"><span class="hint" style="padding:0">Clique num bloco para ações de mover / duplicar / excluir.</span></div>
+  </div>
+
+  <!-- ===== TOOLBAR do passo ESTILO: régua tipo Word ===== -->
+  <div class="ribbon" id="stylebar">
+    <div class="grp">
+      <select id="font" title="Fonte">
+        <option value="Helvetica, Arial, sans-serif">Padrão (sans)</option>
+        <option value="'Times New Roman', Times, serif">Serifada</option>
+        <option value="'Courier New', monospace">Monoespaçada</option>
+      </select>
+      <input id="size" type="number" min="8" max="48" value="16" title="Tamanho (px)" />
+    </div>
+    <div class="sep"></div>
+    <div class="grp">
+      <button class="btn" data-cmd="bold" title="Negrito"><b>N</b></button>
+      <button class="btn" data-cmd="italic" title="Itálico"><i>I</i></button>
+      <button class="btn" data-cmd="underline" title="Sublinhado"><u>S</u></button>
+      <button class="btn" data-cmd="strikeThrough" title="Tachado"><s>T</s></button>
+    </div>
+    <div class="sep"></div>
+    <div class="grp colors" title="Cor do texto">
+      <button style="background:#1F2937" data-color="#1F2937"></button>
+      <button style="background:#DC2626" data-color="#DC2626"></button>
+      <button style="background:#2563EB" data-color="#2563EB"></button>
+      <button style="background:#16A34A" data-color="#16A34A"></button>
+      <button style="background:#9333EA" data-color="#9333EA"></button>
+      <button style="background:#FEF08A" data-color="#FEF08A" title="realce"></button>
+    </div>
+    <div class="sep"></div>
+    <div class="grp">
+      <button class="btn" data-align="left" title="Esquerda">⯇</button>
+      <button class="btn" data-align="center" title="Centro">≡</button>
+      <button class="btn" data-align="right" title="Direita">⯈</button>
+      <button class="btn" data-align="justify" title="Justificado">☰</button>
+    </div>
+    <div class="sep"></div>
+    <div class="grp">
+      <button class="btn" id="spacing" title="Espaçamento depois do bloco"><span class="lbl">Espaço ▾</span></button>
+      <button class="btn" id="pagebreak" title="Quebra de página antes"><span class="lbl">⤓ Quebra</span></button>
+    </div>
+    <div class="sep"></div>
+    <button class="btn primary" id="applyAll" title="Aplicar a todos os blocos">Aplicar a tudo</button>
+  </div>
+
+  <div class="hint style-only" style="--so-disp:block">
+    <b>Como funciona:</b> selecionou um <b>trecho</b> → formata só ele (inline). Sem seleção, clicou num <b>bloco</b> → formata o bloco inteiro. “Aplicar a tudo” = documento.
+  </div>
+  <div class="removed-note style-only" style="--so-disp:block">
+    Consolidado nesta régua: <s>popover flutuante “Estilo”</s> · <s>botão “Estilo do documento”</s> · <s>bubble menu</s>
+  </div>
+  </div><!-- /.topbar -->
+
+  <!-- ===== MESA + FOLHA A4 (compartilhada pelos dois passos) ===== -->
+  <div class="desk">
+    <div class="sheet" id="sheet">
+      <div class="doc-header">
+        <div class="title">Exercício de Interpretação</div>
+        <div class="row"><span>Professor(a): _______________</span><span>Data: ___/___/____</span></div>
+      </div>
+
+      <h2 class="block" contenteditable="true">Parte 1 — Combatendo a Dengue
+        <div class="rail"><button class="mini" title="Mover para cima">↑</button><button class="mini" title="Mover para baixo">↓</button><button class="mini danger" title="Excluir">🗑</button></div>
+      </h2>
+
+      <p class="block" contenteditable="true">Observe o cartaz com atenção para responder à questão.
+        <div class="rail"><button class="mini">↑</button><button class="mini">↓</button><button class="mini danger">🗑</button></div>
+      </p>
+
+      <div class="block q" contenteditable="true" style="font-size:19px">
+        <div class="rail"><button class="mini" title="Mover">↑</button><button class="mini">↓</button><button class="mini" title="Duplicar">⧉</button><button class="mini danger">🗑</button></div>
+        <div class="imgph" style="margin-bottom:10px" contenteditable="false">
+          <img src="http://127.0.0.1:54321/storage/v1/object/public/question-images/3898d396-3b3a-47bc-bc87-cd2805ee42a8/1780604391512_24k3qthrsfz.png"
+               alt="Cartaz de campanha contra a dengue" style="max-width:280px;border-radius:6px"
+               onerror="this.style.display='none';this.nextElementSibling.style.display='block'" />
+          <div class="box" style="display:none"></div>
+          <small>alt: “Cartaz de campanha contra a dengue. Mostra um vaso de planta sendo virado de cabeça para baixo…”</small>
+        </div>
+        <div class="stem"><span class="num">1.</span><span>Qual é a <b>principal mensagem</b> <b><u>do cartaz</u></b> para combater o mosquito da dengue?</span></div>
+        <ul class="opts">
+          <li><span class="opt-correct" title="Marcar como correta"></span><span class="key">a)</span><span>Permitir que o mosquito da dengue se crie em vasos de plantas.</span><button class="opt-rm" title="Remover">✕</button></li>
+          <li><span class="opt-correct" title="Marcar como correta"></span><span class="key">b)</span><span>Tirar a água parada dos vasos de plantas, virando-os de cabeça para baixo.</span><button class="opt-rm">✕</button></li>
+          <li><span class="opt-correct is" title="Correta"></span><span class="key">c)</span><span class="correct">Não deixar lixo acumulado nos jardins e quintais.</span><button class="opt-rm">✕</button></li>
+          <li><span class="opt-correct" title="Marcar como correta"></span><span class="key">d)</span><span>Deixar a água acumulada nos vasos para as plantas beberem.</span><button class="opt-rm">✕</button></li>
+        </ul>
+        <button class="add-alt" contenteditable="false">＋ Adicionar alternativa</button>
+      </div>
+
+      <h2 class="block" contenteditable="true">Parte 2 — A Lenda do Pirarucu
+        <div class="rail"><button class="mini">↑</button><button class="mini">↓</button><button class="mini danger">🗑</button></div>
+      </h2>
+
+      <p class="block" contenteditable="true">Leia o texto abaixo para responder à próxima questão.
+        <div class="rail"><button class="mini">↑</button><button class="mini">↓</button><button class="mini danger">🗑</button></div>
+      </p>
+
+      <p class="block" contenteditable="true"><b>A Brincadeira do Pirarucu</b><br /><br />O Pirarucu era um índio muito valente, vaidoso, orgulhoso e gostava de praticar a maldade. Foi então que o Deus Tupã resolveu castigá-lo por toda a maldade que praticava. De uma vez para outra, Pirarucu transformou-se em um enorme peixe e afundou nas águas escuras do Rio Araguaia. Desde então, ele vive por lá. Suas escamas, que eram da cor do seu cabelo, adquiriram um tom avermelhado de grandes escamas e cabeça chata. É este peixe Pirarucu que habita nos rios da Amazônia.
+        <div class="rail"><button class="mini">↑</button><button class="mini">↓</button><button class="mini danger">🗑</button></div>
+      </p>
+
+      <div class="block q" contenteditable="true">
+        <div class="rail"><button class="mini">↑</button><button class="mini">↓</button><button class="mini">⧉</button><button class="mini danger">🗑</button></div>
+        <div class="stem"><span class="num">2.</span><span>De acordo com o texto, <b><u>por que</u></b> o Deus Tupã transformou o índio Pirarucu em um peixe?</span></div>
+        <ul class="opts">
+          <li><span class="opt-correct"></span><span class="key">a)</span><span>Porque a Deusa Lua fez cair uma grande tempestade na floresta.</span><button class="opt-rm">✕</button></li>
+          <li><span class="opt-correct is"></span><span class="key">b)</span><span class="correct">Porque Tupã quis castigar o índio por sua maldade.</span><button class="opt-rm">✕</button></li>
+          <li><span class="opt-correct"></span><span class="key">c)</span><span>Porque Tupã queria fazer um experimento com os peixes do rio.</span><button class="opt-rm">✕</button></li>
+        </ul>
+        <button class="add-alt" contenteditable="false">＋ Adicionar alternativa</button>
+      </div>
+
+      <hr class="divider" />
+
+      <h2 class="block" contenteditable="true">Parte 3 — Matemática
+        <div class="rail"><button class="mini">↑</button><button class="mini">↓</button><button class="mini danger">🗑</button></div>
+      </h2>
+
+      <div class="block q" contenteditable="true">
+        <div class="rail"><button class="mini">↑</button><button class="mini">↓</button><button class="mini">⧉</button><button class="mini danger">🗑</button></div>
+        <div class="stem">
+          <span class="num">3.</span>
+          <span>Vamos resolver a equação <span class="imath">x<sup>2</sup> = 9</span>. A pergunta é: <b>Qual número, quando multiplicado por ele mesmo, o resultado é 9?</b></span>
+          <span class="meta">1 ponto · médio</span>
+        </div>
+        <p style="margin:6px 0 0">Complete os espaços para encontrar a resposta:</p>
+        <div class="math">_____ × _____ = 9</div>
+        <p class="instr">Escreva o número que completa os espaços.</p>
+        <p class="answerline"></p>
+      </div>
+    </div>
+  </div>
+
+<script>
+  const body = document.body;
+  const sheet = document.getElementById('sheet');
+  let current = null;
+
+  /* ---- alternador de passo ---- */
+  const titles = {
+    content: ['Conteúdo', 'Edite o texto, as questões e a estrutura. Insira blocos pela barra acima.'],
+    style:   ['Estilo', 'Ajuste a aparência direto na folha — selecione um trecho ou clique num bloco.'],
+  };
+  document.querySelectorAll('.tab').forEach(t => {
+    t.addEventListener('click', () => {
+      document.querySelectorAll('.tab').forEach(x => x.classList.remove('active'));
+      t.classList.add('active');
+      const mode = t.dataset.mode;
+      body.className = 'mode-' + mode;
+      document.getElementById('title').textContent = titles[mode][0];
+      document.getElementById('subtitle').textContent = titles[mode][1];
+    });
+  });
+
+  /* ---- seleção de bloco ---- */
+  function selectBlock(el) { if (current) current.classList.remove('sel'); current = el; if (current) current.classList.add('sel'); }
+  sheet.querySelectorAll('.block').forEach(b => {
+    b.addEventListener('mousedown', () => selectBlock(b));
+    b.addEventListener('focus', () => selectBlock(b));
+  });
+
+  /* ---- CONTEÚDO: marcar correta / remover / adicionar (visual) ---- */
+  sheet.querySelectorAll('.opts').forEach(ul => {
+    ul.addEventListener('click', e => {
+      const dot = e.target.closest('.opt-correct');
+      if (dot) {
+        ul.querySelectorAll('.opt-correct').forEach(d => { d.classList.remove('is'); d.parentElement.querySelector('span:not(.key):not(.opt-correct)')?.classList.remove('correct'); });
+        dot.classList.add('is');
+        dot.parentElement.querySelector('span:not(.key):not(.opt-correct)')?.classList.add('correct');
+      }
+      const rm = e.target.closest('.opt-rm');
+      if (rm) rm.closest('li').remove();
+    });
+  });
+
+  /* ---- ESTILO: régua tipo Word ---- */
+  function hasTextSelection() { const s = window.getSelection(); return s && !s.isCollapsed && s.toString().length > 0; }
+  function eachTarget(fn) { if (current) fn(current); }
+  document.querySelectorAll('[data-cmd]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const cmd = btn.dataset.cmd;
+      if (hasTextSelection()) document.execCommand(cmd, false);
+      else if (current) {
+        if (cmd === 'bold') current.style.fontWeight = current.style.fontWeight === '700' ? '' : '700';
+        if (cmd === 'italic') current.style.fontStyle = current.style.fontStyle === 'italic' ? '' : 'italic';
+        if (cmd === 'underline') current.style.textDecoration = current.style.textDecoration.includes('underline') ? '' : 'underline';
+        if (cmd === 'strikeThrough') current.style.textDecoration = current.style.textDecoration.includes('line-through') ? '' : 'line-through';
+      }
+      btn.classList.toggle('on');
+    });
+  });
+  document.querySelectorAll('[data-color]').forEach(b => {
+    b.addEventListener('click', () => {
+      const color = b.dataset.color, hl = color === '#FEF08A';
+      if (hasTextSelection()) document.execCommand(hl ? 'hiliteColor' : 'foreColor', false, color);
+      else if (current) { if (hl) current.style.background = color; else current.style.color = color; }
+    });
+  });
+  document.getElementById('font').addEventListener('change', e => eachTarget(el => el.style.fontFamily = e.target.value));
+  document.getElementById('size').addEventListener('change', e => eachTarget(el => el.style.fontSize = e.target.value + 'px'));
+  document.querySelectorAll('[data-align]').forEach(b => b.addEventListener('click', () => eachTarget(el => el.style.textAlign = b.dataset.align)));
+  document.getElementById('spacing').addEventListener('click', () => eachTarget(el => el.style.marginBottom = el.style.marginBottom === '28px' ? '' : '28px'));
+  document.getElementById('pagebreak').addEventListener('click', () => { if (current) { const on = current.style.borderTop.includes('dashed'); current.style.borderTop = on ? '' : '2px dashed #2563eb'; current.style.paddingTop = on ? '' : '10px'; } });
+  document.getElementById('applyAll').addEventListener('click', () => {
+    const font = document.getElementById('font').value, size = document.getElementById('size').value + 'px';
+    sheet.querySelectorAll('.block').forEach(el => { el.style.fontFamily = font; el.style.fontSize = size; });
+  });
+</script>
+</body>
+</html>

@@ -6,7 +6,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { ChevronLeft, ChevronRight, Loader2, Crop, Move } from "lucide-react";
+import { ChevronLeft, ChevronRight, Loader2, Crop, Move, ZoomIn, ZoomOut } from "lucide-react";
 import { renderPdfPage, getPdfPageCount } from "@/lib/utils/pdf-utils";
 
 type CropPoint = { x: number; y: number };
@@ -36,6 +36,7 @@ export default function PdfPreviewModal({ open, onOpenChange, file, onCrop, init
   const [cropStart, setCropStart] = useState<CropPoint | null>(null);
   const [cropEnd, setCropEnd] = useState<CropPoint | null>(null);
   const [isDragging, setIsDragging] = useState(false);
+  const [zoom, setZoom] = useState(100);
   const imgRef = useRef<HTMLImageElement>(null);
 
   useEffect(() => {
@@ -89,6 +90,7 @@ export default function PdfPreviewModal({ open, onOpenChange, file, onCrop, init
       setCropStart(null);
       setCropEnd(null);
       setIsDragging(false);
+      setZoom(100);
     }
     onOpenChange(isOpen);
   };
@@ -193,7 +195,8 @@ export default function PdfPreviewModal({ open, onOpenChange, file, onCrop, init
                   ref={imgRef}
                   src={pageImage}
                   alt={`Página ${currentPage}`}
-                  className="block max-w-full rounded shadow-sm"
+                  className="block rounded shadow-sm"
+                  style={{ width: `${zoom}%` }}
                   draggable={false}
                 />
                 {cropping && cropRect && (
@@ -233,6 +236,26 @@ export default function PdfPreviewModal({ open, onOpenChange, file, onCrop, init
               aria-label="Próxima página"
             >
               <ChevronRight className="w-4 h-4" />
+            </Button>
+
+            <Button
+              size="icon"
+              variant="outline"
+              aria-label="Reduzir zoom"
+              disabled={loading}
+              onClick={() => setZoom((z) => Math.max(50, z - 25))}
+            >
+              <ZoomOut className="w-4 h-4" />
+            </Button>
+            <span className="text-sm text-muted-foreground w-12 text-center">{zoom}%</span>
+            <Button
+              size="icon"
+              variant="outline"
+              aria-label="Aumentar zoom"
+              disabled={loading}
+              onClick={() => setZoom((z) => Math.min(300, z + 25))}
+            >
+              <ZoomIn className="w-4 h-4" />
             </Button>
 
             {onCrop && !cropping && (

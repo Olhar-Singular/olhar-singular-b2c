@@ -4,6 +4,7 @@ export type ExtractedQuestion = {
   topic?: string;
   options?: string[];
   correct_answer?: number | null;
+  resolution?: string;
   has_figure: boolean;
   figure_description?: string;
   image_page?: number;
@@ -83,6 +84,10 @@ export function validateExtractedQuestions(data: unknown): ExtractionResult {
       topic: typeof q.topic === "string" ? q.topic.trim() : undefined,
       options,
       correct_answer,
+      resolution:
+        typeof q.resolution === "string" && q.resolution.trim()
+          ? q.resolution.trim()
+          : undefined,
       has_figure: q.has_figure === true,
       figure_description:
         typeof q.figure_description === "string" && q.figure_description.trim()

@@ -34,7 +34,7 @@ import {
 import {
   Loader2, Plus, BookOpen, Search, Gift, CreditCard,
   MoreVertical, Pencil, Trash2, FileText, AlertTriangle,
-  Upload, X, CheckCircle2, Eye, Crop, Folder,
+  Upload, X, CheckCircle2, Eye, Crop, Folder, ZoomIn, ZoomOut,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useAuthContext } from "@/contexts/AuthContext";
@@ -45,9 +45,10 @@ import { parsePdf } from "@/lib/utils/pdf-utils";
 import { extractDocxWithImages } from "@/lib/utils/docx-utils";
 import { detectFileType } from "@/lib/utils/fileValidation";
 import { resolveUniqueFileName } from "@/lib/utils/fileNameUtils";
-import { normalizeTextForDedup, autoCropFromBbox, dataUrlToBlob } from "@/lib/utils/extraction-utils";
+import { normalizeTextForDedup, autoCropFromBbox, dataUrlToBlob, stripOptionMarker, stripOptionsFromText } from "@/lib/utils/extraction-utils";
 import { parseDbError, parseEdgeFnError } from "@/lib/utils/errors";
 import QuestionForm from "@/components/forms/QuestionForm";
+import OptionsEditor from "@/components/forms/OptionsEditor";
 import ManualQuestionEditor from "@/components/forms/ManualQuestionEditor";
 import PdfPreviewModal from "@/components/forms/PdfPreviewModal";
 import { SUBJECTS } from "@/lib/utils/constants";
@@ -85,6 +86,27 @@ type ExtractedQuestion = {
   editing?: boolean;
 };
 
+function ImageZoomModal({ url, onClose }: { url: string | null; onClose: () => void }) {
+  return (
+    <Dialog open={!!url} onOpenChange={onClose}>
+      <DialogContent className="max-w-5xl max-h-[90vh] flex flex-col">
+        <DialogHeader>
+          <DialogTitle>Imagem da questão</DialogTitle>
+        </DialogHeader>
+        <div className="flex-1 overflow-auto flex justify-center items-start p-4">
+          {url && (
+            <img
+              src={url}
+              alt="Imagem ampliada"
+              className="max-w-full"
+            />
+          )}
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 function FilePreviewDialog({
   open, file, objectUrl, onOpenChange,
 }: {
@@ -93,16 +115,30 @@ function FilePreviewDialog({
   objectUrl: string | null;
   onOpenChange: (open: boolean) => void;
 }) {
+  const [zoom, setZoom] = useState(100);
+  useEffect(() => { if (!open) setZoom(100); }, [open]);
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-4xl h-[80vh] flex flex-col">
-        <DialogHeader>
-          <DialogTitle>{file?.name ?? "Prévia do arquivo"}</DialogTitle>
+        <DialogHeader className="pb-0">
+          <div className="flex items-center gap-3 flex-wrap">
+            <DialogTitle className="flex-1 truncate">{file?.name ?? "Prévia do arquivo"}</DialogTitle>
+            <div className="flex items-center gap-1.5 shrink-0">
+              <Button size="sm" variant="outline" aria-label="Reduzir zoom" onClick={() => setZoom((z) => Math.max(25, z - 25))}>
+                <ZoomOut className="w-4 h-4" />
+              </Button>
+              <span className="text-sm font-medium w-12 text-center">{zoom}%</span>
+              <Button size="sm" variant="outline" aria-label="Aumentar zoom" onClick={() => setZoom((z) => Math.min(300, z + 25))}>
+                <ZoomIn className="w-4 h-4" />
+              </Button>
+            </div>
+          </div>
         </DialogHeader>
         {objectUrl && (
           <iframe
-            src={`${objectUrl}#toolbar=0&navpanes=0`}
-            className="flex-1 w-full rounded border"
+            key={zoom}
+            src={`${objectUrl}#toolbar=0&navpanes=0&zoom=${zoom}`}
+            className="flex-1 w-full rounded border mt-3"
             title="Prévia do arquivo"
           />
         )}
@@ -139,6 +175,7 @@ export default function QuestionBankPage() {
 
   // Provas tab: upload + extraction state
   const [uploadFile, setUploadFile] = useState<File | null>(null);
+  const [uploadId, setUploadId] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
   const [extracting, setExtracting] = useState(false);
   const [extractionTime, setExtractionTime] = useState(0);
@@ -157,6 +194,9 @@ export default function QuestionBankPage() {
   // PDF crop modal
   const [cropModalOpen, setCropModalOpen] = useState(false);
   const [cropTargetIndex, setCropTargetIndex] = useState<number | null>(null);
+
+  // Image zoom modal
+  const [zoomUrl, setZoomUrl] = useState<string | null>(null);
 
   const fileRef = useRef<HTMLInputElement>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -227,12 +267,17 @@ export default function QuestionBankPage() {
         .replace(/[^a-zA-Z0-9._-]/g, "_");
       const filePath = `${user.id}/${Date.now()}_${safeName}`;
       await supabase.storage.from("question-pdfs").upload(filePath, fileToUpload);
-      await supabase.from("pdf_uploads").insert({
-        user_id: user.id,
-        file_name: fileToUpload.name,
-        file_path: filePath,
-      });
+      const { data: inserted } = await supabase
+        .from("pdf_uploads")
+        .insert({
+          user_id: user.id,
+          file_name: fileToUpload.name,
+          file_path: filePath,
+        })
+        .select("id")
+        .single();
       setUploadFile(fileToUpload);
+      setUploadId((inserted as { id: string } | null)?.id ?? null);
       await fetchUploads();
     } catch (err: unknown) {
       toast.error(parseDbError(err, "Erro ao enviar arquivo."));
@@ -243,10 +288,12 @@ export default function QuestionBankPage() {
 
   // ── Extract questions (AI) ────────────────────────────────────────────────
 
-  const handleExtract = async (fileParam?: File) => {
+  const handleExtract = async (fileParam?: File, uploadIdParam?: string | null) => {
     const file = fileParam ?? uploadFile;
     if (!file || !canExtract) return;
     if (fileParam) setUploadFile(fileParam);
+    const currentUploadId = uploadIdParam !== undefined ? uploadIdParam : uploadId;
+    if (uploadIdParam !== undefined) setUploadId(uploadIdParam);
     setExtracting(true);
 
     try {
@@ -255,11 +302,22 @@ export default function QuestionBankPage() {
 
       let pdfText = "";
       let images: string[] = [];
+      const limitWarnings: string[] = [];
 
       if (type === "pdf") {
         const result = await parsePdf(file);
         pdfText = result.text;
         images = result.pageImages;
+        if (result.truncated) {
+          limitWarnings.push(
+            "O texto do PDF é muito longo e foi truncado — questões no final do documento podem não ter sido extraídas.",
+          );
+        }
+        if (result.pageCount > result.pagesProcessed.length) {
+          limitWarnings.push(
+            `Apenas as primeiras ${result.pagesProcessed.length} páginas foram enviadas como imagem (de ${result.pageCount}). Questões ou figuras em páginas posteriores podem faltar.`,
+          );
+        }
       } else if (type === "docx") {
         const docxResult = await extractDocxWithImages(file);
         pdfText = docxResult.text;
@@ -271,6 +329,7 @@ export default function QuestionBankPage() {
           pdfText,
           pdfFileName: file.name,
           pageImages: images,
+          uploadId: currentUploadId,
         },
       });
 
@@ -299,7 +358,10 @@ export default function QuestionBankPage() {
         let imageUrl: string | undefined;
         if (q.has_figure && q.image_page && images[q.image_page - 1]) {
           try {
-            if (q.figure_bbox) {
+            // figure_bbox is page-relative and only meaningful for PDF page
+            // renders. DOCX images are already-isolated figures, so cropping by
+            // a fractional bbox would mangle them — use them as-is.
+            if (type === "pdf" && q.figure_bbox) {
               imageUrl = await autoCropFromBbox(images[q.image_page - 1], q.figure_bbox);
             } else {
               imageUrl = images[q.image_page - 1];
@@ -309,11 +371,13 @@ export default function QuestionBankPage() {
             imageUrl = images[q.image_page - 1];
           }
         }
+        const cleanedOptions = q.options ? q.options.map(stripOptionMarker) : undefined;
+        const rawText = (q.text || "").replace(/\\n/g, "\n");
         processed.push({
-          text: q.text || "",
+          text: stripOptionsFromText(rawText, Boolean(cleanedOptions?.length)),
           subject: q.subject || "Geral",
           topic: q.topic || undefined,
-          options: q.options || undefined,
+          options: cleanedOptions,
           correct_answer: q.correct_answer != null ? q.correct_answer : undefined,
           resolution: q.resolution || undefined,
           has_figure: q.has_figure || false,
@@ -327,7 +391,7 @@ export default function QuestionBankPage() {
       }
 
       setExtractedQuestions(processed);
-      setExtractionWarnings(warnings);
+      setExtractionWarnings([...limitWarnings, ...warnings]);
       setShowReview(true);
       await refreshProfile();
     } catch (e: unknown) {
@@ -447,6 +511,22 @@ export default function QuestionBankPage() {
     );
   };
 
+  // Keeps options + correct_answer in sync; clearing all options turns the
+  // question back into a dissertativa (no options, no correct answer).
+  const updateOptions = (i: number, options: string[], correctAnswer: number | null) => {
+    setExtractedQuestions((prev) =>
+      prev.map((q, idx) =>
+        idx === i
+          ? {
+              ...q,
+              options: options.length ? options : undefined,
+              correct_answer: options.length ? correctAnswer ?? undefined : undefined,
+            }
+          : q,
+      ),
+    );
+  };
+
   const openPreview = (file: File) => {
     if (previewObjectUrl) URL.revokeObjectURL(previewObjectUrl);
     const url = URL.createObjectURL(file);
@@ -483,7 +563,7 @@ export default function QuestionBankPage() {
           ? "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
           : "application/pdf",
       });
-      await handleExtract(file);
+      await handleExtract(file, upload.id);
     } catch (e: unknown) {
       toast.error(parseEdgeFnError(e, "Erro ao carregar arquivo."));
     }
@@ -652,11 +732,21 @@ export default function QuestionBankPage() {
                     )}
 
                     {q.imageUrl && (
-                      <img
-                        src={q.imageUrl}
-                        alt="Imagem da questão"
-                        className="mt-2 max-h-48 rounded border"
-                      />
+                      <div className="relative mt-2 w-fit">
+                        <img
+                          src={q.imageUrl}
+                          alt="Imagem da questão"
+                          className="max-h-48 rounded border block"
+                        />
+                        <button
+                          type="button"
+                          className="absolute top-1.5 right-1.5 bg-primary text-primary-foreground hover:bg-primary/90 rounded-full p-1.5 shadow-md z-10"
+                          aria-label="Ampliar imagem"
+                          onClick={() => setZoomUrl(q.imageUrl!)}
+                        >
+                          <ZoomIn className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
                     )}
 
                     {q.editing && uploadFile && (
@@ -699,7 +789,25 @@ export default function QuestionBankPage() {
                       </div>
                     )}
 
-                    {q.options && q.options.length > 0 && (
+                    {q.editing && (
+                      q.options && q.options.length > 0 ? (
+                        <OptionsEditor
+                          options={q.options}
+                          correctAnswer={q.correct_answer ?? null}
+                          onChange={(o, c) => updateOptions(i, o, c)}
+                        />
+                      ) : (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => updateOptions(i, ["", ""], null)}
+                        >
+                          <Plus className="w-3 h-3 mr-1" /> Transformar em múltipla escolha
+                        </Button>
+                      )
+                    )}
+
+                    {!q.editing && q.options && q.options.length > 0 && (
                       <div className="space-y-1">
                         {q.options.map((opt: string, j: number) => (
                           <p
@@ -762,6 +870,8 @@ export default function QuestionBankPage() {
             setCropModalOpen(false);
           }}
         />
+
+        <ImageZoomModal url={zoomUrl} onClose={() => setZoomUrl(null)} />
       </div>
     );
   }

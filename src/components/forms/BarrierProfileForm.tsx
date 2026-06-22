@@ -92,7 +92,7 @@ export function BarrierProfileForm({ defaultValues, onSubmit, isPending }: Props
         name="observation"
         render={({ field }) => (
           <div className="space-y-1">
-            <Label htmlFor="observation">Observações (opcional)</Label>
+            <Label htmlFor="observation">Observações adicionais (opcional)</Label>
             <Textarea
               id="observation"
               placeholder="Contextos, comportamentos ou necessidades específicas..."

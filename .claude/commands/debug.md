@@ -47,7 +47,7 @@ Na fase 1, crie o arquivo (slug curto descritivo, ex: `wizard-step4-crash.md`). 
 
 ## Fase 1 — REPRO
 
-1. **Ative o modo debug** (silencia o Stop hook para não bloquear em testes vermelhos intencionais) rodando: `mkdir -p .claude/debug && touch .claude/debug/.active`
+1. **Ative o modo debug** (silencia o hook de lint para não bloquear em código intencionalmente "errado") rodando: `mkdir -p .claude/debug && touch .claude/debug/.active`
 2. Pergunte ao user (se não estiver claro):
    - Sintoma exato (mensagem, comportamento observado vs esperado)
    - Como dispara (passos, input, ambiente)
@@ -58,7 +58,7 @@ Na fase 1, crie o arquivo (slug curto descritivo, ex: `wizard-step4-crash.md`). 
    - Sem reprodução = pare e peça mais detalhes
 4. Crie `.claude/debug/<slug>.md` preenchendo "Sintoma" e "Reprodução"
 
-> **Sobre os hooks de teste**: enquanto `.claude/debug/.active` existir, o Stop hook fica silenciado. O PostToolUse continua rodando `vitest related` por arquivo editado e pode exibir falhas — na fase REPRO, essas falhas **são o bug reproduzido**, não um problema real. Continue.
+> **Sobre os hooks**: enquanto `.claude/debug/.active` existir, o hook de lint (PostToolUse → `lint-file.sh`) fica silenciado, pra não travar em código intencionalmente "errado". Testes não rodam em hook do Claude — o gate de testes vive nos git hooks (Husky). Se você rodar testes à mão na fase REPRO e eles falharem, essa falha **é o bug reproduzido**, não um problema real. Continue.
 
 **Pare**: "Bug reproduzido. Confirma o sintoma? Posso levantar hipóteses?"
 
@@ -104,7 +104,7 @@ Na fase 1, crie o arquivo (slug curto descritivo, ex: `wizard-step4-crash.md`). 
 
 1. Escreva um teste que **falha sem o fix e passa com o fix**:
    - Se criou um teste na fase REPRO, reaproveite
-   - Caso contrário, crie em `src/test/` usando os helpers (`mockAuthHook`, `createSupabaseMock`, `createTestWrapper`) e fixtures
+   - Caso contrário, crie o teste **ao lado do arquivo alvo** usando os helpers de `src/test/helpers.ts` (`renderWithProviders`, `buildAuthState`, `createQueryChain`)
 2. Garanta que:
    - O teste novo passa
    - Nenhum teste existente quebrou
@@ -118,7 +118,7 @@ Na fase 1, crie o arquivo (slug curto descritivo, ex: `wizard-step4-crash.md`). 
 2. Atualize o arquivo de debug:
    - Status = `resolvido`
    - Seção "Lições" com 1–3 bullets
-3. **Desative o modo debug** removendo o flag: `rm -f .claude/debug/.active` — isso reativa o Stop hook pra próximo turno
+3. **Desative o modo debug** removendo o flag: `rm -f .claude/debug/.active` — isso reativa o hook de lint pra próximo turno
 4. Sugira commit: `fix: <descrição curta do bug>`
 
 ## Regras

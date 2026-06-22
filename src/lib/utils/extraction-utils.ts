@@ -2,6 +2,27 @@ export function normalizeTextForDedup(text: string): string {
   return text.normalize("NFKC").toLowerCase().replace(/\s+/g, " ").trim();
 }
 
+// Leading enumeration marker the OCR model often embeds in an option's text:
+// "a)" / "A." / "(a)" / "a -" / "1)". Matches a single letter (a-e) or 1-2
+// digits, an optional wrapping paren, a delimiter, and trailing whitespace.
+const OPTION_MARKER = /^\s*\(?\s*([a-eA-E]|\d{1,2})\s*[).:\-–]\s+/;
+
+export function stripOptionMarker(text: string): string {
+  const stripped = text.replace(OPTION_MARKER, "").trim();
+  // Never collapse an option to nothing (e.g. the text was only a marker).
+  return stripped === "" ? text.trim() : stripped;
+}
+
+const OPTION_LINE = /^\s*\(?[A-Ea-e]\s*[).]\s/;
+
+export function stripOptionsFromText(text: string, hasOptions: boolean): string {
+  if (!hasOptions) return text;
+  const lines = text.split("\n");
+  const firstOptIdx = lines.findIndex((line) => OPTION_LINE.test(line));
+  if (firstOptIdx === -1) return text;
+  return lines.slice(0, firstOptIdx).join("\n").trim();
+}
+
 export function findDuplicates(
   newQuestions: { text: string }[],
   existingQuestions: { text: string }[]

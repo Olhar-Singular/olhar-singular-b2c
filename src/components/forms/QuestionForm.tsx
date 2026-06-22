@@ -20,8 +20,9 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { toast } from "sonner";
 import { parseDbError } from "@/lib/utils/errors";
-import { Plus, X, Upload, Loader2 } from "lucide-react";
+import { X, Upload, Loader2 } from "lucide-react";
 import { dataUrlToBlob } from "@/lib/utils/extraction-utils";
+import OptionsEditor from "@/components/forms/OptionsEditor";
 import ImagePreviewDialog from "@/components/dialogs/ImagePreviewDialog";
 import { renderMathToHtml, hasMathContent } from "@/lib/domain/latexRenderer";
 import { SUBJECTS as subjects } from "@/lib/utils/constants";
@@ -237,45 +238,11 @@ export default function QuestionForm({ open, onOpenChange, question, onSaved }: 
             </div>
 
             {questionType === "objetiva" && (
-              <div>
-                <div className="flex items-center justify-between mb-2">
-                  <Label>Alternativas</Label>
-                  <Button type="button" size="sm" variant="outline" onClick={() => setOptions([...options, ""])}>
-                    <Plus className="w-3 h-3 mr-1" /> Adicionar
-                  </Button>
-                </div>
-                {options.length === 0 && <p className="text-xs text-muted-foreground">Clique em "Adicionar" para criar alternativas.</p>}
-                {options.map((opt, i) => (
-                  <div key={i} className="flex gap-2 mb-2">
-                    <Input
-                      value={opt}
-                      onChange={(e) => { const n = [...options]; n[i] = e.target.value; setOptions(n); }}
-                      placeholder={`Alternativa ${String.fromCharCode(65 + i)}`}
-                    />
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant={correctAnswer === i ? "default" : "outline"}
-                      onClick={() => setCorrectAnswer(correctAnswer === i ? null : i)}
-                      className="shrink-0"
-                    >
-                      {correctAnswer === i ? "✓" : String.fromCharCode(65 + i)}
-                    </Button>
-                    <Button
-                      type="button"
-                      size="icon"
-                      variant="ghost"
-                      onClick={() => {
-                        setOptions(options.filter((_, j) => j !== i));
-                        if (correctAnswer === i) setCorrectAnswer(null);
-                        else if (correctAnswer !== null && correctAnswer > i) setCorrectAnswer(correctAnswer - 1);
-                      }}
-                    >
-                      <X className="w-3 h-3" />
-                    </Button>
-                  </div>
-                ))}
-              </div>
+              <OptionsEditor
+                options={options}
+                correctAnswer={correctAnswer}
+                onChange={(o, c) => { setOptions(o); setCorrectAnswer(c); }}
+              />
             )}
 
             <div>

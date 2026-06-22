@@ -5,7 +5,83 @@ import {
   dataUrlToBlob,
   autoCropFromBbox,
   fetchWithRetry,
+  stripOptionMarker,
+  stripOptionsFromText,
 } from "./extraction-utils";
+
+describe("stripOptionMarker", () => {
+  it("strips lowercase letter marker with paren", () => {
+    expect(stripOptionMarker("a) sucos.")).toBe("sucos.");
+  });
+  it("strips uppercase letter marker with paren", () => {
+    expect(stripOptionMarker("B) sanduíches.")).toBe("sanduíches.");
+  });
+  it("strips letter marker with dot", () => {
+    expect(stripOptionMarker("c. garrafa de água")).toBe("garrafa de água");
+  });
+  it("strips parenthesized marker", () => {
+    expect(stripOptionMarker("(d) bebidas açucaradas")).toBe("bebidas açucaradas");
+  });
+  it("strips dash-style marker", () => {
+    expect(stripOptionMarker("a - primeira opção")).toBe("primeira opção");
+  });
+  it("strips numeric marker", () => {
+    expect(stripOptionMarker("1) primeira")).toBe("primeira");
+  });
+  it("leaves text without a marker untouched", () => {
+    expect(stripOptionMarker("A bola é azul")).toBe("A bola é azul");
+  });
+  it("leaves a sentence that merely starts with a letter untouched", () => {
+    expect(stripOptionMarker("Verdadeiro")).toBe("Verdadeiro");
+  });
+  it("does not empty an option that is only a marker", () => {
+    expect(stripOptionMarker("a)")).toBe("a)");
+  });
+  it("trims surrounding whitespace", () => {
+    expect(stripOptionMarker("  a) sucos.  ")).toBe("sucos.");
+  });
+  it("returns empty string unchanged", () => {
+    expect(stripOptionMarker("")).toBe("");
+  });
+});
+
+describe("stripOptionsFromText", () => {
+  it("removes option lines (parenthesized markers) when options are present", () => {
+    const text = "A que mudança o personagem está se referindo?\n(A) Descartar o lixo.\n(B) Não desperdiçar água.\n(C) Mudar os móveis.\n(D) Mudar de endereço.";
+    const result = stripOptionsFromText(text, true);
+    expect(result).toBe("A que mudança o personagem está se referindo?");
+  });
+
+  it("removes option lines (bare paren markers) when options are present", () => {
+    const text = "Esse texto é uma\nA) reportagem.\nB) entrevista.\nC) crônica.\nD) fábula.";
+    expect(stripOptionsFromText(text, true)).toBe("Esse texto é uma");
+  });
+
+  it("handles multi-paragraph stem before options", () => {
+    const text = "O anel de vidro\nTenho um anel de vidro...\n\nEsse trecho do poema sugere\n(A) cansaço.\n(B) tristeza.";
+    expect(stripOptionsFromText(text, true)).toBe("O anel de vidro\nTenho um anel de vidro...\n\nEsse trecho do poema sugere");
+  });
+
+  it("returns original text unchanged when hasOptions is false", () => {
+    const text = "Descreva o processo fotossintético.\n(A) linha que não é opção";
+    expect(stripOptionsFromText(text, false)).toBe(text);
+  });
+
+  it("returns original text unchanged when no option lines are found", () => {
+    const text = "Calcule a área do triângulo com base 4 e altura 3.";
+    expect(stripOptionsFromText(text, true)).toBe(text);
+  });
+
+  it("handles dot-delimited markers", () => {
+    const text = "Qual é a capital?\nA. Brasília\nB. São Paulo\nC. Rio\nD. Curitiba";
+    expect(stripOptionsFromText(text, true)).toBe("Qual é a capital?");
+  });
+
+  it("does not strip text that merely starts with a letter word (no delimiter)", () => {
+    const text = "Assinale a alternativa correta.\nApenas Brasília é capital.";
+    expect(stripOptionsFromText(text, true)).toBe(text);
+  });
+});
 
 describe("normalizeTextForDedup", () => {
   it("lowercases text", () => {

@@ -13,7 +13,13 @@ Você é um especialista em escrever testes Vitest para este projeto B2C especí
 - **Localização dos testes**: colocados junto ao arquivo testado (ex: `src/hooks/useFoo.test.ts`, `src/components/chat/ChatWindow.test.tsx`)
 - **Setup global**: `src/test/setup.ts` — contém mocks de `matchMedia`, `ResizeObserver`, `IntersectionObserver`, `scrollTo`, `scrollIntoView`, `URL.createObjectURL`
 - **Alias**: `@/` mapeia para `src/`
-- **Sem `helpers.ts` ou `fixtures.ts`** — este projeto B2C não tem esses arquivos; mocks são inline em cada arquivo de teste
+- **Helpers reutilizáveis**: `src/test/helpers.ts` **existe** — use antes de reinventar mock:
+  - `renderWithProviders(ui, opts)` — render com QueryClient + providers
+  - `queryWrapper(qc?)` / `createTestQueryClient()` — wrapper p/ `renderHook`
+  - `buildAuthState(overrides)` — estado de auth mockado
+  - `createQueryChain(result)` — encadeia o mock do supabase-js (`from().select()...`)
+  - `flushPromises()`
+- **NÃO há `fixtures.ts`** — dados de fixture ficam inline em cada teste.
 
 ## Ordem obrigatória ao começar
 

@@ -1,0 +1,6 @@
+{
+  "imports": {
+    "zod": "https://esm.sh/zod@3.25.76",
+    "zod-to-json-schema": "https://esm.sh/zod-to-json-schema@3.25.2"
+  }
+}

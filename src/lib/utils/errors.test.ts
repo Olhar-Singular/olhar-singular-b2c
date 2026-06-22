@@ -29,6 +29,12 @@ describe("isNetworkError", () => {
     expect(isNetworkError(null)).toBe(false);
     expect(isNetworkError(42)).toBe(false);
   });
+
+  it("returns false for an Error with a nullish message", () => {
+    const err = new Error("x");
+    (err as { message: unknown }).message = undefined;
+    expect(isNetworkError(err)).toBe(false);
+  });
 });
 
 describe("parseDbError", () => {
@@ -83,6 +89,12 @@ describe("parseEdgeFnError", () => {
 
   it("returns fallback when err has no message", () => {
     expect(parseEdgeFnError({}, "Erro genérico.")).toBe("Erro genérico.");
+  });
+
+  it("returns fallback for an Error with a nullish message", () => {
+    const err = new Error("x");
+    (err as { message: unknown }).message = undefined;
+    expect(parseEdgeFnError(err, "Erro genérico.")).toBe("Erro genérico.");
   });
 });
 

@@ -85,6 +85,32 @@ describe("pdf-utils — parsePdf", () => {
     const result = await parsePdf(fakeFile());
     expect(result.text).toMatch(/\[\.\.\. texto truncado\]$/);
     expect(result.text.length).toBeLessThanOrEqual(8000 + "[... texto truncado]".length + 5);
+    expect(result.truncated).toBe(true);
+  });
+
+  it("sets truncated=false when text is within MAX_TEXT_CHARS", async () => {
+    const pages = [makePage("short text")];
+    getDocument.mockReturnValue({
+      promise: Promise.resolve({
+        numPages: 1,
+        getPage: () => Promise.resolve(pages[0]),
+      }),
+    });
+    const result = await parsePdf(fakeFile());
+    expect(result.truncated).toBe(false);
+  });
+
+  it("renders page images at RENDER_SCALE 3.0", async () => {
+    const pages = [makePage("hello world")];
+    getDocument.mockReturnValue({
+      promise: Promise.resolve({
+        numPages: 1,
+        getPage: (i: number) => Promise.resolve(pages[i - 1]),
+      }),
+    });
+
+    await parsePdf(fakeFile());
+    expect(pages[0].getViewport).toHaveBeenCalledWith({ scale: 3.0 });
   });
 
   it("only renders the first 8 pages even when document has more", async () => {

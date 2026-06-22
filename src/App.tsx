@@ -11,6 +11,8 @@ import DashboardPage from "@/pages/DashboardPage";
 import BarrierProfilesPage from "@/pages/BarrierProfilesPage";
 import CreditsPage from "@/pages/CreditsPage";
 import AdaptarPage from "@/pages/AdaptarPage";
+import MyAdaptationsPage from "@/pages/MyAdaptationsPage";
+import EditAdaptationPage from "@/pages/EditAdaptationPage";
 import ChatPage from "@/pages/ChatPage";
 import LandingPage from "@/pages/LandingPage";
 import QuestionBankPage from "@/pages/QuestionBankPage";
@@ -36,6 +38,8 @@ export default function App() {
               >
                 <Route path="/dashboard" element={<DashboardPage />} />
                 <Route path="/adaptar" element={<AdaptarPage />} />
+                <Route path="/adaptar/editar/:id" element={<EditAdaptationPage />} />
+                <Route path="/historico" element={<MyAdaptationsPage />} />
                 <Route path="/perfis-barreira" element={<BarrierProfilesPage />} />
                 <Route path="/chat" element={<ChatPage />} />
                 <Route path="/banco-questoes" element={<QuestionBankPage />} />

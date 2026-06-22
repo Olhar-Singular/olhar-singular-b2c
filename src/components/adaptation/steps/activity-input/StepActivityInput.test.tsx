@@ -1,11 +1,12 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { toast } from "sonner";
 import { StepActivityInput } from "./StepActivityInput";
-import type { WizardData } from "@/lib/domain/adaptationWizardHelpers";
+import type { WizardData } from "@/lib/adaptation/wizard/wizardState";
 
 // ── Supabase mock (bank query + auth session) ──────────────────────────────
 
-const bankQuestionsResult: { data: unknown[]; error: null } = { data: [], error: null };
+const bankQuestionsResult: { data: unknown[] | null; error: unknown } = { data: [], error: null };
 
 const fromChain = {
   select: vi.fn().mockReturnThis(),
@@ -34,6 +35,7 @@ const fetchSpy = vi.fn();
 beforeEach(() => {
   vi.clearAllMocks();
   bankQuestionsResult.data = [];
+  bankQuestionsResult.error = null;
   getSessionSpy.mockResolvedValue({ data: { session: { access_token: "tok" } } });
   fetchSpy.mockResolvedValue({
     ok: true,
@@ -567,5 +569,24 @@ describe("StepActivityInput — banco tab error alert", () => {
     fireEvent.click(screen.getByRole("button", { name: /Próximo/i }));
     expect(onNext).not.toHaveBeenCalled();
     expect(screen.getByRole("alert")).toHaveTextContent(/Digite ou cole/i);
+  });
+});
+
+// ── Bank query failure surfaces an error (not a silent empty list) ──────────
+
+describe("StepActivityInput — bank query error", () => {
+  it("shows an error and toasts when the bank query fails (no silent empty)", async () => {
+    bankQuestionsResult.data = null;
+    bankQuestionsResult.error = { message: "boom" };
+    render(<StepActivityInput data={baseData} updateData={vi.fn()} onNext={vi.fn()} onPrev={vi.fn()} />);
+    fireEvent.click(screen.getByRole("button", { name: /Banco de Questões/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Abrir Banco de Questões/i }));
+
+    await waitFor(() => {
+      expect(screen.getByRole("alert")).toHaveTextContent(/Erro ao carregar o banco/i);
+    });
+    expect(toast.error).toHaveBeenCalledWith(expect.stringMatching(/Erro ao carregar o banco/i));
+    // It must NOT fall back to the "no questions found" empty state.
+    expect(screen.queryByText(/Nenhuma questão encontrada/i)).toBeNull();
   });
 });

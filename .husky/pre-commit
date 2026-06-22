@@ -1,1 +1,14 @@
-npx lint-staged
+# Roda lint-staged DENTRO do container: o tooling (eslint/vitest/node_modules)
+# vive no Docker, não no host — mesmo padrão do Makefile. Assim o hook funciona
+# sem exigir `npm install` local (o node_modules do host é parcial).
+if ! docker compose exec -T app true 2>/dev/null; then
+  echo "⚠️  Container 'app' não está rodando. Rode 'make start' antes de commitar." >&2
+  exit 1
+fi
+# O bind mount dispara a checagem de "dubious ownership" do git no container.
+# Injeta safe.directory=/app via env (one-off) — sem escrever ~/.gitconfig.
+docker compose exec -T \
+  -e GIT_CONFIG_COUNT=1 \
+  -e GIT_CONFIG_KEY_0=safe.directory \
+  -e GIT_CONFIG_VALUE_0=/app \
+  app npx lint-staged
