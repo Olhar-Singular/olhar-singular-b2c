@@ -10,7 +10,7 @@
  * teacher picks one in the Aparência popover.
  */
 import { BASE_FONT_PT, BASE_BLOCK_SPACING_PX } from "./pageTokens";
-import type { PageStyle } from "@/lib/adaptation/canonical/schema";
+import type { PageStyle, ElementFontSizes } from "@/lib/adaptation/canonical/schema";
 
 export type ResolvedPageStyle = {
   /** Font token (fontFamily.ts) or undefined for "no override". */
@@ -19,6 +19,8 @@ export type ResolvedPageStyle = {
   fontSize: number;
   /** Default gap between top-level blocks, in px. */
   blockSpacing: number;
+  /** Per-element font-size overrides in pt. Absent keys inherit the global fontSize. */
+  elementFontSizes?: ElementFontSizes;
 };
 
 export const PAGE_STYLE_DEFAULTS: ResolvedPageStyle = {
@@ -32,5 +34,6 @@ export function resolvePageStyle(ps?: PageStyle): ResolvedPageStyle {
     fontFamily: ps?.fontFamily ?? PAGE_STYLE_DEFAULTS.fontFamily,
     fontSize: ps?.fontSize ?? PAGE_STYLE_DEFAULTS.fontSize,
     blockSpacing: ps?.blockSpacing ?? PAGE_STYLE_DEFAULTS.blockSpacing,
+    ...(ps?.elementFontSizes !== undefined ? { elementFontSizes: ps.elementFontSizes } : {}),
   };
 }

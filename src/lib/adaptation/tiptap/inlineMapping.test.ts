@@ -31,6 +31,22 @@ describe("inline mappers round-trip (RichText -> PM inline -> RichText)", () => 
       value: [{ type: "text", text: "bc", marks: ["bold"], color: "#2563EB" }],
     },
     {
+      name: "fontSize alone (12pt ↔ 16px exact)",
+      value: [{ type: "text", text: "big", fontSize: 12 }],
+    },
+    {
+      name: "fontSize alone (non-divisible-by-3: 14pt → px → 14pt via toFixed cleanup)",
+      value: [{ type: "text", text: "larger", fontSize: 14 }],
+    },
+    {
+      name: "color + fontSize together (single textStyle mark)",
+      value: [{ type: "text", text: "styled", color: "#DC2626", fontSize: 12 }],
+    },
+    {
+      name: "marks + color + fontSize all together",
+      value: [{ type: "text", text: "all", marks: ["bold", "italic"], color: "#16A34A", fontSize: 15 }],
+    },
+    {
       name: "inline math without alt",
       value: [{ type: "inlineMath", latex: "x^2" }],
     },
@@ -64,5 +80,11 @@ describe("inline mappers round-trip (RichText -> PM inline -> RichText)", () => 
   it("inlineToPM emits no marks array for an unstyled run", () => {
     const pm = inlineToPM({ type: "text", text: "plain" } as Inline);
     expect(pm).toEqual({ type: "text", text: "plain" });
+  });
+
+  it("pmToInline silently ignores a malformed fontSize (non-numeric string)", () => {
+    // Tests the defensive `!isNaN(px)` branch guard in toCanonical.ts.
+    const pm = { type: "text", text: "x", marks: [{ type: "textStyle", attrs: { fontSize: "invalid" } }] };
+    expect(pmToInline(pm)).toEqual({ type: "text", text: "x" });
   });
 });

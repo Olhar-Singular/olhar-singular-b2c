@@ -20,15 +20,30 @@ type QuestionBlock = Extract<Block, { type: "question" }>;
 
 export function PdfQuestion({ block, number }: { block: QuestionBlock; number: number }) {
   const stemNumbers = questionNumbers(block.stem);
+  const position = block.enunciadoPosition ?? "below";
+  const hasEnunciado = block.enunciado != null && block.enunciado.length > 0;
+
+  const enunciadoView = hasEnunciado ? (
+    <View style={{ marginBottom: 4 }}>
+      <Text>
+        <PdfRichText content={block.enunciado!} />
+      </Text>
+    </View>
+  ) : null;
+
   return (
     <View style={{ flexDirection: "column", marginBottom: 8, ...nodeStyleToPdf(block.style) }}>
       <View style={{ marginBottom: 4 }}>
         <Text style={{ color: "#555555" }}>{number}.</Text>
       </View>
 
+      {position === "above" && enunciadoView}
+
       {block.stem.map((child, i) => (
         <PdfBlock key={child.id} block={child} number={stemNumbers[i]} />
       ))}
+
+      {position === "below" && enunciadoView}
 
       {block.instruction && (
         <View style={{ marginBottom: 4 }}>

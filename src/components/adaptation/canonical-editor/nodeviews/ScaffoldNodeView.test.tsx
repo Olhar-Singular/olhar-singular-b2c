@@ -9,12 +9,14 @@ vi.mock("@tiptap/react", () => ({
 
 function makeProps(items: string[], editable = true) {
   const updateAttributes = vi.fn();
+  const deleteNode = vi.fn();
   const props = {
     node: { attrs: { items } },
     updateAttributes,
+    deleteNode,
     editor: { isEditable: editable },
   } as unknown as NodeViewProps;
-  return { props, updateAttributes };
+  return { props, updateAttributes, deleteNode };
 }
 
 beforeEach(() => vi.clearAllMocks());
@@ -35,5 +37,18 @@ describe("ScaffoldNodeView", () => {
     const { props } = makeProps(["a"], false);
     render(<ScaffoldNodeView {...props} />);
     expect(screen.getByLabelText("Passo 1")).toBeDisabled();
+  });
+
+  it("calls deleteNode when the delete button is clicked", () => {
+    const { props, deleteNode } = makeProps(["a"]);
+    render(<ScaffoldNodeView {...props} />);
+    fireEvent.click(screen.getByRole("button", { name: "Excluir andaime" }));
+    expect(deleteNode).toHaveBeenCalledTimes(1);
+  });
+
+  it("disables the delete button when not editable", () => {
+    const { props } = makeProps(["a"], false);
+    render(<ScaffoldNodeView {...props} />);
+    expect(screen.getByRole("button", { name: "Excluir andaime" })).toBeDisabled();
   });
 });

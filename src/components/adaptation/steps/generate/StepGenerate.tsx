@@ -81,9 +81,6 @@ export function StepGenerate({ data, onResult, onNext, onPrev }: Props) {
     }
   }, [data, onResult, onNext, refreshProfile]);
 
-   
-   
-   
   useEffect(() => {
     if (startedRef.current) return;
     startedRef.current = true;

@@ -65,22 +65,32 @@ export function pmToInline(node: PMNode): Inline {
   const marks: PMMark[] = node.marks ?? [];
   const canonicalMarks: ("bold" | "italic" | "underline" | "strike")[] = [];
   let color: string | undefined;
+  let fontSize: number | undefined;
   for (const m of marks) {
     if (TEXT_MARK_NAMES.has(m.type)) {
       canonicalMarks.push(m.type as (typeof MARK_ORDER)[number]);
     } else if (m.type === "textStyle") {
       const c = m.attrs?.color;
       if (c !== undefined && c !== null) color = c as string;
+      const fs = m.attrs?.fontSize;
+      if (typeof fs === "string" && fs) {
+        const px = parseFloat(fs);
+        if (!isNaN(px) && px > 0) {
+          // Convert px → pt (96px = 72pt) and clean up floating-point noise.
+          fontSize = +(px * (72 / 96)).toFixed(10);
+        }
+      }
     }
   }
   /* v8 ignore next -- defensive: PM text nodes always carry a non-empty text */
-  const text: Inline = { type: "text", text: node.text ?? "" };
+  const textNode: Extract<Inline, { type: "text" }> = { type: "text", text: node.text ?? "" };
   if (canonicalMarks.length > 0) {
     // Normalize ordering so the round-trip is stable regardless of PM's order.
-    text.marks = MARK_ORDER.filter((m) => canonicalMarks.includes(m));
+    textNode.marks = MARK_ORDER.filter((m) => canonicalMarks.includes(m));
   }
-  if (color !== undefined) text.color = color;
-  return text;
+  if (color !== undefined) textNode.color = color;
+  if (fontSize !== undefined) textNode.fontSize = fontSize;
+  return textNode;
 }
 
 export function pmToRichText(content: PMNode[] | undefined): RichText {
@@ -146,6 +156,12 @@ function pmToBlock(node: PMNode): Block {
       });
       if (a.instruction !== undefined && a.instruction !== null) {
         block.instruction = a.instruction as RichText;
+      }
+      if (a.enunciado !== undefined && a.enunciado !== null) {
+        block.enunciado = a.enunciado as RichText;
+      }
+      if (a.enunciadoPosition !== undefined && a.enunciadoPosition !== null) {
+        block.enunciadoPosition = a.enunciadoPosition as "above" | "below";
       }
       return block;
     }

@@ -71,6 +71,7 @@ function makeProps(
     instruction = null,
     id = "q-1",
     editor: sharedEditor,
+    originalDocSnapshots,
   }: {
     editable?: boolean;
     priorQuestions?: number;
@@ -80,6 +81,7 @@ function makeProps(
     instruction?: RichText | null;
     id?: string;
     editor?: NodeViewProps["editor"];
+    originalDocSnapshots?: Map<string, unknown>;
   } = {}
 ) {
   const updateAttributes = vi.fn();
@@ -90,18 +92,49 @@ function makeProps(
     descendants(fn: (node: { type: { name: string } }, pos: number) => void) {
       for (let i = 0; i < priorQuestions; i++) fn({ type: { name: "question" } }, i);
     },
+    // forEach is used by findTopLevelPosById to get the live position. When
+    // getPosUndefined is true we simulate "mid-deletion / not yet in doc" by
+    // NOT including the question — ensuring pos falls back to null. Otherwise
+    // report a non-matching sibling first (covers the false branch), then the
+    // question at its mocked position.
+    forEach(fn: (node: { attrs: Record<string, unknown> }, offset: number) => void) {
+      fn({ attrs: { id: `${id}--sibling` } }, 0);
+      if (!getPosUndefined) fn({ attrs: { id } }, pos);
+    },
   };
   canMoveUp.mockReturnValue(upable);
   canMoveDown.mockReturnValue(downable);
-  const editor = sharedEditor ?? ({ isEditable: editable, state: { doc }, view: { dispatch } } as unknown as NodeViewProps["editor"]);
+
+  // Mock schema + transaction for Cancel/Reset restore operations
+  const mockRestoredNode = { type: "question", mock: true };
+  const mockTr = { replaceWith: vi.fn().mockReturnThis() };
+  const schema = { nodeFromJSON: vi.fn().mockReturnValue(mockRestoredNode) };
+
+  const editor = sharedEditor ?? ({
+    isEditable: editable,
+    state: { doc, schema, tr: mockTr },
+    view: { dispatch },
+    storage: {
+      originalDoc: {
+        snapshots: originalDocSnapshots ?? new Map<string, unknown>(),
+      },
+    },
+  } as unknown as NodeViewProps["editor"]);
+
+  const nodeJSON = { type: "question", attrs: { answer, instruction, enunciado: null, enunciadoPosition: "below", id }, content: [] };
   const props = {
-    node: { attrs: { answer, instruction, id } },
+    node: {
+      attrs: { answer, instruction, enunciado: null, enunciadoPosition: "below", id },
+      nodeSize: 10,
+      content: { size: 8 },
+      toJSON: vi.fn().mockReturnValue(nodeJSON),
+    },
     updateAttributes,
     deleteNode,
     getPos: () => (getPosUndefined ? undefined : pos),
     editor,
   } as unknown as NodeViewProps;
-  return { props, updateAttributes, deleteNode, dispatch, editor };
+  return { props, updateAttributes, deleteNode, dispatch, editor, schema, mockTr };
 }
 
 const mc: QuestionAnswer = {
@@ -120,14 +153,14 @@ const SEEDS: QuestionAnswer[] = [
     kind: "trueFalse",
     items: [
       { id: "33333333-3333-4333-8333-333333333333", content: rt("Afirmação V"), value: true },
-      { id: "34333333-3333-4333-8333-333333333333", content: rt("Afirmação F"), value: false },
+      { id: "34333333-3333-4333-8333-333333333334", content: rt("Afirmação F"), value: false },
     ],
   },
   {
     kind: "checkbox",
     items: [
       { id: "55555555-5555-4555-8555-555555555555", content: rt("Opção 1"), checked: true },
-      { id: "56555555-5555-4555-8555-555555555555", content: rt("Opção 2"), checked: false },
+      { id: "56555555-5555-4555-8555-555555555556", content: rt("Opção 2"), checked: false },
     ],
   },
   {
@@ -138,7 +171,7 @@ const SEEDS: QuestionAnswer[] = [
     kind: "ordering",
     items: [
       { id: "99999999-9999-4999-8999-999999999999", content: rt("Primeiro"), position: 0 },
-      { id: "9a999999-9999-4999-8999-999999999999", content: rt("Segundo"), position: 1 },
+      { id: "9a999999-9999-4999-8999-9a9999999999", content: rt("Segundo"), position: 1 },
     ],
   },
   { kind: "fillBlank", gaps: [{ id: "cccccccc-cccc-4ccc-8ccc-cccccccccccc", answer: "resposta" }] },
@@ -209,13 +242,14 @@ describe("QuestionNodeView — preview at rest", () => {
 });
 
 describe("QuestionNodeView — rail actions", () => {
-  it("renders the rail with pt-BR aria-labels (✎ editar first)", () => {
+  it("renders the rail with pt-BR aria-labels (✎ editar first, restaurar before excluir)", () => {
     const { props } = makeProps(mc);
     render(<QuestionNodeView {...props} />);
     expect(screen.getByLabelText("Editar questão")).toBeInTheDocument();
     expect(screen.getByLabelText("Mover questão para cima")).toBeInTheDocument();
     expect(screen.getByLabelText("Mover questão para baixo")).toBeInTheDocument();
     expect(screen.getByLabelText("Adicionar imagem à questão")).toBeInTheDocument();
+    expect(screen.getByLabelText("Restaurar questão ao original")).toBeInTheDocument();
     expect(screen.getByLabelText("Excluir questão")).toBeInTheDocument();
   });
 
@@ -252,6 +286,85 @@ describe("QuestionNodeView — rail actions", () => {
     render(<QuestionNodeView {...props} />);
     expect(screen.getByLabelText("Mover questão para cima")).toBeDisabled();
     expect(screen.getByLabelText("Mover questão para baixo")).toBeDisabled();
+  });
+
+  it("uses live doc position (not stale getPos) for disabled checks — regression: move-down after move-up", () => {
+    // Simulate: getPos() is stale (returns old pos 200) but the question actually
+    // moved to pos 0 after a move-up transaction.
+    const livePos = 0;
+    const stalePos = 200;
+    // canMoveDown returns true only for the live position (0), false for stale (200).
+    canMoveDown.mockImplementation((_doc: unknown, p: number) => p === livePos);
+    canMoveUp.mockImplementation((_doc: unknown, p: number) => p > 0);
+
+    const id = "q-live";
+    const customDoc = {
+      descendants(_fn: unknown) {},
+      forEach(fn: (node: { attrs: Record<string, unknown> }, offset: number) => void) {
+        fn({ attrs: { id } }, livePos); // question is at the new live position
+      },
+    };
+    const props = {
+      node: {
+        attrs: { answer: mc, instruction: null, id },
+        nodeSize: 10,
+        content: { size: 8 },
+        toJSON: vi.fn(),
+      },
+      updateAttributes: vi.fn(),
+      deleteNode: vi.fn(),
+      getPos: vi.fn().mockReturnValue(stalePos), // stale — but should NOT be used
+      editor: {
+        isEditable: true,
+        state: { doc: customDoc, schema: { nodeFromJSON: vi.fn() }, tr: { replaceWith: vi.fn().mockReturnThis() } },
+        view: { dispatch: vi.fn() },
+        storage: { originalDoc: { snapshots: new Map() } },
+      },
+    } as unknown as NodeViewProps;
+
+    render(<QuestionNodeView {...props} />);
+
+    // Down button must be ENABLED because we used livePos (0), not stalePos (200)
+    expect(screen.getByLabelText("Mover questão para baixo")).not.toBeDisabled();
+    expect(screen.getByLabelText("Mover questão para cima")).toBeDisabled();
+    expect(canMoveDown).toHaveBeenCalledWith(customDoc, livePos);
+  });
+
+  it("falls back to getPos when the question is not found in doc.forEach", () => {
+    // Edge case: findTopLevelPosById returns null (question mid-deletion or
+    // not yet in doc) → falls back to rawPosNum from getPos().
+    canMoveUp.mockReturnValue(true);
+    canMoveDown.mockReturnValue(true);
+
+    const id = "q-notfound";
+    const emptyForEachDoc = {
+      descendants(_fn: unknown) {},
+      forEach(fn: (node: { attrs: Record<string, unknown> }, offset: number) => void) {
+        fn({ attrs: { id: "other-block" } }, 0); // only a non-matching node
+      },
+    };
+    const props = {
+      node: {
+        attrs: { answer: mc, instruction: null, id },
+        nodeSize: 10,
+        content: { size: 8 },
+        toJSON: vi.fn(),
+      },
+      updateAttributes: vi.fn(),
+      deleteNode: vi.fn(),
+      getPos: vi.fn().mockReturnValue(100),
+      editor: {
+        isEditable: true,
+        state: { doc: emptyForEachDoc, schema: { nodeFromJSON: vi.fn() }, tr: { replaceWith: vi.fn().mockReturnThis() } },
+        view: { dispatch: vi.fn() },
+        storage: { originalDoc: { snapshots: new Map() } },
+      },
+    } as unknown as NodeViewProps;
+
+    render(<QuestionNodeView {...props} />);
+
+    // Falls back to getPos() = 100 → canMoveDown called with 100
+    expect(canMoveDown).toHaveBeenCalledWith(emptyForEachDoc, 100);
   });
 
   it("opens the image modal and inserts the picked image into the stem", () => {
@@ -295,6 +408,31 @@ describe("QuestionNodeView — rail actions", () => {
     expect(deleteNode).toHaveBeenCalledTimes(1);
   });
 
+  it("restores the question to the original-doc snapshot via Restaurar", () => {
+    const originalJSON = { type: "question", attrs: { id: "q-1" }, content: [] };
+    const snapshots = new Map([["q-1", originalJSON]]);
+    const { props, dispatch, schema } = makeProps(mc, { originalDocSnapshots: snapshots });
+    render(<QuestionNodeView {...props} />);
+    fireEvent.click(screen.getByLabelText("Restaurar questão ao original"));
+    expect(schema.nodeFromJSON).toHaveBeenCalledWith(originalJSON);
+    expect(dispatch).toHaveBeenCalled();
+    expect(screen.queryByTestId("question-card")).not.toBeInTheDocument();
+  });
+
+  it("no-ops Restaurar when OriginalDocExtension is not mounted (no storage)", () => {
+    const { props, dispatch } = makeProps(mc, { originalDocSnapshots: new Map() });
+    render(<QuestionNodeView {...props} />);
+    fireEvent.click(screen.getByLabelText("Restaurar questão ao original"));
+    // No snapshot → nothing dispatched
+    expect(dispatch).not.toHaveBeenCalled();
+  });
+
+  it("Restaurar is disabled when not editable", () => {
+    const { props } = makeProps(mc, { editable: false });
+    render(<QuestionNodeView {...props} />);
+    expect(screen.getByLabelText("Restaurar questão ao original")).toBeDisabled();
+  });
+
   it("survives a transient undefined getPos() (empty ordinal, move/image guarded, delete works)", () => {
     const { props, dispatch } = makeProps(mc, { getPosUndefined: true });
     expect(() => render(<QuestionNodeView {...props} />)).not.toThrow();
@@ -308,8 +446,8 @@ describe("QuestionNodeView — rail actions", () => {
   });
 });
 
-describe("QuestionNodeView — preview ↔ card", () => {
-  it("opens the card via ✎ Editar: AnswerEditor + gabarito + Concluir, preview gone", () => {
+describe("QuestionNodeView — card open / commit / cancel", () => {
+  it("opens the card via ✎ Editar (saves snapshot): shows AnswerEditor + Cancelar + Concluir", () => {
     const { props } = makeProps(mc);
     render(<QuestionNodeView {...props} />);
     fireEvent.click(screen.getByLabelText("Editar questão"));
@@ -317,7 +455,36 @@ describe("QuestionNodeView — preview ↔ card", () => {
     expect(screen.getByTestId("answer-multipleChoice")).toBeInTheDocument();
     expect(screen.getByLabelText("Marcar como correta")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Concluir" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Cancelar edição" })).toBeInTheDocument();
     expect(screen.queryByTestId("answer-preview-multipleChoice")).not.toBeInTheDocument();
+    // snapshot is taken from the node
+    expect((props.node as unknown as { toJSON: ReturnType<typeof vi.fn> }).toJSON).toHaveBeenCalled();
+  });
+
+  it("Concluir writes the local answer + instruction + enunciado to the document via updateAttributes", () => {
+    const { props, updateAttributes } = makeProps(mc);
+    render(<QuestionNodeView {...props} />);
+    fireEvent.click(screen.getByLabelText("Editar questão"));
+    fireEvent.click(screen.getByRole("button", { name: "Concluir" }));
+    expect(updateAttributes).toHaveBeenCalledWith({
+      answer: expect.objectContaining({ kind: "multipleChoice" }),
+      instruction: null,
+      enunciado: null,
+      enunciadoPosition: "below",
+    });
+    expect(screen.queryByTestId("question-card")).not.toBeInTheDocument();
+  });
+
+  it("Cancelar dispatches a restore transaction and closes the card without calling updateAttributes", () => {
+    const { props, dispatch, updateAttributes } = makeProps(mc);
+    render(<QuestionNodeView {...props} />);
+    fireEvent.click(screen.getByLabelText("Editar questão"));
+    fireEvent.click(screen.getByRole("button", { name: "Cancelar edição" }));
+    // restore transaction was dispatched
+    expect(dispatch).toHaveBeenCalled();
+    // attrs were NOT committed
+    expect(updateAttributes).not.toHaveBeenCalled();
+    expect(screen.queryByTestId("question-card")).not.toBeInTheDocument();
   });
 
   it("returns to the preview via Concluir", () => {
@@ -329,13 +496,14 @@ describe("QuestionNodeView — preview ↔ card", () => {
     expect(screen.getByTestId("answer-preview-multipleChoice")).toBeInTheDocument();
   });
 
-  it("closes the card on Escape", () => {
-    const { props } = makeProps(mc);
+  it("closes the card on Escape via handleCancel (dispatches restore)", () => {
+    const { props, dispatch } = makeProps(mc);
     render(<QuestionNodeView {...props} />);
     fireEvent.click(screen.getByLabelText("Editar questão"));
     expect(screen.getByTestId("question-card")).toBeInTheDocument();
     fireEvent.keyDown(document, { key: "Escape" });
     expect(screen.queryByTestId("question-card")).not.toBeInTheDocument();
+    expect(dispatch).toHaveBeenCalled(); // restore transaction
   });
 
   it("ignores non-Escape keys while the card is open", () => {
@@ -347,9 +515,28 @@ describe("QuestionNodeView — preview ↔ card", () => {
   });
 
   it("keeps only one card open at a time on the same editor", () => {
-    const editor = { isEditable: true, state: { doc: { descendants() {} } }, view: { dispatch: vi.fn() } } as unknown as NodeViewProps["editor"];
+    const editor = {
+      isEditable: true,
+      state: {
+        doc: {
+          descendants() {},
+          forEach(fn: (node: { attrs: Record<string, unknown> }, offset: number) => void) {
+            fn({ attrs: { id: "q-a" } }, 0);
+            fn({ attrs: { id: "q-b" } }, 100);
+          },
+        },
+        schema: { nodeFromJSON: vi.fn().mockReturnValue({}) },
+        tr: { replaceWith: vi.fn().mockReturnThis() },
+      },
+      view: { dispatch: vi.fn() },
+      storage: { originalDoc: { snapshots: new Map() } },
+    } as unknown as NodeViewProps["editor"];
+    const nodeJSON = { type: "question", attrs: { id: "q-a" }, content: [] };
     const { props: pa } = makeProps(mc, { id: "q-a", editor });
     const { props: pb } = makeProps(mc, { id: "q-b", editor });
+    // Override toJSON for both nodes
+    (pa.node as unknown as { toJSON: () => unknown }).toJSON = vi.fn().mockReturnValue(nodeJSON);
+    (pb.node as unknown as { toJSON: () => unknown }).toJSON = vi.fn().mockReturnValue(nodeJSON);
     render(
       <>
         <QuestionNodeView {...pa} />
@@ -362,6 +549,21 @@ describe("QuestionNodeView — preview ↔ card", () => {
     // only the still-collapsed question keeps a rail with "Editar questão"
     fireEvent.click(screen.getByLabelText("Editar questão"));
     expect(screen.getAllByTestId("question-card")).toHaveLength(1);
+  });
+});
+
+describe("QuestionNodeView — data-question-expanded attribute", () => {
+  it("has data-question-expanded=false at rest (preview mode)", () => {
+    const { props } = makeProps(mc);
+    render(<QuestionNodeView {...props} />);
+    expect(screen.getByTestId("question-node")).toHaveAttribute("data-question-expanded", "false");
+  });
+
+  it("has data-question-expanded=true when card is open", () => {
+    const { props } = makeProps(mc);
+    render(<QuestionNodeView {...props} />);
+    fireEvent.click(screen.getByLabelText("Editar questão"));
+    expect(screen.getByTestId("question-node")).toHaveAttribute("data-question-expanded", "true");
   });
 });
 

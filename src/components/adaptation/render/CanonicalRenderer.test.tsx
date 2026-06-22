@@ -344,4 +344,87 @@ describe("CanonicalRenderer (defaults / edge branches)", () => {
     const table = screen.getByTestId("answer-table");
     expect(table.querySelector("thead")).toBeNull();
   });
+
+  it("question with enunciado=null renders no enunciado node", () => {
+    render(
+      <CanonicalRenderer
+        document={wrap([
+          {
+            id: id(21),
+            type: "question",
+            stem: [{ id: id(22), type: "paragraph", content: [{ type: "text", text: "Q" }] }],
+            answer: { kind: "open" },
+          },
+        ])}
+      />
+    );
+    expect(screen.queryByTestId("question-enunciado")).toBeNull();
+  });
+
+  it("question with enunciado below stem renders enunciado after stem content", () => {
+    render(
+      <CanonicalRenderer
+        document={wrap([
+          {
+            id: id(23),
+            type: "question",
+            stem: [{ id: id(24), type: "paragraph", content: [{ type: "text", text: "Observe a imagem." }] }],
+            enunciado: [{ type: "text", text: "Qual é a mensagem?" }],
+            enunciadoPosition: "below",
+            answer: { kind: "open" },
+          },
+        ])}
+      />
+    );
+    const enunciadoEl = screen.getByTestId("question-enunciado");
+    expect(enunciadoEl).toBeInTheDocument();
+    expect(enunciadoEl).toHaveTextContent("Qual é a mensagem?");
+    // below: stem comes before enunciado in DOM
+    const allNodes = document.body.querySelectorAll("[data-testid]");
+    const ids = Array.from(allNodes).map((el) => el.getAttribute("data-testid"));
+    expect(ids.indexOf("question")).toBeLessThan(ids.indexOf("question-enunciado"));
+  });
+
+  it("question with enunciado above stem renders enunciado before stem content", () => {
+    render(
+      <CanonicalRenderer
+        document={wrap([
+          {
+            id: id(25),
+            type: "question",
+            stem: [{ id: id(26), type: "paragraph", content: [{ type: "text", text: "Observe a imagem." }] }],
+            enunciado: [{ type: "text", text: "Leia o texto." }],
+            enunciadoPosition: "above",
+            answer: { kind: "open" },
+          },
+        ])}
+      />
+    );
+    const enunciadoEl = screen.getByTestId("question-enunciado");
+    expect(enunciadoEl).toBeInTheDocument();
+    expect(enunciadoEl).toHaveTextContent("Leia o texto.");
+    // above: enunciado node comes before the stem content div in DOM
+    // (question-number is always first, then enunciado above, then stem div, then answers)
+    const body = document.body.innerHTML;
+    const enunciadoPos = body.indexOf("Leia o texto.");
+    const stemPos = body.indexOf("Observe a imagem.");
+    expect(enunciadoPos).toBeLessThan(stemPos);
+  });
+
+  it("question with empty enunciado array renders no enunciado node", () => {
+    render(
+      <CanonicalRenderer
+        document={wrap([
+          {
+            id: id(27),
+            type: "question",
+            stem: [{ id: id(28), type: "paragraph", content: [{ type: "text", text: "Q" }] }],
+            enunciado: [],
+            answer: { kind: "open" },
+          },
+        ])}
+      />
+    );
+    expect(screen.queryByTestId("question-enunciado")).toBeNull();
+  });
 });

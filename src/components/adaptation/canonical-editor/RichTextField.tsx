@@ -16,15 +16,16 @@
  * `richTextToPM` / `pmToRichText` mappers. `onChange` only fires when the mapped
  * RichText actually changed (deep compare) to avoid render/onChange loops.
  *
- * The only chrome is an inline-math button (math is content). Inline marks
- * (bold / italic / underline / strike / color) are still parsed and rendered —
- * the extensions stay in the editor — but selection formatting now lives in the
- * folha's BubbleMenu (§6.2), not in a per-field toolbar. The value contract is
+ * No toolbar chrome — selection formatting lives in the folha's BubbleMenu
+ * (§6.2). Inline marks (bold / italic / underline / strike / color) and inline
+ * math are still parsed and rendered (extensions stay) but insertion of new
+ * math nodes is reserved for a future dedicated UI. The value contract is
  * unchanged: the field always emits canonical `RichText`.
  */
 
 import { useRef } from "react";
-import { useEditor, EditorContent, ReactNodeViewRenderer } from "@tiptap/react";
+import { useEditor, EditorContent, BubbleMenu, ReactNodeViewRenderer } from "@tiptap/react";
+import { SelectionBubble } from "./SelectionBubble";
 import Document from "@tiptap/extension-document";
 import Paragraph from "@tiptap/extension-paragraph";
 import Text from "@tiptap/extension-text";
@@ -34,8 +35,7 @@ import Underline from "@tiptap/extension-underline";
 import Strike from "@tiptap/extension-strike";
 import TextStyle from "@tiptap/extension-text-style";
 import Color from "@tiptap/extension-color";
-import { Sigma } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { FontSize } from "@/lib/tiptap/fontSizeExtension";
 import { cn } from "@/lib/utils";
 import type { RichText } from "@/lib/adaptation/canonical/schema";
 import { InlineMathNode } from "@/lib/adaptation/tiptap/schema";
@@ -67,6 +67,8 @@ interface RichTextFieldProps {
    * (plano §6.3 / D2) while still being click-to-edit. The card uses the default.
    */
   plain?: boolean;
+  /** Suppress the BubbleMenu formatting bar — used in image caption/alt fields. */
+  noBubble?: boolean;
 }
 
 export function RichTextField({
@@ -76,6 +78,7 @@ export function RichTextField({
   disabled = false,
   ariaLabel,
   plain = false,
+  noBubble = false,
 }: RichTextFieldProps) {
   // Seed once; track the last emitted RichText to guard against feedback loops.
   const initialContentRef = useRef<PMNode>(docFromRichText(value));
@@ -92,6 +95,7 @@ export function RichTextField({
       Strike,
       TextStyle,
       Color,
+      FontSize,
       buildInlineMathExtension(),
     ],
     content: initialContentRef.current,
@@ -119,31 +123,13 @@ export function RichTextField({
 
   if (!editor) return null;
 
-  const insertMath = () => {
-    const latex = window.prompt("LaTeX inline:");
-    if (latex === null || latex.trim() === "") return;
-    editor.chain().focus().insertContent({ type: "inlineMath", attrs: { latex } }).run();
-  };
-
   return (
     <div className={cn("flex-1 min-w-0", !plain && "rounded-md border border-input bg-background", disabled && "opacity-60")}>
-      {!plain && (
-      <div className="flex flex-wrap items-center gap-0.5 border-b border-border bg-muted/30 px-1 py-0.5">
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon"
-          className="h-6 w-6"
-          onClick={insertMath}
-          disabled={disabled}
-          title="Inserir fórmula inline"
-          aria-label="Inserir fórmula inline"
-        >
-          <Sigma className="h-3.5 w-3.5" />
-        </Button>
-      </div>
+      {!disabled && !noBubble && (
+        <BubbleMenu editor={editor} tippyOptions={{ duration: 100, appendTo: "parent" }}>
+          <SelectionBubble editor={editor} />
+        </BubbleMenu>
       )}
-
       <EditorContent editor={editor} />
     </div>
   );

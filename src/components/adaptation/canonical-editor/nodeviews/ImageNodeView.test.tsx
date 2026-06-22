@@ -8,9 +8,6 @@ vi.mock("@tiptap/react", () => ({
   NodeViewWrapper: ({ children, ...rest }: { children: React.ReactNode }) => <div {...rest}>{children}</div>,
 }));
 
-// Stub the inline rich-text field used for the caption; emit a single text run
-// (or empty array) on change so we can drive the caption without the real editor.
-let captionInitialValue: unknown;
 vi.mock("../RichTextField", () => ({
   RichTextField: ({
     value,
@@ -23,8 +20,7 @@ vi.mock("../RichTextField", () => ({
     ariaLabel?: string;
     disabled?: boolean;
   }) => {
-    captionInitialValue = value;
-    const initialText = value.map((n) => n.text).join("");
+    const initialText = value.filter((n) => n.type === "text").map((n) => n.text).join("");
     return (
       <input
         aria-label={ariaLabel}
@@ -66,7 +62,6 @@ beforeEach(() => {
   vi.clearAllMocks();
   modalOnConfirm = undefined;
   modalOnClose = undefined;
-  captionInitialValue = undefined;
 });
 
 function renderImage(attrs: Record<string, unknown> = {}, editable = true) {
@@ -78,6 +73,21 @@ describe("ImageNodeView", () => {
   it("container da imagem é flat (sem borda de card)", () => {
     const { getByTestId } = renderImage();
     expect(getByTestId("image-node").className).not.toMatch(/rounded-xl|border border-border\/60/);
+  });
+
+  it("sem lixeira flutuante no hover (rail removido)", () => {
+    renderImage();
+    expect(screen.queryByRole("button", { name: "Excluir imagem" })).not.toBeInTheDocument();
+  });
+
+  it("sem campo de texto alternativo (removido)", () => {
+    renderImage();
+    expect(screen.queryByLabelText("Texto alternativo")).not.toBeInTheDocument();
+  });
+
+  it("controles de edição ficam dentro do wrapper image-controls", () => {
+    const { getByTestId } = renderImage();
+    expect(getByTestId("image-controls")).toBeInTheDocument();
   });
 
   it("updates width on resize", () => {
@@ -94,36 +104,71 @@ describe("ImageNodeView", () => {
     expect(updateAttributes).toHaveBeenCalledWith({ alignment: "center" });
   });
 
-  it("edits caption (rich text) and alt", () => {
-    const { props, updateAttributes } = makeProps({ caption: [{ type: "text", text: "cap" }] });
+  it("sempre mostra os controles de alinhamento + trocar imagem", () => {
+    const { props } = makeProps({ alignment: "left" });
     render(<ImageNodeView {...props} />);
-    // RichTextField is seeded with the caption RichText.
-    expect(captionInitialValue).toEqual([{ type: "text", text: "cap" }]);
-    fireEvent.change(screen.getByLabelText("Legenda da imagem"), { target: { value: "new" } });
-    fireEvent.change(screen.getByLabelText("Texto alternativo"), { target: { value: "altx" } });
-    expect(updateAttributes).toHaveBeenCalledWith({ caption: [{ type: "text", text: "new" }] });
-    expect(updateAttributes).toHaveBeenCalledWith({ alt: "altx" });
+    expect(screen.getByRole("button", { name: "Alinhar à esquerda" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Centralizar" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Alinhar à direita" })).toBeInTheDocument();
+    expect(screen.getByText("Trocar imagem")).toBeInTheDocument();
   });
 
-  it("seeds the caption field with an empty array when caption is null", () => {
-    const { props } = makeProps({ caption: null });
-    render(<ImageNodeView {...props} />);
-    expect(captionInitialValue).toEqual([]);
+  // --- Legenda: toggle -------------------------------------------------------
+
+  it("mostra botão adicionar legenda quando caption é null", () => {
+    renderImage({ caption: null });
+    expect(screen.getByRole("button", { name: "Adicionar legenda" })).toBeInTheDocument();
+    expect(screen.queryByLabelText("Legenda da imagem")).not.toBeInTheDocument();
   });
 
-  it("sets a caption when there was none", () => {
+  it("clicar adicionar legenda chama updateAttributes com array vazio", () => {
     const { props, updateAttributes } = makeProps({ caption: null });
     render(<ImageNodeView {...props} />);
-    fireEvent.change(screen.getByLabelText("Legenda da imagem"), { target: { value: "first" } });
-    expect(updateAttributes).toHaveBeenCalledWith({ caption: [{ type: "text", text: "first" }] });
+    fireEvent.click(screen.getByRole("button", { name: "Adicionar legenda" }));
+    expect(updateAttributes).toHaveBeenCalledWith({ caption: [] });
   });
 
-  it("clears the caption to null when emptied", () => {
+  it("mostra campo legenda e botão remover quando caption é array vazio", () => {
+    renderImage({ caption: [] });
+    expect(screen.queryByRole("button", { name: "Adicionar legenda" })).not.toBeInTheDocument();
+    expect(screen.getByLabelText("Legenda da imagem")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Remover legenda" })).toBeInTheDocument();
+  });
+
+  it("mostra campo legenda e botão remover quando caption tem conteúdo", () => {
+    renderImage({ caption: [{ type: "text", text: "cap" }] });
+    expect(screen.queryByRole("button", { name: "Adicionar legenda" })).not.toBeInTheDocument();
+    expect(screen.getByLabelText("Legenda da imagem")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Remover legenda" })).toBeInTheDocument();
+  });
+
+  it("clicar remover legenda chama updateAttributes com null", () => {
+    const { props, updateAttributes } = makeProps({ caption: [{ type: "text", text: "cap" }] });
+    render(<ImageNodeView {...props} />);
+    fireEvent.click(screen.getByRole("button", { name: "Remover legenda" }));
+    expect(updateAttributes).toHaveBeenCalledWith({ caption: null });
+  });
+
+  it("edita conteúdo da legenda quando caption não é null", () => {
+    const { props, updateAttributes } = makeProps({ caption: [{ type: "text", text: "cap" }] });
+    render(<ImageNodeView {...props} />);
+    fireEvent.change(screen.getByLabelText("Legenda da imagem"), { target: { value: "nova" } });
+    expect(updateAttributes).toHaveBeenCalledWith({ caption: [{ type: "text", text: "nova" }] });
+  });
+
+  it("onChange da legenda preserva array vazio (não anula a seção)", () => {
     const { props, updateAttributes } = makeProps({ caption: [{ type: "text", text: "cap" }] });
     render(<ImageNodeView {...props} />);
     fireEvent.change(screen.getByLabelText("Legenda da imagem"), { target: { value: "" } });
-    expect(updateAttributes).toHaveBeenCalledWith({ caption: null });
+    expect(updateAttributes).toHaveBeenCalledWith({ caption: [] });
   });
+
+  it("desabilita controles quando não editável", () => {
+    renderImage({}, false);
+    expect(screen.getByRole("button", { name: "Adicionar legenda" })).toBeDisabled();
+  });
+
+  // --- Modal ----------------------------------------------------------------
 
   it("opens the modal and applies the first picked image", () => {
     const { props, updateAttributes } = makeProps();
@@ -151,18 +196,27 @@ describe("ImageNodeView", () => {
     expect(updateAttributes).not.toHaveBeenCalled();
   });
 
-  it("disables controls when not editable", () => {
-    const { props } = makeProps({}, false);
-    render(<ImageNodeView {...props} />);
-    expect(screen.getByLabelText("Texto alternativo")).toBeDisabled();
+  // --- Alignment container --------------------------------------------------
+
+  it("aplica justify-center ao container quando alignment é center", () => {
+    const { getByTestId } = renderImage({ alignment: "center" });
+    expect(getByTestId("image-align-container").className).toContain("justify-center");
   });
 
-  it("sempre mostra os controles de alinhamento + trocar imagem (superfície única)", () => {
-    const { props } = makeProps({ alignment: "left" });
-    render(<ImageNodeView {...props} />);
-    expect(screen.getByRole("button", { name: "Alinhar à esquerda" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Centralizar" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Alinhar à direita" })).toBeInTheDocument();
-    expect(screen.getByText("Trocar imagem")).toBeInTheDocument();
+  it("aplica justify-end ao container quando alignment é right", () => {
+    const { getByTestId } = renderImage({ alignment: "right" });
+    expect(getByTestId("image-align-container").className).toContain("justify-end");
+  });
+
+  it("sem classe de alinhamento direcional quando alignment é left", () => {
+    const { getByTestId } = renderImage({ alignment: "left" });
+    expect(getByTestId("image-align-container").className).not.toContain("justify-center");
+    expect(getByTestId("image-align-container").className).not.toContain("justify-end");
+  });
+
+  it("sem classe de alinhamento direcional quando alignment é null", () => {
+    const { getByTestId } = renderImage({ alignment: null });
+    expect(getByTestId("image-align-container").className).not.toContain("justify-center");
+    expect(getByTestId("image-align-container").className).not.toContain("justify-end");
   });
 });

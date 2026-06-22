@@ -1,9 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render, screen } from "@testing-library/react";
 import type { RichText } from "@/lib/adaptation/canonical/schema";
 import { RichTextField } from "./RichTextField";
 
-// Stub TipTap so we can test the toolbar / mapping without ProseMirror DOM.
+// Stub TipTap so we can test the mapping without ProseMirror DOM.
 let capturedConfig: { content?: unknown; onUpdate?: (a: { editor: unknown }) => void } | undefined;
 
 const editorMock = {
@@ -12,40 +12,25 @@ const editorMock = {
   getJSON: vi.fn(),
 };
 
-function makeChain() {
-  const calls: string[] = [];
-  const proxy: Record<string, unknown> = new Proxy({}, {
-    get(_, prop: string) {
-      if (prop === "run") return () => true;
-      if (prop === "__calls") return calls;
-      return (...args: unknown[]) => {
-        calls.push(`${prop}:${JSON.stringify(args)}`);
-        return proxy;
-      };
-    },
-  });
-  return proxy;
-}
-
 vi.mock("@tiptap/react", () => ({
   useEditor: vi.fn(),
   EditorContent: ({ editor }: { editor: unknown }) => (
     <div data-testid="editor-content">{String(editor !== null)}</div>
   ),
+  BubbleMenu: ({ children }: { children: React.ReactNode }) => <>{children}</>,
   ReactNodeViewRenderer: vi.fn(() => "renderer"),
+}));
+
+vi.mock("./SelectionBubble", () => ({
+  SelectionBubble: () => <div data-testid="selection-bubble" />,
 }));
 
 import { useEditor } from "@tiptap/react";
 
-let lastChain: ReturnType<typeof makeChain> | undefined;
-
 beforeEach(() => {
   vi.clearAllMocks();
   capturedConfig = undefined;
-  editorMock.chain = vi.fn(() => {
-    lastChain = makeChain();
-    return lastChain;
-  });
+  editorMock.chain = vi.fn();
   editorMock.isActive = vi.fn().mockReturnValue(false);
   editorMock.getJSON = vi.fn();
   vi.mocked(useEditor).mockImplementation((cfg: unknown) => {
@@ -63,12 +48,19 @@ describe("RichTextField — component", () => {
     expect(container.firstChild).toBeNull();
   });
 
-  it("plain mode renders the editor with no toolbar and no border (worksheet-faithful)", () => {
+  it("plain mode renders the editor with no border (worksheet-faithful)", () => {
     const { container } = render(<RichTextField plain value={t("a")} onChange={vi.fn()} />);
     expect(screen.getByTestId("editor-content")).toBeInTheDocument();
-    // no chrome: neither the inline-math button nor the bordered wrapper
-    expect(screen.queryByLabelText("Inserir fórmula inline")).not.toBeInTheDocument();
     expect(container.querySelector(".border-input")).toBeNull();
+    expect(screen.queryByRole("button")).not.toBeInTheDocument();
+  });
+
+  it("non-plain mode renders editor with a bordered wrapper and no toolbar buttons", () => {
+    const { container } = render(<RichTextField value={t("a")} onChange={vi.fn()} />);
+    expect(screen.getByTestId("editor-content")).toBeInTheDocument();
+    expect(container.querySelector(".border-input")).not.toBeNull();
+    // formatting lives in BubbleMenu — no per-field toolbar buttons
+    expect(screen.queryByRole("button")).not.toBeInTheDocument();
   });
 
   it("seeds editor content from value", () => {
@@ -77,40 +69,6 @@ describe("RichTextField — component", () => {
       type: "doc",
       content: [{ type: "paragraph", content: [{ type: "text", text: "seed", marks: [{ type: "italic" }] }] }],
     });
-  });
-
-  it("shows only the math button — no format buttons (formatting lives in the BubbleMenu)", () => {
-    render(<RichTextField value={t("a")} onChange={vi.fn()} />);
-    expect(screen.queryByLabelText("Negrito")).not.toBeInTheDocument();
-    expect(screen.queryByLabelText("Itálico")).not.toBeInTheDocument();
-    expect(screen.queryByLabelText("Sublinhado")).not.toBeInTheDocument();
-    expect(screen.queryByLabelText("Tachado")).not.toBeInTheDocument();
-    expect(screen.queryByLabelText("Cor do texto")).not.toBeInTheDocument();
-    expect(screen.getByLabelText("Inserir fórmula inline")).toBeInTheDocument();
-    expect(screen.getByTestId("editor-content")).toBeInTheDocument();
-  });
-
-  it("inserts inline math when prompt returns a latex string", () => {
-    const promptSpy = vi.spyOn(window, "prompt").mockReturnValue("x^2");
-    render(<RichTextField value={t("a")} onChange={vi.fn()} />);
-    fireEvent.click(screen.getByLabelText("Inserir fórmula inline"));
-    expect(promptSpy).toHaveBeenCalled();
-    expect(lastChain?.__calls).toContain(
-      `insertContent:[${JSON.stringify({ type: "inlineMath", attrs: { latex: "x^2" } })}]`
-    );
-    promptSpy.mockRestore();
-  });
-
-  it("does not insert math when prompt is cancelled or blank", () => {
-    const promptSpy = vi.spyOn(window, "prompt").mockReturnValue(null);
-    render(<RichTextField value={t("a")} onChange={vi.fn()} />);
-    fireEvent.click(screen.getByLabelText("Inserir fórmula inline"));
-    expect(editorMock.chain).not.toHaveBeenCalled();
-
-    promptSpy.mockReturnValue("   ");
-    fireEvent.click(screen.getByLabelText("Inserir fórmula inline"));
-    expect(editorMock.chain).not.toHaveBeenCalled();
-    promptSpy.mockRestore();
   });
 
   it("emits RichText via onChange when the doc changes", () => {
@@ -157,16 +115,35 @@ describe("RichTextField — component", () => {
     expect(root.className).toContain("min-w-0");
   });
 
+  it("renders the SelectionBubble inside a BubbleMenu when not disabled", () => {
+    render(<RichTextField value={t("a")} onChange={vi.fn()} />);
+    expect(screen.getByTestId("selection-bubble")).toBeInTheDocument();
+  });
+
+  it("hides the BubbleMenu when disabled (no formatting on read-only fields)", () => {
+    render(<RichTextField value={t("a")} onChange={vi.fn()} disabled />);
+    expect(screen.queryByTestId("selection-bubble")).not.toBeInTheDocument();
+  });
+
+  it("hides the BubbleMenu when noBubble is true (image caption / alt fields)", () => {
+    render(<RichTextField value={t("a")} onChange={vi.fn()} noBubble />);
+    expect(screen.queryByTestId("selection-bubble")).not.toBeInTheDocument();
+  });
+
+  it("applies opacity styles to the container and editor attributes when disabled", () => {
+    const { container } = render(<RichTextField value={t("a")} onChange={vi.fn()} disabled />);
+    expect((container.firstChild as HTMLElement).className).toContain("opacity-60");
+    const attrs = (capturedConfig as { editorProps?: { attributes?: Record<string, string> } })
+      .editorProps?.attributes;
+    expect(attrs?.class).toContain("opacity-50");
+    expect(attrs?.class).toContain("cursor-not-allowed");
+  });
+
   it("passes ariaLabel into the editor attributes", () => {
     render(<RichTextField value={t("a")} onChange={vi.fn()} ariaLabel="Alternativa" />);
     const attrs = (capturedConfig as { editorProps?: { attributes?: Record<string, string> } })
       .editorProps?.attributes;
     expect(attrs?.["aria-label"]).toBe("Alternativa");
     expect(attrs?.["data-placeholder"]).toBeDefined();
-  });
-
-  it("disables the math button when disabled", () => {
-    render(<RichTextField value={t("a")} onChange={vi.fn()} disabled />);
-    expect(screen.getByLabelText("Inserir fórmula inline")).toBeDisabled();
   });
 });

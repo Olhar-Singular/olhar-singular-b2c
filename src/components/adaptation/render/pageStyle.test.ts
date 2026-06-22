@@ -34,4 +34,18 @@ describe("resolvePageStyle", () => {
       blockSpacing: 8,
     });
   });
+
+  it("passes through elementFontSizes when present", () => {
+    const efs = { stem: 14, instruction: 10 };
+    expect(resolvePageStyle({ elementFontSizes: efs })).toEqual({
+      fontFamily: undefined,
+      fontSize: BASE_FONT_PT,
+      blockSpacing: 16,
+      elementFontSizes: efs,
+    });
+  });
+
+  it("does not include elementFontSizes key when absent", () => {
+    expect("elementFontSizes" in resolvePageStyle({})).toBe(false);
+  });
 });

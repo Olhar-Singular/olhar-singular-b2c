@@ -2,13 +2,15 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, ArrowRight, Info, RefreshCw } from "lucide-react";
 import { EditorContent, BubbleMenu } from "@tiptap/react";
+import { isTextSelection } from "@tiptap/core";
 import { useCanonicalEditor } from "@/components/adaptation/canonical-editor/useCanonicalEditor";
 import { BlockInserter } from "@/components/adaptation/canonical-editor/block-inserter/BlockInserter";
 import { PageBreakMarker } from "@/components/adaptation/canonical-editor/page-break/pageBreakDecoration";
+import { OriginalDocExtension } from "@/components/adaptation/canonical-editor/originalDocExtension";
 import { PageSheet } from "@/components/adaptation/PageSheet";
 import { AppearancePopover } from "./AppearancePopover";
 import { MetadataDrawer } from "./MetadataDrawer";
-import { SelectionBubble } from "./SelectionBubble";
+import { SelectionBubble } from "@/components/adaptation/canonical-editor/SelectionBubble";
 import { resolvePageStyle } from "@/components/adaptation/render/pageStyle";
 import "katex/dist/katex.min.css";
 import type { Block, CanonicalDocument, PageStyle } from "@/lib/adaptation/canonical/schema";
@@ -38,7 +40,7 @@ const FALLBACK_TITLE = "Atividade adaptada";
  * page-break marker (§6.6 / Fase 5b). Module-level constant so the editor is
  * built once (stable reference) instead of rebuilt on every render.
  */
-const REVIEW_EXTENSIONS = [PageBreakMarker];
+const REVIEW_EXTENSIONS = [PageBreakMarker, OriginalDocExtension];
 
 /** Document title for the chrome bar: plain text of the first heading, or a fallback. */
 function documentTitle(doc: CanonicalDocument): string {
@@ -122,13 +124,16 @@ export function StepReview({
           {/* Bubble de seleção (plano §6.2): aparece só com seleção não-vazia no
               editor principal — editores aninhados (RichTextField) são instâncias
               separadas, então o bubble não os atinge. */}
-          <BubbleMenu editor={editor}>
+          <BubbleMenu
+            editor={editor}
+            shouldShow={({ state }) => isTextSelection(state.selection) && !state.selection.empty}
+          >
             <SelectionBubble editor={editor} />
           </BubbleMenu>
           <PageSheet pageStyle={pageStyle}>
             {/* `relative` ancora o overlay "+" (§6.4) sobre o conteúdo do editor. */}
             <div className="relative">
-              <EditorContent editor={editor} className="text-base" />
+              <EditorContent editor={editor} />
               <BlockInserter editor={editor} />
             </div>
           </PageSheet>

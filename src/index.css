@@ -373,3 +373,18 @@
   border-radius: 9999px;
   background-color: hsl(var(--primary) / 0.8);
 }
+
+/* When an image or block-math node lives inside a question's stem and the
+ * inner node is hovered, both the inner node's rail and the question's rail
+ * would appear simultaneously (nested .group hover propagates up). Suppress
+ * the question rail via :has() so only the inner node's own rail is visible. */
+[data-testid="question-node"]:has([data-testid="image-node"]:hover) [data-role="question-rail"],
+[data-testid="question-node"]:has([data-testid="blockmath-node"]:hover) [data-role="question-rail"] {
+  display: none;
+}
+
+/* Image controls (alignment, legenda, alt text) inside a question are hidden
+ * in preview mode and only revealed when the card is open (editar questão).
+ * Top-level images (not inside a question) always show their controls. */
+[data-testid="question-node"] [data-testid="image-controls"] { display: none; }
+[data-question-expanded="true"] [data-testid="image-controls"] { display: flex; flex-direction: column; gap: 0.5rem; }

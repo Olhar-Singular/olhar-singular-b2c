@@ -1,24 +1,45 @@
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 import { StepReview } from "./StepReview";
 import { PageBreakMarker } from "@/components/adaptation/canonical-editor/page-break/pageBreakDecoration";
+import { OriginalDocExtension } from "@/components/adaptation/canonical-editor/originalDocExtension";
 import type { CanonicalDocument } from "@/lib/adaptation/canonical/schema";
+
+// Capture shouldShow so tests can verify it filters node selections.
+let capturedShouldShow: ((props: { state: { selection: { empty: boolean } } }) => boolean) | undefined;
+
+const mockIsTextSelection = vi.fn();
+vi.mock("@tiptap/core", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@tiptap/core")>();
+  return { ...actual, isTextSelection: (...args: unknown[]) => mockIsTextSelection(...args) };
+});
 
 // Mock @tiptap/react so EditorContent + BubbleMenu render deterministic sentinels.
 vi.mock("@tiptap/react", () => ({
   EditorContent: ({ editor }: { editor: unknown }) => (
     <div data-testid="editor-content">{String(editor !== null)}</div>
   ),
-  BubbleMenu: ({ editor, children }: { editor: unknown; children: React.ReactNode }) => (
-    <div data-testid="bubble-menu">
-      {String(editor !== null)}
-      {children}
-    </div>
-  ),
+  BubbleMenu: ({
+    editor,
+    children,
+    shouldShow,
+  }: {
+    editor: unknown;
+    children: React.ReactNode;
+    shouldShow?: (props: { state: { selection: { empty: boolean } } }) => boolean;
+  }) => {
+    capturedShouldShow = shouldShow;
+    return (
+      <div data-testid="bubble-menu">
+        {String(editor !== null)}
+        {children}
+      </div>
+    );
+  },
 }));
 
 // Mock SelectionBubble (it reads the editor object; we just need it to render).
-vi.mock("./SelectionBubble", () => ({
+vi.mock("@/components/adaptation/canonical-editor/SelectionBubble", () => ({
   SelectionBubble: () => <div data-testid="selection-bubble" />,
 }));
 
@@ -32,6 +53,11 @@ vi.mock("@/components/adaptation/canonical-editor/useCanonicalEditor", () => ({
 vi.mock("@/components/adaptation/canonical-editor/block-inserter/BlockInserter", () => ({
   BlockInserter: () => <div data-testid="block-inserter" />,
 }));
+
+beforeEach(() => {
+  capturedShouldShow = undefined;
+  mockIsTextSelection.mockReset();
+});
 
 const fakeEditor = { isEditable: true } as unknown as import("@tiptap/react").Editor;
 
@@ -83,6 +109,20 @@ describe("StepReview", () => {
     setup();
     expect(screen.getByTestId("bubble-menu")).toBeInTheDocument();
     expect(screen.getByTestId("selection-bubble")).toBeInTheDocument();
+  });
+
+  it("BubbleMenu shouldShow — só exibe para TextSelection não-vazia", () => {
+    setup();
+    expect(typeof capturedShouldShow).toBe("function");
+    // Texto selecionado (TextSelection, não-vazia) → true
+    mockIsTextSelection.mockReturnValue(true);
+    expect(capturedShouldShow?.({ state: { selection: { empty: false } } })).toBe(true);
+    // Cursor posicionado (TextSelection, vazia) → false
+    mockIsTextSelection.mockReturnValue(true);
+    expect(capturedShouldShow?.({ state: { selection: { empty: true } } })).toBe(false);
+    // NodeSelection (clique em imagem) → false
+    mockIsTextSelection.mockReturnValue(false);
+    expect(capturedShouldShow?.({ state: { selection: { empty: false } } })).toBe(false);
   });
 
   it("usa título de fallback quando o documento não tem heading", () => {
@@ -147,6 +187,13 @@ describe("StepReview", () => {
     );
   });
 
+  it("monta OriginalDocExtension para possibilitar Reset de questão", () => {
+    setup();
+    expect(useCanonicalEditor).toHaveBeenCalledWith(
+      expect.objectContaining({ extraExtensions: expect.arrayContaining([OriginalDocExtension]) }),
+    );
+  });
+
   it("abre a gaveta 'Sobre esta adaptação' e mostra os metadados", () => {
     setup();
     expect(screen.queryByText("Estratégias aplicadas")).not.toBeInTheDocument();
@@ -157,17 +204,17 @@ describe("StepReview", () => {
     expect(screen.getByText("Reduz a carga de produção textual.")).toBeInTheDocument();
   });
 
-  it("abre Aparência e emite pageStyle ao alterar o tamanho do texto", () => {
+  it("abre Formato e emite pageStyle ao alterar o tamanho do texto", () => {
     const onPageStyleChange = vi.fn();
     setup({ onPageStyleChange });
-    fireEvent.click(screen.getByRole("button", { name: "Aparência" }));
+    fireEvent.click(screen.getByRole("button", { name: "Formato" }));
     fireEvent.click(screen.getByRole("button", { name: "Aumentar tamanho do texto" }));
     expect(onPageStyleChange).toHaveBeenCalledWith(expect.objectContaining({ fontSize: 17 * 0.75 }));
   });
 
-  it("não quebra ao alterar a Aparência sem onPageStyleChange", () => {
+  it("não quebra ao alterar a Formato sem onPageStyleChange", () => {
     setup(); // sem onPageStyleChange
-    fireEvent.click(screen.getByRole("button", { name: "Aparência" }));
+    fireEvent.click(screen.getByRole("button", { name: "Formato" }));
     expect(() =>
       fireEvent.click(screen.getByRole("button", { name: "Aumentar tamanho do texto" })),
     ).not.toThrow();

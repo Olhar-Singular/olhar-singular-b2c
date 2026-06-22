@@ -47,6 +47,7 @@ const InlineText = z.object({
   text: z.string(),
   marks: z.array(Mark).optional(),
   color: Color.optional(),
+  fontSize: z.number().positive().optional(),
 });
 
 const InlineMath = z.object({
@@ -245,6 +246,8 @@ const Question = BlockBase.extend({
   type: z.literal("question"),
   stem: z.lazy(() => z.array(BlockSchema)),
   instruction: RichTextSchema.optional(),
+  enunciado: RichTextSchema.optional(),
+  enunciadoPosition: z.enum(["above", "below"]).optional(),
   answer: QuestionAnswerSchema,
 });
 
@@ -273,17 +276,33 @@ export const CanonicalDocumentSchema = z.object({
 });
 
 /**
+ * Per-element font-size overrides (in pt), controlled via the "Formato" popover.
+ * Each key is optional — absent means "inherit the global fontSize".
+ */
+const ElementFontSizesSchema = z
+  .object({
+    stem: z.number().positive().optional(),
+    instruction: z.number().positive().optional(),
+    alternative: z.number().positive().optional(),
+    caption: z.number().positive().optional(),
+  })
+  .strict();
+
+export type ElementFontSizes = z.infer<typeof ElementFontSizesSchema>;
+
+/**
  * Document-wide presentation style (plano §7.1) — additive, optional sibling of
  * `document` inside `adaptation_result`. Controls font/size/spacing for the whole
- * sheet via the "Aparência" popover. Absent → renderers fall back to current
+ * sheet via the "Formato" popover. Absent → renderers fall back to current
  * defaults, so legacy documents (no `pageStyle`) round-trip byte-for-byte. Units:
- * `fontSize` in pt (mirrors page tokens / PDF), `blockSpacing` in px.
+ * `fontSize`/element sizes in pt (mirrors page tokens / PDF), `blockSpacing` in px.
  */
 export const PageStyleSchema = z
   .object({
     fontFamily: z.string().optional(),
     fontSize: z.number().positive().optional(),
     blockSpacing: z.number().nonnegative().optional(),
+    elementFontSizes: ElementFontSizesSchema.optional(),
   })
   .strict();
 

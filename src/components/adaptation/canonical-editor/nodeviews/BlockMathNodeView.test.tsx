@@ -14,12 +14,14 @@ vi.mock("@/lib/domain/latexRenderer", () => ({
 
 function makeProps(attrs: Record<string, unknown> = {}, editable = true) {
   const updateAttributes = vi.fn();
+  const deleteNode = vi.fn();
   const props = {
     node: { attrs: { latex: "x^2", alt: null, ...attrs } },
     updateAttributes,
+    deleteNode,
     editor: { isEditable: editable },
   } as unknown as NodeViewProps;
-  return { props, updateAttributes };
+  return { props, updateAttributes, deleteNode };
 }
 
 beforeEach(() => vi.clearAllMocks());
@@ -50,5 +52,18 @@ describe("BlockMathNodeView", () => {
     render(<BlockMathNodeView {...props} />);
     fireEvent.click(screen.getByTestId("blockmath-render"));
     expect(screen.queryByLabelText("Expressão LaTeX")).not.toBeInTheDocument();
+  });
+
+  it("calls deleteNode when the delete button is clicked", () => {
+    const { props, deleteNode } = makeProps();
+    render(<BlockMathNodeView {...props} />);
+    fireEvent.click(screen.getByRole("button", { name: "Excluir fórmula" }));
+    expect(deleteNode).toHaveBeenCalledTimes(1);
+  });
+
+  it("disables the delete button when not editable", () => {
+    const { props } = makeProps({}, false);
+    render(<BlockMathNodeView {...props} />);
+    expect(screen.getByRole("button", { name: "Excluir fórmula" })).toBeDisabled();
   });
 });

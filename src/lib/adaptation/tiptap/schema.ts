@@ -23,6 +23,7 @@ import Underline from "@tiptap/extension-underline";
 import TextStyle from "@tiptap/extension-text-style";
 import Color from "@tiptap/extension-color";
 import { Node, Mark, mergeAttributes } from "@tiptap/core";
+import { FontSize } from "@/lib/tiptap/fontSizeExtension";
 
 // ---------------------------------------------------------------------------
 // Shared attribute helpers
@@ -185,6 +186,9 @@ export const QuestionNode = Node.create({
       ...blockBaseAttributes,
       // RichText stored as JSON attr; model-only.
       instruction: { default: null as unknown, rendered: false },
+      // Optional rich-text question statement with position relative to stem.
+      enunciado: { default: null as unknown, rendered: false },
+      enunciadoPosition: { default: null as string | null },
       // QuestionAnswer (discriminated union) stored as JSON attr — this is
       // what keeps deep structures (alternatives, gaps, pairs, …) lossless.
       // Model-only (an object); never serialized to HTML attributes.
@@ -253,6 +257,7 @@ export function buildCanonicalExtensions() {
     Underline,
     TextStyle,
     Color,
+    FontSize,
     InlineMathNode,
     BlockMathNode,
     ImageBlockNode,

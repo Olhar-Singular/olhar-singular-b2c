@@ -39,8 +39,13 @@ describe("INSERTER_SECTIONS", () => {
     expect(buildOf("text-media", "paragraph").type).toBe("paragraph");
     expect(buildOf("text-media", "image").type).toBe("image");
     expect(buildOf("text-media", "math").type).toBe("blockMath");
-    expect(buildOf("text-media", "wordbank").type).toBe("scaffolding");
     expect(buildOf("text-media", "divider").type).toBe("divider");
+  });
+
+  it("does not include 'Banco de palavras' (wordbank) in the menu", () => {
+    const textMedia = INSERTER_SECTIONS.find((s) => s.id === "text-media")!;
+    expect(textMedia.items.find((i) => i.id === "wordbank")).toBeUndefined();
+    expect(textMedia.items.map((i) => i.label)).not.toContain("Banco de palavras");
   });
 
   it("exposes Quebra de página as a pageBreak action that needs a following block", () => {

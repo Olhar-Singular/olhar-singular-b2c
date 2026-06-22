@@ -47,13 +47,18 @@ export function pageTokensToPdf(resolved: ResolvedPageStyle = DEFAULT_RESOLVED) 
   };
 }
 
-/** Estilo base da folha da tela (em px). Expõe `--doc-block-spacing` para o gap entre blocos. */
+/** Estilo base da folha da tela (em px). Expõe `--doc-block-spacing` e vars por elemento. */
 export function pageTokensToCss(resolved: ResolvedPageStyle = DEFAULT_RESOLVED): CSSProperties {
+  const efs = resolved.elementFontSizes;
   return {
     padding: px(PAGE_MARGIN_PT),
     fontSize: px(resolved.fontSize),
     lineHeight: BASE_LINE_HEIGHT,
     ...(resolved.fontFamily ? { fontFamily: fontFamilyToCss(resolved.fontFamily) } : {}),
     ["--doc-block-spacing"]: `${resolved.blockSpacing}px`,
+    ...(efs?.stem !== undefined ? { ["--doc-fs-stem"]: px(efs.stem) } : {}),
+    ...(efs?.instruction !== undefined ? { ["--doc-fs-instruction"]: px(efs.instruction) } : {}),
+    ...(efs?.alternative !== undefined ? { ["--doc-fs-alternative"]: px(efs.alternative) } : {}),
+    ...(efs?.caption !== undefined ? { ["--doc-fs-caption"]: px(efs.caption) } : {}),
   } as CSSProperties;
 }

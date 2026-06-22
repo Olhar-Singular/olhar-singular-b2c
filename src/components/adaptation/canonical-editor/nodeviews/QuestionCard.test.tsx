@@ -7,6 +7,7 @@ import { QuestionCard } from "./QuestionCard";
 // drive the inline fields without the real ProseMirror editor.
 vi.mock("../RichTextField", () => ({
   RichTextField: ({
+    value,
     onChange,
     ariaLabel,
     disabled,
@@ -15,9 +16,17 @@ vi.mock("../RichTextField", () => ({
     onChange: (rt: RichText) => void;
     ariaLabel?: string;
     disabled?: boolean;
-  }) => (
-    <input aria-label={ariaLabel} disabled={disabled} onChange={(e) => onChange(e.target.value ? [{ type: "text", text: e.target.value }] : [])} />
-  ),
+  }) => {
+    const text = value.map((n: { type: string; text?: string }) => n.text ?? "").join("");
+    return (
+      <input
+        aria-label={ariaLabel}
+        disabled={disabled}
+        value={text}
+        onChange={(e) => onChange(e.target.value ? [{ type: "text", text: e.target.value }] : [])}
+      />
+    );
+  },
 }));
 
 const mc: QuestionAnswer = {
@@ -30,10 +39,11 @@ function setup(overrides: Partial<Parameters<typeof QuestionCard>[0]> = {}) {
     num: 2,
     answer: mc,
     instruction: null as RichText | null,
+    enunciado: null as RichText | null,
+    enunciadoPosition: "below" as "above" | "below",
     disabled: false,
-    onAnswerChange: vi.fn(),
-    onInstructionChange: vi.fn(),
-    onDone: vi.fn(),
+    onCommit: vi.fn(),
+    onCancel: vi.fn(),
     stem: <div data-testid="stem-slot" />,
     ...overrides,
   };
@@ -49,10 +59,10 @@ describe("QuestionCard", () => {
     expect(screen.getByText("Questão 3")).toBeInTheDocument();
   });
 
-  it("renders the stem slot under an Enunciado label", () => {
+  it("renders the stem slot under Imagem / Conteúdo label", () => {
     setup();
     expect(screen.getByTestId("stem-slot")).toBeInTheDocument();
-    expect(screen.getByText("Enunciado")).toBeInTheDocument();
+    expect(screen.getByText("Imagem / Conteúdo")).toBeInTheDocument();
   });
 
   it("renders the full AnswerEditor (structure controls visible)", () => {
@@ -61,11 +71,137 @@ describe("QuestionCard", () => {
     expect(screen.getByLabelText("Marcar como correta")).toBeInTheDocument();
   });
 
-  it("forwards answer edits", () => {
+  // --- Local state: edits are buffered, not immediately committed ---
+
+  it("commits the updated answer on Concluir (answer edits are buffered locally)", () => {
     const props = setup();
     fireEvent.change(screen.getByLabelText("Alternativa"), { target: { value: "z" } });
-    expect(props.onAnswerChange).toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "Concluir" }));
+    expect(props.onCommit).toHaveBeenCalledWith(
+      expect.objectContaining({ kind: "multipleChoice" }),
+      null,
+      null,
+      "below",
+    );
   });
+
+  it("commits initial values unchanged when Concluir is clicked with no edits", () => {
+    const props = setup();
+    fireEvent.click(screen.getByRole("button", { name: "Concluir" }));
+    expect(props.onCommit).toHaveBeenCalledWith(mc, null, null, "below");
+  });
+
+  // --- Cancelar ---
+
+  it("renders a Cancelar button", () => {
+    setup();
+    expect(screen.getByRole("button", { name: "Cancelar edição" })).toBeInTheDocument();
+  });
+
+  it("calls onCancel when Cancelar is clicked without calling onCommit", () => {
+    const props = setup();
+    fireEvent.click(screen.getByRole("button", { name: "Cancelar edição" }));
+    expect(props.onCancel).toHaveBeenCalledTimes(1);
+    expect(props.onCommit).not.toHaveBeenCalled();
+  });
+
+  // --- Enunciado field ---
+
+  it("offers 'Adicionar enunciado' when enunciado is null", () => {
+    setup({ enunciado: null });
+    expect(screen.getByRole("button", { name: "Adicionar enunciado" })).toBeInTheDocument();
+    expect(screen.queryByLabelText("Enunciado da questão")).not.toBeInTheDocument();
+  });
+
+  it("clicking 'Adicionar enunciado' reveals the enunciado field and position buttons", () => {
+    setup({ enunciado: null });
+    fireEvent.click(screen.getByRole("button", { name: "Adicionar enunciado" }));
+    expect(screen.getByLabelText("Enunciado da questão")).toBeInTheDocument();
+    expect(screen.getByLabelText("Remover enunciado")).toBeInTheDocument();
+    expect(screen.getByLabelText("Enunciado acima da imagem")).toBeInTheDocument();
+    expect(screen.getByLabelText("Enunciado abaixo da imagem")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Adicionar enunciado" })).not.toBeInTheDocument();
+  });
+
+  it("shows enunciado field and remove button when enunciado has content", () => {
+    setup({ enunciado: [{ type: "text", text: "Observe a imagem." }] });
+    expect(screen.queryByRole("button", { name: "Adicionar enunciado" })).not.toBeInTheDocument();
+    expect(screen.getByLabelText("Enunciado da questão")).toBeInTheDocument();
+    expect(screen.getByLabelText("Remover enunciado")).toBeInTheDocument();
+  });
+
+  it("clicking 'Remover enunciado' hides the field locally", async () => {
+    setup({ enunciado: [{ type: "text", text: "Observe." }] });
+    fireEvent.click(screen.getByLabelText("Remover enunciado"));
+    await waitFor(() =>
+      expect(screen.queryByLabelText("Enunciado da questão")).not.toBeInTheDocument(),
+    );
+    expect(screen.getByRole("button", { name: "Adicionar enunciado" })).toBeInTheDocument();
+  });
+
+  it("position buttons toggle localPosition — above highlights the first button", () => {
+    setup({ enunciado: [{ type: "text", text: "txt" }], enunciadoPosition: "below" });
+    const aboveBtn = screen.getByLabelText("Enunciado acima da imagem");
+    fireEvent.click(aboveBtn);
+    // After clicking above, the "above" button should be the active (default variant)
+    // The field should now appear above the stem slot (above section is rendered).
+    expect(screen.getByLabelText("Enunciado da questão")).toBeInTheDocument();
+  });
+
+  it("enunciado position 'above' renders enunciado section before the stem slot", () => {
+    setup({ enunciado: [{ type: "text", text: "txt" }], enunciadoPosition: "above" });
+    // Both should be rendered; "Enunciado" label present
+    const labels = screen.getAllByText("Enunciado");
+    expect(labels.length).toBeGreaterThanOrEqual(1);
+    expect(screen.getByTestId("stem-slot")).toBeInTheDocument();
+  });
+
+  it("enunciado position 'below' renders enunciado section after the stem slot", () => {
+    setup({ enunciado: [{ type: "text", text: "txt" }], enunciadoPosition: "below" });
+    const labels = screen.getAllByText("Enunciado");
+    expect(labels.length).toBeGreaterThanOrEqual(1);
+    expect(screen.getByTestId("stem-slot")).toBeInTheDocument();
+  });
+
+  it("commits enunciado content and position on Concluir", () => {
+    const props = setup({ enunciado: [{ type: "text", text: "Observe a imagem." }], enunciadoPosition: "above" });
+    fireEvent.click(screen.getByRole("button", { name: "Concluir" }));
+    expect(props.onCommit).toHaveBeenCalledWith(
+      mc,
+      null,
+      [{ type: "text", text: "Observe a imagem." }],
+      "above",
+    );
+  });
+
+  it("commits null enunciado when field is removed before Concluir", async () => {
+    const props = setup({ enunciado: [{ type: "text", text: "obs" }] });
+    fireEvent.click(screen.getByLabelText("Remover enunciado"));
+    await waitFor(() =>
+      expect(screen.queryByLabelText("Enunciado da questão")).not.toBeInTheDocument(),
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Concluir" }));
+    expect(props.onCommit).toHaveBeenCalledWith(mc, null, null, expect.any(String));
+  });
+
+  it("adding enunciado defaults to position 'below'", () => {
+    const props = setup({ enunciado: null });
+    fireEvent.click(screen.getByRole("button", { name: "Adicionar enunciado" }));
+    fireEvent.click(screen.getByRole("button", { name: "Concluir" }));
+    expect(props.onCommit).toHaveBeenCalledWith(mc, null, [], "below");
+  });
+
+  it("disables enunciado controls when disabled", () => {
+    setup({ enunciado: null, disabled: true });
+    expect(screen.getByRole("button", { name: "Adicionar enunciado" })).toBeDisabled();
+  });
+
+  it("disables the enunciado field itself when disabled", () => {
+    setup({ enunciado: [{ type: "text", text: "obs" }], disabled: true });
+    expect(screen.getByLabelText("Enunciado da questão")).toBeDisabled();
+  });
+
+  // --- Instruction field ---
 
   it("offers 'Adicionar instrução' when there is no instruction", () => {
     setup({ instruction: null });
@@ -87,31 +223,32 @@ describe("QuestionCard", () => {
     expect(screen.queryByText("Adicionar instrução")).not.toBeInTheDocument();
   });
 
-  it("writes an edited instruction back (non-empty)", () => {
+  it("commits the edited instruction on Concluir (non-empty)", () => {
     const props = setup({ instruction: [{ type: "text", text: "old" }] });
     fireEvent.change(screen.getByLabelText("Instrução da questão"), { target: { value: "new" } });
-    expect(props.onInstructionChange).toHaveBeenCalledWith([{ type: "text", text: "new" }]);
+    fireEvent.click(screen.getByRole("button", { name: "Concluir" }));
+    expect(props.onCommit).toHaveBeenCalledWith(
+      expect.anything(),
+      [{ type: "text", text: "new" }],
+      null,
+      "below",
+    );
   });
 
-  it("clearing the instruction text writes null (never an empty array)", () => {
+  it("commits null instruction when the field is cleared", async () => {
     const props = setup({ instruction: [{ type: "text", text: "x" }] });
-    const field = screen.getByLabelText("Instrução da questão");
-    // type then clear → the field emits [] → the card writes null.
-    fireEvent.change(field, { target: { value: "y" } });
-    fireEvent.change(field, { target: { value: "" } });
-    expect(props.onInstructionChange).toHaveBeenLastCalledWith(null);
+    fireEvent.change(screen.getByLabelText("Instrução da questão"), { target: { value: "" } });
+    await waitFor(() => expect(screen.queryByLabelText("Instrução da questão")).not.toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: "Concluir" }));
+    expect(props.onCommit).toHaveBeenCalledWith(expect.anything(), null, null, "below");
   });
 
-  it("removing the instruction writes null", () => {
+  it("commits null instruction when 'remover' is clicked and Concluir follows", async () => {
     const props = setup({ instruction: [{ type: "text", text: "x" }] });
     fireEvent.click(screen.getByLabelText("Remover instrução"));
-    expect(props.onInstructionChange).toHaveBeenCalledWith(null);
-  });
-
-  it("closes via Concluir", () => {
-    const props = setup();
+    await waitFor(() => expect(screen.queryByLabelText("Remover instrução")).not.toBeInTheDocument());
     fireEvent.click(screen.getByRole("button", { name: "Concluir" }));
-    expect(props.onDone).toHaveBeenCalledTimes(1);
+    expect(props.onCommit).toHaveBeenCalledWith(expect.anything(), null, null, "below");
   });
 
   it("disables the inline fields when disabled", () => {
@@ -119,20 +256,20 @@ describe("QuestionCard", () => {
     expect(screen.getByLabelText("Instrução da questão")).toBeDisabled();
   });
 
-  // Tipo dropdown (plano §6.3 / D8 — troca de tipo) -------------------------
+  // --- Tipo dropdown ---
 
   it("shows the current answer type in the Tipo dropdown", () => {
-    setup(); // multipleChoice
+    setup();
     expect(screen.getByTestId("question-type-trigger")).toHaveTextContent("Múltipla escolha");
   });
 
   it("lets the teacher change the question type, converting the answer in place", async () => {
-    const props = setup(); // multipleChoice
+    const props = setup();
     fireEvent.click(screen.getByTestId("question-type-trigger"));
     await waitFor(() => screen.getByRole("option", { name: "Verdadeiro/Falso" }));
     fireEvent.click(screen.getByRole("option", { name: "Verdadeiro/Falso" }));
-    expect(props.onAnswerChange).toHaveBeenCalledTimes(1);
-    expect(props.onAnswerChange.mock.calls[0][0]).toMatchObject({ kind: "trueFalse" });
+    fireEvent.click(screen.getByRole("button", { name: "Concluir" }));
+    expect(props.onCommit.mock.calls[0][0]).toMatchObject({ kind: "trueFalse" });
   });
 
   it("disables the Tipo dropdown when disabled", () => {

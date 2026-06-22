@@ -10,14 +10,23 @@ vi.mock("../RichTextField", () => ({
     onChange,
     ariaLabel,
     disabled,
+    value,
   }: {
     value: RichText;
     onChange: (rt: RichText) => void;
     ariaLabel?: string;
     disabled?: boolean;
-  }) => (
-    <input aria-label={ariaLabel} disabled={disabled} onChange={(e) => onChange(e.target.value ? [{ type: "text", text: e.target.value }] : [])} />
-  ),
+  }) => {
+    const text = value.map((n: { type: string; text?: string }) => n.text ?? "").join("");
+    return (
+      <input
+        aria-label={ariaLabel}
+        disabled={disabled}
+        defaultValue={text}
+        onChange={(e) => onChange(e.target.value ? [{ type: "text", text: e.target.value }] : [])}
+      />
+    );
+  },
 }));
 
 const mc: QuestionAnswer = {
@@ -33,6 +42,8 @@ function setup(overrides: Partial<Parameters<typeof QuestionPreview>[0]> = {}) {
     num: 3 as number | undefined,
     answer: mc,
     instruction: null as RichText | null,
+    enunciado: null as RichText | null,
+    enunciadoPosition: "below" as "above" | "below",
     disabled: false,
     onAnswerChange: vi.fn(),
     onInstructionChange: vi.fn(),
@@ -104,5 +115,76 @@ describe("QuestionPreview", () => {
   it("disables the editable fields when disabled", () => {
     setup({ disabled: true });
     expect(screen.getAllByLabelText("Alternativa")[0]).toBeDisabled();
+  });
+
+  it("renders a remove-instruction button when instruction is present", () => {
+    setup({ instruction: [{ type: "text", text: "Siga os passos." }] });
+    expect(screen.getByLabelText("Remover instrução")).toBeInTheDocument();
+  });
+
+  it("remove-instruction button calls onInstructionChange(null)", () => {
+    const props = setup({ instruction: [{ type: "text", text: "x" }] });
+    fireEvent.click(screen.getByLabelText("Remover instrução"));
+    expect(props.onInstructionChange).toHaveBeenCalledWith(null);
+  });
+
+  it("disables the remove-instruction button when not editable", () => {
+    setup({ disabled: true, instruction: [{ type: "text", text: "x" }] });
+    expect(screen.getByLabelText("Remover instrução")).toBeDisabled();
+  });
+
+  it("does not render a remove-instruction button when there is no instruction", () => {
+    setup({ instruction: null });
+    expect(screen.queryByLabelText("Remover instrução")).not.toBeInTheDocument();
+  });
+
+  // --- Enunciado (read-only in preview) ---
+
+  it("does not render enunciado when enunciado is null", () => {
+    setup({ enunciado: null });
+    expect(screen.queryByTestId("question-enunciado")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Enunciado da questão")).not.toBeInTheDocument();
+  });
+
+  it("does not render enunciado when enunciado is an empty array", () => {
+    setup({ enunciado: [] });
+    expect(screen.queryByTestId("question-enunciado")).not.toBeInTheDocument();
+  });
+
+  it("renders enunciado read-only (disabled) when content is present", () => {
+    setup({ enunciado: [{ type: "text", text: "Observe a imagem." }] });
+    expect(screen.getByTestId("question-enunciado")).toBeInTheDocument();
+    const field = screen.getByLabelText("Enunciado da questão");
+    expect(field).toBeInTheDocument();
+    expect(field).toBeDisabled();
+  });
+
+  it("enunciado above renders the enunciado node before the stem slot", () => {
+    setup({
+      enunciado: [{ type: "text", text: "Observe." }],
+      enunciadoPosition: "above",
+    });
+    const enunciadoNode = screen.getByTestId("question-enunciado");
+    const stemSlot = screen.getByTestId("stem-slot");
+    // both exist; enunciadoNode appears before stem-slot in DOM order
+    expect(enunciadoNode).toBeInTheDocument();
+    expect(stemSlot).toBeInTheDocument();
+    const allNodes = document.body.querySelectorAll("[data-testid]");
+    const ids = Array.from(allNodes).map((el) => el.getAttribute("data-testid"));
+    const enunciadoIdx = ids.indexOf("question-enunciado");
+    const stemIdx = ids.indexOf("stem-slot");
+    expect(enunciadoIdx).toBeLessThan(stemIdx);
+  });
+
+  it("enunciado below renders the enunciado node after the stem slot", () => {
+    setup({
+      enunciado: [{ type: "text", text: "Observe." }],
+      enunciadoPosition: "below",
+    });
+    const allNodes = document.body.querySelectorAll("[data-testid]");
+    const ids = Array.from(allNodes).map((el) => el.getAttribute("data-testid"));
+    const enunciadoIdx = ids.indexOf("question-enunciado");
+    const stemIdx = ids.indexOf("stem-slot");
+    expect(stemIdx).toBeLessThan(enunciadoIdx);
   });
 });

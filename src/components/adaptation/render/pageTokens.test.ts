@@ -61,3 +61,39 @@ describe("pageTokens — parametrizado por pageStyle (Fase 4a)", () => {
     expect("fontFamily" in pdf).toBe(false);
   });
 });
+
+describe("pageTokens — CSS vars por elemento (Formato)", () => {
+  it("pageTokensToCss emite as CSS vars de todos os elementos quando definidos", () => {
+    const css = pageTokensToCss({
+      fontFamily: undefined,
+      fontSize: 12,
+      blockSpacing: 16,
+      elementFontSizes: { stem: 14, instruction: 10, alternative: 12, caption: 9 },
+    }) as Record<string, unknown>;
+    expect(css["--doc-fs-stem"]).toBe("18.67px");    // 14 * 96/72
+    expect(css["--doc-fs-instruction"]).toBe("13.33px"); // 10 * 96/72
+    expect(css["--doc-fs-alternative"]).toBe("16px"); // 12 * 96/72
+    expect(css["--doc-fs-caption"]).toBe("12px");     // 9 * 96/72
+  });
+
+  it("pageTokensToCss não emite CSS vars de elemento quando elementFontSizes ausente", () => {
+    const css = pageTokensToCss({ fontFamily: undefined, fontSize: 12, blockSpacing: 16 }) as Record<string, unknown>;
+    expect("--doc-fs-stem" in css).toBe(false);
+    expect("--doc-fs-instruction" in css).toBe(false);
+    expect("--doc-fs-alternative" in css).toBe(false);
+    expect("--doc-fs-caption" in css).toBe(false);
+  });
+
+  it("pageTokensToCss emite apenas as CSS vars com override definido (elementFontSizes parcial)", () => {
+    const css = pageTokensToCss({
+      fontFamily: undefined,
+      fontSize: 12,
+      blockSpacing: 16,
+      elementFontSizes: { stem: 14 },
+    }) as Record<string, unknown>;
+    expect(css["--doc-fs-stem"]).toBe("18.67px");
+    expect("--doc-fs-instruction" in css).toBe(false);
+    expect("--doc-fs-alternative" in css).toBe(false);
+    expect("--doc-fs-caption" in css).toBe(false);
+  });
+});

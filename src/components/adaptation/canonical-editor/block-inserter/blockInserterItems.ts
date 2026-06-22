@@ -19,7 +19,6 @@ import {
   Pilcrow,
   ImageIcon,
   Sigma,
-  ListTree,
   Minus,
   SeparatorHorizontal,
   type LucideIcon,
@@ -28,7 +27,6 @@ import {
   buildQuestionNode,
   buildImageNode,
   buildMathNode,
-  buildScaffoldNode,
   buildDivider,
   buildHeadingNode,
   buildParagraphNode,
@@ -65,7 +63,6 @@ const textMediaItems: InserterItem[] = [
   { id: "paragraph", label: "Parágrafo", icon: Pilcrow, action: { type: "insert", build: () => buildParagraphNode() } },
   { id: "image", label: "Imagem", icon: ImageIcon, action: { type: "insert", build: () => buildImageNode("") } },
   { id: "math", label: "Fórmula", icon: Sigma, action: { type: "insert", build: () => buildMathNode(undefined) } },
-  { id: "wordbank", label: "Banco de palavras", icon: ListTree, action: { type: "insert", build: () => buildScaffoldNode() } },
   { id: "divider", label: "Divisória", icon: Minus, action: { type: "insert", build: () => buildDivider() } },
   { id: "pageBreak", label: "Quebra de página", icon: SeparatorHorizontal, action: { type: "pageBreak" }, needsFollowing: true },
 ];

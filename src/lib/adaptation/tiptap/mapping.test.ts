@@ -216,6 +216,26 @@ describe("canonical <-> ProseMirror mapping", () => {
       };
       expect(proseMirrorToCanonical(pmRoundTrip(doc))).toEqual(doc);
     });
+
+    it("round-trips question with enunciado and enunciadoPosition", () => {
+      const doc: CanonicalDocument = {
+        schemaVersion: 1,
+        blocks: [
+          {
+            id: uid(111),
+            type: "question",
+            stem: [{ id: uid(112), type: "paragraph", content: [{ type: "text", text: "Obs." }] }],
+            enunciado: [
+              { type: "text", text: "Texto ", marks: ["bold"] as ["bold"] },
+              { type: "text", text: "do enunciado", color: "#DC2626" },
+            ],
+            enunciadoPosition: "above",
+            answer: { kind: "open" },
+          },
+        ],
+      };
+      expect(proseMirrorToCanonical(pmRoundTrip(doc))).toEqual(doc);
+    });
   });
 
   describe("StarterKit hardening (only canonical-mappable nodes/marks live)", () => {

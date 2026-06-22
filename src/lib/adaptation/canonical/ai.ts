@@ -193,6 +193,8 @@ export const AiQuestionSchema = z.object({
   type: z.literal("question"),
   stem: z.array(AiContentBlockSchema),
   instruction: RichTextSchema.optional(),
+  enunciado: RichTextSchema.optional(),
+  enunciadoPosition: z.enum(["above", "below"]).optional(),
   answer: AiQuestionAnswerSchema,
 });
 export type AiQuestion = z.infer<typeof AiQuestionSchema>;
@@ -346,6 +348,8 @@ export function normalizeAiActivity(ai: AiActivity): CanonicalDocument {
         type: "question",
         stem: stemBlocks,
         ...(block.instruction !== undefined && { instruction: block.instruction }),
+        ...(block.enunciado !== undefined && { enunciado: block.enunciado }),
+        ...(block.enunciadoPosition !== undefined && { enunciadoPosition: block.enunciadoPosition }),
         answer,
       } as CanonicalDocument["blocks"][number];
     }

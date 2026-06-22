@@ -183,6 +183,25 @@ describe("PageStyleSchema", () => {
   it("rejects a negative blockSpacing", () => {
     expect(PageStyleSchema.safeParse({ blockSpacing: -1 }).success).toBe(false);
   });
+
+  it("accepts elementFontSizes with all four keys", () => {
+    const result = PageStyleSchema.safeParse({
+      elementFontSizes: { stem: 14, instruction: 10, alternative: 12, caption: 9 },
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("accepts elementFontSizes with a subset of keys", () => {
+    expect(PageStyleSchema.safeParse({ elementFontSizes: { stem: 13 } }).success).toBe(true);
+  });
+
+  it("rejects elementFontSizes with unknown keys (strict)", () => {
+    expect(PageStyleSchema.safeParse({ elementFontSizes: { unknown: 12 } }).success).toBe(false);
+  });
+
+  it("rejects elementFontSizes.stem that is not positive", () => {
+    expect(PageStyleSchema.safeParse({ elementFontSizes: { stem: 0 } }).success).toBe(false);
+  });
 });
 
 describe("AdaptationResultSchema — pageStyle (additive, optional)", () => {

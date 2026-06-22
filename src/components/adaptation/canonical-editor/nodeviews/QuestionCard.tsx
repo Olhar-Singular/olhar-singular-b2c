@@ -2,7 +2,13 @@
  * QuestionCard — the expanded ("editar estrutura") state of a question (plano
  * §6.3 / D4). Accent shell with a "Questão N" bar, the editable stem (passed in
  * as the live NodeViewContent slot), a named Instrução field (with remove / add),
- * the full AnswerEditor (structure + answer key), and a Concluir footer.
+ * the full AnswerEditor (structure + answer key), and footer with Cancelar/Concluir.
+ *
+ * Answer, instruction and enunciado edits are buffered in LOCAL state — they are
+ * only written to the Tiptap document when the teacher clicks Concluir (via
+ * onCommit). Clicking Cancelar discards those local changes without touching the
+ * document; the parent is responsible for restoring any stem-content edits that
+ * happened live.
  *
  * Tiptap note: only the stem slot is outer-editor content. Every other section is
  * chrome and must be contentEditable={false} so ProseMirror does not treat it as
@@ -10,7 +16,7 @@
  */
 
 import { useState } from "react";
-import { Plus } from "lucide-react";
+import { AlignStartVertical, AlignEndVertical, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Select,
@@ -24,14 +30,28 @@ import { changeAnswerKind } from "../answer-editors/answerOps";
 import { QUESTION_KINDS, type QuestionKind } from "../questionKinds";
 import { RichTextField } from "../RichTextField";
 
+type EnunciadoPosition = "above" | "below";
+
 interface QuestionCardProps {
   num: number | undefined;
+  /** Initial answer value — buffered locally until Concluir. */
   answer: QuestionAnswer;
+  /** Initial instruction value — buffered locally until Concluir. */
   instruction: RichText | null;
+  /** Initial enunciado value — buffered locally until Concluir. */
+  enunciado: RichText | null;
+  /** Initial enunciado position — buffered locally until Concluir. */
+  enunciadoPosition: EnunciadoPosition;
   disabled: boolean;
-  onAnswerChange: (answer: QuestionAnswer) => void;
-  onInstructionChange: (instruction: RichText | null) => void;
-  onDone: () => void;
+  /** Called on Concluir with the committed answer, instruction, enunciado and position. */
+  onCommit: (
+    answer: QuestionAnswer,
+    instruction: RichText | null,
+    enunciado: RichText | null,
+    enunciadoPosition: EnunciadoPosition,
+  ) => void;
+  /** Called on Cancelar — the parent is responsible for restoring stem content. */
+  onCancel: () => void;
   stem: React.ReactNode;
 }
 
@@ -47,18 +67,21 @@ export function QuestionCard({
   num,
   answer,
   instruction,
+  enunciado,
+  enunciadoPosition,
   disabled,
-  onAnswerChange,
-  onInstructionChange,
-  onDone,
+  onCommit,
+  onCancel,
   stem,
 }: QuestionCardProps) {
-  // Local "adding" reveals the field before any text is persisted, so an empty
-  // instruction is never written to the document (keeps the canonical round-trip
-  // honest — null stays null until the teacher types).
+  const [localAnswer, setLocalAnswer] = useState<QuestionAnswer>(answer);
+  const [localInstruction, setLocalInstruction] = useState<RichText | null>(instruction);
+  const [localEnunciado, setLocalEnunciado] = useState<RichText | null>(enunciado);
+  const [localPosition, setLocalPosition] = useState<EnunciadoPosition>(enunciadoPosition);
+  // Local "adding" reveals the instruction field before any text is persisted.
   const [adding, setAdding] = useState(false);
-  const showInstruction = instruction != null || adding;
-  const currentLabel = QUESTION_KINDS.find((k) => k.kind === answer.kind)!.label;
+  const showInstruction = localInstruction != null || adding;
+  const currentLabel = QUESTION_KINDS.find((k) => k.kind === localAnswer.kind)!.label;
 
   return (
     <div
@@ -71,8 +94,8 @@ export function QuestionCard({
       >
         <span className="text-[13px] font-semibold text-surface-accent-ink">Questão {num}</span>
         <Select
-          value={answer.kind}
-          onValueChange={(kind) => onAnswerChange(changeAnswerKind(answer, kind as QuestionKind))}
+          value={localAnswer.kind}
+          onValueChange={(kind) => setLocalAnswer(changeAnswerKind(localAnswer, kind as QuestionKind))}
           disabled={disabled}
         >
           <SelectTrigger
@@ -93,12 +116,132 @@ export function QuestionCard({
       </div>
 
       <div className="flex flex-col gap-4 px-4 py-4">
+
+        {/* Enunciado acima do stem */}
+        {localEnunciado !== null && localPosition === "above" && (
+          <div contentEditable={false}>
+            <FieldLabel>
+              Enunciado
+              <button
+                type="button"
+                className="ml-auto text-[11px] font-medium normal-case tracking-normal text-surface-ink-faint hover:text-destructive disabled:opacity-50"
+                disabled={disabled}
+                onClick={() => setLocalEnunciado(null)}
+                aria-label="Remover enunciado"
+              >
+                remover ×
+              </button>
+            </FieldLabel>
+            <div className="mb-1 flex gap-1">
+              <Button
+                type="button"
+                size="icon"
+                variant={localPosition === "above" ? "default" : "ghost"}
+                className="h-6 w-6"
+                disabled={disabled}
+                onClick={() => setLocalPosition("above")}
+                aria-label="Enunciado acima da imagem"
+                title="Acima"
+              >
+                <AlignStartVertical className="h-3.5 w-3.5" />
+              </Button>
+              <Button
+                type="button"
+                size="icon"
+                variant={localPosition === "below" ? "default" : "ghost"}
+                className="h-6 w-6"
+                disabled={disabled}
+                onClick={() => setLocalPosition("below")}
+                aria-label="Enunciado abaixo da imagem"
+                title="Abaixo"
+              >
+                <AlignEndVertical className="h-3.5 w-3.5" />
+              </Button>
+            </div>
+            <RichTextField
+              value={localEnunciado}
+              placeholder="Escreva o enunciado da questão…"
+              disabled={disabled}
+              onChange={(rt) => setLocalEnunciado(rt.length > 0 ? rt : null)}
+              ariaLabel="Enunciado da questão"
+            />
+          </div>
+        )}
+
         <div>
           <div contentEditable={false}>
-            <FieldLabel>Enunciado</FieldLabel>
+            <FieldLabel>Imagem / Conteúdo</FieldLabel>
           </div>
           {stem}
         </div>
+
+        {/* Enunciado abaixo do stem */}
+        {localEnunciado !== null && localPosition === "below" && (
+          <div contentEditable={false}>
+            <FieldLabel>
+              Enunciado
+              <button
+                type="button"
+                className="ml-auto text-[11px] font-medium normal-case tracking-normal text-surface-ink-faint hover:text-destructive disabled:opacity-50"
+                disabled={disabled}
+                onClick={() => setLocalEnunciado(null)}
+                aria-label="Remover enunciado"
+              >
+                remover ×
+              </button>
+            </FieldLabel>
+            <div className="mb-1 flex gap-1">
+              <Button
+                type="button"
+                size="icon"
+                variant={localPosition === "above" ? "default" : "ghost"}
+                className="h-6 w-6"
+                disabled={disabled}
+                onClick={() => setLocalPosition("above")}
+                aria-label="Enunciado acima da imagem"
+                title="Acima"
+              >
+                <AlignStartVertical className="h-3.5 w-3.5" />
+              </Button>
+              <Button
+                type="button"
+                size="icon"
+                variant={localPosition === "below" ? "default" : "ghost"}
+                className="h-6 w-6"
+                disabled={disabled}
+                onClick={() => setLocalPosition("below")}
+                aria-label="Enunciado abaixo da imagem"
+                title="Abaixo"
+              >
+                <AlignEndVertical className="h-3.5 w-3.5" />
+              </Button>
+            </div>
+            <RichTextField
+              value={localEnunciado}
+              placeholder="Escreva o enunciado da questão…"
+              disabled={disabled}
+              onChange={(rt) => setLocalEnunciado(rt.length > 0 ? rt : null)}
+              ariaLabel="Enunciado da questão"
+            />
+          </div>
+        )}
+
+        {/* Botão adicionar enunciado (quando não existe) */}
+        {localEnunciado === null && (
+          <div contentEditable={false}>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="gap-1 self-start border border-dashed border-surface-accent/40 text-surface-accent hover:border-surface-accent hover:bg-surface-accent hover:text-white"
+              disabled={disabled}
+              onClick={() => { setLocalEnunciado([]); setLocalPosition("below"); }}
+              aria-label="Adicionar enunciado"
+            >
+              <Plus className="h-3.5 w-3.5" /> Adicionar enunciado
+            </Button>
+          </div>
+        )}
 
         <div contentEditable={false}>
           <FieldLabel>
@@ -109,7 +252,7 @@ export function QuestionCard({
                 className="ml-auto text-[11px] font-medium normal-case tracking-normal text-surface-ink-faint hover:text-destructive disabled:opacity-50"
                 disabled={disabled}
                 onClick={() => {
-                  onInstructionChange(null);
+                  setLocalInstruction(null);
                   setAdding(false);
                 }}
                 aria-label="Remover instrução"
@@ -120,10 +263,10 @@ export function QuestionCard({
           </FieldLabel>
           {showInstruction ? (
             <RichTextField
-              value={instruction ?? []}
+              value={localInstruction ?? []}
               placeholder="Ex.: Marque a resposta correta."
               disabled={disabled}
-              onChange={(rt) => onInstructionChange(rt.length > 0 ? rt : null)}
+              onChange={(rt) => setLocalInstruction(rt.length > 0 ? rt : null)}
               ariaLabel="Instrução da questão"
             />
           ) : (
@@ -131,7 +274,7 @@ export function QuestionCard({
               type="button"
               variant="ghost"
               size="sm"
-              className="gap-1 self-start text-surface-accent hover:bg-surface-accent-soft"
+              className="gap-1 self-start border border-dashed border-surface-accent/40 text-surface-accent hover:border-surface-accent hover:bg-surface-accent hover:text-white"
               disabled={disabled}
               onClick={() => setAdding(true)}
             >
@@ -141,12 +284,27 @@ export function QuestionCard({
         </div>
 
         <div contentEditable={false}>
-          <AnswerEditor answer={answer} disabled={disabled} onChange={onAnswerChange} />
+          <AnswerEditor answer={localAnswer} disabled={disabled} onChange={setLocalAnswer} />
         </div>
       </div>
 
-      <div contentEditable={false} className="flex justify-end border-t border-surface-line px-4 py-3">
-        <Button type="button" size="sm" onClick={onDone} className="bg-surface-accent text-white hover:bg-surface-accent-ink">
+      <div contentEditable={false} className="flex justify-end gap-2 border-t border-surface-line px-4 py-3">
+        <Button
+          type="button"
+          size="sm"
+          variant="ghost"
+          onClick={onCancel}
+          className="text-surface-ink-soft hover:text-surface-ink"
+          aria-label="Cancelar edição"
+        >
+          Cancelar
+        </Button>
+        <Button
+          type="button"
+          size="sm"
+          onClick={() => onCommit(localAnswer, localInstruction, localEnunciado, localPosition)}
+          className="bg-surface-accent text-white hover:bg-surface-accent-ink"
+        >
           Concluir
         </Button>
       </div>

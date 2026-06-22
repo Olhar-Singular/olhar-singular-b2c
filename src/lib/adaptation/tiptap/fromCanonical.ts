@@ -47,8 +47,15 @@ export function inlineToPM(node: Inline): PMNode {
   for (const m of node.marks ?? []) {
     marks.push({ type: m });
   }
-  if (node.color !== undefined) {
-    marks.push({ type: "textStyle", attrs: { color: node.color } });
+  // Merge color and fontSize into a single textStyle mark — ProseMirror collapses
+  // duplicate mark types, so two separate textStyle marks would conflict.
+  const textStyleAttrs: Record<string, unknown> = {};
+  if (node.color !== undefined) textStyleAttrs.color = node.color;
+  if (node.fontSize !== undefined) {
+    textStyleAttrs.fontSize = `${node.fontSize * (96 / 72)}px`;
+  }
+  if (Object.keys(textStyleAttrs).length > 0) {
+    marks.push({ type: "textStyle", attrs: textStyleAttrs });
   }
   const pm: PMNode = { type: "text", text: node.text };
   if (marks.length > 0) pm.marks = marks;
@@ -113,6 +120,8 @@ function blockToPM(block: Block): PMNode {
     case "question": {
       const attrs = baseAttrs(block);
       if (block.instruction !== undefined) attrs.instruction = block.instruction;
+      if (block.enunciado !== undefined) attrs.enunciado = block.enunciado;
+      if (block.enunciadoPosition !== undefined) attrs.enunciadoPosition = block.enunciadoPosition;
       attrs.answer = block.answer;
       return {
         type: "question",
