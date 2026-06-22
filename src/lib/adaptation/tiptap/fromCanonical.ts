@@ -122,6 +122,7 @@ function blockToPM(block: Block): PMNode {
       if (block.instruction !== undefined) attrs.instruction = block.instruction;
       if (block.enunciado !== undefined) attrs.enunciado = block.enunciado;
       if (block.enunciadoPosition !== undefined) attrs.enunciadoPosition = block.enunciadoPosition;
+      if (block.customNumber !== undefined) attrs.customNumber = block.customNumber;
       attrs.answer = block.answer;
       return {
         type: "question",

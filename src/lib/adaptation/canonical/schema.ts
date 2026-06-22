@@ -240,14 +240,15 @@ const Divider = BlockBase.extend({
 });
 
 // Question.stem is recursive — references BlockSchema via z.lazy.
-// Questions have no editable number/points/difficulty: the displayed number is
-// derived automatically from the question's position in the document.
+// `customNumber` overrides the auto-derived ordinal when set (e.g. "1a", "B2").
+// Absent/null → the renderer falls back to the automatic position-based number.
 const Question = BlockBase.extend({
   type: z.literal("question"),
   stem: z.lazy(() => z.array(BlockSchema)),
   instruction: RichTextSchema.optional(),
   enunciado: RichTextSchema.optional(),
   enunciadoPosition: z.enum(["above", "below"]).optional(),
+  customNumber: z.string().optional(),
   answer: QuestionAnswerSchema,
 });
 

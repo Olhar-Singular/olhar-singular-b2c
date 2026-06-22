@@ -37,6 +37,7 @@ const mc: QuestionAnswer = {
 function setup(overrides: Partial<Parameters<typeof QuestionCard>[0]> = {}) {
   const props = {
     num: 2,
+    customNumber: null as string | null,
     answer: mc,
     instruction: null as RichText | null,
     enunciado: null as RichText | null,
@@ -56,7 +57,7 @@ describe("QuestionCard", () => {
     setup({ num: 3 });
     const card = screen.getByTestId("question-card");
     expect(card.className).toMatch(/border/);
-    expect(screen.getByText("Questão 3")).toBeInTheDocument();
+    expect(screen.getByLabelText("Número da questão")).toHaveValue("3");
   });
 
   it("renders the stem slot under Imagem / Conteúdo label", () => {
@@ -82,13 +83,14 @@ describe("QuestionCard", () => {
       null,
       null,
       "below",
+      null,
     );
   });
 
   it("commits initial values unchanged when Concluir is clicked with no edits", () => {
     const props = setup();
     fireEvent.click(screen.getByRole("button", { name: "Concluir" }));
-    expect(props.onCommit).toHaveBeenCalledWith(mc, null, null, "below");
+    expect(props.onCommit).toHaveBeenCalledWith(mc, null, null, "below", null);
   });
 
   // --- Cancelar ---
@@ -163,6 +165,79 @@ describe("QuestionCard", () => {
     expect(screen.getByTestId("stem-slot")).toBeInTheDocument();
   });
 
+  it("removes enunciado from within the 'above' block (remover button in above section)", async () => {
+    setup({ enunciado: [{ type: "text", text: "Txt" }], enunciadoPosition: "above" });
+    fireEvent.click(screen.getByLabelText("Remover enunciado"));
+    await waitFor(() =>
+      expect(screen.queryByLabelText("Enunciado da questão")).not.toBeInTheDocument(),
+    );
+    expect(screen.getByRole("button", { name: "Adicionar enunciado" })).toBeInTheDocument();
+  });
+
+  it("changes enunciado text when already in 'above' position", () => {
+    const props = setup({ enunciado: [{ type: "text", text: "Antigo" }], enunciadoPosition: "above" });
+    fireEvent.change(screen.getByLabelText("Enunciado da questão"), { target: { value: "Novo texto" } });
+    fireEvent.click(screen.getByRole("button", { name: "Concluir" }));
+    expect(props.onCommit).toHaveBeenCalledWith(
+      mc,
+      null,
+      [{ type: "text", text: "Novo texto" }],
+      "above",
+      null,
+    );
+  });
+
+  it("clears enunciado to null when field is emptied in 'above' position", async () => {
+    setup({ enunciado: [{ type: "text", text: "Txt" }], enunciadoPosition: "above" });
+    fireEvent.change(screen.getByLabelText("Enunciado da questão"), { target: { value: "" } });
+    await waitFor(() =>
+      expect(screen.queryByLabelText("Enunciado da questão")).not.toBeInTheDocument(),
+    );
+    expect(screen.getByRole("button", { name: "Adicionar enunciado" })).toBeInTheDocument();
+  });
+
+  it("toggles from 'above' to 'below' via the position button inside the 'above' section", () => {
+    setup({ enunciado: [{ type: "text", text: "txt" }], enunciadoPosition: "above" });
+    // "Enunciado abaixo da imagem" button is inside the rendered "above" section
+    fireEvent.click(screen.getByLabelText("Enunciado abaixo da imagem"));
+    // Field still present; position changed to below
+    expect(screen.getByLabelText("Enunciado da questão")).toBeInTheDocument();
+  });
+
+  it("re-selects 'above' when already above (idempotent click on 'acima' in above section)", () => {
+    setup({ enunciado: [{ type: "text", text: "txt" }], enunciadoPosition: "above" });
+    fireEvent.click(screen.getByLabelText("Enunciado acima da imagem"));
+    expect(screen.getByLabelText("Enunciado da questão")).toBeInTheDocument();
+  });
+
+  it("re-selects 'below' when already below (idempotent click on 'abaixo' in below section)", () => {
+    setup({ enunciado: [{ type: "text", text: "txt" }], enunciadoPosition: "below" });
+    fireEvent.click(screen.getByLabelText("Enunciado abaixo da imagem"));
+    expect(screen.getByLabelText("Enunciado da questão")).toBeInTheDocument();
+  });
+
+  it("changes enunciado text when in 'below' position (covers RichTextField onChange in below section)", () => {
+    const props = setup({ enunciado: [{ type: "text", text: "Antigo" }], enunciadoPosition: "below" });
+    fireEvent.change(screen.getByLabelText("Enunciado da questão"), { target: { value: "Atualizado" } });
+    fireEvent.click(screen.getByRole("button", { name: "Concluir" }));
+    expect(props.onCommit).toHaveBeenCalledWith(
+      mc,
+      null,
+      [{ type: "text", text: "Atualizado" }],
+      "below",
+      null,
+    );
+  });
+
+  it("clears enunciado to null when field is emptied in 'below' position", async () => {
+    setup({ enunciado: [{ type: "text", text: "Txt" }], enunciadoPosition: "below" });
+    fireEvent.change(screen.getByLabelText("Enunciado da questão"), { target: { value: "" } });
+    await waitFor(() =>
+      expect(screen.queryByLabelText("Enunciado da questão")).not.toBeInTheDocument(),
+    );
+    expect(screen.getByRole("button", { name: "Adicionar enunciado" })).toBeInTheDocument();
+  });
+
   it("commits enunciado content and position on Concluir", () => {
     const props = setup({ enunciado: [{ type: "text", text: "Observe a imagem." }], enunciadoPosition: "above" });
     fireEvent.click(screen.getByRole("button", { name: "Concluir" }));
@@ -171,6 +246,7 @@ describe("QuestionCard", () => {
       null,
       [{ type: "text", text: "Observe a imagem." }],
       "above",
+      null,
     );
   });
 
@@ -181,14 +257,14 @@ describe("QuestionCard", () => {
       expect(screen.queryByLabelText("Enunciado da questão")).not.toBeInTheDocument(),
     );
     fireEvent.click(screen.getByRole("button", { name: "Concluir" }));
-    expect(props.onCommit).toHaveBeenCalledWith(mc, null, null, expect.any(String));
+    expect(props.onCommit).toHaveBeenCalledWith(mc, null, null, expect.any(String), null);
   });
 
   it("adding enunciado defaults to position 'below'", () => {
     const props = setup({ enunciado: null });
     fireEvent.click(screen.getByRole("button", { name: "Adicionar enunciado" }));
     fireEvent.click(screen.getByRole("button", { name: "Concluir" }));
-    expect(props.onCommit).toHaveBeenCalledWith(mc, null, [], "below");
+    expect(props.onCommit).toHaveBeenCalledWith(mc, null, [], "below", null);
   });
 
   it("disables enunciado controls when disabled", () => {
@@ -232,6 +308,7 @@ describe("QuestionCard", () => {
       [{ type: "text", text: "new" }],
       null,
       "below",
+      null,
     );
   });
 
@@ -240,7 +317,7 @@ describe("QuestionCard", () => {
     fireEvent.change(screen.getByLabelText("Instrução da questão"), { target: { value: "" } });
     await waitFor(() => expect(screen.queryByLabelText("Instrução da questão")).not.toBeInTheDocument());
     fireEvent.click(screen.getByRole("button", { name: "Concluir" }));
-    expect(props.onCommit).toHaveBeenCalledWith(expect.anything(), null, null, "below");
+    expect(props.onCommit).toHaveBeenCalledWith(expect.anything(), null, null, "below", null);
   });
 
   it("commits null instruction when 'remover' is clicked and Concluir follows", async () => {
@@ -248,7 +325,7 @@ describe("QuestionCard", () => {
     fireEvent.click(screen.getByLabelText("Remover instrução"));
     await waitFor(() => expect(screen.queryByLabelText("Remover instrução")).not.toBeInTheDocument());
     fireEvent.click(screen.getByRole("button", { name: "Concluir" }));
-    expect(props.onCommit).toHaveBeenCalledWith(expect.anything(), null, null, "below");
+    expect(props.onCommit).toHaveBeenCalledWith(expect.anything(), null, null, "below", null);
   });
 
   it("disables the inline fields when disabled", () => {
@@ -275,5 +352,42 @@ describe("QuestionCard", () => {
   it("disables the Tipo dropdown when disabled", () => {
     setup({ disabled: true });
     expect(screen.getByTestId("question-type-trigger")).toBeDisabled();
+  });
+
+  // --- customNumber (editable question number) ---
+
+  it("shows the auto number in the number input when customNumber is null", () => {
+    setup({ num: 5, customNumber: null });
+    expect(screen.getByLabelText("Número da questão")).toHaveValue("5");
+  });
+
+  it("shows empty value and empty placeholder when num is undefined and customNumber is null", () => {
+    setup({ num: undefined, customNumber: null });
+    expect(screen.getByLabelText("Número da questão")).toHaveValue("");
+    expect(screen.getByLabelText("Número da questão")).toHaveAttribute("placeholder", "");
+  });
+
+  it("shows customNumber in the input when set", () => {
+    setup({ num: 1, customNumber: "1a" });
+    expect(screen.getByLabelText("Número da questão")).toHaveValue("1a");
+  });
+
+  it("commits the edited customNumber on Concluir", () => {
+    const props = setup({ num: 2, customNumber: null });
+    fireEvent.change(screen.getByLabelText("Número da questão"), { target: { value: "2b" } });
+    fireEvent.click(screen.getByRole("button", { name: "Concluir" }));
+    expect(props.onCommit).toHaveBeenCalledWith(mc, null, null, "below", "2b");
+  });
+
+  it("commits null customNumber when the input is cleared", () => {
+    const props = setup({ num: 3, customNumber: "3a" });
+    fireEvent.change(screen.getByLabelText("Número da questão"), { target: { value: "" } });
+    fireEvent.click(screen.getByRole("button", { name: "Concluir" }));
+    expect(props.onCommit).toHaveBeenCalledWith(mc, null, null, "below", null);
+  });
+
+  it("disables the number input when disabled", () => {
+    setup({ num: 1, disabled: true });
+    expect(screen.getByLabelText("Número da questão")).toBeDisabled();
   });
 });

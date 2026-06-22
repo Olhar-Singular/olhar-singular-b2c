@@ -189,6 +189,8 @@ export const QuestionNode = Node.create({
       // Optional rich-text question statement with position relative to stem.
       enunciado: { default: null as unknown, rendered: false },
       enunciadoPosition: { default: null as string | null },
+      // Optional override of the auto-computed question ordinal (e.g. "1a", "B2").
+      customNumber: { default: null as string | null },
       // QuestionAnswer (discriminated union) stored as JSON attr — this is
       // what keeps deep structures (alternatives, gaps, pairs, …) lossless.
       // Model-only (an object); never serialized to HTML attributes.

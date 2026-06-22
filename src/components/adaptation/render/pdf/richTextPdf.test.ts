@@ -28,4 +28,19 @@ describe("marksToPdfStyle", () => {
   it("drops a disallowed color", () => {
     expect(marksToPdfStyle(undefined, "#abcdef").color).toBeUndefined();
   });
+
+  it("applies fontSize in pt (as a number) when provided", () => {
+    expect(marksToPdfStyle(undefined, undefined, 12)).toMatchObject({ fontSize: 12 });
+  });
+
+  it("applies fontSize together with marks and color", () => {
+    const style = marksToPdfStyle(["bold"], "#DC2626", 14);
+    expect(style.fontWeight).toBe("bold");
+    expect(style.color).toBe("#DC2626");
+    expect(style.fontSize).toBe(14);
+  });
+
+  it("ignores fontSize when it is zero", () => {
+    expect((marksToPdfStyle(undefined, undefined, 0) as Record<string, unknown>).fontSize).toBeUndefined();
+  });
 });

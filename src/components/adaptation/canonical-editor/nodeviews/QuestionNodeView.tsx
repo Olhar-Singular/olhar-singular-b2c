@@ -59,6 +59,7 @@ export function QuestionNodeView({ node, updateAttributes, editor, getPos, delet
   const instruction = node.attrs.instruction as RichText | null;
   const enunciado = node.attrs.enunciado as RichText | null;
   const enunciadoPosition = (node.attrs.enunciadoPosition ?? "below") as "above" | "below";
+  const customNumber = (node.attrs.customNumber ?? null) as string | null;
   const id = node.attrs.id as string;
   const disabled = !editor.isEditable;
 
@@ -88,8 +89,12 @@ export function QuestionNodeView({ node, updateAttributes, editor, getPos, delet
   const rawPosNum = typeof rawPos === "number" ? rawPos : null;
   const pos = findTopLevelPosById(editor.state.doc, id) ?? rawPosNum;
   const ordinal = pos === null ? undefined : questionOrdinal(editor.state.doc, pos);
-  const upDisabled = disabled || pos === null || !canMoveUp(editor.state.doc, pos);
-  const downDisabled = disabled || pos === null || !canMoveDown(editor.state.doc, pos);
+  // Show move buttons only when another question exists in that direction.
+  // pos === null (transient) → no position known → hide both.
+  const showMoveUp = pos !== null && canMoveUp(editor.state.doc, pos);
+  const showMoveDown = pos !== null && canMoveDown(editor.state.doc, pos);
+  const upDisabled = disabled || !showMoveUp;
+  const downDisabled = disabled || !showMoveDown;
 
   const move = (dir: MoveDirection) => {
     // Call getPos() at click time — the render-time `pos` can be stale after
@@ -118,18 +123,20 @@ export function QuestionNodeView({ node, updateAttributes, editor, getPos, delet
     expand();
   };
 
-  /** Concluir: write buffered answer + instruction + enunciado to the Tiptap document. */
+  /** Concluir: write buffered answer + instruction + enunciado + customNumber to the Tiptap document. */
   const handleCommit = (
     committedAnswer: QuestionAnswer,
     committedInstruction: RichText | null,
     committedEnunciado: RichText | null,
     committedEnunciadoPosition: "above" | "below",
+    committedCustomNumber: string | null,
   ) => {
     updateAttributes({
       answer: committedAnswer,
       instruction: committedInstruction,
       enunciado: committedEnunciado,
       enunciadoPosition: committedEnunciadoPosition,
+      customNumber: committedCustomNumber,
     });
     collapse();
   };
@@ -185,12 +192,16 @@ export function QuestionNodeView({ node, updateAttributes, editor, getPos, delet
       >
         <Pencil className="h-3.5 w-3.5" />
       </Button>
-      <Button type="button" variant="ghost" size="icon" className="h-7 w-7" disabled={upDisabled} onClick={() => move("up")} title="Mover questão para cima" aria-label="Mover questão para cima">
-        <ArrowUp className="h-3.5 w-3.5" />
-      </Button>
-      <Button type="button" variant="ghost" size="icon" className="h-7 w-7" disabled={downDisabled} onClick={() => move("down")} title="Mover questão para baixo" aria-label="Mover questão para baixo">
-        <ArrowDown className="h-3.5 w-3.5" />
-      </Button>
+      {showMoveUp && (
+        <Button type="button" variant="ghost" size="icon" className="h-7 w-7" disabled={upDisabled} onClick={() => move("up")} title="Mover questão para cima" aria-label="Mover questão para cima">
+          <ArrowUp className="h-3.5 w-3.5" />
+        </Button>
+      )}
+      {showMoveDown && (
+        <Button type="button" variant="ghost" size="icon" className="h-7 w-7" disabled={downDisabled} onClick={() => move("down")} title="Mover questão para baixo" aria-label="Mover questão para baixo">
+          <ArrowDown className="h-3.5 w-3.5" />
+        </Button>
+      )}
       <Button type="button" variant="ghost" size="icon" className="h-7 w-7" disabled={disabled || pos === null} onClick={() => setModalOpen(true)} title="Adicionar imagem à questão" aria-label="Adicionar imagem à questão">
         <ImagePlus className="h-3.5 w-3.5" />
       </Button>
@@ -208,6 +219,7 @@ export function QuestionNodeView({ node, updateAttributes, editor, getPos, delet
       {expanded ? (
         <QuestionCard
           num={ordinal}
+          customNumber={customNumber}
           answer={answer}
           instruction={instruction}
           enunciado={enunciado}
@@ -220,6 +232,7 @@ export function QuestionNodeView({ node, updateAttributes, editor, getPos, delet
       ) : (
         <QuestionPreview
           num={ordinal}
+          customNumber={customNumber}
           answer={answer}
           instruction={instruction}
           enunciado={enunciado}

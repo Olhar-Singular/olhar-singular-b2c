@@ -21,8 +21,10 @@ export function marksToClassName(marks?: Mark[]): string {
   return marks.map((m) => MARK_CLASS[m]).join(" ");
 }
 
-/** Map an optional (allowlisted) color to an inline style object. */
-export function textRunStyle(color?: string): CSSProperties {
-  if (color !== undefined && isAllowedColor(color)) return { color };
-  return {};
+/** Map an optional (allowlisted) color and optional fontSize (pt) to an inline style object. */
+export function textRunStyle(color?: string, fontSize?: number): CSSProperties {
+  const style: CSSProperties = {};
+  if (color !== undefined && isAllowedColor(color)) style.color = color;
+  if (fontSize !== undefined && fontSize > 0) style.fontSize = `${fontSize}pt`;
+  return style;
 }

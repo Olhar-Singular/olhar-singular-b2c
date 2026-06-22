@@ -236,6 +236,22 @@ describe("canonical <-> ProseMirror mapping", () => {
       };
       expect(proseMirrorToCanonical(pmRoundTrip(doc))).toEqual(doc);
     });
+
+    it("round-trips question with customNumber override", () => {
+      const doc: CanonicalDocument = {
+        schemaVersion: 1,
+        blocks: [
+          {
+            id: uid(113),
+            type: "question",
+            stem: [{ id: uid(114), type: "paragraph", content: [{ type: "text", text: "Q." }] }],
+            customNumber: "1a",
+            answer: { kind: "open" },
+          },
+        ],
+      };
+      expect(proseMirrorToCanonical(pmRoundTrip(doc))).toEqual(doc);
+    });
   });
 
   describe("StarterKit hardening (only canonical-mappable nodes/marks live)", () => {

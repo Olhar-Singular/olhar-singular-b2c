@@ -175,6 +175,54 @@ describe("AdaptationPdf — header + page-break wiring", () => {
   });
 });
 
+describe("PdfQuestion — customNumber and enunciado branches", () => {
+  const qBlock = (overrides: Record<string, unknown> = {}) => ({
+    id: id(90),
+    type: "question" as const,
+    stem: [{ id: id(91), type: "paragraph" as const, content: [{ type: "text", text: "Pergunta?" }] }],
+    answer: { kind: "open" as const, answerLines: 2 },
+    ...overrides,
+  });
+
+  it("uses customNumber in the rendered text when set", () => {
+    const { text } = collect(PdfQuestion({ block: qBlock({ customNumber: "3a" }), number: 3 }));
+    expect(text).toContain("3a.");
+  });
+
+  it("falls back to the auto number when customNumber is not set", () => {
+    const { text } = collect(PdfQuestion({ block: qBlock(), number: 2 }));
+    expect(text).toContain("2.");
+  });
+
+  it("renders enunciado content when enunciado is present", () => {
+    const block = qBlock({ enunciado: [{ type: "text", text: "Observe a imagem." }] });
+    const { text } = collect(PdfQuestion({ block, number: 1 }));
+    expect(text).toContain("Observe a imagem.");
+  });
+
+  it("renders enunciado above the stem when enunciadoPosition is 'above'", () => {
+    const block = qBlock({
+      enunciado: [{ type: "text", text: "Leia o texto." }],
+      enunciadoPosition: "above" as const,
+    });
+    const { text } = collect(PdfQuestion({ block, number: 1 }));
+    const enunciadoPos = text.indexOf("Leia o texto.");
+    const stemPos = text.indexOf("Pergunta?");
+    expect(enunciadoPos).toBeLessThan(stemPos);
+  });
+
+  it("renders enunciado below the stem when enunciadoPosition is 'below'", () => {
+    const block = qBlock({
+      enunciado: [{ type: "text", text: "Veja o gráfico." }],
+      enunciadoPosition: "below" as const,
+    });
+    const { text } = collect(PdfQuestion({ block, number: 1 }));
+    const enunciadoPos = text.indexOf("Veja o gráfico.");
+    const stemPos = text.indexOf("Pergunta?");
+    expect(stemPos).toBeLessThan(enunciadoPos);
+  });
+});
+
 describe("AdaptationPdf — blockGap threading", () => {
   it("passes the resolved blockGap (12pt from default 16px) to blocks", () => {
     // Default pageStyle → blockSpacing=16px → 16*72/96=12pt

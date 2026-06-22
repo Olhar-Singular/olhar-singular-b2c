@@ -38,4 +38,13 @@ describe("textRunStyle", () => {
   it("ignores a non-allowlisted color", () => {
     expect(textRunStyle("orange; x")).toEqual({});
   });
+  it("applies fontSize in pt when provided", () => {
+    expect(textRunStyle(undefined, 12)).toEqual({ fontSize: "12pt" });
+  });
+  it("applies both color and fontSize when both are provided", () => {
+    expect(textRunStyle("#16A34A", 14)).toEqual({ color: "#16A34A", fontSize: "14pt" });
+  });
+  it("ignores fontSize when it is zero or negative", () => {
+    expect(textRunStyle(undefined, 0)).toEqual({});
+  });
 });

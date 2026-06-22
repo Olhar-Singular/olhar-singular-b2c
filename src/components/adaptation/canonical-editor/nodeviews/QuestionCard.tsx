@@ -34,6 +34,8 @@ type EnunciadoPosition = "above" | "below";
 
 interface QuestionCardProps {
   num: number | undefined;
+  /** Optional custom number override (e.g. "1a"). Null → auto from position. */
+  customNumber?: string | null;
   /** Initial answer value — buffered locally until Concluir. */
   answer: QuestionAnswer;
   /** Initial instruction value — buffered locally until Concluir. */
@@ -43,12 +45,13 @@ interface QuestionCardProps {
   /** Initial enunciado position — buffered locally until Concluir. */
   enunciadoPosition: EnunciadoPosition;
   disabled: boolean;
-  /** Called on Concluir with the committed answer, instruction, enunciado and position. */
+  /** Called on Concluir with the committed answer, instruction, enunciado, position and customNumber. */
   onCommit: (
     answer: QuestionAnswer,
     instruction: RichText | null,
     enunciado: RichText | null,
     enunciadoPosition: EnunciadoPosition,
+    customNumber: string | null,
   ) => void;
   /** Called on Cancelar — the parent is responsible for restoring stem content. */
   onCancel: () => void;
@@ -65,6 +68,7 @@ function FieldLabel({ children }: { children: React.ReactNode }) {
 
 export function QuestionCard({
   num,
+  customNumber = null,
   answer,
   instruction,
   enunciado,
@@ -78,6 +82,7 @@ export function QuestionCard({
   const [localInstruction, setLocalInstruction] = useState<RichText | null>(instruction);
   const [localEnunciado, setLocalEnunciado] = useState<RichText | null>(enunciado);
   const [localPosition, setLocalPosition] = useState<EnunciadoPosition>(enunciadoPosition);
+  const [localCustomNumber, setLocalCustomNumber] = useState<string | null>(customNumber);
   // Local "adding" reveals the instruction field before any text is persisted.
   const [adding, setAdding] = useState(false);
   const showInstruction = localInstruction != null || adding;
@@ -92,7 +97,19 @@ export function QuestionCard({
         contentEditable={false}
         className="flex items-center gap-2.5 border-b border-surface-accent-soft bg-surface-accent-soft px-4 py-2.5"
       >
-        <span className="text-[13px] font-semibold text-surface-accent-ink">Questão {num}</span>
+        <span className="text-[13px] font-semibold text-surface-accent-ink">
+          Questão{" "}
+          <input
+            type="text"
+            aria-label="Número da questão"
+            data-testid="question-number-input"
+            value={localCustomNumber ?? (num?.toString() ?? "")}
+            onChange={(e) => setLocalCustomNumber(e.target.value.trim() || null)}
+            placeholder={num?.toString() ?? ""}
+            disabled={disabled}
+            className="inline-block w-8 bg-transparent text-center outline-none border-b border-surface-accent focus:border-surface-accent-ink disabled:opacity-60"
+          />
+        </span>
         <Select
           value={localAnswer.kind}
           onValueChange={(kind) => setLocalAnswer(changeAnswerKind(localAnswer, kind as QuestionKind))}
@@ -136,7 +153,7 @@ export function QuestionCard({
               <Button
                 type="button"
                 size="icon"
-                variant={localPosition === "above" ? "default" : "ghost"}
+                variant="default"
                 className="h-6 w-6"
                 disabled={disabled}
                 onClick={() => setLocalPosition("above")}
@@ -148,7 +165,7 @@ export function QuestionCard({
               <Button
                 type="button"
                 size="icon"
-                variant={localPosition === "below" ? "default" : "ghost"}
+                variant="ghost"
                 className="h-6 w-6"
                 disabled={disabled}
                 onClick={() => setLocalPosition("below")}
@@ -194,7 +211,7 @@ export function QuestionCard({
               <Button
                 type="button"
                 size="icon"
-                variant={localPosition === "above" ? "default" : "ghost"}
+                variant="ghost"
                 className="h-6 w-6"
                 disabled={disabled}
                 onClick={() => setLocalPosition("above")}
@@ -206,7 +223,7 @@ export function QuestionCard({
               <Button
                 type="button"
                 size="icon"
-                variant={localPosition === "below" ? "default" : "ghost"}
+                variant="default"
                 className="h-6 w-6"
                 disabled={disabled}
                 onClick={() => setLocalPosition("below")}
@@ -302,7 +319,7 @@ export function QuestionCard({
         <Button
           type="button"
           size="sm"
-          onClick={() => onCommit(localAnswer, localInstruction, localEnunciado, localPosition)}
+          onClick={() => onCommit(localAnswer, localInstruction, localEnunciado, localPosition, localCustomNumber)}
           className="bg-surface-accent text-white hover:bg-surface-accent-ink"
         >
           Concluir

@@ -22,7 +22,7 @@ export function PdfRichText({ content }: { content: RichText }) {
           );
         }
         return (
-          <Text key={i} style={marksToPdfStyle(run.marks, run.color)}>
+          <Text key={i} style={marksToPdfStyle(run.marks, run.color, run.fontSize)}>
             {run.text}
           </Text>
         );

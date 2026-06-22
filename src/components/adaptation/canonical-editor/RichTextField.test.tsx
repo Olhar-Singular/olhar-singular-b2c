@@ -139,6 +139,18 @@ describe("RichTextField — component", () => {
     expect(attrs?.class).toContain("cursor-not-allowed");
   });
 
+  it("applies cursor-default to editor attributes when readOnly", () => {
+    render(<RichTextField value={t("a")} onChange={vi.fn()} readOnly />);
+    const attrs = (capturedConfig as { editorProps?: { attributes?: Record<string, string> } })
+      .editorProps?.attributes;
+    expect(attrs?.class).toContain("cursor-default");
+  });
+
+  it("hides the BubbleMenu when readOnly (formatting disabled on read-only fields)", () => {
+    render(<RichTextField value={t("a")} onChange={vi.fn()} readOnly />);
+    expect(screen.queryByTestId("selection-bubble")).not.toBeInTheDocument();
+  });
+
   it("passes ariaLabel into the editor attributes", () => {
     render(<RichTextField value={t("a")} onChange={vi.fn()} ariaLabel="Alternativa" />);
     const attrs = (capturedConfig as { editorProps?: { attributes?: Record<string, string> } })

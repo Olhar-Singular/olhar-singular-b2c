@@ -246,6 +246,25 @@ describe("normalizeAiActivity — round-trip", () => {
     expect(doc.schemaVersion).toBe(SCHEMA_VERSION);
   });
 
+  it("preserves enunciado and enunciadoPosition from the AI output when present", () => {
+    const activityWithEnunciado = {
+      ...validMinimalActivity,
+      blocks: [
+        {
+          type: "question" as const,
+          stem: [{ type: "paragraph" as const, content: [{ type: "text" as const, text: "Q?" }] }],
+          enunciado: [{ type: "text" as const, text: "Observe a imagem." }],
+          enunciadoPosition: "above" as const,
+          answer: { kind: "open" as const, answerLines: 3 },
+        },
+      ],
+    };
+    const doc = normalizeAiActivity(activityWithEnunciado);
+    const q = doc.blocks[0] as Extract<(typeof doc.blocks)[number], { type: "question" }>;
+    expect(q.enunciado).toEqual([{ type: "text", text: "Observe a imagem." }]);
+    expect(q.enunciadoPosition).toBe("above");
+  });
+
   it("table answer passes round-trip (no per-item ids needed)", () => {
     const doc = normalizeAiActivity(validAllAnswerTypesActivity);
     expect(() => validateDocument(doc)).not.toThrow();

@@ -2,9 +2,11 @@
  * PdfQuestion — PDF analogue of QuestionView. The question number is AUTOMATIC:
  * it is computed from the question's position among the document's question
  * blocks and passed in via `number` (the PDF block walker mirrors the screen
- * renderer's counter). Renders the recursive stem blocks (via the shared
- * PdfBlock dispatcher), an optional instruction, and the typed answer via
- * PdfAnswer. The authored answer `kind` and correct-answer flags are
+ * renderer's counter). If `block.customNumber` is set it takes precedence.
+ * The number is rendered inline (flex row) with the stem content so the PDF
+ * layout mirrors the printed question format. Renders the recursive stem blocks
+ * (via the shared PdfBlock dispatcher), an optional instruction, and the typed
+ * answer via PdfAnswer. The authored answer `kind` and correct-answer flags are
  * authoritative — no heuristic re-derivation.
  */
 
@@ -22,6 +24,7 @@ export function PdfQuestion({ block, number }: { block: QuestionBlock; number: n
   const stemNumbers = questionNumbers(block.stem);
   const position = block.enunciadoPosition ?? "below";
   const hasEnunciado = block.enunciado != null && block.enunciado.length > 0;
+  const displayNumber = block.customNumber ?? number.toString();
 
   const enunciadoView = hasEnunciado ? (
     <View style={{ marginBottom: 4 }}>
@@ -33,17 +36,16 @@ export function PdfQuestion({ block, number }: { block: QuestionBlock; number: n
 
   return (
     <View style={{ flexDirection: "column", marginBottom: 8, ...nodeStyleToPdf(block.style) }}>
-      <View style={{ marginBottom: 4 }}>
-        <Text style={{ color: "#555555" }}>{number}.</Text>
+      <View style={{ flexDirection: "row", alignItems: "flex-start" }}>
+        <Text style={{ color: "#555555", marginRight: 6 }}>{displayNumber}.</Text>
+        <View style={{ flex: 1 }}>
+          {position === "above" && enunciadoView}
+          {block.stem.map((child, i) => (
+            <PdfBlock key={child.id} block={child} number={stemNumbers[i]} />
+          ))}
+          {position === "below" && enunciadoView}
+        </View>
       </View>
-
-      {position === "above" && enunciadoView}
-
-      {block.stem.map((child, i) => (
-        <PdfBlock key={child.id} block={child} number={stemNumbers[i]} />
-      ))}
-
-      {position === "below" && enunciadoView}
 
       {block.instruction && (
         <View style={{ marginBottom: 4 }}>

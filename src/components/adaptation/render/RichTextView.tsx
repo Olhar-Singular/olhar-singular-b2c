@@ -28,7 +28,7 @@ export function RichTextView({ content }: { content: RichText }) {
         }
         const className = marksToClassName(run.marks);
         return (
-          <span key={i} className={className || undefined} style={textRunStyle(run.color)}>
+          <span key={i} className={className || undefined} style={textRunStyle(run.color, run.fontSize)}>
             {run.text}
           </span>
         );

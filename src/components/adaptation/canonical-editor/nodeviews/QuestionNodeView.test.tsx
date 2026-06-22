@@ -121,10 +121,10 @@ function makeProps(
     },
   } as unknown as NodeViewProps["editor"]);
 
-  const nodeJSON = { type: "question", attrs: { answer, instruction, enunciado: null, enunciadoPosition: "below", id }, content: [] };
+  const nodeJSON = { type: "question", attrs: { answer, instruction, enunciado: null, enunciadoPosition: "below", customNumber: null, id }, content: [] };
   const props = {
     node: {
-      attrs: { answer, instruction, enunciado: null, enunciadoPosition: "below", id },
+      attrs: { answer, instruction, enunciado: null, enunciadoPosition: "below", customNumber: null, id },
       nodeSize: 10,
       content: { size: 8 },
       toJSON: vi.fn().mockReturnValue(nodeJSON),
@@ -281,11 +281,11 @@ describe("QuestionNodeView — rail actions", () => {
     expect(dispatch).not.toHaveBeenCalled();
   });
 
-  it("disables up/down at the document ends", () => {
+  it("hides up/down buttons when no adjacent question exists in that direction", () => {
     const { props } = makeProps(mc, { upable: false, downable: false });
     render(<QuestionNodeView {...props} />);
-    expect(screen.getByLabelText("Mover questão para cima")).toBeDisabled();
-    expect(screen.getByLabelText("Mover questão para baixo")).toBeDisabled();
+    expect(screen.queryByLabelText("Mover questão para cima")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Mover questão para baixo")).not.toBeInTheDocument();
   });
 
   it("uses live doc position (not stale getPos) for disabled checks — regression: move-down after move-up", () => {
@@ -326,7 +326,8 @@ describe("QuestionNodeView — rail actions", () => {
 
     // Down button must be ENABLED because we used livePos (0), not stalePos (200)
     expect(screen.getByLabelText("Mover questão para baixo")).not.toBeDisabled();
-    expect(screen.getByLabelText("Mover questão para cima")).toBeDisabled();
+    // Up button is HIDDEN (not just disabled): canMoveUp(doc, 0) returns false → button not rendered
+    expect(screen.queryByLabelText("Mover questão para cima")).not.toBeInTheDocument();
     expect(canMoveDown).toHaveBeenCalledWith(customDoc, livePos);
   });
 
@@ -433,12 +434,13 @@ describe("QuestionNodeView — rail actions", () => {
     expect(screen.getByLabelText("Restaurar questão ao original")).toBeDisabled();
   });
 
-  it("survives a transient undefined getPos() (empty ordinal, move/image guarded, delete works)", () => {
+  it("survives a transient undefined getPos() (empty ordinal, move hidden, image/delete guarded)", () => {
     const { props, dispatch } = makeProps(mc, { getPosUndefined: true });
     expect(() => render(<QuestionNodeView {...props} />)).not.toThrow();
     expect(screen.getByTestId("question-ordinal")).toHaveTextContent("");
-    expect(screen.getByLabelText("Mover questão para cima")).toBeDisabled();
-    expect(screen.getByLabelText("Mover questão para baixo")).toBeDisabled();
+    // pos === null → showMoveUp/showMoveDown = false → buttons not rendered at all
+    expect(screen.queryByLabelText("Mover questão para cima")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Mover questão para baixo")).not.toBeInTheDocument();
     expect(screen.getByLabelText("Adicionar imagem à questão")).toBeDisabled();
     fireEvent.click(screen.getByLabelText("Excluir questão"));
     expect(props.deleteNode).toHaveBeenCalledTimes(1);
@@ -471,6 +473,7 @@ describe("QuestionNodeView — card open / commit / cancel", () => {
       instruction: null,
       enunciado: null,
       enunciadoPosition: "below",
+      customNumber: null,
     });
     expect(screen.queryByTestId("question-card")).not.toBeInTheDocument();
   });
@@ -549,6 +552,24 @@ describe("QuestionNodeView — card open / commit / cancel", () => {
     // only the still-collapsed question keeps a rail with "Editar questão"
     fireEvent.click(screen.getByLabelText("Editar questão"));
     expect(screen.getAllByTestId("question-card")).toHaveLength(1);
+  });
+});
+
+describe("QuestionNodeView — customNumber", () => {
+  it("shows customNumber override in the preview ordinal", () => {
+    const { props } = makeProps(mc);
+    (props.node as unknown as { attrs: Record<string, unknown> }).attrs.customNumber = "2a";
+    render(<QuestionNodeView {...props} />);
+    expect(screen.getByTestId("question-ordinal")).toHaveTextContent("2a.");
+  });
+
+  it("commits customNumber via Concluir when the card number input is edited", () => {
+    const { props, updateAttributes } = makeProps(mc);
+    render(<QuestionNodeView {...props} />);
+    fireEvent.click(screen.getByLabelText("Editar questão"));
+    fireEvent.change(screen.getByLabelText("Número da questão"), { target: { value: "3c" } });
+    fireEvent.click(screen.getByRole("button", { name: "Concluir" }));
+    expect(updateAttributes).toHaveBeenCalledWith(expect.objectContaining({ customNumber: "3c" }));
   });
 });
 

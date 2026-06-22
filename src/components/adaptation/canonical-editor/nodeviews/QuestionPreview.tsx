@@ -20,6 +20,7 @@ import { AnswerPreview } from "../answer-editors/AnswerPreview";
 
 interface QuestionPreviewProps {
   num: number | undefined;
+  customNumber?: string | null;
   answer: QuestionAnswer;
   instruction: RichText | null;
   enunciado: RichText | null;
@@ -33,6 +34,7 @@ interface QuestionPreviewProps {
 
 export function QuestionPreview({
   num,
+  customNumber = null,
   answer,
   instruction,
   enunciado,
@@ -43,13 +45,14 @@ export function QuestionPreview({
   stem,
   rail,
 }: QuestionPreviewProps) {
+  const displayNumber = customNumber ?? (num != null ? num.toString() : "");
   const hasEnunciado = enunciado != null && enunciado.length > 0;
 
   const enunciadoNode = hasEnunciado ? (
     <div contentEditable={false} className="text-surface-ink" data-testid="question-enunciado" style={{ fontSize: "var(--doc-fs-stem, inherit)" }}>
       <RichTextField
         value={enunciado}
-        disabled={true}
+        readOnly={true}
         onChange={() => {}}
         ariaLabel="Enunciado da questão"
         plain
@@ -63,7 +66,7 @@ export function QuestionPreview({
       {rail}
       <div className="flex items-baseline gap-2.5">
         <span data-testid="question-ordinal" contentEditable={false} className="shrink-0 font-bold text-surface-ink">
-          {num != null ? `${num}.` : ""}
+          {displayNumber ? `${displayNumber}.` : ""}
         </span>
         <div className="flex min-w-0 flex-1 flex-col gap-2.5">
           {enunciadoPosition === "above" && enunciadoNode}

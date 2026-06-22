@@ -60,6 +60,12 @@ interface RichTextFieldProps {
   onChange: (rt: RichText) => void;
   placeholder?: string;
   disabled?: boolean;
+  /**
+   * Non-editable without the opacity/fading of `disabled`. Used for the
+   * enunciado in QuestionPreview: text is locked but renders at full opacity
+   * so the folha at rest looks like the printed document.
+   */
+  readOnly?: boolean;
   ariaLabel?: string;
   /**
    * Worksheet-faithful variant: no border and no toolbar — just editable text.
@@ -76,6 +82,7 @@ export function RichTextField({
   onChange,
   placeholder = "Digite o texto...",
   disabled = false,
+  readOnly = false,
   ariaLabel,
   plain = false,
   noBubble = false,
@@ -99,7 +106,7 @@ export function RichTextField({
       buildInlineMathExtension(),
     ],
     content: initialContentRef.current,
-    editable: !disabled,
+    editable: !disabled && !readOnly,
     onUpdate: ({ editor }) => {
       const next = richTextFromDoc(editor.getJSON() as PMNode);
       if (richTextEqual(next, lastValueRef.current)) return;
@@ -113,7 +120,8 @@ export function RichTextField({
           // top-level block labels (`.tiptap > p` ⇒ "Instrução" etc., in index.css)
           // never leak onto answer fields. Wrap long answers instead of scrolling.
           "rich-text-field w-full px-2 py-1 text-sm focus:outline-none min-h-[2rem] whitespace-normal break-words",
-          disabled && "opacity-50 cursor-not-allowed"
+          disabled && "opacity-50 cursor-not-allowed",
+          readOnly && "cursor-default"
         ),
         ...(ariaLabel ? { "aria-label": ariaLabel } : {}),
         "data-placeholder": placeholder,
@@ -125,7 +133,7 @@ export function RichTextField({
 
   return (
     <div className={cn("flex-1 min-w-0", !plain && "rounded-md border border-input bg-background", disabled && "opacity-60")}>
-      {!disabled && !noBubble && (
+      {!disabled && !readOnly && !noBubble && (
         <BubbleMenu editor={editor} tippyOptions={{ duration: 100, appendTo: "parent" }}>
           <SelectionBubble editor={editor} />
         </BubbleMenu>

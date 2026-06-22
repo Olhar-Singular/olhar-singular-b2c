@@ -163,6 +163,9 @@ function pmToBlock(node: PMNode): Block {
       if (a.enunciadoPosition !== undefined && a.enunciadoPosition !== null) {
         block.enunciadoPosition = a.enunciadoPosition as "above" | "below";
       }
+      if (a.customNumber !== undefined && a.customNumber !== null) {
+        block.customNumber = a.customNumber as string;
+      }
       return block;
     }
     default:

@@ -10,18 +10,21 @@ vi.mock("../RichTextField", () => ({
     onChange,
     ariaLabel,
     disabled,
+    readOnly,
     value,
   }: {
     value: RichText;
     onChange: (rt: RichText) => void;
     ariaLabel?: string;
     disabled?: boolean;
+    readOnly?: boolean;
   }) => {
     const text = value.map((n: { type: string; text?: string }) => n.text ?? "").join("");
     return (
       <input
         aria-label={ariaLabel}
         disabled={disabled}
+        readOnly={readOnly}
         defaultValue={text}
         onChange={(e) => onChange(e.target.value ? [{ type: "text", text: e.target.value }] : [])}
       />
@@ -151,12 +154,13 @@ describe("QuestionPreview", () => {
     expect(screen.queryByTestId("question-enunciado")).not.toBeInTheDocument();
   });
 
-  it("renders enunciado read-only (disabled) when content is present", () => {
+  it("renders enunciado read-only (not disabled, no opacity) when content is present", () => {
     setup({ enunciado: [{ type: "text", text: "Observe a imagem." }] });
     expect(screen.getByTestId("question-enunciado")).toBeInTheDocument();
     const field = screen.getByLabelText("Enunciado da questão");
     expect(field).toBeInTheDocument();
-    expect(field).toBeDisabled();
+    expect(field).toHaveAttribute("readonly");
+    expect(field).not.toBeDisabled();
   });
 
   it("enunciado above renders the enunciado node before the stem slot", () => {
@@ -186,5 +190,29 @@ describe("QuestionPreview", () => {
     const enunciadoIdx = ids.indexOf("question-enunciado");
     const stemIdx = ids.indexOf("stem-slot");
     expect(stemIdx).toBeLessThan(enunciadoIdx);
+  });
+
+  it("enunciado onChange is a no-op (field is read-only, does not throw)", () => {
+    setup({ enunciado: [{ type: "text", text: "Observe." }] });
+    const field = screen.getByLabelText("Enunciado da questão");
+    // onChange={() => {}} is intentionally inert; firing it should not throw
+    expect(() => fireEvent.change(field, { target: { value: "x" } })).not.toThrow();
+  });
+
+  // --- customNumber ---
+
+  it("uses customNumber as the ordinal when set", () => {
+    setup({ num: 1, customNumber: "1a" });
+    expect(screen.getByTestId("question-ordinal")).toHaveTextContent("1a.");
+  });
+
+  it("falls back to auto-number when customNumber is null", () => {
+    setup({ num: 7, customNumber: null });
+    expect(screen.getByTestId("question-ordinal")).toHaveTextContent("7.");
+  });
+
+  it("renders empty ordinal when both num is undefined and customNumber is null", () => {
+    setup({ num: undefined, customNumber: null });
+    expect(screen.getByTestId("question-ordinal")).toHaveTextContent("");
   });
 });

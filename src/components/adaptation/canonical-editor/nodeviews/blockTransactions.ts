@@ -10,28 +10,34 @@
  */
 
 import type { EditorState, Transaction } from "@tiptap/pm/state";
-import { moveTarget, stemInsertPos, type MoveDirection } from "./blockMove";
+import { questionSwapTarget, stemInsertPos, type MoveDirection } from "./blockMove";
 
 /**
- * Build a transaction that moves the top-level block at `pos` one slot in `dir`.
- * Returns null when the move is impossible (first up / last down).
+ * Build a transaction that swaps the question at `pos` with the nearest question
+ * in direction `dir`, skipping any non-question blocks between them. Returns null
+ * when no adjacent question exists in that direction.
  *
- * It deletes the node's slice, then re-inserts the SAME node at the target.
- * Deleting first and mapping the insert position keeps both ends valid in one
- * transaction: for "up" the target sits before the cut (unchanged); for "down"
- * it sits after the cut and the mapping shifts it to land after the next sibling.
+ * The swap is done in two steps applied to the same transaction:
+ *  1. Replace the LATER node with the EARLIER node (high position first, so the
+ *     lower position stays valid for step 2).
+ *  2. Replace the EARLIER node with the LATER node.
+ * Non-question blocks that lie between the two questions remain in place.
  */
 export function buildMoveTransaction(
   state: EditorState,
   pos: number,
   dir: MoveDirection,
 ): Transaction | null {
-  const target = moveTarget(state.doc, pos, dir);
+  const target = questionSwapTarget(state.doc, pos, dir);
   if (!target) return null;
 
-  const node = state.doc.child(state.doc.resolve(pos).index(0));
-  const tr = state.tr.delete(target.from, target.to);
-  tr.insert(tr.mapping.map(target.insert), node);
+  const { posFirst, nodeFirst, posSecond, nodeSecond } = target;
+  const tr = state.tr;
+  // Step 1: replace the later node with the earlier node (posSecond > posFirst,
+  // so this doesn't shift posFirst).
+  tr.replaceWith(posSecond, posSecond + nodeSecond.nodeSize, nodeFirst);
+  // Step 2: replace the earlier node with the later node.
+  tr.replaceWith(posFirst, posFirst + nodeFirst.nodeSize, nodeSecond);
   return tr;
 }
 
