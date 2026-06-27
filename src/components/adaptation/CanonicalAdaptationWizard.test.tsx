@@ -9,6 +9,11 @@ import * as mirror from "@/lib/adaptation/persistence/draftMirror";
 
 vi.mock("sonner", () => ({ toast: { error: vi.fn(), success: vi.fn() } }));
 
+const mockNavGuard = vi.fn();
+vi.mock("@/hooks/useNavigationGuard", () => ({
+  useNavigationGuard: (...args: unknown[]) => mockNavGuard(...args),
+}));
+
 // --- persistence seams ------------------------------------------------------
 const mockNavigate = vi.fn();
 vi.mock("react-router-dom", async (orig) => ({
@@ -109,19 +114,42 @@ vi.mock("./steps/generate/StepGenerate", () => ({
   StepGenerate: ({
     onResult,
     onNext,
+    onLoadingChange,
   }: {
     onResult: (r: AdaptationResult) => void;
     onNext: () => void;
+    onLoadingChange?: (loading: boolean) => void;
   }) => (
-    <button
-      data-testid="do-generate"
-      onClick={() => {
-        onResult(makeResult());
-        onNext();
-      }}
-    >
-      generate
-    </button>
+    <>
+      <button
+        data-testid="simulate-loading"
+        onClick={() => onLoadingChange?.(true)}
+      >
+        start loading
+      </button>
+      <button
+        data-testid="do-generate"
+        onClick={() => {
+          onLoadingChange?.(false);
+          onResult(makeResult());
+          onNext();
+        }}
+      >
+        generate
+      </button>
+      {/* Simulates React 18 unmount race: onLoadingChange(false) is NOT called
+          before onNext, mimicking the real StepGenerate where the useEffect
+          may not fire when the component is unmounted in the same batch. */}
+      <button
+        data-testid="do-generate-no-lc"
+        onClick={() => {
+          onResult(makeResult());
+          onNext();
+        }}
+      >
+        generate-no-lc
+      </button>
+    </>
   ),
 }));
 
@@ -198,6 +226,7 @@ beforeEach(() => {
   vi.mocked(mirror.readMirror).mockResolvedValue(null);
   vi.mocked(mirror.clearMirror).mockResolvedValue(undefined);
   mockMarkReady.mockResolvedValue({ ok: true, updatedAt: "2026-01-02T00:00:00Z" });
+  mockNavGuard.mockReturnValue({ state: "unblocked", reset: vi.fn(), proceed: vi.fn() });
 });
 
 describe("CanonicalAdaptationWizard", () => {
@@ -344,7 +373,7 @@ describe("CanonicalAdaptationWizard", () => {
     expect(await screen.findByRole("status")).toHaveTextContent(/Salvando/i);
   });
 
-  it("Salvar marks the draft ready, toasts, and navigates to history", async () => {
+  it("Salvar marks the draft ready, toasts, and stays on page (no navigation)", async () => {
     const { toast } = await import("sonner");
     renderWithProviders(<CanonicalAdaptationWizard />);
     advanceToReview();
@@ -358,7 +387,8 @@ describe("CanonicalAdaptationWizard", () => {
       }),
     );
     expect(toast.success).toHaveBeenCalled();
-    expect(mockNavigate).toHaveBeenCalledWith("/historico");
+    // After saving, the wizard stays on the current page — no navigate() call.
+    expect(mockNavigate).not.toHaveBeenCalledWith("/historico");
   });
 
   it("Salvar uses the freshest updated_at returned by flush for the guard", async () => {
@@ -609,5 +639,144 @@ describe("CanonicalAdaptationWizard", () => {
       expect.stringMatching(/alterada em outro lugar/i),
     );
     expect(mockNavigate).toHaveBeenCalledWith(0);
+  });
+});
+
+describe("CanonicalAdaptationWizard — navigation guard", () => {
+  it("calls useNavigationGuard with false initially (no result, not generating)", () => {
+    renderWithProviders(<CanonicalAdaptationWizard />);
+    expect(mockNavGuard).toHaveBeenCalledWith(false);
+  });
+
+  it("calls useNavigationGuard with true while StepGenerate reports loading", () => {
+    renderWithProviders(<CanonicalAdaptationWizard />);
+    fireEvent.click(screen.getByTestId("pick-type"));
+    fireEvent.click(screen.getByTestId("input-next"));
+    fireEvent.click(screen.getByTestId("barriers-next"));
+    fireEvent.click(screen.getByTestId("simulate-loading"));
+    expect(mockNavGuard).toHaveBeenCalledWith(true);
+  });
+
+  it("calls useNavigationGuard with true after generation completes (unsaved result)", () => {
+    renderWithProviders(<CanonicalAdaptationWizard />);
+    fireEvent.click(screen.getByTestId("pick-type"));
+    fireEvent.click(screen.getByTestId("input-next"));
+    fireEvent.click(screen.getByTestId("barriers-next"));
+    fireEvent.click(screen.getByTestId("do-generate"));
+    // Result exists, not saved → guard active for "unsaved" reason.
+    expect(mockNavGuard).toHaveBeenLastCalledWith(true);
+  });
+
+  it("resets isGenerating via handleResult when onLoadingChange is not called before onNext (unmount race)", () => {
+    // do-generate-no-lc mimics the React 18 unmount race: StepGenerate's useEffect
+    // doesn't fire because the component is unmounted in the same batch as onNext().
+    // handleResult must explicitly reset isGenerating to prevent the generation dialog
+    // from showing after navigation is unblocked.
+    mockNavGuard.mockReturnValue({ state: "blocked", reset: vi.fn(), proceed: vi.fn() });
+    renderWithProviders(<CanonicalAdaptationWizard />);
+    fireEvent.click(screen.getByTestId("pick-type"));
+    fireEvent.click(screen.getByTestId("input-next"));
+    fireEvent.click(screen.getByTestId("barriers-next"));
+    fireEvent.click(screen.getByTestId("simulate-loading")); // isGenerating=true
+    fireEvent.click(screen.getByTestId("do-generate-no-lc")); // no onLoadingChange(false)
+    // Without the fix: isGenerating stays true → generation dialog visible (bug).
+    // With the fix: handleResult resets isGenerating → unsaved dialog shows instead.
+    expect(screen.queryByText(/adaptação ainda está em andamento/i)).not.toBeInTheDocument();
+    expect(screen.getByText(/sair sem salvar/i)).toBeInTheDocument();
+  });
+
+  it("calls useNavigationGuard with false after saving (isSaved=true)", async () => {
+    renderWithProviders(<CanonicalAdaptationWizard />);
+    advanceToReview();
+    await waitFor(() => expect(repo.saveDraft).toHaveBeenCalled());
+    fireEvent.click(screen.getByRole("button", { name: /Avançar para exportação/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Salvar/i }));
+    await waitFor(() => expect(mockMarkReady).toHaveBeenCalled());
+    expect(mockNavGuard).toHaveBeenLastCalledWith(false);
+  });
+
+  // --- generation guard dialog ------------------------------------------------
+
+  it("shows 'A adaptação ainda está em andamento' dialog when generating and blocked", () => {
+    mockNavGuard.mockReturnValue({ state: "blocked", reset: vi.fn(), proceed: vi.fn() });
+    renderWithProviders(<CanonicalAdaptationWizard />);
+    fireEvent.click(screen.getByTestId("pick-type"));
+    fireEvent.click(screen.getByTestId("input-next"));
+    fireEvent.click(screen.getByTestId("barriers-next"));
+    fireEvent.click(screen.getByTestId("simulate-loading"));
+    expect(screen.getByText(/adaptação ainda está em andamento/i)).toBeInTheDocument();
+  });
+
+  it("calls reset() when user clicks 'Continuar aqui' (generation dialog)", () => {
+    const reset = vi.fn();
+    mockNavGuard.mockReturnValue({ state: "blocked", reset, proceed: vi.fn() });
+    renderWithProviders(<CanonicalAdaptationWizard />);
+    fireEvent.click(screen.getByTestId("pick-type"));
+    fireEvent.click(screen.getByTestId("input-next"));
+    fireEvent.click(screen.getByTestId("barriers-next"));
+    fireEvent.click(screen.getByTestId("simulate-loading"));
+    fireEvent.click(screen.getByRole("button", { name: /Continuar aqui/i }));
+    expect(reset).toHaveBeenCalled();
+  });
+
+  it("calls proceed() when user clicks 'Sair mesmo assim' (generation dialog)", () => {
+    const proceed = vi.fn();
+    mockNavGuard.mockReturnValue({ state: "blocked", reset: vi.fn(), proceed });
+    renderWithProviders(<CanonicalAdaptationWizard />);
+    fireEvent.click(screen.getByTestId("pick-type"));
+    fireEvent.click(screen.getByTestId("input-next"));
+    fireEvent.click(screen.getByTestId("barriers-next"));
+    fireEvent.click(screen.getByTestId("simulate-loading"));
+    fireEvent.click(screen.getByRole("button", { name: /Sair mesmo assim/i }));
+    expect(proceed).toHaveBeenCalled();
+  });
+
+  it("calls reset() when generation dialog is dismissed via Escape key", () => {
+    const reset = vi.fn();
+    mockNavGuard.mockReturnValue({ state: "blocked", reset, proceed: vi.fn() });
+    renderWithProviders(<CanonicalAdaptationWizard />);
+    fireEvent.click(screen.getByTestId("pick-type"));
+    fireEvent.click(screen.getByTestId("input-next"));
+    fireEvent.click(screen.getByTestId("barriers-next"));
+    fireEvent.click(screen.getByTestId("simulate-loading"));
+    fireEvent.keyDown(document, { key: "Escape" });
+    expect(reset).toHaveBeenCalled();
+  });
+
+  // --- unsaved guard dialog ---------------------------------------------------
+
+  it("shows 'Sair sem salvar?' dialog when blocked after generation (unsaved result)", () => {
+    mockNavGuard.mockReturnValue({ state: "blocked", reset: vi.fn(), proceed: vi.fn() });
+    renderWithProviders(<CanonicalAdaptationWizard />);
+    advanceToReview(); // result set, isGenerating=false
+    expect(screen.getByText(/sair sem salvar/i)).toBeInTheDocument();
+    expect(screen.getByText(/rascunho ficará disponível no Histórico/i)).toBeInTheDocument();
+  });
+
+  it("calls reset() on 'Voltar e salvar' in unsaved dialog", () => {
+    const reset = vi.fn();
+    mockNavGuard.mockReturnValue({ state: "blocked", reset, proceed: vi.fn() });
+    renderWithProviders(<CanonicalAdaptationWizard />);
+    advanceToReview();
+    fireEvent.click(screen.getByRole("button", { name: /Voltar e salvar/i }));
+    expect(reset).toHaveBeenCalled();
+  });
+
+  it("calls proceed() on 'Sair assim mesmo' in unsaved dialog", () => {
+    const proceed = vi.fn();
+    mockNavGuard.mockReturnValue({ state: "blocked", reset: vi.fn(), proceed });
+    renderWithProviders(<CanonicalAdaptationWizard />);
+    advanceToReview();
+    fireEvent.click(screen.getByRole("button", { name: /Sair assim mesmo/i }));
+    expect(proceed).toHaveBeenCalled();
+  });
+
+  it("calls reset() when unsaved dialog is dismissed via Escape key", () => {
+    const reset = vi.fn();
+    mockNavGuard.mockReturnValue({ state: "blocked", reset, proceed: vi.fn() });
+    renderWithProviders(<CanonicalAdaptationWizard />);
+    advanceToReview();
+    fireEvent.keyDown(document, { key: "Escape" });
+    expect(reset).toHaveBeenCalled();
   });
 });

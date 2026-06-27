@@ -131,6 +131,28 @@ describe("useDeleteQuestion", () => {
       await expect(result.current.mutateAsync("q1")).rejects.toThrow("delete failed");
     });
   });
+
+  it("invalidates question_bank_stats on success so sidebar folders update in real-time", async () => {
+    const chain = {
+      delete: vi.fn().mockReturnThis(),
+      eq: vi.fn().mockResolvedValue({ error: null }),
+    };
+    vi.mocked(supabase.from).mockReturnValue(chain as never);
+
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
+    const invalidateSpy = vi.spyOn(qc, "invalidateQueries");
+
+    const { result } = renderHook(() => useDeleteQuestion(), {
+      wrapper: ({ children }) => createElement(QueryClientProvider, { client: qc }, children),
+    });
+    await act(async () => {
+      await result.current.mutateAsync("q1");
+    });
+
+    const keys = invalidateSpy.mock.calls.map((c) => (c[0] as { queryKey: unknown[] }).queryKey[0]);
+    expect(keys).toContain("question_bank");
+    expect(keys).toContain("question_bank_stats");
+  });
 });
 
 describe("useUpdateQuestion", () => {
@@ -163,6 +185,28 @@ describe("useUpdateQuestion", () => {
     await act(async () => {
       await expect(result.current.mutateAsync({ id: "q1", payload: { subject: "Química" } })).rejects.toThrow("update failed");
     });
+  });
+
+  it("invalidates question_bank_stats on success so sidebar updates without page reload", async () => {
+    const chain = {
+      update: vi.fn().mockReturnThis(),
+      eq: vi.fn().mockResolvedValue({ error: null }),
+    };
+    vi.mocked(supabase.from).mockReturnValue(chain as never);
+
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
+    const invalidateSpy = vi.spyOn(qc, "invalidateQueries");
+
+    const { result } = renderHook(() => useUpdateQuestion(), {
+      wrapper: ({ children }) => createElement(QueryClientProvider, { client: qc }, children),
+    });
+    await act(async () => {
+      await result.current.mutateAsync({ id: "q1", payload: { subject: "Química" } });
+    });
+
+    const keys = invalidateSpy.mock.calls.map((c) => (c[0] as { queryKey: unknown[] }).queryKey[0]);
+    expect(keys).toContain("question_bank");
+    expect(keys).toContain("question_bank_stats");
   });
 });
 

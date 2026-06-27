@@ -1,4 +1,5 @@
 import { useState, useRef, useCallback, useEffect } from "react";
+import { useNavigationGuard } from "@/hooks/useNavigationGuard";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -51,7 +52,7 @@ import QuestionForm from "@/components/forms/QuestionForm";
 import OptionsEditor from "@/components/forms/OptionsEditor";
 import ManualQuestionEditor from "@/components/forms/ManualQuestionEditor";
 import PdfPreviewModal from "@/components/forms/PdfPreviewModal";
-import { SUBJECTS } from "@/lib/utils/constants";
+import { SUBJECTS, normalizeSubject } from "@/lib/utils/constants";
 import "katex/dist/katex.min.css";
 
 const EXTRACTION_COST = 5;
@@ -200,6 +201,8 @@ export default function QuestionBankPage() {
 
   const fileRef = useRef<HTMLInputElement>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const navGuard = useNavigationGuard(extracting || uploading);
 
   const filters = { subject: subjectFilter !== "all" ? subjectFilter : undefined };
   const { data: questions = [], isLoading } = useQuestions(filters);
@@ -375,7 +378,7 @@ export default function QuestionBankPage() {
         const rawText = (q.text || "").replace(/\\n/g, "\n");
         processed.push({
           text: stripOptionsFromText(rawText, Boolean(cleanedOptions?.length)),
-          subject: q.subject || "Geral",
+          subject: normalizeSubject(q.subject || "Geral"),
           topic: q.topic || undefined,
           options: cleanedOptions,
           correct_answer: q.correct_answer != null ? q.correct_answer : undefined,
@@ -488,7 +491,7 @@ export default function QuestionBankPage() {
     }]);
 
     setExtractedQuestions((prev) =>
-      prev.map((eq, idx) => (idx === index ? { ...eq, saved: true, selected: true } : eq)),
+      prev.map((eq, idx) => (idx === index ? { ...eq, saved: true, selected: true, editing: false } : eq)),
     );
   };
 
@@ -880,6 +883,28 @@ export default function QuestionBankPage() {
 
   return (
     <div className="p-6 max-w-6xl mx-auto space-y-6">
+      {/* Navigation guard dialog — shown when user tries to navigate away mid-extraction */}
+      {navGuard.state === "blocked" && (
+        <Dialog open onOpenChange={() => navGuard.reset?.()}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Processamento ainda está em andamento</DialogTitle>
+            </DialogHeader>
+            <p className="text-sm text-muted-foreground">
+              A IA ainda está processando o arquivo. Se sair agora, o resultado será perdido e os créditos não serão devolvidos.
+            </p>
+            <div className="flex justify-end gap-2 pt-2">
+              <Button variant="outline" onClick={() => navGuard.reset?.()}>
+                Continuar aqui
+              </Button>
+              <Button variant="destructive" onClick={() => navGuard.proceed?.()}>
+                Sair mesmo assim
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
+      )}
+
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>

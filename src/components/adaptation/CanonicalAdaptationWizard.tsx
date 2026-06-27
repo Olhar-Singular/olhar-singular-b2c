@@ -1,5 +1,6 @@
 import { useState, useCallback, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
+import { useNavigationGuard } from "@/hooks/useNavigationGuard";
 import { toast } from "sonner";
 import {
   AlertDialog,
@@ -11,6 +12,13 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
 import { StepActivityType } from "./steps/activity-type/StepActivityType";
 import { StepActivityInput } from "./steps/activity-input/StepActivityInput";
 import { StepBarrierSelection } from "./steps/barriers/StepBarrierSelection";
@@ -81,10 +89,15 @@ export default function CanonicalAdaptationWizard({ editMode }: Props = {}) {
   const navigate = useNavigate();
   const { user } = useAuth();
   const markReady = useMarkReady();
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [isSaved, setIsSaved] = useState(!!editMode);
 
   const [data, setData] = useState<WizardData>(
     editMode ? editMode.initialData : INITIAL_WIZARD_DATA,
   );
+
+  const hasUnsavedResult = !!data.result && !isSaved && !isGenerating;
+  const navGuard = useNavigationGuard(isGenerating || hasUnsavedResult);
   const [stepIndex, setStepIndex] = useState(editMode ? REVIEW_INDEX : 0);
   const [confirmRegenerate, setConfirmRegenerate] = useState(false);
   // Crash-mirror recovery: a surviving mirror newer than the loaded row means a
@@ -176,6 +189,11 @@ export default function CanonicalAdaptationWizard({ editMode }: Props = {}) {
   // First generation creates the draft row so autosave has somewhere to write.
   const handleResult = useCallback(
     async (result: AdaptationResult) => {
+      // Reset isGenerating immediately when a result arrives. The real StepGenerate
+      // calls onLoadingChange(false) via useEffect, but that effect may not fire when
+      // the component is unmounted in the same React 18 batch as onNext(). Resetting
+      // here ensures the navigation guard switches to "unsaved" mode, not "generating".
+      setIsGenerating(false);
       setData((prev) => setResult(prev, result));
       // Draft already exists (e.g. regenerate) → autosave handles the update.
       if (draftId) return;
@@ -209,6 +227,7 @@ export default function CanonicalAdaptationWizard({ editMode }: Props = {}) {
     setStepIndex(0);
     setDraftId(null);
     setDraftUpdatedAt(null);
+    setIsSaved(false);
   }
 
   function confirmRegenerateNow() {
@@ -237,8 +256,8 @@ export default function CanonicalAdaptationWizard({ editMode }: Props = {}) {
       return;
     }
     toast.success("Adaptação salva!");
-    navigate("/historico");
-  }, [draftId, currentUpdatedAt, flush, markReady, navigate, handleConflict]);
+    setIsSaved(true);
+  }, [draftId, currentUpdatedAt, flush, markReady, handleConflict]);
 
   const renderStep = () => {
     switch (currentKey) {
@@ -257,7 +276,13 @@ export default function CanonicalAdaptationWizard({ editMode }: Props = {}) {
         return <StepBarrierSelection data={data} updateData={updateData} onNext={onNext} onPrev={onPrev} />;
       case "generate":
         return (
-          <StepGenerate data={data} onResult={handleResult} onNext={onNext} onPrev={onPrev} />
+          <StepGenerate
+            data={data}
+            onResult={handleResult}
+            onNext={onNext}
+            onPrev={onPrev}
+            onLoadingChange={setIsGenerating}
+          />
         );
       case "review":
         /* v8 ignore next -- guard: review step is only reachable once a result exists */
@@ -341,6 +366,40 @@ export default function CanonicalAdaptationWizard({ editMode }: Props = {}) {
       </div>
 
       <div className="min-h-[400px]">{renderStep()}</div>
+
+      {navGuard.state === "blocked" && isGenerating && (
+        <Dialog open onOpenChange={() => navGuard.reset?.()}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>A adaptação ainda está em andamento</DialogTitle>
+            </DialogHeader>
+            <p className="text-sm text-muted-foreground">
+              A ISA ainda está gerando a adaptação. Se sair agora, o resultado será perdido e os créditos não serão devolvidos.
+            </p>
+            <div className="flex justify-end gap-2 pt-2">
+              <Button variant="outline" onClick={() => navGuard.reset?.()}>Continuar aqui</Button>
+              <Button variant="destructive" onClick={() => navGuard.proceed?.()}>Sair mesmo assim</Button>
+            </div>
+          </DialogContent>
+        </Dialog>
+      )}
+
+      {navGuard.state === "blocked" && !isGenerating && (
+        <Dialog open onOpenChange={() => navGuard.reset?.()}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Sair sem salvar?</DialogTitle>
+            </DialogHeader>
+            <p className="text-sm text-muted-foreground">
+              Você tem uma adaptação não salva. O rascunho ficará disponível no Histórico.
+            </p>
+            <div className="flex justify-end gap-2 pt-2">
+              <Button variant="outline" onClick={() => navGuard.reset?.()}>Voltar e salvar</Button>
+              <Button variant="destructive" onClick={() => navGuard.proceed?.()}>Sair assim mesmo</Button>
+            </div>
+          </DialogContent>
+        </Dialog>
+      )}
 
       <AlertDialog
         open={!!pendingMirror}

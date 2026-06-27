@@ -1,7 +1,7 @@
 import { Link, useLocation, Outlet, useNavigate } from "react-router-dom";
 import {
   LayoutDashboard, Wand2, Users, MessageSquare,
-  Coins, LogOut, Menu, X, BookOpen, ShieldCheck, History,
+  Coins, LogOut, Menu, X, BookOpen, ShieldCheck, History, LibraryBig,
 } from "lucide-react";
 import { useState } from "react";
 import { useAuth } from "@/hooks/useAuth";
@@ -9,11 +9,12 @@ import logoImg from "@/assets/logo-olho-transparent.png";
 
 const NAV_ITEMS = [
   { path: "/dashboard",        label: "Dashboard",          icon: LayoutDashboard },
-  { path: "/adaptar",          label: "Adaptar",             icon: Wand2 },
-  { path: "/historico",        label: "Histórico",           icon: History },
-  { path: "/perfis-barreira",  label: "Perfis de Barreira",  icon: Users },
-  { path: "/chat",             label: "Chat com a ISA",      icon: MessageSquare },
-  { path: "/banco-questoes",  label: "Banco de Questões",   icon: BookOpen },
+  { path: "/adaptar",          label: "Adaptar",            icon: Wand2 },
+  { path: "/adaptacoes",       label: "Adaptações",         icon: LibraryBig },
+  { path: "/historico",        label: "Histórico",          icon: History },
+  { path: "/perfis-barreira",  label: "Perfis de Barreira", icon: Users },
+  { path: "/chat",             label: "Chat com a ISA",     icon: MessageSquare },
+  { path: "/banco-questoes",   label: "Banco de Questões",  icon: BookOpen },
 ];
 
 const ADMIN_ITEM = { path: "/admin", label: "Admin", icon: ShieldCheck };

@@ -24,6 +24,12 @@ import { resolvePageStyle } from "../pageStyle";
 /** Convert pixels (screen) to points (PDF). 1px = 72/96 pt. */
 const px2pt = (px: number): number => px * (72 / 96);
 
+/** Convert ISO date (YYYY-MM-DD) to Brazilian format (DD/MM/AAAA); passes through any other string. */
+function formatDateBR(date: string): string {
+  const match = date.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  return match ? `${match[3]}/${match[2]}/${match[1]}` : date;
+}
+
 export function PdfHeader({ header }: { header: HeaderSettings }) {
   if (!hasHeaderContent(header)) return null;
   return (
@@ -42,7 +48,7 @@ export function PdfHeader({ header }: { header: HeaderSettings }) {
         ) : (
           <Text> </Text>
         )}
-        {header.date && header.date.trim() !== "" ? <Text>Data: {header.date}</Text> : <Text> </Text>}
+        {header.date && header.date.trim() !== "" ? <Text>Data: {formatDateBR(header.date)}</Text> : <Text> </Text>}
       </View>
     </View>
   );

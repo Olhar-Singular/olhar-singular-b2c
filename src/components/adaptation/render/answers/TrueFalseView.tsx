@@ -13,12 +13,12 @@ export function TrueFalseView({ answer }: { answer: TrueFalseAnswer }) {
   return (
     <ul data-testid="answer-trueFalse" className="space-y-2">
       {answer.items.map((item) => (
-        <li key={item.id} className="flex items-start gap-2">
-          <span className="flex-1">
-            <RichTextView content={item.content} />
-          </span>
+        <li key={item.id} className="flex items-start gap-3">
           <span className="shrink-0 font-medium" aria-label="Marque Verdadeiro ou Falso">
             (  ) V  (  ) F
+          </span>
+          <span className="flex-1">
+            <RichTextView content={item.content} />
           </span>
         </li>
       ))}

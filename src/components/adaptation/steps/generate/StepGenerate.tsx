@@ -14,9 +14,10 @@ type Props = {
   onResult: (result: AdaptationResult) => void;
   onNext: () => void;
   onPrev: () => void;
+  onLoadingChange?: (loading: boolean) => void;
 };
 
-export function StepGenerate({ data, onResult, onNext, onPrev }: Props) {
+export function StepGenerate({ data, onResult, onNext, onPrev, onLoadingChange }: Props) {
   const { refreshProfile } = useAuth();
   const [loading, setLoading] = useState(!data.result);
   const [creditError, setCreditError] = useState<string | null>(null);
@@ -30,6 +31,7 @@ export function StepGenerate({ data, onResult, onNext, onPrev }: Props) {
     abortRef.current = controller;
 
     setLoading(true);
+    onLoadingChange?.(true);
     setCreditError(null);
     setFailed(false);
 
@@ -77,9 +79,12 @@ export function StepGenerate({ data, onResult, onNext, onPrev }: Props) {
       toast.error(parseEdgeFnError(e, "Erro ao gerar adaptação."));
     } finally {
       /* v8 ignore next -- AbortController race: aborted branch only reachable via Regerar timing */
-      if (!controller.signal.aborted) setLoading(false);
+      if (!controller.signal.aborted) {
+        setLoading(false);
+        onLoadingChange?.(false);
+      }
     }
-  }, [data, onResult, onNext, refreshProfile]);
+  }, [data, onResult, onNext, refreshProfile, onLoadingChange]);
 
   useEffect(() => {
     if (startedRef.current) return;

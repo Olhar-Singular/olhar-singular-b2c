@@ -65,12 +65,12 @@ export function PdfAnswer({ answer }: { answer: QuestionAnswer }) {
         <View>
           {answer.items.map((item) => (
             <View key={item.id} style={ROW}>
+              <Text style={TF_MARKER}>(  ) V  (  ) F</Text>
               <View style={FLEX}>
                 <Text>
                   <PdfRichText content={item.content} />
                 </Text>
               </View>
-              <Text style={TF_MARKER}>(  ) V  (  ) F</Text>
             </View>
           ))}
         </View>

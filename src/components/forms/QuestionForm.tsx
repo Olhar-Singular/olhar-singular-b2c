@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import {
   Dialog,
   DialogContent,
@@ -48,6 +49,7 @@ type QuestionFormProps = {
 
 export default function QuestionForm({ open, onOpenChange, question, onSaved }: QuestionFormProps) {
   const { user } = useAuth();
+  const qc = useQueryClient();
   const [text, setText] = useState("");
   const [subject, setSubject] = useState("");
   const [topic, setTopic] = useState("");
@@ -149,6 +151,8 @@ export default function QuestionForm({ open, onOpenChange, question, onSaved }: 
       }
 
       if (error) throw error;
+      qc.invalidateQueries({ queryKey: ["question_bank", user?.id] });
+      qc.invalidateQueries({ queryKey: ["question_bank_stats", user?.id] });
       toast.success(question ? "Questão atualizada!" : "Questão adicionada!");
       onOpenChange(false);
       onSaved();

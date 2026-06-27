@@ -13,7 +13,7 @@
  */
 
 import { useState } from "react";
-import { Copy, FileDown } from "lucide-react";
+import { Copy, FileDown, CalendarDays } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -67,6 +67,7 @@ export function ExportPanel({ document, pageStyle, onDownload = downloadPdf }: P
           <Label htmlFor="pdf-title">Título</Label>
           <Input
             id="pdf-title"
+            maxLength={120}
             value={settings.header.title ?? ""}
             onChange={(e) => setHeader("title", e.target.value)}
           />
@@ -75,6 +76,7 @@ export function ExportPanel({ document, pageStyle, onDownload = downloadPdf }: P
           <Label htmlFor="pdf-school">Escola</Label>
           <Input
             id="pdf-school"
+            maxLength={100}
             value={settings.header.school ?? ""}
             onChange={(e) => setHeader("school", e.target.value)}
           />
@@ -83,17 +85,23 @@ export function ExportPanel({ document, pageStyle, onDownload = downloadPdf }: P
           <Label htmlFor="pdf-teacher">Professor(a)</Label>
           <Input
             id="pdf-teacher"
+            maxLength={80}
             value={settings.header.teacher ?? ""}
             onChange={(e) => setHeader("teacher", e.target.value)}
           />
         </div>
         <div className="space-y-1">
           <Label htmlFor="pdf-date">Data</Label>
-          <Input
-            id="pdf-date"
-            value={settings.header.date ?? ""}
-            onChange={(e) => setHeader("date", e.target.value)}
-          />
+          <div className="relative group">
+            <Input
+              id="pdf-date"
+              type="date"
+              value={settings.header.date ?? ""}
+              onChange={(e) => setHeader("date", e.target.value)}
+              className="cursor-pointer pr-10 hover:border-primary/60 focus-visible:border-primary transition-colors duration-200 [&::-webkit-calendar-picker-indicator]:opacity-0 [&::-webkit-calendar-picker-indicator]:absolute [&::-webkit-calendar-picker-indicator]:inset-0 [&::-webkit-calendar-picker-indicator]:w-full [&::-webkit-calendar-picker-indicator]:h-full [&::-webkit-calendar-picker-indicator]:cursor-pointer"
+            />
+            <CalendarDays className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground transition-colors duration-200 group-hover:text-primary" />
+          </div>
         </div>
       </div>
 

@@ -3,6 +3,12 @@ import { render, screen, fireEvent, waitFor, act } from "@testing-library/react"
 import userEvent from "@testing-library/user-event";
 import QuestionForm from "./QuestionForm";
 
+const mockInvalidateQueries = vi.fn();
+vi.mock("@tanstack/react-query", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@tanstack/react-query")>();
+  return { ...actual, useQueryClient: () => ({ invalidateQueries: mockInvalidateQueries }) };
+});
+
 const insertSpy = vi.fn();
 const updateSpy = vi.fn();
 const eqSpy = vi.fn();
@@ -555,5 +561,36 @@ describe("QuestionForm — MathPreview and image preview", () => {
     // After click, the ImagePreviewDialog should be open — verify the img is still rendered
     // (ImagePreviewDialog is a separate dialog that renders when open=true)
     expect(img).toBeInTheDocument();
+  });
+});
+
+describe("QuestionForm — cache invalidation after save", () => {
+  it("invalidates question_bank and question_bank_stats after updating an existing question", async () => {
+    render(
+      <QuestionForm
+        open
+        onOpenChange={vi.fn()}
+        question={{ id: "q1", text: "Enunciado", subject: "Física", difficulty: "medio" }}
+        onSaved={vi.fn()}
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: /Atualizar/ }));
+    await waitFor(() => expect(eqSpy).toHaveBeenCalledWith("id", "q1"));
+    const keys = mockInvalidateQueries.mock.calls.map((c: [{ queryKey: unknown[] }]) => c[0].queryKey[0]);
+    expect(keys).toContain("question_bank");
+    expect(keys).toContain("question_bank_stats");
+  });
+
+  it("invalidates question_bank and question_bank_stats after inserting a new question", async () => {
+    render(<QuestionForm open onOpenChange={vi.fn()} question={null} onSaved={vi.fn()} />);
+    const textareas = screen.getAllByRole("textbox");
+    fireEvent.change(textareas[0], { target: { value: "novo texto" } });
+    const selects = screen.getAllByLabelText("select-mock") as HTMLSelectElement[];
+    fireEvent.change(selects[0], { target: { value: "Matemática" } });
+    fireEvent.click(screen.getByRole("button", { name: /^Adicionar$/ }));
+    await waitFor(() => expect(insertSpy).toHaveBeenCalled());
+    const keys = mockInvalidateQueries.mock.calls.map((c: [{ queryKey: unknown[] }]) => c[0].queryKey[0]);
+    expect(keys).toContain("question_bank");
+    expect(keys).toContain("question_bank_stats");
   });
 });

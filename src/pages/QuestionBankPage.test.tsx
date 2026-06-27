@@ -21,6 +21,12 @@ const mockUseAuthContext = vi.fn(() => ({
   refreshProfile: mockRefreshProfile,
 }));
 
+// Default: guard is inactive — tests don't need Router context.
+const mockNavigationGuard = vi.fn().mockReturnValue({ state: "unblocked", reset: vi.fn(), proceed: vi.fn() });
+vi.mock("@/hooks/useNavigationGuard", () => ({
+  useNavigationGuard: (...args: any[]) => mockNavigationGuard(...args),
+}));
+
 vi.mock("@/hooks/useQuestionBank", () => ({
   useQuestions: (...args: any[]) => mockUseQuestions(...args),
   useDeleteQuestion: vi.fn(() => ({ mutateAsync: mockDeleteMutateAsync, isPending: false })),
@@ -1354,6 +1360,19 @@ describe("QuestionBankPage", () => {
     fireEvent.click(saveBtn);
     await waitFor(() => expect(screen.getByText("✓ Salva")).toBeInTheDocument());
     expect(screen.queryByRole("button", { name: /^Salvar$/i })).not.toBeInTheDocument();
+  });
+
+  it("review: Salvar closes the edit panel even when editing was open (bug: editing:false after save)", async () => {
+    await goToReview([{ text: "Q1", subject: "Física" }]);
+    // Open edit mode
+    fireEvent.click(screen.getByRole("button", { name: /^Editar$/i }));
+    expect(screen.getByDisplayValue("Q1")).toBeInTheDocument();
+    // Click Salvar while edit is still open
+    fireEvent.click(screen.getByRole("button", { name: /^Salvar$/i }));
+    await waitFor(() => expect(screen.getByText("✓ Salva")).toBeInTheDocument());
+    // Edit panel must be closed — textarea gone, "Fechar edição" button gone
+    expect(screen.queryByDisplayValue("Q1")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Fechar edição/i })).not.toBeInTheDocument();
   });
 
   // ── Review: remover questão individual ───────────────────────────────────────
@@ -2822,5 +2841,47 @@ describe("QuestionBankPage", () => {
     await goToReview([{ text: "Q sem imagem", subject: "Física" }]);
     expect(screen.queryByRole("button", { name: /ampliar imagem/i })).not.toBeInTheDocument();
   });
+  });
+
+  describe("navigation guard during extraction", () => {
+    it("does not show the guard dialog when extraction is idle", () => {
+      mockNavigationGuard.mockReturnValueOnce({ state: "unblocked", reset: vi.fn(), proceed: vi.fn() });
+      render(<QuestionBankPage />, { wrapper });
+      expect(screen.queryByText(/ainda está em andamento/i)).not.toBeInTheDocument();
+    });
+
+    it("shows confirmation dialog when the router tries to navigate away mid-extraction", () => {
+      const mockReset = vi.fn();
+      const mockProceed = vi.fn();
+      mockNavigationGuard.mockReturnValueOnce({ state: "blocked", reset: mockReset, proceed: mockProceed });
+      render(<QuestionBankPage />, { wrapper });
+      expect(screen.getByRole("dialog")).toBeInTheDocument();
+      expect(screen.getByText(/ainda está em andamento/i)).toBeInTheDocument();
+    });
+
+    it("calls reset() when user clicks 'Continuar aqui'", () => {
+      const mockReset = vi.fn();
+      mockNavigationGuard.mockReturnValueOnce({ state: "blocked", reset: mockReset, proceed: vi.fn() });
+      render(<QuestionBankPage />, { wrapper });
+      fireEvent.click(screen.getByRole("button", { name: /continuar aqui/i }));
+      expect(mockReset).toHaveBeenCalledOnce();
+    });
+
+    it("calls proceed() when user clicks 'Sair mesmo assim'", () => {
+      const mockProceed = vi.fn();
+      mockNavigationGuard.mockReturnValueOnce({ state: "blocked", reset: vi.fn(), proceed: mockProceed });
+      render(<QuestionBankPage />, { wrapper });
+      fireEvent.click(screen.getByRole("button", { name: /sair mesmo assim/i }));
+      expect(mockProceed).toHaveBeenCalledOnce();
+    });
+
+    it("calls reset() when dialog is dismissed via onOpenChange (e.g. Escape key)", () => {
+      const mockReset = vi.fn();
+      mockNavigationGuard.mockReturnValueOnce({ state: "blocked", reset: mockReset, proceed: vi.fn() });
+      render(<QuestionBankPage />, { wrapper });
+      // shadcn Dialog calls onOpenChange(false) when Escape is pressed.
+      fireEvent.keyDown(document, { key: "Escape" });
+      expect(mockReset).toHaveBeenCalled();
+    });
   });
 });

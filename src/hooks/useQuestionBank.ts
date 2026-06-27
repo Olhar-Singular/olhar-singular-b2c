@@ -45,6 +45,7 @@ export function useDeleteQuestion() {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["question_bank", user?.id] });
+      qc.invalidateQueries({ queryKey: ["question_bank_stats", user?.id] });
       toast.success("Questão removida.");
     },
     onError: (err: Error) => toast.error(parseDbError(err, "Erro ao excluir questão.")),
@@ -64,6 +65,7 @@ export function useUpdateQuestion() {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["question_bank", user?.id] });
+      qc.invalidateQueries({ queryKey: ["question_bank_stats", user?.id] });
     },
     onError: (err: Error) => toast.error(parseDbError(err, "Erro ao salvar alterações na questão.")),
   });

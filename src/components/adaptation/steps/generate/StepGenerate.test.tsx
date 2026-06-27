@@ -185,6 +185,25 @@ describe("StepGenerate", () => {
     await waitFor(() => expect(toast.error).toHaveBeenCalledWith("Falha na adaptação"));
   });
 
+  it("calls onLoadingChange(true) when generation starts and onLoadingChange(false) when done", async () => {
+    const onLoadingChange = vi.fn();
+    invokeMock.mockResolvedValueOnce({ data: { adaptation: result }, error: null });
+    renderWithProviders(
+      <StepGenerate data={baseData} onResult={vi.fn()} onNext={vi.fn()} onPrev={vi.fn()} onLoadingChange={onLoadingChange} />,
+    );
+    expect(onLoadingChange).toHaveBeenCalledWith(true);
+    await waitFor(() => expect(onLoadingChange).toHaveBeenCalledWith(false));
+  });
+
+  it("calls onLoadingChange(false) even when generation fails", async () => {
+    const onLoadingChange = vi.fn();
+    invokeMock.mockResolvedValueOnce({ data: null, error: { message: "boom" } });
+    renderWithProviders(
+      <StepGenerate data={baseData} onResult={vi.fn()} onNext={vi.fn()} onPrev={vi.fn()} onLoadingChange={onLoadingChange} />,
+    );
+    await waitFor(() => expect(onLoadingChange).toHaveBeenCalledWith(false));
+  });
+
   it("does not generate when a result is already present and offers navigation", () => {
     const onNext = vi.fn();
     const onPrev = vi.fn();

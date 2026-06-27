@@ -1,121 +1,88 @@
-import { useState } from "react";
-import { useNavigate } from "react-router-dom";
-import { FileText, Pencil, Trash2, Plus } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
+import { FileText, FileSearch, Coins } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
-import { useAdaptations, useDeleteAdaptation } from "@/hooks/useAdaptations";
+import { Badge } from "@/components/ui/badge";
+import { useActivityLog } from "@/hooks/useActivityLog";
+import type { ActivityLogItem } from "@/hooks/useActivityLog";
 
 function formatDate(iso: string): string {
-  return new Date(iso).toLocaleDateString("pt-BR", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-  });
+  return new Date(iso).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric" });
+}
+
+function CreditsLabel({ n, wasFree }: { n: number; wasFree?: boolean }) {
+  if (n === 0 || wasFree) return <span className="text-xs text-emerald-600 font-medium">Gratuita</span>;
+  return (
+    <span className="flex items-center gap-1 text-xs text-muted-foreground">
+      <Coins className="w-3 h-3" />
+      {n} crédito{n !== 1 ? "s" : ""}
+    </span>
+  );
+}
+
+function AdaptationRow({ item }: { item: Extract<ActivityLogItem, { kind: "adaptation" }> }) {
+  return (
+    <Card>
+      <CardContent className="flex items-center gap-4 p-4">
+        <FileText className="w-5 h-5 text-primary shrink-0" />
+        <div className="flex-1 min-w-0">
+          <p className="font-medium truncate">{item.title}</p>
+          <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+            {item.activityType && (
+              <Badge variant="secondary" className="text-xs">{item.activityType}</Badge>
+            )}
+            <Badge variant={item.status === "ready" ? "default" : "outline"} className="text-xs">
+              {item.status === "ready" ? "Concluída" : "Rascunho"}
+            </Badge>
+            <span className="text-xs text-muted-foreground">{formatDate(item.date)}</span>
+          </div>
+        </div>
+        <CreditsLabel n={item.creditsSpent} />
+      </CardContent>
+    </Card>
+  );
+}
+
+function ExtractionRow({ item }: { item: Extract<ActivityLogItem, { kind: "extraction" }> }) {
+  return (
+    <Card>
+      <CardContent className="flex items-center gap-4 p-4">
+        <FileSearch className="w-5 h-5 text-orange-500 shrink-0" />
+        <div className="flex-1 min-w-0">
+          <p className="font-medium truncate">{item.fileName}</p>
+          <div className="flex items-center gap-2 mt-0.5">
+            <span className="text-xs text-muted-foreground">{item.questionsExtracted} questões extraídas</span>
+            <span className="text-xs text-muted-foreground">{formatDate(item.date)}</span>
+          </div>
+        </div>
+        <CreditsLabel n={item.creditsSpent} wasFree={item.wasFree} />
+      </CardContent>
+    </Card>
+  );
 }
 
 export default function MyAdaptationsPage() {
-  const navigate = useNavigate();
-  const { data: adaptations = [], isLoading } = useAdaptations();
-  const remove = useDeleteAdaptation();
-  const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
-
-  async function handleDelete() {
-    /* v8 ignore next -- guard: Confirmar is only shown when a target is set */
-    if (!deleteTarget) return;
-    await remove.mutateAsync(deleteTarget);
-    setDeleteTarget(null);
-  }
+  const { data: items = [], isLoading } = useActivityLog();
 
   return (
     <div className="mx-auto max-w-4xl px-4 py-6 space-y-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold text-foreground">Minhas Adaptações</h1>
-        <Button onClick={() => navigate("/adaptar")}>
-          <Plus className="w-4 h-4 mr-1" /> Nova adaptação
-        </Button>
-      </div>
+      <h1 className="text-2xl font-semibold text-foreground">Histórico</h1>
 
       {isLoading ? (
         <p className="text-sm text-muted-foreground">Carregando…</p>
-      ) : adaptations.length === 0 ? (
-        <p className="text-sm text-muted-foreground">
-          Você ainda não salvou nenhuma adaptação.
-        </p>
+      ) : items.length === 0 ? (
+        <p className="text-sm text-muted-foreground">Nenhuma atividade registrada ainda.</p>
       ) : (
         <ul className="space-y-3">
-          {adaptations.map((a) => (
-            <li key={a.id}>
-              <Card>
-                <CardContent className="flex items-center justify-between gap-4 p-4">
-                  <div className="flex items-center gap-3 min-w-0">
-                    <FileText className="w-5 h-5 text-primary shrink-0" />
-                    <div className="min-w-0">
-                      <p className="font-medium truncate">
-                        {a.title || "Adaptação sem título"}
-                      </p>
-                      <p className="text-xs text-muted-foreground">
-                        Atualizada em {formatDate(a.updated_at)}
-                      </p>
-                    </div>
-                    <Badge variant={a.status === "ready" ? "default" : "secondary"}>
-                      {a.status === "ready" ? "Salva" : "Rascunho"}
-                    </Badge>
-                  </div>
-                  <div className="flex items-center gap-2 shrink-0">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => navigate(`/adaptar/editar/${a.id}`)}
-                      aria-label={`Editar ${a.title || "adaptação"}`}
-                    >
-                      <Pencil className="w-4 h-4" />
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setDeleteTarget(a.id)}
-                      aria-label={`Excluir ${a.title || "adaptação"}`}
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
+          {items.map((item) => (
+            <li key={`${item.kind}-${item.id}`}>
+              {item.kind === "adaptation" ? (
+                <AdaptationRow item={item} />
+              ) : (
+                <ExtractionRow item={item} />
+              )}
             </li>
           ))}
         </ul>
       )}
-
-      <AlertDialog open={!!deleteTarget} onOpenChange={(open) => !open && setDeleteTarget(null)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Excluir adaptação?</AlertDialogTitle>
-            <AlertDialogDescription>
-              Esta ação não pode ser desfeita.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancelar</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={handleDelete}
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-            >
-              Excluir
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
     </div>
   );
 }

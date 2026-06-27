@@ -94,6 +94,16 @@ describe("AnswerPreview — trueFalse", () => {
     fireEvent.change(screen.getByLabelText("Afirmação"), { target: { value: "y" } });
     expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ kind: "trueFalse" }));
   });
+
+  it("renders V/F markers before the statement text (left-aligned, not right-pushed)", () => {
+    render(<AnswerPreview answer={answer} onChange={vi.fn()} />);
+    const container = screen.getByTestId("answer-preview-trueFalse");
+    const row = container.firstElementChild!;
+    // V/F span must be the FIRST child so it appears left of the statement text.
+    expect(row.firstElementChild?.textContent).toMatch(/V.*F/);
+    // V/F must NOT be the last element — that would mean content pushed it to the right edge.
+    expect(row.lastElementChild?.textContent).not.toMatch(/V.*F/);
+  });
 });
 
 describe("AnswerPreview — ordering", () => {

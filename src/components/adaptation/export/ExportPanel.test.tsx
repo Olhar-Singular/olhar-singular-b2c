@@ -97,4 +97,28 @@ describe("ExportPanel", () => {
     render(<ExportPanel document={document} />);
     expect(screen.getByRole("button", { name: /Exportar PDF/i })).toBeInTheDocument();
   });
+
+  it("date input has type='date' for native browser date picker", () => {
+    render(<ExportPanel document={document} onDownload={vi.fn()} />);
+    const dateInput = screen.getByLabelText("Data") as HTMLInputElement;
+    expect(dateInput.type).toBe("date");
+  });
+
+  it("title input enforces maxLength of 120 characters", () => {
+    render(<ExportPanel document={document} onDownload={vi.fn()} />);
+    const titleInput = screen.getByLabelText("Título") as HTMLInputElement;
+    expect(titleInput.maxLength).toBe(120);
+  });
+
+  it("school input enforces maxLength of 100 characters", () => {
+    render(<ExportPanel document={document} onDownload={vi.fn()} />);
+    const schoolInput = screen.getByLabelText("Escola") as HTMLInputElement;
+    expect(schoolInput.maxLength).toBe(100);
+  });
+
+  it("teacher input enforces maxLength of 80 characters", () => {
+    render(<ExportPanel document={document} onDownload={vi.fn()} />);
+    const teacherInput = screen.getByLabelText("Professor(a)") as HTMLInputElement;
+    expect(teacherInput.maxLength).toBe(80);
+  });
 });

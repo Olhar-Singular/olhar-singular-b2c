@@ -138,7 +138,14 @@ describe("PdfHeader", () => {
     expect(text).toContain("Prova");
     expect(text).toContain("Escola X");
     expect(text).toContain("Ana");
-    expect(text).toContain("2026-06-04");
+    // ISO date stored in settings must be formatted as DD/MM/AAAA for the PDF.
+    expect(text).toContain("04/06/2026");
+    expect(text).not.toContain("2026-06-04");
+  });
+
+  it("renders a non-ISO date string as-is (graceful fallback)", () => {
+    const { text } = collect(PdfHeader({ header: { title: "X", date: "sem data" } }));
+    expect(text).toContain("sem data");
   });
 
   it("renders placeholder cells when teacher/date are blank but another field is set", () => {

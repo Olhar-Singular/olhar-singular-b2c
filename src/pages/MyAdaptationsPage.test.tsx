@@ -1,117 +1,88 @@
-import { render, screen, fireEvent, waitFor, within } from "@testing-library/react";
+import { render, screen } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { MemoryRouter } from "react-router-dom";
 import MyAdaptationsPage from "./MyAdaptationsPage";
+import type { ActivityLogItem } from "@/hooks/useActivityLog";
 
-const mockNavigate = vi.fn();
-vi.mock("react-router-dom", async (orig) => ({
-  ...(await orig<typeof import("react-router-dom")>()),
-  useNavigate: () => mockNavigate,
+vi.mock("@/hooks/useActivityLog", () => ({
+  useActivityLog: vi.fn(),
 }));
 
-const mockDelete = vi.fn();
-vi.mock("@/hooks/useAdaptations", () => ({
-  useAdaptations: vi.fn(),
-  useDeleteAdaptation: vi.fn(() => ({ mutateAsync: mockDelete, isPending: false })),
-}));
-
-const items = [
-  {
-    id: "a1",
-    user_id: "u1",
-    barrier_profile_id: null,
-    title: "Atividade de frações",
-    original_activity: "x",
-    activity_type: "prova",
-    barriers_used: [],
-    status: "ready",
-    credits_spent: 0,
-    created_at: "2026-01-01T00:00:00Z",
-    updated_at: "2026-02-10T00:00:00Z",
-  },
-  {
-    id: "a2",
-    user_id: "u1",
-    barrier_profile_id: null,
-    title: "",
-    original_activity: "y",
-    activity_type: null,
-    barriers_used: [],
-    status: "draft",
-    credits_spent: 0,
-    created_at: "2026-01-01T00:00:00Z",
-    updated_at: "2026-02-11T00:00:00Z",
-  },
+const items: ActivityLogItem[] = [
+  { kind: "adaptation", id: "a1", title: "Prova de Física", activityType: "prova", status: "ready", creditsSpent: 5, date: "2026-06-01T00:00:00Z" },
+  { kind: "extraction", id: "e1", fileName: "gabarito.pdf", questionsExtracted: 8, creditsSpent: 2, wasFree: false, date: "2026-06-02T00:00:00Z" },
+  { kind: "adaptation", id: "a2", title: "Adaptação sem título", activityType: null, status: "draft", creditsSpent: 0, date: "2026-06-03T00:00:00Z" },
 ];
 
 function renderPage() {
-  return render(
-    <MemoryRouter>
-      <MyAdaptationsPage />
-    </MemoryRouter>,
-  );
+  return render(<MemoryRouter><MyAdaptationsPage /></MemoryRouter>);
 }
 
-describe("MyAdaptationsPage", () => {
+describe("MyAdaptationsPage (Histórico)", () => {
   beforeEach(async () => {
     vi.clearAllMocks();
-    const m = await import("@/hooks/useAdaptations");
-    vi.mocked(m.useAdaptations).mockReturnValue({ data: items, isLoading: false } as never);
-    vi.mocked(m.useDeleteAdaptation).mockReturnValue({ mutateAsync: mockDelete, isPending: false } as never);
+    const m = await import("@/hooks/useActivityLog");
+    vi.mocked(m.useActivityLog).mockReturnValue({ data: items, isLoading: false } as never);
   });
 
-  it("renders the page title", () => {
+  it("renders 'Histórico' heading", () => {
     renderPage();
-    expect(screen.getByRole("heading", { name: /minhas adaptações/i })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: /histórico/i })).toBeInTheDocument();
   });
 
-  it("shows a loading state", async () => {
-    const m = await import("@/hooks/useAdaptations");
-    vi.mocked(m.useAdaptations).mockReturnValue({ data: undefined, isLoading: true } as never);
+  it("shows loading state", async () => {
+    const m = await import("@/hooks/useActivityLog");
+    vi.mocked(m.useActivityLog).mockReturnValue({ data: undefined, isLoading: true } as never);
     renderPage();
     expect(screen.getByText(/carregando/i)).toBeInTheDocument();
   });
 
-  it("shows an empty state when there are no adaptations", async () => {
-    const m = await import("@/hooks/useAdaptations");
-    vi.mocked(m.useAdaptations).mockReturnValue({ data: [], isLoading: false } as never);
+  it("shows empty state", async () => {
+    const m = await import("@/hooks/useActivityLog");
+    vi.mocked(m.useActivityLog).mockReturnValue({ data: [], isLoading: false } as never);
     renderPage();
-    expect(screen.getByText(/ainda não salvou nenhuma/i)).toBeInTheDocument();
+    expect(screen.getByText(/nenhuma atividade/i)).toBeInTheDocument();
   });
 
-  it("lists adaptations with status badges and placeholder titles", () => {
+  it("shows adaptation items with title and credits", () => {
     renderPage();
-    expect(screen.getByText("Atividade de frações")).toBeInTheDocument();
-    expect(screen.getByText("Salva")).toBeInTheDocument();
+    expect(screen.getByText("Prova de Física")).toBeInTheDocument();
+    expect(screen.getByText(/5 crédito/i)).toBeInTheDocument();
+  });
+
+  it("shows 'Adaptação sem título' for untitled adaptations", () => {
+    renderPage();
     expect(screen.getByText("Adaptação sem título")).toBeInTheDocument();
-    expect(screen.getByText("Rascunho")).toBeInTheDocument();
   });
 
-  it("navigates to the editor on Editar", () => {
+  it("shows extraction items with file name and questions count", () => {
     renderPage();
-    fireEvent.click(screen.getByRole("button", { name: /editar atividade de frações/i }));
-    expect(mockNavigate).toHaveBeenCalledWith("/adaptar/editar/a1");
+    expect(screen.getByText("gabarito.pdf")).toBeInTheDocument();
+    expect(screen.getByText(/8 questões/i)).toBeInTheDocument();
   });
 
-  it("navigates to a new adaptation", () => {
+  it("shows 'Gratuita' for zero-credit items", () => {
     renderPage();
-    fireEvent.click(screen.getByRole("button", { name: /nova adaptação/i }));
-    expect(mockNavigate).toHaveBeenCalledWith("/adaptar");
+    expect(screen.getAllByText(/gratuita/i).length).toBeGreaterThan(0);
   });
 
-  it("confirms and deletes an adaptation", async () => {
+  it("does NOT render edit buttons (read-only)", () => {
     renderPage();
-    fireEvent.click(screen.getByRole("button", { name: /excluir atividade de frações/i }));
-    const dialog = await screen.findByRole("alertdialog");
-    fireEvent.click(dialog.querySelector("button.bg-destructive")!);
-    await waitFor(() => expect(mockDelete).toHaveBeenCalledWith("a1"));
+    expect(screen.queryByRole("button", { name: /editar/i })).not.toBeInTheDocument();
   });
 
-  it("cancels deletion without calling the mutation", async () => {
+  it("does NOT render delete buttons (read-only)", () => {
     renderPage();
-    fireEvent.click(screen.getByRole("button", { name: /excluir atividade de frações/i }));
-    const dialog = await screen.findByRole("alertdialog");
-    fireEvent.click(within(dialog).getByRole("button", { name: /cancelar/i }));
-    expect(mockDelete).not.toHaveBeenCalled();
+    expect(screen.queryByRole("button", { name: /excluir/i })).not.toBeInTheDocument();
+  });
+
+  it("shows '1 crédito' (singular) for single-credit items", async () => {
+    const m = await import("@/hooks/useActivityLog");
+    vi.mocked(m.useActivityLog).mockReturnValue({
+      data: [{ kind: "adaptation", id: "x1", title: "Teste singular", activityType: null, status: "ready", creditsSpent: 1, date: "2026-06-01T00:00:00Z" }],
+      isLoading: false,
+    } as never);
+    renderPage();
+    expect(screen.getByText("1 crédito")).toBeInTheDocument();
   });
 });
