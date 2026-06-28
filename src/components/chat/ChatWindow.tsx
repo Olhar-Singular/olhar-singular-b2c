@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Send, Loader2, Bot, User } from "lucide-react";
+import ChatMarkdown from "./ChatMarkdown";
 import type { ChatMessage } from "@/types/chat";
 
 type Props = {
@@ -50,13 +51,17 @@ export default function ChatWindow({ messages, onSend, isPending }: Props) {
                   </div>
                 )}
                 <div
-                  className={`rounded-2xl px-4 py-2.5 text-sm max-w-[80%] whitespace-pre-wrap leading-relaxed ${
+                  className={`rounded-2xl px-4 py-2.5 text-sm max-w-[80%] leading-relaxed ${
                     msg.role === "user"
-                      ? "bg-primary text-primary-foreground rounded-tr-sm"
+                      ? "bg-primary text-primary-foreground rounded-tr-sm whitespace-pre-wrap"
                       : "bg-muted text-foreground rounded-tl-sm"
                   }`}
                 >
-                  {msg.content}
+                  {msg.role === "assistant" ? (
+                    <ChatMarkdown content={msg.content} />
+                  ) : (
+                    msg.content
+                  )}
                 </div>
                 {msg.role === "user" && (
                   <div className="shrink-0 w-7 h-7 rounded-full bg-primary/20 flex items-center justify-center">

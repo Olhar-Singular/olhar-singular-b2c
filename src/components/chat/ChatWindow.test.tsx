@@ -23,6 +23,26 @@ describe("ChatWindow", () => {
     expect(screen.getByText("Algumas estratégias úteis são...")).toBeInTheDocument();
   });
 
+  it("renders assistant Markdown as formatted HTML, not raw syntax", () => {
+    const withMarkdown: ChatMessage[] = [
+      { role: "assistant", content: "### Instruções\n\n**Linguagem direta:**" },
+    ];
+    render(<ChatWindow messages={withMarkdown} onSend={noop} isPending={false} />);
+    expect(
+      screen.getByRole("heading", { level: 3, name: "Instruções" }),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Linguagem direta:").tagName).toBe("STRONG");
+    expect(screen.queryByText(/###/)).not.toBeInTheDocument();
+  });
+
+  it("keeps user message text literal (no Markdown parsing)", () => {
+    const userMarkdown: ChatMessage[] = [
+      { role: "user", content: "**não deve ficar negrito**" },
+    ];
+    render(<ChatWindow messages={userMarkdown} onSend={noop} isPending={false} />);
+    expect(screen.getByText("**não deve ficar negrito**")).toBeInTheDocument();
+  });
+
   it("calls onSend with message text on submit", async () => {
     const onSend = vi.fn();
     const user = userEvent.setup();
