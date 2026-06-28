@@ -92,13 +92,12 @@ export default function CreditsPage() {
                     <CreditCard className="w-3.5 h-3.5" />
                     Cartão de crédito
                   </Button>
+                  {/* Pix temporariamente desabilitado — reabilitar restaurando o onClick. */}
                   <Button
                     className="w-full gap-1.5"
                     variant="ghost"
-                    disabled={buying}
-                    onClick={() =>
-                      checkout.mutateAsync({ credits: pkg.credits, amountBrl: pkg.amountBrl })
-                    }
+                    disabled
+                    title="Pix em breve"
                   >
                     <QrCode className="w-3.5 h-3.5" />
                     Pix
@@ -109,7 +108,7 @@ export default function CreditsPage() {
           ))}
         </div>
         <p className="text-xs text-muted-foreground text-center">
-          Cartão de crédito via Stripe ou Pix via Mercado Pago. Créditos nunca expiram.
+          Cartão de crédito via Stripe. Pix em breve. Créditos nunca expiram.
         </p>
       </section>
 

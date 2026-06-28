@@ -125,20 +125,16 @@ describe("CreditsPage", () => {
     expect(mockCheckout).not.toHaveBeenCalled();
   });
 
-  it("calls the Mercado Pago (Pix) checkout with the correct package on Pix click", async () => {
+  it("renders every Pix button disabled and never triggers the Mercado Pago checkout", async () => {
     const user = userEvent.setup();
-    mockCheckout.mockResolvedValue({ url: "https://mp.com/checkout" });
     renderPage();
 
     const pixButtons = screen.getAllByRole("button", { name: /^pix$/i });
-    await user.click(pixButtons[0]);
+    expect(pixButtons).toHaveLength(3);
+    pixButtons.forEach((button) => expect(button).toBeDisabled());
 
-    await waitFor(() =>
-      expect(mockCheckout).toHaveBeenCalledWith(
-        expect.objectContaining({ credits: 30 })
-      )
-    );
-    expect(mockStripeCheckout).not.toHaveBeenCalled();
+    await user.click(pixButtons[0]);
+    expect(mockCheckout).not.toHaveBeenCalled();
   });
 
   it("shows empty state when no transactions", async () => {
