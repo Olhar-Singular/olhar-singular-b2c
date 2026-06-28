@@ -29,7 +29,13 @@ export default defineConfig({
       "@radix-ui/react-tooltip",
     ],
   },
+  // `@react-pdf/renderer` and its deps assume a Node-like environment. `global`
+  // must resolve to `globalThis` in the browser; the `Buffer` global itself is
+  // shimmed in main.tsx via the `buffer` package.
+  define: {
+    global: "globalThis",
+  },
   optimizeDeps: {
-    include: ["@tanstack/react-query"],
+    include: ["@tanstack/react-query", "buffer"],
   },
 });
