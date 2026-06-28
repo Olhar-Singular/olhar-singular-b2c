@@ -3,6 +3,7 @@ import {
   INITIAL_WIZARD_DATA,
   setDocument,
   setPageStyle,
+  setHeader,
   setResult,
   clearResult,
   type WizardData,
@@ -115,5 +116,26 @@ describe("setPageStyle", () => {
     const withResult = setResult(INITIAL_WIZARD_DATA, result);
     setPageStyle(withResult, { blockSpacing: 24 });
     expect(withResult.result?.pageStyle).toBeUndefined();
+  });
+});
+
+describe("setHeader", () => {
+  it("sets result.header while preserving document and metadata", () => {
+    const withResult = setResult(INITIAL_WIZARD_DATA, result);
+    const next = setHeader(withResult, { title: "Prova", school: "Escola Singular" });
+    expect(next.result?.header).toEqual({ title: "Prova", school: "Escola Singular" });
+    expect(next.result?.document).toBe(doc);
+    expect(next.result?.strategies_applied).toEqual(["s"]);
+  });
+
+  it("is a no-op when there is no result", () => {
+    const data: WizardData = { ...INITIAL_WIZARD_DATA, result: null };
+    expect(setHeader(data, { title: "x" })).toBe(data);
+  });
+
+  it("does not mutate the input result", () => {
+    const withResult = setResult(INITIAL_WIZARD_DATA, result);
+    setHeader(withResult, { teacher: "Ana" });
+    expect(withResult.result?.header).toBeUndefined();
   });
 });

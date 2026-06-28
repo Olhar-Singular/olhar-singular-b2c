@@ -2,7 +2,7 @@ import { Button } from "@/components/ui/button";
 import { ArrowLeft, RotateCcw, Save, Loader2 } from "lucide-react";
 import { CanonicalRenderer } from "@/components/adaptation/render/CanonicalRenderer";
 import { ExportPanel } from "@/components/adaptation/export/ExportPanel";
-import type { AdaptationResult } from "@/lib/adaptation/canonical/schema";
+import type { AdaptationResult, DocumentHeader } from "@/lib/adaptation/canonical/schema";
 
 type Props = {
   result: AdaptationResult;
@@ -11,18 +11,33 @@ type Props = {
   /** True while the markReady mutation is in flight. */
   saving: boolean;
   onSave: () => void;
+  /** Persist a change to the document header (title/school/teacher/date). */
+  onHeaderChange?: (header: DocumentHeader) => void;
   onPrev: () => void;
   onRestart: () => void;
 };
 
-export function StepExportCanonical({ result, canSave, saving, onSave, onPrev, onRestart }: Props) {
+export function StepExportCanonical({
+  result,
+  canSave,
+  saving,
+  onSave,
+  onHeaderChange,
+  onPrev,
+  onRestart,
+}: Props) {
   const document = result.document;
 
   return (
     <div className="space-y-6">
       <h2 className="text-lg font-semibold text-foreground">Exportar</h2>
 
-      <ExportPanel document={document} pageStyle={result.pageStyle} />
+      <ExportPanel
+        document={document}
+        header={result.header}
+        onHeaderChange={onHeaderChange}
+        pageStyle={result.pageStyle}
+      />
 
       <div className="flex flex-wrap gap-2">
         <Button variant="outline" onClick={onSave} disabled={!canSave || saving}>

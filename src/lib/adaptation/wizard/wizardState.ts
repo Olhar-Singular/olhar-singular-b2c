@@ -9,7 +9,12 @@
  * new object (or the same reference when there is nothing to change).
  */
 
-import type { AdaptationResult, CanonicalDocument, PageStyle } from "@/lib/adaptation/canonical/schema";
+import type {
+  AdaptationResult,
+  CanonicalDocument,
+  DocumentHeader,
+  PageStyle,
+} from "@/lib/adaptation/canonical/schema";
 
 export type BarrierItem = {
   dimension: string;
@@ -75,4 +80,15 @@ export function setDocument(data: WizardData, document: CanonicalDocument): Wiza
 export function setPageStyle(data: WizardData, pageStyle: PageStyle): WizardData {
   if (!data.result) return data;
   return { ...data, result: { ...data.result, pageStyle } };
+}
+
+/**
+ * Set the document header (title/school/teacher/date), preserving the document
+ * and the surrounding metadata. No-op when there is no result yet. The header
+ * lives inside `result`, so editing it rides the same autosave path as the
+ * document and `pageStyle`.
+ */
+export function setHeader(data: WizardData, header: DocumentHeader): WizardData {
+  if (!data.result) return data;
+  return { ...data, result: { ...data.result, header } };
 }

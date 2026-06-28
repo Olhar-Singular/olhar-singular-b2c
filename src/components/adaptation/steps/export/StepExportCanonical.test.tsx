@@ -1,7 +1,12 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 import { StepExportCanonical } from "./StepExportCanonical";
-import type { AdaptationResult, CanonicalDocument, PageStyle } from "@/lib/adaptation/canonical/schema";
+import type {
+  AdaptationResult,
+  CanonicalDocument,
+  DocumentHeader,
+  PageStyle,
+} from "@/lib/adaptation/canonical/schema";
 
 vi.mock("@/components/adaptation/render/CanonicalRenderer", () => ({
   CanonicalRenderer: ({ document }: { document: CanonicalDocument }) => (
@@ -10,9 +15,24 @@ vi.mock("@/components/adaptation/render/CanonicalRenderer", () => ({
 }));
 
 vi.mock("@/components/adaptation/export/ExportPanel", () => ({
-  ExportPanel: ({ document, pageStyle }: { document: CanonicalDocument; pageStyle?: PageStyle }) => (
-    <div data-testid="export-panel" data-page-style={pageStyle?.fontFamily ?? "none"}>
+  ExportPanel: ({
+    document,
+    pageStyle,
+    header,
+    onHeaderChange,
+  }: {
+    document: CanonicalDocument;
+    pageStyle?: PageStyle;
+    header?: DocumentHeader;
+    onHeaderChange?: (h: DocumentHeader) => void;
+  }) => (
+    <div
+      data-testid="export-panel"
+      data-page-style={pageStyle?.fontFamily ?? "none"}
+      data-header-title={header?.title ?? "none"}
+    >
       {document.blocks.length}
+      <button onClick={() => onHeaderChange?.({ title: "edited" })}>edit-header</button>
     </div>
   ),
 }));
@@ -70,6 +90,18 @@ describe("StepExportCanonical", () => {
   it("passes undefined pageStyle to ExportPanel when result has none", () => {
     renderStep({ result });
     expect(screen.getByTestId("export-panel").dataset.pageStyle).toBe("none");
+  });
+
+  it("passes the result header to ExportPanel", () => {
+    renderStep({ result: { ...result, header: { title: "Cabeçalho" } } });
+    expect(screen.getByTestId("export-panel").dataset.headerTitle).toBe("Cabeçalho");
+  });
+
+  it("forwards onHeaderChange from ExportPanel to the parent", () => {
+    const onHeaderChange = vi.fn();
+    renderStep({ onHeaderChange });
+    fireEvent.click(screen.getByRole("button", { name: "edit-header" }));
+    expect(onHeaderChange).toHaveBeenCalledWith({ title: "edited" });
   });
 
   it("fires onSave when Salvar is clicked", () => {

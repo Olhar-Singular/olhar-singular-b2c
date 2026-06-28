@@ -30,6 +30,7 @@ import {
   setResult,
   setDocument,
   setPageStyle,
+  setHeader,
   clearResult,
   type WizardData,
 } from "@/lib/adaptation/wizard/wizardState";
@@ -41,7 +42,7 @@ import { useAdaptationDraft } from "@/hooks/useAdaptationDraft";
 import { useMarkReady } from "@/hooks/useAdaptations";
 import { useAuth } from "@/hooks/useAuth";
 import { parseDbError } from "@/lib/utils/errors";
-import type { AdaptationResult, CanonicalDocument, PageStyle } from "@/lib/adaptation/canonical/schema";
+import type { AdaptationResult, CanonicalDocument, DocumentHeader, PageStyle } from "@/lib/adaptation/canonical/schema";
 
 const STEPS = [
   "activity_type",
@@ -218,6 +219,10 @@ export default function CanonicalAdaptationWizard({ editMode }: Props = {}) {
     setData((prev) => setDocument(prev, document));
   }, []);
 
+  const handleHeaderChange = useCallback((header: DocumentHeader) => {
+    setData((prev) => setHeader(prev, header));
+  }, []);
+
   const handlePageStyleChange = useCallback((pageStyle: PageStyle) => {
     setData((prev) => setPageStyle(prev, pageStyle));
   }, []);
@@ -312,6 +317,7 @@ export default function CanonicalAdaptationWizard({ editMode }: Props = {}) {
             canSave={!!draftId}
             saving={markReady.isPending}
             onSave={handleSave}
+            onHeaderChange={handleHeaderChange}
             onPrev={onPrev}
             onRestart={handleRestart}
           />

@@ -1,7 +1,8 @@
+import { useState } from "react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { ExportPanel } from "./ExportPanel";
-import type { CanonicalDocument, PageStyle } from "@/lib/adaptation/canonical/schema";
+import type { CanonicalDocument, DocumentHeader, PageStyle } from "@/lib/adaptation/canonical/schema";
 import type { PanelSettings } from "./panelSettings";
 
 vi.mock("sonner", () => ({ toast: { error: vi.fn(), success: vi.fn() } }));
@@ -24,6 +25,28 @@ const document: CanonicalDocument = {
 
 beforeEach(() => vi.clearAllMocks());
 
+/** Stateful harness: the header is controlled, owned by the parent (like the wizard). */
+function Harness({
+  onDownload,
+  pageStyle,
+  initialHeader = {},
+}: {
+  onDownload: (d: CanonicalDocument, s: PanelSettings, ps?: PageStyle) => Promise<void>;
+  pageStyle?: PageStyle;
+  initialHeader?: DocumentHeader;
+}) {
+  const [header, setHeader] = useState<DocumentHeader>(initialHeader);
+  return (
+    <ExportPanel
+      document={document}
+      header={header}
+      onHeaderChange={setHeader}
+      onDownload={onDownload}
+      pageStyle={pageStyle}
+    />
+  );
+}
+
 describe("ExportPanel", () => {
   it("copies the plain-text projection", async () => {
     const writeText = vi.fn().mockResolvedValue(undefined);
@@ -44,10 +67,10 @@ describe("ExportPanel", () => {
     await waitFor(() => expect(toast.error).toHaveBeenCalledWith("Erro ao copiar."));
   });
 
-  it("builds the PDF with header and page-break settings from the inputs (no font select)", async () => {
+  it("builds the PDF with header (from controlled state) and page-break toggle (no font select)", async () => {
     const onDownload = vi.fn<(d: CanonicalDocument, s: PanelSettings, ps?: PageStyle) => Promise<void>>().mockResolvedValue(undefined);
     const { toast } = await import("sonner");
-    render(<ExportPanel document={document} onDownload={onDownload} />);
+    render(<Harness onDownload={onDownload} />);
 
     fireEvent.change(screen.getByLabelText("Título"), { target: { value: "Minha Prova" } });
     fireEvent.change(screen.getByLabelText("Escola"), { target: { value: "Escola X" } });
@@ -67,6 +90,42 @@ describe("ExportPanel", () => {
     // No fontFamily in settings anymore — font comes from pageStyle.
     expect("fontFamily" in settings).toBe(false);
     await waitFor(() => expect(toast.success).toHaveBeenCalledWith("PDF gerado!"));
+  });
+
+  it("is safe to use without an onHeaderChange handler (a field change does not throw)", () => {
+    render(<ExportPanel document={document} onDownload={vi.fn()} />);
+    expect(() =>
+      fireEvent.change(screen.getByLabelText("Título"), { target: { value: "x" } }),
+    ).not.toThrow();
+  });
+
+  it("renders the header field values from the header prop (controlled)", () => {
+    render(
+      <ExportPanel
+        document={document}
+        header={{ title: "Pré-preenchido", school: "Escola Y", teacher: "Bia", date: "2026-01-15" }}
+        onHeaderChange={vi.fn()}
+        onDownload={vi.fn()}
+      />,
+    );
+    expect((screen.getByLabelText("Título") as HTMLInputElement).value).toBe("Pré-preenchido");
+    expect((screen.getByLabelText("Escola") as HTMLInputElement).value).toBe("Escola Y");
+    expect((screen.getByLabelText("Professor(a)") as HTMLInputElement).value).toBe("Bia");
+    expect((screen.getByLabelText("Data") as HTMLInputElement).value).toBe("2026-01-15");
+  });
+
+  it("fires onHeaderChange with the merged header when a field changes", () => {
+    const onHeaderChange = vi.fn();
+    render(
+      <ExportPanel
+        document={document}
+        header={{ school: "Escola Y" }}
+        onHeaderChange={onHeaderChange}
+        onDownload={vi.fn()}
+      />,
+    );
+    fireEvent.change(screen.getByLabelText("Título"), { target: { value: "Novo Título" } });
+    expect(onHeaderChange).toHaveBeenCalledWith({ school: "Escola Y", title: "Novo Título" });
   });
 
   it("does not render a font select (font comes from pageStyle, not the panel)", () => {

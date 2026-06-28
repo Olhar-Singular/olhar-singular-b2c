@@ -307,6 +307,24 @@ export const PageStyleSchema = z
   })
   .strict();
 
+/**
+ * Document header (title/school/teacher/date) — additive, optional sibling of
+ * `document` inside `adaptation_result`. These are user-entered fields filled on
+ * the "Exportar" step; the AI never produces them, so they are absent at
+ * generation and only appear once the teacher types them. Stored here (rather
+ * than as ephemeral export-panel state) so they persist via the same autosave
+ * path as `pageStyle` and survive edit-after-save. Absent → the PDF renders no
+ * header, so legacy documents round-trip byte-for-byte.
+ */
+export const DocumentHeaderSchema = z
+  .object({
+    title: z.string().optional(),
+    school: z.string().optional(),
+    teacher: z.string().optional(),
+    date: z.string().optional(),
+  })
+  .strict();
+
 export const AdaptationResultSchema = z.object({
   schemaVersion: z.literal(SCHEMA_VERSION),
   document: CanonicalDocumentSchema,
@@ -318,6 +336,7 @@ export const AdaptationResultSchema = z.object({
   implementation_tips: z.array(z.string()),
   // Additive & optional: never injected on read, so legacy docs parse identically.
   pageStyle: PageStyleSchema.optional(),
+  header: DocumentHeaderSchema.optional(),
 });
 
 // ---------------------------------------------------------------------------
@@ -334,3 +353,4 @@ export type QuestionAnswer = z.infer<typeof QuestionAnswerSchema>;
 export type Alternative = z.infer<typeof AlternativeSchema>;
 export type NodeStyle = z.infer<typeof NodeStyleSchema>;
 export type PageStyle = z.infer<typeof PageStyleSchema>;
+export type DocumentHeader = z.infer<typeof DocumentHeaderSchema>;

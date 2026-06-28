@@ -5,6 +5,7 @@ import {
   isSafeImageSrc,
   CanonicalDocumentSchema,
   PageStyleSchema,
+  DocumentHeaderSchema,
   AdaptationResultSchema,
   SCHEMA_VERSION,
 } from "./schema";
@@ -201,6 +202,56 @@ describe("PageStyleSchema", () => {
 
   it("rejects elementFontSizes.stem that is not positive", () => {
     expect(PageStyleSchema.safeParse({ elementFontSizes: { stem: 0 } }).success).toBe(false);
+  });
+});
+
+describe("DocumentHeaderSchema", () => {
+  it("accepts a fully specified header", () => {
+    const result = DocumentHeaderSchema.safeParse({
+      title: "Prova de Matemática",
+      school: "Escola Singular",
+      teacher: "Ana",
+      date: "2026-06-27",
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("accepts an empty object (all fields optional)", () => {
+    expect(DocumentHeaderSchema.safeParse({}).success).toBe(true);
+  });
+
+  it("rejects unknown keys (strict)", () => {
+    expect(DocumentHeaderSchema.safeParse({ subtitle: "x" }).success).toBe(false);
+  });
+
+  it("rejects a non-string field", () => {
+    expect(DocumentHeaderSchema.safeParse({ title: 42 }).success).toBe(false);
+  });
+});
+
+describe("AdaptationResultSchema — header (additive, optional)", () => {
+  it("accepts a result WITHOUT header (back-compat)", () => {
+    expect(AdaptationResultSchema.safeParse(baseResult()).success).toBe(true);
+  });
+
+  it("does not inject a header default (round-trip identity)", () => {
+    const input = baseResult();
+    const parsed = AdaptationResultSchema.parse(input);
+    expect("header" in parsed).toBe(false);
+  });
+
+  it("accepts a result WITH a header sibling", () => {
+    const input = {
+      ...baseResult(),
+      header: { title: "Prova", school: "Escola", teacher: "Ana", date: "2026-06-27" },
+    };
+    const parsed = AdaptationResultSchema.parse(input);
+    expect(parsed.header).toEqual({
+      title: "Prova",
+      school: "Escola",
+      teacher: "Ana",
+      date: "2026-06-27",
+    });
   });
 });
 

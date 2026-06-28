@@ -141,7 +141,15 @@ export function useAdaptationDraft({
     await writeMirror(id, current);
 
     try {
-      const res = await updateAdaptation(id, { adaptation_result: current }, expected);
+      // Keep the `title` column in sync with the manual header title so the
+      // history list (which reads the column, not the result blob) reflects an
+      // edited title live. When no manual title is set we leave the column as-is
+      // (it keeps the value derived from the activity text at insert time).
+      const manualTitle = current.header?.title?.trim();
+      const patch = manualTitle
+        ? { adaptation_result: current, title: manualTitle }
+        : { adaptation_result: current };
+      const res = await updateAdaptation(id, patch, expected);
       if (res.ok) {
         lastSavedRef.current = serializeResult(current);
         expectedUpdatedAtRef.current = res.row.updated_at;

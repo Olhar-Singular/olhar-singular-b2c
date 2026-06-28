@@ -79,6 +79,84 @@ describe("useAdaptationDraft", () => {
     );
   });
 
+  it("syncs the title column when the result carries a manual header title", async () => {
+    const withTitle: AdaptationResult = { ...validResult, header: { title: "Prova de Frações" } };
+    const { rerender } = renderHook((props) => useAdaptationDraft(props), {
+      initialProps: {
+        draftId: "d1",
+        result: validResult,
+        initialUpdatedAt: "2026-01-01T00:00:00Z",
+        debounceMs: 1200,
+      },
+    });
+    rerender({
+      draftId: "d1",
+      result: withTitle,
+      initialUpdatedAt: "2026-01-01T00:00:00Z",
+      debounceMs: 1200,
+    });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1200);
+    });
+    expect(repo.updateAdaptation).toHaveBeenCalledWith(
+      "d1",
+      { adaptation_result: withTitle, title: "Prova de Frações" },
+      "2026-01-01T00:00:00Z",
+    );
+  });
+
+  it("does not touch the title column when the header has no title", async () => {
+    const withSchool: AdaptationResult = { ...validResult, header: { school: "Escola Singular" } };
+    const { rerender } = renderHook((props) => useAdaptationDraft(props), {
+      initialProps: {
+        draftId: "d1",
+        result: validResult,
+        initialUpdatedAt: "2026-01-01T00:00:00Z",
+        debounceMs: 1200,
+      },
+    });
+    rerender({
+      draftId: "d1",
+      result: withSchool,
+      initialUpdatedAt: "2026-01-01T00:00:00Z",
+      debounceMs: 1200,
+    });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1200);
+    });
+    expect(repo.updateAdaptation).toHaveBeenCalledWith(
+      "d1",
+      { adaptation_result: withSchool },
+      "2026-01-01T00:00:00Z",
+    );
+  });
+
+  it("does not touch the title column when the header title is blank", async () => {
+    const withBlank: AdaptationResult = { ...validResult, header: { title: "   " } };
+    const { rerender } = renderHook((props) => useAdaptationDraft(props), {
+      initialProps: {
+        draftId: "d1",
+        result: validResult,
+        initialUpdatedAt: "2026-01-01T00:00:00Z",
+        debounceMs: 1200,
+      },
+    });
+    rerender({
+      draftId: "d1",
+      result: withBlank,
+      initialUpdatedAt: "2026-01-01T00:00:00Z",
+      debounceMs: 1200,
+    });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1200);
+    });
+    expect(repo.updateAdaptation).toHaveBeenCalledWith(
+      "d1",
+      { adaptation_result: withBlank },
+      "2026-01-01T00:00:00Z",
+    );
+  });
+
   it("debounces and saves an edit after the window elapses", async () => {
     const { rerender, result } = renderHook(
       (props) => useAdaptationDraft(props),

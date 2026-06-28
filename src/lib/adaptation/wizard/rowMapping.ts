@@ -37,9 +37,12 @@ export function wizardDataToPayload(
 ): AdaptationPayload {
   /* v8 ignore next -- callers only build a payload once a result exists */
   if (!data.result) throw new Error("cannot build payload without a result");
+  // The manual header title (typed on the "Exportar" step) is the source of
+  // truth for the row title when present; otherwise we fall back to deriving it
+  // from the first line of the activity text.
   return {
     user_id: userId,
-    title: deriveTitle(data.activityText),
+    title: data.result.header?.title?.trim() || deriveTitle(data.activityText),
     original_activity: data.activityText,
     activity_type: data.activityType,
     barrier_profile_id: data.barrierProfileId,

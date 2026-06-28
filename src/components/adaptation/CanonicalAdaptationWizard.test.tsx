@@ -289,6 +289,22 @@ describe("CanonicalAdaptationWizard", () => {
     );
   });
 
+  it("SSOT: a manual header title persists and survives navigating export ↔ review", () => {
+    renderWithProviders(<CanonicalAdaptationWizard />);
+    advanceToReview();
+    fireEvent.click(screen.getByRole("button", { name: /Avançar para exportação/i }));
+
+    // Type a title in the real ExportPanel — it is controlled by the wizard, so
+    // it only reflects (and persists) if the change is lifted into result.header.
+    fireEvent.change(screen.getByLabelText("Título"), { target: { value: "Prova Final" } });
+    expect((screen.getByLabelText("Título") as HTMLInputElement).value).toBe("Prova Final");
+
+    // It survives a round-trip to review and back (single source of truth).
+    fireEvent.click(screen.getByRole("button", { name: /Voltar/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Avançar para exportação/i }));
+    expect((screen.getByLabelText("Título") as HTMLInputElement).value).toBe("Prova Final");
+  });
+
   it("the step indicator navigates back to a visited step", () => {
     renderWithProviders(<CanonicalAdaptationWizard />);
     advanceToReview();

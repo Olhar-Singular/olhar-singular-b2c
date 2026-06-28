@@ -37,6 +37,7 @@ Plataforma educacional B2C. **Educadores adaptam atividades pedagógicas (provas
 
 - Saldo de crédito = coluna **`credit_balance`** (NÃO `credits`).
 - Documento adaptado vive em **`adaptations.adaptation_result->'document'`** (`->'blocks'` é o array de blocos canônicos). Coluna `content` antiga foi dropada (migration `20260604000000_adaptations_canonical`).
+- Cabeçalho do PDF (título/escola/professor/data) vive em **`adaptation_result->'header'`** — sibling opcional de `document` (additive, igual ao `pageStyle`; ausente = sem header, legacy round-trip). Editado no passo **Exportar** (`ExportPanel` é controlado pelo wizard via `setHeader`), persiste pelo autosave. A coluna **`adaptations.title`** (usada no histórico, que não lê o blob) espelha o `header.title` manual; se vazio, cai no `deriveTitle` (1ª linha de `original_activity`). Logo o "Título" de Exportar **é** o título do histórico.
 - 1ª adaptação grátis: flag **`profiles.free_adaptation_used`**; só depois debita.
 - Edge function importa o pacote canônico com **extensão `.ts` explícita** (Vite resolve sem, Deno não).
 - Pagamentos: Stripe = cartão, Mercado Pago = Pix; backend compartilhado (`credit_purchases` + `grant_credits`).

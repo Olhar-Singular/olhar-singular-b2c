@@ -90,4 +90,24 @@ describe("wizardDataToPayload", () => {
     const payload = wizardDataToPayload(data, "u1");
     expect(payload.observation_notes).toBeNull();
   });
+
+  it("uses the manual header title when present (overrides deriveTitle)", () => {
+    const data = {
+      ...INITIAL_WIZARD_DATA,
+      activityText: "Texto original da atividade",
+      result: { ...validResult, header: { title: "Prova de Frações" } },
+    };
+    const payload = wizardDataToPayload(data, "u1");
+    expect(payload.title).toBe("Prova de Frações");
+  });
+
+  it("falls back to deriveTitle when the header title is blank", () => {
+    const data = {
+      ...INITIAL_WIZARD_DATA,
+      activityText: "Texto original da atividade",
+      result: { ...validResult, header: { title: "   " } },
+    };
+    const payload = wizardDataToPayload(data, "u1");
+    expect(payload.title).toBe("Texto original da atividade");
+  });
 });
