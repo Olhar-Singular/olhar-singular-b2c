@@ -23,7 +23,7 @@ Plataforma educacional B2C. **Educadores adaptam atividades pedagógicas (provas
 | **Chat** | `ChatPage` | `useChatSessions`, `useSendMessage` | `chat` | Orientação pedagógica via IA. |
 | **Créditos** | `CreditsPage` | `useCredits` | `create-stripe-checkout`, `create-checkout`, `stripe-webhook`, `mp-webhook` | Compra. RPCs `deduct_credits`/`grant_credits`. |
 | **Admin** | `AdminPage`, `DashboardPage` | `useAdminDashboard`, `useHistory` | `admin-dashboard`, `admin-grant-credits`, `admin-user-status` | Painel super-admin. |
-| **Auth** | `AuthPage`, `LandingPage` | `useAuth` | — | Signup ganha 50 créditos (trigger). |
+| **Auth** | `AuthPage`, `LandingPage` | `useAuth` | — | Signup (senha + confirmação por link) ganha 50 créditos (trigger). Pós-signup, `AuthPage` mostra a view "Verifique seu e-mail" com botão Reenviar (cooldown 60s) via `supabase.auth.resend({ type: "signup" })`. Template do e-mail: `supabase/templates/confirmation.html` (registrado no `config.toml`). |
 
 ## Onde mora a lógica
 

@@ -1,4 +1,4 @@
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor, act } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { MemoryRouter } from "react-router-dom";
@@ -14,6 +14,7 @@ vi.mock("@/integrations/supabase/client", () => ({
     auth: {
       signInWithPassword: vi.fn(),
       signUp: vi.fn(),
+      resend: vi.fn(),
     },
   },
 }));
@@ -47,7 +48,16 @@ describe("AuthPage", () => {
     vi.mocked(useAuth).mockReturnValue(buildAuthState() as never);
     vi.mocked(supabase.auth.signInWithPassword).mockResolvedValue({ error: null } as never);
     vi.mocked(supabase.auth.signUp).mockResolvedValue({ error: null } as never);
+    vi.mocked(supabase.auth.resend).mockResolvedValue({ error: null } as never);
   });
+
+  async function fillAndSubmitSignup(user: ReturnType<typeof userEvent.setup>) {
+    await user.click(screen.getByRole("button", { name: /cadastre-se/i }));
+    await user.type(screen.getByLabelText(/nome/i), "Ana");
+    await user.type(screen.getByLabelText(/e-mail/i), "ana@b.com");
+    await user.type(screen.getByLabelText("Senha"), "123456");
+    await user.click(screen.getByRole("button", { name: /criar conta/i }));
+  }
 
   it("renders login form by default", () => {
     renderAuthPage();
@@ -246,5 +256,121 @@ describe("AuthPage", () => {
     await waitFor(() =>
       expect(screen.getByRole("alert")).toHaveTextContent(/Erro ao entrar/i)
     );
+  });
+
+  it("shows the email-confirmation view after a successful signup", async () => {
+    const user = userEvent.setup();
+    renderAuthPage();
+    await fillAndSubmitSignup(user);
+
+    expect(await screen.findByText(/verifique seu e-mail/i)).toBeInTheDocument();
+    expect(screen.getByText(/ana@b\.com/)).toBeInTheDocument();
+    const resendButton = screen.getByRole("button", { name: /reenviar/i });
+    expect(resendButton).toBeDisabled();
+    expect(resendButton).toHaveTextContent(/reenviar em 60s/i);
+    // login/signup form is gone
+    expect(screen.queryByLabelText("Senha")).toBeNull();
+  });
+
+  it("enables resend after the 60s cooldown and resends the confirmation email", async () => {
+    vi.useFakeTimers();
+    try {
+      renderAuthPage();
+      fireEvent.click(screen.getByRole("button", { name: /cadastre-se/i }));
+      fireEvent.change(screen.getByLabelText(/nome/i), { target: { value: "Ana" } });
+      fireEvent.change(screen.getByLabelText(/e-mail/i), { target: { value: "ana@b.com" } });
+      fireEvent.change(screen.getByLabelText("Senha"), { target: { value: "123456" } });
+      fireEvent.click(screen.getByRole("button", { name: /criar conta/i }));
+      await act(async () => {});
+
+      expect(screen.getByText(/verifique seu e-mail/i)).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: /reenviar/i })).toBeDisabled();
+
+      // drain the cooldown
+      await act(async () => {
+        vi.advanceTimersByTime(60_000);
+      });
+
+      const resendButton = screen.getByRole("button", { name: /reenviar/i });
+      expect(resendButton).toBeEnabled();
+      expect(resendButton).toHaveTextContent(/^Reenviar e-mail$/);
+
+      fireEvent.click(resendButton);
+      await act(async () => {});
+
+      expect(supabase.auth.resend).toHaveBeenCalledWith({
+        type: "signup",
+        email: "ana@b.com",
+      });
+      // cooldown restarts after resend
+      expect(screen.getByRole("button", { name: /reenviar/i })).toHaveTextContent(
+        /reenviar em 60s/i,
+      );
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("counts the cooldown down second by second", async () => {
+    vi.useFakeTimers();
+    try {
+      renderAuthPage();
+      fireEvent.click(screen.getByRole("button", { name: /cadastre-se/i }));
+      fireEvent.change(screen.getByLabelText(/nome/i), { target: { value: "Ana" } });
+      fireEvent.change(screen.getByLabelText(/e-mail/i), { target: { value: "ana@b.com" } });
+      fireEvent.change(screen.getByLabelText("Senha"), { target: { value: "123456" } });
+      fireEvent.click(screen.getByRole("button", { name: /criar conta/i }));
+      await act(async () => {});
+
+      expect(screen.getByRole("button", { name: /reenviar/i })).toHaveTextContent(
+        /reenviar em 60s/i,
+      );
+      await act(async () => {
+        vi.advanceTimersByTime(1_000);
+      });
+      expect(screen.getByRole("button", { name: /reenviar/i })).toHaveTextContent(
+        /reenviar em 59s/i,
+      );
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("shows an error when resending the confirmation email fails", async () => {
+    vi.useFakeTimers();
+    try {
+      vi.mocked(supabase.auth.resend).mockResolvedValue({
+        error: { message: "Email rate limit exceeded" },
+      } as never);
+      renderAuthPage();
+      fireEvent.click(screen.getByRole("button", { name: /cadastre-se/i }));
+      fireEvent.change(screen.getByLabelText(/nome/i), { target: { value: "Ana" } });
+      fireEvent.change(screen.getByLabelText(/e-mail/i), { target: { value: "ana@b.com" } });
+      fireEvent.change(screen.getByLabelText("Senha"), { target: { value: "123456" } });
+      fireEvent.click(screen.getByRole("button", { name: /criar conta/i }));
+      await act(async () => {});
+      await act(async () => {
+        vi.advanceTimersByTime(60_000);
+      });
+
+      fireEvent.click(screen.getByRole("button", { name: /reenviar/i }));
+      await act(async () => {});
+
+      expect(screen.getByRole("alert")).toHaveTextContent(/muitas tentativas/i);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("returns to the login form from the email-confirmation view", async () => {
+    const user = userEvent.setup();
+    renderAuthPage();
+    await fillAndSubmitSignup(user);
+    await screen.findByText(/verifique seu e-mail/i);
+
+    await user.click(screen.getByRole("button", { name: /voltar para login/i }));
+
+    expect(screen.getByRole("button", { name: /^Entrar$/ })).toBeInTheDocument();
+    expect(screen.queryByText(/verifique seu e-mail/i)).toBeNull();
   });
 });

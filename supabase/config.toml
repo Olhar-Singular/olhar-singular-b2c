@@ -1,5 +1,20 @@
 project_id = "orientador-digital-b2c"
 
+# Confirmação de e-mail é obrigatória (paridade com produção): o cadastro só ativa a
+# conta após o usuário clicar no link. Sem isto, o local auto-confirma (autoconfirm) e
+# o fluxo "Verifique seu e-mail" / botão Reenviar nunca aparece.
+[auth.email]
+enable_confirmations = true
+
+# E-mail de confirmação de cadastro com a identidade da Olhar Singular (paleta + logo).
+# Disparado tanto no signUp quanto no botão "Reenviar" da tela de cadastro
+# (supabase.auth.resend({ type: "signup" })). Vale no Supabase LOCAL (Inbucket).
+# Em produção, aplicar via Dashboard (Auth → Email Templates → Confirm signup) ou
+# Management API; `supabase config push` sincroniza TODA a config de auth (cuidado).
+[auth.email.template.confirmation]
+subject = "Confirme seu cadastro - Olhar Singular"
+content_path = "./supabase/templates/confirmation.html"
+
 # Webhooks são chamados por provedores externos (Stripe / Mercado Pago) sem JWT
 # do Supabase. Sem isto o gateway rejeita a chamada com 401 antes da função rodar.
 [functions.stripe-webhook]

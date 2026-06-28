@@ -27,10 +27,19 @@ export default function AuthPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
+  const [pendingEmail, setPendingEmail] = useState("");
+  const [resending, setResending] = useState(false);
+  const [cooldown, setCooldown] = useState(0);
 
   useEffect(() => {
     if (!loading && session) navigate("/dashboard", { replace: true });
   }, [session, loading, navigate]);
+
+  useEffect(() => {
+    if (cooldown <= 0) return;
+    const id = setInterval(() => setCooldown((c) => c - 1), 1000);
+    return () => clearInterval(id);
+  }, [cooldown]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -59,10 +68,36 @@ export default function AuthPage() {
           return;
         }
         toast.success("Conta criada! Verifique seu e-mail para confirmar o cadastro.");
+        setPendingEmail(email);
+        setCooldown(60);
       }
     } finally {
       setSubmitting(false);
     }
+  }
+
+  async function handleResend() {
+    setResending(true);
+    setError("");
+    try {
+      const { error: err } = await supabase.auth.resend({ type: "signup", email: pendingEmail });
+      if (err) {
+        setError(parseAuthError(err.message, "signup"));
+        return;
+      }
+      toast.success("E-mail de confirmação reenviado.");
+      setCooldown(60);
+    } finally {
+      setResending(false);
+    }
+  }
+
+  function handleBackToLogin() {
+    setPendingEmail("");
+    setCooldown(0);
+    setError("");
+    setPassword("");
+    setIsLogin(true);
   }
 
   return (
@@ -77,12 +112,14 @@ export default function AuthPage() {
         <Card className="shadow-card-hover">
           <CardHeader className="text-center">
             <CardTitle className="text-xl">
-              {isLogin ? "Entrar" : "Criar conta"}
+              {pendingEmail ? "Verifique seu e-mail" : isLogin ? "Entrar" : "Criar conta"}
             </CardTitle>
             <CardDescription>
-              {isLogin
-                ? "Acesse sua conta para continuar"
-                : "Crie sua conta e comece a adaptar atividades"}
+              {pendingEmail
+                ? "Falta só confirmar o cadastro"
+                : isLogin
+                  ? "Acesse sua conta para continuar"
+                  : "Crie sua conta e comece a adaptar atividades"}
             </CardDescription>
           </CardHeader>
 
@@ -96,6 +133,37 @@ export default function AuthPage() {
               </div>
             )}
 
+            {pendingEmail ? (
+              <div className="space-y-4">
+                <p className="text-sm text-muted-foreground">
+                  Enviamos um link de confirmação para{" "}
+                  <span className="font-medium text-foreground">{pendingEmail}</span>. Verifique
+                  sua caixa de entrada e a pasta de spam.
+                </p>
+                <Button
+                  type="button"
+                  className="w-full"
+                  onClick={handleResend}
+                  disabled={resending || cooldown > 0}
+                >
+                  {resending
+                    ? "Reenviando..."
+                    : cooldown > 0
+                      ? `Reenviar em ${cooldown}s`
+                      : "Reenviar e-mail"}
+                </Button>
+                <div className="text-center text-sm text-muted-foreground">
+                  <button
+                    type="button"
+                    onClick={handleBackToLogin}
+                    className="text-primary font-medium hover:underline"
+                  >
+                    Voltar para login
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <>
             <form onSubmit={handleSubmit} className="space-y-4">
               {!isLogin && (
                 <div className="space-y-2">
@@ -174,6 +242,8 @@ export default function AuthPage() {
                 </>
               )}
             </div>
+              </>
+            )}
           </CardContent>
         </Card>
 
