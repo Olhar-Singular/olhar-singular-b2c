@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { isValidElement, type ReactElement } from "react";
-import { View, Text } from "@react-pdf/renderer";
+import { View, Text, Image } from "@react-pdf/renderer";
 import { PdfBlock } from "./PdfBlock";
 import { PdfAnswer } from "./PdfAnswer";
 import { PdfQuestion } from "./PdfQuestion";
@@ -235,6 +235,46 @@ describe("PdfImage", () => {
     };
     const el = PdfImage({ block }) as ReactElement;
     expect((el.props.style as { alignItems: string }).alignItems).toBe("flex-start");
+  });
+
+  /** Find the inner <Image> element produced by PdfImage's <View> wrapper. */
+  function imageStyleOf(block: Extract<Block, { type: "image" }>) {
+    const view = PdfImage({ block }) as ReactElement;
+    const children = (view.props as { children?: unknown }).children;
+    const image = (Array.isArray(children) ? children : [children]).find(
+      (c) => isValidElement(c) && c.type === Image,
+    ) as ReactElement;
+    return image.props.style as {
+      width?: number;
+      maxWidth?: string;
+      maxHeight?: number;
+      objectFit?: string;
+    };
+  }
+
+  it("constrains the image to the page so it cannot overflow onto following blocks (no width)", () => {
+    const style = imageStyleOf({ id: id(1), type: "image", src: "https://x/y.png", alt: "a" });
+    // Mirrors the screen's `max-w-full`: never wider than the content box…
+    expect(style.maxWidth).toBe("100%");
+    // …and never taller than a page, so react-pdf paginates instead of overflowing.
+    // The cap must stay under the A4 content height (~762pt = 841.89 − 2×40 margin)
+    // with margin, so a tall image always fits a fresh page (verified empirically:
+    // react-pdf flags it as un-wrappable above ~750pt).
+    expect(typeof style.maxHeight).toBe("number");
+    expect(style.maxHeight as number).toBeGreaterThan(0);
+    expect(style.maxHeight as number).toBeLessThanOrEqual(740);
+    expect(style.objectFit).toBe("contain");
+    // No explicit width is forced when the block carries none.
+    expect(style.width).toBeUndefined();
+  });
+
+  it("converts an explicit width from px to pt and still applies the page constraints", () => {
+    const style = imageStyleOf({ id: id(1), type: "image", src: "https://x/y.png", alt: "a", width: 400 });
+    // 400px → 300pt (1px = 72/96 pt), matching the on-screen physical size.
+    expect(style.width).toBeCloseTo(300, 5);
+    expect(style.maxWidth).toBe("100%");
+    expect(typeof style.maxHeight).toBe("number");
+    expect(style.objectFit).toBe("contain");
   });
 });
 

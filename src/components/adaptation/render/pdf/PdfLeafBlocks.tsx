@@ -19,6 +19,7 @@ import { View, Text, Image } from "@react-pdf/renderer";
 import type { Block } from "@/lib/adaptation/canonical/schema";
 import { nodeStyleToPdf } from "./nodeStyleToPdf";
 import { PdfRichText } from "./PdfRichText";
+import { PAGE_MARGIN_PT } from "../pageTokens";
 
 type HeadingBlock = Extract<Block, { type: "heading" }>;
 type ParagraphBlock = Extract<Block, { type: "paragraph" }>;
@@ -63,11 +64,44 @@ const IMAGE_ALIGN: Record<NonNullable<ImageBlock["alignment"]>, "flex-start" | "
   right: "flex-end",
 };
 
+/** Convert pixels (screen unit) to points (PDF unit). 1px = 72/96 pt. */
+const px2pt = (px: number): number => px * (72 / 96);
+
+/** A4 page height in pt — the only page size used (see AdaptationPdf's `<Page size="A4">`). */
+const A4_HEIGHT_PT = 841.89;
+
+/**
+ * Upper bound (pt) for an image's rendered height. react-pdf cannot wrap an
+ * <Image> across pages, so an image taller than the page is drawn overflowing —
+ * painting over the blocks below it (the bug this guards against). Capping the
+ * height keeps a tall image within a single page so react-pdf paginates cleanly.
+ *
+ * Derived from page geometry (so it stays correct if the margin changes): ~92%
+ * of the A4 content height (841.89 − 2×40 ≈ 761.89pt → ≈701pt), leaving ~8%
+ * headroom — empirically the band above which react-pdf flags the image as
+ * un-wrappable (~750pt).
+ */
+const MAX_IMAGE_HEIGHT_PT = (A4_HEIGHT_PT - 2 * PAGE_MARGIN_PT) * 0.92;
+
 export function PdfImage({ block }: { block: ImageBlock }) {
   const alignItems = block.alignment ? IMAGE_ALIGN[block.alignment] : "flex-start";
   return (
     <View style={{ alignItems, marginBottom: 4, ...nodeStyleToPdf(block.style) }}>
-      <Image src={block.src} style={block.width ? { width: block.width } : undefined} />
+      {/*
+        Mirror the screen's `max-w-full`: never wider than the content box and
+        never taller than a page. `objectFit: "contain"` preserves the aspect
+        ratio when either cap clamps the box. A per-block width (stored in px,
+        screen units) is converted to pt for physical parity with the screen.
+      */}
+      <Image
+        src={block.src}
+        style={{
+          maxWidth: "100%",
+          maxHeight: MAX_IMAGE_HEIGHT_PT,
+          objectFit: "contain",
+          ...(block.width ? { width: px2pt(block.width) } : {}),
+        }}
+      />
       {block.caption && (
         <Text style={{ fontSize: 10, color: "#666666", marginTop: 2 }}>
           <PdfRichText content={block.caption} />

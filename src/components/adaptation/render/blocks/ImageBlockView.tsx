@@ -19,6 +19,12 @@ export function ImageBlockView({ block }: { block: ImageBlock }) {
   const alignClass = block.alignment ? ALIGN_CLASS[block.alignment] : "text-left";
   return (
     <figure className={alignClass} style={nodeStyleToCss(block.style)}>
+      {/*
+        `max-w-full` caps width to the container; height is intrinsic with no cap.
+        Parity note: the PDF renderer (PdfImage) additionally caps image HEIGHT to
+        a page-safe value, because react-pdf cannot wrap an image across pages — a
+        very tall image is shrunk in the PDF where on screen it scrolls freely.
+      */}
       <img
         src={block.src}
         alt={block.alt}
