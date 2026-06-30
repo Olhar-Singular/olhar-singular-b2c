@@ -15,7 +15,7 @@ const ALIGNMENTS = [
   { value: "right", Icon: AlignRight, label: "Alinhar à direita" },
 ] as const;
 
-export function ImageNodeView({ node, updateAttributes, editor }: NodeViewProps) {
+export function ImageNodeView({ node, updateAttributes, deleteNode, editor }: NodeViewProps) {
   const [modalOpen, setModalOpen] = useState(false);
   const { src, width, alignment, caption } = node.attrs as {
     src: string;
@@ -71,6 +71,17 @@ export function ImageNodeView({ node, updateAttributes, editor }: NodeViewProps)
               onClick={() => setModalOpen(true)}
             >
               <ImageIcon className="h-3.5 w-3.5" /> Trocar imagem
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="gap-1 text-destructive hover:text-destructive"
+              disabled={disabled}
+              onClick={() => deleteNode()}
+              aria-label="Excluir imagem"
+            >
+              <Trash2 className="h-3.5 w-3.5" />
             </Button>
           </div>
 

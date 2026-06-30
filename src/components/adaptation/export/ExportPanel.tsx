@@ -13,7 +13,7 @@
  */
 
 import { useState } from "react";
-import { Copy, FileDown, CalendarDays } from "lucide-react";
+import { Copy, FileDown, CalendarDays, FileText } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -22,6 +22,7 @@ import { Switch } from "@/components/ui/switch";
 import type { CanonicalDocument, DocumentHeader, PageStyle } from "@/lib/adaptation/canonical/schema";
 import { documentToPlainText } from "@/lib/adaptation/canonical/plainText";
 import { downloadPdf } from "./exportPdf";
+import { downloadDocx } from "./exportDocx";
 import { type PanelSettings } from "./panelSettings";
 
 type Props = {
@@ -35,8 +36,10 @@ type Props = {
   onHeaderChange?: (header: DocumentHeader) => void;
   /** Document-level presentation style (font, size, spacing). Comes from pageStyle in the result. */
   pageStyle?: PageStyle;
-  /** Override the download trigger (used in tests). */
+  /** Override the PDF download trigger (used in tests). */
   onDownload?: (document: CanonicalDocument, settings: PanelSettings, pageStyle?: PageStyle) => Promise<void>;
+  /** Override the Word download trigger (used in tests). */
+  onDownloadWord?: (document: CanonicalDocument, header: DocumentHeader, pageStyle?: PageStyle) => Promise<void>;
 };
 
 export function ExportPanel({
@@ -45,11 +48,13 @@ export function ExportPanel({
   onHeaderChange = () => {},
   pageStyle,
   onDownload = downloadPdf,
+  onDownloadWord = downloadDocx,
 }: Props) {
   // Page-break is a transient, export-only choice (not persisted); the header
   // is lifted to the parent so it survives save.
   const [pageBreakPerQuestion, setPageBreakPerQuestion] = useState(false);
   const [exporting, setExporting] = useState(false);
+  const [exportingWord, setExportingWord] = useState(false);
 
   const setField = (key: keyof DocumentHeader, value: string) =>
     onHeaderChange({ ...header, [key]: value });
@@ -72,6 +77,18 @@ export function ExportPanel({
       toast.error("Erro ao gerar PDF.");
     } finally {
       setExporting(false);
+    }
+  };
+
+  const handleExportWord = async () => {
+    setExportingWord(true);
+    try {
+      await onDownloadWord(document, header, pageStyle);
+      toast.success("Word gerado!");
+    } catch {
+      toast.error("Erro ao gerar Word.");
+    } finally {
+      setExportingWord(false);
     }
   };
 
@@ -135,6 +152,9 @@ export function ExportPanel({
         </Button>
         <Button variant="outline" onClick={handleExport} disabled={exporting}>
           <FileDown className="mr-1 h-4 w-4" /> Exportar PDF
+        </Button>
+        <Button variant="outline" onClick={handleExportWord} disabled={exportingWord}>
+          <FileText className="mr-1 h-4 w-4" /> Exportar Word
         </Button>
       </div>
     </div>

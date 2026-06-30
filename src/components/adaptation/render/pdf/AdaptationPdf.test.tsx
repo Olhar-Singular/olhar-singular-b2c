@@ -180,6 +180,23 @@ describe("AdaptationPdf — header + page-break wiring", () => {
     );
     expect(breakViews).toHaveLength(1); // only the 2nd question breaks
   });
+
+  it("não insere break antes da 1ª questão quando um heading a precede", () => {
+    const docWithHeadingFirst: CanonicalDocument = {
+      schemaVersion: 1,
+      blocks: [
+        renderDocument.blocks.find((b) => b.type === "heading")!,
+        renderDocument.blocks.find((b) => b.type === "question")!,
+        renderDocument.blocks.filter((b) => b.type === "question")[1]!,
+      ],
+    };
+    const el = AdaptationPdf({ document: docWithHeadingFirst, settings: { ...settings, pageBreakPerQuestion: true } });
+    const pageChildren = (el.props.children.props.children as unknown[]).flat();
+    const breakViews = pageChildren.filter(
+      (c) => isValidElement(c) && c.type === View && (c.props as { break?: boolean }).break,
+    );
+    expect(breakViews).toHaveLength(1); // só a 2ª questão quebra; a 1ª flui com o heading
+  });
 });
 
 describe("PdfQuestion — customNumber and enunciado branches", () => {

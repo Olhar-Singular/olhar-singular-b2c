@@ -1,20 +1,18 @@
 /**
- * AppearancePopover — controle de Formato do documento (plano §6.5, D7/D12).
+ * AppearancePopover — controle de Formato do documento.
  *
  * Atua sobre os PAGE TOKENS do documento inteiro (fonte, tamanho, espaçamento
- * entre blocos) mais overrides por elemento (enunciado, instrução, alternativas,
- * legenda). Emite `Partial<PageStyle>`; o `StepReview` mescla no `pageStyle` e
- * persiste. Paridade com o PDF é automática (o PDF lê os mesmos tokens).
+ * entre blocos). Emite `Partial<PageStyle>`; o `StepReview` mescla no `pageStyle`
+ * e persiste. Paridade com o PDF é automática (o PDF lê os mesmos tokens).
  *
- * Unidades: o usuário pensa em px (tamanho 11–28); `pageStyle.fontSize` e os
- * tamanhos por elemento são armazenados em pt (paridade direta com o PDF).
- * Conversão px↔pt (px = pt / 0.75) fica isolada aqui.
+ * Unidades: o usuário pensa em px (tamanho 11–28); `pageStyle.fontSize` é
+ * armazenado em pt (paridade direta com o PDF). Conversão px↔pt fica isolada aqui.
  */
-import { Type, X } from "lucide-react";
+import { Type } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { APPEARANCE_FONT_GROUPS } from "@/lib/adaptation/canonical/fontFamily";
-import type { PageStyle, ElementFontSizes } from "@/lib/adaptation/canonical/schema";
+import type { PageStyle } from "@/lib/adaptation/canonical/schema";
 import type { ResolvedPageStyle } from "@/components/adaptation/render/pageStyle";
 
 /** pt = px * 0.75 (1pt = 1/72in, 1px = 1/96in). */
@@ -30,51 +28,28 @@ const SPACING_STEP_PX = 2;
 
 const clamp = (n: number, min: number, max: number) => Math.min(max, Math.max(min, n));
 
-const ELEMENT_ENTRIES = [
-  { key: "stem" as const, label: "Enunciado", testId: "elem-fs-stem" },
-  { key: "instruction" as const, label: "Instrução", testId: "elem-fs-instruction" },
-  { key: "alternative" as const, label: "Alternativas", testId: "elem-fs-alternative" },
-  { key: "caption" as const, label: "Legenda", testId: "elem-fs-caption" },
-];
-
 type Props = {
   value: ResolvedPageStyle;
   onChange: (partial: Partial<PageStyle>) => void;
 };
 
-/** Stepper "− valor +" com rótulos acessíveis. Exibe botão × de redefinição quando `onReset` fornecido. */
+/** Stepper "− valor +" com rótulos acessíveis. */
 function Stepper({
   label,
   display,
   testId,
   onDecrease,
   onIncrease,
-  onReset,
 }: {
   label: string;
   display: string;
   testId: string;
   onDecrease: () => void;
   onIncrease: () => void;
-  onReset?: () => void;
 }) {
   return (
     <div className="flex items-center justify-between">
-      <div className="flex items-center gap-1">
-        <span className="text-sm text-surface-ink">{label}</span>
-        {onReset && (
-          <Button
-            type="button"
-            size="icon"
-            variant="ghost"
-            className="h-4 w-4 text-muted-foreground"
-            aria-label={`Redefinir ${label.toLowerCase()}`}
-            onClick={onReset}
-          >
-            <X className="h-2.5 w-2.5" />
-          </Button>
-        )}
-      </div>
+      <span className="text-sm text-surface-ink">{label}</span>
       <div className="flex items-center gap-2">
         <Button
           type="button"
@@ -107,7 +82,6 @@ function Stepper({
 /** Os controles em si (sem o popover) — fáceis de testar isoladamente. */
 export function AppearanceControls({ value, onChange }: Props) {
   const sizePx = ptToPx(value.fontSize);
-  const efs = value.elementFontSizes ?? {};
 
   const stepFontSize = (deltaPx: number) => {
     const next = clamp(sizePx + deltaPx, FONT_SIZE_MIN_PX, FONT_SIZE_MAX_PX);
@@ -117,24 +91,6 @@ export function AppearanceControls({ value, onChange }: Props) {
   const stepSpacing = (deltaPx: number) => {
     const next = clamp(value.blockSpacing + deltaPx, SPACING_MIN_PX, SPACING_MAX_PX);
     if (next !== value.blockSpacing) onChange({ blockSpacing: next });
-  };
-
-  const stepElement = (key: keyof ElementFontSizes, deltaPx: number) => {
-    const currentPt = efs[key];
-    const currentPx = currentPt !== undefined ? ptToPx(currentPt) : sizePx;
-    const next = clamp(currentPx + deltaPx, FONT_SIZE_MIN_PX, FONT_SIZE_MAX_PX);
-    if (next !== currentPx) onChange({ elementFontSizes: { ...efs, [key]: pxToPt(next) } });
-  };
-
-  const resetElement = (key: keyof ElementFontSizes) => {
-    const { stem, instruction, alternative, caption } = efs;
-    const next: ElementFontSizes = {
-      ...(key !== "stem" && stem !== undefined ? { stem } : {}),
-      ...(key !== "instruction" && instruction !== undefined ? { instruction } : {}),
-      ...(key !== "alternative" && alternative !== undefined ? { alternative } : {}),
-      ...(key !== "caption" && caption !== undefined ? { caption } : {}),
-    };
-    onChange({ elementFontSizes: Object.keys(next).length > 0 ? next : undefined });
   };
 
   return (
@@ -170,6 +126,10 @@ export function AppearanceControls({ value, onChange }: Props) {
         onIncrease={() => stepFontSize(1)}
       />
 
+      <p className="text-xs text-surface-ink-soft">
+        Altera o tamanho de toda a prova — enunciados, instruções e alternativas.
+      </p>
+
       <Stepper
         label="Espaçamento entre blocos"
         display={`${value.blockSpacing}px`}
@@ -182,30 +142,6 @@ export function AppearanceControls({ value, onChange }: Props) {
         As fontes de acessibilidade ajudam leitores com dislexia e baixa visão. A escolha vale
         para a folha e para o PDF.
       </p>
-
-      <hr className="border-surface-line-2" />
-
-      <div className="space-y-3">
-        <p className="text-xs font-semibold uppercase tracking-wide text-surface-ink-faint">
-          Tamanho por elemento
-        </p>
-        {ELEMENT_ENTRIES.map(({ key, label, testId }) => {
-          const currentPt = efs[key];
-          const currentPx = currentPt !== undefined ? ptToPx(currentPt) : sizePx;
-          const hasOverride = currentPt !== undefined;
-          return (
-            <Stepper
-              key={key}
-              label={label}
-              display={`${currentPx}px`}
-              testId={testId}
-              onDecrease={() => stepElement(key, -1)}
-              onIncrease={() => stepElement(key, 1)}
-              onReset={hasOverride ? () => resetElement(key) : undefined}
-            />
-          );
-        })}
-      </div>
     </div>
   );
 }

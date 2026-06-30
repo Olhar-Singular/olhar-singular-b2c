@@ -50,12 +50,14 @@ vi.mock("@/components/editor/ImageManagerModal", () => ({
 
 function makeProps(attrs: Record<string, unknown> = {}, editable = true) {
   const updateAttributes = vi.fn();
+  const deleteNode = vi.fn();
   const props = {
     node: { attrs: { src: "x.png", alt: "", width: null, alignment: null, caption: null, ...attrs } },
     updateAttributes,
+    deleteNode,
     editor: { isEditable: editable },
   } as unknown as NodeViewProps;
-  return { props, updateAttributes };
+  return { props, updateAttributes, deleteNode };
 }
 
 beforeEach(() => {
@@ -75,9 +77,21 @@ describe("ImageNodeView", () => {
     expect(getByTestId("image-node").className).not.toMatch(/rounded-xl|border border-border\/60/);
   });
 
-  it("sem lixeira flutuante no hover (rail removido)", () => {
+  it("mostra botão 'Excluir imagem' na barra de controles", () => {
     renderImage();
-    expect(screen.queryByRole("button", { name: "Excluir imagem" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Excluir imagem" })).toBeInTheDocument();
+  });
+
+  it("clicar 'Excluir imagem' chama deleteNode", () => {
+    const { props, deleteNode } = makeProps();
+    render(<ImageNodeView {...props} />);
+    fireEvent.click(screen.getByRole("button", { name: "Excluir imagem" }));
+    expect(deleteNode).toHaveBeenCalledOnce();
+  });
+
+  it("botão 'Excluir imagem' fica desabilitado quando não editável", () => {
+    renderImage({}, false);
+    expect(screen.getByRole("button", { name: "Excluir imagem" })).toBeDisabled();
   });
 
   it("sem campo de texto alternativo (removido)", () => {

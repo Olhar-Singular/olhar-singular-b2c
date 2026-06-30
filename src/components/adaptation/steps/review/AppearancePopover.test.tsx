@@ -100,83 +100,15 @@ describe("AppearanceControls", () => {
     setupControls();
     expect(screen.getByText(/acessibilidade/i)).toBeInTheDocument();
   });
-});
 
-describe("AppearanceControls — tamanho por elemento", () => {
-  it("mostra o tamanho global como fallback quando não há override de elemento", () => {
-    setupControls(); // fontSize 12pt → 16px, sem elementFontSizes
-    expect(screen.getByTestId("elem-fs-stem").textContent).toBe("16px");
-    expect(screen.getByTestId("elem-fs-instruction").textContent).toBe("16px");
-    expect(screen.getByTestId("elem-fs-alternative").textContent).toBe("16px");
-    expect(screen.getByTestId("elem-fs-caption").textContent).toBe("16px");
-  });
-
-  it("mostra o override em px quando definido e global como fallback para os demais", () => {
-    setupControls({ elementFontSizes: { stem: 14 } }); // 14pt → ptToPx = 19px
-    expect(screen.getByTestId("elem-fs-stem").textContent).toBe("19px");
-    expect(screen.getByTestId("elem-fs-instruction").textContent).toBe("16px"); // fallback global
-  });
-
-  it("não mostra botão redefinir quando não há override", () => {
+  it("não exibe a seção 'Tamanho por elemento'", () => {
     setupControls();
-    expect(screen.queryByLabelText("Redefinir enunciado")).not.toBeInTheDocument();
-    expect(screen.queryByLabelText("Redefinir instrução")).not.toBeInTheDocument();
+    expect(screen.queryByText(/tamanho por elemento/i)).not.toBeInTheDocument();
   });
 
-  it("mostra botão redefinir somente para elementos com override", () => {
-    setupControls({ elementFontSizes: { stem: 14 } });
-    expect(screen.getByLabelText("Redefinir enunciado")).toBeInTheDocument();
-    expect(screen.queryByLabelText("Redefinir instrução")).not.toBeInTheDocument();
-  });
-
-  it("aumenta o tamanho de elemento sem override usando o tamanho global como base", () => {
-    const { onChange } = setupControls(); // global 12pt → 16px
-    fireEvent.click(screen.getByRole("button", { name: "Aumentar enunciado" }));
-    // currentPx = 16, next = 17, pxToPt(17) = 12.75
-    expect(onChange).toHaveBeenCalledWith({ elementFontSizes: { stem: 12.75 } });
-  });
-
-  it("diminui o tamanho de elemento com override existente", () => {
-    const { onChange } = setupControls({ elementFontSizes: { stem: 14 } });
-    fireEvent.click(screen.getByRole("button", { name: "Diminuir enunciado" }));
-    // currentPt=14 → ptToPx=19, next=18, pxToPt(18)=13.5
-    expect(onChange).toHaveBeenCalledWith({ elementFontSizes: { stem: 13.5 } });
-  });
-
-  it("respeita o limite máximo de tamanho de elemento (28px)", () => {
-    const { onChange } = setupControls({ elementFontSizes: { stem: 21 } }); // 21pt → ptToPx=28
-    fireEvent.click(screen.getByRole("button", { name: "Aumentar enunciado" }));
-    expect(onChange).not.toHaveBeenCalled();
-  });
-
-  it("respeita o limite mínimo de tamanho de elemento (11px)", () => {
-    const { onChange } = setupControls({ elementFontSizes: { stem: 8.25 } }); // 8.25pt → ptToPx=11
-    fireEvent.click(screen.getByRole("button", { name: "Diminuir enunciado" }));
-    expect(onChange).not.toHaveBeenCalled();
-  });
-
-  it("redefinir emite elementFontSizes undefined quando era o único override", () => {
-    const { onChange } = setupControls({ elementFontSizes: { stem: 14 } });
-    fireEvent.click(screen.getByLabelText("Redefinir enunciado"));
-    expect(onChange).toHaveBeenCalledWith({ elementFontSizes: undefined });
-  });
-
-  it("redefinir um elemento preserva os demais overrides", () => {
-    const { onChange } = setupControls({ elementFontSizes: { stem: 14, instruction: 10 } });
-    fireEvent.click(screen.getByLabelText("Redefinir instrução"));
-    expect(onChange).toHaveBeenCalledWith({ elementFontSizes: { stem: 14 } });
-  });
-
-  it("redefinir preserva overrides de alternativas e legenda", () => {
-    const { onChange } = setupControls({ elementFontSizes: { stem: 14, alternative: 12, caption: 9 } });
-    fireEvent.click(screen.getByLabelText("Redefinir enunciado"));
-    expect(onChange).toHaveBeenCalledWith({ elementFontSizes: { alternative: 12, caption: 9 } });
-  });
-
-  it("redefinir alternativa preserva instrução definida", () => {
-    const { onChange } = setupControls({ elementFontSizes: { instruction: 10, alternative: 12 } });
-    fireEvent.click(screen.getByLabelText("Redefinir alternativas"));
-    expect(onChange).toHaveBeenCalledWith({ elementFontSizes: { instruction: 10 } });
+  it("exibe aviso de que o tamanho afeta toda a prova", () => {
+    setupControls();
+    expect(screen.getByText(/toda a prova/i)).toBeInTheDocument();
   });
 });
 

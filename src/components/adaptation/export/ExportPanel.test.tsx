@@ -28,10 +28,12 @@ beforeEach(() => vi.clearAllMocks());
 /** Stateful harness: the header is controlled, owned by the parent (like the wizard). */
 function Harness({
   onDownload,
+  onDownloadWord,
   pageStyle,
   initialHeader = {},
 }: {
   onDownload: (d: CanonicalDocument, s: PanelSettings, ps?: PageStyle) => Promise<void>;
+  onDownloadWord?: (d: CanonicalDocument, h: DocumentHeader, ps?: PageStyle) => Promise<void>;
   pageStyle?: PageStyle;
   initialHeader?: DocumentHeader;
 }) {
@@ -42,6 +44,7 @@ function Harness({
       header={header}
       onHeaderChange={setHeader}
       onDownload={onDownload}
+      onDownloadWord={onDownloadWord}
       pageStyle={pageStyle}
     />
   );
@@ -155,6 +158,31 @@ describe("ExportPanel", () => {
   it("defaults to the downloadPdf trigger when no override is given", () => {
     render(<ExportPanel document={document} />);
     expect(screen.getByRole("button", { name: /Exportar PDF/i })).toBeInTheDocument();
+  });
+
+  it("mostra botão 'Exportar Word'", () => {
+    render(<ExportPanel document={document} onDownload={vi.fn()} />);
+    expect(screen.getByRole("button", { name: /Exportar Word/i })).toBeInTheDocument();
+  });
+
+  it("clicar 'Exportar Word' chama onDownloadWord com o documento e o cabeçalho", async () => {
+    const onDownloadWord = vi.fn<(d: CanonicalDocument, h: DocumentHeader, ps?: PageStyle) => Promise<void>>().mockResolvedValue(undefined);
+    const { toast } = await import("sonner");
+    render(<Harness onDownload={vi.fn()} onDownloadWord={onDownloadWord} initialHeader={{ title: "Minha Prova" }} />);
+    fireEvent.click(screen.getByRole("button", { name: /Exportar Word/i }));
+    await waitFor(() => expect(onDownloadWord).toHaveBeenCalled());
+    const [doc, header] = onDownloadWord.mock.calls[0];
+    expect(doc).toBe(document);
+    expect(header).toMatchObject({ title: "Minha Prova" });
+    await waitFor(() => expect(toast.success).toHaveBeenCalledWith("Word gerado!"));
+  });
+
+  it("mostra toast de erro quando exportar Word falha", async () => {
+    const onDownloadWord = vi.fn().mockRejectedValue(new Error("boom"));
+    const { toast } = await import("sonner");
+    render(<ExportPanel document={document} onDownload={vi.fn()} onDownloadWord={onDownloadWord} />);
+    fireEvent.click(screen.getByRole("button", { name: /Exportar Word/i }));
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith("Erro ao gerar Word."));
   });
 
   it("date input has type='date' for native browser date picker", () => {

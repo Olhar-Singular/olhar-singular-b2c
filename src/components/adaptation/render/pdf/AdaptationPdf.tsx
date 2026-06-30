@@ -71,9 +71,12 @@ export function AdaptationPdf({ document, settings = DEFAULT_PANEL_SETTINGS, pag
         <PdfHeader header={settings.header} />
         {(() => {
           const numbers = questionNumbers(document.blocks);
+          let questionsSeen = 0;
           return document.blocks.map((block, i) => {
+            const isQuestion = block.type === "question";
             const forceBreak =
-              settings.pageBreakPerQuestion && block.type === "question" && i > 0;
+              settings.pageBreakPerQuestion && isQuestion && questionsSeen > 0;
+            if (isQuestion) questionsSeen++;
             return forceBreak ? (
               <View key={block.id} break>
                 <PdfBlock block={block} number={numbers[i]} blockGap={blockGap} />
