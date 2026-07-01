@@ -85,14 +85,22 @@ const CONTENT_LIMIT = 516;
 const PAGE_HEIGHT_LIMIT = 720;
 
 describe("PdfImage — real react-pdf layout keeps images within the page", () => {
-  it("bounds a tall image (no width) to the content box and a page-safe height", async () => {
+  it("bounds a very tall image (no width) to a page-safe height via the maxHeight cap", async () => {
+    // Aspect 1:4 so that even at the default width (225pt) the natural height
+    // (~900pt) exceeds a page — the maxHeight cap must clamp it. This keeps the
+    // overflow guard exercised now that a widthless image is 225pt wide, not the
+    // full content box.
     const doc: CanonicalDocument = {
       schemaVersion: 1,
-      blocks: [{ id: id(1), type: "image", src: pngDataUri(1000, 1500), alt: "tall" }],
+      blocks: [{ id: id(1), type: "image", src: pngDataUri(1000, 4000), alt: "tall" }],
     };
     const box = await layoutImage(doc);
     expect(box.width).toBeLessThanOrEqual(CONTENT_LIMIT);
+    // Cap engaged: under the ≈701pt cap…
     expect(box.height).toBeLessThan(PAGE_HEIGHT_LIMIT);
+    // …but genuinely near it — without the cap this image would be ~900pt tall,
+    // so a comfortable lower bound proves the clamp actually fired.
+    expect(box.height).toBeGreaterThan(600);
   });
 
   it("clamps an oversized explicit width to the content box", async () => {
@@ -103,5 +111,21 @@ describe("PdfImage — real react-pdf layout keeps images within the page", () =
     };
     const box = await layoutImage(doc);
     expect(box.width).toBeLessThanOrEqual(CONTENT_LIMIT);
+  });
+
+  it("renders a widthless image at the shared default, not filling the whole page width", async () => {
+    // The bug: react-pdf lays a widthless <Image> across the FULL content box
+    // (~515pt), so an un-resized/AI image balloons in the PDF while the editor
+    // shows it at 300px. The fix defaults it to 300px → 225pt (matching the
+    // editor), so a small natural image does not fill the page.
+    const doc: CanonicalDocument = {
+      schemaVersion: 1,
+      blocks: [{ id: id(3), type: "image", src: pngDataUri(120, 90), alt: "small" }],
+    };
+    const box = await layoutImage(doc);
+    // Discriminating bound: the fix pins it to ≈225pt; the old code filled ≈515pt.
+    // 300 sits between the two, so this fails if the default is ever dropped.
+    expect(box.width).toBeLessThan(300);
+    expect(box.width).toBeCloseTo(225, 0);
   });
 });

@@ -19,7 +19,7 @@ import { View, Text, Image } from "@react-pdf/renderer";
 import type { Block } from "@/lib/adaptation/canonical/schema";
 import { nodeStyleToPdf } from "./nodeStyleToPdf";
 import { PdfRichText } from "./PdfRichText";
-import { PAGE_MARGIN_PT } from "../pageTokens";
+import { PAGE_MARGIN_PT, DEFAULT_IMAGE_WIDTH_PX } from "../pageTokens";
 
 type HeadingBlock = Extract<Block, { type: "heading" }>;
 type ParagraphBlock = Extract<Block, { type: "paragraph" }>;
@@ -90,8 +90,12 @@ export function PdfImage({ block }: { block: ImageBlock }) {
       {/*
         Mirror the screen's `max-w-full`: never wider than the content box and
         never taller than a page. `objectFit: "contain"` preserves the aspect
-        ratio when either cap clamps the box. A per-block width (stored in px,
-        screen units) is converted to pt for physical parity with the screen.
+        ratio when either cap clamps the box. The width (stored in px, screen
+        units) is converted to pt for physical parity with the screen. When the
+        block carries no width, fall back to DEFAULT_IMAGE_WIDTH_PX (the size the
+        editor's resizer shows) instead of letting react-pdf stretch a widthless
+        <Image> across the whole content box — that ballooning is the bug this
+        guards against for un-resized/AI images.
       */}
       <Image
         src={block.src}
@@ -99,7 +103,7 @@ export function PdfImage({ block }: { block: ImageBlock }) {
           maxWidth: "100%",
           maxHeight: MAX_IMAGE_HEIGHT_PT,
           objectFit: "contain",
-          ...(block.width ? { width: px2pt(block.width) } : {}),
+          width: px2pt(block.width ?? DEFAULT_IMAGE_WIDTH_PX),
         }}
       />
       {block.caption && (

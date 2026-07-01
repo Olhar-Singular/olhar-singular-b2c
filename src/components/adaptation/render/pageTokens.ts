@@ -21,6 +21,16 @@ export const BASE_LINE_HEIGHT = 1.4;
 export const BASE_BLOCK_SPACING_PX = 16;
 
 /**
+ * Largura default (px, unidade da tela) de uma imagem SEM `width` explícito.
+ * Contrato de paridade das imagens: o resizer do editor, a prévia da exportação
+ * e o PDF caem todos neste valor quando a imagem não foi redimensionada — assim
+ * o tamanho que o usuário vê editando é o tamanho que sai no PDF. Sem ele, o
+ * react-pdf estica uma imagem sem largura por toda a caixa de conteúdo (a folha
+ * mostra o natural / o editor mostra 300px), e os tamanhos divergem.
+ */
+export const DEFAULT_IMAGE_WIDTH_PX = 300;
+
+/**
  * Defaults resolvidos usados quando nenhum `pageStyle` é passado. Definido aqui
  * (a partir das constantes-base) em vez de importado de `pageStyle.ts` para
  * evitar um ciclo de import em tempo de avaliação (pageStyle importa as

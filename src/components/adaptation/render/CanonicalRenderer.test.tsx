@@ -179,7 +179,7 @@ describe("CanonicalRenderer (defaults / edge branches)", () => {
     expect(container.querySelector("h3")).toHaveTextContent("H3");
   });
 
-  it("renders image with no width/alignment/caption (left default)", () => {
+  it("renders image with no width/alignment/caption (left default, shared default width)", () => {
     render(
       <CanonicalRenderer
         document={wrap([{ id: id(3), type: "image", src: "/x.png", alt: "x" }])}
@@ -187,7 +187,9 @@ describe("CanonicalRenderer (defaults / edge branches)", () => {
     );
     const fig = screen.getByAltText("x").closest("figure");
     expect(fig).toHaveClass("text-left");
-    expect(screen.getByAltText("x")).not.toHaveAttribute("width");
+    // A widthless image falls back to the shared default (300px), matching the
+    // editor's resizer and the PDF — so the preview and export agree on size.
+    expect(screen.getByAltText("x")).toHaveAttribute("width", "300");
   });
 
   it("renders left/right aligned images", () => {

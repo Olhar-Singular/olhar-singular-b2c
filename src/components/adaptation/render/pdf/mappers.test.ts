@@ -264,8 +264,15 @@ describe("PdfImage", () => {
     expect(style.maxHeight as number).toBeGreaterThan(0);
     expect(style.maxHeight as number).toBeLessThanOrEqual(740);
     expect(style.objectFit).toBe("contain");
-    // No explicit width is forced when the block carries none.
-    expect(style.width).toBeUndefined();
+  });
+
+  it("falls back to the shared default width when the block carries none, matching the editor", () => {
+    // An image with no explicit width must NOT fill the whole content box in the
+    // PDF (react-pdf's default for a widthless <Image>). It falls back to the same
+    // DEFAULT_IMAGE_WIDTH_PX the editor's resizer shows (300px → 225pt), so the
+    // exported size matches what the user sees while editing.
+    const style = imageStyleOf({ id: id(1), type: "image", src: "https://x/y.png", alt: "a" });
+    expect(style.width).toBeCloseTo(225, 5);
   });
 
   it("converts an explicit width from px to pt and still applies the page constraints", () => {

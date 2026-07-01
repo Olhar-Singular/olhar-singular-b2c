@@ -1,4 +1,5 @@
 import { useState, useCallback, useRef } from "react";
+import { DEFAULT_IMAGE_WIDTH_PX } from "@/components/adaptation/render/pageTokens";
 
 type Props = {
   src: string;
@@ -7,7 +8,9 @@ type Props = {
 };
 
 export default function ImageResizer({ src, initialWidth, onResize }: Props) {
-  const [width, setWidth] = useState(initialWidth || 300);
+  // No explicit width → the shared default, kept in sync with the export preview
+  // and the PDF so an un-resized image is the same size on every surface.
+  const [width, setWidth] = useState(initialWidth ?? DEFAULT_IMAGE_WIDTH_PX);
   const containerRef = useRef<HTMLDivElement>(null);
   const dragging = useRef(false);
   const startX = useRef(0);
