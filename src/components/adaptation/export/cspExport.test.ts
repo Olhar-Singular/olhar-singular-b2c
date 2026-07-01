@@ -60,3 +60,20 @@ describe("production CSP (vercel.json) — PDF export machinery", () => {
     expect(csp["connect-src"]).toContain("wss://*.supabase.co");
   });
 });
+
+describe("production CSP (vercel.json) — in-app PDF preview iframe", () => {
+  const csp = getCsp();
+
+  it("allows previewing uploaded PDFs in a blob: iframe (frame-src)", () => {
+    // QuestionBankPage renders <iframe src={`${objectUrl}#toolbar=0…`}> where
+    // objectUrl is a blob: URL (URL.createObjectURL of the uploaded file). A bare
+    // `frame-src 'self'` blocks it in production ("Este conteúdo está bloqueado"),
+    // while every unit test stays green (dev server sends no CSP).
+    // See: src/pages/QuestionBankPage.tsx (PDF preview Dialog iframe).
+    expect(csp["frame-src"]).toContain("blob:");
+  });
+
+  it("keeps same-origin framing allowed (frame-src)", () => {
+    expect(csp["frame-src"]).toContain("'self'");
+  });
+});
