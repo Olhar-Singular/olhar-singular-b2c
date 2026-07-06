@@ -62,3 +62,34 @@ jobs:
 
       - name: Run pgTAP database tests
         run: supabase test db
+
+  pdf-font-smoke:
+    name: PDF font smoke (real Node render)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      # poppler-utils provides pdftoppm, used to rasterize the rendered PDF and
+      # assert each accessibility font actually paints glyphs. Without it the
+      # smoke can only do structural checks and cannot catch invisible-text
+      # (subset-corruption) regressions — so CI must have it installed.
+      - name: Install poppler-utils
+        run: sudo apt-get update && sudo apt-get install -y poppler-utils
+
+      # Pure-Node render (NOT the jsdom Vitest suite, which gives false negatives
+      # on TrueType subsetting). Fails if any family renders (near-)blank.
+      - name: Render all a11y fonts and assert glyphs are visible
+        run: npm run test:pdf-smoke

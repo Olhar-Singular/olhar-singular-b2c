@@ -13,6 +13,7 @@
     "test:watch": "NODE_OPTIONS='--max-old-space-size=19456' vitest",
     "test:coverage": "NODE_OPTIONS='--max-old-space-size=19456' vitest run --coverage",
     "test:db": "supabase test db",
+    "test:pdf-smoke": "node scripts/pdf-font-smoke.mjs",
     "typecheck": "tsc --noEmit",
     "prepare": "husky"
   },

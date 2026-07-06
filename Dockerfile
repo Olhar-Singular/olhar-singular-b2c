@@ -1,7 +1,10 @@
 FROM node:22-slim
 
+# poppler-utils: pdftoppm/pdffonts for the PDF font smoke's ink check
+# (scripts/pdf-font-smoke.mjs) — without it the smoke degrades to
+# structural-only and cannot catch invisible-glyph font corruption.
 RUN apt-get update && apt-get install -y \
-    curl unzip git ca-certificates \
+    curl unzip git ca-certificates poppler-utils \
     && rm -rf /var/lib/apt/lists/*
 
 # Supabase CLI
