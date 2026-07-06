@@ -20,7 +20,7 @@ Fluxo: `Tipo → Atividade → Barreiras → Gerar → Revisar → Exportar` (os
 Estilo foram fundidos; não existe mais "modo de editor"). Regra mental que governa a
 interação: **"Se está impresso na folha, clique e digite. Se é estrutura, abra o card."**
 Texto edita inline; formatação de seleção vem do BubbleMenu; aparência do documento (fonte/
-tamanho/espaçamento) vem do popover Aparência sobre os page tokens (paridade com o PDF).
+tamanho/espaçamento) vem do popover **Formato** sobre os page tokens (paridade com o PDF).
 Specs do redesign: **`docs/superpowers/specs/2026-06-03-adaptar-restructure-design.md`**.
 
 **Áreas frágeis** — isolar via ferramenta dedicada:
@@ -86,7 +86,7 @@ Setup inicial de máquina nova: @.claude/docs/setup.md
 
 - `src/lib/adaptation/` — núcleo do Adaptar (canônico + Tiptap). **Compartilhado c/ Deno.** FRÁGIL.
 - `src/components/adaptation/steps/review/` — superfície única "Revisar" (editor canônico +
-  Aparência + gaveta de metadados). `canonical-editor/` traz NodeViews, BubbleMenu e o
+  popover Formato + gaveta de metadados). `canonical-editor/` traz NodeViews, BubbleMenu e o
   inserter "+". Não há mais `steps/content` nem `steps/styling` (fundidos em Revisar).
 - `src/components/adaptation/render/pdf/` — geração de PDF. FRÁGIL (agente `pdf-debugger`).
 - `src/components/ui/` e `src/integrations/supabase/types.ts` — gerados, **NÃO EDITAR**.

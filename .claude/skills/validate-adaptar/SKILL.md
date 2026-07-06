@@ -46,14 +46,24 @@ grep '^AI_API_KEY=' .env > /tmp/fn.env
 supabase functions serve --env-file /tmp/fn.env > /tmp/fnserve.log 2>&1 &
 
 # App apontando pro LOCAL — use .env.local (Vite prioriza, é gitignored; NÃO edite .env)
+# O browser (no host) lê essas vars do bundle e chama o Supabase em 127.0.0.1 direto.
 ANON=$(supabase status -o env 2>/dev/null | grep ANON_KEY | cut -d= -f2- | tr -d '"')  # ou pegue de `supabase status`
 cat > .env.local <<EOF
 VITE_SUPABASE_URL=http://127.0.0.1:54321
 VITE_SUPABASE_PUBLISHABLE_KEY=$ANON
 VITE_SUPABASE_PROJECT_ID=local
 EOF
-npm run dev > /tmp/dev.log 2>&1 &   # Vite na porta 8080
+# O dev server roda DENTRO do container app: o CMD do container JÁ É `npm run dev` (o Vite
+# escuta 8080 no container → docker-compose mapeia pra localhost:3000 no HOST). Ou seja,
+# `docker compose up -d` sozinho já sobe o Vite — NÃO rode um segundo (conflita no 8080).
+# `npm run dev` no host falha (node_modules mora no volume do container).
+docker compose up -d                # sobe o container; o CMD inicia o Vite sozinho
+#   logs do dev:  docker compose logs -f app   ·   acesse SEMPRE http://localhost:3000
 ```
+
+> Atalho: `make verify-adaptar` faz todo este setup (Supabase + reset + seed + `.env.local` +
+> functions serve + dev no container) de uma vez, e deixa tudo pronto em http://localhost:3000.
+> Este passo-a-passo manual fica como referência / para depurar quando o atalho falha.
 
 > Conexão Postgres direta (verificações/seed): `psql "postgresql://postgres:postgres@127.0.0.1:54322/postgres"`.
 > zsh NÃO faz word-split de variável — chame `psql`/`curl` direto, não via `$VAR` com flags.
@@ -61,18 +71,42 @@ npm run dev > /tmp/dev.log 2>&1 &   # Vite na porta 8080
 
 ## Seed de dados (pra alcançar o fluxo sem setup manual)
 
-O usuário de signup ganha 50 créditos (trigger). O passo Barreiras **exige um perfil de barreira**.
+O usuário ganha créditos por trigger ao ser criado. O passo Barreiras **exige um perfil de
+barreira COM ao menos uma barreira** (perfil vazio trava o wizard — ver abaixo).
+
+**Caminho rápido (recomendado):** `make verify-adaptar` roda o seed SQL idempotente
+(`supabase/scripts/seed_test_user.sql` + `seed_verify_adaptar.sql`) que insere um usuário
+**já confirmado** (`teste@teste.com` / `123123`, com créditos) e um perfil de barreira com
+barreiras reais — direto no banco, **sem passar por signup/confirmação**. Use isto a menos
+que você queira exercitar o fluxo de auth de verdade.
+
+**Caminho manual (exercita o signup real):** o Supabase local tem `enable_confirmations = true`
+(`supabase/config.toml`), então o signup **NÃO** retorna sessão e o login falha com
+`email not confirmed` até você confirmar o e-mail no banco.
 
 ```bash
-ANON=<anon key local>
-# 1) criar usuário + pegar JWT
+ANON=<anon key local>; EMAIL=flow@local.dev; PASS='Test123456!'
+# 1) signup (não retorna sessão enquanto o e-mail não for confirmado)
 curl -s -X POST "http://127.0.0.1:54321/auth/v1/signup" -H "apikey: $ANON" \
-  -H "Content-Type: application/json" -d '{"email":"flow@local.dev","password":"Test123456!"}'
-#    → guarde access_token (JWT) e user.id
-# 2) criar 1 perfil de barreira (senão o passo 3 do wizard trava)
+  -H "Content-Type: application/json" -d "{\"email\":\"$EMAIL\",\"password\":\"$PASS\"}"
+# 2) CONFIRMAR o e-mail no banco (senão o login abaixo falha)
 psql "postgresql://postgres:postgres@127.0.0.1:54322/postgres" -c \
- "insert into public.barrier_profiles (user_id,name,barriers,observation) values ('<UID>','Aluno Teste','{}','obs');"
+  "update auth.users set email_confirmed_at = now() where email='flow@local.dev';"
+# 3) login → pega o JWT + user.id
+curl -s -X POST "http://127.0.0.1:54321/auth/v1/token?grant_type=password" -H "apikey: $ANON" \
+  -H "Content-Type: application/json" -d "{\"email\":\"$EMAIL\",\"password\":\"$PASS\"}"
+#    → guarde access_token (JWT) e user.id
+# 4) perfil de barreira COM barreiras. barriers é text[] com as CHAVES PLANAS do catálogo
+#    BARRIER_DIMENSIONS (src/lib/domain/barriers.ts) — ex.: tea_abstracao. NÃO use '{}':
+#    perfil vazio TRAVA o passo Barreiras ("O perfil selecionado não possui barreiras").
+psql "postgresql://postgres:postgres@127.0.0.1:54322/postgres" -c \
+  "insert into public.barrier_profiles (user_id,name,barriers,observation)
+   values ('<UID>','Aluno Teste',array['tea_abstracao','tea_comunicacao_social'],'obs');"
 ```
+
+> **TanStack Query cacheia a lista de perfis** (`useBarrierProfiles`). Se você inserir/alterar
+> um perfil com a página Adaptar já aberta, o `<select>` só reflete a mudança após **recarregar
+> a página** (ou invalidar a query). Seed **antes** de abrir a página, ou dê reload depois.
 
 ## Testar a edge function isolada (camadas 6+7)
 
@@ -92,25 +126,27 @@ curl -s -X POST "http://127.0.0.1:54321/functions/v1/adapt-activity" \
 `take_snapshot` é lento/caro (despeja a a11y tree). Use **`evaluate_script`**: clique por texto/`data-testid` e leia o estado numa só chamada. Padrões que funcionam:
 
 ```js
-// abrir: new_page http://localhost:8080 ; depois navigate_page para /auth?signup=1, /adaptar, etc.
+// abrir: new_page http://localhost:3000 ; depois navigate_page para /auth?signup=1, /adaptar, etc.
+// (host = 3000; o Vite escuta 8080 SÓ dentro do container — ver Setup.)
 
-// clicar botão por texto exato (visível)
+// clicar botão por texto exato (visível) — o rótulo do avanço muda por passo:
+// "Próximo" na Atividade, "Adaptar" no passo Barreiras.
 const T = e => (e.innerText||'').replace(/\n/g,' ').trim();
 const vis = e => e.offsetParent !== null;
-[...document.querySelectorAll('button')].filter(vis).find(b => T(b)==='Próximo')?.click();
+[...document.querySelectorAll('button')].filter(vis).find(b => T(b)==='Adaptar')?.click();
 
 // preencher input/textarea CONTROLADO por React (precisa do setter nativo + evento)
 const ta = document.querySelector('textarea');
 Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype,'value').set.call(ta,'texto');
 ta.dispatchEvent(new Event('input',{bubbles:true}));
 
-// <select> NATIVO (o seletor de perfil é nativo, NÃO Radix):
+// <select> NATIVO (o seletor de perfil é nativo; o seletor de fonte no popover Formato também):
 const s=document.querySelector('select'); const o=[...s.options].find(x=>x.textContent.includes('Aluno Teste'));
 Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype,'value').set.call(s,o.value);
 s.dispatchEvent(new Event('change',{bubbles:true}));
 
-// checkbox Radix (role="checkbox") → .click(). MAS: ao selecionar um perfil, as barreiras
-// ficam TRAVADAS (mostram as do perfil). Clique "Editar" antes de marcar.
+// Passo Barreiras: NÃO há checkboxes nem botão "Editar". Selecionar o perfil no <select> já
+// preenche as barreiras (mostradas como tags read-only); depois clique "Adaptar" pra avançar.
 
 // esperar geração da IA: poll até o spinner sumir
 while (document.querySelector('[class*="animate-spin"]') && waited<60000){ await new Promise(r=>setTimeout(r,2500)); waited+=2500; }
@@ -123,7 +159,7 @@ list_console_messages({ types:["error"] })
 Foi assim que o crash do editor (`node.type.spec.toDOM is not a function`) foi diagnosticado.
 
 ### Sequência do happy-path do Adaptar
-1 Tipo (clicar "Prova") → 2 Atividade (preencher textarea, "Próximo") → 3 Barreiras (selecionar perfil no `<select>`, "Editar", marcar 1 barreira, "Próximo") → 4 **Gerar** (auto-dispara a IA; aguardar) → 5 **Revisar** (superfície única: `.ProseMirror` deve renderizar na folha; edição inline + card da questão + Aparência + "Sobre esta adaptação"; **checar console**) → 6 Exportar (Salvar). Indicador "Salvo" = autosave gravou o draft.
+1 Tipo (clicar "Prova") → 2 Atividade (preencher textarea, "Próximo") → 3 Barreiras (selecionar perfil no `<select>`; as barreiras do perfil aparecem como tags read-only; clicar **"Adaptar"**) → 4 **Gerar** (auto-dispara a IA; aguardar) → 5 **Revisar** (superfície única: `.ProseMirror` deve renderizar na folha; edição inline + card da questão + popover **"Formato"** + "Sobre esta adaptação"; **checar console**) → 6 Exportar (Salvar). Indicador "Salvo" = autosave gravou o draft.
 
 > O wizard tem **um só passo de edição** ("Revisar") — os antigos Conteúdo + Estilo foram fundidos. Não existe mais passo "Estilo".
 
@@ -144,17 +180,38 @@ select credit_balance, free_adaptation_used from public.profiles where id='<UID>
 
 - **Tiptap**: todo nó custom precisa de `renderHTML` (+ `parseHTML`); attrs-objeto (`style`,`answer`,`items`,`caption`,`instruction`) com `rendered:false`. Sem isso o editor crasha ao montar. Teste de regressão: serializar o schema real (`DOMSerializer.fromSchema` + `serializeFragment`).
 - **Edge function importando `src/`**: imports relativos do pacote precisam de **`.ts`** (Deno); `deno.json` import map cobre `zod`/`zod-to-json-schema`.
+- **Runtime keyless do `supabase start`**: o edge-runtime que sobe junto com `supabase start` serve as functions **sem** ler o `.env` raiz → `adapt-activity` responde **HTTP 500 `No AI provider configured`**. Pra geração real você **precisa** rodar `supabase functions serve --env-file .env` (injeta `AI_API_KEY`), que substitui o runtime keyless. O `make verify-adaptar` já sobe esse serve com a chave.
 - **Persistência**: a tabela `adaptations` tem `original_activity/activity_type/barriers_used/adaptation_result/status/observation_notes` (migration `20260604000000`). Coluna de saldo = `credit_balance`. `content` (antiga) foi dropada.
-- **Perfil trava barreiras** → botão "Editar". **Seletor de perfil é `<select>` nativo**. **Checkbox é Radix.**
+- **Barreiras vêm do perfil (read-only)**: no passo Barreiras **não há** edição de barreiras nem botão "Editar" — o `<select>` nativo de perfil já preenche as barreiras (tags read-only) e o avanço é o botão **"Adaptar"**. Perfil com `barriers='{}'` trava o passo ("não possui barreiras"); seed com chaves reais do catálogo. No **Revisar**, o popover de aparência abre pelo botão **"Formato"** e o seletor de fonte é `<select>` nativo (opção "Padrão" + optgroups).
 
 ## Cleanup
 
+Se subiu via `make verify-adaptar`, rode **`make verify-adaptar-down`** (faz tudo isto). Manual:
+
 ```bash
-rm -f .env.local                         # app volta a apontar pro remoto
-kill %1 %2 2>/dev/null                    # dev server + functions serve (ou pkill -f 'vite|functions serve')
-# supabase db reset                       # opcional: limpa usuários/perfis de teste
-# supabase stop                           # opcional: derruba o stack local
+rm -f .env.local                                    # sem ele, o app aponta pro remoto
+pkill -f 'supabase functions serve' 2>/dev/null     # functions serve (roda no host)
+docker compose stop app                             # dev server = CMD do container → parar o container o encerra
+# supabase db reset                                 # opcional: limpa usuários/perfis de teste
+# supabase stop                                     # opcional: derruba o stack local
 ```
 
 ## Roadmap (ver o plano completo)
-`docs/superpowers/plans/2026-06-04-e2e-and-autonomous-testing.md` — Playwright E2E, smoke "real DOM" no CI, `data-testid` nos âncoras, `make verify-adaptar`. Quando esses existirem, **atualize esta skill** para apontar pra eles em vez do procedimento manual.
+`docs/superpowers/plans/2026-06-04-e2e-and-autonomous-testing.md`.
+
+**Já existe:** `make verify-adaptar` — automatiza o §Setup + §Seed (Supabase + `db reset` +
+usuário confirmado + perfil com barreiras reais + `.env.local` efêmero + functions serve + dev
+no container), deixando tudo pronto em http://localhost:3000. `make verify-adaptar-down` derruba
+o dev/functions e remove o `.env.local`. **Use o atalho**; o passo-a-passo acima fica pra
+depurar quando ele falha. (Orquestração: `supabase/scripts/verify-adaptar.sh`.)
+
+**Já existe (Fase 1, no gate Vitest):**
+- `src/components/adaptation/canonical-editor/CanonicalEditor.realdom.test.tsx` — monta o editor
+  Tiptap **de verdade** (sem mock) e afirma que renderiza; pega o crash de render (`toDOM`).
+- `supabase/functions/denoImportGraph.test.ts` — **lint estático** do grafo de imports: a partir
+  de cada `index.ts` de function, segue os imports e exige extensão `.ts` explícita + zero `@/`.
+  ⚠️ **`supabase functions serve` NÃO pega esse bug** (o compile via esbuild resolve import sem
+  extensão e ainda cacheia o bundle) — por isso o check é um lint do grafo, não um smoke de runtime.
+
+**Ainda pendente:** `data-testid` nos âncoras e o Playwright E2E (stub no PR + real no nightly).
+Quando existirem, **atualize esta skill** pra apontar pra eles.

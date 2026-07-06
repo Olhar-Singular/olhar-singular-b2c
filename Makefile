@@ -33,6 +33,10 @@ help:
 	@echo "    make sb-reset           Resetar banco local (reaplica migrations)"
 	@echo "    make test-db            Testes pgTAP do banco (supabase test db)"
 	@echo ""
+	@echo "  Validação do fluxo Adaptar (ambiente real)"
+	@echo "    make verify-adaptar      Sobe tudo (Supabase+seed+.env.local+fns+dev) -> :3000"
+	@echo "    make verify-adaptar-down Derruba dev/fns e remove .env.local"
+	@echo ""
 	@echo "  Supabase — Setup Remoto"
 	@echo "    make sb-login           Autenticar no Supabase"
 	@echo "    make sb-link            Vincular CLI ao projeto remoto"
@@ -136,6 +140,23 @@ sb-reset:
 .PHONY: test-db
 test-db:
 	supabase test db
+
+# ─────────────────────────────────────────────
+#  VALIDAÇÃO DO FLUXO ADAPTAR (ambiente real)
+# ─────────────────────────────────────────────
+# Sobe o ambiente real completo pra validar o fluxo "Adaptar" sem os ~15 passos
+# manuais: Supabase local + db reset + seed (usuário confirmado + perfil com
+# barreiras reais) + .env.local efêmero + functions serve + dev server no
+# container. Deixa tudo pronto em http://localhost:3000. Skill: validate-adaptar.
+.PHONY: verify-adaptar
+verify-adaptar:
+	@bash supabase/scripts/verify-adaptar.sh up
+
+# Derruba o que o verify-adaptar subiu (dev server + functions serve) e remove o
+# .env.local efêmero. Mantém o Supabase local no ar (derrube com make sb-stop).
+.PHONY: verify-adaptar-down
+verify-adaptar-down:
+	@bash supabase/scripts/verify-adaptar.sh down
 
 # ─────────────────────────────────────────────
 #  SUPABASE — SETUP REMOTO

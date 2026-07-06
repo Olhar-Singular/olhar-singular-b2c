@@ -38,6 +38,9 @@ make gen-types-remote    # Gerar tipos do schema remoto
 make fn-deploy-all       # Deploy de todas as edge functions
 make fn-serve            # Servir funções localmente
 make test-db             # pgTAP (RPC/RLS) — exige Docker
+make verify-adaptar      # Sobe o ambiente real do fluxo "Adaptar" (Supabase+reset+seed+
+                         #   .env.local+functions serve+dev no container) → localhost:3000
+make verify-adaptar-down # Derruba dev/functions do verify-adaptar e remove o .env.local
 ```
 
 ## Atalhos

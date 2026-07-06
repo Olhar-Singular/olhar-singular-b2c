@@ -15,9 +15,9 @@ Os testes unitários estão em 100% de cobertura e mesmo assim deixaram passar b
 
 ### 1. Smoke tests de integração "sem mock" (rápidos, no Vitest) — PRIORIDADE
 Fecham a maior parte do gap sem precisar de browser. Já existe um exemplo nesta sessão: `src/lib/adaptation/tiptap/domSerialization.test.ts` (serializa o schema real pro DOM). Expandir:
-- **`CanonicalEditor` real (sem mockar `@tiptap/react`):** um teste que monta o editor de verdade com um documento-fixture e afirma "não crasha + renderiza N questões". jsdom suporta ProseMirror. Isso teria pego o bug #1 diretamente. Manter num arquivo separado (`*.realdom.test.tsx`) que NÃO aplica o mock global de tiptap.
+- ✅ **FEITO (2026-07-03) — `CanonicalEditor` real (sem mockar `@tiptap/react`):** `src/components/adaptation/canonical-editor/CanonicalEditor.realdom.test.tsx` monta o editor de verdade com o fixture `richDocument` e afirma que renderiza as N questões sem crashar. Validado por mutação: remover o `renderHTML` do `QuestionNode` reproduz o `toDOM is not a function` (bug #1) e o teste falha.
 - **Renderer + PDF mapper:** já há snapshots de paridade; adicionar um que renderiza o documento-fixture de verdade.
-- **Deno bundle check:** script `scripts/check-deno-bundle.sh` que roda `supabase functions serve <fn>` (ou `deno check`) e faz um POST smoke; falha se houver erro de módulo/boot. Rodar no CI (`db-tests` job já sobe Supabase local).
+- ✅ **FEITO (2026-07-03) — Deno bundle check:** implementado como **lint estático do grafo de imports** (`supabase/functions/denoImportGraph.test.ts`), **não** como smoke de runtime. Motivo: testei `supabase functions serve` e ele **NÃO pega** o import sem `.ts` — o compile do edge-runtime (esbuild) resolve extensionless e cacheia o bundle, então daria falsa confiança. O lint segue o grafo a partir de cada `index.ts` de function e exige extensão explícita + zero `@/` no subconjunto realmente alcançado. Roda no gate Vitest (sem Deno/infra nova). Validado por mutação (bug #2). A alternativa fiel (`deno cache`/`deno check` num step Deno no CI) fica registrada caso queira pegar também bare-specifiers fora do import map.
 
 ### 2. Playwright E2E (repetível, CI + manual)
 Instalar `@playwright/test` (separado do Vitest). Estrutura:
