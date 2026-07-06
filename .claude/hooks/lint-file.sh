@@ -5,6 +5,9 @@
 #   - Lê file_path do tool_input via jq
 #   - Filtra por extensão (.ts/.tsx/.js/.jsx) e diretório (src/ ou supabase/functions/)
 #   - Roda eslint com --fix (auto-corrige formatação, imports não usados, etc.)
+#   - node_modules mora no volume do container, não no host: se o eslint não resolve no
+#     host, usa `docker compose exec app` (quando up); se o container está down, pula
+#     sem bloquear o edit (aviso curto no stderr).
 #
 # Saída:
 #   - exit 0: lint OK ou arquivo fora do escopo
@@ -46,9 +49,25 @@ if [ -f .claude/debug/.active ]; then
   exit 0
 fi
 
-# ESLint com --fix (auto-corrige quando possível)
-output=$(npx eslint "$file" --fix 2>&1)
-status=$?
+# node_modules mora no volume do container (app_node_modules), não no host — então o
+# eslint só resolve no host se as deps estiverem instaladas lá. Caso contrário, roda
+# dentro do container `app` (quando up) ou pula sem bloquear (quando down).
+rel="${file#"$CLAUDE_PROJECT_DIR"/}"
+
+if [ -x node_modules/.bin/eslint ] && [ -d node_modules/@eslint/js ]; then
+  # Host tem as deps: lint direto (caminho rápido).
+  output=$(npx eslint "$file" --fix 2>&1)
+  status=$?
+elif docker compose ps --status running --services 2>/dev/null | grep -qx app; then
+  # Deps no container e ele está up: lint via container. O projeto é bind-mount em
+  # /app (WORKDIR), então --fix escreve de volta no arquivo do host.
+  output=$(docker compose exec -T app npx eslint "$rel" --fix </dev/null 2>&1)
+  status=$?
+else
+  # Sem eslint no host e container down: não dá pra lintar. Avisa e não bloqueia o edit.
+  printf '[hook] eslint indisponível (deps no container, container down) — lint pulado em %s\n' "$rel" >&2
+  exit 0
+fi
 
 if [ $status -ne 0 ]; then
   printf '%s\n' "$output" | tail -50 >&2
