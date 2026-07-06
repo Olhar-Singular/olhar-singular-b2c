@@ -20,6 +20,10 @@ import { questionNumbers } from "../questionNumbering";
 
 type QuestionBlock = Extract<Block, { type: "question" }>;
 
+// text-sm on screen (14px) converted to the PDF unit (pt): 14 × 72/96 = 10.5pt.
+// Applied to the question's instruction and enunciado to mirror QuestionView.
+const QUESTION_SUB_FS = 10.5;
+
 export function PdfQuestion({ block, number }: { block: QuestionBlock; number: number }) {
   const stemNumbers = questionNumbers(block.stem);
   const position = block.enunciadoPosition ?? "below";
@@ -28,7 +32,7 @@ export function PdfQuestion({ block, number }: { block: QuestionBlock; number: n
 
   const enunciadoView = hasEnunciado ? (
     <View style={{ marginBottom: 4 }}>
-      <Text>
+      <Text style={{ fontSize: QUESTION_SUB_FS }}>
         <PdfRichText content={block.enunciado!} />
       </Text>
     </View>
@@ -37,7 +41,7 @@ export function PdfQuestion({ block, number }: { block: QuestionBlock; number: n
   return (
     <View style={{ flexDirection: "column", marginBottom: 8, ...nodeStyleToPdf(block.style) }}>
       <View style={{ flexDirection: "row", alignItems: "flex-start" }}>
-        <Text style={{ color: "#555555", marginRight: 6 }}>{displayNumber}.</Text>
+        <Text style={{ fontWeight: "bold", marginRight: 6 }}>{displayNumber}.</Text>
         <View style={{ flex: 1 }}>
           {position === "above" && enunciadoView}
           {block.stem.map((child, i) => (
@@ -49,7 +53,7 @@ export function PdfQuestion({ block, number }: { block: QuestionBlock; number: n
 
       {block.instruction && (
         <View style={{ marginBottom: 4 }}>
-          <Text style={{ fontStyle: "italic", color: "#555555" }}>
+          <Text style={{ fontStyle: "italic", color: "#555555", fontSize: QUESTION_SUB_FS }}>
             <PdfRichText content={block.instruction} />
           </Text>
         </View>

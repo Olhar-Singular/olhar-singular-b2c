@@ -17,11 +17,17 @@ describe("nodeStyleToPdf", () => {
       }),
     ).toEqual({
       fontFamily: "Times-Roman",
-      fontSize: 14,
+      fontSize: 10.5,      // 14px → 10.5pt
       textAlign: "center",
       color: "#2563EB",
-      marginBottom: 12,
+      marginBottom: 9,     // 12px → 9pt
     });
+  });
+
+  it("converts fontSize and spacingAfter from px (screen) to pt (PDF)", () => {
+    const out = nodeStyleToPdf({ fontSize: 16, spacingAfter: 20 });
+    expect(out.fontSize).toBe(12);     // 16px → 12pt (matches the 12pt doc base)
+    expect(out.marginBottom).toBe(15); // 20px → 15pt
   });
 
   it("passes an unknown fontFamily through unchanged (legacy docs)", () => {

@@ -17,15 +17,18 @@ import type { NodeStyle } from "@/lib/adaptation/canonical/schema";
 import { isAllowedColor } from "@/lib/adaptation/canonical/colors";
 import { fontFamilyToPdf } from "@/lib/adaptation/canonical/fontFamily";
 
+/** Convert px (screen/canonical NodeStyle unit) to pt (PDF unit). 1px = 72/96 pt. */
+const pxToPt = (px: number): number => px * (72 / 96);
+
 export function nodeStyleToPdf(style?: NodeStyle): Style {
   const out: Style = {};
   if (!style) return out;
 
   if (style.fontFamily !== undefined) out.fontFamily = fontFamilyToPdf(style.fontFamily);
-  if (style.fontSize !== undefined) out.fontSize = style.fontSize;
+  if (style.fontSize !== undefined) out.fontSize = pxToPt(style.fontSize);
   if (style.align !== undefined) out.textAlign = style.align;
   if (style.color !== undefined && isAllowedColor(style.color)) out.color = style.color;
-  if (style.spacingAfter !== undefined) out.marginBottom = style.spacingAfter;
+  if (style.spacingAfter !== undefined) out.marginBottom = pxToPt(style.spacingAfter);
 
   return out;
 }

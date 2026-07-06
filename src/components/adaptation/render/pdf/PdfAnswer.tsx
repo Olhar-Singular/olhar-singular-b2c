@@ -131,14 +131,24 @@ export function PdfAnswer({ answer }: { answer: QuestionAnswer }) {
       return <View />;
     case "table": {
       const [header, ...body] = answer.rows;
+      // Simulate border-collapse (Yoga has none): the container draws the top+left
+      // edges, each cell draws its right+bottom — so every interior line is drawn
+      // once instead of doubled.
+      const cell = {
+        flexGrow: 1,
+        borderRightWidth: 1,
+        borderBottomWidth: 1,
+        borderColor: "#999999",
+        padding: 3,
+      } as const;
       return (
-        <View>
+        <View style={{ borderTopWidth: 1, borderLeftWidth: 1, borderColor: "#999999" }}>
           {header && (
             <View style={{ flexDirection: "row" }}>
-              {header.map((cell, c) => (
-                <View key={c} style={{ flexGrow: 1, borderWidth: 1, borderColor: "#999999", padding: 3 }}>
+              {header.map((c, i) => (
+                <View key={i} style={cell}>
                   <Text style={{ fontWeight: "bold" }}>
-                    <PdfRichText content={cell} />
+                    <PdfRichText content={c} />
                   </Text>
                 </View>
               ))}
@@ -146,10 +156,10 @@ export function PdfAnswer({ answer }: { answer: QuestionAnswer }) {
           )}
           {body.map((row, r) => (
             <View key={r} style={{ flexDirection: "row" }}>
-              {row.map((cell, c) => (
-                <View key={c} style={{ flexGrow: 1, borderWidth: 1, borderColor: "#999999", padding: 3 }}>
+              {row.map((c, i) => (
+                <View key={i} style={cell}>
                   <Text>
-                    <PdfRichText content={cell} />
+                    <PdfRichText content={c} />
                   </Text>
                 </View>
               ))}

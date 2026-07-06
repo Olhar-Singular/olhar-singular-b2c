@@ -27,7 +27,8 @@ type ImageBlock = Extract<Block, { type: "image" }>;
 type ScaffoldingBlock = Extract<Block, { type: "scaffolding" }>;
 type DividerBlock = Extract<Block, { type: "divider" }>;
 
-const HEADING_SIZE: Record<1 | 2 | 3, number> = { 1: 22, 2: 18, 3: 15 };
+// Screen heading sizes (text-2xl/xl/lg = 24/20/18px) converted px→pt for parity.
+const HEADING_SIZE: Record<1 | 2 | 3, number> = { 1: 18, 2: 15, 3: 13.5 };
 
 export function PdfHeading({ block, blockGap = 12 }: { block: HeadingBlock; blockGap?: number }) {
   // Extract marginBottom from nodeStyleToPdf (spacingAfter) and fall back to blockGap.

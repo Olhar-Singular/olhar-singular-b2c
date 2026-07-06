@@ -153,6 +153,25 @@ describe("PdfAnswer", () => {
     expect(txt).toContain("1");
   });
 
+  it("draws collapsed table borders — container top/left, cells right/bottom (no doubled lines)", () => {
+    const el = PdfAnswer({
+      answer: { kind: "table", rows: [[rt("H1"), rt("H2")], [rt("a"), rt("b")]] },
+    }) as ReactElement;
+    const container = el.props.style as { borderTopWidth?: number; borderLeftWidth?: number };
+    expect(container.borderTopWidth).toBe(1);
+    expect(container.borderLeftWidth).toBe(1);
+    const headerRow = (el.props.children as unknown[])[0] as ReactElement;
+    const headerCell = (headerRow.props.children as ReactElement[])[0];
+    const cell = headerCell.props.style as {
+      borderRightWidth?: number;
+      borderBottomWidth?: number;
+      borderWidth?: number;
+    };
+    expect(cell.borderRightWidth).toBe(1);
+    expect(cell.borderBottomWidth).toBe(1);
+    expect(cell.borderWidth).toBeUndefined();
+  });
+
   it("renders the requested number of open answer lines", () => {
     const five = PdfAnswer({ answer: { kind: "open", answerLines: 5 } }) as ReactElement;
     expect((five.props.children as unknown[]).length).toBe(5);
@@ -207,6 +226,53 @@ describe("PdfQuestion — auto number header", () => {
     const txt = textOf(PdfQuestion({ block, number: 3 }));
     expect(txt).toContain("3.");
     expect(txt).toContain("faça assim");
+  });
+
+  it("renders the question number in bold, not muted gray (parity with screen)", () => {
+    const block: Extract<Block, { type: "question" }> = {
+      id: id(1),
+      type: "question",
+      stem: [{ id: id(2), type: "paragraph", content: rt("s") }],
+      answer: { kind: "open" },
+    };
+    const el = PdfQuestion({ block, number: 1 }) as ReactElement;
+    const row = (el.props.children as ReactElement[])[0];
+    const numberText = (row.props.children as ReactElement[])[0];
+    const style = numberText.props.style as { fontWeight?: string; color?: string };
+    expect(style.fontWeight).toBe("bold");
+    expect(style.color).toBeUndefined();
+  });
+
+  it("renders the instruction at the smaller text-sm size (parity with screen)", () => {
+    const block: Extract<Block, { type: "question" }> = {
+      id: id(1),
+      type: "question",
+      stem: [{ id: id(2), type: "paragraph", content: rt("stem") }],
+      instruction: rt("faça assim"),
+      answer: { kind: "open" },
+    };
+    const el = PdfQuestion({ block, number: 1 }) as ReactElement;
+    const instructionView = (el.props.children as ReactElement[])[1];
+    const instructionText = (instructionView.props as { children: ReactElement }).children;
+    expect((instructionText.props.style as { fontSize?: number }).fontSize).toBe(10.5);
+  });
+
+  it("renders the enunciado at the smaller text-sm size (parity with screen)", () => {
+    const block: Extract<Block, { type: "question" }> = {
+      id: id(1),
+      type: "question",
+      stem: [{ id: id(2), type: "paragraph", content: rt("stem") }],
+      enunciado: rt("contexto"),
+      enunciadoPosition: "above",
+      answer: { kind: "open" },
+    };
+    const el = PdfQuestion({ block, number: 1 }) as ReactElement;
+    const row = (el.props.children as ReactElement[])[0];
+    const innerView = (row.props.children as ReactElement[])[1];
+    // position "above" → enunciado View is the first child of the inner column
+    const enunciadoView = (innerView.props.children as unknown[])[0] as ReactElement;
+    const enunciadoText = (enunciadoView.props as { children: ReactElement }).children;
+    expect((enunciadoText.props.style as { fontSize?: number }).fontSize).toBe(10.5);
   });
 });
 
@@ -363,7 +429,7 @@ describe("Layout — PdfParagraph wraps content in a View (prevents overlap)", (
       style: { spacingAfter: 20 },
     };
     const el = PdfParagraph({ block, blockGap: DEFAULT_BLOCK_GAP_PT }) as ReactElement;
-    expect((el.props.style as { marginBottom?: number }).marginBottom).toBe(20);
+    expect((el.props.style as { marginBottom?: number }).marginBottom).toBe(15);
   });
 
   it("outer View marginBottom is 0 when spacingAfter is explicitly 0 (author intent)", () => {
@@ -433,7 +499,21 @@ describe("Layout — PdfHeading wraps content in a View (prevents overlap)", () 
     const el = PdfHeading({ block, blockGap: DEFAULT_BLOCK_GAP_PT }) as ReactElement;
     const inner = (el.props as { children: ReactElement }).children;
     expect(inner.type).toBe(Text);
-    expect((inner.props.style as { fontSize?: number }).fontSize).toBe(18);
+    expect((inner.props.style as { fontSize?: number }).fontSize).toBe(15);
+  });
+
+  it("reconciles heading sizes to px→pt (h1 18pt, h2 15pt, h3 13.5pt)", () => {
+    const sizeOf = (level: 1 | 2 | 3) => {
+      const el = PdfHeading({
+        block: { id: id(1), type: "heading", level, content: rt("h") },
+        blockGap: DEFAULT_BLOCK_GAP_PT,
+      }) as ReactElement;
+      const inner = (el.props as { children: ReactElement }).children;
+      return (inner.props.style as { fontSize?: number }).fontSize;
+    };
+    expect(sizeOf(1)).toBe(18);
+    expect(sizeOf(2)).toBe(15);
+    expect(sizeOf(3)).toBe(13.5);
   });
 
   it("spacingAfter from nodeStyle overrides the default marginBottom on the View (overrides blockGap)", () => {
@@ -445,7 +525,7 @@ describe("Layout — PdfHeading wraps content in a View (prevents overlap)", () 
       style: { spacingAfter: 16 },
     };
     const el = PdfHeading({ block, blockGap: DEFAULT_BLOCK_GAP_PT }) as ReactElement;
-    expect((el.props.style as { marginBottom?: number }).marginBottom).toBe(16);
+    expect((el.props.style as { marginBottom?: number }).marginBottom).toBe(12);
   });
 });
 
