@@ -12,6 +12,7 @@ import {
   buildReaskMessages,
   type ChatMessage,
 } from "../_shared/adaptActivityCore.ts";
+import { extractImageMarkers, stripFabricatedImages } from "../_shared/imageSourceGuard.ts";
 import {
   buildSystemPrompt,
   MAX_ACTIVITY_CHARS,
@@ -143,6 +144,7 @@ serve(async (req) => {
 
     try {
       const sanitizedActivity = sanitize(original_activity, MAX_ACTIVITY_CHARS);
+      const allowedImageSrcs = extractImageMarkers(sanitizedActivity);
       const sanitizedType = sanitize(activity_type, MAX_ACTIVITY_TYPE_CHARS);
       const sanitizedObservations = observation_notes ? sanitize(observation_notes, MAX_OBSERVATION_CHARS) : "";
 
@@ -266,7 +268,7 @@ BARREIRAS OBSERVÁVEIS:
 
           return new Response(
             JSON.stringify({
-              adaptation: interpreted.result,
+              adaptation: stripFabricatedImages(interpreted.result, allowedImageSrcs),
               model_used: modelName,
               tokens_used: totalTokens,
               credits_charged: creditsCharged,

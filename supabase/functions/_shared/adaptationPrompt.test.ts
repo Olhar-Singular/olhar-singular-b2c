@@ -67,6 +67,12 @@ describe("buildSystemPrompt", () => {
     // And tells the model not to leak the literal marker.
     expect(prompt).toContain("NÃO deixe o marcador literal");
   });
+
+  it("forbids inventing images and tells the model to describe in text instead", () => {
+    const prompt = buildSystemPrompt([{ dimension: "tea" }]);
+    expect(prompt).toContain("NUNCA invente");
+    expect(prompt).toContain("URL inventada");
+  });
 });
 
 describe("named constants", () => {
