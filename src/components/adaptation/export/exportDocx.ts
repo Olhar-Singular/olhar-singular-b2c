@@ -2,6 +2,8 @@
  * Word (.docx) export.
  *
  * `docxFileName`  — pure filename derivation (fully tested).
+ * render helpers  — richTextToRuns / blockToDocxParagraphs / headerParagraphs:
+ *                   pure canonical→docx mapping, exported for direct unit tests.
  * `downloadDocx`  — side-effecting blob + DOM download (v8 ignore).
  */
 
@@ -21,7 +23,7 @@ export function docxFileName(header: DocumentHeader): string {
   return `${slug || "atividade-adaptada"}.docx`;
 }
 
-function richTextToRuns(nodes: Inline[]): TextRun[] {
+export function richTextToRuns(nodes: Inline[]): TextRun[] {
   return nodes.flatMap((node) => {
     if (node.type !== "text") return [];
     return [
@@ -35,7 +37,7 @@ function richTextToRuns(nodes: Inline[]): TextRun[] {
   });
 }
 
-function blockToDocxParagraphs(block: Block, number: number): Paragraph[] {
+export function blockToDocxParagraphs(block: Block, number: number): Paragraph[] {
   if (block.type === "heading") {
     const level = block.level === 1 ? HeadingLevel.HEADING_1 : HeadingLevel.HEADING_2;
     return [new Paragraph({ heading: level, children: richTextToRuns(block.content) })];
@@ -62,15 +64,15 @@ function blockToDocxParagraphs(block: Block, number: number): Paragraph[] {
       for (let i = 0; i < lines; i++) {
         paragraphs.push(new Paragraph({ children: [new TextRun({ text: "_".repeat(60) })] }));
       }
-    } else if (answer.kind === "multipleChoice" && answer.choices) {
-      answer.choices.forEach((choice, idx) => {
+    } else if (answer.kind === "multipleChoice") {
+      answer.alternatives.forEach((alternative, idx) => {
         const letter = String.fromCharCode(65 + idx);
         paragraphs.push(
           new Paragraph({
             indent: { left: 360 },
             children: [
               new TextRun({ text: `${letter}) `, bold: true }),
-              ...richTextToRuns(choice.content),
+              ...richTextToRuns(alternative.content),
             ],
           }),
         );
@@ -95,7 +97,7 @@ function blockToDocxParagraphs(block: Block, number: number): Paragraph[] {
   return [];
 }
 
-function headerParagraphs(header: DocumentHeader): Paragraph[] {
+export function headerParagraphs(header: DocumentHeader): Paragraph[] {
   const lines: [string, string][] = [
     ["Título", header.title ?? ""],
     ["Escola", header.school ?? ""],
