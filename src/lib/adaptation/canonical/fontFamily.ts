@@ -12,8 +12,10 @@
  * registration). The accessibility tokens (`atkinson/lexend/opendyslexic`) map
  * to families that MUST be registered with `Font.register` in `render/pdf/`
  * (see `registerFonts.ts`) and self-hosted via `@font-face` for the screen —
- * otherwise the PDF silently falls back to a built-in. `georgia/arial` are
- * system fonts on screen and map to the closest built-in in the PDF.
+ * rendering an unregistered family (or an unregistered weight/style variant of
+ * a registered one) makes the PDF export throw "Could not resolve font"; there
+ * is NO fallback to a built-in. `georgia/arial` are system fonts on screen and
+ * map to the closest built-in in the PDF.
  */
 
 /** The logical font tokens stored in `NodeStyle.fontFamily` / `pageStyle.fontFamily`. */
