@@ -13,6 +13,7 @@ import {
   type ChatMessage,
 } from "../_shared/adaptActivityCore.ts";
 import { extractImageMarkers, stripFabricatedImages } from "../_shared/imageSourceGuard.ts";
+import { stripGapTokens } from "../_shared/gapTokenGuard.ts";
 import {
   buildSystemPrompt,
   MAX_ACTIVITY_CHARS,
@@ -268,7 +269,7 @@ BARREIRAS OBSERVÁVEIS:
 
           return new Response(
             JSON.stringify({
-              adaptation: stripFabricatedImages(interpreted.result, allowedImageSrcs),
+              adaptation: stripGapTokens(stripFabricatedImages(interpreted.result, allowedImageSrcs)),
               model_used: modelName,
               tokens_used: totalTokens,
               credits_charged: creditsCharged,
