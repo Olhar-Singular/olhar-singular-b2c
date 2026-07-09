@@ -119,7 +119,13 @@ export function RichTextField({
           // `rich-text-field` marks this as a NESTED inline editor so the folha's
           // top-level block labels (`.tiptap > p` ⇒ "Instrução" etc., in index.css)
           // never leak onto answer fields. Wrap long answers instead of scrolling.
-          "rich-text-field w-full px-2 py-1 text-sm focus:outline-none min-h-[2rem] whitespace-normal break-words",
+          "rich-text-field w-full px-2 py-1 focus:outline-none min-h-[2rem] whitespace-normal break-words",
+          // Tamanho da fonte: `font-size` é herdada, e o popover Formato move os
+          // page tokens (`--doc-fs-*` / font-size da folha) no ancestral. Um valor
+          // fixo AQUI vence a herança e congela o campo. Na folha (`plain`) o campo
+          // herda — é o que dá paridade com o PDF; no card ele é chrome estrutural
+          // e mantém o `text-sm` compacto.
+          plain ? "text-[length:inherit] leading-[inherit]" : "text-sm",
           disabled && "opacity-50 cursor-not-allowed",
           readOnly && "cursor-default"
         ),

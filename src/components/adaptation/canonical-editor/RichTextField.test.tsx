@@ -151,6 +151,32 @@ describe("RichTextField — component", () => {
     expect(screen.queryByTestId("selection-bubble")).not.toBeInTheDocument();
   });
 
+  /**
+   * Regressão: o popover "Formato" move o tamanho da fonte via page tokens
+   * (`--doc-fs-*` / font-size da folha), que são propriedades HERDADAS. Um
+   * `text-sm` fixo no elemento .ProseMirror do campo aninhado vence a herança e
+   * trava as alternativas em 14px — o professor tinha de aumentar uma a uma.
+   * No modo `plain` (a folha impressa) o campo precisa herdar.
+   */
+  it("plain mode inherits the page font size so Formato scales alternatives", () => {
+    render(<RichTextField plain value={t("a")} onChange={vi.fn()} />);
+    const attrs = (capturedConfig as { editorProps?: { attributes?: Record<string, string> } })
+      .editorProps?.attributes;
+    const cls = attrs?.class ?? "";
+    expect(cls).not.toContain("text-sm");
+    expect(cls).toContain("text-[length:inherit]");
+    expect(cls).toContain("leading-[inherit]");
+  });
+
+  it("non-plain (card) keeps the compact text-sm — structural editor, not the folha", () => {
+    render(<RichTextField value={t("a")} onChange={vi.fn()} />);
+    const attrs = (capturedConfig as { editorProps?: { attributes?: Record<string, string> } })
+      .editorProps?.attributes;
+    const cls = attrs?.class ?? "";
+    expect(cls).toContain("text-sm");
+    expect(cls).not.toContain("text-[length:inherit]");
+  });
+
   it("passes ariaLabel into the editor attributes", () => {
     render(<RichTextField value={t("a")} onChange={vi.fn()} ariaLabel="Alternativa" />);
     const attrs = (capturedConfig as { editorProps?: { attributes?: Record<string, string> } })
