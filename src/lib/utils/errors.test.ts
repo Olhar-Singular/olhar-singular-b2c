@@ -164,6 +164,12 @@ describe("parseAuthError", () => {
     expect(parseAuthError("Password is too weak")).toBe("Senha muito fraca. Use pelo menos 6 caracteres.");
   });
 
+  it("maps reused password ahead of the weak-password catch-all", () => {
+    expect(parseAuthError("New password should be different from the old password")).toBe(
+      "A nova senha deve ser diferente da atual.",
+    );
+  });
+
   it("returns generic fallback for unknown messages", () => {
     expect(parseAuthError("some unknown error")).toBe("Erro ao acessar a conta. Tente novamente.");
   });

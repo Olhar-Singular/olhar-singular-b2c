@@ -87,6 +87,10 @@ export function parseAuthError(message: string | undefined, action: "login" | "s
   if (m.includes("too many requests") || m.includes("rate limit")) {
     return "Muitas tentativas. Aguarde alguns minutos.";
   }
+  // Must precede the "password" catch-all, which would otherwise swallow it.
+  if (m.includes("should be different")) {
+    return "A nova senha deve ser diferente da atual.";
+  }
   if (m.includes("weak password") || m.includes("password")) {
     return "Senha muito fraca. Use pelo menos 6 caracteres.";
   }

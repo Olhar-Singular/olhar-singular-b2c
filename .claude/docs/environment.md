@@ -19,8 +19,15 @@ DATABASE_URL=                  # Connection string completa (remoto)
 
 > **Um único `.env`** na raiz é a fonte de verdade: serve o app (Vite) **e** as edge
 > functions locais (`make fn-serve` lê o `.env` raiz — não há mais `supabase/functions/.env`).
-> Guarda também os segredos de backend (`AI_API_KEY`, `MP_*`, `STRIPE_*`, sem prefixo
-> `VITE_`). As `VITE_SUPABASE_*` servem aos dois ambientes — o que muda é o conteúdo.
+> Guarda também os segredos de backend (`AI_API_KEY`, `MP_*`, `STRIPE_*`,
+> `GOOGLE_CLIENT_*`, sem prefixo `VITE_`). As `VITE_SUPABASE_*` servem aos
+> dois ambientes — o que muda é o conteúdo.
+>
+> **Login com Google (OAuth):** `GOOGLE_CLIENT_ID` e `GOOGLE_CLIENT_SECRET` alimentam o
+> bloco `[auth.external.google]` do `config.toml` (via `env(...)`) — valem só no **Supabase
+> LOCAL**. Em produção o provider Google é habilitado pelo Dashboard (Auth → Providers →
+> Google) ou por PATCH na Management API; **nunca** `supabase config push` (apagaria o SMTP
+> do Resend).
 >
 > Para apontar o app pro **Supabase local** sem editar o `.env`, a skill `validate-adaptar`
 > cria um `.env.local` **efêmero** (o Vite prioriza, é gitignored) e o **remove no cleanup**

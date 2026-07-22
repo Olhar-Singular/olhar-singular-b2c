@@ -15,6 +15,7 @@ vi.mock("@/integrations/supabase/client", () => ({
       signInWithPassword: vi.fn(),
       signUp: vi.fn(),
       resend: vi.fn(),
+      signInWithOAuth: vi.fn(),
     },
   },
 }));
@@ -49,6 +50,7 @@ describe("AuthPage", () => {
     vi.mocked(supabase.auth.signInWithPassword).mockResolvedValue({ error: null } as never);
     vi.mocked(supabase.auth.signUp).mockResolvedValue({ error: null } as never);
     vi.mocked(supabase.auth.resend).mockResolvedValue({ error: null } as never);
+    vi.mocked(supabase.auth.signInWithOAuth).mockResolvedValue({ error: null } as never);
   });
 
   async function fillAndSubmitSignup(user: ReturnType<typeof userEvent.setup>) {
@@ -362,6 +364,21 @@ describe("AuthPage", () => {
     }
   });
 
+  it("links to the forgot-password page from the login form", () => {
+    renderAuthPage();
+    expect(screen.getByRole("link", { name: /esqueci minha senha/i })).toHaveAttribute(
+      "href",
+      "/esqueci-senha",
+    );
+  });
+
+  it("hides the forgot-password link in signup mode", async () => {
+    const user = userEvent.setup();
+    renderAuthPage();
+    await user.click(screen.getByRole("button", { name: /cadastre-se/i }));
+    expect(screen.queryByRole("link", { name: /esqueci minha senha/i })).toBeNull();
+  });
+
   it("returns to the login form from the email-confirmation view", async () => {
     const user = userEvent.setup();
     renderAuthPage();
@@ -372,5 +389,62 @@ describe("AuthPage", () => {
 
     expect(screen.getByRole("button", { name: /^Entrar$/ })).toBeInTheDocument();
     expect(screen.queryByText(/verifique seu e-mail/i)).toBeNull();
+  });
+
+  it("marks the login fields for the browser password manager", () => {
+    renderAuthPage();
+    const emailInput = screen.getByLabelText(/e-mail/i);
+    expect(emailInput).toHaveAttribute("name", "email");
+    expect(emailInput).toHaveAttribute("autocomplete", "username");
+    const passwordInput = screen.getByLabelText("Senha");
+    expect(passwordInput).toHaveAttribute("name", "password");
+    expect(passwordInput).toHaveAttribute("autocomplete", "current-password");
+  });
+
+  it("switches the password to new-password and marks the name field in signup mode", async () => {
+    const user = userEvent.setup();
+    renderAuthPage();
+    await user.click(screen.getByRole("button", { name: /cadastre-se/i }));
+    const nameInput = screen.getByLabelText(/nome/i);
+    expect(nameInput).toHaveAttribute("name", "name");
+    expect(nameInput).toHaveAttribute("autocomplete", "name");
+    expect(screen.getByLabelText("Senha")).toHaveAttribute("autocomplete", "new-password");
+  });
+
+  it("moves focus through the login form with Tab", async () => {
+    const user = userEvent.setup();
+    renderAuthPage();
+    await user.tab();
+    expect(screen.getByLabelText(/e-mail/i)).toHaveFocus();
+    await user.tab();
+    expect(screen.getByLabelText("Senha")).toHaveFocus();
+    await user.tab();
+    expect(screen.getByRole("button", { name: /mostrar senha/i })).toHaveFocus();
+    await user.tab();
+    expect(screen.getByRole("link", { name: /esqueci minha senha/i })).toHaveFocus();
+    await user.tab();
+    expect(screen.getByRole("button", { name: /^Entrar$/ })).toHaveFocus();
+  });
+
+  it("starts Google OAuth when the Google button is clicked", async () => {
+    const user = userEvent.setup();
+    renderAuthPage();
+    await user.click(screen.getByRole("button", { name: /continuar com google/i }));
+    await waitFor(() =>
+      expect(supabase.auth.signInWithOAuth).toHaveBeenCalledWith({
+        provider: "google",
+        options: { redirectTo: expect.stringContaining("/dashboard") },
+      }),
+    );
+  });
+
+  it("shows an error when Google OAuth fails to start", async () => {
+    const user = userEvent.setup();
+    vi.mocked(supabase.auth.signInWithOAuth).mockResolvedValue({
+      error: { message: "Unsupported provider" },
+    } as never);
+    renderAuthPage();
+    await user.click(screen.getByRole("button", { name: /continuar com google/i }));
+    await waitFor(() => expect(screen.getByRole("alert")).toBeInTheDocument());
   });
 });

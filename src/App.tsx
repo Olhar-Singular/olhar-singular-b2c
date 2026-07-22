@@ -7,6 +7,8 @@ import { ProtectedRoute } from "@/components/common/ProtectedRoute";
 import { SuperAdminRoute } from "@/components/common/SuperAdminRoute";
 import { ErrorBoundary } from "@/components/common/ErrorBoundary";
 import AuthPage from "@/pages/AuthPage";
+import ForgotPasswordPage from "@/pages/ForgotPasswordPage";
+import ResetPasswordPage from "@/pages/ResetPasswordPage";
 import AdminPage from "@/pages/AdminPage";
 import DashboardPage from "@/pages/DashboardPage";
 import BarrierProfilesPage from "@/pages/BarrierProfilesPage";
@@ -43,6 +45,9 @@ function buildRouter() {
       children: [
         { path: "/", element: <LandingPage /> },
         { path: "/auth", element: <AuthPage /> },
+        { path: "/esqueci-senha", element: <ForgotPasswordPage /> },
+        // Public by design: it is the redirect target of the recovery email link.
+        { path: "/redefinir-senha", element: <ResetPasswordPage /> },
         {
           element: (
             <ProtectedRoute>

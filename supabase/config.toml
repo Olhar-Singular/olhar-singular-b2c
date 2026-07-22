@@ -1,5 +1,28 @@
 project_id = "orientador-digital-b2c"
 
+# O e-mail de recuperação volta para /redefinir-senha via `redirectTo`. O Supabase só
+# honra um redirectTo presente nesta allowlist — sem isto o link cai no site_url e a
+# tela de nova senha nunca recebe a sessão de recovery.
+# Portas: 8080 (`make dev`) e 3000 (`make verify-adaptar`).
+[auth]
+additional_redirect_urls = [
+  "http://localhost:8080/redefinir-senha",
+  "http://localhost:3000/redefinir-senha",
+  # Alvo do redirect após login com Google (signInWithOAuth redirectTo).
+  "http://localhost:8080/dashboard",
+  "http://localhost:3000/dashboard",
+]
+
+# Login social com Google (supabase.auth.signInWithOAuth). Vale só no Supabase LOCAL.
+# As credenciais vêm do .env raiz via env(...) — SEM prefixo VITE_ (segredo de backend).
+# Em produção, `config.toml` NÃO chega ao remoto: habilitar o provider pelo Dashboard
+# (Auth → Providers → Google) ou por PATCH na Management API. NUNCA `supabase config push`
+# (sincroniza TODA a config de auth e apagaria o SMTP do Resend, que só existe no remoto).
+[auth.external.google]
+enabled = true
+client_id = "env(GOOGLE_CLIENT_ID)"
+secret = "env(GOOGLE_CLIENT_SECRET)"
+
 # Confirmação de e-mail é obrigatória (paridade com produção): o cadastro só ativa a
 # conta após o usuário clicar no link. Sem isto, o local auto-confirma (autoconfirm) e
 # o fluxo "Verifique seu e-mail" / botão Reenviar nunca aparece.
@@ -14,6 +37,14 @@ enable_confirmations = true
 [auth.email.template.confirmation]
 subject = "Confirme seu cadastro - Olhar Singular"
 content_path = "./supabase/templates/confirmation.html"
+
+# E-mail de redefinição de senha, disparado por supabase.auth.resetPasswordForEmail()
+# na tela /esqueci-senha. Usa `{{ .ConfirmationURL }}` (fluxo implicit, igual ao
+# cadastro): o link devolve o usuário a /redefinir-senha já com a sessão de recovery.
+# Em produção, aplicar via Dashboard (Auth → Email Templates → Reset password).
+[auth.email.template.recovery]
+subject = "Redefinir sua senha - Olhar Singular"
+content_path = "./supabase/templates/recovery.html"
 
 # Webhooks são chamados por provedores externos (Stripe / Mercado Pago) sem JWT
 # do Supabase. Sem isto o gateway rejeita a chamada com 401 antes da função rodar.

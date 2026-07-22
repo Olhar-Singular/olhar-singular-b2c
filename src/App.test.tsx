@@ -20,6 +20,8 @@ vi.mock("@/pages/AdaptarPage", () => ({ default: () => <div data-testid="adaptar
 vi.mock("@/pages/ChatPage", () => ({ default: () => <div data-testid="chat-page" /> }));
 vi.mock("@/pages/QuestionBankPage", () => ({ default: () => <div data-testid="qb-page" /> }));
 vi.mock("@/pages/AdminPage", () => ({ default: () => <div data-testid="admin-page" /> }));
+vi.mock("@/pages/ForgotPasswordPage", () => ({ default: () => <div data-testid="forgot-page" /> }));
+vi.mock("@/pages/ResetPasswordPage", () => ({ default: () => <div data-testid="reset-page" /> }));
 vi.mock("@/components/common/SuperAdminRoute", () => ({
   SuperAdminRoute: ({ children }: { children: React.ReactNode }) => <>{children}</>,
 }));
@@ -56,6 +58,20 @@ describe("App", () => {
     window.history.pushState({}, "", "/creditos/sucesso");
     render(<App />);
     await waitFor(() => expect(screen.getByTestId("layout-stub")).toBeInTheDocument());
+  });
+
+  it("renders the forgot-password page on /esqueci-senha, outside the protected layout", async () => {
+    window.history.pushState({}, "", "/esqueci-senha");
+    render(<App />);
+    await waitFor(() => expect(screen.getByTestId("forgot-page")).toBeInTheDocument());
+    expect(screen.queryByTestId("layout-stub")).toBeNull();
+  });
+
+  it("renders the reset-password page on /redefinir-senha, outside the protected layout", async () => {
+    window.history.pushState({}, "", "/redefinir-senha");
+    render(<App />);
+    await waitFor(() => expect(screen.getByTestId("reset-page")).toBeInTheDocument());
+    expect(screen.queryByTestId("layout-stub")).toBeNull();
   });
 
   it("renders the toaster", async () => {

@@ -23,7 +23,8 @@ Plataforma educacional B2C. **Educadores adaptam atividades pedagógicas (provas
 | **Chat** | `ChatPage` | `useChatSessions`, `useSendMessage` | `chat` | Orientação pedagógica via IA. |
 | **Créditos** | `CreditsPage` | `useCredits` | `create-stripe-checkout`, `create-checkout`, `stripe-webhook`, `mp-webhook` | Compra. RPCs `deduct_credits`/`grant_credits`. |
 | **Admin** | `AdminPage`, `DashboardPage` | `useAdminDashboard`, `useHistory` | `admin-dashboard`, `admin-grant-credits`, `admin-user-status` | Painel super-admin. |
-| **Auth** | `AuthPage`, `LandingPage` | `useAuth` | — | Signup (senha + confirmação por link) ganha 50 créditos (trigger). Pós-signup, `AuthPage` mostra a view "Verifique seu e-mail" com botão Reenviar (cooldown 60s) via `supabase.auth.resend({ type: "signup" })`. Template do e-mail: `supabase/templates/confirmation.html` (registrado no `config.toml`). |
+| **Auth** | `AuthPage`, `ForgotPasswordPage`, `ResetPasswordPage`, `LandingPage` | `useAuth` | — | Signup (senha + confirmação por link) ganha 50 créditos (trigger). Pós-signup, `AuthPage` mostra a view "Verifique seu e-mail" com botão Reenviar (cooldown 60s) via `supabase.auth.resend({ type: "signup" })`. As 3 telas públicas compartilham o shell `components/auth/AuthLayout`. Templates: `supabase/templates/{confirmation,recovery}.html` (registrados no `config.toml`). |
+| **Esqueci a senha** | `ForgotPasswordPage` (`/esqueci-senha`) → `ResetPasswordPage` (`/redefinir-senha`) | — | — | `resetPasswordForEmail(email, { redirectTo: <origin>/redefinir-senha })` → e-mail (`recovery.html`) → a página de destino recebe a sessão de recovery e chama `updateUser({ password })`, depois `signOut()` + volta pro login. Rotas **públicas** (fora do `ProtectedRoute`). |
 
 ## Onde mora a lógica
 
@@ -40,7 +41,11 @@ Plataforma educacional B2C. **Educadores adaptam atividades pedagógicas (provas
 - Cabeçalho do PDF (título/escola/professor/data) vive em **`adaptation_result->'header'`** — sibling opcional de `document` (additive, igual ao `pageStyle`; ausente = sem header, legacy round-trip). Editado no passo **Exportar** (`ExportPanel` é controlado pelo wizard via `setHeader`), persiste pelo autosave. A coluna **`adaptations.title`** (usada no histórico, que não lê o blob) espelha o `header.title` manual; se vazio, cai no `deriveTitle` (1ª linha de `original_activity`). Logo o "Título" de Exportar **é** o título do histórico.
 - 1ª adaptação grátis: flag **`profiles.free_adaptation_used`**; só depois debita.
 - Edge function importa o pacote canônico com **extensão `.ts` explícita** (Vite resolve sem, Deno não).
+- **Custo de IA** (`ai_usage_logs`/`ai_model_pricing`, alimenta o "Gasto (IA)" do Admin): pricing é chaveado pelo id **canônico** (`google/gemini-2.5-pro`), mas as edge functions trabalham com o nome **resolvido** pela `MODEL_MAP` (`gemini-2.5-pro`). `logAiUsage` canonicaliza via `toCanonicalModel` (`_shared/aiConfig.ts`) antes de precificar e gravar — nunca contorne isso logando direto na tabela, senão `cost_total` sai 0.
 - Pagamentos: Stripe = cartão, Mercado Pago = Pix; backend compartilhado (`credit_purchases` + `grant_credits`).
+- **Reset de senha**: a sessão de recovery **é uma sessão real** — abrir o link do e-mail já deixa o usuário autenticado no `AuthContext` (dá pra ir ao `/dashboard` sem trocar a senha). Por isso `ResetPasswordPage` faz `signOut()` após o `updateUser`. Fluxo é **implicit** (`{{ .ConfirmationURL }}`), não PKCE.
+- **`redirectTo` só é honrado se estiver em `auth.additional_redirect_urls`** (`config.toml`). Mudou a porta do dev server? Acrescente a URL lá, senão o link cai no `site_url` e a tela de nova senha nunca recebe a sessão.
+- Em `parseAuthError`, o teste de `"should be different"` **precisa vir antes** do catch-all `includes("password")` — senão "senha repetida" vira "senha muito fraca".
 
 ## Camadas de teste
 
