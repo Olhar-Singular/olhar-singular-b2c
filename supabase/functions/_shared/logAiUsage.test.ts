@@ -230,6 +230,69 @@ describe("logAiUsage", () => {
     expect(inserted.cost_output).toBeCloseTo(0.30);
   });
 
+  it("canonicalizes resolved model names: prices and stores gemini-2.5-pro as google/gemini-2.5-pro", async () => {
+    // Edge functions log the *resolved* API name (resolveModel output). Pricing rows
+    // and the audit trail are keyed by the canonical id — the lookup must translate.
+    const modelQueries: string[] = [];
+    fromMock.mockReturnValue({
+      select: () => ({
+        eq: (_col: string, value: string) => {
+          modelQueries.push(value);
+          return {
+            eq: () => ({
+              single: () =>
+                value === "google/gemini-2.5-pro"
+                  ? Promise.resolve({
+                      data: { price_input_per_million: 1.25, price_output_per_million: 5.0 },
+                      error: null,
+                    })
+                  : Promise.resolve({ data: null, error: null }),
+            }),
+          };
+        },
+      }),
+      insert: insertMock,
+    });
+    const { logAiUsage } = await import("./logAiUsage");
+    await logAiUsage({
+      user_id: "u1",
+      action_type: "adaptation",
+      model: "gemini-2.5-pro",
+      input_tokens: 1_000_000,
+      output_tokens: 1_000_000,
+    });
+    const inserted = insertMock.mock.calls[0][0];
+    expect(modelQueries).toContain("google/gemini-2.5-pro");
+    expect(inserted.model).toBe("google/gemini-2.5-pro");
+    expect(inserted.cost_input).toBeCloseTo(1.25);
+    expect(inserted.cost_output).toBeCloseTo(5.0);
+    expect(inserted.cost_total).toBeCloseTo(6.25);
+  });
+
+  it("finds hardcoded fallback pricing for resolved model names when DB has no row", async () => {
+    fromMock.mockReturnValue({
+      select: () => ({
+        eq: () => ({
+          eq: () => ({
+            single: () => Promise.resolve({ data: null, error: null }),
+          }),
+        }),
+      }),
+      insert: insertMock,
+    });
+    const { logAiUsage } = await import("./logAiUsage");
+    await logAiUsage({
+      user_id: "u1",
+      action_type: "chat",
+      model: "gemini-2.5-flash",
+      input_tokens: 1_000_000,
+      output_tokens: 1_000_000,
+    });
+    const inserted = insertMock.mock.calls[0][0];
+    expect(inserted.cost_input).toBeCloseTo(0.075);
+    expect(inserted.cost_output).toBeCloseTo(0.30);
+  });
+
   it("uses zero pricing for unknown model not in FALLBACK (line 54 false branch)", async () => {
     // FALLBACK[model] is undefined => uses { input: 0, output: 0 }
     fromMock.mockReturnValue({

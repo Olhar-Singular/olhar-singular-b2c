@@ -11,6 +11,16 @@ const MODEL_MAP: Record<string, string> = {
   "google/gemini-3.1-flash-image-preview": "gemini-2.0-flash-preview-image-generation",
 };
 
+const REVERSE_MODEL_MAP: Record<string, string> = Object.fromEntries(
+  Object.entries(MODEL_MAP).map(([canonical, resolved]) => [resolved, canonical]),
+);
+
+// ai_model_pricing rows are keyed by the canonical id, but callers hold the
+// resolveModel() output — this translates back (identity for unknown names).
+export function toCanonicalModel(model: string): string {
+  return REVERSE_MODEL_MAP[model] ?? model;
+}
+
 type EnvGetter = (key: string) => string | undefined;
 
 // deno-lint-ignore no-explicit-any

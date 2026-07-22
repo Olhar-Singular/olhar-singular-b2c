@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { getAiConfig } from "./aiConfig";
+import { getAiConfig, toCanonicalModel } from "./aiConfig";
 
 function envMap(map: Record<string, string | undefined>) {
   return (key: string) => map[key];
@@ -40,6 +40,20 @@ describe("getAiConfig", () => {
 
   it("throws when no provider key is configured", () => {
     expect(() => getAiConfig(envMap({}))).toThrow(/No AI provider configured/);
+  });
+
+  it("maps resolved API model names back to their canonical ids", () => {
+    expect(toCanonicalModel("gemini-2.5-pro")).toBe("google/gemini-2.5-pro");
+    expect(toCanonicalModel("gemini-2.5-flash")).toBe("google/gemini-2.5-flash");
+    expect(toCanonicalModel("gemini-2.0-flash")).toBe("google/gemini-3-flash-preview");
+    expect(toCanonicalModel("gemini-2.0-flash-preview-image-generation")).toBe(
+      "google/gemini-3.1-flash-image-preview",
+    );
+  });
+
+  it("returns canonical ids and unknown models unchanged", () => {
+    expect(toCanonicalModel("google/gemini-2.5-pro")).toBe("google/gemini-2.5-pro");
+    expect(toCanonicalModel("openai/gpt-4")).toBe("openai/gpt-4");
   });
 
   it("uses the default EnvGetter (globalThis.Deno) when no argument is passed (line 18)", () => {

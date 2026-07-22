@@ -1,4 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { toCanonicalModel } from "./aiConfig.ts";
 
 interface AiUsageLog {
   user_id: string;
@@ -94,8 +95,10 @@ export async function logAiUsage(log: AiUsageLog): Promise<void> {
 
     const totalTokens = inputTokens + outputTokens;
 
-    // Fetch pricing from DB (with fallback)
-    const pricing = await getModelPricing(admin, log.model);
+    // Fetch pricing from DB (with fallback) — pricing rows are keyed by the
+    // canonical id, while callers pass the resolved API name.
+    const model = toCanonicalModel(log.model);
+    const pricing = await getModelPricing(admin, model);
     const costInput = (inputTokens / 1_000_000) * pricing.input;
     const costOutput = (outputTokens / 1_000_000) * pricing.output;
     const costTotal = costInput + costOutput;
@@ -104,7 +107,7 @@ export async function logAiUsage(log: AiUsageLog): Promise<void> {
       user_id: log.user_id,
       school_id: schoolId,
       action_type: log.action_type,
-      model: log.model,
+      model,
       endpoint: log.endpoint || null,
       input_tokens: inputTokens,
       output_tokens: outputTokens,
