@@ -247,6 +247,7 @@ export type Database = {
           credits_granted: number
           id: string
           payment_id: string | null
+          payment_method: string
           provider: string
           status: string
           updated_at: string
@@ -258,6 +259,7 @@ export type Database = {
           credits_granted: number
           id?: string
           payment_id?: string | null
+          payment_method?: string
           provider?: string
           status?: string
           updated_at?: string
@@ -269,6 +271,7 @@ export type Database = {
           credits_granted?: number
           id?: string
           payment_id?: string | null
+          payment_method?: string
           provider?: string
           status?: string
           updated_at?: string

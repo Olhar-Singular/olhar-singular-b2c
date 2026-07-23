@@ -29,29 +29,12 @@ export function useTransactionHistory(limit = 50) {
 interface CheckoutInput {
   credits: number;
   amountBrl: number;
+  method?: "card" | "pix";
 }
 
-export function useCreateCheckout() {
-  return useMutation({
-    mutationFn: async (input: CheckoutInput) => {
-      const { data, error } = await supabase.functions.invoke("create-checkout", {
-        body: input,
-      });
-      if (error) {
-        const msg = await parseInvokeError(error, "Erro ao iniciar compra. Tente novamente.");
-        throw new Error(msg);
-      }
-      return data as { url: string };
-    },
-    onSuccess: ({ url }) => {
-      window.location.href = url;
-    },
-    onError: (err: Error) => toast.error(parseEdgeFnError(err, "Erro ao iniciar compra. Tente novamente.")),
-  });
-}
-
-// Credit-card checkout via Stripe (hosted). Mirrors useCreateCheckout but targets
-// the Stripe edge function; Mercado Pago (useCreateCheckout) now handles Pix only.
+// Hosted Stripe Checkout for both rails — `method` picks card or Pix. Pix does
+// not credit on redirect: the balance only moves when the async webhook confirms
+// the payment (see supabase/functions/stripe-webhook).
 export function useCreateStripeCheckout() {
   return useMutation({
     mutationFn: async (input: CheckoutInput) => {

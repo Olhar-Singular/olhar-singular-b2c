@@ -25,12 +25,10 @@ const mockTransactions = [
   },
 ];
 
-const mockCheckout = vi.fn();
 const mockStripeCheckout = vi.fn();
 
 vi.mock("@/hooks/useCredits", () => ({
   useTransactionHistory: vi.fn(() => ({ data: mockTransactions, isLoading: false })),
-  useCreateCheckout: vi.fn(() => ({ mutateAsync: mockCheckout, isPending: false })),
   useCreateStripeCheckout: vi.fn(() => ({ mutateAsync: mockStripeCheckout, isPending: false })),
 }));
 
@@ -55,10 +53,6 @@ describe("CreditsPage", () => {
     vi.mocked(m.useTransactionHistory).mockReturnValue({
       data: mockTransactions,
       isLoading: false,
-    } as never);
-    vi.mocked(m.useCreateCheckout).mockReturnValue({
-      mutateAsync: mockCheckout,
-      isPending: false,
     } as never);
     vi.mocked(m.useCreateStripeCheckout).mockReturnValue({
       mutateAsync: mockStripeCheckout,
@@ -118,23 +112,30 @@ describe("CreditsPage", () => {
     await user.click(cardButtons[0]);
 
     await waitFor(() =>
-      expect(mockStripeCheckout).toHaveBeenCalledWith(
-        expect.objectContaining({ credits: 30 })
-      )
+      expect(mockStripeCheckout).toHaveBeenCalledWith({
+        credits: 30,
+        amountBrl: 9.9,
+        method: "card",
+      })
     );
-    expect(mockCheckout).not.toHaveBeenCalled();
   });
 
-  it("renders every Pix button disabled and never triggers the Mercado Pago checkout", async () => {
+  it("sends the Pix method to the same Stripe checkout", async () => {
     const user = userEvent.setup();
+    mockStripeCheckout.mockResolvedValue({ url: "https://stripe.com/pix" });
     renderPage();
 
     const pixButtons = screen.getAllByRole("button", { name: /^pix$/i });
-    expect(pixButtons).toHaveLength(3);
-    pixButtons.forEach((button) => expect(button).toBeDisabled());
+    pixButtons.forEach((button) => expect(button).toBeEnabled());
+    await user.click(pixButtons[1]);
 
-    await user.click(pixButtons[0]);
-    expect(mockCheckout).not.toHaveBeenCalled();
+    await waitFor(() =>
+      expect(mockStripeCheckout).toHaveBeenCalledWith({
+        credits: 120,
+        amountBrl: 29.9,
+        method: "pix",
+      })
+    );
   });
 
   it("does not render the R$1 test package for regular users", () => {
@@ -143,7 +144,7 @@ describe("CreditsPage", () => {
     expect(screen.getAllByRole("button", { name: /cartão de crédito/i })).toHaveLength(3);
   });
 
-  it("renders the R$1 test package card for super-admins, without a Pix button", async () => {
+  it("renders the R$1 test package card for super-admins, with both payment methods", async () => {
     const auth = await import("@/hooks/useAuth");
     vi.mocked(auth.useAuth).mockReturnValue({
       profile: { credit_balance: 9, is_super_admin: true },
@@ -154,8 +155,8 @@ describe("CreditsPage", () => {
     expect(screen.getByText(/1 crédito$/i)).toBeInTheDocument();
     expect(screen.getByText(/R\$\s*1[,.]00/i)).toBeInTheDocument();
     expect(screen.getAllByRole("button", { name: /cartão de crédito/i })).toHaveLength(4);
-    // The test card is Stripe-only: still just the 3 regular Pix buttons.
-    expect(screen.getAllByRole("button", { name: /^pix$/i })).toHaveLength(3);
+    // R$1 clears the R$0,50 Pix minimum, so the smoke test covers both rails.
+    expect(screen.getAllByRole("button", { name: /^pix$/i })).toHaveLength(4);
   });
 
   it("calls the Stripe checkout with 1 credit / R$1 when the super-admin buys the test package", async () => {
@@ -171,9 +172,33 @@ describe("CreditsPage", () => {
     await user.click(cardButtons[3]);
 
     await waitFor(() =>
-      expect(mockStripeCheckout).toHaveBeenCalledWith({ credits: 1, amountBrl: 1 })
+      expect(mockStripeCheckout).toHaveBeenCalledWith({
+        credits: 1,
+        amountBrl: 1,
+        method: "card",
+      })
     );
-    expect(mockCheckout).not.toHaveBeenCalled();
+  });
+
+  it("lets the super-admin smoke-test a real Pix payment with the R$1 package", async () => {
+    const auth = await import("@/hooks/useAuth");
+    vi.mocked(auth.useAuth).mockReturnValue({
+      profile: { credit_balance: 9, is_super_admin: true },
+    } as never);
+    const user = userEvent.setup();
+    mockStripeCheckout.mockResolvedValue({ url: "https://stripe.com/pix" });
+    renderPage();
+
+    const pixButtons = screen.getAllByRole("button", { name: /^pix$/i });
+    await user.click(pixButtons[3]);
+
+    await waitFor(() =>
+      expect(mockStripeCheckout).toHaveBeenCalledWith({
+        credits: 1,
+        amountBrl: 1,
+        method: "pix",
+      })
+    );
   });
 
   it("shows empty state when no transactions", async () => {

@@ -2,7 +2,7 @@ import { renderHook, waitFor, act } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { createElement } from "react";
-import { useTransactionHistory, useCreateCheckout, useCreateStripeCheckout } from "./useCredits";
+import { useTransactionHistory, useCreateStripeCheckout } from "./useCredits";
 import { supabase } from "@/integrations/supabase/client";
 import { MSG_NETWORK } from "@/lib/utils/errors";
 
@@ -118,64 +118,6 @@ describe("useTransactionHistory", () => {
   });
 });
 
-describe("useCreateCheckout", () => {
-  const mockInvoke = supabase.functions.invoke as ReturnType<typeof vi.fn>;
-
-  beforeEach(() => {
-    vi.clearAllMocks();
-    delete (window as { location?: unknown }).location;
-    (window as { location: unknown }).location = { href: "" };
-  });
-
-  it("invokes create-checkout with credits and amountBrl", async () => {
-    mockInvoke.mockResolvedValue({ data: { url: "https://mp.test/checkout" }, error: null });
-
-    const { result } = renderHook(() => useCreateCheckout(), { wrapper });
-    await act(async () => {
-      await result.current.mutateAsync({ credits: 30, amountBrl: 9.9 });
-    });
-
-    expect(mockInvoke).toHaveBeenCalledWith("create-checkout", {
-      body: { credits: 30, amountBrl: 9.9 },
-    });
-  });
-
-  it("redirects to url on success", async () => {
-    mockInvoke.mockResolvedValue({ data: { url: "https://mp.test/checkout" }, error: null });
-
-    const { result } = renderHook(() => useCreateCheckout(), { wrapper });
-    await act(async () => {
-      await result.current.mutateAsync({ credits: 30, amountBrl: 9.9 });
-    });
-
-    expect(window.location.href).toBe("https://mp.test/checkout");
-  });
-
-  it("calls toast.error when invoke returns error", async () => {
-    const { toast } = await import("sonner");
-    mockInvoke.mockResolvedValue({ data: null, error: new Error("falha no servidor") });
-
-    const { result } = renderHook(() => useCreateCheckout(), { wrapper });
-    await act(async () => {
-      try { await result.current.mutateAsync({ credits: 30, amountBrl: 9.9 }); } catch { /* expected */ }
-    });
-
-    expect(toast.error).toHaveBeenCalled();
-  });
-
-  it("maps a raw network rejection to the friendly connection message", async () => {
-    const { toast } = await import("sonner");
-    mockInvoke.mockRejectedValue(new TypeError("Failed to fetch"));
-
-    const { result } = renderHook(() => useCreateCheckout(), { wrapper });
-    await act(async () => {
-      try { await result.current.mutateAsync({ credits: 30, amountBrl: 9.9 }); } catch { /* expected */ }
-    });
-
-    expect(toast.error).toHaveBeenCalledWith(MSG_NETWORK);
-  });
-});
-
 describe("useCreateStripeCheckout", () => {
   const mockInvoke = supabase.functions.invoke as ReturnType<typeof vi.fn>;
 
@@ -195,6 +137,20 @@ describe("useCreateStripeCheckout", () => {
 
     expect(mockInvoke).toHaveBeenCalledWith("create-stripe-checkout", {
       body: { credits: 120, amountBrl: 29.9 },
+    });
+  });
+
+  // Both rails go through the same function; only the method field differs.
+  it("forwards the Pix payment method to the same edge function", async () => {
+    mockInvoke.mockResolvedValue({ data: { url: "https://stripe.test/pix" }, error: null });
+
+    const { result } = renderHook(() => useCreateStripeCheckout(), { wrapper });
+    await act(async () => {
+      await result.current.mutateAsync({ credits: 30, amountBrl: 9.9, method: "pix" });
+    });
+
+    expect(mockInvoke).toHaveBeenCalledWith("create-stripe-checkout", {
+      body: { credits: 30, amountBrl: 9.9, method: "pix" },
     });
   });
 

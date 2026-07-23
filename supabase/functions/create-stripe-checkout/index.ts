@@ -2,6 +2,10 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import Stripe from "https://esm.sh/stripe@17.7.0?target=deno";
 import { findPackage } from "../_shared/creditPackages.ts";
+import {
+  buildCheckoutSessionParams,
+  parseCheckoutMethod,
+} from "../_shared/stripeCheckoutParams.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -42,7 +46,16 @@ serve(async (req) => {
     }
 
     const body = await req.json();
-    const { credits, amountBrl } = body as { credits?: number; amountBrl?: number };
+    const { credits, amountBrl, method: rawMethod } = body as {
+      credits?: number;
+      amountBrl?: number;
+      method?: unknown;
+    };
+
+    const method = parseCheckoutMethod(rawMethod);
+    if (!method) {
+      return json({ error: "Método de pagamento inválido." }, 400);
+    }
 
     // The R$1 TEST_PACKAGE is only purchasable by super-admins; owner-based RLS
     // lets the user client read its own profile.
@@ -67,6 +80,7 @@ serve(async (req) => {
         credits_granted: pkg.credits,
         status:          "pending",
         provider:        "stripe",
+        payment_method:  method,
       })
       .select("id")
       .single();
@@ -76,37 +90,36 @@ serve(async (req) => {
       return json({ error: "Erro ao criar registro de compra." }, 500);
     }
 
-    // Create Stripe Checkout Session (hosted, card-only, BRL)
+    // Create Stripe Checkout Session (hosted, BRL). Card settles synchronously;
+    // Pix only confirms later, via the async webhook events.
     const stripe = new Stripe(stripeKey, {
       apiVersion: "2024-06-20",
       httpClient: Stripe.createFetchHttpClient(),
     });
 
-    const session = await stripe.checkout.sessions.create({
-      mode: "payment",
-      payment_method_types: ["card"],
-      line_items: [
-        {
-          price_data: {
-            currency:     "brl",
-            product_data: {
-              name: `${pkg.credits} ${pkg.credits === 1 ? "crédito" : "créditos"} — Olhar Singular`,
-            },
-            unit_amount:  Math.round(pkg.amountBrl * 100),
-          },
-          quantity: 1,
-        },
-      ],
-      client_reference_id: purchase.id,
-      customer_email:      user.email,
-      success_url:         `${appUrl}/creditos/sucesso`,
-      cancel_url:          `${appUrl}/creditos`,
-      metadata: {
-        purchase_id: purchase.id,
-        user_id:     user.id,
-        credits:     String(pkg.credits),
-      },
+    const params = buildCheckoutSessionParams({
+      pkg,
+      method,
+      purchaseId: purchase.id,
+      userId:     user.id,
+      email:      user.email,
+      appUrl,
     });
+
+    let session;
+    try {
+      session = await stripe.checkout.sessions.create(
+        params as Parameters<typeof stripe.checkout.sessions.create>[0],
+      );
+    } catch (stripeError) {
+      console.error("create-stripe-checkout: session create failed:", stripeError);
+      // Most common cause: Pix not enabled on the Stripe account (Settings →
+      // Payment methods), which the API rejects as an invalid payment method type.
+      const message = method === "pix"
+        ? "Pix indisponível no momento. Tente pagar com cartão."
+        : "Erro ao criar sessão de pagamento.";
+      return json({ error: message }, 502);
+    }
 
     if (!session.url) {
       console.error("Stripe session has no url:", session.id);

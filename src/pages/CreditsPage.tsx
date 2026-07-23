@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { useAuth } from "@/hooks/useAuth";
-import { useTransactionHistory, useCreateCheckout, useCreateStripeCheckout } from "@/hooks/useCredits";
+import { useTransactionHistory, useCreateStripeCheckout } from "@/hooks/useCredits";
 
 const PACKAGES = [
   { credits: 30, amountBrl: 9.9, label: "Básico" },
@@ -14,7 +14,8 @@ const PACKAGES = [
 ] as const;
 
 // Real-payment smoke test, shown only to super-admins and accepted by the Stripe
-// checkout only for them (creditPackages.TEST_PACKAGE). Card-only, no Pix.
+// checkout only for them (creditPackages.TEST_PACKAGE). R$1 clears the R$0,50
+// Pix minimum, so it smoke-tests both rails.
 const TEST_PACKAGE = { credits: 1, amountBrl: 1.0, label: "Teste (admin)" } as const;
 
 const TYPE_LABELS: Record<string, string> = {
@@ -34,9 +35,8 @@ function formatBrl(value: number) {
 export default function CreditsPage() {
   const { profile } = useAuth();
   const { data: transactions = [], isLoading } = useTransactionHistory();
-  const checkout = useCreateCheckout();
   const stripeCheckout = useCreateStripeCheckout();
-  const buying = checkout.isPending || stripeCheckout.isPending;
+  const buying = stripeCheckout.isPending;
 
   return (
     <div className="mx-auto max-w-2xl px-4 py-8 space-y-8">
@@ -90,18 +90,27 @@ export default function CreditsPage() {
                     variant={pkg.highlight ? "default" : "outline"}
                     disabled={buying}
                     onClick={() =>
-                      stripeCheckout.mutateAsync({ credits: pkg.credits, amountBrl: pkg.amountBrl })
+                      stripeCheckout.mutateAsync({
+                        credits: pkg.credits,
+                        amountBrl: pkg.amountBrl,
+                        method: "card",
+                      })
                     }
                   >
                     <CreditCard className="w-3.5 h-3.5" />
                     Cartão de crédito
                   </Button>
-                  {/* Pix temporariamente desabilitado — reabilitar restaurando o onClick. */}
                   <Button
                     className="w-full gap-1.5"
                     variant="ghost"
-                    disabled
-                    title="Pix em breve"
+                    disabled={buying}
+                    onClick={() =>
+                      stripeCheckout.mutateAsync({
+                        credits: pkg.credits,
+                        amountBrl: pkg.amountBrl,
+                        method: "pix",
+                      })
+                    }
                   >
                     <QrCode className="w-3.5 h-3.5" />
                     Pix
@@ -125,26 +134,44 @@ export default function CreditsPage() {
                 <p className="text-muted-foreground text-sm font-medium">
                   {formatBrl(TEST_PACKAGE.amountBrl)}
                 </p>
-                <Button
-                  className="w-full gap-1.5"
-                  variant="outline"
-                  disabled={buying}
-                  onClick={() =>
-                    stripeCheckout.mutateAsync({
-                      credits: TEST_PACKAGE.credits,
-                      amountBrl: TEST_PACKAGE.amountBrl,
-                    })
-                  }
-                >
-                  <CreditCard className="w-3.5 h-3.5" />
-                  Cartão de crédito
-                </Button>
+                <div className="space-y-2">
+                  <Button
+                    className="w-full gap-1.5"
+                    variant="outline"
+                    disabled={buying}
+                    onClick={() =>
+                      stripeCheckout.mutateAsync({
+                        credits: TEST_PACKAGE.credits,
+                        amountBrl: TEST_PACKAGE.amountBrl,
+                        method: "card",
+                      })
+                    }
+                  >
+                    <CreditCard className="w-3.5 h-3.5" />
+                    Cartão de crédito
+                  </Button>
+                  <Button
+                    className="w-full gap-1.5"
+                    variant="ghost"
+                    disabled={buying}
+                    onClick={() =>
+                      stripeCheckout.mutateAsync({
+                        credits: TEST_PACKAGE.credits,
+                        amountBrl: TEST_PACKAGE.amountBrl,
+                        method: "pix",
+                      })
+                    }
+                  >
+                    <QrCode className="w-3.5 h-3.5" />
+                    Pix
+                  </Button>
+                </div>
               </CardContent>
             </Card>
           )}
         </div>
         <p className="text-xs text-muted-foreground text-center">
-          Cartão de crédito via Stripe. Pix em breve. Créditos nunca expiram.
+          Cartão de crédito e Pix via Stripe. Créditos nunca expiram.
         </p>
       </section>
 

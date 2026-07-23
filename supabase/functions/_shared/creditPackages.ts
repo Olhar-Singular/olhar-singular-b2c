@@ -1,6 +1,6 @@
 // Single source of truth for the credit packages that may be purchased.
-// Imported by both checkout edge functions (Mercado Pago / Pix and Stripe / card)
-// so the allowed price list cannot drift between providers.
+// Imported by the Stripe checkout edge function, which serves both payment
+// methods (card and Pix), so the allowed price list lives in exactly one place.
 
 export interface CreditPackage {
   credits: number;

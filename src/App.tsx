@@ -13,6 +13,7 @@ import AdminPage from "@/pages/AdminPage";
 import DashboardPage from "@/pages/DashboardPage";
 import BarrierProfilesPage from "@/pages/BarrierProfilesPage";
 import CreditsPage from "@/pages/CreditsPage";
+import CreditsSuccessPage from "@/pages/CreditsSuccessPage";
 import AdaptarPage from "@/pages/AdaptarPage";
 import MyAdaptationsPage from "@/pages/MyAdaptationsPage";
 import EditAdaptationPage from "@/pages/EditAdaptationPage";
@@ -72,15 +73,7 @@ function buildRouter() {
                 </SuperAdminRoute>
               ),
             },
-            {
-              path: "/creditos/sucesso",
-              element: (
-                <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4 text-center">
-                  <p className="text-lg font-semibold text-foreground">Pagamento confirmado!</p>
-                  <p className="text-muted-foreground text-sm">Seus créditos foram adicionados à sua conta.</p>
-                </div>
-              ),
-            },
+            { path: "/creditos/sucesso", element: <CreditsSuccessPage /> },
           ],
         },
       ],

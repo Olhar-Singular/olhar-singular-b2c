@@ -94,7 +94,7 @@ export default function PricingSection() {
         </div>
 
         <p className="text-xs text-muted-foreground text-center mt-6">
-          PIX ou cartão via Mercado Pago. Créditos nunca expiram.
+          Pix ou cartão via Stripe. Créditos nunca expiram.
         </p>
       </div>
     </section>

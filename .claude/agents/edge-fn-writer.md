@@ -25,7 +25,8 @@ supabase/functions/
 │   ├── adminAuth.ts     # checagem de super-admin
 │   ├── admin{Dashboard,GrantCredits,UserStatus}.ts  # core das functions admin
 │   ├── adapt{ActivityCore,ationPrompt}.ts  # core do adapt-activity
-│   ├── stripeEvents.ts  # parsing de webhooks Stripe
+│   ├── stripeEvents.ts  # parsing de webhooks Stripe (grant + falha async do Pix)
+│   ├── stripeCheckoutParams.ts # payload do Checkout (cartão | Pix)
 │   └── sanitize.ts      # sanitize() — limpa strings antes de salvar
 └── <nome-da-function>/
     └── index.ts         # serve(async req => { ...glue... })
@@ -182,7 +183,7 @@ if (!isSuperAdmin) {
 ## Resposta ao thread principal
 
 1. Caminho do arquivo criado (ou modificado)
-2. Lista de secrets/env vars que a function precisa (`SUPABASE_URL`, `SUPABASE_ANON_KEY`/`SUPABASE_SERVICE_ROLE_KEY`, `AI_API_KEY`, `MP_*`/`STRIPE_*` conforme o caso — runtime local injeta os `SUPABASE_*`; demais vêm do `.env` raiz via `make fn-serve`)
+2. Lista de secrets/env vars que a function precisa (`SUPABASE_URL`, `SUPABASE_ANON_KEY`/`SUPABASE_SERVICE_ROLE_KEY`, `AI_API_KEY`, `STRIPE_*` conforme o caso — runtime local injeta os `SUPABASE_*`; demais vêm do `.env` raiz via `make fn-serve`)
 3. Comando pra deploy local: `make fn-serve` ou `supabase functions serve <nome>`
 4. Comando pra deploy remoto: `supabase functions deploy <nome>` ou `make fn-deploy-all`
 5. Action type escolhido (pra grep de duplicação)

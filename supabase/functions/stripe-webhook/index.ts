@@ -1,7 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import Stripe from "https://esm.sh/stripe@17.7.0?target=deno";
-import { extractCheckoutGrant } from "../_shared/stripeEvents.ts";
+import { extractCheckoutFailure, extractCheckoutGrant } from "../_shared/stripeEvents.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -49,13 +49,30 @@ serve(async (req) => {
       return json({ error: "Assinatura inválida." }, 401);
     }
 
-    // Only paid checkout.session.completed events yield a grant; ignore the rest.
+    // Only paid checkout sessions yield a grant — card via
+    // checkout.session.completed, Pix via checkout.session.async_payment_succeeded.
     const grant = extractCheckoutGrant(event as unknown as Record<string, unknown>);
+    const admin = createClient(supabaseUrl, serviceKey);
+
     if (!grant) {
+      // A Pix that expired or was declined closes out the pending purchase so it
+      // stops looking payable in the user's history. Scoped to 'pending' so an
+      // already-approved purchase can never be downgraded.
+      const failure = extractCheckoutFailure(event as unknown as Record<string, unknown>);
+      if (failure) {
+        const { error: rejectError } = await admin
+          .from("credit_purchases")
+          .update({ status: "rejected" })
+          .eq("id", failure.purchaseId)
+          .eq("status", "pending");
+
+        if (rejectError) {
+          console.error("stripe-webhook: reject credit_purchases:", rejectError);
+          return json({ error: "Erro interno." }, 500);
+        }
+      }
       return json({ received: true });
     }
-
-    const admin = createClient(supabaseUrl, serviceKey);
 
     // Atomically mark purchase as approved; skip if already processed (idempotency)
     const { data: updated, error: updateError } = await admin
