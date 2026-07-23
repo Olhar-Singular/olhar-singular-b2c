@@ -48,6 +48,12 @@ jobs:
     permissions:
       contents: read
 
+    env:
+      # config.toml references env(GOOGLE_CLIENT_*) for LOCAL auth only; dummies
+      # keep `supabase db start` from warning about unset variables in CI.
+      GOOGLE_CLIENT_ID: ci-dummy
+      GOOGLE_CLIENT_SECRET: ci-dummy
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4

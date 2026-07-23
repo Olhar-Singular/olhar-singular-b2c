@@ -22,6 +22,10 @@ jobs:
     env:
       SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
       SUPABASE_PROJECT_ID: ${{ secrets.VITE_SUPABASE_PROJECT_ID }}
+      # config.toml references env(GOOGLE_CLIENT_*) for LOCAL auth only; the CLI
+      # still parses the file here, so dummies silence the unset-variable warnings.
+      GOOGLE_CLIENT_ID: ci-dummy
+      GOOGLE_CLIENT_SECRET: ci-dummy
 
     steps:
       - name: Checkout
@@ -29,10 +33,12 @@ jobs:
         with:
           fetch-depth: 0
 
+      # "latest" (parity with the CI db-tests job): the pinned 2.20.5 hit removed
+      # Management API endpoints on `supabase link` ("Resource has been removed").
       - name: Setup Supabase CLI
         uses: supabase/setup-cli@v1
         with:
-          version: 2.20.5
+          version: latest
 
       - name: Link project
         run: supabase link --project-ref "$SUPABASE_PROJECT_ID"
