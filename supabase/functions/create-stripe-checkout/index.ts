@@ -44,7 +44,15 @@ serve(async (req) => {
     const body = await req.json();
     const { credits, amountBrl } = body as { credits?: number; amountBrl?: number };
 
-    const pkg = findPackage(credits, amountBrl);
+    // The R$1 TEST_PACKAGE is only purchasable by super-admins; owner-based RLS
+    // lets the user client read its own profile.
+    const { data: profile } = await userClient
+      .from("profiles")
+      .select("is_super_admin")
+      .eq("id", user.id)
+      .maybeSingle();
+
+    const pkg = findPackage(credits, amountBrl, { allowTest: profile?.is_super_admin === true });
     if (!pkg) {
       return json({ error: "Pacote inválido." }, 400);
     }
@@ -81,7 +89,9 @@ serve(async (req) => {
         {
           price_data: {
             currency:     "brl",
-            product_data: { name: `${pkg.credits} créditos — Olhar Singular` },
+            product_data: {
+              name: `${pkg.credits} ${pkg.credits === 1 ? "crédito" : "créditos"} — Olhar Singular`,
+            },
             unit_amount:  Math.round(pkg.amountBrl * 100),
           },
           quantity: 1,

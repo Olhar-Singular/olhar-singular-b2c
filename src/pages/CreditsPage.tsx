@@ -13,6 +13,10 @@ const PACKAGES = [
   { credits: 300, amountBrl: 59.9, label: "Avançado" },
 ] as const;
 
+// Real-payment smoke test, shown only to super-admins and accepted by the Stripe
+// checkout only for them (creditPackages.TEST_PACKAGE). Card-only, no Pix.
+const TEST_PACKAGE = { credits: 1, amountBrl: 1.0, label: "Teste (admin)" } as const;
+
 const TYPE_LABELS: Record<string, string> = {
   signup_bonus: "Bônus de cadastro",
   purchase: "Compra",
@@ -106,6 +110,38 @@ export default function CreditsPage() {
               </CardContent>
             </Card>
           ))}
+          {profile?.is_super_admin && (
+            <Card className="border-dashed border-border transition-shadow hover:shadow-card-hover">
+              <CardHeader className="pb-2">
+                <div className="flex items-center justify-between">
+                  <CardTitle className="text-base">{TEST_PACKAGE.label}</CardTitle>
+                  <Badge variant="outline" className="text-xs">
+                    Só admins
+                  </Badge>
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <p className="text-2xl font-bold tabular-nums">{TEST_PACKAGE.credits} crédito</p>
+                <p className="text-muted-foreground text-sm font-medium">
+                  {formatBrl(TEST_PACKAGE.amountBrl)}
+                </p>
+                <Button
+                  className="w-full gap-1.5"
+                  variant="outline"
+                  disabled={buying}
+                  onClick={() =>
+                    stripeCheckout.mutateAsync({
+                      credits: TEST_PACKAGE.credits,
+                      amountBrl: TEST_PACKAGE.amountBrl,
+                    })
+                  }
+                >
+                  <CreditCard className="w-3.5 h-3.5" />
+                  Cartão de crédito
+                </Button>
+              </CardContent>
+            </Card>
+          )}
         </div>
         <p className="text-xs text-muted-foreground text-center">
           Cartão de crédito via Stripe. Pix em breve. Créditos nunca expiram.

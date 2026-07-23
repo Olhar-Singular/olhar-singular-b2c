@@ -49,18 +49,21 @@ WITH u AS (
 SELECT is((SELECT count(*)::int FROM u),
   0, 'A cannot update another user''s profile');
 
--- The ledger is immutable: no UPDATE / DELETE policy → 0 rows affected
-WITH u AS (
-  UPDATE public.credit_transactions SET delta = 9999
-    WHERE user_id = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa' RETURNING 1)
-SELECT is((SELECT count(*)::int FROM u),
-  0, 'credit_transactions cannot be updated (immutable ledger)');
+-- The ledger is immutable at the GRANT level: authenticated has no UPDATE /
+-- DELETE privilege on credit_transactions (20260622000000 grants SELECT+INSERT
+-- only; 20260722000002 revokes the legacy defaults) → permission denied (42501)
+-- before RLS is even evaluated.
+SELECT throws_ok(
+  $$ UPDATE public.credit_transactions SET delta = 9999
+       WHERE user_id = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa' $$,
+  '42501', NULL,
+  'credit_transactions cannot be updated (immutable ledger)');
 
-WITH d AS (
-  DELETE FROM public.credit_transactions
-    WHERE user_id = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa' RETURNING 1)
-SELECT is((SELECT count(*)::int FROM d),
-  0, 'credit_transactions cannot be deleted (immutable ledger)');
+SELECT throws_ok(
+  $$ DELETE FROM public.credit_transactions
+       WHERE user_id = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa' $$,
+  '42501', NULL,
+  'credit_transactions cannot be deleted (immutable ledger)');
 
 -- INSERT policy WITH CHECK (auth.uid() = user_id): A may insert its own row...
 WITH i AS (
