@@ -15,7 +15,6 @@ vi.mock("@/integrations/supabase/client", () => ({
       signInWithPassword: vi.fn(),
       signUp: vi.fn(),
       resend: vi.fn(),
-      signInWithOAuth: vi.fn(),
     },
   },
 }));
@@ -50,7 +49,6 @@ describe("AuthPage", () => {
     vi.mocked(supabase.auth.signInWithPassword).mockResolvedValue({ error: null } as never);
     vi.mocked(supabase.auth.signUp).mockResolvedValue({ error: null } as never);
     vi.mocked(supabase.auth.resend).mockResolvedValue({ error: null } as never);
-    vi.mocked(supabase.auth.signInWithOAuth).mockResolvedValue({ error: null } as never);
   });
 
   async function fillAndSubmitSignup(user: ReturnType<typeof userEvent.setup>) {
@@ -424,27 +422,5 @@ describe("AuthPage", () => {
     expect(screen.getByRole("link", { name: /esqueci minha senha/i })).toHaveFocus();
     await user.tab();
     expect(screen.getByRole("button", { name: /^Entrar$/ })).toHaveFocus();
-  });
-
-  it("starts Google OAuth when the Google button is clicked", async () => {
-    const user = userEvent.setup();
-    renderAuthPage();
-    await user.click(screen.getByRole("button", { name: /continuar com google/i }));
-    await waitFor(() =>
-      expect(supabase.auth.signInWithOAuth).toHaveBeenCalledWith({
-        provider: "google",
-        options: { redirectTo: expect.stringContaining("/dashboard") },
-      }),
-    );
-  });
-
-  it("shows an error when Google OAuth fails to start", async () => {
-    const user = userEvent.setup();
-    vi.mocked(supabase.auth.signInWithOAuth).mockResolvedValue({
-      error: { message: "Unsupported provider" },
-    } as never);
-    renderAuthPage();
-    await user.click(screen.getByRole("button", { name: /continuar com google/i }));
-    await waitFor(() => expect(screen.getByRole("alert")).toBeInTheDocument());
   });
 });
