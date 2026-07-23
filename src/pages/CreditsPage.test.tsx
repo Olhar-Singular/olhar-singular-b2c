@@ -137,6 +137,45 @@ describe("CreditsPage", () => {
     expect(mockCheckout).not.toHaveBeenCalled();
   });
 
+  it("does not render the R$1 test package for regular users", () => {
+    renderPage();
+    expect(screen.queryByText(/teste \(admin\)/i)).not.toBeInTheDocument();
+    expect(screen.getAllByRole("button", { name: /cartão de crédito/i })).toHaveLength(3);
+  });
+
+  it("renders the R$1 test package card for super-admins, without a Pix button", async () => {
+    const auth = await import("@/hooks/useAuth");
+    vi.mocked(auth.useAuth).mockReturnValue({
+      profile: { credit_balance: 9, is_super_admin: true },
+    } as never);
+    renderPage();
+
+    expect(screen.getByText(/teste \(admin\)/i)).toBeInTheDocument();
+    expect(screen.getByText(/1 crédito$/i)).toBeInTheDocument();
+    expect(screen.getByText(/R\$\s*1[,.]00/i)).toBeInTheDocument();
+    expect(screen.getAllByRole("button", { name: /cartão de crédito/i })).toHaveLength(4);
+    // The test card is Stripe-only: still just the 3 regular Pix buttons.
+    expect(screen.getAllByRole("button", { name: /^pix$/i })).toHaveLength(3);
+  });
+
+  it("calls the Stripe checkout with 1 credit / R$1 when the super-admin buys the test package", async () => {
+    const auth = await import("@/hooks/useAuth");
+    vi.mocked(auth.useAuth).mockReturnValue({
+      profile: { credit_balance: 9, is_super_admin: true },
+    } as never);
+    const user = userEvent.setup();
+    mockStripeCheckout.mockResolvedValue({ url: "https://stripe.com/checkout" });
+    renderPage();
+
+    const cardButtons = screen.getAllByRole("button", { name: /cartão de crédito/i });
+    await user.click(cardButtons[3]);
+
+    await waitFor(() =>
+      expect(mockStripeCheckout).toHaveBeenCalledWith({ credits: 1, amountBrl: 1 })
+    );
+    expect(mockCheckout).not.toHaveBeenCalled();
+  });
+
   it("shows empty state when no transactions", async () => {
     const m = await import("@/hooks/useCredits");
     vi.mocked(m.useTransactionHistory).mockReturnValue({
