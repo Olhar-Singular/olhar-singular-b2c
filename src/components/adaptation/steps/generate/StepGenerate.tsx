@@ -9,9 +9,16 @@ import { useAuth } from "@/hooks/useAuth";
 import type { AdaptationResult } from "@/lib/adaptation/canonical/schema";
 import type { WizardData } from "@/lib/adaptation/wizard/wizardState";
 
+/** The `adaptations` row the SERVER created for this generation (A7). */
+export type GeneratedRow = {
+  id: string;
+  /** Seeds the autosave optimistic-concurrency token — no extra round-trip. */
+  updatedAt: string;
+};
+
 type Props = {
   data: WizardData;
-  onResult: (result: AdaptationResult) => void;
+  onResult: (result: AdaptationResult, row: GeneratedRow) => void;
   onNext: () => void;
   onPrev: () => void;
   onLoadingChange?: (loading: boolean) => void;
@@ -46,6 +53,13 @@ export function StepGenerate({ data, onResult, onNext, onPrev, onLoadingChange }
           activity_type: data.activityType,
           barriers: activeBarriers,
           observation_notes: data.observationNotes || undefined,
+          // The server writes the adaptation row itself now, so it needs the
+          // profile link the row carries.
+          barrier_profile_id: data.barrierProfileId ?? undefined,
+          // Idempotency key for the credit reservation: it makes a replayed
+          // request (retried transport, double-click) impossible to charge
+          // twice. Fresh per attempt — a real retry IS a new charge.
+          request_id: crypto.randomUUID(),
         },
         signal: controller.signal,
       });
@@ -69,7 +83,19 @@ export function StepGenerate({ data, onResult, onNext, onPrev, onLoadingChange }
         throw new Error(errMsg);
       }
 
-      onResult(fnResult.adaptation as AdaptationResult);
+      // A7: the document is only worth showing if the server already stored it.
+      // Accepting a response without a row id would put us back to editing a
+      // document with nowhere to autosave — the exact loss this flow fixes.
+      const adaptationId = fnResult?.adaptation_id as string | undefined;
+      const adaptationUpdatedAt = fnResult?.adaptation_updated_at as string | undefined;
+      if (!adaptationId || !adaptationUpdatedAt) {
+        throw new Error("A adaptação não foi salva no servidor. Tente novamente.");
+      }
+
+      onResult(fnResult.adaptation as AdaptationResult, {
+        id: adaptationId,
+        updatedAt: adaptationUpdatedAt,
+      });
       refreshProfile().catch(() => {});
       onNext();
     } catch (e) {

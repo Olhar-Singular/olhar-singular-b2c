@@ -3,10 +3,11 @@
  * document-level "Aparência" style (`pageStyle.fontFamily`).
  *
  * Each logical token is mapped through this single source of truth so the screen
- * (CSS) and the PDF (@react-pdf) can never silently diverge:
+ * (CSS), the PDF (@react-pdf) and the Word export can never silently diverge:
  *
- *   - `fontFamilyToCss` → a CSS font stack
- *   - `fontFamilyToPdf` → a @react-pdf family name
+ *   - `fontFamilyToCss`  → a CSS font stack
+ *   - `fontFamilyToPdf`  → a @react-pdf family name
+ *   - `fontFamilyToDocx` → a Word font name (resolved on the reader's machine)
  *
  * The classic tokens `sans/serif/mono` map to @react-pdf built-ins (no
  * registration). The accessibility tokens (`atkinson/lexend/opendyslexic`) map
@@ -121,4 +122,36 @@ export function fontFamilyToCss(value: string): string {
  */
 export function fontFamilyToPdf(value: string): string {
   return isFontFamilyToken(value) ? PDF_FAMILIES[value] : value;
+}
+
+/**
+ * Map a logical token to a Word (.docx) font name. Unknown values are passed
+ * through unchanged (matching the CSS/PDF mappers).
+ *
+ * Word resolves fonts on the READER's machine — it embeds nothing. The classic
+ * tokens map to fonts every Word install has; the accessibility families do not
+ * ship with Word, so a reader without them installed silently gets a
+ * substitute. That substitution is exactly the kind of loss this export used to
+ * hide, so `docxExportWarnings` says it out loud before the download.
+ */
+const DOCX_FAMILIES: Record<FontFamilyToken, string> = {
+  sans: "Arial",
+  serif: "Times New Roman",
+  mono: "Courier New",
+  atkinson: "Atkinson Hyperlegible",
+  lexend: "Lexend",
+  opendyslexic: "OpenDyslexic",
+  georgia: "Georgia",
+  arial: "Arial",
+};
+
+/** Tokens whose font is not installed with Word by default. */
+export const DOCX_NON_STANDARD_FONTS: FontFamilyToken[] = [
+  "atkinson",
+  "lexend",
+  "opendyslexic",
+];
+
+export function fontFamilyToDocx(value: string): string {
+  return isFontFamilyToken(value) ? DOCX_FAMILIES[value] : value;
 }

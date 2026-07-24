@@ -19,11 +19,17 @@ export default function EditAdaptationPage() {
     );
   }
 
-  // Keyed on id + updated_at so a re-fetch with new data remounts the wizard
-  // with fresh seed state (rehydrate cleanly after an external change).
+  // Keyed on the ID ALONE. The key used to include `updated_at`, which every
+  // autosave advances — so a refetch that saw a newer row (a window refocus,
+  // the invalidation fired by "Salvar") remounted the wizard out from under the
+  // user: caret, scroll and current step all thrown away, back to Revisar,
+  // mid-sentence. The seed is a starting point, not live state; once the wizard
+  // is mounted it owns the document and autosaves it, so re-seeding it from a
+  // row IT wrote is both destructive and pointless. Only a genuinely different
+  // adaptation justifies a fresh wizard.
   return (
     <CanonicalAdaptationWizard
-      key={`${row.id}:${row.updated_at}`}
+      key={row.id}
       editMode={{
         adaptationId: row.id,
         initialData: rowToWizardData(row),

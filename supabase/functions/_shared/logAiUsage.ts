@@ -103,7 +103,10 @@ export async function logAiUsage(log: AiUsageLog): Promise<void> {
     const costOutput = (outputTokens / 1_000_000) * pricing.output;
     const costTotal = costInput + costOutput;
 
-    await admin.from("ai_usage_logs").insert({
+    // supabase-js resolves with `{ error }` on a DB failure instead of
+    // rejecting — unchecked, the whole usage/cost row vanishes silently and the
+    // Admin "Gasto (IA)" under-reports. Surface it via the catch below.
+    const { error: insertError } = await admin.from("ai_usage_logs").insert({
       user_id: log.user_id,
       school_id: schoolId,
       action_type: log.action_type,
@@ -121,6 +124,7 @@ export async function logAiUsage(log: AiUsageLog): Promise<void> {
       metadata: log.metadata || {},
       tokens_source: tokensSource,
     });
+    if (insertError) throw insertError;
   } catch (err) {
     console.error("Failed to log AI usage:", err);
   }

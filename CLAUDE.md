@@ -69,7 +69,9 @@ Setup inicial de máquina nova: @.claude/docs/setup.md
 
 - **Nunca commit automático.** Sempre aguardar aprovação explícita do usuário após teste
   manual. (Redação da mensagem seguindo a convenção: skill `commit-crafting`.)
-- **Nunca push direto para `main`** — feature branch + PR.
+- **Trabalhar sempre na `main`.** Commitar e pushar direto na `main` é o padrão. **Só criar
+  branch (ou PR) quando o usuário pedir explicitamente** — nunca criar feature branch por
+  conta própria. Se já estiver numa branch, seguir nela até o usuário mandar voltar.
 - **TDD obrigatório**: toda mudança segue Red → Green → Refactor; nunca editar código sem
   teste que cubra a mudança. Ciclo guiado: comando `/tdd`.
 - **Gate de cobertura 100%** (statements/branches/functions/lines) travado em

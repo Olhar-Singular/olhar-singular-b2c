@@ -78,9 +78,31 @@ export function buildQuestionNode(kind: QuestionKind, generate: Generate = newId
   return blockToNode(block);
 }
 
-/** Build an image PM node from a src (typically a data URL). */
+/**
+ * A 1x1 transparent PNG used as the src of a freshly inserted image, before the
+ * teacher picks a file.
+ *
+ * The canonical model requires a non-empty, safe `src` (`isSafeImageSrc`), so an
+ * empty one is not "an image without a picture yet" — it is a document that
+ * cannot be represented at all. Inserting one used to freeze the autosave for
+ * the WHOLE sheet, silently, until a file was chosen. A data URI keeps the node
+ * valid from the moment it exists; the NodeView still shows its "Trocar imagem"
+ * affordance, and PNG (not SVG) is what the PDF renderer accepts.
+ */
+export const IMAGE_PLACEHOLDER_SRC =
+  "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==";
+
+/**
+ * Build an image PM node from a src (typically a data URL). An empty src falls
+ * back to `IMAGE_PLACEHOLDER_SRC` so the inserted node is always representable.
+ */
 export function buildImageNode(src: string, generate: Generate = newId): PMNode {
-  const block: Block = { id: generate(), type: "image", src, alt: "" };
+  const block: Block = {
+    id: generate(),
+    type: "image",
+    src: src.length > 0 ? src : IMAGE_PLACEHOLDER_SRC,
+    alt: "",
+  };
   return blockToNode(block);
 }
 

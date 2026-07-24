@@ -1,6 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import {
-  saveDraft,
   updateAdaptation,
   markReady,
   listAdaptations,
@@ -60,38 +59,6 @@ function buildChain(result: { data: unknown; error: unknown }, overrides: Record
 
 describe("adaptationsRepo", () => {
   beforeEach(() => vi.clearAllMocks());
-
-  describe("saveDraft", () => {
-    it("inserts a draft and returns the parsed row", async () => {
-      const chain = buildChain({ data: baseRow, error: null });
-      vi.mocked(supabase.from).mockReturnValue(chain as never);
-      const row = await saveDraft(payload);
-      expect(supabase.from).toHaveBeenCalledWith("adaptations");
-      expect(chain.insert).toHaveBeenCalledWith(
-        expect.objectContaining({
-          status: "draft",
-          user_id: "u1",
-          observation_notes: "minhas notas",
-        }),
-      );
-      expect(row.id).toBe("a1");
-      expect(row.adaptation_result).toEqual(validResult);
-    });
-
-    it("throws on supabase error", async () => {
-      const chain = buildChain({ data: null, error: { message: "boom" } });
-      vi.mocked(supabase.from).mockReturnValue(chain as never);
-      await expect(saveDraft(payload)).rejects.toEqual({ message: "boom" });
-    });
-
-    it("throws when the result blob is invalid (write-side validation)", async () => {
-      const chain = buildChain({ data: baseRow, error: null });
-      vi.mocked(supabase.from).mockReturnValue(chain as never);
-      const bad = { ...payload, adaptation_result: { junk: true } as never };
-      await expect(saveDraft(bad)).rejects.toBeInstanceOf(Error);
-      expect(chain.insert).not.toHaveBeenCalled();
-    });
-  });
 
   describe("updateAdaptation", () => {
     it("updates with optimistic concurrency and returns the row", async () => {

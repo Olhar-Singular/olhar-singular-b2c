@@ -209,3 +209,105 @@ describe("ExportPanel", () => {
     expect(teacherInput.maxLength).toBe(80);
   });
 });
+
+// ---------------------------------------------------------------------------
+// B15 — nada de "Word gerado!" por cima de conteúdo que não foi
+// ---------------------------------------------------------------------------
+
+/** Um documento com imagem e fórmula: os dois casos que o Word não carrega fiel. */
+const lossyDocument: CanonicalDocument = {
+  schemaVersion: 1,
+  blocks: [
+    { id: id(1), type: "image", src: "https://example.com/a.png", alt: "figura" },
+    { id: id(2), type: "blockMath", latex: "x^2" },
+  ],
+};
+
+describe("aviso antes do download do Word (B15)", () => {
+  it("não baixa direto: avisa o que não vai para o Word e espera confirmação", async () => {
+    const onDownloadWord = vi.fn().mockResolvedValue(undefined);
+    render(
+      <ExportPanel document={lossyDocument} onDownload={vi.fn()} onDownloadWord={onDownloadWord} />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /Exportar Word/i }));
+
+    // O aviso aparece ANTES de qualquer download...
+    expect(await screen.findByText(/não são embutidas no Word/i)).toBeInTheDocument();
+    expect(screen.getByText(/fórmulas saem como texto LaTeX/i)).toBeInTheDocument();
+    expect(onDownloadWord).not.toHaveBeenCalled();
+    const { toast } = await import("sonner");
+    expect(toast.success).not.toHaveBeenCalled();
+  });
+
+  it("confirmar baixa o arquivo e só então diz que gerou", async () => {
+    const { toast } = await import("sonner");
+    const onDownloadWord = vi.fn().mockResolvedValue(undefined);
+    render(
+      <ExportPanel document={lossyDocument} onDownload={vi.fn()} onDownloadWord={onDownloadWord} />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: /Exportar Word/i }));
+    fireEvent.click(await screen.findByRole("button", { name: /Baixar mesmo assim/i }));
+
+    await waitFor(() => expect(onDownloadWord).toHaveBeenCalled());
+    await waitFor(() => expect(toast.success).toHaveBeenCalledWith("Word gerado!"));
+  });
+
+  it("cancelar não baixa nada", async () => {
+    const { toast } = await import("sonner");
+    const onDownloadWord = vi.fn().mockResolvedValue(undefined);
+    render(
+      <ExportPanel document={lossyDocument} onDownload={vi.fn()} onDownloadWord={onDownloadWord} />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: /Exportar Word/i }));
+    fireEvent.click(await screen.findByRole("button", { name: /Cancelar/i }));
+
+    await waitFor(() =>
+      expect(screen.queryByText(/não são embutidas no Word/i)).not.toBeInTheDocument(),
+    );
+    expect(onDownloadWord).not.toHaveBeenCalled();
+    expect(toast.success).not.toHaveBeenCalled();
+  });
+
+  it("documento sem perdas baixa direto, sem diálogo", async () => {
+    const onDownloadWord = vi.fn().mockResolvedValue(undefined);
+    render(<ExportPanel document={document} onDownload={vi.fn()} onDownloadWord={onDownloadWord} />);
+
+    fireEvent.click(screen.getByRole("button", { name: /Exportar Word/i }));
+
+    await waitFor(() => expect(onDownloadWord).toHaveBeenCalled());
+    expect(screen.queryByText(/Baixar mesmo assim/i)).not.toBeInTheDocument();
+  });
+
+  it("avisa quando a fonte de acessibilidade pode não existir na máquina do leitor", async () => {
+    render(
+      <ExportPanel
+        document={document}
+        pageStyle={{ fontFamily: "opendyslexic" }}
+        onDownload={vi.fn()}
+        onDownloadWord={vi.fn().mockResolvedValue(undefined)}
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: /Exportar Word/i }));
+
+    expect(await screen.findByText(/OpenDyslexic/i)).toBeInTheDocument();
+  });
+
+  it("repassa o pageStyle para o gerador do Word (a fonte precisa chegar ao arquivo)", async () => {
+    const onDownloadWord = vi.fn().mockResolvedValue(undefined);
+    const pageStyle: PageStyle = { fontFamily: "lexend", fontSize: 14 };
+    render(
+      <ExportPanel
+        document={document}
+        pageStyle={pageStyle}
+        onDownload={vi.fn()}
+        onDownloadWord={onDownloadWord}
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: /Exportar Word/i }));
+    fireEvent.click(await screen.findByRole("button", { name: /Baixar mesmo assim/i }));
+
+    await waitFor(() => expect(onDownloadWord).toHaveBeenCalled());
+    expect(onDownloadWord.mock.calls[0][2]).toEqual(pageStyle);
+  });
+});

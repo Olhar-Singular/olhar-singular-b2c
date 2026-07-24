@@ -17,7 +17,7 @@ Plataforma educacional B2C. **Educadores adaptam atividades pedagógicas (provas
 
 | Fluxo | Página | Hook(s) | Edge function | Resumo |
 |-------|--------|---------|---------------|--------|
-| **Adaptar** | `AdaptarPage`, `EditAdaptationPage`, `MyAdaptationsPage` | `useAdaptations`, `useAdaptationDraft` | `adapt-activity` | Wizard: Tipo → Atividade → Barreiras → Gerar (IA) → **Revisar** (superfície única Tiptap canônico: edição inline + card da questão + Aparência) → Exportar PDF. Persiste em `adaptations`. |
+| **Adaptar** | `AdaptarPage`, `EditAdaptationPage`, `MyAdaptationsPage` | `useAdaptations`, `useAdaptationDraft` | `adapt-activity` | Wizard: Tipo → Atividade → Barreiras → Gerar (IA) → **Revisar** (superfície única Tiptap canônico: edição inline + card da questão + Aparência) → Exportar PDF. A **edge function** grava a linha em `adaptations` (draft) e o cliente só a atualiza por autosave. |
 | **Perfis de barreira** | `BarrierProfilesPage` | `useBarrierProfiles` | — | Perfis (aluno + barreiras) reutilizados no passo "Barreiras". |
 | **Banco de questões** | `QuestionBankPage` | `useQuestionBank` | `extract-questions` | Extrai questões de PDF de prova. |
 | **Chat** | `ChatPage` | `useChatSessions`, `useSendMessage` | `chat` | Orientação pedagógica via IA. |
@@ -38,8 +38,94 @@ Plataforma educacional B2C. **Educadores adaptam atividades pedagógicas (provas
 
 - Saldo de crédito = coluna **`credit_balance`** (NÃO `credits`).
 - Documento adaptado vive em **`adaptations.adaptation_result->'document'`** (`->'blocks'` é o array de blocos canônicos). Coluna `content` antiga foi dropada (migration `20260604000000_adaptations_canonical`).
-- Cabeçalho do PDF (título/escola/professor/data) vive em **`adaptation_result->'header'`** — sibling opcional de `document` (additive, igual ao `pageStyle`; ausente = sem header, legacy round-trip). Editado no passo **Exportar** (`ExportPanel` é controlado pelo wizard via `setHeader`), persiste pelo autosave. A coluna **`adaptations.title`** (usada no histórico, que não lê o blob) espelha o `header.title` manual; se vazio, cai no `deriveTitle` (1ª linha de `original_activity`). Logo o "Título" de Exportar **é** o título do histórico.
-- 1ª adaptação grátis: flag **`profiles.free_adaptation_used`**; só depois debita.
+- Cabeçalho do PDF (título/escola/professor/data) vive em **`adaptation_result->'header'`** — sibling opcional de `document` (additive, igual ao `pageStyle`; ausente = sem header, legacy round-trip). Editado no passo **Exportar** (`ExportPanel` é controlado pelo wizard via `setHeader`), persiste pelo autosave. A coluna **`adaptations.title`** (usada no histórico, que não lê o blob) espelha o `header.title` manual; se vazio, cai no título derivado no servidor (`deriveAdaptationTitle`, 1ª linha de `original_activity`). Logo o "Título" de Exportar **é** o título do histórico.
+- **Quem cria a linha em `adaptations` é a EDGE FUNCTION, não o cliente** (migration
+  `20260723160000_adaptations_request_id`). `adapt-activity` insere o rascunho via service_role
+  **antes** de dar `settle` na reserva (`_shared/adaptationPersistence.ts`) e devolve
+  `adaptation_id` + `adaptation_updated_at`; o wizard só **adota** essa linha. Se o insert falha,
+  a reserva é revertida — nunca se cobra por documento que não ficou gravado. A linha carrega o
+  **`request_id`** (o mesmo id da reserva), com índice único parcial: replay não deixa adaptação
+  duplicada. Não existe mais `saveDraft`/`wizardDataToPayload` no cliente — o que ele escreve são
+  **updates** (`updateAdaptation`). Regerar = requisição paga nova = **linha nova** (o rascunho
+  anterior continua no histórico).
+- **Token de concorrência otimista é POR LINHA.** `useAdaptationDraft` religa
+  `expectedUpdatedAt` sempre que o `draftId` muda (adoção da linha, "Nova adaptação"); carregar o
+  `updated_at` da adaptação anterior fazia o 1º autosave da nova conflitar → `navigate(0)`.
+  `markReady` também avança o `updated_at` no servidor, então o wizard devolve o valor retornado
+  via **`syncUpdatedAt`** — sem isso, editar depois de "Salvar" conflita.
+- **`flush()` devolve resultado, não token**: `{ status: "saved" | "failed" }`. `handleSave` **não**
+  marca ready quando o flush falha — marcar mesmo assim dizia "Salvo" sobre edições que nunca
+  subiram e ainda empurrava o `updated_at` à frente do mirror, fazendo a próxima abertura apagar a
+  única cópia. (Discriminante é **string**: o projeto compila com `strictNullChecks: false`, onde
+  TS não estreita união por literal booleano.)
+- **Mirror de crash: divergência manda, não timestamp.** `shouldOfferRestore` compara o conteúdo do
+  mirror com o `result` que o servidor carregou; só cai no timestamp quando não há resultado pra
+  comparar. E a checagem só "trava" (`checkedMirrorFor`) **depois** de decidir — o app roda em
+  `<StrictMode>`, que monta o efeito duas vezes: travar antes do await cancelava a 1ª execução e
+  curto-circuitava a 2ª, então o prompt de recuperação **nunca** aparecia no browser.
+- **O modelo canônico é estreito de propósito — o editor NUNCA pode produzir algo fora dele.**
+  Um nó irrepresentável não é "meio inválido": `tryProseMirrorToCanonical` falha e o autosave
+  para de capturar o documento **inteiro**, em silêncio. Quatro origens já corrigidas (B8):
+  **(1)** `hardBreak` foi **desligado** no StarterKit — não há quebra inline no canônico, e um
+  Shift+Enter virava `{type:"text",text:""}`, que validava mas o `Node.fromJSON` recusava no
+  reload (folha em branco). Shift+Enter/Mod+Enter agora fazem `splitBlock` (extensão
+  `BreakAsParagraph`), e `InlineText.text` é `.min(1)` — o que não recarrega não valida.
+  **(2)** Attrs só-de-modelo (`answer`, `instruction`, `enunciado`, `style`, `items`, `caption`)
+  **não podem ser `rendered:false`**: o clipboard do ProseMirror round-trippa por **HTML**
+  (`data-pm-slice` só guarda profundidade), então colar uma questão a devolvia com `answer:null`.
+  Agora viajam como JSON em `data-*` (helper `jsonAttribute` em `tiptap/schema.ts`); `width` usa
+  `numberAttribute` porque atributo HTML volta string. **(3)** Cor colada (Word/Docs — e a nossa
+  própria, que o DOM serializa como `rgb(...)`) passa por `normalizeColor` (`canonical/colors.ts`),
+  que casa com a **cor mais próxima do allowlist**; `fontSize` passa por `normalizeFontSize`
+  (`lib/tiptap/fontSizeExtension.ts`), senão `12pt` era lido como px e virava 9pt.
+  **(4)** Nó novo nasce **válido**: `buildImageNode("")` usa `IMAGE_PLACEHOLDER_SRC` (PNG 1x1) e
+  os NodeViews de math usam `useLatexDraft` — o campo continua apagável, mas `latex:""` nunca
+  chega ao documento.
+- **Falha de captura é VISÍVEL, nunca silenciosa.** `tryProseMirrorToCanonical` devolve
+  `{ok:false, reason}`; `useCanonicalEditor` aceita `onCaptureFailure(reason|null)` (dispara só na
+  transição) e o wizard troca o "Salvo" por **"Alterações não estão sendo salvas"** (`role=status`,
+  `aria-live`, `title` com o motivo) + `console.warn`. Antes, congelado e salvo eram
+  indistinguíveis na tela — que é o que tornava o B8 caro.
+- **Export Word é lossy POR CONTRATO, e avisa antes de baixar** (`export/exportDocx.ts`). O PDF é
+  a referência de fidelidade; o `.docx` espelha a apresentação do PDF (`PdfAnswer`/`PdfLeafBlocks`/
+  `PdfQuestion`) — mesmo conteúdo, mesma ordem, **gabarito igualmente oculto**: marcadores vazios,
+  `ordering` na ordem autoral (ordenar por `position` **seria** o gabarito) e `fillBlank` sem bloco
+  de resposta (as lacunas vivem inline no enunciado — é paridade deliberada, **não** um mapper
+  faltando). O que não sobrevive vira aviso de `docxExportWarnings` num diálogo **antes** do
+  download (imagem não é embutida → marcação `[Imagem: alt]`; math sai como LaTeX; fonte de
+  acessibilidade pode não existir na máquina de quem abre). Nunca faça o Word "dar sucesso" sobre
+  perda silenciosa — era esse o bug. Fonte do Word sai de `fontFamilyToDocx` (mesmo ponto único de
+  `fontFamilyToCss`/`ToPdf`), e `downloadDocx` recebe **`pageStyle`** (sem isso a fonte de
+  acessibilidade não chega ao arquivo). Bloco/kind novo sem mapper quebra o teste de paridade em
+  `exportDocx.test.ts`.
+- **O editor precisa ressemear quando o documento muda por fora** (`useCanonicalEditor`): semear
+  uma vez só fazia o "Recuperar" ser no-op visual — a folha seguia com o doc antigo e a 1ª tecla
+  re-emitia ele, sobrescrevendo o recuperado. A guarda contra loop é o `lastDocRef` (o doc que o
+  próprio editor emitiu volta igual e não ressemeia).
+- **A linha aberta no editor não se refetcha** (`useAdaptation`: `staleTime: Infinity`,
+  `refetchOnWindowFocus/OnMount: false`) e `EditAdaptationPage` usa `key={row.id}` — **sem** o
+  `updated_at`. Como todo autosave bumpa o `updated_at`, a key antiga remontava o wizard no meio da
+  edição (perdia cursor, scroll e passo, voltando pro Revisar) a cada refetch.
+- 1ª adaptação grátis: flag **`profiles.free_adaptation_used`**; só depois debita. A flag é
+  **reivindicada antes** da chamada de IA (UPDATE atômico `… WHERE free_adaptation_used = false`,
+  pra fechar a corrida de duplo-grátis) e **devolvida em qualquer falha** — senão uma geração
+  que dá timeout queima o grátis do usuário novo pra sempre.
+- **Cobrança do Adaptar é por RESERVA, não por débito solto** (migration
+  `20260723140633_credit_reservations`): `adapt-activity` chama **`open_adapt_reservation`**
+  (reserva + free-first/débito **na mesma transação**), e só existem duas saídas —
+  `settle_credit_reservation` logo antes do 200, ou `reverse_credit_reservation` em qualquer
+  falha. O **`id` da reserva é o `request_id` que o cliente manda** (`StepGenerate` gera um
+  `crypto.randomUUID()` por tentativa): é a chave de idempotência, então replay → **409**, não
+  cobrança dupla. Reserva que fica `open` = isolate morreu no meio → o job
+  **`reconcile_stale_credit_reservations()`** devolve crédito/grátis (agendado por pg_cron
+  quando a extensão existe; senão roda à mão). Nunca debite direto no fluxo Adaptar — o débito
+  sem reserva é justamente o bug que isso corrige. Cobertura: pgTAP `credit_reservations.test.sql`
+  + `free_adaptation_claim.test.sql`; decisões puras em `_shared/creditReservation.ts`.
+- **Toda RPC de dinheiro passa por `runCreditRpc` (`_shared/credits.ts`)**: supabase-js
+  **resolve** (não rejeita) em erro de banco, então `await client.rpc("grant_credits", …)` sem
+  ler `{ error }` parece sucesso — o try/catch do refund nunca dispara, o `onError` vira código
+  morto e o usuário perde o crédito pago sem um log sequer. Mesma armadilha em `.insert()`
+  (ver `logAiUsage`, que checa o `error` do insert).
 - **Escrita de dinheiro é só service_role** (migration `20260722000001_harden_credit_paywall`): `deduct_credits`/`grant_credits` têm `REVOKE EXECUTE` de anon/authenticated (só edge fns via service_role chamam) e as colunas `credit_balance`/`free_adaptation_used`/`free_extraction_used` têm o trigger `prevent_credit_self_mutation` que barra UPDATE por JWT authenticated/anon. O cliente **nunca** escreve saldo/flags direto — sempre via edge function. Alterou essas RPCs? Use **`CREATE OR REPLACE`** (nunca `DROP`+`CREATE`, reabre o EXECUTE p/ PUBLIC). Cobertura: `credit_paywall_guard.test.sql`.
 - Edge function importa o pacote canônico com **extensão `.ts` explícita** (Vite resolve sem, Deno não).
 - **Custo de IA** (`ai_usage_logs`/`ai_model_pricing`, alimenta o "Gasto (IA)" do Admin): pricing é chaveado pelo id **canônico** (`google/gemini-2.5-pro`), mas as edge functions trabalham com o nome **resolvido** pela `MODEL_MAP` (`gemini-2.5-pro`). `logAiUsage` canonicaliza via `toCanonicalModel` (`_shared/aiConfig.ts`) antes de precificar e gravar — nunca contorne isso logando direto na tabela, senão `cost_total` sai 0.

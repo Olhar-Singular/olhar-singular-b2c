@@ -1,3 +1,4 @@
+import { StrictMode } from "react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, within, waitFor, act } from "@testing-library/react";
 import { renderWithProviders } from "@/test/helpers";
@@ -28,7 +29,8 @@ vi.mock("@/lib/adaptation/persistence/draftMirror");
 
 const mockDraftStatus = { value: "idle" as string };
 const mockCurrentUpdatedAt = { value: "2026-01-01T00:00:00Z" as string | null };
-const mockFlush = vi.fn().mockResolvedValue("2026-01-01T00:00:00Z");
+const mockFlush = vi.fn().mockResolvedValue({ status: "saved", updatedAt: "2026-01-01T00:00:00Z" });
+const mockSyncUpdatedAt = vi.fn();
 // Captures the latest props the wizard passes into the hook + the onConflict cb.
 const draftHookCalls: Array<{
   draftId: string | null;
@@ -51,6 +53,7 @@ vi.mock("@/hooks/useAdaptationDraft", () => ({
       flush: mockFlush,
       restoreFromMirror: vi.fn().mockResolvedValue(null),
       currentUpdatedAt: mockCurrentUpdatedAt.value,
+      syncUpdatedAt: mockSyncUpdatedAt,
     };
   },
 }));
@@ -110,13 +113,23 @@ vi.mock("./steps/barriers/StepBarrierSelection", () => ({
   ),
 }));
 
+// The SERVER creates the adaptations row now (A7) and hands its identity back
+// with the document; the wizard adopts it instead of inserting one. A counter
+// gives each generation a distinct row, so "Nova adaptação" can be told apart
+// from the draft that preceded it.
+let generationCount = 0;
+const serverRow = (n: number) => ({
+  id: `srv-${n}`,
+  updatedAt: `2026-0${n}-01T00:00:00Z`,
+});
+
 vi.mock("./steps/generate/StepGenerate", () => ({
   StepGenerate: ({
     onResult,
     onNext,
     onLoadingChange,
   }: {
-    onResult: (r: AdaptationResult) => void;
+    onResult: (r: AdaptationResult, row: { id: string; updatedAt: string }) => void;
     onNext: () => void;
     onLoadingChange?: (loading: boolean) => void;
   }) => (
@@ -131,7 +144,7 @@ vi.mock("./steps/generate/StepGenerate", () => ({
         data-testid="do-generate"
         onClick={() => {
           onLoadingChange?.(false);
-          onResult(makeResult());
+          onResult(makeResult(), serverRow(++generationCount));
           onNext();
         }}
       >
@@ -143,7 +156,7 @@ vi.mock("./steps/generate/StepGenerate", () => ({
       <button
         data-testid="do-generate-no-lc"
         onClick={() => {
-          onResult(makeResult());
+          onResult(makeResult(), serverRow(++generationCount));
           onNext();
         }}
       >
@@ -166,6 +179,7 @@ vi.mock("./steps/review/StepReview", () => ({
     onRegenerate,
     onNext,
     onPrev,
+    onCaptureFailure,
   }: {
     document: CanonicalDocument;
     pageStyle?: unknown;
@@ -174,6 +188,7 @@ vi.mock("./steps/review/StepReview", () => ({
     onRegenerate: () => void;
     onNext: () => void;
     onPrev: () => void;
+    onCaptureFailure?: (reason: string | null) => void;
   }) => (
     <div>
       <pre data-testid="review-doc">{JSON.stringify(document)}</pre>
@@ -192,6 +207,15 @@ vi.mock("./steps/review/StepReview", () => ({
       <button data-testid="set-pagestyle" onClick={() => onPageStyleChange({ fontFamily: "lexend", fontSize: 14 })}>
         Aparência
       </button>
+      <button
+        data-testid="break-capture"
+        onClick={() => onCaptureFailure?.("blocks.0.src: String must contain at least 1 character(s)")}
+      >
+        quebrar captura
+      </button>
+      <button data-testid="restore-capture" onClick={() => onCaptureFailure?.(null)}>
+        restaurar captura
+      </button>
       <button onClick={onRegenerate}>Regerar</button>
       <button aria-label="Voltar" onClick={onPrev}>Voltar</button>
       <button aria-label="Avançar para exportação" onClick={onNext}>Exportar</button>
@@ -208,6 +232,16 @@ vi.mock("./render/CanonicalRenderer", () => ({
 
 // --- helpers ----------------------------------------------------------------
 
+/** The draftId the wizard last handed to the autosave hook. */
+function adoptedDraftId() {
+  return draftHookCalls[draftHookCalls.length - 1]?.draftId;
+}
+
+/** The initialUpdatedAt the wizard last handed to the autosave hook. */
+function adoptedUpdatedAt() {
+  return draftHookCalls[draftHookCalls.length - 1]?.initialUpdatedAt;
+}
+
 function advanceToReview() {
   fireEvent.click(screen.getByTestId("pick-type"));
   fireEvent.click(screen.getByTestId("input-next"));
@@ -220,8 +254,8 @@ beforeEach(() => {
   draftHookCalls.length = 0;
   mockDraftStatus.value = "idle";
   mockCurrentUpdatedAt.value = "2026-01-01T00:00:00Z";
-  mockFlush.mockResolvedValue("2026-01-01T00:00:00Z");
-  vi.mocked(repo.saveDraft).mockResolvedValue(DRAFT_ROW);
+  mockFlush.mockResolvedValue({ status: "saved", updatedAt: "2026-01-01T00:00:00Z" });
+  generationCount = 0;
   vi.mocked(repo.getAdaptation).mockResolvedValue(DRAFT_ROW);
   vi.mocked(mirror.readMirror).mockResolvedValue(null);
   vi.mocked(mirror.clearMirror).mockResolvedValue(undefined);
@@ -364,28 +398,21 @@ describe("CanonicalAdaptationWizard", () => {
 
   // --- M6 persistence wiring -------------------------------------------------
 
-  it("creates a draft on first generation", async () => {
+  it("adopts the row the SERVER created on first generation (A7)", async () => {
+    // The wizard no longer inserts anything: by the time the document reaches
+    // it, the row already exists. It just adopts its identity so autosave has
+    // somewhere to write.
     renderWithProviders(<CanonicalAdaptationWizard />);
     advanceToReview();
-    await waitFor(() => expect(repo.saveDraft).toHaveBeenCalledTimes(1));
-    expect(repo.saveDraft).toHaveBeenCalledWith(
-      expect.objectContaining({ user_id: "u1", activity_type: "exercício" }),
-    );
-  });
-
-  it("toasts when draft creation fails", async () => {
-    vi.mocked(repo.saveDraft).mockRejectedValue(new Error("db down"));
-    const { toast } = await import("sonner");
-    renderWithProviders(<CanonicalAdaptationWizard />);
-    advanceToReview();
-    await waitFor(() => expect(toast.error).toHaveBeenCalled());
+    await waitFor(() => expect(adoptedDraftId()).toBe("srv-1"));
+    expect(adoptedUpdatedAt()).toBe("2026-01-01T00:00:00Z");
   });
 
   it("shows the autosave status indicator once a draft exists", async () => {
     mockDraftStatus.value = "saving";
     renderWithProviders(<CanonicalAdaptationWizard />);
     advanceToReview();
-    await waitFor(() => expect(repo.saveDraft).toHaveBeenCalled());
+    await waitFor(() => expect(adoptedDraftId()).toBe("srv-1"));
     expect(await screen.findByRole("status")).toHaveTextContent(/Salvando/i);
   });
 
@@ -393,12 +420,12 @@ describe("CanonicalAdaptationWizard", () => {
     const { toast } = await import("sonner");
     renderWithProviders(<CanonicalAdaptationWizard />);
     advanceToReview();
-    await waitFor(() => expect(repo.saveDraft).toHaveBeenCalled());
+    await waitFor(() => expect(adoptedDraftId()).toBe("srv-1"));
     fireEvent.click(screen.getByRole("button", { name: /Avançar para exportação/i }));
     fireEvent.click(screen.getByRole("button", { name: /Salvar/i }));
     await waitFor(() =>
       expect(mockMarkReady).toHaveBeenCalledWith({
-        id: "draft-1",
+        id: "srv-1",
         expectedUpdatedAt: "2026-01-01T00:00:00Z",
       }),
     );
@@ -410,30 +437,30 @@ describe("CanonicalAdaptationWizard", () => {
   it("Salvar uses the freshest updated_at returned by flush for the guard", async () => {
     // flush advanced the row (autosave landed) → its returned token, not the
     // render-time currentUpdatedAt, must be the one markReady receives.
-    mockFlush.mockResolvedValue("2026-09-09T00:00:00Z");
+    mockFlush.mockResolvedValue({ status: "saved", updatedAt: "2026-09-09T00:00:00Z" });
     renderWithProviders(<CanonicalAdaptationWizard />);
     advanceToReview();
-    await waitFor(() => expect(repo.saveDraft).toHaveBeenCalled());
+    await waitFor(() => expect(adoptedDraftId()).toBe("srv-1"));
     fireEvent.click(screen.getByRole("button", { name: /Avançar para exportação/i }));
     fireEvent.click(screen.getByRole("button", { name: /Salvar/i }));
     await waitFor(() =>
       expect(mockMarkReady).toHaveBeenCalledWith({
-        id: "draft-1",
+        id: "srv-1",
         expectedUpdatedAt: "2026-09-09T00:00:00Z",
       }),
     );
   });
 
-  it("Salvar falls back to currentUpdatedAt when flush returns null", async () => {
-    mockFlush.mockResolvedValue(null);
+  it("Salvar falls back to currentUpdatedAt when the flush had nothing to save", async () => {
+    mockFlush.mockResolvedValue({ status: "saved", updatedAt: null });
     renderWithProviders(<CanonicalAdaptationWizard />);
     advanceToReview();
-    await waitFor(() => expect(repo.saveDraft).toHaveBeenCalled());
+    await waitFor(() => expect(adoptedDraftId()).toBe("srv-1"));
     fireEvent.click(screen.getByRole("button", { name: /Avançar para exportação/i }));
     fireEvent.click(screen.getByRole("button", { name: /Salvar/i }));
     await waitFor(() =>
       expect(mockMarkReady).toHaveBeenCalledWith({
-        id: "draft-1",
+        id: "srv-1",
         expectedUpdatedAt: "2026-01-01T00:00:00Z",
       }),
     );
@@ -444,7 +471,7 @@ describe("CanonicalAdaptationWizard", () => {
     mockMarkReady.mockResolvedValue({ ok: false, conflict: true });
     renderWithProviders(<CanonicalAdaptationWizard />);
     advanceToReview();
-    await waitFor(() => expect(repo.saveDraft).toHaveBeenCalled());
+    await waitFor(() => expect(adoptedDraftId()).toBe("srv-1"));
     fireEvent.click(screen.getByRole("button", { name: /Avançar para exportação/i }));
     fireEvent.click(screen.getByRole("button", { name: /Salvar/i }));
     await waitFor(() => expect(mockMarkReady).toHaveBeenCalled());
@@ -456,18 +483,21 @@ describe("CanonicalAdaptationWizard", () => {
     expect(toast.success).not.toHaveBeenCalled();
   });
 
-  it("does not create a second draft when regenerating", async () => {
+  it("adopts the NEW server row when regenerating", async () => {
+    // A regeneration is a fresh paid request, so the server writes a fresh row.
+    // Staying bound to the old one would autosave the new document over the
+    // previous adaptation — and against its stale token.
     renderWithProviders(<CanonicalAdaptationWizard />);
     advanceToReview();
-    await waitFor(() => expect(repo.saveDraft).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(adoptedDraftId()).toBe("srv-1"));
 
-    // regenerate, then generate again — draftId already exists, so no new draft
     fireEvent.click(screen.getByRole("button", { name: /Regerar/i }));
     const dialog = screen.getByRole("alertdialog");
     fireEvent.click(within(dialog).getByRole("button", { name: /^Regerar$/i }));
     fireEvent.click(screen.getByTestId("do-generate"));
     await waitFor(() => expect(screen.getByTestId("edit-content")).toHaveTextContent("gerado"));
-    expect(repo.saveDraft).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect(adoptedDraftId()).toBe("srv-2"));
+    expect(adoptedUpdatedAt()).toBe("2026-02-01T00:00:00Z");
   });
 
   // --- C1-a crash-mirror restore -------------------------------------------
@@ -532,10 +562,12 @@ describe("CanonicalAdaptationWizard", () => {
     expect(screen.getByTestId("edit-content")).toHaveTextContent("gerado");
   });
 
-  it("does not prompt and clears an older mirror (server row is newer)", async () => {
+  it("does not prompt and clears a mirror that matches the loaded row", async () => {
+    // Nothing to recover: the row already holds exactly what the mirror does,
+    // so the leftover is noise and clearing it is safe.
     vi.mocked(mirror.readMirror).mockResolvedValue({
       draftId: "edit-1",
-      result: mirrorResult("OLD"),
+      result: makeResult(),
       savedAt: Date.parse("2025-01-01T00:00:00Z"), // older than the row
     });
     renderWithProviders(<CanonicalAdaptationWizard editMode={editSeed()} />);
@@ -572,13 +604,13 @@ describe("CanonicalAdaptationWizard", () => {
     // Create flow: no editMode, draft is created on first generation. Mirror
     // appears keyed by the new draft id → any surviving mirror is unsaved.
     vi.mocked(mirror.readMirror).mockResolvedValue({
-      draftId: "draft-1",
+      draftId: "srv-1",
       result: mirrorResult("CREATE-RECOVER"),
       savedAt: 1,
     });
     renderWithProviders(<CanonicalAdaptationWizard />);
     advanceToReview();
-    await waitFor(() => expect(repo.saveDraft).toHaveBeenCalled());
+    await waitFor(() => expect(adoptedDraftId()).toBe("srv-1"));
     const dialog = await screen.findByRole("alertdialog");
     fireEvent.click(within(dialog).getByRole("button", { name: /Recuperar/i }));
     await waitFor(() =>
@@ -606,8 +638,8 @@ describe("CanonicalAdaptationWizard", () => {
     );
     // Lands directly on the content step with the seeded document.
     expect(screen.getByTestId("edit-content")).toHaveTextContent("gerado");
-    // No new draft is created in edit mode.
-    expect(repo.saveDraft).not.toHaveBeenCalled();
+    // Edit mode adopts the row it was seeded with.
+    expect(adoptedDraftId()).toBe("edit-1");
   });
 
   it("passes draftId + updated_at into the autosave hook from STATE after generation", async () => {
@@ -615,25 +647,25 @@ describe("CanonicalAdaptationWizard", () => {
     // Before generation the hook is wired with a null draft.
     expect(draftHookCalls[0]).toMatchObject({ draftId: null, initialUpdatedAt: null });
     advanceToReview();
-    await waitFor(() => expect(repo.saveDraft).toHaveBeenCalled());
+    await waitFor(() => expect(adoptedDraftId()).toBe("srv-1"));
     // After generation the latest hook call carries the row's id + updated_at,
     // proving the values propagated as props (state, not a ref).
     await waitFor(() => {
       const last = draftHookCalls[draftHookCalls.length - 1];
-      expect(last.draftId).toBe(DRAFT_ROW.id);
-      expect(last.initialUpdatedAt).toBe(DRAFT_ROW.updated_at);
+      expect(last.draftId).toBe("srv-1");
+      expect(last.initialUpdatedAt).toBe("2026-01-01T00:00:00Z");
     });
   });
 
   it("Salvar flushes the pending autosave before marking ready", async () => {
     renderWithProviders(<CanonicalAdaptationWizard />);
     advanceToReview();
-    await waitFor(() => expect(repo.saveDraft).toHaveBeenCalled());
+    await waitFor(() => expect(adoptedDraftId()).toBe("srv-1"));
     fireEvent.click(screen.getByRole("button", { name: /Avançar para exportação/i }));
     fireEvent.click(screen.getByRole("button", { name: /Salvar/i }));
     await waitFor(() =>
       expect(mockMarkReady).toHaveBeenCalledWith(
-        expect.objectContaining({ id: "draft-1" }),
+        expect.objectContaining({ id: "srv-1" }),
       ),
     );
     // flush must have run, and before markReady.
@@ -643,11 +675,122 @@ describe("CanonicalAdaptationWizard", () => {
     );
   });
 
+  // --- B10: "Nova adaptação" must not inherit the previous draft's token -----
+
+  it("Nova adaptação clears the draft, then adopts the next server row cleanly", async () => {
+    // The autosave token is per-row. Restarting used to leave the wizard
+    // handing the hook a new id alongside the OLD updated_at, so the first
+    // autosave of the new adaptation conflicted and reloaded the page.
+    renderWithProviders(<CanonicalAdaptationWizard />);
+    advanceToReview();
+    await waitFor(() => expect(adoptedDraftId()).toBe("srv-1"));
+    fireEvent.click(screen.getByRole("button", { name: /Avançar para exportação/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Nova adaptação/i }));
+
+    // Back at step 1 with no draft at all — nothing of the old row survives.
+    await waitFor(() => expect(adoptedDraftId()).toBeNull());
+    expect(adoptedUpdatedAt()).toBeNull();
+
+    advanceToReview();
+    await waitFor(() => expect(adoptedDraftId()).toBe("srv-2"));
+    expect(adoptedUpdatedAt()).toBe("2026-02-01T00:00:00Z");
+  });
+
+  // --- B11: a failed flush must not be reported as "Salvo" -------------------
+
+  it("Salvar does NOT mark the row ready when the flush failed", async () => {
+    // The chain this breaks: flush fails (the edit lives only in the crash
+    // mirror) → markReady succeeds anyway → the row is 'ready' without the
+    // edit, and its fresh updated_at makes the mirror look stale, so the next
+    // open deletes the only surviving copy.
+    const { toast } = await import("sonner");
+    mockFlush.mockResolvedValue({ status: "failed", reason: "error" });
+    renderWithProviders(<CanonicalAdaptationWizard />);
+    advanceToReview();
+    await waitFor(() => expect(adoptedDraftId()).toBe("srv-1"));
+    fireEvent.click(screen.getByRole("button", { name: /Avançar para exportação/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Salvar/i }));
+
+    await waitFor(() => expect(toast.error).toHaveBeenCalled());
+    expect(mockMarkReady).not.toHaveBeenCalled();
+    expect(toast.success).not.toHaveBeenCalled();
+    // Still "unsaved" as far as the navigation guard is concerned.
+    expect(mockNavGuard).toHaveBeenLastCalledWith(true);
+  });
+
+  it("Salvar stays silent on a flush CONFLICT (the hook already warned + reloaded)", async () => {
+    const { toast } = await import("sonner");
+    mockFlush.mockResolvedValue({ status: "failed", reason: "conflict" });
+    renderWithProviders(<CanonicalAdaptationWizard />);
+    advanceToReview();
+    await waitFor(() => expect(adoptedDraftId()).toBe("srv-1"));
+    fireEvent.click(screen.getByRole("button", { name: /Avançar para exportação/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Salvar/i }));
+
+    await waitFor(() => expect(mockFlush).toHaveBeenCalled());
+    expect(mockMarkReady).not.toHaveBeenCalled();
+    expect(toast.error).not.toHaveBeenCalled();
+    expect(toast.success).not.toHaveBeenCalled();
+  });
+
+  // --- B12: markReady advances the row, so the token must follow -------------
+
+  it("Salvar feeds the updated_at from markReady back into the autosave token", async () => {
+    // markReady flips status and the trigger stamps a new updated_at. Dropping
+    // it meant the very next keystroke autosaved against a token the server had
+    // moved past → conflict → navigate(0), losing the edit that caused it.
+    mockMarkReady.mockResolvedValue({ ok: true, updatedAt: "2026-12-31T00:00:00Z" });
+    renderWithProviders(<CanonicalAdaptationWizard />);
+    advanceToReview();
+    await waitFor(() => expect(adoptedDraftId()).toBe("srv-1"));
+    fireEvent.click(screen.getByRole("button", { name: /Avançar para exportação/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Salvar/i }));
+
+    await waitFor(() => expect(mockSyncUpdatedAt).toHaveBeenCalledWith("2026-12-31T00:00:00Z"));
+  });
+
+  // --- B11 (second half): the mirror survives a content divergence -----------
+
+  it("still offers restore under StrictMode's double-invoked effects", async () => {
+    // The app runs in <StrictMode>, which mounts effects twice. The mirror
+    // check latched "already checked" BEFORE its async read resolved, so run 1
+    // was cancelled by the cleanup and run 2 short-circuited on the latch — the
+    // recovery prompt never appeared in the real browser at all, no matter what
+    // the mirror held. Only the latch AFTER a check actually decides.
+    vi.mocked(mirror.readMirror).mockResolvedValue({
+      draftId: "edit-1",
+      result: mirrorResult("SOBREVIVEU"),
+      savedAt: Date.parse("2026-02-01T00:00:00Z"),
+    });
+    renderWithProviders(
+      <StrictMode>
+        <CanonicalAdaptationWizard editMode={editSeed()} />
+      </StrictMode>,
+    );
+    const dialog = await screen.findByRole("alertdialog");
+    expect(within(dialog).getByText(/Recuperar alterações não salvas/i)).toBeInTheDocument();
+  });
+
+  it("offers restore when the mirror DIVERGES from the loaded row, even if older", async () => {
+    // A failed autosave followed by a successful "Salvar" leaves the server row
+    // newer than the mirror — but without the edit. Timestamps alone said
+    // "stale, delete it"; the content says it is the only copy.
+    vi.mocked(mirror.readMirror).mockResolvedValue({
+      draftId: "edit-1",
+      result: mirrorResult("NUNCA SUBIU"),
+      savedAt: Date.parse("2025-01-01T00:00:00Z"), // OLDER than the row
+    });
+    renderWithProviders(<CanonicalAdaptationWizard editMode={editSeed()} />);
+    const dialog = await screen.findByRole("alertdialog");
+    expect(within(dialog).getByText(/Recuperar alterações não salvas/i)).toBeInTheDocument();
+    expect(mirror.clearMirror).not.toHaveBeenCalled();
+  });
+
   it("onConflict surfaces a toast and reloads via navigate(0)", async () => {
     const { toast } = await import("sonner");
     renderWithProviders(<CanonicalAdaptationWizard />);
     advanceToReview();
-    await waitFor(() => expect(repo.saveDraft).toHaveBeenCalled());
+    await waitFor(() => expect(adoptedDraftId()).toBe("srv-1"));
     const onConflict = draftHookCalls[draftHookCalls.length - 1].onConflict;
     expect(onConflict).toBeTypeOf("function");
     onConflict!();
@@ -704,7 +847,7 @@ describe("CanonicalAdaptationWizard — navigation guard", () => {
   it("calls useNavigationGuard with false after saving (isSaved=true)", async () => {
     renderWithProviders(<CanonicalAdaptationWizard />);
     advanceToReview();
-    await waitFor(() => expect(repo.saveDraft).toHaveBeenCalled());
+    await waitFor(() => expect(adoptedDraftId()).toBe("srv-1"));
     fireEvent.click(screen.getByRole("button", { name: /Avançar para exportação/i }));
     fireEvent.click(screen.getByRole("button", { name: /Salvar/i }));
     await waitFor(() => expect(mockMarkReady).toHaveBeenCalled());
@@ -794,5 +937,48 @@ describe("CanonicalAdaptationWizard — navigation guard", () => {
     advanceToReview();
     fireEvent.keyDown(document, { key: "Escape" });
     expect(reset).toHaveBeenCalled();
+  });
+
+  /**
+   * B8 · Frente B — while the editor cannot capture edits, nothing is being
+   * persisted. The status line must SAY so instead of going on showing "Salvo",
+   * which is what let people type for minutes into a sheet that was frozen.
+   */
+  describe("autosave frozen warning", () => {
+    it("replaces the save status with a warning while capture is broken", () => {
+      renderWithProviders(<CanonicalAdaptationWizard />);
+      advanceToReview();
+
+      fireEvent.click(screen.getByTestId("break-capture"));
+
+      const warning = screen.getByTestId("capture-failure");
+      expect(warning).toBeInTheDocument();
+      expect(warning).toHaveTextContent(/não estão sendo salvas/i);
+      // The reassuring label must be gone — not sitting next to the warning.
+      expect(screen.queryByText("Salvo")).not.toBeInTheDocument();
+    });
+
+    it("announces the warning to assistive tech", () => {
+      renderWithProviders(<CanonicalAdaptationWizard />);
+      advanceToReview();
+      fireEvent.click(screen.getByTestId("break-capture"));
+
+      const warning = screen.getByTestId("capture-failure");
+      expect(warning).toHaveAttribute("role", "status");
+      expect(warning).toHaveAttribute("aria-live", "polite");
+      // The underlying reason stays available for support/debugging.
+      expect(warning).toHaveAttribute("title", expect.stringContaining("src"));
+    });
+
+    it("clears the warning once the editor can capture again", () => {
+      renderWithProviders(<CanonicalAdaptationWizard />);
+      advanceToReview();
+      fireEvent.click(screen.getByTestId("break-capture"));
+      expect(screen.getByTestId("capture-failure")).toBeInTheDocument();
+
+      fireEvent.click(screen.getByTestId("restore-capture"));
+
+      expect(screen.queryByTestId("capture-failure")).not.toBeInTheDocument();
+    });
   });
 });

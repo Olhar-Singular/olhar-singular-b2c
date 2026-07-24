@@ -1,9 +1,11 @@
 import { describe, it, expect } from "vitest";
-import { Node as PMNode, DOMParser as DOMParser2 } from "@tiptap/pm/model";
-import { getEditorSchema } from "./getEditorSchema";
-import { canonicalToProseMirror } from "./fromCanonical";
+import { Editor } from "@tiptap/core";
+import { Node as PMNode, DOMParser as DOMParser2, DOMSerializer } from "@tiptap/pm/model";
+import { getEditorSchema, buildExtensions } from "./getEditorSchema";
+import { canonicalToProseMirror, type PMNode as PMNodeJSON } from "./fromCanonical";
 import { proseMirrorToCanonical, tryProseMirrorToCanonical } from "./toCanonical";
 import { richDocument } from "./__fixtures__/richDocument";
+import { UniqueId } from "./uniqueId";
 import { validateDocument } from "@/lib/adaptation/canonical/validate";
 import type { CanonicalDocument } from "@/lib/adaptation/canonical/schema";
 
@@ -20,6 +22,33 @@ function pmRoundTrip(doc: CanonicalDocument) {
 
 const uid = (n: number): string =>
   `00000000-0000-4000-8000-${String(n).padStart(12, "0")}`;
+
+/** A minimal one-paragraph document to type/paste into. */
+const oneParagraph: CanonicalDocument = {
+  schemaVersion: 1,
+  blocks: [
+    { id: uid(300), type: "paragraph", content: [{ type: "text", text: "linha um" }] },
+  ],
+};
+
+/**
+ * Drive the REAL editor (canonical extensions + UniqueId, no React NodeViews)
+ * over `oneParagraph` and return the resulting PM JSON. This is the only way to
+ * exercise paste and keymaps the way the browser does — the mapper alone can't.
+ */
+function withEditor(act: (editor: Editor) => void): PMNodeJSON {
+  const editor = new Editor({
+    extensions: [...buildExtensions(), UniqueId],
+    content: canonicalToProseMirror(oneParagraph) as never,
+  });
+  try {
+    editor.commands.focus("end");
+    act(editor);
+    return editor.getJSON() as PMNodeJSON;
+  } finally {
+    editor.destroy();
+  }
+}
 
 describe("canonical <-> ProseMirror mapping", () => {
   describe("lossless round-trip (canonical -> PM -> canonical)", () => {
@@ -340,6 +369,241 @@ describe("canonical <-> ProseMirror mapping", () => {
       };
       expect(() => tryProseMirrorToCanonical(unmappable)).not.toThrow();
       expect(tryProseMirrorToCanonical(unmappable).ok).toBe(false);
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // B8 · gatilho G1 — Shift+Enter (hardBreak)
+  // -------------------------------------------------------------------------
+  //
+  // hardBreak used to survive in StarterKit while `pmToInline` had no branch for
+  // it, so a Shift+Enter degraded into `{ type: "text", text: "" }`. That run
+  // VALIDATED (InlineText.text had no `.min(1)`), so the autosave happily
+  // persisted it — and then `Node.fromJSON` refused to reload it ("Empty text
+  // nodes are not allowed"), so reopening the adaptation showed a blank sheet.
+  //
+  // Two guards, at two levels:
+  //  1. the editor never produces an inline break (hardBreak is out of the
+  //     schema; Shift+Enter splits into a representable paragraph);
+  //  2. the canonical schema itself rejects the empty run, so ANY future path
+  //     that produces one fails the round-trip loudly instead of persisting a
+  //     document that cannot be reopened.
+  describe("Shift+Enter never freezes the round-trip (B8 · G1)", () => {
+    it("exposes no hardBreak node — the canonical model cannot represent an inline break", () => {
+      expect(schema.nodes.hardBreak).toBeUndefined();
+    });
+
+    it("maps Shift+Enter to a NEW PARAGRAPH whose document still round-trips AND reloads", () => {
+      const json = withEditor((editor) => {
+        editor.commands.keyboardShortcut("Shift-Enter");
+      });
+
+      const result = tryProseMirrorToCanonical(json);
+      // The autosave must keep capturing — this is the freeze itself.
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+
+      // The break became a second, representable paragraph with a fresh id.
+      expect(result.value.blocks).toHaveLength(2);
+      expect(result.value.blocks.every((b) => b.type === "paragraph")).toBe(true);
+      expect(result.value.blocks[0].id).not.toBe(result.value.blocks[1].id);
+
+      // And the persisted document REOPENS — the half that used to blow up.
+      expect(() =>
+        PMNode.fromJSON(schema, canonicalToProseMirror(result.value)),
+      ).not.toThrow();
+    });
+
+    it("rejects an empty text run: what cannot be reloaded must not validate", () => {
+      const withEmptyRun = {
+        type: "doc",
+        content: [
+          {
+            type: "paragraph",
+            attrs: { id: uid(301) },
+            content: [
+              { type: "text", text: "linha um" },
+              // exactly what a stray hardBreak used to map to
+              { type: "text", text: "" },
+              { type: "text", text: "linha dois" },
+            ],
+          },
+        ],
+      };
+
+      // Proof this state is genuinely unreloadable — accepting it is a trap.
+      expect(() => PMNode.fromJSON(schema, withEmptyRun)).toThrow();
+      expect(tryProseMirrorToCanonical(withEmptyRun).ok).toBe(false);
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // B8 · gatilho G2 — copiar/colar (Ctrl+C / Ctrl+V)
+  // -------------------------------------------------------------------------
+  //
+  // ProseMirror's clipboard does NOT carry node JSON: `serializeForClipboard`
+  // writes HTML (the `data-pm-slice` attribute only records slice depth), and
+  // the paste re-PARSES that HTML. So every attr declared `rendered: false`
+  // — `answer`, `instruction`, `enunciado`, `style`, `items`, `caption` — was
+  // simply gone on the way back, and a pasted question came back with
+  // `answer: null`. That is unrepresentable in the canonical model, so the
+  // round-trip failed on EVERY keystroke for as long as the pasted copy existed
+  // (and QuestionNodeView crashed reading `answer.kind`).
+  //
+  // Sub-case: attrs that ARE rendered come back as HTML strings, so the image's
+  // numeric `width` returned as "320" and failed `z.number()` the same way.
+  describe("copiar/colar não congela o round-trip (B8 · G2)", () => {
+    /**
+     * Exactly what the clipboard does: serialize the slice to DOM, then parse
+     * that DOM back. Anything lost here is lost on a real Ctrl+C / Ctrl+V.
+     */
+    function clipboardRoundTrip(doc: CanonicalDocument): PMNodeJSON {
+      const node = PMNode.fromJSON(schema, canonicalToProseMirror(doc));
+      const container = document.createElement("div");
+      container.appendChild(
+        DOMSerializer.fromSchema(schema).serializeFragment(node.content),
+      );
+      return DOMParser2.fromSchema(schema).parse(container).toJSON() as PMNodeJSON;
+    }
+
+    it("a pasted document still maps to canonical (no permanent freeze)", () => {
+      const result = tryProseMirrorToCanonical(clipboardRoundTrip(richDocument));
+      expect(result.ok).toBe(true);
+    });
+
+    it("keeps a pasted question's answer, instruction and enunciado", () => {
+      const result = tryProseMirrorToCanonical(clipboardRoundTrip(richDocument));
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+
+      const original = richDocument.blocks.find((b) => b.id === uid(7));
+      const pasted = result.value.blocks.find((b) => b.id === uid(7));
+      expect(pasted).toEqual(original);
+    });
+
+    it("keeps a pasted image's width NUMERIC (HTML attrs come back as strings)", () => {
+      const result = tryProseMirrorToCanonical(clipboardRoundTrip(richDocument));
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+
+      const pasted = result.value.blocks.find((b) => b.id === uid(4));
+      expect(pasted).toEqual(richDocument.blocks.find((b) => b.id === uid(4)));
+    });
+
+    it("keeps a pasted scaffolding's items and a block's per-node style", () => {
+      const result = tryProseMirrorToCanonical(clipboardRoundTrip(richDocument));
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+
+      // items: string[] held as a model-only attr.
+      expect(result.value.blocks.find((b) => b.id === uid(5))).toEqual(
+        richDocument.blocks.find((b) => b.id === uid(5)),
+      );
+      // style: object attr on an ordinary heading (BlockIdStyle globals).
+      expect(result.value.blocks.find((b) => b.id === uid(1))).toEqual(
+        richDocument.blocks.find((b) => b.id === uid(1)),
+      );
+    });
+
+    /**
+     * The JSON now travels through the clipboard, so it can arrive corrupted —
+     * a truncated copy, HTML mangled by an intermediate app, a hand-edited
+     * page. Parsing must degrade, never throw: an exception inside ProseMirror's
+     * DOM parser takes down the whole editor, which is worse than the freeze
+     * this fix was meant to remove.
+     */
+    it("degrades instead of throwing when a model-only attr is not valid JSON", () => {
+      const el = document.createElement("div");
+      el.innerHTML =
+        '<div data-type="question" data-answer="{nao-e-json" data-style="[[">' +
+        "<p>pergunta</p></div>";
+
+      const parsed = () =>
+        DOMParser2.fromSchema(schema).parse(el).toJSON() as PMNodeJSON;
+      expect(parsed).not.toThrow();
+
+      // It falls back to the default (null answer), which the canonical model
+      // rejects — reported as a capture failure, not as a crash.
+      const result = tryProseMirrorToCanonical(parsed());
+      expect(result.ok).toBe(false);
+      expect(result.reason).toBeTruthy();
+    });
+
+    it("ignores a non-numeric width instead of carrying a NaN into the model", () => {
+      const el = document.createElement("div");
+      el.innerHTML =
+        '<img data-type="canonical-image" src="https://example.com/a.png" ' +
+        'alt="fig" width="muito-grande">';
+
+      const parsed = DOMParser2.fromSchema(schema).parse(el).toJSON() as PMNodeJSON;
+      const image = (parsed.content as PMNodeJSON[])[0];
+      expect(image.attrs?.width).toBeNull();
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // B8 · gatilho G3 — colar de fonte externa (Word / Google Docs)
+  // -------------------------------------------------------------------------
+  //
+  // `@tiptap/extension-color` accepts any CSS color, but the canonical model
+  // only accepts the palette — so a paste carrying `color: #ff0000` produced a
+  // document that failed validation on EVERY keystroke, freezing the autosave
+  // for as long as the pasted text survived. The quieter sibling: FontSize
+  // returned the raw declaration, and `toCanonical` reads it as pixels, so a
+  // pasted `12pt` silently became 9pt on the sheet and in the PDF.
+  describe("colar de fonte externa não congela o round-trip (B8 · G3)", () => {
+    /** Find the first text run carrying color/fontSize in a canonical doc. */
+    function styledRun(doc: CanonicalDocument) {
+      for (const block of doc.blocks) {
+        if (block.type !== "paragraph" && block.type !== "heading") continue;
+        const run = block.content.find(
+          (i) => i.type === "text" && (i.color !== undefined || i.fontSize !== undefined),
+        );
+        if (run !== undefined) return run as Extract<typeof run, { type: "text" }>;
+      }
+      return undefined;
+    }
+
+    it("clamps a foreign color into the palette instead of freezing the autosave", () => {
+      const json = withEditor((editor) => {
+        editor.commands.insertContent(
+          '<p><span style="color: #ff0000">urgente</span></p>',
+        );
+      });
+
+      const result = tryProseMirrorToCanonical(json);
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+
+      // The emphasis survives, mapped onto the palette's red.
+      expect(styledRun(result.value)?.color).toBe("#DC2626");
+    });
+
+    it("normalizes a pasted pt font-size instead of silently shrinking it", () => {
+      const json = withEditor((editor) => {
+        editor.commands.insertContent(
+          '<p><span style="font-size: 12pt">enunciado</span></p>',
+        );
+      });
+
+      const result = tryProseMirrorToCanonical(json);
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+
+      // 12pt must come back as 12pt — not as 9pt (12px read as pixels).
+      expect(styledRun(result.value)?.fontSize).toBe(12);
+    });
+
+    it("drops a font-size in a unit it cannot convert rather than inventing one", () => {
+      const json = withEditor((editor) => {
+        editor.commands.insertContent('<p><span style="font-size: 1.5em">x</span></p>');
+      });
+
+      const result = tryProseMirrorToCanonical(json);
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+
+      expect(styledRun(result.value)).toBeUndefined();
     });
   });
 });

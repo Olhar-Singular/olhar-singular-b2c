@@ -33,13 +33,25 @@ export function useAdaptations() {
   });
 }
 
-/** Fetch a single adaptation by id (edit-after-save rehydration). */
+/**
+ * Fetch a single adaptation by id (edit-after-save rehydration).
+ *
+ * Deliberately inert once it has loaded: this row's ONLY writer is the wizard
+ * mounted on top of it, which autosaves every edit. Re-reading it in the
+ * background can therefore never bring news — it can only hand the page a
+ * fresher `updated_at` and disturb a live editing session. `refetchOnMount` is
+ * off for the same reason: coming back to the editor should not re-seed it from
+ * the server behind a still-pending local change.
+ */
 export function useAdaptation(id: string | undefined) {
   const { user } = useAuth();
   return useQuery({
     queryKey: adaptationKeys.detail(id ?? ""),
     queryFn: () => getAdaptation(id!),
     enabled: !!user && !!id,
+    staleTime: Infinity,
+    refetchOnWindowFocus: false,
+    refetchOnMount: false,
   });
 }
 

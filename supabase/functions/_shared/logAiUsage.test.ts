@@ -141,6 +141,25 @@ describe("logAiUsage", () => {
     warn.mockRestore();
   });
 
+  it("reports a failed insert instead of swallowing it", async () => {
+    // supabase-js resolves with `{ error }` on a DB failure — an unchecked
+    // `await admin.from(...).insert(...)` loses the whole usage/cost row silently.
+    insertMock.mockResolvedValue({ error: { message: "null value in column cost_total" } });
+    const err = vi.spyOn(console, "error").mockImplementation(() => {});
+    const { logAiUsage } = await import("./logAiUsage");
+
+    await logAiUsage({
+      user_id: "u1",
+      action_type: "adaptation",
+      model: "google/gemini-2.5-pro",
+      input_tokens: 10,
+      output_tokens: 20,
+    });
+
+    expect(err).toHaveBeenCalledWith("Failed to log AI usage:", expect.anything());
+    err.mockRestore();
+  });
+
   it("logs error to console when overall flow throws", async () => {
     createClientMock.mockImplementation(() => {
       throw new Error("init failed");

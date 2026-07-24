@@ -12,11 +12,14 @@ import { NodeViewWrapper, type NodeViewProps } from "@tiptap/react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { latexToHtml } from "./nodeViewUtils";
+import { useLatexDraft } from "./useLatexDraft";
 
 export function BlockMathNodeView({ node, updateAttributes, editor, deleteNode }: NodeViewProps) {
   const [editing, setEditing] = useState(false);
   const { latex, alt } = node.attrs as { latex: string; alt: string | null };
   const disabled = !editor.isEditable;
+  // An empty latex is unrepresentable — see useLatexDraft.
+  const draft = useLatexDraft(latex, (next) => updateAttributes({ latex: next }));
 
   return (
     <NodeViewWrapper className="group relative my-3" data-testid="blockmath-node" contentEditable={false}>
@@ -42,9 +45,10 @@ export function BlockMathNodeView({ node, updateAttributes, editor, deleteNode }
       {editing && !disabled ? (
         <div className="flex flex-col gap-2 rounded-lg border border-border p-2">
           <Input
-            value={latex}
+            value={draft.value}
             autoFocus
-            onChange={(e) => updateAttributes({ latex: e.target.value })}
+            onChange={(e) => draft.onChange(e.target.value)}
+            onBlur={draft.onBlur}
             placeholder="LaTeX"
             aria-label="Expressão LaTeX"
           />

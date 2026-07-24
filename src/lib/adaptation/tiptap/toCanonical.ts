@@ -11,7 +11,11 @@
  */
 
 import type { PMMark, PMNode } from "./fromCanonical";
-import { validateDocument, safeParseDocument } from "../canonical/validate";
+import {
+  validateDocument,
+  safeParseDocument,
+  type SafeParseFailure,
+} from "../canonical/validate";
 import type {
   Block,
   CanonicalDocument,
@@ -193,8 +197,10 @@ export function proseMirrorToCanonical(pmDocJSON: PMNode): CanonicalDocument {
 }
 
 export type TryToCanonicalResult =
-  | { ok: true; value: CanonicalDocument }
-  | { ok: false };
+  | { ok: true; value: CanonicalDocument; reason?: undefined }
+  // `reason` explains WHY the edit could not be captured. Callers surface it —
+  // a conversion that fails in silence is indistinguishable from a save.
+  | { ok: false; value?: undefined; reason: string };
 
 /**
  * Non-throwing variant of `proseMirrorToCanonical`. Returns `{ ok: false }`
@@ -209,10 +215,13 @@ export function tryProseMirrorToCanonical(pmDocJSON: PMNode): TryToCanonicalResu
   try {
     const blocks = (pmDocJSON.content as PMNode[] | undefined ?? []).map(pmToBlock);
     doc = { schemaVersion: 1 as const, blocks };
-  } catch {
+  } catch (error) {
     // `pmToBlock` threw on an unmappable node type.
-    return { ok: false };
+    return { ok: false, reason: (error as Error).message };
   }
   const parsed = safeParseDocument(doc);
-  return parsed.ok ? { ok: true, value: parsed.value } : { ok: false };
+  if (parsed.ok) return { ok: true, value: parsed.value };
+  // The project compiles with `strictNullChecks: false`, where TS narrows a
+  // union positively but NOT on the negative branch — hence the explicit type.
+  return { ok: false, reason: (parsed as SafeParseFailure).errors.join("; ") };
 }

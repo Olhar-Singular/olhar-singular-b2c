@@ -6,6 +6,8 @@ import {
   isFontFamilyToken,
   fontFamilyToCss,
   fontFamilyToPdf,
+  fontFamilyToDocx,
+  DOCX_NON_STANDARD_FONTS,
 } from "./fontFamily";
 
 describe("fontFamily tokens", () => {
@@ -87,5 +89,34 @@ describe("unknown values pass through unchanged (legacy documents)", () => {
   });
   it("pdf passthrough", () => {
     expect(fontFamilyToPdf("Georgia")).toBe("Georgia");
+  });
+  it("docx passthrough", () => {
+    expect(fontFamilyToDocx("Georgia")).toBe("Georgia");
+  });
+});
+
+/**
+ * O Word não embute fonte: ele resolve pelo nome na máquina de quem abre. Por
+ * isso o mapeamento aponta para nomes que o Word conhece, e as famílias de
+ * acessibilidade ficam marcadas como "pode não existir lá" (o export avisa).
+ */
+describe("fontFamilyToDocx", () => {
+  it.each([
+    ["sans", "Arial"],
+    ["serif", "Times New Roman"],
+    ["mono", "Courier New"],
+    ["atkinson", "Atkinson Hyperlegible"],
+    ["lexend", "Lexend"],
+    ["opendyslexic", "OpenDyslexic"],
+    ["georgia", "Georgia"],
+    ["arial", "Arial"],
+  ])("%s → %s", (token, docx) => {
+    expect(fontFamilyToDocx(token)).toBe(docx);
+  });
+
+  it("marca exatamente as famílias de acessibilidade como não-padrão do Word", () => {
+    expect([...DOCX_NON_STANDARD_FONTS].sort()).toEqual(
+      ["atkinson", "lexend", "opendyslexic"].sort(),
+    );
   });
 });

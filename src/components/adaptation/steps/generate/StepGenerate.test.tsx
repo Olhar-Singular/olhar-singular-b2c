@@ -32,6 +32,21 @@ const result: AdaptationResult = {
   implementation_tips: [],
 };
 
+/**
+ * The server persists the adaptation and hands back the row it created (A7),
+ * so every successful invoke answers with the document AND its row identity.
+ */
+const SERVER_ROW = { id: "row-1", updatedAt: "2026-07-23T10:00:00Z" };
+
+const okResponse = () => ({
+  data: {
+    adaptation: result,
+    adaptation_id: SERVER_ROW.id,
+    adaptation_updated_at: SERVER_ROW.updatedAt,
+  },
+  error: null,
+});
+
 const baseData: WizardData = {
   activityType: "exercício",
   activityText: "1) Q?",
@@ -58,17 +73,17 @@ describe("StepGenerate", () => {
   it("sets a valid document on success and advances", async () => {
     const onResult = vi.fn();
     const onNext = vi.fn();
-    invokeMock.mockResolvedValueOnce({ data: { adaptation: result }, error: null });
+    invokeMock.mockResolvedValueOnce(okResponse());
     renderWithProviders(
       <StepGenerate data={baseData} onResult={onResult} onNext={onNext} onPrev={vi.fn()} />,
     );
-    await waitFor(() => expect(onResult).toHaveBeenCalledWith(result));
+    await waitFor(() => expect(onResult).toHaveBeenCalledWith(result, SERVER_ROW));
     expect(validateDocument(onResult.mock.calls[0][0].document)).toBeTruthy();
     expect(onNext).toHaveBeenCalled();
   });
 
   it("sends the active barriers and observation notes in the request body", async () => {
-    invokeMock.mockResolvedValueOnce({ data: { adaptation: result }, error: null });
+    invokeMock.mockResolvedValueOnce(okResponse());
     renderWithProviders(
       <StepGenerate
         data={{ ...baseData, observationNotes: "obs" }}
@@ -91,11 +106,87 @@ describe("StepGenerate", () => {
     );
   });
 
+  it("sends barrier_profile_id so the server-written row keeps the profile link", async () => {
+    invokeMock.mockResolvedValueOnce(okResponse());
+    renderWithProviders(
+      <StepGenerate
+        data={{ ...baseData, barrierProfileId: "33333333-3333-4333-8333-333333333333" }}
+        onResult={vi.fn()}
+        onNext={vi.fn()}
+        onPrev={vi.fn()}
+      />,
+    );
+    await waitFor(() => expect(invokeMock).toHaveBeenCalled());
+    expect(invokeMock.mock.calls[0][1].body.barrier_profile_id).toBe(
+      "33333333-3333-4333-8333-333333333333",
+    );
+  });
+
+  it("hands the server-created row (id + updated_at) to the wizard", async () => {
+    // A7: the row is born on the server, so the wizard adopts it instead of
+    // inserting one itself. Losing this hand-off would put the wizard back to
+    // editing a document with nowhere to save it.
+    const onResult = vi.fn();
+    invokeMock.mockResolvedValueOnce(okResponse());
+    renderWithProviders(
+      <StepGenerate data={baseData} onResult={onResult} onNext={vi.fn()} onPrev={vi.fn()} />,
+    );
+    await waitFor(() => expect(onResult).toHaveBeenCalled());
+    expect(onResult).toHaveBeenCalledWith(result, {
+      id: "row-1",
+      updatedAt: "2026-07-23T10:00:00Z",
+    });
+  });
+
+  it("fails loudly when the server answers without a persisted row", async () => {
+    // Silently continuing would recreate exactly the bug A7 fixes: an edited
+    // document with no row behind it, lost the moment the tab closes.
+    const onResult = vi.fn();
+    const onNext = vi.fn();
+    invokeMock.mockResolvedValueOnce({ data: { adaptation: result }, error: null });
+    renderWithProviders(
+      <StepGenerate data={baseData} onResult={onResult} onNext={onNext} onPrev={vi.fn()} />,
+    );
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: /Tentar novamente/i })).toBeInTheDocument(),
+    );
+    expect(onResult).not.toHaveBeenCalled();
+    expect(onNext).not.toHaveBeenCalled();
+  });
+
+  it("sends a request_id so a replayed request cannot be charged twice", async () => {
+    invokeMock.mockResolvedValueOnce(okResponse());
+    renderWithProviders(
+      <StepGenerate data={baseData} onResult={vi.fn()} onNext={vi.fn()} onPrev={vi.fn()} />,
+    );
+    await waitFor(() => expect(invokeMock).toHaveBeenCalled());
+    expect(invokeMock.mock.calls[0][1].body.request_id).toMatch(
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i,
+    );
+  });
+
+  it("uses a FRESH request_id per attempt (a retry is a new charge, not a replay)", async () => {
+    // Reusing the key would make the retry look like a duplicate and be refused.
+    invokeMock.mockResolvedValueOnce({ data: null, error: new Error("boom") });
+    renderWithProviders(
+      <StepGenerate data={baseData} onResult={vi.fn()} onNext={vi.fn()} onPrev={vi.fn()} />,
+    );
+    await waitFor(() => expect(screen.getByText("Tentar novamente")).toBeInTheDocument());
+
+    invokeMock.mockResolvedValueOnce(okResponse());
+    fireEvent.click(screen.getByText("Tentar novamente"));
+
+    await waitFor(() => expect(invokeMock).toHaveBeenCalledTimes(2));
+    expect(invokeMock.mock.calls[0][1].body.request_id).not.toBe(
+      invokeMock.mock.calls[1][1].body.request_id,
+    );
+  });
+
   it("calls refreshProfile after a successful generation", async () => {
     const mockRefresh = vi.fn().mockResolvedValue(undefined);
     const { useAuth } = await import("@/hooks/useAuth");
     vi.mocked(useAuth).mockReturnValueOnce({ refreshProfile: mockRefresh } as never);
-    invokeMock.mockResolvedValueOnce({ data: { adaptation: result }, error: null });
+    invokeMock.mockResolvedValueOnce(okResponse());
     renderWithProviders(
       <StepGenerate data={baseData} onResult={vi.fn()} onNext={vi.fn()} onPrev={vi.fn()} />,
     );
@@ -107,7 +198,7 @@ describe("StepGenerate", () => {
     const { useAuth } = await import("@/hooks/useAuth");
     vi.mocked(useAuth).mockReturnValueOnce({ refreshProfile: mockRefresh } as never);
     const onResult = vi.fn();
-    invokeMock.mockResolvedValueOnce({ data: { adaptation: result }, error: null });
+    invokeMock.mockResolvedValueOnce(okResponse());
     renderWithProviders(
       <StepGenerate data={baseData} onResult={onResult} onNext={vi.fn()} onPrev={vi.fn()} />,
     );
@@ -145,14 +236,14 @@ describe("StepGenerate", () => {
     const { toast } = await import("sonner");
     invokeMock
       .mockResolvedValueOnce({ data: null, error: { context: { status: 500, json: async () => ({ error: "boom" }) } } })
-      .mockResolvedValueOnce({ data: { adaptation: result }, error: null });
+      .mockResolvedValueOnce(okResponse());
     const onResult = vi.fn();
     renderWithProviders(
       <StepGenerate data={baseData} onResult={onResult} onNext={vi.fn()} onPrev={vi.fn()} />,
     );
     await waitFor(() => expect(toast.error).toHaveBeenCalledWith("boom"));
     fireEvent.click(screen.getByRole("button", { name: /Tentar novamente/i }));
-    await waitFor(() => expect(onResult).toHaveBeenCalledWith(result));
+    await waitFor(() => expect(onResult).toHaveBeenCalledWith(result, SERVER_ROW));
   });
 
   it("uses the fallback message when the error body has no error field", async () => {
@@ -187,7 +278,7 @@ describe("StepGenerate", () => {
 
   it("calls onLoadingChange(true) when generation starts and onLoadingChange(false) when done", async () => {
     const onLoadingChange = vi.fn();
-    invokeMock.mockResolvedValueOnce({ data: { adaptation: result }, error: null });
+    invokeMock.mockResolvedValueOnce(okResponse());
     renderWithProviders(
       <StepGenerate data={baseData} onResult={vi.fn()} onNext={vi.fn()} onPrev={vi.fn()} onLoadingChange={onLoadingChange} />,
     );

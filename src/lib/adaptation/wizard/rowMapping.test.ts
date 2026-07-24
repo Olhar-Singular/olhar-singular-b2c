@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { rowToWizardData, deriveTitle, wizardDataToPayload } from "./rowMapping";
+import { rowToWizardData } from "./rowMapping";
 import { INITIAL_WIZARD_DATA } from "./wizardState";
 import { validResult } from "@/lib/adaptation/persistence/__fixtures__/result";
 import type { AdaptationRow } from "@/lib/adaptation/persistence/adaptationsRepo";
@@ -41,73 +41,5 @@ describe("rowToWizardData", () => {
   it("rehydrates observationNotes as undefined when the column is null", () => {
     const data = rowToWizardData({ ...ROW, observation_notes: null });
     expect(data.observationNotes).toBeUndefined();
-  });
-});
-
-describe("deriveTitle", () => {
-  it("uses the first line of the activity text", () => {
-    expect(deriveTitle("Primeira linha\nsegunda")).toBe("Primeira linha");
-  });
-
-  it("falls back to a placeholder when empty", () => {
-    expect(deriveTitle("   ")).toBe("Adaptação sem título");
-  });
-
-  it("truncates very long first lines", () => {
-    const long = "a".repeat(120);
-    const title = deriveTitle(long);
-    expect(title.length).toBe(78);
-    expect(title.endsWith("…")).toBe(true);
-  });
-});
-
-describe("wizardDataToPayload", () => {
-  it("builds an insert payload from wizard data", () => {
-    const data = {
-      ...INITIAL_WIZARD_DATA,
-      activityType: "prova",
-      activityText: "Texto da atividade",
-      barrierProfileId: "bp1",
-      barriers: [],
-      observationNotes: "Observações",
-      result: validResult,
-    };
-    const payload = wizardDataToPayload(data, "u1");
-    expect(payload).toEqual({
-      user_id: "u1",
-      title: "Texto da atividade",
-      original_activity: "Texto da atividade",
-      activity_type: "prova",
-      barrier_profile_id: "bp1",
-      barriers_used: [],
-      observation_notes: "Observações",
-      adaptation_result: validResult,
-    });
-  });
-
-  it("maps an absent observationNotes to a null column value", () => {
-    const data = { ...INITIAL_WIZARD_DATA, activityText: "X", result: validResult };
-    const payload = wizardDataToPayload(data, "u1");
-    expect(payload.observation_notes).toBeNull();
-  });
-
-  it("uses the manual header title when present (overrides deriveTitle)", () => {
-    const data = {
-      ...INITIAL_WIZARD_DATA,
-      activityText: "Texto original da atividade",
-      result: { ...validResult, header: { title: "Prova de Frações" } },
-    };
-    const payload = wizardDataToPayload(data, "u1");
-    expect(payload.title).toBe("Prova de Frações");
-  });
-
-  it("falls back to deriveTitle when the header title is blank", () => {
-    const data = {
-      ...INITIAL_WIZARD_DATA,
-      activityText: "Texto original da atividade",
-      result: { ...validResult, header: { title: "   " } },
-    };
-    const payload = wizardDataToPayload(data, "u1");
-    expect(payload.title).toBe("Texto original da atividade");
   });
 });

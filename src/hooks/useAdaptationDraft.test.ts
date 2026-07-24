@@ -385,6 +385,144 @@ describe("useAdaptationDraft", () => {
     expect(repo.updateAdaptation).toHaveBeenCalled();
   });
 
+  // --- B10: the optimistic token belongs to ONE draft ------------------------
+
+  it("rebinds the optimistic token when a NEW draft is adopted (Nova adaptação)", async () => {
+    // The token is a per-row value. Carrying the previous row's updated_at into
+    // a freshly adopted draft makes its very first autosave conflict — which
+    // the wizard answers with navigate(0), throwing the new work away.
+    const props = {
+      draftId: "d1" as string | null,
+      result: validResult,
+      initialUpdatedAt: "2026-01-01T00:00:00Z" as string | null,
+      debounceMs: 500,
+    };
+    const { rerender } = renderHook((p) => useAdaptationDraft(p), { initialProps: props });
+    // Save once so the token advances past the mount value.
+    rerender({ ...props, result: edited("first") });
+    await act(async () => { await vi.advanceTimersByTimeAsync(500); });
+    expect(repo.updateAdaptation).toHaveBeenCalledTimes(1);
+
+    // "Nova adaptação": the wizard clears the draft, then a new generation
+    // hands over a different row with its own updated_at.
+    rerender({ draftId: null, result: null as never, initialUpdatedAt: null, debounceMs: 500 });
+    rerender({
+      draftId: "d2",
+      result: edited("second"),
+      initialUpdatedAt: "2026-05-05T00:00:00Z",
+      debounceMs: 500,
+    });
+    await act(async () => { await vi.advanceTimersByTimeAsync(500); });
+
+    expect(repo.updateAdaptation).toHaveBeenNthCalledWith(
+      2,
+      "d2",
+      { adaptation_result: edited("second") },
+      "2026-05-05T00:00:00Z",
+    );
+  });
+
+  // --- B11: flush must not swallow a failed save -----------------------------
+
+  it("flush() reports success with the token it produced", async () => {
+    const props = {
+      draftId: "d1",
+      result: validResult,
+      initialUpdatedAt: "2026-01-01T00:00:00Z",
+      debounceMs: 5000,
+    };
+    const { rerender, result } = renderHook((p) => useAdaptationDraft(p), { initialProps: props });
+    rerender({ ...props, result: edited("ok") });
+    let outcome: Awaited<ReturnType<typeof result.current.flush>> | null = null;
+    await act(async () => { outcome = await result.current.flush(); });
+    expect(outcome).toEqual({ status: "saved", updatedAt: ROW.updated_at });
+  });
+
+  it("flush() reports success when there was nothing to save", async () => {
+    const { result } = renderHook(() =>
+      useAdaptationDraft({
+        draftId: "d1",
+        result: validResult,
+        initialUpdatedAt: "2026-01-01T00:00:00Z",
+      }),
+    );
+    let outcome: Awaited<ReturnType<typeof result.current.flush>> | null = null;
+    await act(async () => { outcome = await result.current.flush(); });
+    expect(outcome).toEqual({ status: "saved", updatedAt: "2026-01-01T00:00:00Z" });
+  });
+
+  it("flush() reports FAILURE when the save threw (caller must not claim 'Salvo')", async () => {
+    vi.mocked(repo.updateAdaptation).mockRejectedValue(new Error("net"));
+    const props = {
+      draftId: "d1",
+      result: validResult,
+      initialUpdatedAt: "2026-01-01T00:00:00Z",
+      debounceMs: 5000,
+    };
+    const { rerender, result } = renderHook((p) => useAdaptationDraft(p), { initialProps: props });
+    rerender({ ...props, result: edited("lost") });
+    let outcome: Awaited<ReturnType<typeof result.current.flush>> | null = null;
+    await act(async () => { outcome = await result.current.flush(); });
+    expect(outcome).toEqual({ status: "failed", reason: "error" });
+  });
+
+  it("flush() reports FAILURE on a conflict", async () => {
+    vi.mocked(repo.updateAdaptation).mockResolvedValue({ ok: false, conflict: true });
+    const props = {
+      draftId: "d1",
+      result: validResult,
+      initialUpdatedAt: "2026-01-01T00:00:00Z",
+      debounceMs: 5000,
+    };
+    const { rerender, result } = renderHook((p) => useAdaptationDraft(p), { initialProps: props });
+    rerender({ ...props, result: edited("conflicted") });
+    let outcome: Awaited<ReturnType<typeof result.current.flush>> | null = null;
+    await act(async () => { outcome = await result.current.flush(); });
+    expect(outcome).toEqual({ status: "failed", reason: "conflict" });
+  });
+
+  it("keeps the crash mirror when the save failed (it is the only surviving copy)", async () => {
+    vi.mocked(repo.updateAdaptation).mockRejectedValue(new Error("net"));
+    const props = {
+      draftId: "d1",
+      result: validResult,
+      initialUpdatedAt: "2026-01-01T00:00:00Z",
+      debounceMs: 500,
+    };
+    const { rerender } = renderHook((p) => useAdaptationDraft(p), { initialProps: props });
+    rerender({ ...props, result: edited("only-copy") });
+    await act(async () => { await vi.advanceTimersByTimeAsync(500); });
+    expect(mirror.writeMirror).toHaveBeenCalledWith("d1", edited("only-copy"));
+    expect(mirror.clearMirror).not.toHaveBeenCalled();
+  });
+
+  // --- B12: a write outside the autosave path also advances the row ----------
+
+  it("syncUpdatedAt adopts a token produced elsewhere (markReady)", async () => {
+    // markReady flips status='ready', which the BEFORE UPDATE trigger stamps
+    // with a new updated_at. Without adopting it, the next keystroke autosaves
+    // against a token the server has already moved past → conflict → reload.
+    const props = {
+      draftId: "d1",
+      result: validResult,
+      initialUpdatedAt: "2026-01-01T00:00:00Z",
+      debounceMs: 500,
+    };
+    const { rerender, result } = renderHook((p) => useAdaptationDraft(p), { initialProps: props });
+
+    act(() => { result.current.syncUpdatedAt("2026-03-03T00:00:00Z"); });
+    expect(result.current.currentUpdatedAt).toBe("2026-03-03T00:00:00Z");
+
+    rerender({ ...props, result: edited("after-save") });
+    await act(async () => { await vi.advanceTimersByTimeAsync(500); });
+
+    expect(repo.updateAdaptation).toHaveBeenCalledWith(
+      "d1",
+      { adaptation_result: edited("after-save") },
+      "2026-03-03T00:00:00Z",
+    );
+  });
+
   it("restoreFromMirror returns the mirrored result", async () => {
     vi.mocked(mirror.readMirror).mockResolvedValue({
       draftId: "d1",

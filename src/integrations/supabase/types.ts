@@ -45,6 +45,7 @@ export type Database = {
           id: string
           observation_notes: string | null
           original_activity: string
+          request_id: string | null
           status: string
           title: string
           updated_at: string
@@ -60,6 +61,7 @@ export type Database = {
           id?: string
           observation_notes?: string | null
           original_activity?: string
+          request_id?: string | null
           status?: string
           title?: string
           updated_at?: string
@@ -75,6 +77,7 @@ export type Database = {
           id?: string
           observation_notes?: string | null
           original_activity?: string
+          request_id?: string | null
           status?: string
           title?: string
           updated_at?: string
@@ -276,6 +279,42 @@ export type Database = {
           status?: string
           updated_at?: string
           user_id?: string | null
+        }
+        Relationships: []
+      }
+      credit_reservations: {
+        Row: {
+          created_at: string
+          credits_charged: number
+          free_claimed: boolean
+          id: string
+          kind: string
+          reversed_at: string | null
+          settled_at: string | null
+          state: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          credits_charged?: number
+          free_claimed?: boolean
+          id: string
+          kind: string
+          reversed_at?: string | null
+          settled_at?: string | null
+          state?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          credits_charged?: number
+          free_claimed?: boolean
+          id?: string
+          kind?: string
+          reversed_at?: string | null
+          settled_at?: string | null
+          state?: string
+          user_id?: string
         }
         Relationships: []
       }
@@ -487,6 +526,16 @@ export type Database = {
         }
         Returns: Json
       }
+      open_adapt_reservation: {
+        Args: { p_amount: number; p_request_id: string; p_user_id: string }
+        Returns: Json
+      }
+      reconcile_stale_credit_reservations: {
+        Args: { p_older_than?: string }
+        Returns: Json
+      }
+      reverse_credit_reservation: { Args: { p_id: string }; Returns: Json }
+      settle_credit_reservation: { Args: { p_id: string }; Returns: Json }
     }
     Enums: {
       [_ in never]: never

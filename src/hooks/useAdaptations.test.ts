@@ -76,6 +76,26 @@ describe("useAdaptation", () => {
     expect(result.current.fetchStatus).toBe("idle");
     expect(repo.getAdaptation).not.toHaveBeenCalled();
   });
+
+  // --- B13: the editor is the writer; refetching under it is destructive -----
+
+  it("does NOT refetch the open adaptation on window focus", async () => {
+    // The wizard flushes its autosave on blur, so every alt-tab back fired a
+    // refetch of the row it had just written — and the fresher updated_at that
+    // came back remounted the editor mid-edit. The wizard is the writer here;
+    // re-reading the row under it can only destroy work.
+    vi.mocked(repo.getAdaptation).mockResolvedValue(ROW);
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const localWrapper = ({ children }: { children: React.ReactNode }) =>
+      createElement(QueryClientProvider, { client: qc }, children);
+
+    const { result } = renderHook(() => useAdaptation("a1"), { wrapper: localWrapper });
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+
+    const query = qc.getQueryCache().find({ queryKey: adaptationKeys.detail("a1") });
+    expect(query?.options.refetchOnWindowFocus).toBe(false);
+    expect(query?.options.refetchOnMount).toBe(false);
+  });
 });
 
 describe("useMarkReady", () => {

@@ -1,16 +1,17 @@
-# /ship — Verificar e criar PR
+# /ship — Verificar e publicar
 
-Verificação completa antes de criar um Pull Request.
+Verificação completa antes de publicar (push na `main`, ou PR quando o usuário pediu branch).
 
 ## Passo 1: Verificação
 
-Primeiro, verifique que não está na branch `main` ou `master`:
+Verifique em que branch está:
 
 ```bash
-git branch --show-current   # deve ser uma feature branch, não main/master
+git branch --show-current
 ```
 
-Se estiver em `main`, pare e peça ao usuário para criar uma feature branch antes de continuar.
+Estar na `main` é o padrão do projeto — **não peça feature branch**. Nesse caso o Passo 4
+vira push direto na `main` (sem PR), a menos que o usuário tenha pedido um PR.
 
 Rode em sequência e reporte cada resultado:
 
@@ -46,9 +47,11 @@ Se houver mudanças não commitadas:
 - Use conventional commits: `type: description`
 - Nunca commite tudo em um único commit genérico
 
-## Passo 4: Criar PR
+## Passo 4: Publicar
 
-Crie o PR via `gh pr create` com:
+**Na `main` (padrão):** `git push` direto, sem PR. Pule o template abaixo.
+
+**Numa branch (só quando o usuário pediu):** crie o PR via `gh pr create` com:
 
 ```
 ## Resumo

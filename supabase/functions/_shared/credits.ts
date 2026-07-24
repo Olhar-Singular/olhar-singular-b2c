@@ -15,6 +15,44 @@ export interface CreditRpcResult {
   new_balance?: number;
 }
 
+/** Raised when a money RPC fails, so the failure cannot be silently ignored. */
+export class CreditRpcError extends Error {
+  /** The raw supabase-js error (or failure payload) behind this failure. */
+  cause: unknown;
+
+  constructor(label: string, cause: unknown) {
+    super(`${label} failed: ${describeCause(cause)}`);
+    this.name = "CreditRpcError";
+    this.cause = cause;
+  }
+}
+
+function describeCause(cause: unknown): string {
+  if (typeof cause === "string") return cause;
+  const message = (cause as { message?: unknown } | null)?.message;
+  if (typeof message === "string") return message;
+  return "unknown error";
+}
+
+/**
+ * Run a money-moving RPC and turn EVERY failure mode into a thrown error.
+ *
+ * supabase-js RESOLVES on a database error — it returns `{ data, error }` and
+ * never rejects. So `await client.rpc("grant_credits", …)` without reading
+ * `error` looks exactly like a success: a refund guard's try/catch never fires,
+ * its onError reporter is dead code, and the user silently loses the credits
+ * they paid for with nothing in the logs. Route every credit RPC through this.
+ */
+export async function runCreditRpc(
+  label: string,
+  invoke: () => Promise<{ data: CreditRpcResult | null; error: unknown }>,
+): Promise<CreditRpcResult | null> {
+  const { data, error } = await invoke();
+  if (error) throw new CreditRpcError(label, error);
+  if (data?.success === false) throw new CreditRpcError(label, data.error ?? null);
+  return data;
+}
+
 /** Outcome of an attempt to charge a user for an action. */
 export type ChargeOutcome =
   | { status: "free"; creditsCharged: 0 }

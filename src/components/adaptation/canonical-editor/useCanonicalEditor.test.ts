@@ -129,6 +129,151 @@ describe("useCanonicalEditor", () => {
     expect(onChange).not.toHaveBeenCalled();
   });
 
+  // --- B8 · Frente B: a freeze must never be silent -------------------------
+  //
+  // Not emitting is correct — the parent must keep its last VALID document.
+  // Saying nothing is not: the wizard went on showing "Salvo" while every
+  // keystroke was being dropped, so the user kept typing into a sheet that was
+  // no longer being persisted. The hook has to announce that it stopped
+  // capturing, and announce again when it recovers.
+  describe("reports when it stops capturing edits", () => {
+    /** An image with an empty src — unrepresentable in the canonical model. */
+    const invalidDoc = {
+      type: "doc",
+      content: [
+        { type: "image", attrs: { id: "11111111-1111-4111-8111-111111111111", src: "", alt: "" } },
+      ],
+    };
+
+    function mountWithUpdates() {
+      let onUpdate: ((args: { editor: { getJSON: () => unknown } }) => void) | undefined;
+      vi.mocked(useEditor).mockImplementation((c: unknown) => {
+        onUpdate = (c as { onUpdate: typeof onUpdate }).onUpdate;
+        return { getJSON: () => canonicalToProseMirror(docA) } as never;
+      });
+      const onChange = vi.fn();
+      const onCaptureFailure = vi.fn();
+      renderHook(() => useCanonicalEditor({ value: docA, onChange, onCaptureFailure }));
+      return { onUpdate, onChange, onCaptureFailure };
+    }
+
+    it("calls onCaptureFailure with a reason when the edit cannot be captured", () => {
+      const { onUpdate, onCaptureFailure } = mountWithUpdates();
+
+      onUpdate?.({ editor: { getJSON: () => invalidDoc } });
+
+      expect(onCaptureFailure).toHaveBeenCalledTimes(1);
+      const reason = onCaptureFailure.mock.calls[0][0] as string;
+      expect(reason).toBeTruthy();
+      // The reason must point at the actual problem, not just "invalid".
+      expect(reason).toContain("src");
+    });
+
+    it("clears the failure once the document converts again", () => {
+      const { onUpdate, onChange, onCaptureFailure } = mountWithUpdates();
+
+      onUpdate?.({ editor: { getJSON: () => invalidDoc } });
+      onUpdate?.({ editor: { getJSON: () => canonicalToProseMirror(docB) } });
+
+      expect(onCaptureFailure).toHaveBeenLastCalledWith(null);
+      expect(onChange).toHaveBeenCalledWith(docB);
+    });
+
+    it("does not re-notify on every keystroke while the state stays the same", () => {
+      const { onUpdate, onCaptureFailure } = mountWithUpdates();
+
+      onUpdate?.({ editor: { getJSON: () => invalidDoc } });
+      onUpdate?.({ editor: { getJSON: () => invalidDoc } });
+      onUpdate?.({ editor: { getJSON: () => invalidDoc } });
+
+      expect(onCaptureFailure).toHaveBeenCalledTimes(1);
+    });
+
+    it("warns in the console so the cause is visible while developing", () => {
+      const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+      const { onUpdate } = mountWithUpdates();
+
+      onUpdate?.({ editor: { getJSON: () => invalidDoc } });
+
+      expect(warn).toHaveBeenCalled();
+      expect(String(warn.mock.calls[0].join(" "))).toContain("src");
+      warn.mockRestore();
+    });
+
+    it("works when no onCaptureFailure is provided (optional callback)", () => {
+      let onUpdate: ((args: { editor: { getJSON: () => unknown } }) => void) | undefined;
+      vi.mocked(useEditor).mockImplementation((c: unknown) => {
+        onUpdate = (c as { onUpdate: typeof onUpdate }).onUpdate;
+        return { getJSON: () => canonicalToProseMirror(docA) } as never;
+      });
+      renderHook(() => useCanonicalEditor({ value: docA, onChange: vi.fn() }));
+
+      expect(() => onUpdate?.({ editor: { getJSON: () => invalidDoc } })).not.toThrow();
+    });
+  });
+
+  // --- B14: the sheet must follow a document replaced from outside -----------
+
+  function editorStub(json: unknown) {
+    return {
+      getJSON: () => json,
+      commands: { setContent: vi.fn() },
+    };
+  }
+
+  it("re-seeds the editor when the document is replaced externally (restore)", () => {
+    // "Recuperar alterações não salvas" swaps the document in wizard state. A
+    // seed-once editor keeps showing the OLD document, and the first keystroke
+    // re-emits it — so the autosave overwrites the recovered version with the
+    // one the user just chose to discard.
+    const editor = editorStub(canonicalToProseMirror(docA));
+    vi.mocked(useEditor).mockReturnValue(editor as never);
+    const { rerender } = renderHook(
+      (props: { value: CanonicalDocument }) =>
+        useCanonicalEditor({ value: props.value, onChange: vi.fn() }),
+      { initialProps: { value: docA } },
+    );
+    expect(editor.commands.setContent).not.toHaveBeenCalled();
+
+    rerender({ value: docB });
+
+    expect(editor.commands.setContent).toHaveBeenCalledWith(
+      canonicalToProseMirror(docB),
+      false,
+    );
+  });
+
+  it("does NOT re-seed when the incoming value is the doc it just emitted (no loop)", () => {
+    const onChange = vi.fn();
+    let onUpdate: ((args: { editor: { getJSON: () => unknown } }) => void) | undefined;
+    const editor = editorStub(canonicalToProseMirror(docA));
+    vi.mocked(useEditor).mockImplementation((c: unknown) => {
+      onUpdate = (c as { onUpdate: typeof onUpdate }).onUpdate;
+      return editor as never;
+    });
+    const { rerender } = renderHook(
+      (props: { value: CanonicalDocument }) =>
+        useCanonicalEditor({ value: props.value, onChange }),
+      { initialProps: { value: docA } },
+    );
+    // The user types: the editor emits docB upward…
+    onUpdate?.({ editor: { getJSON: () => canonicalToProseMirror(docB) } });
+    expect(onChange).toHaveBeenCalledTimes(1);
+    // …and the parent hands the very same doc back as the new value.
+    rerender({ value: docB });
+    expect(editor.commands.setContent).not.toHaveBeenCalled();
+  });
+
+  it("does not re-seed before the editor exists", () => {
+    vi.mocked(useEditor).mockReturnValue(null as never);
+    const { rerender } = renderHook(
+      (props: { value: CanonicalDocument }) =>
+        useCanonicalEditor({ value: props.value, onChange: vi.fn() }),
+      { initialProps: { value: docA } },
+    );
+    expect(() => rerender({ value: docB })).not.toThrow();
+  });
+
   it("returns the editor instance", () => {
     const editor = { getJSON: () => ({}) };
     vi.mocked(useEditor).mockReturnValue(editor as never);

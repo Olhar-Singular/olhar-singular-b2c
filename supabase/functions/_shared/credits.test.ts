@@ -3,6 +3,8 @@ import {
   chargeCredits,
   chargeErrorResponse,
   refundCredits,
+  runCreditRpc,
+  CreditRpcError,
   type ChargeOutcome,
 } from "./credits";
 
@@ -102,6 +104,71 @@ describe("chargeErrorResponse", () => {
   it("returns null for 'charged' so the caller proceeds", () => {
     const outcome: ChargeOutcome = { status: "charged", creditsCharged: 8, newBalance: 42 };
     expect(chargeErrorResponse(outcome, 8)).toBeNull();
+  });
+});
+
+/**
+ * SILENT-CREDIT-LOSS REGRESSION.
+ *
+ * supabase-js RESOLVES on a database error — it returns `{ data, error }` and
+ * never rejects. `await client.rpc("grant_credits", …)` without reading `error`
+ * therefore looks like a success: the refund guard's try/catch never fires, the
+ * onError reporter is dead code, and the user silently loses paid credits with
+ * nothing in the logs. Every money RPC must go through runCreditRpc.
+ */
+describe("runCreditRpc", () => {
+  it("throws when the RPC returns a transport/DB error (never swallow it)", async () => {
+    const cause = { message: "permission denied for function grant_credits", code: "42501" };
+    const invoke = () => Promise.resolve({ data: null, error: cause });
+
+    await expect(runCreditRpc("grant_credits", invoke)).rejects.toBeInstanceOf(CreditRpcError);
+    await expect(runCreditRpc("grant_credits", invoke)).rejects.toThrow(/grant_credits/);
+  });
+
+  it("carries the raw error as `cause` so the caller can log it", async () => {
+    const cause = { message: "boom" };
+    const err = await runCreditRpc("grant_credits", () =>
+      Promise.resolve({ data: null, error: cause }),
+    ).catch((e: unknown) => e as CreditRpcError);
+
+    expect(err).toBeInstanceOf(CreditRpcError);
+    expect((err as CreditRpcError).cause).toBe(cause);
+    expect((err as CreditRpcError).message).toContain("boom");
+  });
+
+  it("throws when the RPC resolves but reports success:false", async () => {
+    await expect(
+      runCreditRpc("grant_credits", () =>
+        Promise.resolve({ data: { success: false, error: "user_not_found" }, error: null }),
+      ),
+    ).rejects.toThrow(/user_not_found/);
+  });
+
+  it("describes an unlabelled failure payload without crashing", async () => {
+    await expect(
+      runCreditRpc("grant_credits", () => Promise.resolve({ data: { success: false }, error: null })),
+    ).rejects.toBeInstanceOf(CreditRpcError);
+  });
+
+  it("stringifies a non-Error cause", async () => {
+    const err = await runCreditRpc("deduct_credits", () =>
+      Promise.resolve({ data: null, error: "plain string failure" }),
+    ).catch((e: unknown) => e as CreditRpcError);
+
+    expect((err as CreditRpcError).message).toContain("plain string failure");
+  });
+
+  it("returns the payload untouched on success", async () => {
+    const data = { success: true, new_balance: 41 };
+    await expect(
+      runCreditRpc("grant_credits", () => Promise.resolve({ data, error: null })),
+    ).resolves.toBe(data);
+  });
+
+  it("tolerates a null payload with no error (RPC returned nothing)", async () => {
+    await expect(
+      runCreditRpc("grant_credits", () => Promise.resolve({ data: null, error: null })),
+    ).resolves.toBeNull();
   });
 });
 

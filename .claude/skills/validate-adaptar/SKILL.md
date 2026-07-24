@@ -166,14 +166,22 @@ Foi assim que o crash do editor (`node.type.spec.toDOM is not a function`) foi d
 ## Verificar no banco (persistência real)
 
 ```sql
--- draft/adaptação salva, com o documento canônico
-select status, activity_type, jsonb_array_length(adaptation_result->'document'->'blocks') as blocks
+-- draft/adaptação salva, com o documento canônico. A linha nasce no SERVIDOR:
+-- toda geração 200 já deixa um draft aqui, mesmo que o browser morra em seguida.
+select status, activity_type, request_id, credits_spent,
+       jsonb_array_length(adaptation_result->'document'->'blocks') as blocks
 from public.adaptations where user_id='<UID>';
+-- prova do A7 sem UI nenhuma: POST na edge function e confira que a linha existe
+-- (o `request_id` da resposta é o mesmo da reserva; replay dá 409 e NÃO duplica).
 -- round-trip lossless: um campo fundo sobrevive (math inline, gabarito)
 select adaptation_result->'document'->'blocks'->1->'answer'->'alternatives'->0->>'correct'
 from public.adaptations where user_id='<UID>' limit 1;
 -- crédito (coluna é credit_balance, NÃO 'credits')
 select credit_balance, free_adaptation_used from public.profiles where id='<UID>';
+-- reserva de crédito: TODA geração deixa uma linha. 'settled' = entregou e cobrou;
+-- 'reversed' = falhou e devolveu; 'open' parada = o isolate morreu (o job reverte).
+select id, state, credits_charged, free_claimed from public.credit_reservations
+ where user_id='<UID>' order by created_at desc;
 ```
 
 ## Gotchas confirmados nesta base
@@ -181,7 +189,44 @@ select credit_balance, free_adaptation_used from public.profiles where id='<UID>
 - **Tiptap**: todo nó custom precisa de `renderHTML` (+ `parseHTML`); attrs-objeto (`style`,`answer`,`items`,`caption`,`instruction`) com `rendered:false`. Sem isso o editor crasha ao montar. Teste de regressão: serializar o schema real (`DOMSerializer.fromSchema` + `serializeFragment`).
 - **Edge function importando `src/`**: imports relativos do pacote precisam de **`.ts`** (Deno); `deno.json` import map cobre `zod`/`zod-to-json-schema`.
 - **Runtime keyless do `supabase start`**: o edge-runtime que sobe junto com `supabase start` serve as functions **sem** ler o `.env` raiz → `adapt-activity` responde **HTTP 500 `No AI provider configured`**. Pra geração real você **precisa** rodar `supabase functions serve --env-file .env` (injeta `AI_API_KEY`), que substitui o runtime keyless. O `make verify-adaptar` já sobe esse serve com a chave.
-- **Persistência**: a tabela `adaptations` tem `original_activity/activity_type/barriers_used/adaptation_result/status/observation_notes` (migration `20260604000000`). Coluna de saldo = `credit_balance`. `content` (antiga) foi dropada.
+- **Persistência**: a tabela `adaptations` tem `original_activity/activity_type/barriers_used/adaptation_result/status/observation_notes` (migration `20260604000000`) + `request_id` (migration `20260723160000`). Coluna de saldo = `credit_balance`. `content` (antiga) foi dropada. **Quem insere é a edge function**, antes do `settle` da reserva — o cliente só dá `update`.
+- **Autosave/draft: 5 armadilhas que o Vitest NÃO pega** (todas confirmadas no browser; a suíte
+  passava verde com cada uma delas). Ao mexer no ciclo de vida do rascunho, exercite **estes**
+  roteiros na UI real, não só os testes:
+  1. **"Nova adaptação" → gerar de novo** → tem que autosalvar ("Salvo") sem conflito. O token
+     `expectedUpdatedAt` é por linha; herdar o da adaptação anterior dá conflito → `navigate(0)`.
+  2. **Salvar → continuar editando** → sem conflito. `markReady` bumpa o `updated_at`; o wizard
+     precisa adotá-lo (`syncUpdatedAt`).
+  3. **Digitar e sair dentro do debounce (~1200ms)** → o flush de `blur`/`visibilitychange` tem que
+     gravar. E um flush que **falha** não pode virar "Salvo" nem marcar a linha ready.
+  4. **Recuperar mirror** → a folha tem que **mudar de verdade**. Dois bugs moravam aqui: o editor
+     semeava o conteúdo uma única vez (a folha ficava com o doc antigo), e o prompt sequer aparecia
+     porque `<StrictMode>` monta o efeito duas vezes e o latch fechava antes do await. **Teste isto
+     no browser** — em jsdom, sem StrictMode, os dois passam despercebidos.
+  5. **Reabrir em modo edição e alt-tab** → o passo/cursor tem que ficar onde estava. Key derivada
+     do `updated_at` + refetch no focus remontava o wizard a cada autosave.
+  > Para plantar um mirror divergente à mão (roteiro 4), escreva em `indexedDB` no store
+  > `adaptation-drafts/drafts` uma entry `{ draftId, result, savedAt }` com o `result` da linha
+  > alterado — pode usar `savedAt` **antigo**: a decisão é por conteúdo, não por timestamp.
+- **Gatilhos de "autosave congelado" (B8) — roteiro de regressão no browser.** Nenhum destes é
+  pego por Vitest+jsdom sozinho; todos foram confirmados no editor real. Ao mexer no schema
+  Tiptap, nos mappers ou nos NodeViews, refaça **estes** quatro:
+  1. **Shift+Enter** no meio de um parágrafo → tem que virar **parágrafo novo** (não `hardBreak`),
+     autosave "Salvo", e o **reload** não pode abrir folha em branco.
+  2. **Copiar/colar uma questão** → a cópia mantém `answer`/`instruction` e ganha **id novo**.
+     Confira no banco, não só na tela (o `answer` é attr, não aparece no texto).
+  3. **Colar do Word** (`<span style="color:#ff0000; font-size:12pt">`) → grava `color` do
+     allowlist (`#DC2626`) e `fontSize: 12` (não 9).
+  4. **Inserir Imagem pelo "+"** sem escolher arquivo → doc continua salvando (src placeholder).
+  > Para dirigir o editor real sem passar pelo wizard inteiro: semeie uma linha em `adaptations`
+  > com um documento canônico e abra **`/adaptar/editar/:id`** (a rota é essa, não `/adaptacoes/...`).
+  > O `EditorView` é alcançável por `document.querySelector('.ProseMirror').editor` — dá pra usar
+  > `editor.commands.setNodeSelection(pos)` + `ClipboardEvent` pra exercitar o clipboard REAL
+  > (um `copy` sintético sem NodeSelection não aciona o serializador e volta vazio).
+- **Prova de que o congelamento é visível**: force `src:""` num nó de imagem via
+  `view.dispatch(view.state.tr.setNodeAttribute(pos,'src',''))` → o status tem que virar
+  **"Alterações não estão sendo salvas"** (`[data-testid="capture-failure"]`, com o motivo no
+  `title`) e sair um `console.warn` `[canonical-editor] edição não capturada`. Desfazer limpa.
 - **Barreiras vêm do perfil (read-only)**: no passo Barreiras **não há** edição de barreiras nem botão "Editar" — o `<select>` nativo de perfil já preenche as barreiras (tags read-only) e o avanço é o botão **"Adaptar"**. Perfil com `barriers='{}'` trava o passo ("não possui barreiras"); seed com chaves reais do catálogo. No **Revisar**, o popover de aparência abre pelo botão **"Formato"** e o seletor de fonte é `<select>` nativo (opção "Padrão" + optgroups).
 
 ## Cleanup
@@ -208,6 +253,9 @@ depurar quando ele falha. (Orquestração: `supabase/scripts/verify-adaptar.sh`.
 **Já existe (Fase 1, no gate Vitest):**
 - `src/components/adaptation/canonical-editor/CanonicalEditor.realdom.test.tsx` — monta o editor
   Tiptap **de verdade** (sem mock) e afirma que renderiza; pega o crash de render (`toDOM`).
+- `CanonicalAdaptationWizard.test.tsx` tem um caso que renderiza dentro de **`<StrictMode>`**
+  (efeitos montados duas vezes) — foi o que travou o bug do prompt de recuperação que nunca
+  aparecia. Ao mexer em efeito com `await` + latch/ref, replique esse padrão.
 - `supabase/functions/denoImportGraph.test.ts` — **lint estático** do grafo de imports: a partir
   de cada `index.ts` de function, segue os imports e exige extensão `.ts` explícita + zero `@/`.
   ⚠️ **`supabase functions serve` NÃO pega esse bug** (o compile via esbuild resolve import sem

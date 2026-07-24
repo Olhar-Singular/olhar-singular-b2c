@@ -44,7 +44,13 @@ export function isSafeImageSrc(src: string): boolean {
 
 const InlineText = z.object({
   type: z.literal("text"),
-  text: z.string(),
+  // `.min(1)`: ProseMirror refuses to build an empty text node ("Empty text
+  // nodes are not allowed"), so a document containing one CANNOT be reopened in
+  // the editor. Accepting it here made the autosave persist a sheet that came
+  // back blank on reload (a stray Shift+Enter used to map to exactly this).
+  // Keeping the model no wider than what round-trips means such a state fails
+  // the conversion loudly instead of being written to the database.
+  text: z.string().min(1),
   marks: z.array(Mark).optional(),
   color: Color.optional(),
   fontSize: z.number().positive().optional(),

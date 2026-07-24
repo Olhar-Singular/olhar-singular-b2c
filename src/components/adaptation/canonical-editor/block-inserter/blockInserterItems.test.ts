@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { INSERTER_SECTIONS } from "./blockInserterItems";
 import { QUESTION_KINDS } from "../questionKinds";
+import { tryProseMirrorToCanonical } from "@/lib/adaptation/tiptap/toCanonical";
 
 /** Narrow an item's action to the "insert" variant and run its builder. */
 function buildOf(sectionId: string, itemId: string) {
@@ -53,5 +54,27 @@ describe("INSERTER_SECTIONS", () => {
     expect(item.label).toBe("Quebra de página");
     expect(item.action.type).toBe("pageBreak");
     expect(item.needsFollowing).toBe(true);
+  });
+
+  /**
+   * B8 · gatilho G4 — inserting a block must never make the WHOLE document
+   * unrepresentable. "Imagem" used to build `src: ""`, which fails the canonical
+   * `src.min(1)`, so the very act of adding an image froze the autosave for the
+   * entire sheet until a file was picked — with the UI still reading "Salvo".
+   *
+   * Stated as a property over every item so a new inserter entry cannot
+   * reintroduce the class of bug.
+   */
+  it("every insertable item builds a node that maps back to a VALID canonical doc", () => {
+    for (const section of INSERTER_SECTIONS) {
+      for (const item of section.items) {
+        if (item.action.type !== "insert") continue;
+        const result = tryProseMirrorToCanonical({
+          type: "doc",
+          content: [item.action.build()],
+        });
+        expect(result.ok, `item "${item.id}" inserts an unrepresentable node`).toBe(true);
+      }
+    }
   });
 });

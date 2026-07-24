@@ -3,9 +3,18 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { sanitize } from "../_shared/sanitize.ts";
 import { logAiUsage } from "../_shared/logAiUsage.ts";
 import { getAiConfig } from "../_shared/aiConfig.ts";
-import { chargeCredits, chargeErrorResponse, type CreditRpcResult } from "../_shared/credits.ts";
-import { createRefundGuard } from "../_shared/creditGuard.ts";
+import { runCreditRpc, type CreditRpcResult } from "../_shared/credits.ts";
+import {
+  interpretReservation,
+  reservationErrorResponse,
+  resolveRequestId,
+  type OpenReservationPayload,
+} from "../_shared/creditReservation.ts";
 import { calcAdaptationCost } from "../_shared/adaptationCost.ts";
+import {
+  persistAdaptation,
+  type AdaptationInsertClient,
+} from "../_shared/adaptationPersistence.ts";
 import {
   buildRequestBody,
   interpretAiResponse,
@@ -67,7 +76,7 @@ serve(async (req) => {
     const serviceClient = createClient(supabaseUrl, supabaseServiceKey);
 
     const body = await req.json();
-    const { original_activity, activity_type, barriers, observation_notes } = body;
+    const { original_activity, activity_type, barriers, observation_notes, barrier_profile_id } = body;
 
     if (!original_activity || !activity_type || !barriers || !Array.isArray(barriers) || barriers.length === 0) {
       return new Response(JSON.stringify({ error: "Campos obrigatórios ausentes: original_activity, activity_type, barriers." }), {
@@ -76,7 +85,18 @@ serve(async (req) => {
       });
     }
 
-    // ─── Credit deduction (reserve upfront to avoid races) ──────────────────────
+    // ─── Reserve + charge (one transaction, crash-safe) ─────────────────────────
+    // The reservation row is what makes a charge recoverable: if this isolate
+    // dies before it can refund, the row stays `open` and the reconciliation job
+    // gives the credits (or the free slot) back. Its id is the idempotency key.
+    const requestId = resolveRequestId(body.request_id, () => crypto.randomUUID());
+    if (!requestId.ok) {
+      return new Response(JSON.stringify({ error: "request_id inválido." }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     const barrierDimensions = [...new Set(
       (barriers as Array<{ dimension?: string }>)
         .map((b) => b.dimension)
@@ -84,30 +104,22 @@ serve(async (req) => {
     )];
     const creditCost = calcAdaptationCost(barrierDimensions);
 
-    const charge = await chargeCredits({
-      cost: creditCost,
-      claimFree: async () => {
-        const { data } = await serviceClient
-          .from("profiles")
-          .update({ free_adaptation_used: true })
-          .eq("id", user.id)
-          .eq("free_adaptation_used", false)
-          .select("id");
-        return (data?.length ?? 0) > 0;
-      },
-      deduct: async () => {
-        const { data, error } = await serviceClient.rpc("deduct_credits", {
-          p_user_id: user.id,
-          p_amount: creditCost,
-          p_type: "adapt",
-        });
-        return { data: data as CreditRpcResult | null, error };
-      },
-    });
+    const { data: openData, error: openError } = await serviceClient.rpc(
+      "open_adapt_reservation",
+      { p_request_id: requestId.id, p_user_id: user.id, p_amount: creditCost },
+    );
+    if (openError) {
+      console.error("open_adapt_reservation error:", openError, "user:", user.id);
+      return new Response(JSON.stringify({ error: "Erro ao processar créditos." }), {
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
 
-    const chargeError = chargeErrorResponse(charge, creditCost);
+    const charge = interpretReservation(openData as OpenReservationPayload | null);
+    const chargeError = reservationErrorResponse(charge, creditCost);
     if (chargeError) {
-      if (charge.status === "error") console.error("deduct_credits error:", charge.cause ?? "unexpected failure", "user:", user.id);
+      if (charge.status === "error") console.error("open_adapt_reservation failed for user:", user.id, openData);
       return new Response(JSON.stringify(chargeError.body), {
         status: chargeError.status,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -116,27 +128,35 @@ serve(async (req) => {
 
     const isFirstFree = charge.status === "free";
     const creditsCharged = charge.status === "charged" ? charge.creditsCharged : 0;
-    // ─── End credit deduction ───────────────────────────────────────────────────
+    // ─── End reserve + charge ───────────────────────────────────────────────────
 
-    // CREDIT INVARIANT: from this point on the user has been charged. ANY exit
-    // other than a fully validated success MUST refund. The refund guard makes
-    // this idempotent (at most one grant) and best-effort (never masks errors).
-    const refundGuard = createRefundGuard({
-      creditsCharged,
-      grant: async (amount) => {
-        await serviceClient.rpc("grant_credits", {
-          p_user_id: user.id,
-          p_amount: amount,
-          p_type: "refund",
-        });
-      },
-      onError: (e) => console.error("Refund failed for user:", user.id, e),
-    });
+    // CREDIT INVARIANT: from this point on the user has paid — either in credits
+    // or with their one free adaptation. ANY exit other than a fully validated
+    // success MUST give that back, and the ONLY exit that keeps the money is the
+    // one that settles the reservation right before returning the document.
+    //
+    // Both reversal and settlement are idempotent in the database (a conditional
+    // `open → …` transition), so this request and the reconciliation job can
+    // race without ever paying twice.
+    const reverseReservation = async () => {
+      try {
+        // runCreditRpc is required: supabase-js resolves (never rejects) on a DB
+        // error, so an unchecked rpc() would make a failed reversal look fine.
+        await runCreditRpc("reverse_credit_reservation", () =>
+          serviceClient.rpc("reverse_credit_reservation", {
+            p_id: requestId.id,
+          }) as Promise<{ data: CreditRpcResult | null; error: unknown }>);
+      } catch (e) {
+        // Never mask the original failure — the job will pick this reservation
+        // up on its next pass, since it is still `open`.
+        console.error("Reversal failed for user:", user.id, "reservation:", requestId.id, e);
+      }
+    };
 
-    // Helper: refund then build an error Response in one shot, so no error path
-    // can return without refunding first.
+    // Helper: reverse then build an error Response in one shot, so no error path
+    // can return without giving the charge back first.
     const failure = async (status: number, message: string): Promise<Response> => {
-      await refundGuard.refundIfNeeded();
+      await reverseReservation();
       return new Response(
         JSON.stringify({ error: message }),
         { status, headers: { ...corsHeaders, "Content-Type": "application/json" } },
@@ -256,6 +276,56 @@ BARREIRAS OBSERVÁVEIS:
 
         const interpreted = interpretAiResponse(responseContent);
         if (interpreted.ok) {
+          const adaptation = stripGapTokens(
+            stripFabricatedImages(interpreted.result, allowedImageSrcs),
+          );
+
+          // PERSIST BEFORE SETTLING. The response body used to be the ONLY copy
+          // of a document the user had already paid for — the browser did the
+          // INSERT on its first autosave, so a closed tab, a dead network or an
+          // aborted request between here and there lost the work for good.
+          // Writing the row first means the charge is only ever made final for
+          // an adaptation that is already durable; a failed write refunds via
+          // `failure()` and the user is simply told to try again.
+          const persisted = await persistAdaptation(
+            serviceClient as unknown as AdaptationInsertClient,
+            {
+              userId: user.id,
+              requestId: requestId.id,
+              originalActivity: sanitizedActivity,
+              activityType: sanitizedType,
+              barrierProfileId: barrier_profile_id,
+              barriersUsed: barriers,
+              observationNotes: sanitizedObservations,
+              adaptationResult: adaptation,
+              creditsCharged: creditsCharged,
+            },
+          );
+          if (!persisted.ok) {
+            console.error(
+              "adaptation persist failed for user:",
+              user.id,
+              "reservation:",
+              requestId.id,
+              persisted.error,
+            );
+            return await failure(500, "Não foi possível salvar a adaptação. Tente novamente.");
+          }
+
+          // The document exists AND is stored: the charge is final. Settle
+          // BEFORE responding, so a reservation is never left open for a
+          // delivery that happened (which the job would otherwise refund).
+          try {
+            await runCreditRpc("settle_credit_reservation", () =>
+              serviceClient.rpc("settle_credit_reservation", {
+                p_id: requestId.id,
+              }) as Promise<{ data: CreditRpcResult | null; error: unknown }>);
+          } catch (e) {
+            // Failing to settle only risks refunding a charge we were entitled
+            // to keep — never the user's money. Log and deliver anyway.
+            console.error("Settle failed for user:", user.id, "reservation:", requestId.id, e);
+          }
+
           logAiUsage({
             user_id: user.id,
             action_type: "adaptation",
@@ -269,7 +339,12 @@ BARREIRAS OBSERVÁVEIS:
 
           return new Response(
             JSON.stringify({
-              adaptation: stripGapTokens(stripFabricatedImages(interpreted.result, allowedImageSrcs)),
+              adaptation,
+              // The row the client will autosave into — it no longer creates
+              // one. `updated_at` seeds the optimistic-concurrency token so the
+              // first autosave does not have to guess it.
+              adaptation_id: persisted.row.id,
+              adaptation_updated_at: persisted.row.updatedAt,
               model_used: modelName,
               tokens_used: totalTokens,
               credits_charged: creditsCharged,
@@ -309,9 +384,11 @@ BARREIRAS OBSERVÁVEIS:
     }
   } catch (e) {
     // This outer catch is only reachable for errors that occur BEFORE or DURING
-    // the credit charge (e.g. auth, body parse, chargeCredits itself). No charge
-    // has been committed at this point, so refund is intentionally NOT called
-    // here. Do NOT move any post-charge code above this boundary.
+    // the reserve+charge (e.g. auth, body parse, the RPC call itself), so there
+    // is normally nothing to give back. If a charge DID land, its reservation is
+    // still `open` and the reconciliation job will reverse it — which is exactly
+    // the safety net that also covers this isolate dying outright.
+    // Do NOT move any post-charge code above this boundary.
     console.error("adapt-activity error:", e);
     return new Response(
       JSON.stringify({ error: e instanceof Error ? e.message : "Erro desconhecido" }),

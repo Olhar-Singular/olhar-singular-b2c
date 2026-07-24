@@ -31,6 +31,13 @@ type Props = {
   onRegenerate: () => void;
   onNext: () => void;
   onPrev: () => void;
+  /**
+   * Called when the editor stops (or resumes) being able to convert the sheet
+   * to the canonical model — i.e. when edits are no longer reaching the
+   * autosave. Forwarded straight to `useCanonicalEditor`; the wizard turns it
+   * into a visible warning so a freeze can never look like "Salvo".
+   */
+  onCaptureFailure?: (reason: string | null) => void;
 };
 
 const FALLBACK_TITLE = "Atividade adaptada";
@@ -73,12 +80,14 @@ export function StepReview({
   onRegenerate,
   onNext,
   onPrev,
+  onCaptureFailure,
 }: Props) {
   const [aboutOpen, setAboutOpen] = useState(false);
   const { editor } = useCanonicalEditor({
     value: document,
     onChange: onDocumentChange,
     extraExtensions: REVIEW_EXTENSIONS,
+    onCaptureFailure,
   });
 
   const handleAppearanceChange = (partial: PageStyle) => {

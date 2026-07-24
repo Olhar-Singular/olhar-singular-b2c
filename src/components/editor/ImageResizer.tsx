@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { DEFAULT_IMAGE_WIDTH_PX } from "@/components/adaptation/render/pageTokens";
 
 type Props = {
@@ -12,42 +12,61 @@ export default function ImageResizer({ src, initialWidth, onResize }: Props) {
   // and the PDF so an un-resized image is the same size on every surface.
   const [width, setWidth] = useState(initialWidth ?? DEFAULT_IMAGE_WIDTH_PX);
   const containerRef = useRef<HTMLDivElement>(null);
-  const dragging = useRef(false);
   const startX = useRef(0);
   const startWidth = useRef(0);
+  /**
+   * The live width, updated synchronously on every mouse move.
+   *
+   * `setWidth` alone is not enough to COMMIT from: the mouseup handler is
+   * created once per drag and closes over the `width` of that render, so
+   * `onResize(width)` used to persist the size the image had BEFORE the drag —
+   * the sheet showed the new size while the document stored the old one, and
+   * the PDF came out a full drag behind. The ref is the value the drag actually
+   * produced, so committing from it cannot go stale.
+   */
+  const widthRef = useRef(width);
+  /** Detaches the current drag's document listeners; null when not dragging. */
+  const detachRef = useRef<(() => void) | null>(null);
 
   const handleMouseDown = useCallback(
     (e: React.MouseEvent) => {
       e.preventDefault();
-      dragging.current = true;
-      startX.current = e.clientX;
-      startWidth.current = width;
+      // A previous drag whose mouseup we never saw (released outside the
+      // window) would otherwise leave a second set of handlers on `document`,
+      // and the next mouseup would commit twice. Exactly one drag is live.
+      detachRef.current?.();
 
-      /* v8 ignore start -- nested mousemove/mouseup handlers fire on document
-       * during a real drag; jsdom's dispatchEvent does not propagate the same
-       * event references React installs synthetically. */
+      startX.current = e.clientX;
+      startWidth.current = widthRef.current;
+
       const onMouseMove = (ev: MouseEvent) => {
-        if (!dragging.current) return;
         const delta = ev.clientX - startX.current;
         const newWidth = Math.max(50, Math.min(800, startWidth.current + delta));
+        widthRef.current = newWidth;
         setWidth(newWidth);
       };
 
-      const onMouseUp = () => {
-        if (dragging.current) {
-          dragging.current = false;
-          onResize(width);
-        }
+      const detach = () => {
         document.removeEventListener("mousemove", onMouseMove);
         document.removeEventListener("mouseup", onMouseUp);
+        detachRef.current = null;
       };
-      /* v8 ignore stop */
+
+      const onMouseUp = () => {
+        onResize(widthRef.current);
+        detach();
+      };
 
       document.addEventListener("mousemove", onMouseMove);
       document.addEventListener("mouseup", onMouseUp);
+      detachRef.current = detach;
     },
-    [width, onResize]
+    [onResize]
   );
+
+  // Unmounting mid-drag (image deleted, step left) must not leave the handlers
+  // on `document` writing into a component that no longer exists.
+  useEffect(() => () => detachRef.current?.(), []);
 
   return (
     <div

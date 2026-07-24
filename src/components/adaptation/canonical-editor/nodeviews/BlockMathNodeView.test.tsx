@@ -66,4 +66,20 @@ describe("BlockMathNodeView", () => {
     render(<BlockMathNodeView {...props} />);
     expect(screen.getByRole("button", { name: "Excluir fórmula" })).toBeDisabled();
   });
+
+  /** B8 · gatilho G4 — see the sibling test in InlineMathNodeView.test.tsx. */
+  it("lets the field be cleared WITHOUT writing an empty latex onto the node", () => {
+    const { props, updateAttributes } = makeProps();
+    render(<BlockMathNodeView {...props} />);
+    fireEvent.click(screen.getByTestId("blockmath-render"));
+    const input = screen.getByLabelText("Expressão LaTeX");
+
+    fireEvent.change(input, { target: { value: "" } });
+
+    expect((input as HTMLInputElement).value).toBe("");
+    expect(updateAttributes).not.toHaveBeenCalled();
+
+    fireEvent.change(input, { target: { value: "z" } });
+    expect(updateAttributes).toHaveBeenCalledWith({ latex: "z" });
+  });
 });

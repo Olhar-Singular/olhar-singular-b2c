@@ -49,7 +49,14 @@ export type AdaptationRow = {
 /** A list item omits the heavy result blob to keep the history list lean. */
 export type AdaptationListItem = Omit<AdaptationRow, "adaptation_result">;
 
-/** The data needed to create/update an adaptation. */
+/**
+ * The column-shaped fields of an adaptation.
+ *
+ * There is no client-side INSERT any more: the row is created by the
+ * `adapt-activity` edge function, before it settles the credit charge (see
+ * supabase/functions/_shared/adaptationPersistence.ts). This type now describes
+ * what an UPDATE may patch.
+ */
 export type AdaptationPayload = {
   user_id: string;
   title: string;
@@ -104,22 +111,6 @@ function parseRow(raw: Record<string, unknown>): AdaptationRow {
 // ---------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------
-
-/** Insert a new draft row and return it. */
-export async function saveDraft(payload: AdaptationPayload): Promise<AdaptationRow> {
-  const adaptation_result = assertValidResult(payload.adaptation_result);
-  const { data, error } = await table()
-    .insert({
-      ...payload,
-      barriers_used: payload.barriers_used as Json,
-      adaptation_result: adaptation_result as unknown as Json,
-      status: "draft",
-    })
-    .select("*")
-    .single();
-  if (error) throw error;
-  return parseRow(data as Record<string, unknown>);
-}
 
 /**
  * Update an existing adaptation with optimistic concurrency: the update only

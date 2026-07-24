@@ -13,8 +13,9 @@ description: >-
 
 ## Passos
 
-1. **Verifique a branch**: `git branch --show-current`. Se for `main`/`master`, PARE
-   e peça uma feature branch antes de continuar.
+1. **Verifique a branch**: `git branch --show-current`. Commitar na `main` é o padrão do
+   projeto — siga normalmente. Só crie branch se o usuário pedir explicitamente.
+   (Sessões paralelas podem trocar o HEAD: confira o `[branch sha]` na saída do commit.)
 2. **Veja o que está staged**: `git status --short` e `git diff --staged --stat`.
    Se nada estiver staged, mostre os modificados e pergunte o que incluir.
    NÃO rode `git add -A` sem confirmar o escopo com o usuário.

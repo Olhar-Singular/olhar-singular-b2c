@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, it, expect } from "vitest";
-import { ALLOWED_COLORS, isAllowedColor } from "./colors";
+import { ALLOWED_COLORS, isAllowedColor, normalizeColor } from "./colors";
 
 /**
  * Drift guard: ALLOWED_COLORS mirrors the TEXT_COLORS + HIGHLIGHT_COLORS
@@ -67,5 +67,58 @@ describe("isAllowedColor", () => {
   it("returns false for non-string values", () => {
     expect(isAllowedColor(null as unknown as string)).toBe(false);
     expect(isAllowedColor(undefined as unknown as string)).toBe(false);
+  });
+});
+
+/**
+ * `normalizeColor` is the gate every color crosses on its way in from the DOM
+ * (a Word/Docs paste, and our own clipboard — the browser serializes `#DC2626`
+ * as `rgb(220, 38, 38)`). Anything it lets through must satisfy `isAllowedColor`,
+ * or the canonical document stops validating and the autosave freezes silently.
+ */
+describe("normalizeColor", () => {
+  it("is the identity on every palette color (our own clipboard round-trips)", () => {
+    for (const color of ALLOWED_COLORS) {
+      expect(normalizeColor(color)).toBe(color.toUpperCase());
+    }
+  });
+
+  it("accepts the rgb() form the DOM serializes our palette into", () => {
+    expect(normalizeColor("rgb(220, 38, 38)")).toBe("#DC2626");
+    expect(normalizeColor("rgba(220, 38, 38, 0.5)")).toBe("#DC2626");
+  });
+
+  it("expands the #rgb short form and is case-insensitive", () => {
+    // #F00 -> #FF0000 -> nearest palette red.
+    expect(normalizeColor("#f00")).toBe("#DC2626");
+    expect(normalizeColor("#dc2626")).toBe("#DC2626");
+  });
+
+  it("maps a foreign color to the NEAREST palette entry (keeps the emphasis)", () => {
+    expect(normalizeColor("#FF0000")).toBe("#DC2626"); // red -> palette red
+    expect(normalizeColor("#000000")).toBe("#1F2937"); // black -> palette ink
+    expect(normalizeColor("rgb(255, 255, 0)")).toBe("#FEF08A"); // yellow -> highlight
+  });
+
+  it("returns null for values it cannot parse (caller leaves the text unstyled)", () => {
+    expect(normalizeColor("inherit")).toBeNull();
+    expect(normalizeColor("currentColor")).toBeNull();
+    expect(normalizeColor("")).toBeNull();
+    expect(normalizeColor("linear-gradient(red, blue)")).toBeNull();
+    expect(normalizeColor("#12345")).toBeNull();
+    expect(normalizeColor("rgb(300, 0, 0)")).toBeNull();
+  });
+
+  it("returns null for non-string values", () => {
+    expect(normalizeColor(null)).toBeNull();
+    expect(normalizeColor(undefined)).toBeNull();
+    expect(normalizeColor(42)).toBeNull();
+  });
+
+  it("never returns a value outside the allowlist", () => {
+    const probes = ["#FF0000", "#00FF00", "#123456", "rgb(1,2,3)", "#ABCDEF", "#fff"];
+    for (const probe of probes) {
+      expect(isAllowedColor(normalizeColor(probe))).toBe(true);
+    }
   });
 });

@@ -3,7 +3,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { sanitize } from "../_shared/sanitize.ts";
 import { logAiUsage } from "../_shared/logAiUsage.ts";
 import { getAiConfig } from "../_shared/aiConfig.ts";
-import { chargeCredits, refundCredits, type CreditRpcResult } from "../_shared/credits.ts";
+import { chargeCredits, refundCredits, runCreditRpc, type CreditRpcResult } from "../_shared/credits.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -228,11 +228,14 @@ serve(async (req) => {
       refundCredits({
         creditsCharged,
         grant: async (amount) => {
-          await admin.rpc("grant_credits", {
-            p_user_id: user.id,
-            p_amount: amount,
-            p_type: "refund",
-          });
+          // Must go through runCreditRpc: supabase-js resolves (never rejects)
+          // on a DB error, so an unchecked rpc() hides a failed refund.
+          await runCreditRpc("grant_credits", () =>
+            admin.rpc("grant_credits", {
+              p_user_id: user.id,
+              p_amount: amount,
+              p_type: "refund",
+            }) as Promise<{ data: CreditRpcResult | null; error: unknown }>);
         },
         onError: (e) => console.error("Extraction refund failed for user:", user.id, e),
       });

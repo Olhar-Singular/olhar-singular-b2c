@@ -10,21 +10,25 @@ import { NodeViewWrapper, type NodeViewProps } from "@tiptap/react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { inlineLatexToHtml } from "./nodeViewUtils";
+import { useLatexDraft } from "./useLatexDraft";
 
 export function InlineMathNodeView({ node, updateAttributes, editor }: NodeViewProps) {
   const [editing, setEditing] = useState(false);
   const { latex } = node.attrs as { latex: string };
   const disabled = !editor.isEditable;
+  // An empty latex is unrepresentable — see useLatexDraft.
+  const draft = useLatexDraft(latex, (next) => updateAttributes({ latex: next }));
 
   return (
     <NodeViewWrapper as="span" className="inline-flex items-center" data-testid="inlinemath-node" contentEditable={false}>
       {editing && !disabled ? (
         <span className="inline-flex items-center gap-1 rounded border border-border px-1 align-middle">
           <Input
-            value={latex}
+            value={draft.value}
             autoFocus
             className="h-6 w-28 px-1 py-0 text-sm"
-            onChange={(e) => updateAttributes({ latex: e.target.value })}
+            onChange={(e) => draft.onChange(e.target.value)}
+            onBlur={draft.onBlur}
             placeholder="LaTeX"
             aria-label="Expressão LaTeX inline"
           />

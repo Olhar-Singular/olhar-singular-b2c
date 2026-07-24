@@ -13,7 +13,7 @@
  * is extracted into pure, unit-testable functions.
  */
 
-import { useRef } from "react";
+import { useEffect, useRef } from "react";
 import { useEditor, ReactNodeViewRenderer, type Editor } from "@tiptap/react";
 import type { Extensions } from "@tiptap/core";
 import type { CanonicalDocument } from "@/lib/adaptation/canonical/schema";
@@ -75,6 +75,17 @@ export interface UseCanonicalEditorOptions {
   extraExtensions?: Extensions;
   /** Called on every editor selection change (e.g. to track the current block). */
   onSelectionUpdate?: (editor: Editor) => void;
+  /**
+   * Called with a human-readable reason when an edit CANNOT be converted to the
+   * canonical model (so nothing is emitted and nothing is autosaved), and with
+   * `null` as soon as conversion succeeds again.
+   *
+   * Surfacing this is not optional polish: while conversion fails the sheet goes
+   * on accepting keystrokes that are never persisted, and the wizard went on
+   * displaying "Salvo" over them. Only called when the state actually flips, so
+   * it is safe to drive React state with it.
+   */
+  onCaptureFailure?: (reason: string | null) => void;
 }
 
 export interface UseCanonicalEditorResult {
@@ -87,10 +98,19 @@ export function useCanonicalEditor({
   disabled = false,
   extraExtensions,
   onSelectionUpdate,
+  onCaptureFailure,
 }: UseCanonicalEditorOptions): UseCanonicalEditorResult {
   // Seed content once and track the last-known canonical doc to guard emits.
   const initialContentRef = useRef<PMNode>(canonicalToProseMirror(value));
   const lastDocRef = useRef<CanonicalDocument>(value);
+  // Last reported capture state, so the callback fires on transitions only.
+  const captureFailureRef = useRef<string | null>(null);
+
+  const reportCapture = (reason: string | null) => {
+    if (captureFailureRef.current === reason) return;
+    captureFailureRef.current = reason;
+    onCaptureFailure?.(reason);
+  };
 
   const editor = useEditor({
     extensions: [...buildCanonicalEditorExtensions(), ...(extraExtensions ?? [])],
@@ -98,18 +118,48 @@ export function useCanonicalEditor({
     editable: !disabled,
     onSelectionUpdate: ({ editor }) => onSelectionUpdate?.(editor),
     onUpdate: ({ editor }) => {
-      // Ordinary edits produce transient-invalid states (image with empty src,
-      // cleared math latex, all blocks deleted). Validate without throwing: when
-      // the doc isn't valid we keep the live ProseMirror state as the working
-      // source and do NOT emit — the parent keeps its last valid document.
+      // Ordinary edits produce transient-invalid states (all blocks deleted, a
+      // half-typed construct). Validate without throwing: when the doc isn't
+      // valid we keep the live ProseMirror state as the working source and do
+      // NOT emit — the parent keeps its last valid document.
+      //
+      // But we say so. Emitting an invalid document would corrupt the save;
+      // staying quiet about it is what made B8 costly — the sheet kept taking
+      // keystrokes, the status kept reading "Salvo", and none of it persisted.
       const result = tryProseMirrorToCanonical(editor.getJSON() as PMNode);
-      if (!result.ok) return;
+      if (!result.ok) {
+        // Warned unconditionally, not only in dev: `reportCapture` fires on the
+        // transition, so this is one line per freeze, and it is the breadcrumb
+        // that turns "it stopped saving" into a diagnosable report.
+        console.warn("[canonical-editor] edição não capturada:", result.reason);
+        reportCapture(result.reason);
+        return;
+      }
+      reportCapture(null);
       const next = result.value;
       if (docsEqual(next, lastDocRef.current)) return;
       lastDocRef.current = next;
       onChange(next);
     },
   });
+
+  // Follow a document that was replaced from OUTSIDE the editor — recovering a
+  // crash mirror, an undo that rewrites a nested field, any state change the
+  // sheet did not originate. Seeding only once left the folha showing the old
+  // document after such a swap, and the next keystroke re-emitted that stale
+  // doc, so the autosave wrote it back over the one the user had just chosen.
+  //
+  // The loop guard is `lastDocRef`: it holds whatever this editor last emitted,
+  // so a value echoed back down by the parent compares equal and re-seeds
+  // nothing. Only a document the editor did not produce gets through.
+  useEffect(() => {
+    if (!editor) return;
+    if (docsEqual(value, lastDocRef.current)) return;
+    lastDocRef.current = value;
+    // emitUpdate=false: this is not a user edit, and emitting would bounce the
+    // same document straight back up through onChange.
+    editor.commands.setContent(canonicalToProseMirror(value), false);
+  }, [editor, value]);
 
   return { editor };
 }

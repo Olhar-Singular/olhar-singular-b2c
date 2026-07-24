@@ -22,7 +22,7 @@ import { Button } from "@/components/ui/button";
 import { StepActivityType } from "./steps/activity-type/StepActivityType";
 import { StepActivityInput } from "./steps/activity-input/StepActivityInput";
 import { StepBarrierSelection } from "./steps/barriers/StepBarrierSelection";
-import { StepGenerate } from "./steps/generate/StepGenerate";
+import { StepGenerate, type GeneratedRow } from "./steps/generate/StepGenerate";
 import { StepReview } from "./steps/review/StepReview";
 import { StepExportCanonical } from "./steps/export/StepExportCanonical";
 import {
@@ -34,14 +34,10 @@ import {
   clearResult,
   type WizardData,
 } from "@/lib/adaptation/wizard/wizardState";
-import { wizardDataToPayload } from "@/lib/adaptation/wizard/rowMapping";
-import { saveDraft } from "@/lib/adaptation/persistence/adaptationsRepo";
 import { readMirror, clearMirror, type MirrorEntry } from "@/lib/adaptation/persistence/draftMirror";
 import { shouldOfferRestore } from "@/lib/adaptation/persistence/restoreDecision";
 import { useAdaptationDraft } from "@/hooks/useAdaptationDraft";
 import { useMarkReady } from "@/hooks/useAdaptations";
-import { useAuth } from "@/hooks/useAuth";
-import { parseDbError } from "@/lib/utils/errors";
 import type { AdaptationResult, CanonicalDocument, DocumentHeader, PageStyle } from "@/lib/adaptation/canonical/schema";
 
 const STEPS = [
@@ -88,7 +84,6 @@ const SAVE_STATUS_LABEL: Record<string, string> = {
 
 export default function CanonicalAdaptationWizard({ editMode }: Props = {}) {
   const navigate = useNavigate();
-  const { user } = useAuth();
   const markReady = useMarkReady();
   const [isGenerating, setIsGenerating] = useState(false);
   const [isSaved, setIsSaved] = useState(!!editMode);
@@ -101,6 +96,12 @@ export default function CanonicalAdaptationWizard({ editMode }: Props = {}) {
   const navGuard = useNavigationGuard(isGenerating || hasUnsavedResult);
   const [stepIndex, setStepIndex] = useState(editMode ? REVIEW_INDEX : 0);
   const [confirmRegenerate, setConfirmRegenerate] = useState(false);
+  /**
+   * Set while the editor cannot convert the sheet to the canonical model, i.e.
+   * while edits are NOT reaching the autosave. It overrides the save status:
+   * "Salvo" over dropped keystrokes is exactly how B8 destroyed work.
+   */
+  const [captureFailure, setCaptureFailure] = useState<string | null>(null);
   // Crash-mirror recovery: a surviving mirror newer than the loaded row means a
   // save was lost. We hold it here and prompt the user to recover it.
   const [pendingMirror, setPendingMirror] = useState<MirrorEntry | null>(null);
@@ -128,16 +129,29 @@ export default function CanonicalAdaptationWizard({ editMode }: Props = {}) {
   // loaded server state means an autosave was lost — offer to recover it.
   useEffect(() => {
     if (!draftId || checkedMirrorFor.current === draftId) return;
-    checkedMirrorFor.current = draftId;
     let cancelled = false;
     void (async () => {
       const mirror = await readMirror(draftId);
       const serverUpdatedAt = editMode ? editMode.initialUpdatedAt : null;
+      // Hand over what the server actually loaded: divergence, not recency,
+      // decides whether the mirror still holds work. A failed autosave followed
+      // by a successful "Salvar" leaves the row NEWER than the mirror and still
+      // missing the edit — judged on timestamps alone, we would delete the only
+      // copy of it.
+      const serverResult = editMode ? editMode.initialData.result : null;
+      // A cancelled run must leave NO trace: the effect that superseded it will
+      // redo the check. This is why the latch is set here and not up front —
+      // the app runs in <StrictMode>, which mounts effects twice, so latching
+      // before the read meant run 1 was cancelled by the cleanup and run 2
+      // short-circuited on the latch. The recovery prompt never appeared in the
+      // real browser at all, however much work the mirror was holding.
       if (cancelled) return;
-      if (shouldOfferRestore(mirror, serverUpdatedAt)) {
+      checkedMirrorFor.current = draftId;
+      if (shouldOfferRestore(mirror, serverUpdatedAt, serverResult)) {
         setPendingMirror(mirror);
       } else if (mirror) {
-        // Stale/older mirror: clear it so it never lingers to mislead later.
+        // Nothing to recover (the row already holds it): clear the leftover so
+        // it never lingers to mislead a later open.
         void clearMirror(draftId);
       }
     })();
@@ -162,7 +176,7 @@ export default function CanonicalAdaptationWizard({ editMode }: Props = {}) {
     setPendingMirror(null);
   }, [pendingMirror]);
 
-  const { status: saveStatus, flush, currentUpdatedAt } = useAdaptationDraft({
+  const { status: saveStatus, flush, currentUpdatedAt, syncUpdatedAt } = useAdaptationDraft({
     draftId,
     result: data.result,
     initialUpdatedAt: draftUpdatedAt,
@@ -187,33 +201,26 @@ export default function CanonicalAdaptationWizard({ editMode }: Props = {}) {
     setStepIndex(target);
   }
 
-  // First generation creates the draft row so autosave has somewhere to write.
-  const handleResult = useCallback(
-    async (result: AdaptationResult) => {
-      // Reset isGenerating immediately when a result arrives. The real StepGenerate
-      // calls onLoadingChange(false) via useEffect, but that effect may not fire when
-      // the component is unmounted in the same React 18 batch as onNext(). Resetting
-      // here ensures the navigation guard switches to "unsaved" mode, not "generating".
-      setIsGenerating(false);
-      setData((prev) => setResult(prev, result));
-      // Draft already exists (e.g. regenerate) → autosave handles the update.
-      if (draftId) return;
-      /* v8 ignore next -- user is guaranteed by ProtectedRoute */
-      if (!user) return;
-      try {
-        const payload = wizardDataToPayload(
-          { ...data, result },
-          user.id,
-        );
-        const row = await saveDraft(payload);
-        setDraftId(row.id);
-        setDraftUpdatedAt(row.updated_at);
-      } catch (err) {
-        toast.error(parseDbError(err, "Erro ao salvar o rascunho."));
-      }
-    },
-    [draftId, user, data],
-  );
+  // A7: the row is created by the EDGE FUNCTION, before it settles the charge —
+  // so by the time a document reaches us it is already durable and we only
+  // adopt its identity. The wizard used to do the INSERT here, which meant
+  // every millisecond between the 200 and that write was a window where the
+  // user had paid for something that existed nowhere but in memory.
+  //
+  // Adoption is unconditional, including on regenerate: a regeneration is a new
+  // paid request and therefore a new row. Staying bound to the previous one
+  // would autosave the new document over the old adaptation, against a token
+  // that no longer describes it.
+  const handleResult = useCallback((result: AdaptationResult, row: GeneratedRow) => {
+    // Reset isGenerating immediately when a result arrives. The real StepGenerate
+    // calls onLoadingChange(false) via useEffect, but that effect may not fire when
+    // the component is unmounted in the same React 18 batch as onNext(). Resetting
+    // here ensures the navigation guard switches to "unsaved" mode, not "generating".
+    setIsGenerating(false);
+    setData((prev) => setResult(prev, result));
+    setDraftId(row.id);
+    setDraftUpdatedAt(row.updatedAt);
+  }, []);
 
   const handleDocumentChange = useCallback((document: CanonicalDocument) => {
     setData((prev) => setDocument(prev, document));
@@ -233,6 +240,13 @@ export default function CanonicalAdaptationWizard({ editMode }: Props = {}) {
     setDraftId(null);
     setDraftUpdatedAt(null);
     setIsSaved(false);
+    // Everything below belonged to the adaptation being left behind. The
+    // optimistic token is reset inside the autosave hook (it rebinds whenever
+    // the draft id changes); what has to be dropped HERE is the leftover UI
+    // state, so a restore prompt for the old draft cannot land on the new one
+    // and the next draft gets its own mirror check.
+    setPendingMirror(null);
+    checkedMirrorFor.current = null;
   }
 
   function confirmRegenerateNow() {
@@ -247,9 +261,24 @@ export default function CanonicalAdaptationWizard({ editMode }: Props = {}) {
     if (!draftId) return;
     // Flush any pending autosave first so an edit made within the debounce
     // window lands in adaptation_result before the row is flipped to ready.
-    // The flush returns the freshest updated_at it produced, so markReady's
+    const flushed = await flush();
+    // A FAILED flush must stop the save dead. Marking the row ready anyway used
+    // to report "Salvo" over edits that never left the browser — and worse, the
+    // server-side updated_at bump then made the surviving crash mirror look
+    // stale, so the next open threw away the only copy of them.
+    if (flushed.status === "failed") {
+      // A conflict has already been surfaced (toast + reload) by the hook's
+      // onConflict; only the plain failure still needs telling.
+      if (flushed.reason === "error") {
+        toast.error(
+          "Não foi possível salvar suas últimas alterações. Verifique a conexão e tente de novo.",
+        );
+      }
+      return;
+    }
+    // The flush hands back the freshest updated_at it produced, so markReady's
     // optimistic guard uses a token that cannot be stale from this same save.
-    const latestUpdatedAt = (await flush()) ?? currentUpdatedAt;
+    const latestUpdatedAt = flushed.updatedAt ?? currentUpdatedAt;
     /* v8 ignore next -- guard: a draft always has a known updated_at by now */
     if (!latestUpdatedAt) return;
     // markReady uses the latest known updated_at (advanced by every autosave) so
@@ -260,9 +289,14 @@ export default function CanonicalAdaptationWizard({ editMode }: Props = {}) {
       handleConflict();
       return;
     }
+    // markReady wrote to the row, so the trigger stamped a NEW updated_at. Feed
+    // it back to the autosave token or the next keystroke saves against a value
+    // the server has already moved past — a conflict, a navigate(0), and the
+    // edit that triggered it gone.
+    syncUpdatedAt(res.updatedAt);
     toast.success("Adaptação salva!");
     setIsSaved(true);
-  }, [draftId, currentUpdatedAt, flush, markReady, handleConflict]);
+  }, [draftId, currentUpdatedAt, flush, markReady, handleConflict, syncUpdatedAt]);
 
   const renderStep = () => {
     switch (currentKey) {
@@ -306,6 +340,7 @@ export default function CanonicalAdaptationWizard({ editMode }: Props = {}) {
             onRegenerate={() => setConfirmRegenerate(true)}
             onNext={onNext}
             onPrev={onPrev}
+            onCaptureFailure={setCaptureFailure}
           />
         );
       case "export":
@@ -360,14 +395,29 @@ export default function CanonicalAdaptationWizard({ editMode }: Props = {}) {
           Passo {stepIndex + 1} de {STEPS.length}
         </p>
         {/* Autosave status — shown once a draft exists and from the review step on. */}
-        {draftId && stepIndex >= REVIEW_INDEX && stepIndex <= EXPORT_INDEX && saveStatus !== "idle" && (
+        {captureFailure !== null ? (
           <p
-            className="text-xs text-muted-foreground"
+            className="text-xs font-medium text-destructive"
             role="status"
             aria-live="polite"
+            data-testid="capture-failure"
+            title={captureFailure}
           >
-            {SAVE_STATUS_LABEL[saveStatus]}
+            Alterações não estão sendo salvas — desfaça a última edição
           </p>
+        ) : (
+          draftId &&
+          stepIndex >= REVIEW_INDEX &&
+          stepIndex <= EXPORT_INDEX &&
+          saveStatus !== "idle" && (
+            <p
+              className="text-xs text-muted-foreground"
+              role="status"
+              aria-live="polite"
+            >
+              {SAVE_STATUS_LABEL[saveStatus]}
+            </p>
+          )
         )}
       </div>
 

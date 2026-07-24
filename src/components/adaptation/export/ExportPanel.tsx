@@ -22,7 +22,17 @@ import { Switch } from "@/components/ui/switch";
 import type { CanonicalDocument, DocumentHeader, PageStyle } from "@/lib/adaptation/canonical/schema";
 import { documentToPlainText } from "@/lib/adaptation/canonical/plainText";
 import { downloadPdf } from "./exportPdf";
-import { downloadDocx } from "./exportDocx";
+import { downloadDocx, docxExportWarnings } from "./exportDocx";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { type PanelSettings } from "./panelSettings";
 
 type Props = {
@@ -55,6 +65,12 @@ export function ExportPanel({
   const [pageBreakPerQuestion, setPageBreakPerQuestion] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [exportingWord, setExportingWord] = useState(false);
+  /**
+   * Non-empty while the "what won't survive Word" dialog is open. The export
+   * used to run straight through and toast "Word gerado!" over content the file
+   * did not contain — the teacher only found the hole in front of the class.
+   */
+  const [wordWarnings, setWordWarnings] = useState<string[]>([]);
 
   const setField = (key: keyof DocumentHeader, value: string) =>
     onHeaderChange({ ...header, [key]: value });
@@ -80,7 +96,7 @@ export function ExportPanel({
     }
   };
 
-  const handleExportWord = async () => {
+  const runWordExport = async () => {
     setExportingWord(true);
     try {
       await onDownloadWord(document, header, pageStyle);
@@ -90,6 +106,17 @@ export function ExportPanel({
     } finally {
       setExportingWord(false);
     }
+  };
+
+  const handleExportWord = async () => {
+    const warnings = docxExportWarnings(document, pageStyle);
+    // Only interrupt when there is something to say; a clean document still
+    // downloads in one click.
+    if (warnings.length > 0) {
+      setWordWarnings(warnings);
+      return;
+    }
+    await runWordExport();
   };
 
   return (
@@ -157,6 +184,41 @@ export function ExportPanel({
           <FileText className="mr-1 h-4 w-4" /> Exportar Word
         </Button>
       </div>
+
+      <AlertDialog
+        open={wordWarnings.length > 0}
+        onOpenChange={(open) => !open && setWordWarnings([])}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>O que não vai para o Word</AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div>
+                <p className="mb-2">
+                  O arquivo será gerado, mas estes itens não saem iguais ao PDF:
+                </p>
+                <ul className="list-disc space-y-1 pl-5 text-left">
+                  {wordWarnings.map((warning) => (
+                    <li key={warning}>{warning}</li>
+                  ))}
+                </ul>
+                <p className="mt-2">Para fidelidade total, exporte em PDF.</p>
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                setWordWarnings([]);
+                void runWordExport();
+              }}
+            >
+              Baixar mesmo assim
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
