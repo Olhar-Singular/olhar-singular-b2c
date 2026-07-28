@@ -6,6 +6,9 @@ import {
   MAX_ACTIVITY_TYPE_CHARS,
   MAX_OBSERVATION_CHARS,
   AI_REQUEST_TIMEOUT_MS,
+  AI_REASK_TIMEOUT_MS,
+  AI_TOTAL_BUDGET_MS,
+  attemptTimeoutMs,
   getRelevantProfiles,
   buildSystemPrompt,
 } from "./adaptationPrompt";
@@ -73,6 +76,19 @@ describe("buildSystemPrompt", () => {
     expect(prompt).toContain("NUNCA invente");
     expect(prompt).toContain("URL inventada");
   });
+
+  // gemini-2.5-pro was observed mixing the two enums in production: emitting
+  // `answer.kind: "scaffolding"` (a BLOCK type) and a `table` BLOCK inside a
+  // stem (`table` is an answer kind). Each mistake costs a ~50s reask.
+  it("keeps the block-type and answer-kind vocabularies apart", () => {
+    const prompt = buildSystemPrompt([{ dimension: "tea" }]);
+    // The closed list of block types, and that nothing else is a block.
+    expect(prompt).toContain("NÃO existem outros tipos de bloco");
+    expect(prompt).toContain('"table" NÃO é um tipo de bloco');
+    // And that block names are never valid answer kinds.
+    expect(prompt).toContain('NUNCA use um nome de bloco como "answer.kind"');
+    expect(prompt).toContain('"scaffolding"');
+  });
 });
 
 describe("named constants", () => {
@@ -81,5 +97,34 @@ describe("named constants", () => {
     expect(MAX_ACTIVITY_TYPE_CHARS).toBe(100);
     expect(MAX_OBSERVATION_CHARS).toBe(2000);
     expect(AI_REQUEST_TIMEOUT_MS).toBe(90_000);
+  });
+});
+
+// A reask replays the whole previous document plus the error list, so it runs
+// materially slower than the first call — measured at 28s → 64s on the same
+// activity. Holding it to the first call's budget is what turned recoverable
+// validation failures into "A IA demorou demais" 502s.
+describe("attemptTimeoutMs", () => {
+  it("gives the first attempt the base timeout", () => {
+    expect(attemptTimeoutMs(1, 0)).toBe(AI_REQUEST_TIMEOUT_MS);
+  });
+
+  it("gives a reask the larger reask timeout", () => {
+    expect(attemptTimeoutMs(2, 0)).toBe(AI_REASK_TIMEOUT_MS);
+    expect(AI_REASK_TIMEOUT_MS).toBeGreaterThan(AI_REQUEST_TIMEOUT_MS);
+  });
+
+  it("never lets the attempts exceed the total budget", () => {
+    // 200s already spent, so only 40s of the 240s budget remain.
+    expect(attemptTimeoutMs(2, 200_000)).toBe(AI_TOTAL_BUDGET_MS - 200_000);
+  });
+
+  it("returns 0 when too little budget remains to be worth an attempt", () => {
+    expect(attemptTimeoutMs(2, AI_TOTAL_BUDGET_MS - 1_000)).toBe(0);
+    expect(attemptTimeoutMs(2, AI_TOTAL_BUDGET_MS + 50_000)).toBe(0);
+  });
+
+  it("keeps the worst case inside the Supabase wall-clock limit", () => {
+    expect(AI_TOTAL_BUDGET_MS).toBeLessThan(400_000);
   });
 });

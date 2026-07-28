@@ -28,7 +28,7 @@ import {
   MAX_ACTIVITY_CHARS,
   MAX_ACTIVITY_TYPE_CHARS,
   MAX_OBSERVATION_CHARS,
-  AI_REQUEST_TIMEOUT_MS,
+  attemptTimeoutMs,
 } from "../_shared/adaptationPrompt.ts";
 import { aiActivityJsonSchema } from "../../../src/lib/adaptation/canonical/ai.ts";
 
@@ -196,15 +196,22 @@ BARREIRAS OBSERVÁVEIS:
       const reaskMessages: ChatMessage[] = [];
       let lastErrors: string[] = [];
       let totalTokens: number | null = null;
+      const requestStart = Date.now();
 
       for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+        // Each attempt gets its own budget, bounded by what is left of the
+        // request-wide one. Firing a call we cannot afford to wait for would
+        // only trade a reportable validation error for an opaque timeout.
+        const budgetMs = attemptTimeoutMs(attempt, Date.now() - requestStart);
+        if (budgetMs === 0) break;
+
         const requestBody = buildRequestBody(
           { model: modelName, systemPrompt, userPrompt, extraMessages: reaskMessages },
           jsonSchema,
         );
 
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), AI_REQUEST_TIMEOUT_MS);
+        const timeoutId = setTimeout(() => controller.abort(), budgetMs);
         const aiStartTime = Date.now();
         let aiResponse: Response;
         let aiDurationMs: number;
@@ -223,7 +230,10 @@ BARREIRAS OBSERVÁVEIS:
         } catch (fetchErr: unknown) {
           aiDurationMs = Date.now() - aiStartTime;
           const isTimeout = (fetchErr as { name?: string })?.name === "AbortError";
-          logAiUsage({
+          // AWAITED, unlike the mid-loop logs: this branch returns immediately,
+          // and a fire-and-forget insert dies with the isolate. That is why no
+          // `timeout` row has ever reached ai_usage_logs despite real timeouts.
+          await logAiUsage({
             user_id: user.id,
             action_type: "adaptation",
             model: modelName,
@@ -232,7 +242,9 @@ BARREIRAS OBSERVÁVEIS:
             prompt_text: userPrompt,
             request_duration_ms: aiDurationMs,
             status: isTimeout ? "timeout" : "error",
-            error_message: isTimeout ? "Request timed out after 90s" : ((fetchErr as Error)?.message || "Network error"),
+            error_message: isTimeout
+              ? `Request timed out after ${Math.round(budgetMs / 1000)}s (attempt ${attempt})`
+              : ((fetchErr as Error)?.message || "Network error"),
             metadata: { activity_type: sanitizedType, barriers_count: barriers.length, attempt },
           }).catch(() => {});
           return await failure(
@@ -246,7 +258,8 @@ BARREIRAS OBSERVÁVEIS:
         if (!aiResponse.ok) {
           const errText = await aiResponse.text();
           console.error("AI gateway error:", aiResponse.status, errText);
-          logAiUsage({
+          // Awaited for the same reason as the timeout branch above.
+          await logAiUsage({
             user_id: user.id,
             action_type: "adaptation",
             model: modelName,
@@ -326,7 +339,10 @@ BARREIRAS OBSERVÁVEIS:
             console.error("Settle failed for user:", user.id, "reservation:", requestId.id, e);
           }
 
-          logAiUsage({
+          // Awaited: this is the last thing before the response, and a
+          // fire-and-forget insert dies with the isolate — which is why
+          // successful generations have been missing from the cost dashboard.
+          await logAiUsage({
             user_id: user.id,
             action_type: "adaptation",
             model: modelName,

@@ -200,11 +200,31 @@ export const AiQuestionSchema = z.object({
 export type AiQuestion = z.infer<typeof AiQuestionSchema>;
 
 /**
+ * A top-level block: a content block OR a question node.
+ *
+ * Discriminated on `type` rather than a plain `z.union([content, question])`:
+ * a plain union reports only `blocks.N: Invalid input` and swallows the real
+ * cause, and that string is exactly what the reask turn feeds back to the
+ * model. Naming the offending field ("answer.kind", "stem.0.type") is what
+ * lets the model fix its mistake in one attempt instead of burning another
+ * ~50s round-trip — which is how a validation failure turns into a timeout.
+ */
+export const AiBlockSchema = z.discriminatedUnion("type", [
+  AiHeading,
+  AiParagraph,
+  AiBlockMath,
+  AiImage,
+  AiScaffolding,
+  AiQuestionSchema,
+]);
+export type AiBlock = z.infer<typeof AiBlockSchema>;
+
+/**
  * Top-level activity schema returned by the AI edge function.
  * blocks may be content blocks OR question nodes.
  */
 export const AiActivitySchema = z.object({
-  blocks: z.array(z.union([AiContentBlockSchema, AiQuestionSchema])),
+  blocks: z.array(AiBlockSchema),
   strategies_applied: z.array(z.string()),
   pedagogical_justification: z.string(),
   implementation_tips: z.array(z.string()),
@@ -383,12 +403,31 @@ export function buildAdaptationResult(ai: AiActivity): AdaptationResult {
 // 5. parseAiActivity()
 // ---------------------------------------------------------------------------
 
-/** Format a ZodError's issues into "<path>: <message>" strings. */
-function formatAiIssues(error: z.ZodError): string[] {
-  return error.issues.map((issue) => {
+/**
+ * Format a ZodError's issues into "<path>: <message>" strings.
+ *
+ * `invalid_union` issues carry the per-variant failures in `unionErrors` and
+ * report only a bare "Invalid input" themselves. Those sub-issues already hold
+ * absolute paths, so they are collected in place of their useless parent —
+ * without this, a nested union (e.g. heading `level`) still reaches the reask
+ * turn as an unactionable message.
+ */
+function collectAiIssues(issues: z.ZodIssue[]): string[] {
+  const out: string[] = [];
+  for (const issue of issues) {
+    const { unionErrors } = issue as z.ZodIssue & { unionErrors?: z.ZodError[] };
+    if (unionErrors) {
+      for (const nested of unionErrors) out.push(...collectAiIssues(nested.issues));
+      continue;
+    }
     const path = issue.path.length > 0 ? issue.path.join(".") : "(root)";
-    return `${path}: ${issue.message}`;
-  });
+    out.push(`${path}: ${issue.message}`);
+  }
+  return out;
+}
+
+function formatAiIssues(error: z.ZodError): string[] {
+  return collectAiIssues(error.issues);
 }
 
 export type AiParseSuccess = { ok: true; value: AiActivity };

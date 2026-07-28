@@ -11,8 +11,45 @@ export const MAX_ACTIVITY_CHARS = 15000;
 export const MAX_ACTIVITY_TYPE_CHARS = 100;
 export const MAX_OBSERVATION_CHARS = 2000;
 
-// ─── AI request timeout (ms) ───
+// ─── AI request timeouts (ms) ───
+
+/** Budget for the first call. */
 export const AI_REQUEST_TIMEOUT_MS = 90_000;
+
+/**
+ * Budget for a reask. A reask replays the whole rejected document plus the
+ * error list, so it generates materially more than the first call did — 28s
+ * → 64s on the same activity, measured in production. Holding it to the base
+ * timeout is what turned a recoverable validation failure into a 502.
+ */
+export const AI_REASK_TIMEOUT_MS = 120_000;
+
+/**
+ * Ceiling across ALL attempts of one request, so a slow chain can never run
+ * into the Supabase edge-function wall-clock limit (400s) — where the isolate
+ * is killed outright and the credit reservation is left for the reconciliation
+ * job instead of being reversed inline.
+ */
+export const AI_TOTAL_BUDGET_MS = 240_000;
+
+/**
+ * Below this, an attempt cannot plausibly finish — the fastest generation ever
+ * logged took ~23s. Firing one anyway would trade the validation errors we can
+ * actually report for an opaque "a IA demorou demais", after a longer wait.
+ */
+const MIN_ATTEMPT_MS = 30_000;
+
+/**
+ * Timeout to give attempt `attempt` after `elapsedMs` already spent on this
+ * request. Returns 0 when the remaining budget is too small to be worth a
+ * call — the caller must then stop retrying and report the validation errors.
+ */
+export function attemptTimeoutMs(attempt: number, elapsedMs: number): number {
+  const cap = attempt === 1 ? AI_REQUEST_TIMEOUT_MS : AI_REASK_TIMEOUT_MS;
+  const remaining = AI_TOTAL_BUDGET_MS - elapsedMs;
+  if (remaining < MIN_ATTEMPT_MS) return 0;
+  return Math.min(cap, remaining);
+}
 
 // Fallback neurodivergence profiles used when no barrier maps to a known
 // strategy, so the prompt always carries concrete guidance.
@@ -241,7 +278,9 @@ Você DEVE responder APENAS com um objeto JSON que satisfaz o schema fornecido (
 
 Regras do conteúdo do JSON:
 - "blocks": a atividade adaptada como uma lista ORDENADA de blocos. Cada bloco é um bloco de conteúdo (heading, paragraph, blockMath, image, scaffolding) ou uma questão (type "question").
-- Questões usam "answer.kind" como ENUM: "open", "multipleChoice", "trueFalse", "checkbox", "matching", "ordering", "fillBlank", "table".
+- DOIS VOCABULÁRIOS SEPARADOS — NÃO OS MISTURE. O campo "type" (de um bloco) e o campo "answer.kind" (de uma questão) têm listas DIFERENTES e um nome NUNCA vale para os dois:
+  · "type" de bloco aceita SOMENTE: "heading", "paragraph", "blockMath", "image", "scaffolding", "question". NÃO existem outros tipos de bloco. Em particular, "table" NÃO é um tipo de bloco: para uma tabela, use uma questão com "answer.kind": "table" (campo "rows"); se a tabela for apenas informativa, descreva-a em parágrafos. Isso vale também dentro do "stem" de uma questão.
+  · "answer.kind" aceita SOMENTE: "open", "multipleChoice", "trueFalse", "checkbox", "matching", "ordering", "fillBlank", "table". NUNCA use um nome de bloco como "answer.kind" — "scaffolding", "paragraph" e "heading" são INVÁLIDOS aí. Para dar apoio passo a passo dentro de uma questão, coloque um bloco "scaffolding" no "stem" e use "answer.kind": "open".
 - Em "multipleChoice", marque a alternativa correta com o BOOLEAN "correct": true (EXATAMENTE UMA correta). Em "trueFalse" use o BOOLEAN "value". Em "checkbox" use o BOOLEAN "checked".
 - MATEMÁTICA: use "inlineMath"/"blockMath" com o campo "latex" (LaTeX puro, SEM delimitadores de cifrão). Nunca escreva LaTeX dentro de texto comum.
 - IMAGENS — REGRA CRÍTICA: NUNCA invente imagens nem URLs de imagem. Só inclua um bloco de imagem (type "image") quando o texto original contiver um marcador no formato [IMAGEM: <url>]; nesse caso, no enunciado (stem) da questão correspondente, use "src" EXATAMENTE igual à <url> do marcador e um "alt" curto e descritivo (NUNCA deixe o "alt" vazio), e NÃO deixe o marcador literal [IMAGEM: ...] no texto de saída — substitua-o pelo bloco "image". Se uma figura ajudaria mas NÃO há marcador [IMAGEM:] no original, descreva-a em TEXTO (um parágrafo) — jamais gere um bloco "image" com URL inventada.

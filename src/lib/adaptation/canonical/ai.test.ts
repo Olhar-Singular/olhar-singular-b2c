@@ -393,6 +393,110 @@ describe("parseAiActivity — adversarial rejections", () => {
 });
 
 // ---------------------------------------------------------------------------
+// Actionable reask errors
+//
+// The reask turn feeds these strings straight back to the model, so an error
+// that does not name the offending field teaches it nothing and it burns
+// another ~50s attempt reproducing the same mistake. The two shapes below are
+// verbatim hallucinations captured from gemini-2.5-pro in production.
+// ---------------------------------------------------------------------------
+
+describe("parseAiActivity — errors must name the offending field", () => {
+  const wrap = (block: unknown) => ({
+    blocks: [block],
+    strategies_applied: [],
+    pedagogical_justification: "x",
+    implementation_tips: [],
+  });
+
+  it("names answer.kind when the model invents an answer kind", () => {
+    // Observed: the model borrows a BLOCK type name for `answer.kind`.
+    const result = parseAiActivity(
+      wrap({
+        type: "question",
+        stem: [{ type: "paragraph", content: [{ type: "text", text: "Resolva." }] }],
+        answer: { kind: "scaffolding", items: ["Passo 1", "Passo 2"] },
+      }),
+    );
+
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.errors.some((e) => e.startsWith("blocks.0.answer.kind:"))).toBe(true);
+    expect(result.errors.some((e) => e.includes("multipleChoice"))).toBe(true);
+  });
+
+  it("names stem.0.type when the model invents a content block", () => {
+    // Observed: `table` exists only as an answer kind, so the model invents a
+    // `table` BLOCK (with a made-up `tableRow` inline) to put one in the stem.
+    const result = parseAiActivity(
+      wrap({
+        type: "question",
+        stem: [
+          { type: "table", content: [{ type: "tableRow", text: "a,b" }] },
+          { type: "paragraph", content: [{ type: "text", text: "Responda." }] },
+        ],
+        answer: { kind: "open" },
+      }),
+    );
+
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.errors.some((e) => e.startsWith("blocks.0.stem.0.type:"))).toBe(true);
+  });
+
+  it("names blocks.0.type for an unknown top-level block", () => {
+    const result = parseAiActivity(wrap({ type: "table", rows: [] }));
+
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.errors.some((e) => e.startsWith("blocks.0.type:"))).toBe(true);
+    expect(result.errors.some((e) => e.includes("question"))).toBe(true);
+  });
+
+  it("never reports a bare 'Invalid input' with no field path", () => {
+    const result = parseAiActivity(
+      wrap({
+        type: "question",
+        stem: [{ type: "paragraph", content: [{ type: "text", text: "Resolva." }] }],
+        answer: { kind: "scaffolding", items: [] },
+      }),
+    );
+
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.errors).not.toContain("blocks.0: Invalid input");
+  });
+
+  it("unwraps a nested (non-discriminated) union into per-variant causes", () => {
+    // `level` is a union of literals — the union itself only says
+    // "Invalid input", so the accepted values must come from its variants.
+    const result = parseAiActivity(
+      wrap({ type: "heading", level: 4, content: [{ type: "text", text: "Oi" }] }),
+    );
+
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.errors.every((e) => e.startsWith("blocks.0.level:"))).toBe(true);
+    expect(result.errors.length).toBe(3);
+  });
+
+  it("unwraps nested union causes into the flattened error list", () => {
+    // RichText is a union of inline nodes; a bad inline must still surface its
+    // own path rather than collapsing to the array element.
+    const result = parseAiActivity(
+      wrap({
+        type: "paragraph",
+        content: [{ type: "sparkles", text: "oi" }],
+      }),
+    );
+
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.errors.some((e) => e.startsWith("blocks.0.content.0.type:"))).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
 // A1 — AI image src allowlist
 // ---------------------------------------------------------------------------
 
