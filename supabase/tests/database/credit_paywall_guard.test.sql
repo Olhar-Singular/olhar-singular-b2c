@@ -113,19 +113,36 @@ SELECT is((SELECT count(*)::int FROM u), 1,
 
 RESET role;
 
--- ── As anon: RLS has no UPDATE policy for anon, so every row is filtered out ──
--- (anon holds the table-level UPDATE grant via Supabase defaults, so the block
--- is RLS — the statement silently affects 0 rows rather than raising.)
+-- ── As anon: the row must be untouchable, whichever layer says no ────────────
+-- WHICH layer blocks it depends on how the database was provisioned, so the
+-- assertion must not name one. On a database created by a current Supabase
+-- image (CI's `supabase db start`) anon holds NO grant on profiles — the
+-- UPDATE raises 42501 before RLS is ever consulted. On a legacy database
+-- (local, prod) anon still carries the old default UPDATE grant, and RLS
+-- filters every row instead, affecting 0 rows without raising. Asserting
+-- either mechanism alone makes the suite pass in one environment and fail in
+-- the other, so assert the OUTCOME: the money column is unchanged.
 SELECT set_config('request.jwt.claims', '{"role":"anon"}', true);
 SET LOCAL role anon;
 
-WITH u AS (
+DO $anon_update$
+BEGIN
   UPDATE public.profiles SET credit_balance = 999999
-    WHERE id = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa' RETURNING 1)
-SELECT is((SELECT count(*)::int FROM u), 0,
-  'anon cannot change any profile row (RLS denies ⇒ 0 rows affected)');
+    WHERE id = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa';
+EXCEPTION WHEN insufficient_privilege THEN
+  -- Blocked at the grant layer. Swallowed so the outer transaction survives;
+  -- the assertion below is what actually decides the test.
+  NULL;
+END
+$anon_update$;
 
 RESET role;
+
+SELECT is(
+  (SELECT credit_balance FROM public.profiles
+     WHERE id = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa'),
+  50,
+  'anon cannot change any profile row (money column untouched)');
 
 -- ═══════════════════════════════════════════════════════════════════════════
 -- Legit service_role paths stay intact (webhooks, edge-fn free-first + deduct)
