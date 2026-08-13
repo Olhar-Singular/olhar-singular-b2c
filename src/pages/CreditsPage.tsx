@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { useAuth } from "@/hooks/useAuth";
-import { useTransactionHistory, useCreateStripeCheckout } from "@/hooks/useCredits";
+import { useTransactionHistory, useCreateStripeCheckout, useCreateCheckout } from "@/hooks/useCredits";
 
 const PACKAGES = [
   { credits: 30, amountBrl: 9.9, label: "Básico" },
@@ -36,7 +36,8 @@ export default function CreditsPage() {
   const { profile } = useAuth();
   const { data: transactions = [], isLoading } = useTransactionHistory();
   const stripeCheckout = useCreateStripeCheckout();
-  const buying = stripeCheckout.isPending;
+  const pixCheckout = useCreateCheckout();
+  const buying = stripeCheckout.isPending || pixCheckout.isPending;
 
   return (
     <div className="mx-auto max-w-2xl px-4 py-8 space-y-8">
@@ -105,10 +106,9 @@ export default function CreditsPage() {
                     variant="ghost"
                     disabled={buying}
                     onClick={() =>
-                      stripeCheckout.mutateAsync({
+                      pixCheckout.mutateAsync({
                         credits: pkg.credits,
                         amountBrl: pkg.amountBrl,
-                        method: "pix",
                       })
                     }
                   >
@@ -155,10 +155,9 @@ export default function CreditsPage() {
                     variant="ghost"
                     disabled={buying}
                     onClick={() =>
-                      stripeCheckout.mutateAsync({
+                      pixCheckout.mutateAsync({
                         credits: TEST_PACKAGE.credits,
                         amountBrl: TEST_PACKAGE.amountBrl,
-                        method: "pix",
                       })
                     }
                   >
@@ -171,7 +170,7 @@ export default function CreditsPage() {
           )}
         </div>
         <p className="text-xs text-muted-foreground text-center">
-          Cartão de crédito e Pix via Stripe. Créditos nunca expiram.
+          Cartão via Stripe, Pix via Mercado Pago. Créditos nunca expiram.
         </p>
       </section>
 

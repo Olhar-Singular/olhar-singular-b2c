@@ -26,10 +26,12 @@ const mockTransactions = [
 ];
 
 const mockStripeCheckout = vi.fn();
+const mockPixCheckout = vi.fn();
 
 vi.mock("@/hooks/useCredits", () => ({
   useTransactionHistory: vi.fn(() => ({ data: mockTransactions, isLoading: false })),
   useCreateStripeCheckout: vi.fn(() => ({ mutateAsync: mockStripeCheckout, isPending: false })),
+  useCreateCheckout: vi.fn(() => ({ mutateAsync: mockPixCheckout, isPending: false })),
 }));
 
 vi.mock("@/hooks/useAuth", () => ({
@@ -56,6 +58,10 @@ describe("CreditsPage", () => {
     } as never);
     vi.mocked(m.useCreateStripeCheckout).mockReturnValue({
       mutateAsync: mockStripeCheckout,
+      isPending: false,
+    } as never);
+    vi.mocked(m.useCreateCheckout).mockReturnValue({
+      mutateAsync: mockPixCheckout,
       isPending: false,
     } as never);
     const auth = await import("@/hooks/useAuth");
@@ -120,9 +126,9 @@ describe("CreditsPage", () => {
     );
   });
 
-  it("sends the Pix method to the same Stripe checkout", async () => {
+  it("sends the Pix click to the Mercado Pago checkout, not Stripe", async () => {
     const user = userEvent.setup();
-    mockStripeCheckout.mockResolvedValue({ url: "https://stripe.com/pix" });
+    mockPixCheckout.mockResolvedValue({ url: "https://mp.com/pix" });
     renderPage();
 
     const pixButtons = screen.getAllByRole("button", { name: /^pix$/i });
@@ -130,12 +136,12 @@ describe("CreditsPage", () => {
     await user.click(pixButtons[1]);
 
     await waitFor(() =>
-      expect(mockStripeCheckout).toHaveBeenCalledWith({
+      expect(mockPixCheckout).toHaveBeenCalledWith({
         credits: 120,
         amountBrl: 29.9,
-        method: "pix",
       })
     );
+    expect(mockStripeCheckout).not.toHaveBeenCalled();
   });
 
   it("does not render the R$1 test package for regular users", () => {
@@ -186,17 +192,16 @@ describe("CreditsPage", () => {
       profile: { credit_balance: 9, is_super_admin: true },
     } as never);
     const user = userEvent.setup();
-    mockStripeCheckout.mockResolvedValue({ url: "https://stripe.com/pix" });
+    mockPixCheckout.mockResolvedValue({ url: "https://mp.com/pix" });
     renderPage();
 
     const pixButtons = screen.getAllByRole("button", { name: /^pix$/i });
     await user.click(pixButtons[3]);
 
     await waitFor(() =>
-      expect(mockStripeCheckout).toHaveBeenCalledWith({
+      expect(mockPixCheckout).toHaveBeenCalledWith({
         credits: 1,
         amountBrl: 1,
-        method: "pix",
       })
     );
   });

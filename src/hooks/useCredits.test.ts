@@ -2,7 +2,7 @@ import { renderHook, waitFor, act } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { createElement } from "react";
-import { useTransactionHistory, useCreateStripeCheckout } from "./useCredits";
+import { useTransactionHistory, useCreateStripeCheckout, useCreateCheckout } from "./useCredits";
 import { supabase } from "@/integrations/supabase/client";
 import { MSG_NETWORK } from "@/lib/utils/errors";
 
@@ -184,6 +184,64 @@ describe("useCreateStripeCheckout", () => {
     const { result } = renderHook(() => useCreateStripeCheckout(), { wrapper });
     await act(async () => {
       try { await result.current.mutateAsync({ credits: 120, amountBrl: 29.9 }); } catch { /* expected */ }
+    });
+
+    expect(toast.error).toHaveBeenCalledWith(MSG_NETWORK);
+  });
+});
+
+describe("useCreateCheckout (Pix via Mercado Pago)", () => {
+  const mockInvoke = supabase.functions.invoke as ReturnType<typeof vi.fn>;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    delete (window as { location?: unknown }).location;
+    (window as { location: unknown }).location = { href: "" };
+  });
+
+  it("invokes create-checkout with credits and amountBrl (no method)", async () => {
+    mockInvoke.mockResolvedValue({ data: { url: "https://mp.test/pix" }, error: null });
+
+    const { result } = renderHook(() => useCreateCheckout(), { wrapper });
+    await act(async () => {
+      await result.current.mutateAsync({ credits: 30, amountBrl: 9.9 });
+    });
+
+    expect(mockInvoke).toHaveBeenCalledWith("create-checkout", {
+      body: { credits: 30, amountBrl: 9.9 },
+    });
+  });
+
+  it("redirects to the Mercado Pago url on success", async () => {
+    mockInvoke.mockResolvedValue({ data: { url: "https://mp.test/pix" }, error: null });
+
+    const { result } = renderHook(() => useCreateCheckout(), { wrapper });
+    await act(async () => {
+      await result.current.mutateAsync({ credits: 30, amountBrl: 9.9 });
+    });
+
+    expect(window.location.href).toBe("https://mp.test/pix");
+  });
+
+  it("calls toast.error when invoke returns error", async () => {
+    const { toast } = await import("sonner");
+    mockInvoke.mockResolvedValue({ data: null, error: new Error("falha no servidor") });
+
+    const { result } = renderHook(() => useCreateCheckout(), { wrapper });
+    await act(async () => {
+      try { await result.current.mutateAsync({ credits: 30, amountBrl: 9.9 }); } catch { /* expected */ }
+    });
+
+    expect(toast.error).toHaveBeenCalled();
+  });
+
+  it("maps a raw network rejection to the friendly connection message", async () => {
+    const { toast } = await import("sonner");
+    mockInvoke.mockRejectedValue(new TypeError("Failed to fetch"));
+
+    const { result } = renderHook(() => useCreateCheckout(), { wrapper });
+    await act(async () => {
+      try { await result.current.mutateAsync({ credits: 30, amountBrl: 9.9 }); } catch { /* expected */ }
     });
 
     expect(toast.error).toHaveBeenCalledWith(MSG_NETWORK);

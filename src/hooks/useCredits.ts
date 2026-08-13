@@ -32,13 +32,33 @@ interface CheckoutInput {
   method?: "card" | "pix";
 }
 
-// Hosted Stripe Checkout for both rails — `method` picks card or Pix. Pix does
-// not credit on redirect: the balance only moves when the async webhook confirms
-// the payment (see supabase/functions/stripe-webhook).
+// Hosted Stripe Checkout for the card rail. `method` still exists on the input
+// so the button can pass "card"; Pix is served by Mercado Pago (useCreateCheckout).
 export function useCreateStripeCheckout() {
   return useMutation({
     mutationFn: async (input: CheckoutInput) => {
       const { data, error } = await supabase.functions.invoke("create-stripe-checkout", {
+        body: input,
+      });
+      if (error) {
+        const msg = await parseInvokeError(error, "Erro ao iniciar compra. Tente novamente.");
+        throw new Error(msg);
+      }
+      return data as { url: string };
+    },
+    onSuccess: ({ url }) => {
+      window.location.href = url;
+    },
+    onError: (err: Error) => toast.error(parseEdgeFnError(err, "Erro ao iniciar compra. Tente novamente.")),
+  });
+}
+
+// Pix via Mercado Pago (hosted Checkout Pro, card excluded). Redirects to the MP
+// page; the balance only moves when the mp-webhook confirms the payment.
+export function useCreateCheckout() {
+  return useMutation({
+    mutationFn: async (input: { credits: number; amountBrl: number }) => {
+      const { data, error } = await supabase.functions.invoke("create-checkout", {
         body: input,
       });
       if (error) {
