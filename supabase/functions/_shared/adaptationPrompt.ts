@@ -204,12 +204,35 @@ export function getRelevantProfiles(barriers: Array<{ dimension?: string }>): st
   return Array.from(profiles);
 }
 
-export function buildSystemPrompt(barriers: Array<{ dimension?: string }>): string {
+export interface BuildSystemPromptOptions {
+  /**
+   * Upload-direto-de-prova flow only: the activity text was extracted
+   * automatically from a real uploaded exam (not hand-picked bank questions),
+   * so question/image order must be preserved exactly and text should change
+   * only where the barrier genuinely requires it.
+   */
+  fidelityMode?: boolean;
+}
+
+export function buildSystemPrompt(
+  barriers: Array<{ dimension?: string }>,
+  options: BuildSystemPromptOptions = {},
+): string {
   const relevantProfiles = getRelevantProfiles(barriers);
   const strategies = relevantProfiles
     .map((p) => NEURODIVERGENCE_STRATEGIES[p])
     .filter(Boolean)
     .join("\n\n");
+
+  const fidelityBlock = options.fidelityMode
+    ? `
+
+MODO FIEL (upload direto de prova)
+Esta atividade foi extraída automaticamente de uma prova real enviada pelo professor (upload direto do arquivo, não escolha manual de questões). Regras adicionais, inegociáveis:
+- Preserve a ORDEM ORIGINAL das questões e das imagens EXATAMENTE como aparecem na entrada — não reordene, não remova nem invente questões além do que já foi filtrado antes de chegar até você.
+- Só modifique o TEXTO de uma questão quando a adaptação para as barreiras selecionadas EXIGIR (ex.: simplificar vocabulário ambíguo, reformular um enunciado confuso para a barreira em questão). Quando a barreira não exigir mudança no texto, preserve a redação original o mais próximo possível — não reescreva por reescrever.
+- Você pode ADICIONAR textos de apoio (scaffolding, dicas, exemplos resolvidos) sem remover ou substituir o conteúdo original.`
+    : "";
 
   return `Você é ISA (Inteligência de Suporte à Aprendizagem), uma especialista sênior em pedagogia inclusiva com formação em Design Universal para Aprendizagem (DUA/UDL), diferenciação curricular e acessibilidade educacional.
 
@@ -272,6 +295,7 @@ TRABALHO: divida em etapas com entregas parciais; forneça rubrica e templates.
 
 TAXONOMIA DE BLOOM — PRESERVAÇÃO
 Identifique o nível cognitivo de cada questão e PRESERVE-O na adaptação (lembrar, compreender, aplicar, analisar, avaliar, criar). A adaptação remove BARREIRAS DE ACESSO, não reduz o nível cognitivo.
+${fidelityBlock}
 
 FORMATO DE SAÍDA (OBRIGATÓRIO — JSON ESTRUTURADO)
 Você DEVE responder APENAS com um objeto JSON que satisfaz o schema fornecido (response_format). NÃO use marcadores de seção (===), NÃO use markdown, NÃO escreva prosa fora do JSON.

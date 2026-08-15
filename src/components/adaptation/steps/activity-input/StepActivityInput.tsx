@@ -26,6 +26,7 @@ import {
   Loader2,
   X,
   Image as ImageIcon,
+  Upload,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -198,6 +199,30 @@ export function StepActivityInput({ data, updateData, onNext, onPrev }: Props) {
         <p className="text-sm text-muted-foreground mt-1">
           Cole ou digite o conteúdo que será adaptado pela IA.
         </p>
+      </div>
+
+      {/* Direct path: skip manual curation entirely — upload the file and adapt it whole. */}
+      <button
+        type="button"
+        onClick={() => updateData({ activityInputMode: "upload" })}
+        className="w-full flex items-center gap-4 p-4 border-2 border-primary rounded-xl bg-primary/5 hover:bg-primary/10 transition-colors text-left group"
+      >
+        <div className="w-11 h-11 shrink-0 rounded-lg bg-primary/15 flex items-center justify-center group-hover:bg-primary/25 transition-colors">
+          <Upload className="w-5 h-5 text-primary" />
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="font-semibold text-primary">Adaptar direto do arquivo</p>
+          <p className="text-sm text-muted-foreground">
+            Suba o PDF ou Word da atividade e a IA adapta ela inteira automaticamente, sem escolher questão por questão.
+          </p>
+        </div>
+        <ArrowRight className="w-5 h-5 text-primary shrink-0" />
+      </button>
+
+      <div className="flex items-center gap-3">
+        <div className="h-px flex-1 bg-border" />
+        <p className="text-xs text-muted-foreground shrink-0">ou monte manualmente</p>
+        <div className="h-px flex-1 bg-border" />
       </div>
 
       {/* Tab navigation */}

@@ -31,6 +31,7 @@ describe("INITIAL_WIZARD_DATA", () => {
     expect(INITIAL_WIZARD_DATA).toEqual({
       activityType: null,
       activityText: "",
+      activityInputMode: "bank",
       selectedQuestions: [],
       barriers: [],
       barrierProfileId: null,

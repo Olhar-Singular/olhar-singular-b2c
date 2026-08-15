@@ -17,6 +17,7 @@ vi.mock("@/pages/DashboardPage", () => ({ default: () => <div data-testid="dashb
 vi.mock("@/pages/BarrierProfilesPage", () => ({ default: () => <div data-testid="profiles-page" /> }));
 vi.mock("@/pages/CreditsPage", () => ({ default: () => <div data-testid="credits-page" /> }));
 vi.mock("@/pages/AdaptarPage", () => ({ default: () => <div data-testid="adaptar-page" /> }));
+vi.mock("@/pages/EditAdaptationPage", () => ({ default: () => <div data-testid="edit-adaptation-page" /> }));
 vi.mock("@/pages/ChatPage", () => ({ default: () => <div data-testid="chat-page" /> }));
 vi.mock("@/pages/QuestionBankPage", () => ({ default: () => <div data-testid="qb-page" /> }));
 vi.mock("@/pages/AdminPage", () => ({ default: () => <div data-testid="admin-page" /> }));

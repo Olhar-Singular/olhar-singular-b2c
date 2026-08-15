@@ -91,6 +91,41 @@ describe("buildSystemPrompt", () => {
   });
 });
 
+describe("buildSystemPrompt — fidelityMode", () => {
+  it("omits the MODO FIEL block by default (bank/paste flow unchanged)", () => {
+    const prompt = buildSystemPrompt([{ dimension: "tea" }]);
+    expect(prompt).not.toContain("MODO FIEL");
+  });
+
+  it("omits the MODO FIEL block when fidelityMode is explicitly false", () => {
+    const prompt = buildSystemPrompt([{ dimension: "tea" }], { fidelityMode: false });
+    expect(prompt).not.toContain("MODO FIEL");
+  });
+
+  it("adds the MODO FIEL block when fidelityMode is true", () => {
+    const prompt = buildSystemPrompt([{ dimension: "tea" }], { fidelityMode: true });
+    expect(prompt).toContain("MODO FIEL");
+  });
+
+  it("instructs preserving the original order of questions and images exactly", () => {
+    const prompt = buildSystemPrompt([{ dimension: "tea" }], { fidelityMode: true });
+    expect(prompt).toContain("ORDEM ORIGINAL");
+    expect(prompt).toContain("não reordene");
+  });
+
+  it("instructs changing text only when the barrier requires it, preserving wording otherwise", () => {
+    const prompt = buildSystemPrompt([{ dimension: "tea" }], { fidelityMode: true });
+    expect(prompt).toContain("Só modifique o TEXTO");
+    expect(prompt).toContain("EXIGIR");
+    expect(prompt).toContain("preserve a redação original");
+  });
+
+  it("still allows adding scaffolding/support text without replacing the original content", () => {
+    const prompt = buildSystemPrompt([{ dimension: "tea" }], { fidelityMode: true });
+    expect(prompt).toContain("ADICIONAR textos de apoio");
+  });
+});
+
 describe("named constants", () => {
   it("exposes sanitisation caps and timeout", () => {
     expect(MAX_ACTIVITY_CHARS).toBe(15000);

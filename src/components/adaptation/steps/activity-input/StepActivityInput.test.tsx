@@ -58,6 +58,17 @@ const baseData: WizardData = {
 
 // ── Existing textarea tests (Colar Texto tab) ──────────────────────────────
 
+describe("StepActivityInput — direct upload CTA", () => {
+  it("switches to upload mode via updateData, without touching activityType or advancing the step", () => {
+    const updateData = vi.fn();
+    const onNext = vi.fn();
+    render(<StepActivityInput data={baseData} updateData={updateData} onNext={onNext} onPrev={vi.fn()} />);
+    fireEvent.click(screen.getByRole("button", { name: /Adaptar direto do arquivo/i }));
+    expect(updateData).toHaveBeenCalledWith({ activityInputMode: "upload" });
+    expect(onNext).not.toHaveBeenCalled();
+  });
+});
+
 describe("StepActivityInput — Colar Texto tab", () => {
   it("renders heading and textarea", () => {
     render(<StepActivityInput data={baseData} updateData={vi.fn()} onNext={vi.fn()} onPrev={vi.fn()} />);

@@ -102,8 +102,46 @@ vi.mock("./steps/activity-type/StepActivityType", () => ({
 }));
 
 vi.mock("./steps/activity-input/StepActivityInput", () => ({
-  StepActivityInput: ({ onNext }: { onNext: () => void }) => (
-    <button data-testid="input-next" onClick={onNext}>input</button>
+  StepActivityInput: ({
+    updateData,
+    onNext,
+  }: {
+    updateData: (p: { activityInputMode: "upload" }) => void;
+    onNext: () => void;
+  }) => (
+    <>
+      <button data-testid="input-next" onClick={onNext}>input</button>
+      <button data-testid="switch-to-upload" onClick={() => updateData({ activityInputMode: "upload" })}>
+        switch to upload
+      </button>
+    </>
+  ),
+}));
+
+vi.mock("./steps/upload-exam/StepUploadExam", () => ({
+  StepUploadExam: ({
+    updateData,
+    onNext,
+    onLoadingChange,
+  }: {
+    updateData: (p: { activityText: string }) => void;
+    onNext: () => void;
+    onLoadingChange?: (loading: boolean) => void;
+  }) => (
+    <>
+      <button
+        data-testid="upload-next"
+        onClick={() => {
+          updateData({ activityText: "1) Da prova enviada" });
+          onNext();
+        }}
+      >
+        upload-exam
+      </button>
+      <button data-testid="simulate-uploading" onClick={() => onLoadingChange?.(true)}>
+        start uploading
+      </button>
+    </>
   ),
 }));
 
@@ -268,6 +306,24 @@ describe("CanonicalAdaptationWizard", () => {
     renderWithProviders(<CanonicalAdaptationWizard />);
     advanceToReview();
     expect(screen.getByTestId("edit-content")).toHaveTextContent("gerado");
+  });
+
+  it("switching to upload mode from within the Atividade step renders StepUploadExam in place, and still reaches barriers", () => {
+    renderWithProviders(<CanonicalAdaptationWizard />);
+    fireEvent.click(screen.getByTestId("pick-type"));
+    expect(screen.getByTestId("input-next")).toBeInTheDocument();
+    fireEvent.click(screen.getByTestId("switch-to-upload"));
+    expect(screen.getByTestId("upload-next")).toBeInTheDocument();
+    expect(screen.queryByTestId("input-next")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByTestId("upload-next"));
+    expect(screen.getByTestId("barriers-next")).toBeInTheDocument();
+  });
+
+  it("the bank path (default) renders StepActivityInput on arrival, unaffected by the upload path", () => {
+    renderWithProviders(<CanonicalAdaptationWizard />);
+    fireEvent.click(screen.getByTestId("pick-type"));
+    expect(screen.getByTestId("input-next")).toBeInTheDocument();
+    expect(screen.queryByTestId("upload-next")).not.toBeInTheDocument();
   });
 
   it("generation sets a valid canonical document", () => {
@@ -816,6 +872,14 @@ describe("CanonicalAdaptationWizard — navigation guard", () => {
     expect(mockNavGuard).toHaveBeenCalledWith(true);
   });
 
+  it("calls useNavigationGuard with true while StepUploadExam reports loading", () => {
+    renderWithProviders(<CanonicalAdaptationWizard />);
+    fireEvent.click(screen.getByTestId("pick-type"));
+    fireEvent.click(screen.getByTestId("switch-to-upload"));
+    fireEvent.click(screen.getByTestId("simulate-uploading"));
+    expect(mockNavGuard).toHaveBeenCalledWith(true);
+  });
+
   it("calls useNavigationGuard with true after generation completes (unsaved result)", () => {
     renderWithProviders(<CanonicalAdaptationWizard />);
     fireEvent.click(screen.getByTestId("pick-type"));
@@ -866,6 +930,38 @@ describe("CanonicalAdaptationWizard — navigation guard", () => {
     expect(screen.getByText(/adaptação ainda está em andamento/i)).toBeInTheDocument();
   });
 
+  it("shows 'O arquivo ainda está sendo processado' dialog when uploading and blocked (not the generation dialog)", () => {
+    mockNavGuard.mockReturnValue({ state: "blocked", reset: vi.fn(), proceed: vi.fn() });
+    renderWithProviders(<CanonicalAdaptationWizard />);
+    fireEvent.click(screen.getByTestId("pick-type"));
+    fireEvent.click(screen.getByTestId("switch-to-upload"));
+    fireEvent.click(screen.getByTestId("simulate-uploading"));
+    expect(screen.getByText(/arquivo ainda está sendo processado/i)).toBeInTheDocument();
+    expect(screen.queryByText(/adaptação ainda está em andamento/i)).not.toBeInTheDocument();
+  });
+
+  it("calls reset() when user clicks 'Continuar aqui' (upload dialog)", () => {
+    const reset = vi.fn();
+    mockNavGuard.mockReturnValue({ state: "blocked", reset, proceed: vi.fn() });
+    renderWithProviders(<CanonicalAdaptationWizard />);
+    fireEvent.click(screen.getByTestId("pick-type"));
+    fireEvent.click(screen.getByTestId("switch-to-upload"));
+    fireEvent.click(screen.getByTestId("simulate-uploading"));
+    fireEvent.click(screen.getByRole("button", { name: /Continuar aqui/i }));
+    expect(reset).toHaveBeenCalled();
+  });
+
+  it("calls proceed() when user clicks 'Sair mesmo assim' (upload dialog)", () => {
+    const proceed = vi.fn();
+    mockNavGuard.mockReturnValue({ state: "blocked", reset: vi.fn(), proceed });
+    renderWithProviders(<CanonicalAdaptationWizard />);
+    fireEvent.click(screen.getByTestId("pick-type"));
+    fireEvent.click(screen.getByTestId("switch-to-upload"));
+    fireEvent.click(screen.getByTestId("simulate-uploading"));
+    fireEvent.click(screen.getByRole("button", { name: /Sair mesmo assim/i }));
+    expect(proceed).toHaveBeenCalled();
+  });
+
   it("calls reset() when user clicks 'Continuar aqui' (generation dialog)", () => {
     const reset = vi.fn();
     mockNavGuard.mockReturnValue({ state: "blocked", reset, proceed: vi.fn() });
@@ -898,6 +994,17 @@ describe("CanonicalAdaptationWizard — navigation guard", () => {
     fireEvent.click(screen.getByTestId("input-next"));
     fireEvent.click(screen.getByTestId("barriers-next"));
     fireEvent.click(screen.getByTestId("simulate-loading"));
+    fireEvent.keyDown(document, { key: "Escape" });
+    expect(reset).toHaveBeenCalled();
+  });
+
+  it("calls reset() when upload dialog is dismissed via Escape key", () => {
+    const reset = vi.fn();
+    mockNavGuard.mockReturnValue({ state: "blocked", reset, proceed: vi.fn() });
+    renderWithProviders(<CanonicalAdaptationWizard />);
+    fireEvent.click(screen.getByTestId("pick-type"));
+    fireEvent.click(screen.getByTestId("switch-to-upload"));
+    fireEvent.click(screen.getByTestId("simulate-uploading"));
     fireEvent.keyDown(document, { key: "Escape" });
     expect(reset).toHaveBeenCalled();
   });

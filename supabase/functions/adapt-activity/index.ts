@@ -76,7 +76,7 @@ serve(async (req) => {
     const serviceClient = createClient(supabaseUrl, supabaseServiceKey);
 
     const body = await req.json();
-    const { original_activity, activity_type, barriers, observation_notes, barrier_profile_id } = body;
+    const { original_activity, activity_type, barriers, observation_notes, barrier_profile_id, fidelity_mode } = body;
 
     if (!original_activity || !activity_type || !barriers || !Array.isArray(barriers) || barriers.length === 0) {
       return new Response(JSON.stringify({ error: "Campos obrigatórios ausentes: original_activity, activity_type, barriers." }), {
@@ -189,7 +189,7 @@ BARREIRAS OBSERVÁVEIS:
 
       userPrompt += `\n\nATIVIDADE ORIGINAL:\n${sanitizedActivity}`;
 
-      const systemPrompt = buildSystemPrompt(barriers);
+      const systemPrompt = buildSystemPrompt(barriers, { fidelityMode: fidelity_mode === true });
       const jsonSchema = aiActivityJsonSchema();
 
       // Attempt loop: 1 initial call + up to 2 reasks (MAX_ATTEMPTS total).

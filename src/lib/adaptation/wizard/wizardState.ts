@@ -37,6 +37,8 @@ export type SelectedQuestion = {
 export type WizardData = {
   activityType: string | null;
   activityText: string;
+  /** Which UI the "Atividade" step shows: pick/paste questions, or upload a whole exam file. */
+  activityInputMode: "bank" | "upload";
   selectedQuestions: SelectedQuestion[];
   barriers: BarrierItem[];
   barrierProfileId: string | null;
@@ -48,6 +50,7 @@ export type WizardData = {
 export const INITIAL_WIZARD_DATA: WizardData = {
   activityType: null,
   activityText: "",
+  activityInputMode: "bank",
   selectedQuestions: [],
   barriers: [],
   barrierProfileId: null,

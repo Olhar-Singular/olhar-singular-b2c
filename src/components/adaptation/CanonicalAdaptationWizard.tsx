@@ -21,6 +21,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { StepActivityType } from "./steps/activity-type/StepActivityType";
 import { StepActivityInput } from "./steps/activity-input/StepActivityInput";
+import { StepUploadExam } from "./steps/upload-exam/StepUploadExam";
 import { StepBarrierSelection } from "./steps/barriers/StepBarrierSelection";
 import { StepGenerate, type GeneratedRow } from "./steps/generate/StepGenerate";
 import { StepReview } from "./steps/review/StepReview";
@@ -86,6 +87,10 @@ export default function CanonicalAdaptationWizard({ editMode }: Props = {}) {
   const navigate = useNavigate();
   const markReady = useMarkReady();
   const [isGenerating, setIsGenerating] = useState(false);
+  // Upload-direto-de-prova only: true while StepUploadExam is parsing/extracting
+  // a file. Blocks navigation the same way isGenerating does, but there is no
+  // credit at stake here (extraction is free) — the dialog wording differs.
+  const [isUploading, setIsUploading] = useState(false);
   const [isSaved, setIsSaved] = useState(!!editMode);
 
   const [data, setData] = useState<WizardData>(
@@ -93,7 +98,7 @@ export default function CanonicalAdaptationWizard({ editMode }: Props = {}) {
   );
 
   const hasUnsavedResult = !!data.result && !isSaved && !isGenerating;
-  const navGuard = useNavigationGuard(isGenerating || hasUnsavedResult);
+  const navGuard = useNavigationGuard(isGenerating || isUploading || hasUnsavedResult);
   const [stepIndex, setStepIndex] = useState(editMode ? REVIEW_INDEX : 0);
   const [confirmRegenerate, setConfirmRegenerate] = useState(false);
   /**
@@ -304,13 +309,26 @@ export default function CanonicalAdaptationWizard({ editMode }: Props = {}) {
         return (
           <StepActivityType
             onSelect={(type) => {
-              updateData({ activityType: type });
+              // Resets to "bank": re-picking a type after having toggled into the
+              // upload path (then navigating back) should not strand the Atividade
+              // step showing the upload view for a possibly different type.
+              updateData({ activityType: type, activityInputMode: "bank" });
               onNext();
             }}
           />
         );
       case "activity_input":
-        return <StepActivityInput data={data} updateData={updateData} onNext={onNext} onPrev={onPrev} />;
+        return data.activityInputMode === "upload" ? (
+          <StepUploadExam
+            data={data}
+            updateData={updateData}
+            onNext={onNext}
+            onPrev={onPrev}
+            onLoadingChange={setIsUploading}
+          />
+        ) : (
+          <StepActivityInput data={data} updateData={updateData} onNext={onNext} onPrev={onPrev} />
+        );
       case "barriers":
         return <StepBarrierSelection data={data} updateData={updateData} onNext={onNext} onPrev={onPrev} />;
       case "generate":
@@ -423,7 +441,25 @@ export default function CanonicalAdaptationWizard({ editMode }: Props = {}) {
 
       <div className="min-h-[400px]">{renderStep()}</div>
 
-      {navGuard.state === "blocked" && isGenerating && (
+      {navGuard.state === "blocked" && isUploading && (
+        <Dialog open onOpenChange={() => navGuard.reset?.()}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>O arquivo ainda está sendo processado</DialogTitle>
+            </DialogHeader>
+            <p className="text-sm text-muted-foreground">
+              A IA ainda está lendo e extraindo a atividade enviada. Se sair agora, o processamento será perdido e
+              você vai precisar enviar o arquivo de novo — nenhum crédito foi usado nessa etapa.
+            </p>
+            <div className="flex justify-end gap-2 pt-2">
+              <Button variant="outline" onClick={() => navGuard.reset?.()}>Continuar aqui</Button>
+              <Button variant="destructive" onClick={() => navGuard.proceed?.()}>Sair mesmo assim</Button>
+            </div>
+          </DialogContent>
+        </Dialog>
+      )}
+
+      {navGuard.state === "blocked" && isGenerating && !isUploading && (
         <Dialog open onOpenChange={() => navGuard.reset?.()}>
           <DialogContent>
             <DialogHeader>
@@ -440,7 +476,7 @@ export default function CanonicalAdaptationWizard({ editMode }: Props = {}) {
         </Dialog>
       )}
 
-      {navGuard.state === "blocked" && !isGenerating && (
+      {navGuard.state === "blocked" && !isGenerating && !isUploading && (
         <Dialog open onOpenChange={() => navGuard.reset?.()}>
           <DialogContent>
             <DialogHeader>

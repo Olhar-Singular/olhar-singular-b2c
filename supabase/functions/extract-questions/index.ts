@@ -1,80 +1,18 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { sanitize } from "../_shared/sanitize.ts";
 import { logAiUsage } from "../_shared/logAiUsage.ts";
 import { getAiConfig } from "../_shared/aiConfig.ts";
 import { chargeCredits, refundCredits, runCreditRpc, type CreditRpcResult } from "../_shared/credits.ts";
+import {
+  buildExtractionMessages,
+  parseExtractionResponse,
+  EXTRACTION_TOOL_SCHEMA,
+} from "../_shared/examExtractionCore.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers":
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
-};
-
-const OCR_SYSTEM_PROMPT = `You are an expert OCR system for Brazilian educational exams (ENEM, vestibulares, simulados).
-Images may have 2-3 columns, figures, tables, and multiple questions per page.
-
-EXTRACTION RULES:
-- If a "TEXTO NATIVO EXTRAÍDO" block is provided, it is the authoritative, ground-truth source for every question's text and alternatives — copy it verbatim instead of re-reading the pixels. Use the page images only to detect figures/diagrams, their position, and the reading order — never to override text that the native block already provides.
-- Read left column top-to-bottom, then right column top-to-bottom
-- Extract EVERY question visible — do NOT stop after the first one, do NOT skip any
-- Extract ALL question formats, not only multiple choice: open-ended/essay (dissertativa), true-false (verdadeiro/falso), fill-in-the-blank (completar lacunas), matching (associação/colunas), and multiple choice. A question without alternatives is still a question — extract it with an empty "options" array.
-- Accepted numbering patterns: "1." / "1)" / "Q1" / "Questão 1" / "QUESTÃO 1" / Roman numerals ("I.", "II.", "III.")
-- NEVER invent, deduce, or complete truncated statements — return the text exactly as it appears in the document
-- Ignore headers, footers, school name, teacher name, watermarks
-- Preserve all units and math symbols exactly (m/s², 10⁸, ≥, ≤, etc.)
-
-FIELD RULES:
-- "options": only for multiple-choice questions; extract alternatives as an array of strings. Use an empty array for open-ended/dissertativa, fill-in-the-blank, or matching questions. Detect alternatives by markers (a. / a) / A. / A) / (a) / (A)) but DO NOT include the marker in the string — return just the alternative text (e.g. "sucos", not "a) sucos").
-- "correct_answer": set ONLY if an explicit answer key appears in the document (e.g. "Gabarito: B", "Resposta: C"). Index: 0=A, 1=B, 2=C, 3=D, 4=E. Use -1 in ALL other cases — never solve or guess.
-- "resolution": short explanation (1-3 sentences)
-- "has_figure": true if the question text references a figure, diagram, graph, table, or image — even if it is not visible in the scan
-- "figure_description": describe what the figure shows, or what the question says about it if not visible
-- "image_page": which page image (1-indexed) contains the figure. 0 if no figure.
-- "figure_bbox": normalized bounding box (0.0 to 1.0) relative to page: { "x": left, "y": top, "width": width, "height": height }`;
-
-const EXTRACT_PROMPT = `Extraia todas as questões deste documento/imagem. Para cada questão extraia todos os campos solicitados pela função save_questions. Seja meticuloso: extraia TODAS as questões visíveis.`;
-
-const TOOL_SCHEMA = {
-  type: "function" as const,
-  function: {
-    name: "save_questions",
-    description: "Return all extracted questions as structured data",
-    parameters: {
-      type: "object",
-      properties: {
-        questions: {
-          type: "array",
-          items: {
-            type: "object",
-            properties: {
-              text: { type: "string", description: "Full question text / enunciado completo" },
-              subject: { type: "string", description: "Subject area (Física, Matemática, etc)" },
-              topic: { type: "string", description: "Specific topic" },
-              options: { type: "array", items: { type: "string" }, description: "Answer alternatives" },
-              correct_answer: { type: "integer", description: "0-based index of correct answer. -1 if unknown" },
-              resolution: { type: "string", description: "Short explanation (1-3 sentences)" },
-              has_figure: { type: "boolean", description: "Whether question has an associated figure" },
-              figure_description: { type: "string", description: "Description of the figure" },
-              image_page: { type: "integer", description: "1-indexed page containing the figure. 0 if none" },
-              figure_bbox: {
-                type: "object",
-                properties: {
-                  x: { type: "number" },
-                  y: { type: "number" },
-                  width: { type: "number" },
-                  height: { type: "number" },
-                },
-                description: "Normalized bounding box (0.0-1.0) of the figure on the page",
-              },
-            },
-            required: ["text", "subject"],
-          },
-        },
-      },
-      required: ["questions"],
-    },
-  },
 };
 
 const EXTRACTION_COST = 5;
@@ -241,18 +179,7 @@ serve(async (req) => {
       });
 
     // ── Build AI messages ─────────────────────────────────────────────────────
-    const contentParts: any[] = [
-      { type: "text", text: `${EXTRACT_PROMPT}\n\nTEXTO NATIVO EXTRAÍDO do documento "${sanitize(pdfFileName, 200)}" (fonte de verdade quando presente):\n${sanitize(pdfText, 50000)}` },
-    ];
-    for (let i = 0; i < pageImages.length; i++) {
-      contentParts.push({ type: "text", text: `\n[Página ${i + 1}]` });
-      contentParts.push({ type: "image_url", image_url: { url: pageImages[i] } });
-    }
-
-    const messages: any[] = [
-      { role: "system", content: OCR_SYSTEM_PROMPT },
-      { role: "user", content: contentParts },
-    ];
+    const messages = buildExtractionMessages(pdfText, pdfFileName, pageImages);
 
     // ── Call Gemini ───────────────────────────────────────────────────────────
     const extractModel = ai.resolveModel("google/gemini-2.5-pro");
@@ -263,7 +190,7 @@ serve(async (req) => {
       body: JSON.stringify({
         model: extractModel,
         messages,
-        tools: [TOOL_SCHEMA],
+        tools: [EXTRACTION_TOOL_SCHEMA],
         tool_choice: { type: "function", function: { name: "save_questions" } },
         max_tokens: 16384,
       }),
@@ -297,14 +224,7 @@ serve(async (req) => {
       metadata: { file_name: pdfFileName },
     }).catch(() => {});
 
-    const toolCall = aiData.choices?.[0]?.message?.tool_calls?.[0];
-    let questions: any[] = [];
-    if (toolCall?.function?.arguments) {
-      try {
-        const parsed = JSON.parse(toolCall.function.arguments);
-        questions = parsed.questions || [];
-      } catch { questions = []; }
-    }
+    const questions = parseExtractionResponse(aiData);
 
     // ── Update questions_extracted count ──────────────────────────────────────
     if (uploadId && questions.length > 0) {
