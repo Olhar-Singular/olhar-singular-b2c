@@ -18,6 +18,7 @@ import { parsePdf } from "@/lib/utils/pdf-utils";
 import { extractDocxWithImages } from "@/lib/utils/docx-utils";
 import { autoCropFromBbox, dataUrlToBlob } from "@/lib/utils/extraction-utils";
 import { buildActivityTextFromExtraction, type ExamExtractedQuestion } from "./buildActivityTextFromExtraction";
+import { parseInvokeError } from "@/lib/utils/errors";
 import type { WizardData } from "@/lib/adaptation/wizard/wizardState";
 
 type Props = {
@@ -153,7 +154,10 @@ export function StepUploadExam({ updateData, onNext, onLoadingChange }: Props) {
         body: { pdfText: text, pdfFileName: file.name, pageImages },
       });
       if (!mountedRef.current) return;
-      if (fnError) throw new Error("Não foi possível processar o arquivo enviado. Tente novamente.");
+      if (fnError) {
+        const msg = await parseInvokeError(fnError, "Não foi possível processar o arquivo enviado. Tente novamente.");
+        throw new Error(msg);
+      }
 
       const rawQuestions: RawExtractedQuestion[] = fnResult?.questions ?? [];
       if (rawQuestions.length === 0) {

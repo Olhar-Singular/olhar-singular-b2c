@@ -101,6 +101,7 @@ export function StepGenerate({ data, onResult, onNext, onPrev, onLoadingChange }
     } catch (e) {
       /* v8 ignore next -- AbortController race */
       if ((e as Error).name === "AbortError" || controller.signal.aborted) return;
+      console.error("Erro ao gerar adaptação:", e);
       setFailed(true);
       toast.error(parseEdgeFnError(e, "Erro ao gerar adaptação."));
     } finally {

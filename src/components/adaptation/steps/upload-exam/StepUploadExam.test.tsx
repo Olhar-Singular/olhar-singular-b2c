@@ -327,6 +327,18 @@ describe("StepUploadExam", () => {
     expect(onNext).not.toHaveBeenCalled();
   });
 
+  it("surfaces the real backend error message instead of the generic fallback (e.g. AI rate limit)", async () => {
+    const fnError = Object.assign(new Error("Edge Function returned a non-2xx status code"), {
+      context: { json: async () => ({ error: "Limite de requisições IA atingido. Tente novamente em alguns minutos." }) },
+    });
+    invokeMock.mockResolvedValueOnce({ data: null, error: fnError });
+    const onNext = vi.fn();
+    renderWithProviders(<StepUploadExam data={baseData} updateData={vi.fn()} onNext={onNext} onPrev={vi.fn()} />);
+    selectFile(pdfFile());
+    await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent(/Limite de requisições IA atingido/i));
+    expect(onNext).not.toHaveBeenCalled();
+  });
+
   it("warns before proceeding when more than 12 questions are extracted, and does not show Continuar yet", async () => {
     const questions = Array.from({ length: 15 }, (_, i) => ({ text: `Questão ${i + 1}` }));
     invokeMock.mockResolvedValueOnce({ data: { questions }, error: null });
