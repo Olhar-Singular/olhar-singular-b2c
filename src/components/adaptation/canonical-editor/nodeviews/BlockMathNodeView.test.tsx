@@ -82,4 +82,22 @@ describe("BlockMathNodeView", () => {
     fireEvent.change(input, { target: { value: "z" } });
     expect(updateAttributes).toHaveBeenCalledWith({ latex: "z" });
   });
+  /**
+   * Achado 0006 — the read-only renders (`BlockMathView`) expose `role="math"`
+   * with the alt as accessible name; the editor dropped both, so the alt the
+   * teacher typed never reached the DOM of the screen where he reviews it.
+   */
+  it("exposes the formula as math with the alt as accessible name", () => {
+    const { props } = makeProps({ alt: "x ao quadrado" });
+    render(<BlockMathNodeView {...props} />);
+    const rendered = screen.getByTestId("blockmath-render");
+    expect(rendered).toHaveAttribute("role", "math");
+    expect(rendered).toHaveAttribute("aria-label", "x ao quadrado");
+  });
+
+  it("falls back to the latex as accessible name when there is no alt", () => {
+    const { props } = makeProps({ alt: null });
+    render(<BlockMathNodeView {...props} />);
+    expect(screen.getByTestId("blockmath-render")).toHaveAttribute("aria-label", "x^2");
+  });
 });

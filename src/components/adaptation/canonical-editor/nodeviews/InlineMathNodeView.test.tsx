@@ -101,4 +101,36 @@ describe("InlineMathNodeView", () => {
 
     expect((input as HTMLInputElement).value).toBe("a+b");
   });
+  /** Achado 0006 — parity with the read-only `RichTextView`. */
+  it("exposes the formula as math with the alt as accessible name", () => {
+    const { props } = makeProps({ alt: "x ao quadrado" });
+    render(<InlineMathNodeView {...props} />);
+    const rendered = screen.getByTestId("inlinemath-render");
+    expect(rendered).toHaveAttribute("role", "math");
+    expect(rendered).toHaveAttribute("aria-label", "x ao quadrado");
+  });
+
+  it("falls back to the latex as accessible name when there is no alt", () => {
+    const { props } = makeProps({ alt: null });
+    render(<InlineMathNodeView {...props} />);
+    expect(screen.getByTestId("inlinemath-render")).toHaveAttribute("aria-label", "x^2");
+  });
+
+  /**
+   * Achado 0006 — without this field the `alt` of an inlineMath is editable
+   * nowhere in the UI, so the accessible name above can never be filled in.
+   */
+  it("edits the alt attr", () => {
+    const { props, updateAttributes } = makeProps({ alt: "antigo" });
+    render(<InlineMathNodeView {...props} />);
+    fireEvent.click(screen.getByTestId("inlinemath-render"));
+    const alt = screen.getByLabelText("Texto alternativo da fórmula inline");
+    expect((alt as HTMLInputElement).value).toBe("antigo");
+
+    fireEvent.change(alt, { target: { value: "x ao quadrado" } });
+    expect(updateAttributes).toHaveBeenCalledWith({ alt: "x ao quadrado" });
+
+    fireEvent.change(alt, { target: { value: "" } });
+    expect(updateAttributes).toHaveBeenCalledWith({ alt: null });
+  });
 });

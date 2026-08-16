@@ -69,6 +69,8 @@ export function BlockMathNodeView({ node, updateAttributes, editor, deleteNode }
           disabled={disabled}
           onClick={() => setEditing(true)}
           title="Editar fórmula"
+          role="math"
+          aria-label={alt ?? latex}
           data-testid="blockmath-render"
           dangerouslySetInnerHTML={{ __html: latexToHtml(latex) }}
         />
