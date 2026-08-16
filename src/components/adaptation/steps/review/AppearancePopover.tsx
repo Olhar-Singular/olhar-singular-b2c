@@ -150,8 +150,15 @@ export function AppearancePopover({ value, onChange }: Props) {
   return (
     <Popover>
       <PopoverTrigger asChild>
-        <Button size="sm" variant="ghost" className="shrink-0 text-surface-ink-soft hover:text-surface-ink">
-          <Type className="mr-1 h-4 w-4" /> Formato
+        <Button
+          size="sm"
+          variant="ghost"
+          aria-label="Formato"
+          title="Formato"
+          className="shrink-0 px-2 text-surface-ink-soft hover:text-surface-ink sm:px-3"
+        >
+          <Type className="h-4 w-4" />
+          <span className="hidden sm:ml-1 sm:inline">Formato</span>
         </Button>
       </PopoverTrigger>
       <PopoverContent align="end" className="w-72">

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render, screen, fireEvent, within } from "@testing-library/react";
 import { StepReview } from "./StepReview";
 import { PageBreakMarker } from "@/components/adaptation/canonical-editor/page-break/pageBreakDecoration";
 import { OriginalDocExtension } from "@/components/adaptation/canonical-editor/originalDocExtension";
@@ -210,6 +210,24 @@ describe("StepReview", () => {
     fireEvent.click(screen.getByRole("button", { name: "Formato" }));
     fireEvent.click(screen.getByRole("button", { name: "Aumentar tamanho do texto" }));
     expect(onPageStyleChange).toHaveBeenCalledWith(expect.objectContaining({ fontSize: 17 * 0.75 }));
+  });
+
+  /**
+   * Regressão (caça 0010): em 390x844 a barra de chrome ficava mais larga que a
+   * viewport e o excedente era clipado ("Sobre esta ad..."), sem scroll horizontal.
+   * Em telas estreitas os botões viram só ícone; o rótulo textual só aparece a
+   * partir de `sm`, e o nome acessível é preservado por aria-label + title.
+   */
+  it("barra de chrome: rótulos dos botões só a partir de sm, nome acessível preservado", () => {
+    setup();
+    for (const name of ["Regerar", "Formato", "Sobre esta adaptação"]) {
+      const button = screen.getByRole("button", { name });
+      expect(button).toHaveAttribute("aria-label", name);
+      expect(button).toHaveAttribute("title", name);
+      const label = within(button).getByText(name);
+      expect(label).toHaveClass("hidden");
+      expect(label).toHaveClass("sm:inline");
+    }
   });
 
   it("não quebra ao alterar a Formato sem onPageStyleChange", () => {

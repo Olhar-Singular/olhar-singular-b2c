@@ -98,24 +98,34 @@ export function StepReview({
     <div className="space-y-4">
       {/* Barra superior (chrome) — plano §6.1. */}
       <div className="flex items-center justify-between gap-3 rounded-md border border-surface-chrome-line bg-surface-chrome px-4 py-2.5">
-        <h2 className="truncate text-base font-semibold text-surface-ink">{documentTitle(document)}</h2>
+        <h2 className="min-w-0 flex-1 truncate text-base font-semibold text-surface-ink">
+          {documentTitle(document)}
+        </h2>
+        {/* Em telas estreitas os botões viram só ícone (rótulo a partir de `sm`),
+            senão o grupo `shrink-0` transborda a viewport e é clipado. */}
         <div className="flex shrink-0 items-center gap-1">
           <Button
             size="sm"
             variant="ghost"
             onClick={onRegenerate}
-            className="shrink-0 text-surface-ink-soft hover:text-surface-ink"
+            aria-label="Regerar"
+            title="Regerar"
+            className="shrink-0 px-2 text-surface-ink-soft hover:text-surface-ink sm:px-3"
           >
-            <RefreshCw className="w-4 h-4 mr-1" /> Regerar
+            <RefreshCw className="w-4 h-4" />
+            <span className="hidden sm:ml-1 sm:inline">Regerar</span>
           </Button>
           <AppearancePopover value={resolvePageStyle(pageStyle)} onChange={handleAppearanceChange} />
           <Button
             size="sm"
             variant="ghost"
             onClick={() => setAboutOpen(true)}
-            className="shrink-0 text-surface-ink-soft hover:text-surface-ink"
+            aria-label="Sobre esta adaptação"
+            title="Sobre esta adaptação"
+            className="shrink-0 px-2 text-surface-ink-soft hover:text-surface-ink sm:px-3"
           >
-            <Info className="w-4 h-4 mr-1" /> Sobre esta adaptação
+            <Info className="w-4 h-4" />
+            <span className="hidden sm:ml-1 sm:inline">Sobre esta adaptação</span>
           </Button>
         </div>
       </div>
