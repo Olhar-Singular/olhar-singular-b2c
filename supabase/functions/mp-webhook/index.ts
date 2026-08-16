@@ -27,7 +27,9 @@ serve(async (req) => {
   try {
     const supabaseUrl   = Deno.env.get("SUPABASE_URL")!;
     const serviceKey    = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-    const mpToken       = Deno.env.get("ACCESS_TOKEN_MP")!;
+    // Same production credential the Pix payment was created with; the older
+    // ACCESS_TOKEN_MP cannot read those payments back.
+    const mpToken       = Deno.env.get("ACCESS_TOKEN_MP_PROD")!;
     const webhookSecret = Deno.env.get("VERIFY_TOKEN_MP_PROD") ?? "";
 
     const body = await req.json();

@@ -33,7 +33,8 @@ interface CheckoutInput {
 }
 
 // Hosted Stripe Checkout for the card rail. `method` still exists on the input
-// so the button can pass "card"; Pix is served by Mercado Pago (useCreateCheckout).
+// so the button can pass "card"; Pix is served by Mercado Pago
+// (useCreatePixPayment), inline, with no redirect.
 export function useCreateStripeCheckout() {
   return useMutation({
     mutationFn: async (input: CheckoutInput) => {
@@ -53,23 +54,59 @@ export function useCreateStripeCheckout() {
   });
 }
 
-// Pix via Mercado Pago (hosted Checkout Pro, card excluded). Redirects to the MP
-// page; the balance only moves when the mp-webhook confirms the payment.
-export function useCreateCheckout() {
+export interface PixPayment {
+  qrCode: string;
+  qrCodeBase64: string;
+  purchaseId: string;
+  ticketUrl?: string;
+}
+
+// Pix via Mercado Pago Checkout Transparente: the QR code comes back in the
+// response and is rendered inside our own page, so the buyer never leaves the
+// app and never needs an MP login. The balance only moves when the mp-webhook
+// confirms the payment (watched by usePixPurchaseStatus).
+export function useCreatePixPayment() {
   return useMutation({
     mutationFn: async (input: { credits: number; amountBrl: number }) => {
-      const { data, error } = await supabase.functions.invoke("create-checkout", {
+      const { data, error } = await supabase.functions.invoke("create-pix-payment", {
         body: input,
       });
       if (error) {
-        const msg = await parseInvokeError(error, "Erro ao iniciar compra. Tente novamente.");
+        const msg = await parseInvokeError(error, "Erro ao gerar o Pix. Tente novamente.");
         throw new Error(msg);
       }
-      return data as { url: string };
+      return data as PixPayment;
     },
-    onSuccess: ({ url }) => {
-      window.location.href = url;
+    onError: (err: Error) => toast.error(parseEdgeFnError(err, "Erro ao gerar o Pix. Tente novamente.")),
+  });
+}
+
+export const PIX_POLL_INTERVAL_MS = 3000;
+
+const PIX_SETTLED = ["approved", "rejected", "cancelled"];
+
+// Pix confirmation is asynchronous: nothing happens on the client until the
+// webhook writes the purchase row, so the dialog polls until the status settles.
+export function pixPollInterval(status?: string): number | false {
+  return PIX_SETTLED.includes(status ?? "") ? false : PIX_POLL_INTERVAL_MS;
+}
+
+// Watches the pending purchase created by create-pix-payment. Owner-based RLS
+// lets the buyer read its own credit_purchases row.
+export function usePixPurchaseStatus(purchaseId: string | null) {
+  return useQuery({
+    queryKey: ["credit_purchase", purchaseId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("credit_purchases")
+        .select("status")
+        .eq("id", purchaseId!)
+        .maybeSingle();
+      if (error) throw error;
+      return data as { status: string } | null;
     },
-    onError: (err: Error) => toast.error(parseEdgeFnError(err, "Erro ao iniciar compra. Tente novamente.")),
+    enabled: !!purchaseId,
+    refetchInterval: (query) => pixPollInterval(query.state.data?.status),
+    staleTime: 0,
   });
 }

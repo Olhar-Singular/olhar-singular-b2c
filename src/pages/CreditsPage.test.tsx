@@ -1,7 +1,7 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { MemoryRouter } from "react-router-dom";
+import { renderWithProviders } from "@/test/helpers";
 import CreditsPage from "./CreditsPage";
 
 const mockTransactions = [
@@ -26,12 +26,19 @@ const mockTransactions = [
 ];
 
 const mockStripeCheckout = vi.fn();
-const mockPixCheckout = vi.fn();
+const mockPixPayment = vi.fn();
+
+const PIX_PAYMENT = {
+  qrCode: "00020126580014br.gov.bcb.pix0136abc",
+  qrCodeBase64: "iVBORw0KGgo=",
+  purchaseId: "purchase-1",
+};
 
 vi.mock("@/hooks/useCredits", () => ({
   useTransactionHistory: vi.fn(() => ({ data: mockTransactions, isLoading: false })),
   useCreateStripeCheckout: vi.fn(() => ({ mutateAsync: mockStripeCheckout, isPending: false })),
-  useCreateCheckout: vi.fn(() => ({ mutateAsync: mockPixCheckout, isPending: false })),
+  useCreatePixPayment: vi.fn(() => ({ mutateAsync: mockPixPayment, isPending: false })),
+  usePixPurchaseStatus: vi.fn(() => ({ data: { status: "pending" } })),
 }));
 
 vi.mock("@/hooks/useAuth", () => ({
@@ -41,11 +48,7 @@ vi.mock("@/hooks/useAuth", () => ({
 }));
 
 function renderPage() {
-  return render(
-    <MemoryRouter>
-      <CreditsPage />
-    </MemoryRouter>
-  );
+  return renderWithProviders(<CreditsPage />);
 }
 
 describe("CreditsPage", () => {
@@ -60,10 +63,12 @@ describe("CreditsPage", () => {
       mutateAsync: mockStripeCheckout,
       isPending: false,
     } as never);
-    vi.mocked(m.useCreateCheckout).mockReturnValue({
-      mutateAsync: mockPixCheckout,
+    vi.mocked(m.useCreatePixPayment).mockReturnValue({
+      mutateAsync: mockPixPayment,
       isPending: false,
     } as never);
+    vi.mocked(m.usePixPurchaseStatus).mockReturnValue({ data: { status: "pending" } } as never);
+    mockPixPayment.mockResolvedValue(PIX_PAYMENT);
     const auth = await import("@/hooks/useAuth");
     vi.mocked(auth.useAuth).mockReturnValue({
       profile: { credit_balance: 9 },
@@ -126,9 +131,8 @@ describe("CreditsPage", () => {
     );
   });
 
-  it("sends the Pix click to the Mercado Pago checkout, not Stripe", async () => {
+  it("sends the Pix click to the inline Pix payment, not Stripe", async () => {
     const user = userEvent.setup();
-    mockPixCheckout.mockResolvedValue({ url: "https://mp.com/pix" });
     renderPage();
 
     const pixButtons = screen.getAllByRole("button", { name: /^pix$/i });
@@ -136,12 +140,52 @@ describe("CreditsPage", () => {
     await user.click(pixButtons[1]);
 
     await waitFor(() =>
-      expect(mockPixCheckout).toHaveBeenCalledWith({
+      expect(mockPixPayment).toHaveBeenCalledWith({
         credits: 120,
         amountBrl: 29.9,
       })
     );
     expect(mockStripeCheckout).not.toHaveBeenCalled();
+  });
+
+  // The whole point of Checkout Transparente: the QR shows up right here.
+  it("shows the QR code on the page itself after the Pix payment is created", async () => {
+    const user = userEvent.setup();
+    renderPage();
+
+    await user.click(screen.getAllByRole("button", { name: /^pix$/i })[0]);
+
+    expect(await screen.findByRole("dialog")).toBeInTheDocument();
+    expect(screen.getByRole("img", { name: /qr code/i })).toBeInTheDocument();
+    expect(screen.getByText(PIX_PAYMENT.qrCode)).toBeInTheDocument();
+  });
+
+  it("keeps the QR dialog closed until a Pix payment exists", () => {
+    renderPage();
+    expect(screen.queryByRole("dialog")).toBeNull();
+  });
+
+  it("clears the Pix when the buyer closes the QR dialog", async () => {
+    const user = userEvent.setup();
+    renderPage();
+
+    await user.click(screen.getAllByRole("button", { name: /^pix$/i })[0]);
+    await screen.findByRole("dialog");
+    await user.click(screen.getByRole("button", { name: /close/i }));
+
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+  });
+
+  // A failed create must not leave an empty QR dialog on screen.
+  it("does not open the QR dialog when the Pix payment fails", async () => {
+    const user = userEvent.setup();
+    mockPixPayment.mockRejectedValue(new Error("Pix indisponível."));
+    renderPage();
+
+    await user.click(screen.getAllByRole("button", { name: /^pix$/i })[0]);
+
+    await waitFor(() => expect(mockPixPayment).toHaveBeenCalled());
+    expect(screen.queryByRole("dialog")).toBeNull();
   });
 
   it("does not render the R$1 test package for regular users", () => {
@@ -192,18 +236,18 @@ describe("CreditsPage", () => {
       profile: { credit_balance: 9, is_super_admin: true },
     } as never);
     const user = userEvent.setup();
-    mockPixCheckout.mockResolvedValue({ url: "https://mp.com/pix" });
     renderPage();
 
     const pixButtons = screen.getAllByRole("button", { name: /^pix$/i });
     await user.click(pixButtons[3]);
 
     await waitFor(() =>
-      expect(mockPixCheckout).toHaveBeenCalledWith({
+      expect(mockPixPayment).toHaveBeenCalledWith({
         credits: 1,
         amountBrl: 1,
       })
     );
+    expect(await screen.findByRole("dialog")).toBeInTheDocument();
   });
 
   it("shows empty state when no transactions", async () => {

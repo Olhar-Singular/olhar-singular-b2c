@@ -1,7 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { findPackage } from "../_shared/creditPackages.ts";
-import { buildMpPreference } from "../_shared/mpCheckout.ts";
+import { buildPixPaymentBody, extractPixQr } from "../_shared/mpPixPayment.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -30,8 +30,9 @@ serve(async (req) => {
     const supabaseUrl     = Deno.env.get("SUPABASE_URL")!;
     const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
     const serviceKey      = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-    const mpAccessToken   = Deno.env.get("ACCESS_TOKEN_MP")!;
-    const appUrl          = Deno.env.get("APP_URL") ?? "http://localhost:8080";
+    // Direct /v1/payments needs the production credential; the older
+    // ACCESS_TOKEN_MP is rejected there ("Unauthorized use of live credentials").
+    const mpAccessToken   = Deno.env.get("ACCESS_TOKEN_MP_PROD")!;
 
     const userClient = createClient(supabaseUrl, supabaseAnonKey, {
       global: { headers: { Authorization: authHeader } },
@@ -77,36 +78,60 @@ serve(async (req) => {
       return json({ error: "Erro ao criar registro de compra." }, 500);
     }
 
-    // Create Mercado Pago preference (Pix only; card goes through Stripe).
-    const preference = buildMpPreference({
-      pkg,
-      purchaseId:      purchase.id,
-      email:           user.email,
-      appUrl,
-      notificationUrl: `${supabaseUrl}/functions/v1/mp-webhook`,
-    });
-
-    const mpResp = await fetch("https://api.mercadopago.com/checkout/preferences", {
-      method:  "POST",
+    // Checkout Transparente: MP answers with the QR code itself, so the buyer
+    // pays from inside our page instead of being sent to the MP checkout (which
+    // would demand a login). The purchase id doubles as the idempotency key —
+    // one row, one charge, even if the request is retried.
+    const mpResp = await fetch("https://api.mercadopago.com/v1/payments", {
+      method: "POST",
       headers: {
-        Authorization:  `Bearer ${mpAccessToken}`,
-        "Content-Type": "application/json",
+        Authorization:       `Bearer ${mpAccessToken}`,
+        "Content-Type":      "application/json",
+        "X-Idempotency-Key": purchase.id,
       },
-      body: JSON.stringify(preference),
+      body: JSON.stringify(
+        buildPixPaymentBody({
+          pkg,
+          purchaseId:      purchase.id,
+          email:           user.email,
+          notificationUrl: `${supabaseUrl}/functions/v1/mp-webhook`,
+        }),
+      ),
     });
 
-    if (!mpResp.ok) {
-      const errText = await mpResp.text();
-      console.error("MP preferences error:", mpResp.status, errText);
-      return json({ error: "Erro ao criar preferência de pagamento." }, 502);
+    const payment = mpResp.ok ? await mpResp.json() : null;
+    const qr = payment ? extractPixQr(payment) : null;
+
+    if (!qr) {
+      if (!mpResp.ok) console.error("MP payments error:", mpResp.status, await mpResp.text());
+      else console.error("MP payment without Pix QR:", payment?.id, payment?.status);
+      // Close the row out so a failed attempt does not linger as payable.
+      await admin
+        .from("credit_purchases")
+        .update({ status: "cancelled" })
+        .eq("id", purchase.id)
+        .eq("status", "pending");
+      return json({ error: "Erro ao gerar o Pix. Tente novamente." }, 502);
     }
 
-    const created = await mpResp.json();
-    const url: string = created.init_point;
+    // Store the MP payment id so the webhook (and support) can reconcile.
+    const { error: paymentIdError } = await admin
+      .from("credit_purchases")
+      .update({ payment_id: qr.paymentId })
+      .eq("id", purchase.id);
+    if (paymentIdError) {
+      // Not fatal: the webhook resolves the purchase by external_reference.
+      console.error("create-pix-payment: store payment_id:", paymentIdError);
+    }
 
-    return json({ url });
+    return json({
+      qrCode:       qr.qrCode,
+      qrCodeBase64: qr.qrCodeBase64,
+      purchaseId:   purchase.id,
+      ticketUrl:    qr.ticketUrl,
+    });
   } catch (e) {
-    console.error("create-checkout error:", e);
+    console.error("create-pix-payment error:", e);
     return json({ error: e instanceof Error ? e.message : "Erro desconhecido." }, 500);
   }
 });
