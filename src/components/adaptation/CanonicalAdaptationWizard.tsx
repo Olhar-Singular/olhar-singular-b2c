@@ -185,6 +185,13 @@ export default function CanonicalAdaptationWizard({ editMode }: Props = {}) {
 
   const currentKey = STEPS[stepIndex];
 
+  // On narrow viewports (390px) the step strip overflows horizontally and would
+  // stay pinned at scrollLeft 0, hiding the chip of the step the user is on.
+  const activeStepRef = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    activeStepRef.current.scrollIntoView({ block: "nearest", inline: "center" });
+  }, [stepIndex]);
+
   const updateData = useCallback((partial: Partial<WizardData>) => {
     setData((prev) => ({ ...prev, ...partial }));
   }, []);
@@ -388,6 +395,7 @@ export default function CanonicalAdaptationWizard({ editMode }: Props = {}) {
           <div key={key} className="flex items-center gap-1 shrink-0">
             <button
               type="button"
+              ref={i === stepIndex ? activeStepRef : undefined}
               onClick={() => goTo(i)}
               disabled={i > stepIndex}
               className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${

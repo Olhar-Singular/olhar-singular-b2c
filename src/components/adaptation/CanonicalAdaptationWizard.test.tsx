@@ -346,6 +346,29 @@ describe("CanonicalAdaptationWizard", () => {
     expect(screen.getByTestId("pick-type")).toBeInTheDocument();
   });
 
+  // On 390px the step strip overflows horizontally: the active chip sits outside
+  // the viewport and the container stays at scrollLeft 0. The chip must scroll
+  // itself into view whenever the step changes.
+  it("the step indicator scrolls the active step into view", () => {
+    const scrolled: Array<{ text: string; options: unknown }> = [];
+    const original = window.HTMLElement.prototype.scrollIntoView;
+    window.HTMLElement.prototype.scrollIntoView = function (this: HTMLElement, options?: unknown) {
+      scrolled.push({ text: this.textContent ?? "", options });
+    };
+    try {
+      renderWithProviders(<CanonicalAdaptationWizard />);
+      advanceToReview();
+      const last = scrolled[scrolled.length - 1];
+      expect(last?.text).toMatch(/Revisar/);
+      expect(last?.options).toEqual({ block: "nearest", inline: "center" });
+
+      fireEvent.click(screen.getByRole("button", { name: /1.*Tipo/i }));
+      expect(scrolled[scrolled.length - 1]?.text).toMatch(/Tipo/);
+    } finally {
+      window.HTMLElement.prototype.scrollIntoView = original;
+    }
+  });
+
   it("regenerate is confirmed and replaces the document via the generate step", async () => {
     renderWithProviders(<CanonicalAdaptationWizard />);
     advanceToReview();
