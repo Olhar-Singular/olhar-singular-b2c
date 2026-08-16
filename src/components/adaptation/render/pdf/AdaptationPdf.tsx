@@ -19,7 +19,7 @@ import { DEFAULT_PANEL_SETTINGS, hasHeaderContent } from "@/components/adaptatio
 import { PdfBlock } from "./PdfBlock";
 import { questionNumbers } from "../questionNumbering";
 import { pageTokensToPdf } from "../pageTokens";
-import { resolvePageStyle } from "../pageStyle";
+import { resolvePageStyle, resolveElementFontSizes } from "../pageStyle";
 
 /** Convert pixels (screen) to points (PDF). 1px = 72/96 pt. */
 const px2pt = (px: number): number => px * (72 / 96);
@@ -64,6 +64,9 @@ export function AdaptationPdf({ document, settings = DEFAULT_PANEL_SETTINGS, pag
   const resolved = resolvePageStyle(pageStyle);
   // Convert blockSpacing from px (screen unit) to pt (PDF unit).
   const blockGap = px2pt(resolved.blockSpacing);
+  // Resolved ONCE per document and handed down, so every mapper reads the same
+  // per-element sizes the screen sheet emits as --doc-fs-* vars.
+  const elementSizes = resolveElementFontSizes(resolved);
 
   return (
     <Document>
@@ -79,10 +82,10 @@ export function AdaptationPdf({ document, settings = DEFAULT_PANEL_SETTINGS, pag
             if (isQuestion) questionsSeen++;
             return forceBreak ? (
               <View key={block.id} break>
-                <PdfBlock block={block} number={numbers[i]} blockGap={blockGap} />
+                <PdfBlock block={block} number={numbers[i]} blockGap={blockGap} elementSizes={elementSizes} />
               </View>
             ) : (
-              <PdfBlock key={block.id} block={block} number={numbers[i]} blockGap={blockGap} />
+              <PdfBlock key={block.id} block={block} number={numbers[i]} blockGap={blockGap} elementSizes={elementSizes} />
             );
           });
         })()}

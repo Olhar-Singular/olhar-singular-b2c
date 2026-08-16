@@ -32,12 +32,49 @@ describe("documentToPlainText", () => {
 
   it("renders true/false, checkbox, matching, ordering, fillBlank and table", () => {
     const text = documentToPlainText(renderDocument);
-    expect(text).toContain("( V ) 1/2 > 1/4");
-    expect(text).toContain("[x] Opção A");
-    expect(text).toContain("Brasil — Brasília");
-    expect(text).toContain("1. Primeiro");
-    expect(text).toContain("(1) 3/4");
+    expect(text).toContain("(  ) V  (  ) F 1/2 > 1/4");
+    expect(text).toContain("[ ] Opção A");
+    expect(text).toContain("Brasil <-> Brasília");
+    expect(text).toContain("____ Segundo");
     expect(text).toContain("Termo | Valor");
+  });
+
+  // The "Copiar" button sits next to "Exportar PDF"/"Exportar Word" and is used
+  // to paste the sheet into Word or an e-mail. Screen, PDF and Word all hide the
+  // answer key on purpose (see PdfAnswer / AnswerView / exportDocx); the plain
+  // text projection must hide it too, or one click hands the students the
+  // gabarito.
+  describe("hides the answer key (parity with screen/PDF/Word)", () => {
+    it("does not reveal the true/false value", () => {
+      const text = documentToPlainText(renderDocument);
+      expect(text).not.toContain("( V )");
+      expect(text).not.toContain("( F )");
+    });
+
+    it("does not reveal which checkbox items are checked", () => {
+      const text = documentToPlainText(renderDocument);
+      expect(text).not.toContain("[x]");
+    });
+
+    it("keeps ordering items in authored order (sorting them would BE the key)", () => {
+      const text = documentToPlainText(renderDocument);
+      // Fixture authors "Segundo" (position 2) before "Primeiro" (position 1).
+      expect(text.indexOf("Segundo")).toBeLessThan(text.indexOf("Primeiro"));
+      expect(text).not.toContain("1. Primeiro");
+    });
+
+    it("does not print the fillBlank answer key, alternatives or tips", () => {
+      const text = documentToPlainText(renderDocument);
+      expect(text).not.toContain("(1) 3/4");
+      expect(text).not.toContain("0.75");
+      expect(text).not.toContain("some os numeradores");
+    });
+
+    it("does not mark the correct multiple-choice alternative", () => {
+      const text = documentToPlainText(renderDocument);
+      expect(text).toContain("a) 3/4");
+      expect(text).not.toContain("✔");
+    });
   });
 
   it("renders scaffolding items and divider", () => {

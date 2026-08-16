@@ -519,3 +519,23 @@ describe("AiContentBlockSchema — image src allowlist", () => {
     expect(AiContentBlockSchema.safeParse(img("data:text/html,x")).success).toBe(false);
   });
 });
+
+/**
+ * Regressão: `blocks: []` passava no schema da IA e só era reprovado depois, no
+ * `validateDocument` (que exige `.min(1)`), com uma mensagem genérica de
+ * "Document validation failed". Isso queimava uma rodada de reask inteira — 60 a
+ * 120s dos 240s de orçamento — num erro que o schema podia devolver de primeira,
+ * nomeando o campo.
+ */
+describe("empty blocks are rejected by the schema itself", () => {
+  it("fails parseAiActivity instead of falling through to normalization", () => {
+    const parsed = parseAiActivity({
+      blocks: [],
+      strategies_applied: [],
+      pedagogical_justification: "x",
+      implementation_tips: [],
+    });
+    expect(parsed.ok).toBe(false);
+    expect((parsed as { errors: string[] }).errors.join(" ")).toMatch(/blocks/);
+  });
+});

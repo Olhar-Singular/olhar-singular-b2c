@@ -76,24 +76,36 @@ describe("pageTokens — CSS vars por elemento (Formato)", () => {
     expect(css["--doc-fs-caption"]).toBe("12px");     // 9 * 96/72
   });
 
-  it("pageTokensToCss não emite CSS vars de elemento quando elementFontSizes ausente", () => {
+  /**
+   * As vars são SEMPRE emitidas, derivadas do tamanho base. Antes só existiam
+   * quando o documento trazia `elementFontSizes` (que nenhuma UI escreve), então
+   * a folha caía nos fallbacks do CSS e o PDF usava constantes absolutas — as
+   * duas superfícies divergiam ao mudar o tamanho do texto.
+   */
+  it("pageTokensToCss deriva as CSS vars de elemento do tamanho base quando não há override", () => {
     const css = pageTokensToCss({ fontFamily: undefined, fontSize: 12, blockSpacing: 16 }) as Record<string, unknown>;
-    expect("--doc-fs-stem" in css).toBe(false);
-    expect("--doc-fs-instruction" in css).toBe(false);
-    expect("--doc-fs-alternative" in css).toBe(false);
-    expect("--doc-fs-caption" in css).toBe(false);
+    expect(css["--doc-fs-stem"]).toBe("16px");        // 12pt
+    expect(css["--doc-fs-instruction"]).toBe("14px"); // 10.5pt
+    expect(css["--doc-fs-alternative"]).toBe("16px"); // 12pt
+    expect(css["--doc-fs-caption"]).toBe("13.33px");  // 10pt
   });
 
-  it("pageTokensToCss emite apenas as CSS vars com override definido (elementFontSizes parcial)", () => {
+  it("pageTokensToCss escala as CSS vars de elemento junto com o tamanho base", () => {
+    const css = pageTokensToCss({ fontFamily: undefined, fontSize: 18, blockSpacing: 16 }) as Record<string, unknown>;
+    expect(css["--doc-fs-stem"]).toBe("24px");        // 18pt
+    expect(css["--doc-fs-instruction"]).toBe("21px"); // 15.75pt
+  });
+
+  it("pageTokensToCss aplica o override por chave e deriva o resto (elementFontSizes parcial)", () => {
     const css = pageTokensToCss({
       fontFamily: undefined,
       fontSize: 12,
       blockSpacing: 16,
       elementFontSizes: { stem: 14 },
     }) as Record<string, unknown>;
-    expect(css["--doc-fs-stem"]).toBe("18.67px");
-    expect("--doc-fs-instruction" in css).toBe(false);
-    expect("--doc-fs-alternative" in css).toBe(false);
-    expect("--doc-fs-caption" in css).toBe(false);
+    expect(css["--doc-fs-stem"]).toBe("18.67px");     // override
+    expect(css["--doc-fs-instruction"]).toBe("14px"); // derivado do base
+    expect(css["--doc-fs-alternative"]).toBe("16px");
+    expect(css["--doc-fs-caption"]).toBe("13.33px");
   });
 });

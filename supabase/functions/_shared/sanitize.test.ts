@@ -64,4 +64,29 @@ describe("sanitize", () => {
   it("preserves math text untouched when no special chars", () => {
     expect(sanitize("frac 1 2 plus 1 4")).toBe("frac 1 2 plus 1 4");
   });
+
+  /**
+   * The cap is applied AFTER escaping, so the cut can land inside an entity and
+   * leave `&a` / `&amp` in the prompt — a stray fragment the model then copies
+   * into the adapted worksheet. Truncation should drop the broken entity, not
+   * half of it.
+   */
+  describe("truncation never leaves a half-written entity", () => {
+    it("drops a trailing partial &amp;", () => {
+      // "aa&" escapes to "aa&amp;" — cutting at 5 would leave "aa&am".
+      expect(sanitize("aa&", 5)).toBe("aa");
+    });
+
+    it("drops a trailing partial &lt;", () => {
+      expect(sanitize("a<", 3)).toBe("a");
+    });
+
+    it("keeps a complete entity that fits exactly", () => {
+      expect(sanitize("a<", 5)).toBe("a&lt;");
+    });
+
+    it("leaves an ordinary cut alone", () => {
+      expect(sanitize("abcdefghij", 5)).toBe("abcde");
+    });
+  });
 });

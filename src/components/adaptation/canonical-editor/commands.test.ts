@@ -3,7 +3,6 @@ import {
   buildQuestionNode,
   buildImageNode,
   buildMathNode,
-  buildScaffoldNode,
   buildDivider,
   buildHeadingNode,
   buildParagraphNode,
@@ -103,16 +102,6 @@ describe("buildMathNode", () => {
     const node = buildMathNode(undefined, gen);
     expect(typeof node.attrs?.latex).toBe("string");
     expect((node.attrs?.latex as string).length).toBeGreaterThan(0);
-  });
-});
-
-describe("buildScaffoldNode", () => {
-  it("builds a scaffolding PM node with a starter item", () => {
-    const node = buildScaffoldNode(gen);
-    expect(node.type).toBe("scaffolding");
-    expect(Array.isArray(node.attrs?.items)).toBe(true);
-    const doc = proseMirrorToCanonical(wrapDoc(node));
-    expect(doc.blocks[0].type).toBe("scaffolding");
   });
 });
 

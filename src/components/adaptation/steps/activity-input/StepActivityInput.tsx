@@ -31,6 +31,11 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import ImagePreviewDialog from "@/components/dialogs/ImagePreviewDialog";
 import { buildActivityText } from "./buildActivityText";
+import {
+  MAX_ACTIVITY_CHARS,
+  escapedLength,
+  isActivityOverLimit,
+} from "@/lib/domain/activityLimits";
 import type { WizardData, SelectedQuestion } from "@/lib/adaptation/wizard/wizardState";
 
 type Props = {
@@ -146,9 +151,22 @@ export function StepActivityInput({ data, updateData, onNext, onPrev }: Props) {
 
   // ── Navigation ────────────────────────────────────────────────────────────
 
+  // The server escapes the text and then truncates it at MAX_ACTIVITY_CHARS,
+  // silently. Measuring the ESCAPED length here is what makes the counter honest
+  // and stops a credit being spent on an activity that cannot arrive whole.
+  const activityLength = escapedLength(data.activityText);
+  const overLimit = isActivityOverLimit(data.activityText);
+
   function handleNext() {
     if (!data.activityText.trim()) {
       setError("Digite ou cole a atividade antes de continuar.");
+      return;
+    }
+    if (overLimit) {
+      setError(
+        `A atividade passou do limite de ${MAX_ACTIVITY_CHARS.toLocaleString("pt-BR")} caracteres. ` +
+          "Reduza o texto ou divida em duas adaptações — o excedente seria cortado e você pagaria por uma prova incompleta.",
+      );
       return;
     }
     setError("");
@@ -226,6 +244,12 @@ export function StepActivityInput({ data, updateData, onNext, onPrev }: Props) {
             placeholder="Cole ou digite a atividade aqui..."
             className="w-full min-h-[300px] resize-y rounded-md border border-input bg-background px-3 py-2 text-sm font-mono leading-relaxed placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           />
+          <p
+            data-testid="activity-char-count"
+            className={`text-xs ${overLimit ? "text-destructive font-medium" : "text-muted-foreground"}`}
+          >
+            {activityLength.toLocaleString("pt-BR")} / {MAX_ACTIVITY_CHARS.toLocaleString("pt-BR")} caracteres
+          </p>
           {error && (
             <p role="alert" className="text-sm text-destructive">{error}</p>
           )}

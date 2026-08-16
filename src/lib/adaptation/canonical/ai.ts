@@ -224,7 +224,11 @@ export type AiBlock = z.infer<typeof AiBlockSchema>;
  * blocks may be content blocks OR question nodes.
  */
 export const AiActivitySchema = z.object({
-  blocks: z.array(AiBlockSchema),
+  // `.min(1)` mirrors CanonicalDocumentSchema. Without it an empty `blocks`
+  // parsed fine here and only blew up later inside `validateDocument`, as an
+  // opaque "Document validation failed" — which cost a whole reask round-trip
+  // (60–120s of the 240s budget) to say something the schema can name up front.
+  blocks: z.array(AiBlockSchema).min(1),
   strategies_applied: z.array(z.string()),
   pedagogical_justification: z.string(),
   implementation_tips: z.array(z.string()),

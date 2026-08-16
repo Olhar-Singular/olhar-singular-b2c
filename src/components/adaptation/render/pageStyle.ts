@@ -37,3 +37,17 @@ export function resolvePageStyle(ps?: PageStyle): ResolvedPageStyle {
     ...(ps?.elementFontSizes !== undefined ? { elementFontSizes: ps.elementFontSizes } : {}),
   };
 }
+
+/**
+ * Per-element font sizes. Defined in `pageTokens.ts` (which owns the base
+ * constants) and re-exported here so callers have a single "resolve the page
+ * style" entry point. The definition CANNOT live in this module: `pageTokens`
+ * needs it at runtime and this module already imports `pageTokens` at
+ * evaluation time — the reverse runtime import would close an ES module cycle
+ * and leave `BASE_FONT_PT` in its temporal dead zone.
+ */
+export {
+  ELEMENT_FONT_RATIOS,
+  resolveElementFontSizes,
+  type ElementFontSizesPt,
+} from "./pageTokens";

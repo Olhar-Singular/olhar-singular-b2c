@@ -46,6 +46,47 @@ const DEFAULT_RESOLVED: ResolvedPageStyle = {
 const PT_TO_PX = 96 / 72;
 const px = (pt: number) => `${Math.round(pt * PT_TO_PX * 100) / 100}px`;
 
+/**
+ * Tamanho de cada elemento do documento como FRAÇÃO do tamanho base.
+ *
+ * Os valores reproduzem as proporções que o PDF fixava em constantes no base de
+ * 12pt (instrução/enunciado 10.5pt, legenda 10pt), então um documento sem
+ * `elementFontSizes` explícito sai do papel exatamente como antes. O que muda é
+ * serem proporções e não constantes: subir o tamanho do texto no popover
+ * "Formato" — o controle de acessibilidade que mais importa aqui — escala junto.
+ * Antes a folha crescia e a instrução impressa continuava miúda.
+ */
+export const ELEMENT_FONT_RATIOS = {
+  stem: 1,
+  instruction: 10.5 / BASE_FONT_PT,
+  alternative: 1,
+  caption: 10 / BASE_FONT_PT,
+} as const;
+
+/** Tamanhos por elemento já resolvidos, em pt. Toda chave presente (sem buracos). */
+export type ElementFontSizesPt = { [K in keyof typeof ELEMENT_FONT_RATIOS]: number };
+
+/**
+ * Resolve os tamanhos por elemento (pt) de um documento.
+ *
+ * UM resolvedor alimenta as três superfícies — a folha do editor (via CSS vars
+ * `--doc-fs-*`), o renderer read-only e o PDF —, então a paridade vem por
+ * construção, não de três conjuntos de constantes que alguém precisa manter
+ * iguais. Um `pageStyle.elementFontSizes` explícito sobrescreve POR CHAVE; as
+ * chaves ausentes continuam seguindo o tamanho base.
+ */
+export function resolveElementFontSizes(resolved: ResolvedPageStyle): ElementFontSizesPt {
+  const overrides = resolved.elementFontSizes;
+  const derive = (key: keyof typeof ELEMENT_FONT_RATIOS) =>
+    overrides?.[key] ?? resolved.fontSize * ELEMENT_FONT_RATIOS[key];
+  return {
+    stem: derive("stem"),
+    instruction: derive("instruction"),
+    alternative: derive("alternative"),
+    caption: derive("caption"),
+  };
+}
+
 /** Estilo base do <Page> do react-pdf (em pt). */
 export function pageTokensToPdf(resolved: ResolvedPageStyle = DEFAULT_RESOLVED) {
   return {
@@ -57,18 +98,28 @@ export function pageTokensToPdf(resolved: ResolvedPageStyle = DEFAULT_RESOLVED) 
   };
 }
 
-/** Estilo base da folha da tela (em px). Expõe `--doc-block-spacing` e vars por elemento. */
+/**
+ * Estilo base da folha da tela (em px). Expõe `--doc-block-spacing` e as vars por
+ * elemento.
+ *
+ * As `--doc-fs-*` são emitidas SEMPRE, resolvidas por `resolveElementFontSizes`
+ * (proporção do tamanho base, ou o override explícito do documento). Antes só
+ * apareciam quando o documento trazia `elementFontSizes` — que nenhuma UI
+ * escreve —, então a folha caía nos fallbacks do CSS enquanto o PDF usava
+ * constantes absolutas, e as duas superfícies divergiam assim que o professor
+ * mexia no tamanho do texto.
+ */
 export function pageTokensToCss(resolved: ResolvedPageStyle = DEFAULT_RESOLVED): CSSProperties {
-  const efs = resolved.elementFontSizes;
+  const efs = resolveElementFontSizes(resolved);
   return {
     padding: px(PAGE_MARGIN_PT),
     fontSize: px(resolved.fontSize),
     lineHeight: BASE_LINE_HEIGHT,
     ...(resolved.fontFamily ? { fontFamily: fontFamilyToCss(resolved.fontFamily) } : {}),
     ["--doc-block-spacing"]: `${resolved.blockSpacing}px`,
-    ...(efs?.stem !== undefined ? { ["--doc-fs-stem"]: px(efs.stem) } : {}),
-    ...(efs?.instruction !== undefined ? { ["--doc-fs-instruction"]: px(efs.instruction) } : {}),
-    ...(efs?.alternative !== undefined ? { ["--doc-fs-alternative"]: px(efs.alternative) } : {}),
-    ...(efs?.caption !== undefined ? { ["--doc-fs-caption"]: px(efs.caption) } : {}),
+    ["--doc-fs-stem"]: px(efs.stem),
+    ["--doc-fs-instruction"]: px(efs.instruction),
+    ["--doc-fs-alternative"]: px(efs.alternative),
+    ["--doc-fs-caption"]: px(efs.caption),
   } as CSSProperties;
 }

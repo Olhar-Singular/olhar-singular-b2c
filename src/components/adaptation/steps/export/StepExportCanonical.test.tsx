@@ -121,6 +121,32 @@ describe("StepExportCanonical", () => {
     expect(screen.getByRole("button", { name: /Salvar/i })).toBeDisabled();
   });
 
+  /**
+   * Regressão: a prévia do Exportar é a última tela que o professor confere
+   * antes de baixar o PDF, e renderizava na fonte/tamanho padrão do app — o
+   * `pageStyle` ia só para o ExportPanel (que gera o PDF). Quem aumentava a fonte
+   * na Aparência via a folha grande no Revisar, pequena aqui, e grande de novo no
+   * PDF. A prévia tem de usar os mesmos page tokens da folha.
+   */
+  describe("preview parity with the PDF", () => {
+    it("renders the preview inside the A4 sheet frame", () => {
+      renderStep();
+      expect(screen.getByTestId("page-sheet")).toBeInTheDocument();
+    });
+
+    it("applies the document font size to the preview sheet", () => {
+      renderStep({ result: resultWithPageStyle });
+      // 14pt -> 18.67px on screen (px = pt * 96/72), same conversion the folha uses.
+      expect(screen.getByTestId("page-sheet")).toHaveStyle({ fontSize: "18.67px" });
+    });
+
+    it("falls back to the base tokens when the result has no pageStyle", () => {
+      renderStep({ result });
+      // 12pt base -> 16px.
+      expect(screen.getByTestId("page-sheet")).toHaveStyle({ fontSize: "16px" });
+    });
+  });
+
   it("fires onPrev and onRestart", () => {
     const onPrev = vi.fn();
     const onRestart = vi.fn();

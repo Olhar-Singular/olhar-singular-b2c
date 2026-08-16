@@ -17,14 +17,29 @@ import { PdfRichText } from "./PdfRichText";
 import { PdfAnswer } from "./PdfAnswer";
 import { PdfBlock } from "./PdfBlock";
 import { questionNumbers } from "../questionNumbering";
+import { resolveElementFontSizes, resolvePageStyle, type ElementFontSizesPt } from "../pageStyle";
 
 type QuestionBlock = Extract<Block, { type: "question" }>;
 
-// text-sm on screen (14px) converted to the PDF unit (pt): 14 × 72/96 = 10.5pt.
-// Applied to the question's instruction and enunciado to mirror QuestionView.
-const QUESTION_SUB_FS = 10.5;
+/**
+ * Instruction/enunciado sizes come from `resolveElementFontSizes`, NOT from a
+ * constant. They used to be a hardcoded 10.5pt, so raising the document font
+ * size in the "Formato" popover grew the enunciado on the sheet and left the
+ * printed instruction small — breaking the very accessibility adjustment the
+ * control exists for. The default resolution reproduces the old 10.5pt at the
+ * 12pt base, so untouched documents print identically.
+ */
+const DEFAULT_ELEMENT_SIZES = resolveElementFontSizes(resolvePageStyle());
 
-export function PdfQuestion({ block, number }: { block: QuestionBlock; number: number }) {
+export function PdfQuestion({
+  block,
+  number,
+  elementSizes = DEFAULT_ELEMENT_SIZES,
+}: {
+  block: QuestionBlock;
+  number: number;
+  elementSizes?: ElementFontSizesPt;
+}) {
   const stemNumbers = questionNumbers(block.stem);
   const position = block.enunciadoPosition ?? "below";
   const hasEnunciado = block.enunciado != null && block.enunciado.length > 0;
@@ -32,7 +47,7 @@ export function PdfQuestion({ block, number }: { block: QuestionBlock; number: n
 
   const enunciadoView = hasEnunciado ? (
     <View style={{ marginBottom: 4 }}>
-      <Text style={{ fontSize: QUESTION_SUB_FS }}>
+      <Text style={{ fontSize: elementSizes.stem }}>
         <PdfRichText content={block.enunciado!} />
       </Text>
     </View>
@@ -45,7 +60,7 @@ export function PdfQuestion({ block, number }: { block: QuestionBlock; number: n
         <View style={{ flex: 1 }}>
           {position === "above" && enunciadoView}
           {block.stem.map((child, i) => (
-            <PdfBlock key={child.id} block={child} number={stemNumbers[i]} />
+            <PdfBlock key={child.id} block={child} number={stemNumbers[i]} elementSizes={elementSizes} />
           ))}
           {position === "below" && enunciadoView}
         </View>
@@ -53,13 +68,13 @@ export function PdfQuestion({ block, number }: { block: QuestionBlock; number: n
 
       {block.instruction && (
         <View style={{ marginBottom: 4 }}>
-          <Text style={{ fontStyle: "italic", color: "#555555", fontSize: QUESTION_SUB_FS }}>
+          <Text style={{ fontStyle: "italic", color: "#555555", fontSize: elementSizes.instruction }}>
             <PdfRichText content={block.instruction} />
           </Text>
         </View>
       )}
 
-      <PdfAnswer answer={block.answer} />
+      <PdfAnswer answer={block.answer} elementSizes={elementSizes} />
     </View>
   );
 }

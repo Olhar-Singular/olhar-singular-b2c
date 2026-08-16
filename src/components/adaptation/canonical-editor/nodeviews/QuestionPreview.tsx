@@ -75,7 +75,7 @@ export function QuestionPreview({
           </div>
           {enunciadoPosition === "below" && enunciadoNode}
           {instruction != null && instruction.length > 0 && (
-            <div contentEditable={false} className="flex items-start gap-1 italic text-surface-ink-soft" style={{ fontSize: "var(--doc-fs-instruction, 0.94em)" }} data-testid="question-instruction">
+            <div contentEditable={false} className="flex items-start gap-1 italic text-surface-ink-soft" style={{ fontSize: "var(--doc-fs-instruction, 0.875em)" }} data-testid="question-instruction">
               <div className="flex-1">
                 <RichTextField
                   value={instruction}

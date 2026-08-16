@@ -3,6 +3,7 @@ import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { toast } from "sonner";
 import { StepActivityInput } from "./StepActivityInput";
 import type { WizardData } from "@/lib/adaptation/wizard/wizardState";
+import { MAX_ACTIVITY_CHARS } from "@/lib/domain/activityLimits";
 
 // ── Supabase mock (bank query + auth session) ──────────────────────────────
 
@@ -588,5 +589,72 @@ describe("StepActivityInput — bank query error", () => {
     expect(toast.error).toHaveBeenCalledWith(expect.stringMatching(/Erro ao carregar o banco/i));
     // It must NOT fall back to the "no questions found" empty state.
     expect(screen.queryByText(/Nenhuma questão encontrada/i)).toBeNull();
+  });
+});
+
+// ── Limite de tamanho da atividade ─────────────────────────────────────────
+
+/**
+ * Regressão: o servidor corta a atividade em MAX_ACTIVITY_CHARS (depois de
+ * escapar o HTML) sem avisar ninguém. Colar uma prova longa cobrava os créditos
+ * e devolvia metade da prova adaptada, sem nenhum sinal na tela. O passo tem de
+ * mostrar quanto falta e travar antes da cobrança.
+ */
+describe("StepActivityInput — limite de tamanho", () => {
+  const overLimit = "a".repeat(MAX_ACTIVITY_CHARS + 1);
+
+  it("shows a character counter for the pasted activity", () => {
+    render(
+      <StepActivityInput
+        data={{ ...baseData, activityText: "abc" }}
+        updateData={vi.fn()}
+        onNext={vi.fn()}
+        onPrev={vi.fn()}
+      />,
+    );
+    expect(screen.getByTestId("activity-char-count")).toHaveTextContent(
+      `3 / ${MAX_ACTIVITY_CHARS.toLocaleString("pt-BR")}`,
+    );
+  });
+
+  it("blocks Next and explains when the activity is over the limit", () => {
+    const onNext = vi.fn();
+    render(
+      <StepActivityInput
+        data={{ ...baseData, activityText: overLimit }}
+        updateData={vi.fn()}
+        onNext={onNext}
+        onPrev={vi.fn()}
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: /Próximo/i }));
+    expect(onNext).not.toHaveBeenCalled();
+    expect(screen.getByRole("alert")).toHaveTextContent(/limite/i);
+  });
+
+  it("counts the ESCAPED length, which is what the server truncates", () => {
+    render(
+      <StepActivityInput
+        data={{ ...baseData, activityText: "<".repeat(4000) }}
+        updateData={vi.fn()}
+        onNext={vi.fn()}
+        onPrev={vi.fn()}
+      />,
+    );
+    expect(screen.getByTestId("activity-char-count")).toHaveTextContent("16.000");
+  });
+
+  it("still advances at exactly the limit", () => {
+    const onNext = vi.fn();
+    render(
+      <StepActivityInput
+        data={{ ...baseData, activityText: "a".repeat(MAX_ACTIVITY_CHARS) }}
+        updateData={vi.fn()}
+        onNext={onNext}
+        onPrev={vi.fn()}
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: /Próximo/i }));
+    expect(onNext).toHaveBeenCalled();
   });
 });

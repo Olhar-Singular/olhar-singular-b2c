@@ -20,6 +20,10 @@ import type { Block } from "@/lib/adaptation/canonical/schema";
 import { nodeStyleToPdf } from "./nodeStyleToPdf";
 import { PdfRichText } from "./PdfRichText";
 import { PAGE_MARGIN_PT, DEFAULT_IMAGE_WIDTH_PX } from "../pageTokens";
+import { resolveElementFontSizes, resolvePageStyle, type ElementFontSizesPt } from "../pageStyle";
+
+/** Sizes used when a leaf block is rendered standalone. */
+const DEFAULT_ELEMENT_SIZES = resolveElementFontSizes(resolvePageStyle());
 
 type HeadingBlock = Extract<Block, { type: "heading" }>;
 type ParagraphBlock = Extract<Block, { type: "paragraph" }>;
@@ -84,7 +88,13 @@ const A4_HEIGHT_PT = 841.89;
  */
 const MAX_IMAGE_HEIGHT_PT = (A4_HEIGHT_PT - 2 * PAGE_MARGIN_PT) * 0.92;
 
-export function PdfImage({ block }: { block: ImageBlock }) {
+export function PdfImage({
+  block,
+  elementSizes = DEFAULT_ELEMENT_SIZES,
+}: {
+  block: ImageBlock;
+  elementSizes?: ElementFontSizesPt;
+}) {
   const alignItems = block.alignment ? IMAGE_ALIGN[block.alignment] : "flex-start";
   return (
     <View style={{ alignItems, marginBottom: 4, ...nodeStyleToPdf(block.style) }}>
@@ -108,7 +118,7 @@ export function PdfImage({ block }: { block: ImageBlock }) {
         }}
       />
       {block.caption && (
-        <Text style={{ fontSize: 10, color: "#666666", marginTop: 2 }}>
+        <Text style={{ fontSize: elementSizes.caption, color: "#666666", marginTop: 2 }}>
           <PdfRichText content={block.caption} />
         </Text>
       )}

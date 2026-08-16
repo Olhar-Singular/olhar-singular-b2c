@@ -346,7 +346,7 @@ describe("CanonicalAdaptationWizard", () => {
     expect(screen.getByTestId("pick-type")).toBeInTheDocument();
   });
 
-  it("regenerate is confirmed and replaces the document via the generate step", () => {
+  it("regenerate is confirmed and replaces the document via the generate step", async () => {
     renderWithProviders(<CanonicalAdaptationWizard />);
     advanceToReview();
 
@@ -358,7 +358,9 @@ describe("CanonicalAdaptationWizard", () => {
     const dialog = screen.getByRole("alertdialog");
     fireEvent.click(within(dialog).getByRole("button", { name: /^Regerar$/i }));
 
-    // back on the generate step
+    // back on the generate step (the pending autosave is flushed first, so the
+    // step change lands a microtask later)
+    await waitFor(() => expect(screen.getByTestId("do-generate")).toBeInTheDocument());
     fireEvent.click(screen.getByTestId("do-generate"));
     // fresh document (content reset to "gerado")
     expect(screen.getByTestId("edit-content")).toHaveTextContent("gerado");
@@ -385,7 +387,7 @@ describe("CanonicalAdaptationWizard", () => {
     expect(writeText).toHaveBeenCalledWith("gerado");
 
     fireEvent.click(screen.getByRole("button", { name: /Nova adaptação/i }));
-    expect(screen.getByTestId("pick-type")).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByTestId("pick-type")).toBeInTheDocument());
   });
 
   it("export step navigates back to review with Voltar", () => {
@@ -494,6 +496,7 @@ describe("CanonicalAdaptationWizard", () => {
     fireEvent.click(screen.getByRole("button", { name: /Regerar/i }));
     const dialog = screen.getByRole("alertdialog");
     fireEvent.click(within(dialog).getByRole("button", { name: /^Regerar$/i }));
+    await waitFor(() => expect(screen.getByTestId("do-generate")).toBeInTheDocument());
     fireEvent.click(screen.getByTestId("do-generate"));
     await waitFor(() => expect(screen.getByTestId("edit-content")).toHaveTextContent("gerado"));
     await waitFor(() => expect(adoptedDraftId()).toBe("srv-2"));
@@ -979,6 +982,56 @@ describe("CanonicalAdaptationWizard — navigation guard", () => {
       fireEvent.click(screen.getByTestId("restore-capture"));
 
       expect(screen.queryByTestId("capture-failure")).not.toBeInTheDocument();
+    });
+  });
+  // --- Edição pendente no debounce não pode sumir ao trocar de adaptação -----
+
+  describe("pending autosave is flushed before the draft is dropped", () => {
+    /**
+     * "Nova adaptação" e "Regerar" zeram o `result` e o `draftId`. O timer do
+     * debounce é limpo pelo cleanup do efeito e o crash mirror só é escrito
+     * DENTRO do performSave — então uma edição feita nos últimos ~1.2s não
+     * chegava nem ao banco nem ao mirror: sumia sem rastro.
+     */
+    it("Nova adaptação flushes before clearing the draft", async () => {
+      renderWithProviders(<CanonicalAdaptationWizard />);
+      advanceToReview();
+      await waitFor(() => expect(adoptedDraftId()).toBe("srv-1"));
+      fireEvent.click(screen.getByTestId("edit-content"));
+      fireEvent.click(screen.getByRole("button", { name: /Avançar para exportação/i }));
+      mockFlush.mockClear();
+
+      fireEvent.click(screen.getByRole("button", { name: /Nova adaptação/i }));
+
+      await waitFor(() => expect(mockFlush).toHaveBeenCalled());
+      await waitFor(() => expect(screen.getByTestId("pick-type")).toBeInTheDocument());
+    });
+
+    it("Regerar flushes before discarding the current document", async () => {
+      renderWithProviders(<CanonicalAdaptationWizard />);
+      advanceToReview();
+      await waitFor(() => expect(adoptedDraftId()).toBe("srv-1"));
+      fireEvent.click(screen.getByTestId("edit-content"));
+      mockFlush.mockClear();
+
+      fireEvent.click(screen.getByRole("button", { name: /Regerar/i }));
+      const dialog = screen.getByRole("alertdialog");
+      fireEvent.click(within(dialog).getByRole("button", { name: /^Regerar$/i }));
+
+      await waitFor(() => expect(mockFlush).toHaveBeenCalled());
+      await waitFor(() => expect(screen.getByTestId("do-generate")).toBeInTheDocument());
+    });
+
+    it("still restarts when the flush fails (the mirror keeps the edit)", async () => {
+      mockFlush.mockResolvedValue({ status: "failed", reason: "error" });
+      renderWithProviders(<CanonicalAdaptationWizard />);
+      advanceToReview();
+      await waitFor(() => expect(adoptedDraftId()).toBe("srv-1"));
+      fireEvent.click(screen.getByRole("button", { name: /Avançar para exportação/i }));
+
+      fireEvent.click(screen.getByRole("button", { name: /Nova adaptação/i }));
+
+      await waitFor(() => expect(screen.getByTestId("pick-type")).toBeInTheDocument());
     });
   });
 });

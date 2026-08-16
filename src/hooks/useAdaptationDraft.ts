@@ -97,6 +97,9 @@ export type UseAdaptationDraftResult = {
 /** What one save attempt did — drives both the status indicator and `flush`. */
 type SaveOutcome = "clean" | "success" | "conflict" | "error";
 
+/** Snapshot of an in-flight save, so overlapping callers can join it. */
+type InFlightSave = { promise: Promise<SaveOutcome>; snapshot: string };
+
 export function useAdaptationDraft({
   draftId,
   result,
@@ -182,7 +185,7 @@ export function useAdaptationDraft({
   }, []);
 
   /** Run one save now (no debounce). No-op when nothing to persist / not dirty. */
-  const performSave = useCallback(async (): Promise<SaveOutcome> => {
+  const runSave = useCallback(async (): Promise<SaveOutcome> => {
     const id = draftIdRef.current;
     const current = resultRef.current;
     const expected = expectedUpdatedAtRef.current;
@@ -220,6 +223,44 @@ export function useAdaptationDraft({
       return "error";
     }
   }, [transition]);
+
+  /**
+   * Serialize saves. Two writers may not race on the optimistic token: it is a
+   * per-row value that the FIRST successful UPDATE moves, so a second UPDATE
+   * still holding the old one matches 0 rows and comes back as a conflict — a
+   * conflict with nobody. Switching tabs fired exactly that: the browser emits
+   * `blur` AND `visibilitychange` in the same tick, both flush, and the wizard
+   * answered the phantom conflict with a toast and `navigate(0)`, reloading the
+   * page out from under a user who had done nothing wrong.
+   *
+   * A caller arriving while a save is in flight JOINS it when that save already
+   * covers the current state (same serialized result), and otherwise waits and
+   * then runs its own — so an edit made mid-flight is never dropped.
+   */
+  const inFlightRef = useRef<InFlightSave | null>(null);
+
+  const performSave = useCallback((): Promise<SaveOutcome> => {
+    const current = resultRef.current;
+    const snapshot = current ? serializeResult(current) : "";
+
+    const previous = inFlightRef.current;
+    // The in-flight save already carries this exact state: its outcome is ours.
+    if (previous?.snapshot === snapshot) return previous.promise;
+
+    // Otherwise QUEUE behind it rather than racing it. `runSave` then reads the
+    // freshest result and the token the previous write produced, so a keystroke
+    // made mid-flight is written on top of that write instead of against a
+    // timestamp the server has already moved past.
+    const promise = (async () => {
+      if (previous) await previous.promise.catch(() => undefined);
+      return runSave();
+    })();
+    inFlightRef.current = { promise, snapshot };
+    // Clear the slot only if a newer save has not already claimed it.
+    return promise.finally(() => {
+      if (inFlightRef.current?.promise === promise) inFlightRef.current = null;
+    });
+  }, [runSave]);
 
   const flush = useCallback(async (): Promise<FlushOutcome> => {
     if (timerRef.current) {

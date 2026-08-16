@@ -14,7 +14,7 @@ src/
 ├── contexts/            # auth context
 ├── lib/
 │   ├── adaptation/      # documento canônico + schema Tiptap (compartilhado c/ edge fn Deno)
-│   ├── domain/          # parsers e tipos (questionParser, QuestionType, SUBJECTS)
+│   ├── domain/          # parsers, tipos e limites (questionParser, SUBJECTS, activityLimits)
 │   ├── tiptap/ utils/   # extensões Tiptap e utilitários
 │   └── utils.ts         # cn()
 ├── integrations/

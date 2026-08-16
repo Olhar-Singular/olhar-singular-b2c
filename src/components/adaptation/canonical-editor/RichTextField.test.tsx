@@ -184,4 +184,56 @@ describe("RichTextField — component", () => {
     expect(attrs?.["aria-label"]).toBe("Alternativa");
     expect(attrs?.["data-placeholder"]).toBeDefined();
   });
+
+  /**
+   * Regressão (B8, mesma classe): este campo edita `answer.*`, `caption`,
+   * `enunciado` e `instruction` — tudo que entra no documento canônico. O
+   * `@tiptap/extension-color` cru aceita QUALQUER cor CSS, e o canônico só
+   * aceita a allowlist. Uma cor colada do Word (ou a nossa própria, que o DOM
+   * serializa como `rgb(...)`) chegava verbatim ao modelo, o
+   * `tryProseMirrorToCanonical` reprovava o documento INTEIRO e o autosave
+   * congelava em silêncio. A folha já usa `AllowlistedColor`; o campo aninhado
+   * tem de usar a mesma coerção.
+   */
+  describe("color allowlist", () => {
+    type AttrSpec = { parseHTML: (el: HTMLElement) => string | null };
+    type GlobalAttrEntry = { types: string[]; attributes: Record<string, AttrSpec> };
+    type ColorExt = {
+      name: string;
+      config: { addGlobalAttributes?: () => GlobalAttrEntry[] };
+      options?: unknown;
+    };
+
+    /** The `color` attribute spec of whatever color extension the field wires up. */
+    function colorAttr(): AttrSpec {
+      render(<RichTextField value={t("a")} onChange={vi.fn()} />);
+      const extensions = (capturedConfig as { extensions?: ColorExt[] }).extensions ?? [];
+      const ext = extensions.find((e) => e?.name === "color");
+      expect(ext).toBeDefined();
+      const entries = ext!.config.addGlobalAttributes!.call({ options: ext!.options });
+      const entry = entries.find((e) => e.types.includes("textStyle"));
+      expect(entry).toBeDefined();
+      return entry!.attributes.color;
+    }
+
+    function styled(color: string): HTMLElement {
+      const el = document.createElement("span");
+      el.style.color = color;
+      return el;
+    }
+
+    it("coerces a pasted foreign color to the nearest allowlisted one", () => {
+      // Word's default red is not our red; the emphasis survives, the value is
+      // clamped to the palette instead of freezing the document.
+      expect(colorAttr().parseHTML(styled("#EF4444"))).toBe("#DC2626");
+    });
+
+    it("round-trips our own clipboard, which serializes #DC2626 as rgb()", () => {
+      expect(colorAttr().parseHTML(styled("rgb(220, 38, 38)"))).toBe("#DC2626");
+    });
+
+    it("drops an unparseable color instead of carrying it into the model", () => {
+      expect(colorAttr().parseHTML(styled("inherit"))).toBeNull();
+    });
+  });
 });

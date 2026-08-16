@@ -116,12 +116,6 @@ export function buildMathNode(latex: string | undefined, generate: Generate = ne
   return blockToNode(block);
 }
 
-/** Build a scaffolding PM node with one starter step. */
-export function buildScaffoldNode(generate: Generate = newId): PMNode {
-  const block: Block = { id: generate(), type: "scaffolding", items: [""] };
-  return blockToNode(block);
-}
-
 /** Build a divider PM node. */
 export function buildDivider(generate: Generate = newId): PMNode {
   const block: Block = { id: generate(), type: "divider" };

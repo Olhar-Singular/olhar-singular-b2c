@@ -352,6 +352,180 @@ describe("useAdaptationDraft", () => {
     Object.defineProperty(document, "visibilityState", { value: "visible", configurable: true });
   });
 
+  /**
+   * Regressão: trocar de aba dispara `blur` E `visibilitychange` no mesmo tick,
+   * então dois flushes entravam em performSave antes de o primeiro atualizar o
+   * token otimista. Os dois mandavam o UPDATE com o mesmo `expected`; o segundo
+   * casava 0 linhas, virava "conflict" e o wizard respondia com toast + navigate(0)
+   * — recarga de página inteira num conflito que nunca existiu.
+   */
+  describe("concurrent saves", () => {
+    /** An updateAdaptation that stays in flight until the test releases it. */
+    function deferredUpdate() {
+      let release!: () => void;
+      const gate = new Promise<void>((r) => (release = r));
+      let calls = 0;
+      vi.mocked(repo.updateAdaptation).mockImplementation(async (_id, _patch, expected) => {
+        calls += 1;
+        await gate;
+        // Only the FIRST writer still matches the row's updated_at; the server
+        // bumps it, so any concurrent writer using the same token gets 0 rows.
+        return expected === "2026-01-01T00:00:00Z" && calls === 1
+          ? { ok: true, row: ROW }
+          : { ok: false, conflict: true };
+      });
+      return { release: () => release(), calls: () => calls };
+    }
+
+    const props = {
+      draftId: "d1",
+      result: validResult,
+      initialUpdatedAt: "2026-01-01T00:00:00Z",
+      debounceMs: 5000,
+    };
+
+    it("collapses blur + visibilitychange into a single write", async () => {
+      const update = deferredUpdate();
+      const { rerender } = renderHook((p) => useAdaptationDraft(p), { initialProps: props });
+      rerender({ ...props, result: edited("tab-switch") });
+
+      Object.defineProperty(document, "visibilityState", { value: "hidden", configurable: true });
+      await act(async () => {
+        window.dispatchEvent(new Event("blur"));
+        document.dispatchEvent(new Event("visibilitychange"));
+        await Promise.resolve();
+        update.release();
+        await vi.advanceTimersByTimeAsync(0);
+      });
+      Object.defineProperty(document, "visibilityState", { value: "visible", configurable: true });
+
+      expect(update.calls()).toBe(1);
+    });
+
+    it("does not report a conflict when two flushes overlap", async () => {
+      const update = deferredUpdate();
+      const onConflict = vi.fn();
+      const { result, rerender } = renderHook((p) => useAdaptationDraft(p), {
+        initialProps: { ...props, onConflict },
+      });
+      rerender({ ...props, onConflict, result: edited("overlap") });
+
+      await act(async () => {
+        const a = result.current.flush();
+        const b = result.current.flush();
+        update.release();
+        const [ra, rb] = await Promise.all([a, b]);
+        expect(ra.status).toBe("saved");
+        expect(rb.status).toBe("saved");
+      });
+
+      expect(onConflict).not.toHaveBeenCalled();
+      expect(result.current.status).toBe("saved");
+      expect(update.calls()).toBe(1);
+    });
+
+    it("an edit made mid-flight is written AFTER the save it arrived during", async () => {
+      // Joining the in-flight save would be wrong here: it carries the OLD
+      // document. The newer edit has to wait for that write to land (so the
+      // optimistic token is fresh) and then persist on top of it.
+      let release!: () => void;
+      const gate = new Promise<void>((r) => (release = r));
+      const seen: Array<[string, string]> = [];
+      let first = true;
+      vi.mocked(repo.updateAdaptation).mockImplementation(async (_id, patch, expected) => {
+        const tag = (patch.adaptation_result as AdaptationResult).pedagogical_justification;
+        if (first) {
+          first = false;
+          await gate;
+          seen.push([tag, expected]);
+          return { ok: true, row: { ...ROW, updated_at: "2026-03-03T00:00:00Z" } };
+        }
+        seen.push([tag, expected]);
+        return { ok: true, row: ROW };
+      });
+
+      const { result, rerender } = renderHook((p) => useAdaptationDraft(p), {
+        initialProps: props,
+      });
+      rerender({ ...props, result: edited("first") });
+
+      let a!: Promise<unknown>;
+      await act(async () => {
+        a = result.current.flush();
+      });
+      // A keystroke lands while the first write is still open.
+      rerender({ ...props, result: edited("second") });
+      await act(async () => {
+        const b = result.current.flush();
+        release();
+        await Promise.all([a, b]);
+      });
+
+      expect(seen).toEqual([
+        ["first", "2026-01-01T00:00:00Z"],
+        // Second write uses the token the FIRST one produced — not the stale one.
+        ["second", "2026-03-03T00:00:00Z"],
+      ]);
+    });
+
+    it("a queued save still runs when the write it waits on rejects outright", async () => {
+      // The queue must not be poisoned by a rejection. `runSave` swallows repo
+      // errors itself, but the mirror write sits ahead of its try/catch — so a
+      // storage failure can reject the whole chain and, without the catch, take
+      // every queued edit down with it.
+      // The rejection has to land while the SECOND save is already queued behind
+      // the first — otherwise the slot is free again and nothing ever waits on
+      // the failed promise.
+      let fail!: (e: Error) => void;
+      vi.mocked(mirror.writeMirror).mockReturnValueOnce(
+        new Promise<void>((_resolve, reject) => (fail = reject)),
+      );
+      const { result, rerender } = renderHook((p) => useAdaptationDraft(p), {
+        initialProps: props,
+      });
+      rerender({ ...props, result: edited("doomed") });
+
+      let first!: Promise<unknown>;
+      await act(async () => {
+        first = result.current.flush().catch(() => undefined);
+      });
+      rerender({ ...props, result: edited("survivor") });
+      await act(async () => {
+        const second = result.current.flush();
+        fail(new Error("storage cheia"));
+        await Promise.all([first, second]);
+      });
+
+      expect(repo.updateAdaptation).toHaveBeenCalledWith(
+        "d1",
+        { adaptation_result: edited("survivor") },
+        "2026-01-01T00:00:00Z",
+      );
+    });
+
+    it("a flush that lands while a debounced save is in flight still returns the fresh token", async () => {
+      const update = deferredUpdate();
+      const { result, rerender } = renderHook((p) => useAdaptationDraft(p), {
+        initialProps: { ...props, debounceMs: 10 },
+      });
+      rerender({ ...props, debounceMs: 10, result: edited("debounce") });
+
+      let flushed: Awaited<ReturnType<typeof result.current.flush>>;
+      await act(async () => {
+        // The debounce fires and starts a save...
+        await vi.advanceTimersByTimeAsync(10);
+        // ...and "Salvar" flushes on top of it.
+        const pending = result.current.flush();
+        update.release();
+        flushed = await pending;
+      });
+
+      expect(flushed!.status).toBe("saved");
+      expect(flushed!.updatedAt).toBe(ROW.updated_at);
+      expect(update.calls()).toBe(1);
+    });
+  });
+
   it("does NOT flush when visibility changes to visible", async () => {
     const props = {
       draftId: "d1",

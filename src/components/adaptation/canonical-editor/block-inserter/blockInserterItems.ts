@@ -4,8 +4,13 @@
  * Two sections, covering everything the old `CanonicalToolbar` covered plus the
  * "Texto e mídia" set from §6.4:
  *  - Questão: the 8 answer kinds (a new question opens its card on insert).
- *  - Texto e mídia: Título H1, Seção H2, Parágrafo, Imagem, Fórmula, Banco de
- *    palavras (→ scaffolding node), Divisória, Quebra de página.
+ *  - Texto e mídia: Título H1, Seção H2, Parágrafo, Imagem, Fórmula, Divisória,
+ *    Quebra de página.
+ *
+ * "Banco de palavras" (o bloco `scaffolding`) foi retirado do menu de propósito
+ * (commit 25a0bab) — o teste ao lado fixa a ausência. O bloco continua no modelo
+ * canônico e a IA continua produzindo: `ScaffoldNodeView` o edita normalmente.
+ * O que não existe é a inserção manual.
  *
  * Each item carries a pure `InserterAction`, reusing the round-trip-safe builders
  * from `commands.ts`. "Quebra de página" is `needsFollowing` — it only makes

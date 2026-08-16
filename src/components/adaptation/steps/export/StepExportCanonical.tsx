@@ -2,6 +2,7 @@ import { Button } from "@/components/ui/button";
 import { ArrowLeft, RotateCcw, Save, Loader2 } from "lucide-react";
 import { CanonicalRenderer } from "@/components/adaptation/render/CanonicalRenderer";
 import { ExportPanel } from "@/components/adaptation/export/ExportPanel";
+import { PageSheet } from "@/components/adaptation/PageSheet";
 import type { AdaptationResult, DocumentHeader } from "@/lib/adaptation/canonical/schema";
 
 type Props = {
@@ -50,9 +51,16 @@ export function StepExportCanonical({
         </Button>
       </div>
 
-      <div className="rounded-md border border-input bg-background p-4">
+      {/*
+        The preview is the LAST look the teacher gets before downloading, so it
+        renders through the same page tokens as the Revisar sheet and the PDF
+        (`PageSheet` + `pageStyle`). Rendering it in the app's default typography
+        showed a different document from the one that would come out of the
+        printer — exactly on the screen meant for checking it.
+      */}
+      <PageSheet pageStyle={result.pageStyle}>
         <CanonicalRenderer document={document} />
-      </div>
+      </PageSheet>
 
       <div className="flex justify-between">
         <Button variant="outline" onClick={onPrev}>

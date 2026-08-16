@@ -7,6 +7,12 @@ import { PdfQuestion } from "./PdfQuestion";
 import { PdfHeading, PdfParagraph, PdfImage, PdfScaffolding } from "./PdfLeafBlocks";
 import { PdfMath } from "./PdfMath";
 import type { Block, QuestionAnswer } from "@/lib/adaptation/canonical/schema";
+import {
+  resolvePageStyle,
+  resolveElementFontSizes,
+  ELEMENT_FONT_RATIOS,
+  type ElementFontSizesPt,
+} from "../pageStyle";
 
 const id = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, "0")}`;
 const rt = (t: string) => [{ type: "text" as const, text: t }];
@@ -243,7 +249,7 @@ describe("PdfQuestion — auto number header", () => {
     expect(style.color).toBeUndefined();
   });
 
-  it("renders the instruction at the smaller text-sm size (parity with screen)", () => {
+  function instructionSize(elementSizes?: ElementFontSizesPt): number | undefined {
     const block: Extract<Block, { type: "question" }> = {
       id: id(1),
       type: "question",
@@ -251,13 +257,13 @@ describe("PdfQuestion — auto number header", () => {
       instruction: rt("faça assim"),
       answer: { kind: "open" },
     };
-    const el = PdfQuestion({ block, number: 1 }) as ReactElement;
+    const el = PdfQuestion({ block, number: 1, elementSizes }) as ReactElement;
     const instructionView = (el.props.children as ReactElement[])[1];
     const instructionText = (instructionView.props as { children: ReactElement }).children;
-    expect((instructionText.props.style as { fontSize?: number }).fontSize).toBe(10.5);
-  });
+    return (instructionText.props.style as { fontSize?: number }).fontSize;
+  }
 
-  it("renders the enunciado at the smaller text-sm size (parity with screen)", () => {
+  function enunciadoSize(elementSizes?: ElementFontSizesPt): number | undefined {
     const block: Extract<Block, { type: "question" }> = {
       id: id(1),
       type: "question",
@@ -266,13 +272,40 @@ describe("PdfQuestion — auto number header", () => {
       enunciadoPosition: "above",
       answer: { kind: "open" },
     };
-    const el = PdfQuestion({ block, number: 1 }) as ReactElement;
+    const el = PdfQuestion({ block, number: 1, elementSizes }) as ReactElement;
     const row = (el.props.children as ReactElement[])[0];
     const innerView = (row.props.children as ReactElement[])[1];
     // position "above" → enunciado View is the first child of the inner column
     const enunciadoView = (innerView.props.children as unknown[])[0] as ReactElement;
     const enunciadoText = (enunciadoView.props as { children: ReactElement }).children;
-    expect((enunciadoText.props.style as { fontSize?: number }).fontSize).toBe(10.5);
+    return (enunciadoText.props.style as { fontSize?: number }).fontSize;
+  }
+
+  it("renders the instruction at the smaller size by default (parity with screen)", () => {
+    expect(instructionSize()).toBeCloseTo(10.5, 5);
+  });
+
+  it("renders the enunciado at the stem size (parity with the folha)", () => {
+    expect(enunciadoSize()).toBeCloseTo(12, 5);
+  });
+
+  /**
+   * Regressão: instrução/enunciado eram constantes absolutas (10.5pt), então
+   * aumentar o tamanho do texto na Aparência crescia o enunciado na folha e
+   * deixava a instrução miúda no PDF — quebrando exatamente o ajuste de
+   * acessibilidade que o recurso existe para oferecer.
+   */
+  it("scales the instruction and the enunciado with the document font size", () => {
+    const sizes = resolveElementFontSizes(resolvePageStyle({ fontSize: 18 }));
+    expect(instructionSize(sizes)).toBeCloseTo(18 * ELEMENT_FONT_RATIOS.instruction, 5);
+    expect(enunciadoSize(sizes)).toBeCloseTo(18, 5);
+  });
+
+  it("honours an explicit elementFontSizes override", () => {
+    const sizes = resolveElementFontSizes(
+      resolvePageStyle({ fontSize: 12, elementFontSizes: { instruction: 20 } }),
+    );
+    expect(instructionSize(sizes)).toBe(20);
   });
 });
 

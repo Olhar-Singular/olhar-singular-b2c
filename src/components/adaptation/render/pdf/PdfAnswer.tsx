@@ -20,6 +20,7 @@ import { View, Text } from "@react-pdf/renderer";
 import type { QuestionAnswer } from "@/lib/adaptation/canonical/schema";
 import { indexToLetter } from "../letters";
 import { PdfRichText } from "./PdfRichText";
+import { resolveElementFontSizes, resolvePageStyle, type ElementFontSizesPt } from "../pageStyle";
 
 const ROW = { flexDirection: "row", marginBottom: 3 } as const;
 // flexShrink: 0 prevents the marker column from collapsing when the row is
@@ -30,7 +31,23 @@ const FLEX = { flexGrow: 1, flexShrink: 1 } as const;
 // Marcador de verdadeiro/falso para o aluno assinalar — não revela o valor.
 const TF_MARKER = { width: 60, flexShrink: 0 } as const;
 
-export function PdfAnswer({ answer }: { answer: QuestionAnswer }) {
+/**
+ * Default sizes for callers that render an answer standalone. Resolving them
+ * (instead of inheriting whatever the page sets) keeps this component's output
+ * identical to the historical one at the 12pt base.
+ */
+const DEFAULT_ELEMENT_SIZES = resolveElementFontSizes(resolvePageStyle());
+
+export function PdfAnswer({
+  answer,
+  elementSizes = DEFAULT_ELEMENT_SIZES,
+}: {
+  answer: QuestionAnswer;
+  elementSizes?: ElementFontSizesPt;
+}) {
+  // Alternatives / items / cells all read at the "alternative" size, which
+  // follows the document font size (see resolveElementFontSizes).
+  const itemStyle = { fontSize: elementSizes.alternative };
   switch (answer.kind) {
     case "open": {
       const lines = answer.answerLines ?? 3;
@@ -52,7 +69,7 @@ export function PdfAnswer({ answer }: { answer: QuestionAnswer }) {
             <View key={alt.id} style={ROW}>
               <Text style={MARKER}>{indexToLetter(i)})</Text>
               <View style={FLEX}>
-                <Text>
+                <Text style={itemStyle}>
                   <PdfRichText content={alt.content} />
                 </Text>
               </View>
@@ -67,7 +84,7 @@ export function PdfAnswer({ answer }: { answer: QuestionAnswer }) {
             <View key={item.id} style={ROW}>
               <Text style={TF_MARKER}>(  ) V  (  ) F</Text>
               <View style={FLEX}>
-                <Text>
+                <Text style={itemStyle}>
                   <PdfRichText content={item.content} />
                 </Text>
               </View>
@@ -82,7 +99,7 @@ export function PdfAnswer({ answer }: { answer: QuestionAnswer }) {
             <View key={item.id} style={ROW}>
               <Text style={MARKER}>[ ]</Text>
               <View style={FLEX}>
-                <Text>
+                <Text style={itemStyle}>
                   <PdfRichText content={item.content} />
                 </Text>
               </View>
@@ -96,13 +113,13 @@ export function PdfAnswer({ answer }: { answer: QuestionAnswer }) {
           {answer.pairs.map((pair) => (
             <View key={pair.id} style={ROW}>
               <View style={FLEX}>
-                <Text>
+                <Text style={itemStyle}>
                   <PdfRichText content={pair.left} />
                 </Text>
               </View>
               <Text style={{ marginHorizontal: 6, flexShrink: 0 }}>↔</Text>
               <View style={FLEX}>
-                <Text>
+                <Text style={itemStyle}>
                   <PdfRichText content={pair.right} />
                 </Text>
               </View>
@@ -117,7 +134,7 @@ export function PdfAnswer({ answer }: { answer: QuestionAnswer }) {
             <View key={item.id} style={ROW}>
               <Text style={MARKER}>____</Text>
               <View style={FLEX}>
-                <Text>
+                <Text style={itemStyle}>
                   <PdfRichText content={item.content} />
                 </Text>
               </View>

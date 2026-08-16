@@ -234,7 +234,26 @@ export default function CanonicalAdaptationWizard({ editMode }: Props = {}) {
     setData((prev) => setPageStyle(prev, pageStyle));
   }, []);
 
-  function handleRestart() {
+  /**
+   * Persist whatever is still sitting in the debounce window before the draft is
+   * dropped.
+   *
+   * Both "Nova adaptação" and "Regerar" clear `result`/`draftId`, which makes the
+   * autosave a no-op and lets the effect cleanup cancel the pending timer. The
+   * crash mirror is only written INSIDE a save, so an edit made in the last ~1.2s
+   * reached neither the database nor the mirror: it just vanished.
+   *
+   * The result is deliberately ignored. A failed flush still leaves the edit in
+   * the crash mirror (and has already toasted), and blocking the restart on it
+   * would strand the user on a screen they asked to leave. No draft-id guard
+   * either: `flush` already no-ops when there is nothing to persist.
+   */
+  const flushPending = useCallback(async () => {
+    await flush();
+  }, [flush]);
+
+  async function handleRestart() {
+    await flushPending();
     setData(INITIAL_WIZARD_DATA);
     setStepIndex(0);
     setDraftId(null);
@@ -249,8 +268,9 @@ export default function CanonicalAdaptationWizard({ editMode }: Props = {}) {
     checkedMirrorFor.current = null;
   }
 
-  function confirmRegenerateNow() {
+  async function confirmRegenerateNow() {
     setConfirmRegenerate(false);
+    await flushPending();
     setData((prev) => clearResult(prev));
     setStepIndex(GENERATE_INDEX);
   }
@@ -354,7 +374,7 @@ export default function CanonicalAdaptationWizard({ editMode }: Props = {}) {
             onSave={handleSave}
             onHeaderChange={handleHeaderChange}
             onPrev={onPrev}
-            onRestart={handleRestart}
+            onRestart={() => void handleRestart()}
           />
         );
     }
@@ -489,7 +509,7 @@ export default function CanonicalAdaptationWizard({ editMode }: Props = {}) {
           <AlertDialogFooter>
             <AlertDialogCancel>Cancelar</AlertDialogCancel>
             <AlertDialogAction
-              onClick={confirmRegenerateNow}
+              onClick={() => void confirmRegenerateNow()}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
               Regerar

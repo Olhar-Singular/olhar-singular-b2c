@@ -1,4 +1,6 @@
 import { describe, it, expect } from "vitest";
+import * as frontendLimits from "../../../src/lib/domain/activityLimits";
+import { sanitize } from "./sanitize";
 import {
   NEURODIVERGENCE_STRATEGIES,
   DEFAULT_PROFILES,
@@ -88,6 +90,26 @@ describe("buildSystemPrompt", () => {
     // And that block names are never valid answer kinds.
     expect(prompt).toContain('NUNCA use um nome de bloco como "answer.kind"');
     expect(prompt).toContain('"scaffolding"');
+  });
+});
+
+/**
+ * The wizard has to warn BEFORE charging a credit for an activity the server
+ * would truncate, so it carries its own copy of the cap (it cannot import from
+ * `supabase/functions/`). Same duplication + sync-test pattern as the credit
+ * tables in adaptationCost.ts: drift here means the UI green-lights a paste the
+ * server silently cuts in half.
+ */
+describe("activity cap stays in sync with the frontend", () => {
+  it("MAX_ACTIVITY_CHARS matches src/lib/domain/activityLimits", () => {
+    expect(MAX_ACTIVITY_CHARS).toBe(frontendLimits.MAX_ACTIVITY_CHARS);
+  });
+
+  it("the frontend counts exactly what sanitize() will truncate", () => {
+    const samples = ["abc", "<script>", "a & b", 'x "y" z', "it's", "  trim  "];
+    for (const sample of samples) {
+      expect(frontendLimits.escapedLength(sample)).toBe(sanitize(sample, MAX_ACTIVITY_CHARS).length);
+    }
   });
 });
 

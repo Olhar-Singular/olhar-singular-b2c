@@ -8,9 +8,18 @@
  * italic / color / inline-math into plain text.
  *
  * Extensions are a MINIMAL inline-only set (Document restricted to exactly one
- * paragraph, Paragraph, Text, the four inline marks, TextStyle+Color, and the
- * canonical InlineMath atom). NO block nodes — so the field can never produce a
- * heading/list/divider that the single-paragraph RichText model can't hold.
+ * paragraph, Paragraph, Text, the four inline marks, TextStyle+AllowlistedColor,
+ * and the canonical InlineMath atom). NO block nodes — so the field can never
+ * produce a heading/list/divider that the single-paragraph RichText model can't
+ * hold.
+ *
+ * The color extension is `AllowlistedColor`, NOT the raw `@tiptap/extension-color`:
+ * this field edits `answer.*`, `caption`, `enunciado` and `instruction`, i.e.
+ * values that go straight into the canonical document, whose `Color` accepts only
+ * the palette. A color pasted from Word — or from our OWN clipboard, which the DOM
+ * serializes as `rgb(220, 38, 38)` — used to reach the model verbatim, so
+ * `tryProseMirrorToCanonical` rejected the WHOLE document and the autosave froze
+ * in silence (the B8 failure, one surface over). Same coercion as the folha.
  *
  * RichText <-> ProseMirror-inline mapping reuses the proven, round-trip-tested
  * `richTextToPM` / `pmToRichText` mappers. `onChange` only fires when the mapped
@@ -34,11 +43,10 @@ import Italic from "@tiptap/extension-italic";
 import Underline from "@tiptap/extension-underline";
 import Strike from "@tiptap/extension-strike";
 import TextStyle from "@tiptap/extension-text-style";
-import Color from "@tiptap/extension-color";
 import { FontSize } from "@/lib/tiptap/fontSizeExtension";
 import { cn } from "@/lib/utils";
 import type { RichText } from "@/lib/adaptation/canonical/schema";
-import { InlineMathNode } from "@/lib/adaptation/tiptap/schema";
+import { AllowlistedColor, InlineMathNode } from "@/lib/adaptation/tiptap/schema";
 import { type PMNode } from "@/lib/adaptation/tiptap/fromCanonical";
 import { InlineMathNodeView } from "./nodeviews/InlineMathNodeView";
 import { docFromRichText, richTextFromDoc, richTextEqual } from "./richTextFieldMapping";
@@ -101,7 +109,7 @@ export function RichTextField({
       Underline,
       Strike,
       TextStyle,
-      Color,
+      AllowlistedColor,
       FontSize,
       buildInlineMathExtension(),
     ],

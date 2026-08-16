@@ -36,7 +36,10 @@ export function ImageBlockView({ block }: { block: ImageBlock }) {
         className="inline-block max-w-full"
       />
       {block.caption && (
-        <figcaption className="mt-1 text-sm text-muted-foreground">
+        <figcaption
+          className="mt-1 text-muted-foreground"
+          style={{ fontSize: "var(--doc-fs-caption, 0.833em)" }}
+        >
           <RichTextView content={block.caption} />
         </figcaption>
       )}

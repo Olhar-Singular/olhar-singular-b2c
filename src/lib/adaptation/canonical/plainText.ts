@@ -2,6 +2,14 @@
  * Pure projection of a CanonicalDocument to plain text, used by the "Copiar"
  * action on the export step. Mirrors the visual reading order of the renderer
  * (stem, instruction, then answers) without any markup.
+ *
+ * THE ANSWER KEY IS HIDDEN, exactly as in every other output surface
+ * (AnswerView on screen, PdfAnswer in the PDF, exportDocx in Word): blank
+ * markers for trueFalse/checkbox, `ordering` left in AUTHORED order (sorting it
+ * by `position` would BE the key), and `fillBlank` rendering nothing (its blanks
+ * live inline in the stem). "Copiar" sits next to the two export buttons and is
+ * used to paste the sheet into Word or an e-mail — leaking the gabarito here
+ * hands it to the students in one click.
  */
 
 import type { Block, CanonicalDocument, QuestionAnswer, RichText } from "./schema.ts";
@@ -22,23 +30,24 @@ function answerToLines(answer: QuestionAnswer): string[] {
         (alt, i) => `${indexToLetter(i)}) ${richTextToText(alt.content)}`,
       );
     case "trueFalse":
-      return answer.items.map(
-        (item) => `( ${item.value ? "V" : "F"} ) ${richTextToText(item.content)}`,
-      );
+      // Blank markers for the student to fill — never the authored value.
+      return answer.items.map((item) => `(  ) V  (  ) F ${richTextToText(item.content)}`);
     case "checkbox":
-      return answer.items.map(
-        (item) => `[${item.checked ? "x" : " "}] ${richTextToText(item.content)}`,
-      );
+      // Every box empty, whatever `checked` says.
+      return answer.items.map((item) => `[ ] ${richTextToText(item.content)}`);
     case "matching":
+      // The pairing is the STRUCTURE of the exercise, not the key (same call the
+      // PDF and Word mappers make), so both sides are kept.
       return answer.pairs.map(
-        (pair) => `${richTextToText(pair.left)} — ${richTextToText(pair.right)}`,
+        (pair) => `${richTextToText(pair.left)} <-> ${richTextToText(pair.right)}`,
       );
     case "ordering":
-      return [...answer.items]
-        .sort((a, b) => a.position - b.position)
-        .map((item, i) => `${i + 1}. ${richTextToText(item.content)}`);
+      // AUTHORED order, not sorted by `position`: sorting would print the key.
+      // A blank slot mirrors the "____" marker of the screen and PDF renderers.
+      return answer.items.map((item) => `____ ${richTextToText(item.content)}`);
     case "fillBlank":
-      return answer.gaps.map((gap, i) => `(${i + 1}) ${gap.answer}`);
+      // The blanks live inline in the stem; `gaps` is only the answer key.
+      return [];
     case "table":
       return answer.rows.map((row) => row.map(richTextToText).join(" | "));
   }

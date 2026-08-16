@@ -29,7 +29,7 @@ Plataforma educacional B2C. **Educadores adaptam atividades pedagógicas (provas
 ## Onde mora a lógica
 
 - `src/lib/adaptation/` — núcleo do Adaptar: documento **canônico** (`canonical/`: DSL, blocos, cores) + schema **Tiptap** (`tiptap/`). **Compartilhado** entre editor (browser) e edge function (Deno). Antes de mexer: skill `validate-adaptar`.
-- `src/lib/domain/` — parsers e tipos (`questionParser`, `QuestionType`, `SUBJECTS`).
+- `src/lib/domain/` — parsers, tipos e limites (`questionParser`, `QuestionType`, `SUBJECTS`, `activityLimits`).
 - `src/components/adaptation/render/pdf/` — geração de PDF (`@react-pdf/renderer`, math/LaTeX, fontes). **ÁREA FRÁGIL** → agente `pdf-debugger`.
 - `supabase/functions/_shared/` — lógica testável das edge functions (o `index.ts` é só glue HTTP).
 - `supabase/migrations/` — schema, RPCs de crédito, RLS (owner-based; super-admin cross-tenant).
@@ -58,6 +58,19 @@ Plataforma educacional B2C. **Educadores adaptam atividades pedagógicas (provas
   subiram e ainda empurrava o `updated_at` à frente do mirror, fazendo a próxima abertura apagar a
   única cópia. (Discriminante é **string**: o projeto compila com `strictNullChecks: false`, onde
   TS não estreita união por literal booleano.)
+- **Salvamentos são SERIALIZADOS, nunca concorrentes** (`useAdaptationDraft`, `inFlightRef`). O
+  token otimista é por linha e o primeiro UPDATE bem-sucedido o move, então dois writes em paralelo
+  fazem o segundo casar 0 linhas e voltar como **conflito com ninguém** — e o wizard responde a
+  conflito com toast + `navigate(0)`. Trocar de aba dispara `blur` **e** `visibilitychange` no mesmo
+  tick, os dois chamando `flush`: era recarga de página inteira a cada troca de aba. Agora quem
+  chega durante um save **entra na fila**: mesmo snapshot serializado → adota a promise em curso;
+  snapshot diferente (uma tecla no meio do voo) → espera aquele write terminar e persiste **por
+  cima**, com o token que ele produziu.
+- **"Nova adaptação" e "Regerar" dão `flush()` antes de largar o rascunho** (`flushPending` no
+  wizard). Os dois zeram `result`/`draftId`, o que torna o autosave no-op e deixa o cleanup do
+  efeito cancelar o timer do debounce; como o crash mirror só é escrito **dentro** do save, uma
+  edição dos últimos ~1.2s não chegava nem ao banco nem ao mirror. O resultado do flush é ignorado
+  de propósito: falhou, a edição fica no mirror e o usuário sai da tela que pediu pra sair.
 - **Mirror de crash: divergência manda, não timestamp.** `shouldOfferRestore` compara o conteúdo do
   mirror com o `result` que o servidor carregou; só cai no timestamp quando não há resultado pra
   comparar. E a checagem só "trava" (`checkedMirrorFor`) **depois** de decidir — o app roda em
@@ -77,7 +90,11 @@ Plataforma educacional B2C. **Educadores adaptam atividades pedagógicas (provas
   `numberAttribute` porque atributo HTML volta string. **(3)** Cor colada (Word/Docs — e a nossa
   própria, que o DOM serializa como `rgb(...)`) passa por `normalizeColor` (`canonical/colors.ts`),
   que casa com a **cor mais próxima do allowlist**; `fontSize` passa por `normalizeFontSize`
-  (`lib/tiptap/fontSizeExtension.ts`), senão `12pt` era lido como px e virava 9pt.
+  (`lib/tiptap/fontSizeExtension.ts`), senão `12pt` era lido como px e virava 9pt. Isso vale para
+  **todo editor**, não só a folha: o `RichTextField` (alternativas, V/F, checkbox, matching,
+  ordering, células de tabela, legenda, enunciado, instrução) usa `AllowlistedColor`, não o
+  `@tiptap/extension-color` cru — ele editava `answer.*` com cor arbitrária e congelava o autosave
+  do documento inteiro, o mesmo B8 uma superfície ao lado.
   **(4)** Nó novo nasce **válido**: `buildImageNode("")` usa `IMAGE_PLACEHOLDER_SRC` (PNG 1x1) e
   os NodeViews de math usam `useLatexDraft` — o campo continua apagável, mas `latex:""` nunca
   chega ao documento.
@@ -98,6 +115,28 @@ Plataforma educacional B2C. **Educadores adaptam atividades pedagógicas (provas
   `fontFamilyToCss`/`ToPdf`), e `downloadDocx` recebe **`pageStyle`** (sem isso a fonte de
   acessibilidade não chega ao arquivo). Bloco/kind novo sem mapper quebra o teste de paridade em
   `exportDocx.test.ts`.
+- **O gabarito é oculto em TODA saída, inclusive no "Copiar"** (`canonical/plainText.ts`). São
+  quatro superfícies (tela `AnswerView`, PDF `PdfAnswer`, Word `exportDocx`, texto puro
+  `documentToPlainText`) e a regra é a mesma nas quatro: `trueFalse` com `(  ) V  (  ) F`,
+  `checkbox` com `[ ]`, `ordering` na **ordem autoral** (nunca `sort` por `position`) e `fillBlank`
+  sem nada (as lacunas vivem inline no enunciado). O `documentToPlainText` era a exceção: imprimia
+  `( V )`, `[x]`, a ordem correta e `(1) <resposta>`. O botão "Copiar" fica ao lado de "Exportar
+  PDF"/"Exportar Word" e serve pra colar num Word/e-mail — vazar ali entrega o gabarito ao aluno
+  num clique. Mapper novo sem esconder o gabarito quebra os testes de `plainText.test.ts`.
+- **Tamanho por elemento tem UM resolvedor** (`render/pageTokens.ts` → `resolveElementFontSizes`,
+  reexportado por `render/pageStyle.ts`). Ele devolve `stem`/`instruction`/`alternative`/`caption`
+  em **pt**, derivados do `pageStyle.fontSize` por `ELEMENT_FONT_RATIOS` (as proporções que o PDF
+  fixava em constantes no base de 12pt: instrução 10.5pt, legenda 10pt) e sobrescritos **por
+  chave** por `pageStyle.elementFontSizes`. As três superfícies bebem dele: a folha via as CSS vars
+  `--doc-fs-*` (emitidas SEMPRE por `pageTokensToCss`), o PDF via a prop `elementSizes` que desce
+  `AdaptationPdf → PdfBlock → PdfQuestion/PdfAnswer/PdfImage`, e o renderer read-only via as mesmas
+  vars. Antes o PDF usava constantes absolutas e a folha valores relativos: subir o tamanho do texto
+  no **Formato** aumentava o enunciado na tela e deixava a instrução miúda no papel — quebrando
+  justamente o ajuste de acessibilidade. **Não** volte a escrever `fontSize` literal nos mappers do
+  PDF. (O popover Formato ainda não expõe `elementFontSizes`; o campo só é honrado, não editável.)
+- **A prévia do passo Exportar usa `PageSheet` + `pageStyle`**, igual à folha do Revisar. Renderizar
+  o `CanonicalRenderer` solto mostrava a última tela antes do download na tipografia padrão do app,
+  diferente do PDF que sairia.
 - **O editor precisa ressemear quando o documento muda por fora** (`useCanonicalEditor`): semear
   uma vez só fazia o "Recuperar" ser no-op visual — a folha seguia com o doc antigo e a 1ª tecla
   re-emitia ele, sobrescrevendo o recuperado. A guarda contra loop é o `lastDocRef` (o doc que o
@@ -129,6 +168,18 @@ Plataforma educacional B2C. **Educadores adaptam atividades pedagógicas (provas
 - **Escrita de dinheiro é só service_role** (migration `20260722000001_harden_credit_paywall`): `deduct_credits`/`grant_credits` têm `REVOKE EXECUTE` de anon/authenticated (só edge fns via service_role chamam) e as colunas `credit_balance`/`free_adaptation_used`/`free_extraction_used` têm o trigger `prevent_credit_self_mutation` que barra UPDATE por JWT authenticated/anon. O cliente **nunca** escreve saldo/flags direto — sempre via edge function. Alterou essas RPCs? Use **`CREATE OR REPLACE`** (nunca `DROP`+`CREATE`, reabre o EXECUTE p/ PUBLIC). Cobertura: `credit_paywall_guard.test.sql`.
 - **As funções de trigger também estão revogadas** (migration `20260816000000_harden_function_acls`, fecha os avisos do Supabase security advisor): `handle_new_user`, `prevent_credit_self_mutation` e `prevent_super_admin_self_escalation` perderam o EXECUTE default de anon/authenticated, e `handle_updated_at`/`get_user_school_id` ganharam `search_path = public`. Isso **não** afeta o disparo: o Postgres checa EXECUTE na criação do trigger, não quando ele roda. Vale a mesma regra do `CREATE OR REPLACE`. Cobertura: `function_hardening.test.sql`.
 - Edge function importa o pacote canônico com **extensão `.ts` explícita** (Vite resolve sem, Deno não).
+- **O limite de tamanho da atividade é checado ANTES de cobrar.** `sanitize()` escapa o HTML e só
+  então corta em `MAX_ACTIVITY_CHARS` (15000), em silêncio: colar uma prova longa cobrava os
+  créditos e devolvia meia prova. O `StepActivityInput` mostra um contador e **trava o "Próximo"**
+  usando `src/lib/domain/activityLimits.ts` (`escapedLength`/`isActivityOverLimit`) — que conta o
+  comprimento **escapado**, porque é nele que o corte cai (`<` custa 4 chars, `&` custa 5). A
+  constante é duplicada no edge (Deno não bunda `src/`), com **sync test** em
+  `adaptationPrompt.test.ts`, mesmo padrão de `adaptationCost.ts`. O corte também descarta uma
+  entidade partida no fim (`&am`), que antes vazava crua pro prompt.
+- **`AiActivitySchema.blocks` é `.min(1)`**, espelhando o canônico. Sem isso `blocks: []` passava no
+  parse e só estourava depois no `validateDocument`, como um genérico "Document validation failed" —
+  queimando uma rodada de reask (60 a 120s dos 240s de orçamento) para dizer algo que o schema
+  nomeia de primeira.
 - **Custo de IA** (`ai_usage_logs`/`ai_model_pricing`, alimenta o "Gasto (IA)" do Admin): pricing é chaveado pelo id **canônico** (`google/gemini-2.5-pro`), mas as edge functions trabalham com o nome **resolvido** pela `MODEL_MAP` (`gemini-2.5-pro`). `logAiUsage` canonicaliza via `toCanonicalModel` (`_shared/aiConfig.ts`) antes de precificar e gravar — nunca contorne isso logando direto na tabela, senão `cost_total` sai 0.
 - Pagamentos: **dois provedores, um por trilho.** Cartão = Stripe (`create-stripe-checkout` + `stripe-webhook`); Pix = Mercado Pago **Checkout Transparente** (`create-pix-payment` + `mp-webhook`). `credit_purchases.payment_method` (`'card'|'pix'`) grava qual foi e `provider` (`'stripe'|'mercadopago'`) qual rail. O campo `method` do `create-stripe-checkout` (`_shared/stripeCheckoutParams.ts`) ainda aceita `"pix"`, mas a UI não manda mais: é caminho dormente, mantido só como plano B.
 - **Pix não redireciona: o QR nasce na nossa página.** `create-pix-payment` faz `POST https://api.mercadopago.com/v1/payments` (body por `_shared/mpPixPayment.ts` → `buildPixPaymentBody`, valor em **reais**, não centavos) e devolve `{ qrCode, qrCodeBase64, purchaseId, ticketUrl }`; `PixPaymentDialog` mostra a imagem + copia-e-cola sem o comprador sair do app nem logar no MP. Era exatamente isso que o Checkout Pro (removido) quebrava: a página hospedada exigia login e dizia "saldo insuficiente".

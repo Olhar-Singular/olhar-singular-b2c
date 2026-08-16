@@ -35,8 +35,16 @@ export function QuestionView({
   const position = block.enunciadoPosition ?? "below";
   const displayNumber = block.customNumber ?? number.toString();
 
+  // Element sizes come from the sheet's --doc-fs-* vars (emitted by
+  // pageTokensToCss), the same values the PDF resolves. A fixed `text-sm` here
+  // ignored the document font size, so this renderer disagreed with both the
+  // editing sheet and the printed page.
   const enunciadoNode = hasEnunciado ? (
-    <p className="text-sm text-foreground" data-testid="question-enunciado">
+    <p
+      className="text-foreground"
+      style={{ fontSize: "var(--doc-fs-stem, inherit)" }}
+      data-testid="question-enunciado"
+    >
       <RichTextView content={block.enunciado!} />
     </p>
   ) : null;
@@ -59,7 +67,11 @@ export function QuestionView({
       </div>
 
       {block.instruction && (
-        <p className="text-sm italic text-muted-foreground" data-testid="question-instruction">
+        <p
+          className="italic text-muted-foreground"
+          style={{ fontSize: "var(--doc-fs-instruction, 0.875em)" }}
+          data-testid="question-instruction"
+        >
           <RichTextView content={block.instruction} />
         </p>
       )}
