@@ -31,11 +31,11 @@ describe("AnswerPreview — multipleChoice", () => {
     ],
   };
 
-  it("renders one empty round bullet per alternative, editable text, NO answer key", () => {
+  it("renders one letter marker per alternative, editable text, NO answer key", () => {
     render(<AnswerPreview answer={answer} onChange={vi.fn()} />);
-    const bullets = screen.getAllByTestId("preview-bullet");
-    expect(bullets).toHaveLength(2);
-    bullets.forEach((b) => expect(b).toHaveAttribute("data-shape", "round"));
+    const markers = screen.getAllByTestId("preview-alternative-marker");
+    expect(markers.map((m) => m.textContent)).toEqual(["a)", "b)"]);
+    expect(screen.queryAllByTestId("preview-bullet")).toHaveLength(0);
     expect(screen.getAllByLabelText("Alternativa")).toHaveLength(2);
     // the correct alternative must be indistinguishable from the rest (D5)
     expect(screen.queryByLabelText("Marcar como correta")).not.toBeInTheDocument();
@@ -56,9 +56,13 @@ describe("AnswerPreview — multipleChoice", () => {
     );
   });
 
-  it("lays alternatives out in a two-column grid", () => {
+  // Paridade com PdfAnswer/MultipleChoiceView (achado 0001): a folha do Revisar é o
+  // WYSIWYG do impresso, então alternativa por linha, nunca em duas colunas.
+  it("lays alternatives out one per line, mirroring the PDF", () => {
     render(<AnswerPreview answer={answer} onChange={vi.fn()} />);
-    expect(screen.getByTestId("answer-preview-multipleChoice").className).toContain("sm:grid-cols-2");
+    const container = screen.getByTestId("answer-preview-multipleChoice");
+    expect(container.className).not.toContain("grid-cols-2");
+    expect(container.className).toContain("flex-col");
   });
 });
 

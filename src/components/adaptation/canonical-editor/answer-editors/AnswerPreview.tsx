@@ -1,7 +1,8 @@
 /**
  * AnswerPreview — print-faithful render of a question's answer for the folha "at
- * rest" (plano §6.3). Mirrors what the student receives on paper: empty bullets /
- * boxes / ruled lines, with NO answer key (D5 — the correct option is
+ * rest" (plano §6.3). Mirrors what the student receives on paper: lettered
+ * alternatives (a/b/c, one per line, same as PdfAnswer and MultipleChoiceView),
+ * empty boxes / ruled lines, with NO answer key (D5 — the correct option is
  * indistinguishable). The printed text (alternatives, options, items, cells,
  * pairs) stays editable inline via RichTextField — "se está impresso na folha,
  * clique e digite". Structure (which is correct, add / remove / reorder) lives in
@@ -11,6 +12,7 @@
 
 import { Fragment, type ComponentProps } from "react";
 import type { QuestionAnswer } from "@/lib/adaptation/canonical/schema";
+import { indexToLetter } from "@/components/adaptation/render/letters";
 import { RichTextField } from "../RichTextField";
 import {
   setAlternativeContent,
@@ -27,14 +29,12 @@ interface AnswerPreviewProps {
   disabled?: boolean;
 }
 
-function Bullet({ shape }: { shape: "round" | "square" }) {
+function Bullet() {
   return (
     <span
       data-testid="preview-bullet"
-      data-shape={shape}
-      className={`mt-1 h-[17px] w-[17px] shrink-0 border-[1.5px] border-surface-ink-faint ${
-        shape === "round" ? "rounded-full" : "rounded-[4px]"
-      }`}
+      data-shape="square"
+      className="mt-1 h-[17px] w-[17px] shrink-0 rounded-[4px] border-[1.5px] border-surface-ink-faint"
     />
   );
 }
@@ -51,10 +51,12 @@ export function AnswerPreview({ answer, onChange, disabled = false }: AnswerPrev
   switch (answer.kind) {
     case "multipleChoice":
       return (
-        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 sm:gap-x-7" data-testid="answer-preview-multipleChoice">
-          {answer.alternatives.map((alt) => (
+        <div className="flex flex-col gap-2" data-testid="answer-preview-multipleChoice">
+          {answer.alternatives.map((alt, i) => (
             <div key={alt.id} className="flex min-w-0 items-start gap-2.5">
-              <Bullet shape="round" />
+              <span data-testid="preview-alternative-marker" className="shrink-0 font-medium">
+                {indexToLetter(i)})
+              </span>
               <PreviewField
                 value={alt.content}
                 disabled={disabled}
@@ -72,7 +74,7 @@ export function AnswerPreview({ answer, onChange, disabled = false }: AnswerPrev
         <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 sm:gap-x-7" data-testid="answer-preview-checkbox">
           {answer.items.map((item) => (
             <div key={item.id} className="flex min-w-0 items-start gap-2.5">
-              <Bullet shape="square" />
+              <Bullet />
               <PreviewField
                 value={item.content}
                 disabled={disabled}
