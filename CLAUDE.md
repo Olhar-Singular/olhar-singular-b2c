@@ -105,9 +105,10 @@ Setup inicial de máquina nova: @.claude/docs/setup.md
 
 | Tipo | Onde | Itens |
 | ---- | ---- | ----- |
-| Skills | `.claude/skills/` | `dominio-orientador`, `validate-adaptar`, `commit-crafting`, `supabase*` |
+| Skills | `.claude/skills/` | `dominio-orientador`, `validate-adaptar`, `commit-crafting`, `caca-autonoma`, `supabase*` |
 | Agentes | `.claude/agents/` | `edge-fn-writer`, `hook-writer`, `migration-reviewer`, `rls-policy-writer`, `test-writer`, `pdf-debugger` |
 | Comandos | `.claude/commands/` | `/tdd`, `/plan`, `/ship`, `/debug` |
+| Workflows | `.claude/workflows/` | `caca-autonoma` (varredura autônoma multiagente; ler a skill homônima antes) |
 | Skills vendoradas | `.agents/skills/` | Externas (Supabase) — geridas por `skills-lock.json`, não editar à mão. |
 
 **Manter doc viva (obrigatório):** mexeu numa área que uma skill/agente descreve (caminho,
