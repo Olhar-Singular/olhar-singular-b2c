@@ -23,6 +23,7 @@ import type { CanonicalDocument, DocumentHeader, PageStyle } from "@/lib/adaptat
 import { documentToPlainText } from "@/lib/adaptation/canonical/plainText";
 import { downloadPdf } from "./exportPdf";
 import { downloadDocx, docxExportWarnings } from "./exportDocx";
+import { documentHasMath, pdfExportWarnings } from "./exportWarnings";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -66,11 +67,14 @@ export function ExportPanel({
   const [exporting, setExporting] = useState(false);
   const [exportingWord, setExportingWord] = useState(false);
   /**
-   * Non-empty while the "what won't survive Word" dialog is open. The export
-   * used to run straight through and toast "Word gerado!" over content the file
-   * did not contain — the teacher only found the hole in front of the class.
+   * Preenchido enquanto o diálogo "o que não sobrevive à exportação" está
+   * aberto. Vale para os dois formatos: a exportação corria direto e dizia
+   * "Word gerado!" / "PDF gerado!" por cima de conteúdo que o arquivo não
+   * carrega — o professor só descobria o buraco na frente da turma.
    */
-  const [wordWarnings, setWordWarnings] = useState<string[]>([]);
+  const [pending, setPending] = useState<{ format: "pdf" | "word"; warnings: string[] } | null>(
+    null,
+  );
 
   const setField = (key: keyof DocumentHeader, value: string) =>
     onHeaderChange({ ...header, [key]: value });
@@ -84,7 +88,7 @@ export function ExportPanel({
     }
   };
 
-  const handleExport = async () => {
+  const runPdfExport = async () => {
     setExporting(true);
     try {
       await onDownload(document, { header, pageBreakPerQuestion }, pageStyle);
@@ -94,6 +98,15 @@ export function ExportPanel({
     } finally {
       setExporting(false);
     }
+  };
+
+  const handleExport = async () => {
+    const warnings = pdfExportWarnings(document);
+    if (warnings.length > 0) {
+      setPending({ format: "pdf", warnings });
+      return;
+    }
+    await runPdfExport();
   };
 
   const runWordExport = async () => {
@@ -113,10 +126,17 @@ export function ExportPanel({
     // Only interrupt when there is something to say; a clean document still
     // downloads in one click.
     if (warnings.length > 0) {
-      setWordWarnings(warnings);
+      setPending({ format: "word", warnings });
       return;
     }
     await runWordExport();
+  };
+
+  const confirmPending = () => {
+    const format = pending?.format;
+    setPending(null);
+    if (format === "pdf") void runPdfExport();
+    else void runWordExport();
   };
 
   return (
@@ -185,37 +205,35 @@ export function ExportPanel({
         </Button>
       </div>
 
-      <AlertDialog
-        open={wordWarnings.length > 0}
-        onOpenChange={(open) => !open && setWordWarnings([])}
-      >
+      <AlertDialog open={pending !== null} onOpenChange={(open) => !open && setPending(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>O que não vai para o Word</AlertDialogTitle>
+            <AlertDialogTitle>
+              {pending?.format === "pdf" ? "O que não vai para o PDF" : "O que não vai para o Word"}
+            </AlertDialogTitle>
             <AlertDialogDescription asChild>
               <div>
                 <p className="mb-2">
-                  O arquivo será gerado, mas estes itens não saem iguais ao PDF:
+                  {pending?.format === "pdf"
+                    ? "O arquivo será gerado, mas estes itens não saem como aparecem na prévia:"
+                    : "O arquivo será gerado, mas estes itens não saem iguais ao PDF:"}
                 </p>
                 <ul className="list-disc space-y-1 pl-5 text-left">
-                  {wordWarnings.map((warning) => (
+                  {(pending?.warnings ?? []).map((warning) => (
                     <li key={warning}>{warning}</li>
                   ))}
                 </ul>
-                <p className="mt-2">Para fidelidade total, exporte em PDF.</p>
+                {/* Só empurra para o PDF quando o PDF é de fato mais fiel: com
+                    fórmula ele imprime o mesmo LaTeX cru que o Word. */}
+                {pending?.format === "word" && !documentHasMath(document) && (
+                  <p className="mt-2">Para fidelidade total, exporte em PDF.</p>
+                )}
               </div>
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancelar</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={() => {
-                setWordWarnings([]);
-                void runWordExport();
-              }}
-            >
-              Baixar mesmo assim
-            </AlertDialogAction>
+            <AlertDialogAction onClick={confirmPending}>Baixar mesmo assim</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

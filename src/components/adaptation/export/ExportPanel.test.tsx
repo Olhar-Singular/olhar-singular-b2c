@@ -311,3 +311,81 @@ describe("aviso antes do download do Word (B15)", () => {
     expect(onDownloadWord.mock.calls[0][2]).toEqual(pageStyle);
   });
 });
+
+// ---------------------------------------------------------------------------
+// 0003 — a prévia mostra a fórmula tipografada, o PDF imprime o LaTeX cru
+// ---------------------------------------------------------------------------
+
+const mathDocument: CanonicalDocument = {
+  schemaVersion: 1,
+  blocks: [
+    { id: id(1), type: "paragraph", content: [{ type: "inlineMath", latex: "E = mc^2" }] },
+    { id: id(2), type: "blockMath", latex: "a^2 + b^2 = c^2" },
+  ],
+};
+
+describe("aviso antes do download do PDF (0003)", () => {
+  it("não baixa direto quando há fórmula: avisa que o PDF sai em LaTeX", async () => {
+    const onDownload = vi.fn().mockResolvedValue(undefined);
+    render(<ExportPanel document={mathDocument} onDownload={onDownload} />);
+
+    fireEvent.click(screen.getByRole("button", { name: /Exportar PDF/i }));
+
+    expect(await screen.findByText(/fórmulas saem como texto LaTeX/i)).toBeInTheDocument();
+    expect(onDownload).not.toHaveBeenCalled();
+    const { toast } = await import("sonner");
+    expect(toast.success).not.toHaveBeenCalled();
+  });
+
+  it("confirmar baixa o PDF e só então diz que gerou", async () => {
+    const { toast } = await import("sonner");
+    const onDownload = vi.fn().mockResolvedValue(undefined);
+    render(<ExportPanel document={mathDocument} onDownload={onDownload} />);
+
+    fireEvent.click(screen.getByRole("button", { name: /Exportar PDF/i }));
+    fireEvent.click(await screen.findByRole("button", { name: /Baixar mesmo assim/i }));
+
+    await waitFor(() => expect(onDownload).toHaveBeenCalled());
+    await waitFor(() => expect(toast.success).toHaveBeenCalledWith("PDF gerado!"));
+  });
+
+  it("cancelar não baixa o PDF", async () => {
+    const { toast } = await import("sonner");
+    const onDownload = vi.fn().mockResolvedValue(undefined);
+    render(<ExportPanel document={mathDocument} onDownload={onDownload} />);
+
+    fireEvent.click(screen.getByRole("button", { name: /Exportar PDF/i }));
+    fireEvent.click(await screen.findByRole("button", { name: /Cancelar/i }));
+
+    await waitFor(() =>
+      expect(screen.queryByText(/fórmulas saem como texto LaTeX/i)).not.toBeInTheDocument(),
+    );
+    expect(onDownload).not.toHaveBeenCalled();
+    expect(toast.success).not.toHaveBeenCalled();
+  });
+
+  it("com fórmula, o aviso do Word não empurra mais o professor para o PDF", async () => {
+    render(
+      <ExportPanel
+        document={mathDocument}
+        onDownload={vi.fn()}
+        onDownloadWord={vi.fn().mockResolvedValue(undefined)}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /Exportar Word/i }));
+
+    expect(await screen.findByText(/fórmulas saem como texto LaTeX/i)).toBeInTheDocument();
+    expect(screen.queryByText(/Para fidelidade total, exporte em PDF/i)).not.toBeInTheDocument();
+  });
+
+  it("documento sem fórmula baixa o PDF direto, sem diálogo", async () => {
+    const onDownload = vi.fn().mockResolvedValue(undefined);
+    render(<ExportPanel document={document} onDownload={onDownload} />);
+
+    fireEvent.click(screen.getByRole("button", { name: /Exportar PDF/i }));
+
+    await waitFor(() => expect(onDownload).toHaveBeenCalled());
+    expect(screen.queryByText(/Baixar mesmo assim/i)).not.toBeInTheDocument();
+  });
+});

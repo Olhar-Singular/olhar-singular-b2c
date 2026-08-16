@@ -43,6 +43,7 @@ import {
   isFontFamilyToken,
 } from "@/lib/adaptation/canonical/fontFamily";
 import { indexToLetter } from "../render/letters";
+import { documentHasMath, everyBlock } from "./exportWarnings";
 
 /** A docx section child. Tables are blocks too, not paragraphs. */
 export type DocxBlock = Paragraph | Table;
@@ -263,65 +264,6 @@ export function headerParagraphs(header: DocumentHeader): Paragraph[] {
   );
 }
 
-/** Walk every block, including question stems (which nest). */
-function everyBlock(blocks: Block[]): Block[] {
-  return blocks.flatMap((block) =>
-    block.type === "question" ? [block, ...everyBlock(block.stem)] : [block],
-  );
-}
-
-/** Every RichText hanging off a question's answer, kind by kind. */
-function answerRichTexts(answer: Extract<Block, { type: "question" }>["answer"]): RichText[] {
-  switch (answer.kind) {
-    case "open":
-      return [];
-    case "fillBlank":
-      // `gaps[].answer` is a plain string, never RichText.
-      return [];
-    case "multipleChoice":
-      return answer.alternatives.map((alternative) => alternative.content);
-    case "trueFalse":
-      return answer.items.map((item) => item.content);
-    case "checkbox":
-      return answer.items.map((item) => item.content);
-    case "ordering":
-      return answer.items.map((item) => item.content);
-    case "matching":
-      return answer.pairs.flatMap((pair) => [pair.left, pair.right]);
-    case "table":
-      return answer.rows.flat();
-  }
-}
-
-/**
- * Every RichText field of a single block.
- *
- * `blockMath.latex` and `scaffolding.items` are plain strings, not RichText, so
- * they carry no inline nodes — blockMath is detected separately, by type.
- */
-function richTextsOf(block: Block): RichText[] {
-  switch (block.type) {
-    case "heading":
-      return [block.content];
-    case "paragraph":
-      return [block.content];
-    case "image":
-      return block.caption ? [block.caption] : [];
-    case "blockMath":
-      return [];
-    case "scaffolding":
-      return [];
-    case "divider":
-      return [];
-    case "question":
-      return [
-        ...(block.enunciado ? [block.enunciado] : []),
-        ...(block.instruction ? [block.instruction] : []),
-        ...answerRichTexts(block.answer),
-      ];
-  }
-}
-
 /**
  * What the .docx will NOT carry faithfully.
  *
@@ -342,15 +284,9 @@ export function docxExportWarnings(
     );
   }
 
-  // Inline math fits in EVERY RichText field — an alternative, an enunciado, a
-  // matching pair, a table cell. Checking only paragraph/heading let the LaTeX
-  // reach the file with no warning at all, which is the silence this closes.
-  // Collected before the `||` so the walk is not short-circuited away.
-  const richTexts = blocks.flatMap(richTextsOf);
-  const hasMath =
-    blocks.some((b) => b.type === "blockMath") ||
-    richTexts.some((rich) => rich.some((inline) => inline.type === "inlineMath"));
-  if (hasMath) {
+  // A varredura de math (inline em qualquer campo RichText, mais blockMath) é
+  // a mesma do PDF e mora em `exportWarnings`.
+  if (documentHasMath(document)) {
     warnings.push("As fórmulas saem como texto LaTeX, sem formatação matemática.");
   }
 
