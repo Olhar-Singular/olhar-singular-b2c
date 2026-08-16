@@ -221,7 +221,7 @@ describe("QuestionNodeView — preview at rest", () => {
   it("writes inline alternative edits from the preview", () => {
     const { props, updateAttributes } = makeProps(mc);
     render(<QuestionNodeView {...props} />);
-    fireEvent.change(screen.getByLabelText("Alternativa"), { target: { value: "new" } });
+    fireEvent.change(screen.getByLabelText("Alternativa a"), { target: { value: "new" } });
     expect(updateAttributes).toHaveBeenCalledWith({ answer: expect.objectContaining({ kind: "multipleChoice" }) });
   });
 
@@ -592,7 +592,7 @@ describe("QuestionNodeView — not editable", () => {
   it("disables the inline preview fields and the rail", () => {
     const { props } = makeProps(mc, { editable: false });
     render(<QuestionNodeView {...props} />);
-    expect(screen.getByLabelText("Alternativa")).toBeDisabled();
+    expect(screen.getByLabelText("Alternativa a")).toBeDisabled();
     expect(screen.getByLabelText("Excluir questão")).toBeDisabled();
   });
 });

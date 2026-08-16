@@ -62,7 +62,7 @@ export function AnswerPreview({ answer, onChange, disabled = false }: AnswerPrev
                 disabled={disabled}
                 onChange={(rt) => onChange(setAlternativeContent(answer, alt.id, rt))}
                 placeholder="Alternativa"
-                ariaLabel="Alternativa"
+                ariaLabel={`Alternativa ${indexToLetter(i)}`}
               />
             </div>
           ))}
@@ -72,7 +72,7 @@ export function AnswerPreview({ answer, onChange, disabled = false }: AnswerPrev
     case "checkbox":
       return (
         <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 sm:gap-x-7" data-testid="answer-preview-checkbox">
-          {answer.items.map((item) => (
+          {answer.items.map((item, i) => (
             <div key={item.id} className="flex min-w-0 items-start gap-2.5">
               <Bullet />
               <PreviewField
@@ -80,7 +80,7 @@ export function AnswerPreview({ answer, onChange, disabled = false }: AnswerPrev
                 disabled={disabled}
                 onChange={(rt) => onChange(setCheckboxContent(answer, item.id, rt))}
                 placeholder="Opção"
-                ariaLabel="Opção"
+                ariaLabel={`Opção ${i + 1}`}
               />
             </div>
           ))}
@@ -90,7 +90,7 @@ export function AnswerPreview({ answer, onChange, disabled = false }: AnswerPrev
     case "trueFalse":
       return (
         <div className="flex flex-col gap-2.5" data-testid="answer-preview-trueFalse">
-          {answer.items.map((item) => (
+          {answer.items.map((item, i) => (
             <div key={item.id} className="flex min-w-0 items-start gap-3">
               <span className="flex shrink-0 items-center gap-3 pt-0.5 text-sm text-surface-ink-soft">
                 <span className="flex items-center gap-1">
@@ -108,7 +108,7 @@ export function AnswerPreview({ answer, onChange, disabled = false }: AnswerPrev
                   disabled={disabled}
                   onChange={(rt) => onChange(setTrueFalseContent(answer, item.id, rt))}
                   placeholder="Afirmação"
-                  ariaLabel="Afirmação"
+                  ariaLabel={`Afirmação ${i + 1}`}
                 />
               </div>
             </div>
@@ -119,7 +119,7 @@ export function AnswerPreview({ answer, onChange, disabled = false }: AnswerPrev
     case "ordering":
       return (
         <div className="flex flex-col gap-2.5" data-testid="answer-preview-ordering">
-          {answer.items.map((item) => (
+          {answer.items.map((item, i) => (
             <div key={item.id} className="flex min-w-0 items-center gap-2.5">
               <span
                 data-testid="preview-order-box"
@@ -130,7 +130,7 @@ export function AnswerPreview({ answer, onChange, disabled = false }: AnswerPrev
                 disabled={disabled}
                 onChange={(rt) => onChange(setOrderingContent(answer, item.id, rt))}
                 placeholder="Item"
-                ariaLabel="Item"
+                ariaLabel={`Item ${i + 1}`}
               />
             </div>
           ))}
@@ -140,14 +140,14 @@ export function AnswerPreview({ answer, onChange, disabled = false }: AnswerPrev
     case "matching":
       return (
         <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-x-4 gap-y-2.5" data-testid="answer-preview-matching">
-          {answer.pairs.map((pair) => (
+          {answer.pairs.map((pair, i) => (
             <Fragment key={pair.id}>
               <PreviewField
                 value={pair.left}
                 disabled={disabled}
                 onChange={(rt) => onChange(setMatchingSide(answer, pair.id, "left", rt))}
                 placeholder="Coluna A"
-                ariaLabel="Coluna A"
+                ariaLabel={`Coluna A, par ${i + 1}`}
               />
               <span className="text-surface-ink-faint">↔</span>
               <PreviewField
@@ -155,7 +155,7 @@ export function AnswerPreview({ answer, onChange, disabled = false }: AnswerPrev
                 disabled={disabled}
                 onChange={(rt) => onChange(setMatchingSide(answer, pair.id, "right", rt))}
                 placeholder="Coluna B"
-                ariaLabel="Coluna B"
+                ariaLabel={`Coluna B, par ${i + 1}`}
               />
             </Fragment>
           ))}
@@ -175,7 +175,7 @@ export function AnswerPreview({ answer, onChange, disabled = false }: AnswerPrev
                       disabled={disabled}
                       onChange={(rt) => onChange(setTableCell(answer, ri, ci, rt))}
                       placeholder="Célula"
-                      ariaLabel="Célula"
+                      ariaLabel={`Célula linha ${ri + 1} coluna ${ci + 1}`}
                     />
                   </td>
                 ))}

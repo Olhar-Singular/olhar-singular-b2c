@@ -36,7 +36,7 @@ describe("AnswerPreview — multipleChoice", () => {
     const markers = screen.getAllByTestId("preview-alternative-marker");
     expect(markers.map((m) => m.textContent)).toEqual(["a)", "b)"]);
     expect(screen.queryAllByTestId("preview-bullet")).toHaveLength(0);
-    expect(screen.getAllByLabelText("Alternativa")).toHaveLength(2);
+    expect(screen.getAllByLabelText(/^Alternativa /)).toHaveLength(2);
     // the correct alternative must be indistinguishable from the rest (D5)
     expect(screen.queryByLabelText("Marcar como correta")).not.toBeInTheDocument();
     expect(screen.queryByText("✔")).not.toBeInTheDocument();
@@ -45,7 +45,7 @@ describe("AnswerPreview — multipleChoice", () => {
   it("writes alternative edits back via setAlternativeContent", () => {
     const onChange = vi.fn();
     render(<AnswerPreview answer={answer} onChange={onChange} />);
-    fireEvent.change(screen.getAllByLabelText("Alternativa")[1], { target: { value: "z" } });
+    fireEvent.change(screen.getByLabelText("Alternativa b"), { target: { value: "z" } });
     expect(onChange).toHaveBeenCalledWith(
       expect.objectContaining({
         kind: "multipleChoice",
@@ -54,6 +54,15 @@ describe("AnswerPreview — multipleChoice", () => {
         ]),
       }),
     );
+  });
+
+  // Achado 0012: cada campo precisa de nome acessível único, derivado do índice —
+  // senão o leitor de tela anuncia "Alternativa, Alternativa, Alternativa".
+  it("names each alternative field by its letter", () => {
+    render(<AnswerPreview answer={answer} onChange={vi.fn()} />);
+    expect(screen.getByLabelText("Alternativa a")).toBeInTheDocument();
+    expect(screen.getByLabelText("Alternativa b")).toBeInTheDocument();
+    expect(screen.queryAllByLabelText("Alternativa")).toHaveLength(0);
   });
 
   // Paridade com PdfAnswer/MultipleChoiceView (achado 0001): a folha do Revisar é o
@@ -77,7 +86,7 @@ describe("AnswerPreview — checkbox", () => {
     render(<AnswerPreview answer={answer} onChange={onChange} />);
     expect(screen.getByTestId("preview-bullet")).toHaveAttribute("data-shape", "square");
     expect(screen.queryByLabelText("Marcar opção")).not.toBeInTheDocument();
-    fireEvent.change(screen.getByLabelText("Opção"), { target: { value: "x" } });
+    fireEvent.change(screen.getByLabelText("Opção 1"), { target: { value: "x" } });
     expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ kind: "checkbox" }));
   });
 });
@@ -91,11 +100,11 @@ describe("AnswerPreview — trueFalse", () => {
   it("shows the statement + blank V/F options with NO indication of the authored value", () => {
     const onChange = vi.fn();
     render(<AnswerPreview answer={answer} onChange={onChange} />);
-    expect(screen.getByLabelText("Afirmação")).toBeInTheDocument();
+    expect(screen.getByLabelText("Afirmação 1")).toBeInTheDocument();
     expect(screen.getByText("V")).toBeInTheDocument();
     expect(screen.getByText("F")).toBeInTheDocument();
     expect(screen.queryByTitle("Alternar Verdadeiro/Falso")).not.toBeInTheDocument();
-    fireEvent.change(screen.getByLabelText("Afirmação"), { target: { value: "y" } });
+    fireEvent.change(screen.getByLabelText("Afirmação 1"), { target: { value: "y" } });
     expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ kind: "trueFalse" }));
   });
 
@@ -124,7 +133,7 @@ describe("AnswerPreview — ordering", () => {
     render(<AnswerPreview answer={answer} onChange={onChange} />);
     expect(screen.getAllByTestId("preview-order-box")).toHaveLength(2);
     expect(screen.queryByTitle("Mover para cima")).not.toBeInTheDocument();
-    fireEvent.change(screen.getAllByLabelText("Item")[0], { target: { value: "z" } });
+    fireEvent.change(screen.getByLabelText("Item 1"), { target: { value: "z" } });
     expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ kind: "ordering" }));
   });
 });
@@ -138,12 +147,12 @@ describe("AnswerPreview — matching", () => {
   it("renders editable columns joined by an arrow, no remove/add", () => {
     const onChange = vi.fn();
     render(<AnswerPreview answer={answer} onChange={onChange} />);
-    expect(screen.getByLabelText("Coluna A")).toBeInTheDocument();
-    expect(screen.getByLabelText("Coluna B")).toBeInTheDocument();
+    expect(screen.getByLabelText("Coluna A, par 1")).toBeInTheDocument();
+    expect(screen.getByLabelText("Coluna B, par 1")).toBeInTheDocument();
     expect(screen.getByText("↔")).toBeInTheDocument();
     expect(screen.queryByTitle("Remover par")).not.toBeInTheDocument();
-    fireEvent.change(screen.getByLabelText("Coluna A"), { target: { value: "L" } });
-    fireEvent.change(screen.getByLabelText("Coluna B"), { target: { value: "R" } });
+    fireEvent.change(screen.getByLabelText("Coluna A, par 1"), { target: { value: "L" } });
+    fireEvent.change(screen.getByLabelText("Coluna B, par 1"), { target: { value: "R" } });
     expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ kind: "matching" }));
   });
 });
@@ -154,8 +163,8 @@ describe("AnswerPreview — table", () => {
   it("renders editable cells in a grid", () => {
     const onChange = vi.fn();
     render(<AnswerPreview answer={answer} onChange={onChange} />);
-    expect(screen.getAllByLabelText("Célula")).toHaveLength(2);
-    fireEvent.change(screen.getAllByLabelText("Célula")[1], { target: { value: "z" } });
+    expect(screen.getByLabelText("Célula linha 1 coluna 1")).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText("Célula linha 1 coluna 2"), { target: { value: "z" } });
     expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ kind: "table" }));
   });
 });
@@ -201,6 +210,6 @@ describe("AnswerPreview — disabled", () => {
         disabled
       />,
     );
-    expect(screen.getByLabelText("Alternativa")).toBeDisabled();
+    expect(screen.getByLabelText("Alternativa a")).toBeDisabled();
   });
 });

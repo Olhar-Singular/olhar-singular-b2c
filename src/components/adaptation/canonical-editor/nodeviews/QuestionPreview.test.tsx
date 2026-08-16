@@ -85,7 +85,7 @@ describe("QuestionPreview", () => {
 
   it("forwards inline alternative edits", () => {
     const props = setup();
-    fireEvent.change(screen.getAllByLabelText("Alternativa")[1], { target: { value: "z" } });
+    fireEvent.change(screen.getByLabelText("Alternativa b"), { target: { value: "z" } });
     expect(props.onAnswerChange).toHaveBeenCalledWith(expect.objectContaining({ kind: "multipleChoice" }));
   });
 
@@ -117,7 +117,7 @@ describe("QuestionPreview", () => {
 
   it("disables the editable fields when disabled", () => {
     setup({ disabled: true });
-    expect(screen.getAllByLabelText("Alternativa")[0]).toBeDisabled();
+    expect(screen.getByLabelText("Alternativa a")).toBeDisabled();
   });
 
   it("renders a remove-instruction button when instruction is present", () => {
