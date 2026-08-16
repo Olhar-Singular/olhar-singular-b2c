@@ -201,8 +201,17 @@ Verifique e, onde for seguro, prepare:
 3. O app responde em ${APP}. Se não, suba com \`make verify-adaptar\` a partir de ${REPO}
    e espere ficar de pé (pode levar alguns minutos).
 4. A pasta ${CACA}/fila existe.
+5. TRAVA DE EXECUÇÃO ÚNICA. Recursos são únicos (um browser, uma árvore, um container),
+   e sessões diferentes NÃO enxergam as tarefas umas das outras: arquivo é o único sinal
+   que todas veem. Então:
+   - Se ${CACA}/caca.lock existe e o \`heartbeat\` dentro dele tem MENOS de 90 minutos,
+     outra execução está viva. Aborte com ok=false explicando isso. Não force.
+   - Se existe mas está mais velho que 90 minutos, é resíduo de execução que morreu:
+     sobrescreva e diga isso no campo bloqueio (com ok=true, se o resto estiver bem).
+   - Não existindo, crie: uma linha \`heartbeat: <saída de \`date -Iseconds\`>\` e uma
+     linha \`fase: preflight\`.
 
-Retorne o veredito estruturado. Seja honesto: ok=true só se os quatro estão satisfeitos.`,
+Retorne o veredito estruturado. Seja honesto: ok=true só se os cinco estão satisfeitos.`,
   { label: 'preflight', phase: 'Preflight', effort: 'medium', schema: SCHEMA_PREFLIGHT },
 )
 
@@ -261,7 +270,10 @@ Regenere ${CACA}/RELATORIO.md a partir dos arquivos em ${CACA}/fila/.
 Comece pelo resultado (quantos corrigidos, quantos bloqueados e por quê), depois a tabela
 por gravidade com id, título, arquivo:linha, status e SHA. Termine com o que precisa de
 decisão humana e os comandos para revisar (\`git -C "${REPO}" log --oneline main..${BRANCH}\`)
-ou descartar (\`git branch -D ${BRANCH}\`). Frases completas, sem jargão criado no meio do trabalho.`,
+ou descartar (\`git branch -D ${BRANCH}\`). Frases completas, sem jargão criado no meio do trabalho.
+
+Por último, apague ${CACA}/caca.lock: a execução acabou e a trava tem que liberar, senão
+a próxima aborta achando que ainda há caça viva.`,
     { label: 'relatorio', phase: 'Relatório', effort: 'low' },
   )
 
@@ -410,7 +422,10 @@ Escreva para alguém que acabou de acordar e não acompanhou nada: comece pelo r
 gravidade com id, título, arquivo:linha, status e SHA do commit. Termine com o que precisa
 de decisão humana: os bloqueados e o comando para revisar tudo
 (\`git -C "${REPO}" log --oneline main..${BRANCH}\`) ou descartar (\`git branch -D ${BRANCH}\`).
-Sem jargão criado durante o trabalho. Frases completas.`,
+Sem jargão criado durante o trabalho. Frases completas.
+
+Por último, apague ${CACA}/caca.lock: a execução acabou e a trava tem que liberar, senão
+a próxima aborta achando que ainda há caça viva.`,
   { label: 'relatorio', phase: 'Relatório', effort: 'low' },
 )
 
