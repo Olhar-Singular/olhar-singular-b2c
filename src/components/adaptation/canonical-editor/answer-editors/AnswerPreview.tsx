@@ -195,7 +195,7 @@ export function AnswerPreview({ answer, onChange, disabled = false }: AnswerPrev
       return (
         <div className="flex flex-col gap-[18px] pt-1.5" data-testid="answer-preview-open">
           {Array.from({ length: lines }, (_, i) => (
-            <div key={i} data-testid="preview-answer-line" className="h-px border-b border-surface-line-2" />
+            <div key={i} data-testid="preview-answer-line" className="h-px border-b border-dashed border-surface-line-2" />
           ))}
         </div>
       );

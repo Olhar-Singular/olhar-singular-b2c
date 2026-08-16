@@ -171,6 +171,13 @@ describe("AnswerPreview — open", () => {
     render(<AnswerPreview answer={{ kind: "open" }} onChange={vi.fn()} />);
     expect(screen.getAllByTestId("preview-answer-line")).toHaveLength(3);
   });
+
+  it("draws the ruled line dashed, matching the PDF and the read-only preview", () => {
+    render(<AnswerPreview answer={{ kind: "open", answerLines: 2 }} onChange={vi.fn()} />);
+    for (const line of screen.getAllByTestId("preview-answer-line")) {
+      expect(line).toHaveClass("border-dashed");
+    }
+  });
 });
 
 describe("AnswerPreview — fillBlank", () => {
