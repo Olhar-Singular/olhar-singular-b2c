@@ -5,9 +5,10 @@
  * `fontSize` (pt) and `blockSpacing` (px) get concrete defaults that match the
  * CURRENT hardcoded behaviour, so a document without `pageStyle` renders exactly
  * as before. `fontFamily` stays `undefined` when absent — i.e. NO document-level
- * font override — so the sheet keeps inheriting the app font and the PDF keeps
- * its built-in default. A concrete font (e.g. Lexend) only applies once the
- * teacher picks one in the Aparência popover.
+ * font override. "No override" is NOT "each surface picks its own": both
+ * renderers fall back to `DEFAULT_FONT_FAMILY_TOKEN` (`pageTokens.ts`), so the
+ * sheet and the PDF show the same family. A concrete font (e.g. Lexend) only
+ * applies once the teacher picks one in the Aparência popover.
  */
 import { BASE_FONT_PT, BASE_BLOCK_SPACING_PX } from "./pageTokens";
 import type { PageStyle, ElementFontSizes } from "@/lib/adaptation/canonical/schema";

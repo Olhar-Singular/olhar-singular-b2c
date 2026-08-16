@@ -31,6 +31,25 @@ export const BASE_BLOCK_SPACING_PX = 16;
 export const DEFAULT_IMAGE_WIDTH_PX = 300;
 
 /**
+ * Família usada quando o documento NÃO traz `pageStyle.fontFamily` — o caso
+ * normal, já que nenhuma UI grava a fonte até o professor escolher uma no
+ * popover "Formato".
+ *
+ * Antes a ausência de override significava "não emitir `fontFamily`", e cada
+ * superfície caía no seu próprio default: a folha herdava a fonte do app
+ * (`Plus Jakarta Sans`, `index.css`) e o `@react-pdf` caía no built-in
+ * Helvetica. O mesmo documento aparecia com tipografias visivelmente diferentes
+ * na tela e no papel — exatamente o que o contrato de paridade existe para
+ * impedir. Agora as duas superfícies resolvem pelo MESMO token.
+ *
+ * O token é `sans` (Helvetica/Arial) porque preserva byte a byte o que o PDF já
+ * imprimia: quem se move é a folha, que passa a mostrar o que sai no papel.
+ * Trocar este default por uma fonte de acessibilidade é decisão de produto e
+ * muda o PDF de todo mundo — não cabe aqui.
+ */
+export const DEFAULT_FONT_FAMILY_TOKEN = "sans";
+
+/**
  * Defaults resolvidos usados quando nenhum `pageStyle` é passado. Definido aqui
  * (a partir das constantes-base) em vez de importado de `pageStyle.ts` para
  * evitar um ciclo de import em tempo de avaliação (pageStyle importa as
@@ -94,7 +113,7 @@ export function pageTokensToPdf(resolved: ResolvedPageStyle = DEFAULT_RESOLVED) 
     padding: PAGE_MARGIN_PT,
     fontSize: resolved.fontSize,
     lineHeight: BASE_LINE_HEIGHT,
-    ...(resolved.fontFamily ? { fontFamily: fontFamilyToPdf(resolved.fontFamily) } : {}),
+    fontFamily: fontFamilyToPdf(resolved.fontFamily ?? DEFAULT_FONT_FAMILY_TOKEN),
   };
 }
 
@@ -115,7 +134,7 @@ export function pageTokensToCss(resolved: ResolvedPageStyle = DEFAULT_RESOLVED):
     padding: px(PAGE_MARGIN_PT),
     fontSize: px(resolved.fontSize),
     lineHeight: BASE_LINE_HEIGHT,
-    ...(resolved.fontFamily ? { fontFamily: fontFamilyToCss(resolved.fontFamily) } : {}),
+    fontFamily: fontFamilyToCss(resolved.fontFamily ?? DEFAULT_FONT_FAMILY_TOKEN),
     ["--doc-block-spacing"]: `${resolved.blockSpacing}px`,
     ["--doc-fs-stem"]: px(efs.stem),
     ["--doc-fs-instruction"]: px(efs.instruction),

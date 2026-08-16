@@ -6,7 +6,9 @@ import {
   BASE_BLOCK_SPACING_PX,
   pageTokensToPdf,
   pageTokensToCss,
+  DEFAULT_FONT_FAMILY_TOKEN,
 } from "./pageTokens";
+import { fontFamilyToCss, fontFamilyToPdf } from "@/lib/adaptation/canonical/fontFamily";
 
 describe("pageTokens", () => {
   it("expõe as constantes canônicas da página (espelham o PDF atual)", () => {
@@ -22,6 +24,7 @@ describe("pageTokens", () => {
       padding: 40,
       fontSize: 12,
       lineHeight: 1.4,
+      fontFamily: "Helvetica",
     });
   });
 
@@ -40,9 +43,9 @@ describe("pageTokens — parametrizado por pageStyle (Fase 4a)", () => {
     expect((css as Record<string, unknown>)["--doc-block-spacing"]).toBe("24px");
   });
 
-  it("pageTokensToCss sem fontFamily não emite a propriedade fontFamily", () => {
+  it("pageTokensToCss sem fontFamily emite o stack do token default (paridade com o PDF)", () => {
     const css = pageTokensToCss({ fontFamily: undefined, fontSize: 12, blockSpacing: 16 });
-    expect("fontFamily" in css).toBe(false);
+    expect(css.fontFamily).toBe("Helvetica, Arial, sans-serif");
   });
 
   it("pageTokensToCss com fontFamily mapeia para o stack CSS do token", () => {
@@ -56,9 +59,36 @@ describe("pageTokens — parametrizado por pageStyle (Fase 4a)", () => {
     expect(pdf.fontFamily).toBe("Times-Roman");
   });
 
-  it("pageTokensToPdf sem fontFamily não emite a propriedade fontFamily", () => {
+  it("pageTokensToPdf sem fontFamily emite a família do token default (o built-in de antes)", () => {
     const pdf = pageTokensToPdf({ fontFamily: undefined, fontSize: 12, blockSpacing: 16 });
-    expect("fontFamily" in pdf).toBe(false);
+    expect(pdf.fontFamily).toBe("Helvetica");
+  });
+});
+
+/**
+ * Achado 0007: um documento SEM `pageStyle.fontFamily` (o caso normal, já que
+ * nenhuma UI grava a fonte até o professor escolher uma) saía com tipografias
+ * diferentes nas duas superfícies: a folha herdava a fonte do app
+ * (Plus Jakarta Sans) e o PDF caía no built-in Helvetica do @react-pdf.
+ */
+describe("pageTokens — paridade de fonte sem override (achado 0007)", () => {
+  it("emite a MESMA família nas duas superfícies quando o documento não define fontFamily", () => {
+    const resolved = { fontFamily: undefined, fontSize: 12, blockSpacing: 16 };
+    const css = pageTokensToCss(resolved);
+    const pdf = pageTokensToPdf(resolved);
+
+    expect(css.fontFamily).toBe(fontFamilyToCss(DEFAULT_FONT_FAMILY_TOKEN));
+    expect(pdf.fontFamily).toBe(fontFamilyToPdf(DEFAULT_FONT_FAMILY_TOKEN));
+  });
+
+  it("mantém o PDF no built-in Helvetica (o default não muda o que já era impresso)", () => {
+    expect(pageTokensToPdf().fontFamily).toBe("Helvetica");
+  });
+
+  it("um override explícito continua vencendo o default nas duas superfícies", () => {
+    const resolved = { fontFamily: "lexend", fontSize: 12, blockSpacing: 16 };
+    expect(pageTokensToCss(resolved).fontFamily).toBe("'Lexend', sans-serif");
+    expect(pageTokensToPdf(resolved).fontFamily).toBe("Lexend");
   });
 });
 

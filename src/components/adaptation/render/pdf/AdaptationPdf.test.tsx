@@ -84,8 +84,10 @@ describe("AdaptationPdf", () => {
     // The <Page> must still have the default padding and fontSize.
     expect(el.props.children.props.style.padding).toBe(40);
     expect(el.props.children.props.style.fontSize).toBe(12);
-    // No fontFamily emitted when no pageStyle font is set.
-    expect(el.props.children.props.style.fontFamily).toBeUndefined();
+    // Sem fonte no pageStyle, o <Page> cai no token default — a MESMA família
+    // que a folha da tela resolve (achado 0007), e a mesma que o built-in do
+    // @react-pdf já imprimia.
+    expect(el.props.children.props.style.fontFamily).toBe("Helvetica");
   });
 
   it("does NOT use settings.fontFamily for the <Page> style (font now comes from pageStyle)", () => {
@@ -96,8 +98,8 @@ describe("AdaptationPdf", () => {
       settings,
       pageStyle: undefined,
     });
-    // fontFamily should be absent from the Page style (no pageStyle → no override).
-    expect(el.props.children.props.style.fontFamily).toBeUndefined();
+    // Sem pageStyle, a fonte vem do token default dos pageTokens — nunca de `settings`.
+    expect(el.props.children.props.style.fontFamily).toBe(pageTokensToPdf().fontFamily);
   });
 
   it("covers every block type via a PdfBlock per block", () => {
