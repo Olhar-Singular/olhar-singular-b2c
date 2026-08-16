@@ -33,6 +33,25 @@ describe("PageSheet", () => {
     expect(sheet.getAttribute("style")).toContain("--sf-paper-shadow");
   });
 
+  it("não cria um segundo eixo de rolagem na mesa (achado 0008)", () => {
+    render(<PageSheet toolbar={<div>BARRA</div>}><span>x</span></PageSheet>);
+    const mesa = screen.getByTestId("page-sheet").parentElement!;
+    // A mesa não pode ter altura chutada nem overflow próprio: com
+    // `max-h-[calc(100vh-280px)]` + `overflow-auto` o passo Revisar mostrava
+    // duas barras verticais ao mesmo tempo (mesa e página).
+    expect(mesa.className).not.toContain("overflow-auto");
+    expect(mesa.className).not.toMatch(/max-h-\[calc\(/);
+  });
+
+  it("mantém a barra visível enquanto a página rola (sticky)", () => {
+    render(<PageSheet toolbar={<div>BARRA</div>}><span>x</span></PageSheet>);
+    const bar = screen.getByText("BARRA").parentElement!;
+    expect(bar.className).toContain("sticky");
+    expect(bar.className).toContain("top-0");
+    // A moldura não pode ser um contexto de rolagem, senão o sticky gruda nela.
+    expect(bar.parentElement!.className).not.toContain("overflow-hidden");
+  });
+
   it("reflete o pageStyle na folha (fonte, tamanho e var de espaçamento)", () => {
     render(
       <PageSheet toolbar={null} pageStyle={{ fontFamily: "mono", fontSize: 18, blockSpacing: 24 }}>

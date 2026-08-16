@@ -1,8 +1,12 @@
 /**
  * PageSheet — moldura visual da superfície "Revisar".
  *
- * A barra (`toolbar`) fica PRESA no topo; só a "mesa" rola, com a folha A4
- * branca centralizada. As cores da mesa/folha vêm dos tokens de superfície
+ * A barra (`toolbar`) fica PRESA no topo (sticky) enquanto a página rola, com a
+ * folha A4 branca centralizada sobre a "mesa". A mesa NÃO tem eixo de rolagem
+ * próprio: quando tinha (`overflow-auto` + `max-h-[calc(100vh-280px)]`), a altura
+ * chutada não batia com o chrome real do wizard e o passo Revisar exibia duas
+ * barras verticais ao mesmo tempo. Rola só a página.
+ * As cores da mesa/folha vêm dos tokens de superfície
  * (`--sf-*`, plano §4). A tipografia/margem da folha vêm de `pageTokensToCss`
  * (paridade com o PDF — não mexer aqui). É só apresentação — não conhece o documento.
  */
@@ -25,10 +29,12 @@ interface PageSheetProps {
 
 export function PageSheet({ toolbar, pageStyle, children }: PageSheetProps) {
   return (
-    <div className="flex flex-col rounded-md border border-input overflow-hidden">
-      {toolbar && <div className="shrink-0 bg-background">{toolbar}</div>}
+    // `overflow-clip` (e não `overflow-hidden`) porque hidden cria um contexto de
+    // rolagem e prenderia a barra sticky a esta moldura em vez do viewport.
+    <div className="flex flex-col rounded-md border border-input overflow-clip">
+      {toolbar && <div className="sticky top-0 z-10 shrink-0 bg-background">{toolbar}</div>}
       <div
-        className="flex-1 overflow-auto p-3 sm:p-6 lg:p-10 max-h-[calc(100vh-280px)]"
+        className="flex-1 p-3 sm:p-6 lg:p-10"
         style={{ background: "var(--sf-mesa-gradient)" }}
       >
         <div
