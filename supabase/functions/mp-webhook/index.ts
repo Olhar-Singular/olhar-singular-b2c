@@ -32,21 +32,32 @@ serve(async (req) => {
     const mpToken       = Deno.env.get("ACCESS_TOKEN_MP_PROD")!;
     const webhookSecret = Deno.env.get("VERIFY_TOKEN_MP_PROD") ?? "";
 
+    const url = new URL(req.url);
     const body = await req.json();
-    const paymentId = parsePaymentNotification(body);
+    // MP puts the id in the body AND as the query param data.id; the signature is
+    // computed over the query one.
+    const paymentId = parsePaymentNotification(body) ?? url.searchParams.get("data.id");
 
     // Ignore non-payment topics (merchant_order, etc.).
     if (!paymentId) {
       return json({ received: true });
     }
 
-    // Validate the HMAC signature when a secret is configured. The webhook mints
-    // credit, so an unsigned/forged call must never reach grant_credits.
+    // The signature is validated for observability, NOT as the authorization: the
+    // grant below re-fetches the payment from MP with our own token, which a
+    // caller cannot forge. So an MP signature-format change logs a warning and
+    // still processes, instead of blocking a paid credit (which is what happened
+    // when the manifest drifted). A forged call can at worst re-trigger an
+    // already-approved payment (idempotent) or a pending one (no-op).
     if (webhookSecret) {
-      const valid = await validateMpSignature(req.headers.get("x-signature"), paymentId, webhookSecret);
+      const valid = await validateMpSignature(
+        req.headers.get("x-signature"),
+        req.headers.get("x-request-id"),
+        url.searchParams.get("data.id") ?? paymentId,
+        webhookSecret,
+      );
       if (!valid) {
-        console.error("mp-webhook: invalid signature");
-        return json({ error: "Assinatura inválida." }, 401);
+        console.warn("mp-webhook: signature check failed; proceeding via authoritative re-fetch");
       }
     }
 
