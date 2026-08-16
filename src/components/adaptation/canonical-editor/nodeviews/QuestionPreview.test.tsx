@@ -136,6 +136,35 @@ describe("QuestionPreview", () => {
     expect(screen.getByLabelText("Remover instrução")).toBeDisabled();
   });
 
+  it("remove-instruction button has a target of at least 24x24 (WCAG 2.5.8)", () => {
+    setup({ instruction: [{ type: "text", text: "x" }] });
+    const btn = screen.getByLabelText("Remover instrução");
+    expect(btn.className).toContain("h-7");
+    expect(btn.className).toContain("w-7");
+    expect(btn.className).not.toContain("h-5");
+    expect(btn.className).not.toContain("w-5");
+  });
+
+  it("remove-instruction button is chrome gated by hover/focus, not printed on the folha", () => {
+    setup({ instruction: [{ type: "text", text: "x" }] });
+    const row = screen.getByTestId("question-instruction");
+    expect(row.className).toContain("group/instruction");
+    const btn = screen.getByLabelText("Remover instrução");
+    expect(btn.className).toContain("opacity-0");
+    expect(btn.className).toContain("group-hover/instruction:opacity-100");
+    expect(btn.className).toContain("group-focus-within/instruction:opacity-100");
+  });
+
+  it("remove-instruction button sits next to the instruction text, not pushed to the right edge", () => {
+    setup({ instruction: [{ type: "text", text: "x" }] });
+    const row = screen.getByTestId("question-instruction");
+    // the text wrapper must not stretch (flex-1 would push the x to the column edge)
+    const textWrapper = screen.getByLabelText("Instrução da questão").parentElement!;
+    expect(textWrapper.className).not.toContain("flex-1");
+    // and the row itself must not stretch the gap between text and button
+    expect(row.className).not.toContain("justify-between");
+  });
+
   it("does not render a remove-instruction button when there is no instruction", () => {
     setup({ instruction: null });
     expect(screen.queryByLabelText("Remover instrução")).not.toBeInTheDocument();

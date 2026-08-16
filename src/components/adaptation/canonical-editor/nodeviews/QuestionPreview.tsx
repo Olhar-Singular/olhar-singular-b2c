@@ -75,8 +75,8 @@ export function QuestionPreview({
           </div>
           {enunciadoPosition === "below" && enunciadoNode}
           {instruction != null && instruction.length > 0 && (
-            <div contentEditable={false} className="flex items-start gap-1 italic text-surface-ink-soft" style={{ fontSize: "var(--doc-fs-instruction, 0.875em)" }} data-testid="question-instruction">
-              <div className="flex-1">
+            <div contentEditable={false} className="group/instruction flex items-start gap-1 italic text-surface-ink-soft" style={{ fontSize: "var(--doc-fs-instruction, 0.875em)" }} data-testid="question-instruction">
+              <div className="min-w-0">
                 <RichTextField
                   value={instruction}
                   disabled={disabled}
@@ -90,12 +90,12 @@ export function QuestionPreview({
                 type="button"
                 variant="ghost"
                 size="icon"
-                className="h-5 w-5 shrink-0 text-muted-foreground"
+                className="h-7 w-7 shrink-0 text-muted-foreground opacity-0 transition-opacity group-hover/instruction:opacity-100 group-focus-within/instruction:opacity-100 focus-visible:opacity-100"
                 disabled={disabled}
                 onClick={() => onInstructionChange(null)}
                 aria-label="Remover instrução"
               >
-                <X className="h-3 w-3" />
+                <X className="h-4 w-4" />
               </Button>
             </div>
           )}
