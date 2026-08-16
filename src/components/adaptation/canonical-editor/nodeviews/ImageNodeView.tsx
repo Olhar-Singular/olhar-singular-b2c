@@ -106,7 +106,9 @@ export function ImageNodeView({ node, updateAttributes, deleteNode, editor }: No
                   type="button"
                   variant="ghost"
                   size="icon"
-                  className="h-5 w-5 text-muted-foreground hover:text-destructive"
+                  // 24x24 é o alvo mínimo do WCAG 2.5.8; o ícone continua 12px,
+                  // o ganho vem do padding, sem engordar o chrome da folha.
+                  className="h-6 w-6 text-muted-foreground hover:text-destructive"
                   disabled={disabled}
                   onClick={() => updateAttributes({ caption: null })}
                   aria-label="Remover legenda"

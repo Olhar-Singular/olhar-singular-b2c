@@ -159,6 +159,14 @@ describe("ImageNodeView", () => {
     expect(screen.getByRole("button", { name: "Remover legenda" })).toBeInTheDocument();
   });
 
+  it("botão remover legenda respeita o alvo mínimo de 24x24 (WCAG 2.5.8)", () => {
+    renderImage({ caption: [{ type: "text", text: "cap" }] });
+    const btn = screen.getByRole("button", { name: "Remover legenda" });
+    expect(btn.className).toMatch(/(^|\s)h-6(\s|$)/);
+    expect(btn.className).toMatch(/(^|\s)w-6(\s|$)/);
+    expect(btn.className).not.toMatch(/(^|\s)[hw]-5(\s|$)/);
+  });
+
   it("clicar remover legenda chama updateAttributes com null", () => {
     const { props, updateAttributes } = makeProps({ caption: [{ type: "text", text: "cap" }] });
     render(<ImageNodeView {...props} />);
