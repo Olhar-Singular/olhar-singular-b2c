@@ -14,17 +14,20 @@ vi.mock("../RichTextField", () => ({
     onChange,
     ariaLabel,
     disabled,
+    plain,
   }: {
     value: { type: "text"; text: string }[];
     onChange: (rt: { type: "text"; text: string }[]) => void;
     ariaLabel?: string;
     disabled?: boolean;
+    plain?: boolean;
   }) => {
     const initialText = value.filter((n) => n.type === "text").map((n) => n.text).join("");
     return (
       <input
         aria-label={ariaLabel}
         disabled={disabled}
+        data-plain={plain ? "true" : "false"}
         defaultValue={initialText}
         onChange={(e) => onChange(e.target.value === "" ? [] : [{ type: "text", text: e.target.value }])}
       />
@@ -175,6 +178,16 @@ describe("ImageNodeView", () => {
     render(<ImageNodeView {...props} />);
     fireEvent.change(screen.getByLabelText("Legenda da imagem"), { target: { value: "" } });
     expect(updateAttributes).toHaveBeenCalledWith({ caption: [] });
+  });
+
+  /**
+   * A legenda é texto IMPRESSO na folha: tem que ler como o PDF (sem borda, sem
+   * fundo de input), igual às respostas em AnswerPreview. Sem `plain` ela virava
+   * um campo cinza de formulário ocupando a folha inteira.
+   */
+  it("legenda usa a variante plain do RichTextField (texto impresso, sem chrome de input)", () => {
+    renderImage({ caption: [{ type: "text", text: "cap" }] });
+    expect(screen.getByLabelText("Legenda da imagem")).toHaveAttribute("data-plain", "true");
   });
 
   it("desabilita controles quando não editável", () => {

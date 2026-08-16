@@ -122,6 +122,9 @@ export function ImageNodeView({ node, updateAttributes, deleteNode, editor }: No
                   onChange={(rt) => updateAttributes({ caption: rt })}
                   ariaLabel="Legenda da imagem"
                   noBubble={true}
+                  // A legenda é texto impresso na folha: lê como o PDF (sem borda
+                  // nem fundo de input), mesma convenção do AnswerPreview.
+                  plain={true}
                 />
               </div>
             </div>
