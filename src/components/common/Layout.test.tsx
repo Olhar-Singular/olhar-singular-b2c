@@ -189,4 +189,39 @@ describe("Layout", () => {
     const creditLinks = screen.getAllByRole("link", { name: /Crédit/i });
     expect(creditLinks.some((l) => l.getAttribute("aria-current") === "page")).toBe(true);
   });
+
+  it("Ajuda button opens a dialog with the support contact e-mail", () => {
+    setAuth();
+    renderWithProviders(<Layout />, { route: "/dashboard" });
+    expect(screen.queryByRole("dialog")).toBeNull();
+
+    fireEvent.click(screen.getAllByRole("button", { name: /Ajuda/i })[0]);
+
+    const dialog = screen.getByRole("dialog");
+    expect(dialog).toHaveTextContent(/dúvida/i);
+    const mailLink = screen.getByRole("link", { name: /contato@olharsingular\.com/i });
+    expect(mailLink).toHaveAttribute("href", "mailto:contato@olharsingular.com");
+  });
+
+  it("Ajuda dialog can be closed", () => {
+    setAuth();
+    renderWithProviders(<Layout />, { route: "/dashboard" });
+    fireEvent.click(screen.getAllByRole("button", { name: /Ajuda/i })[0]);
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: /Fechar/i }));
+    expect(screen.queryByRole("dialog")).toBeNull();
+  });
+
+  it("Ajuda button inside the mobile drawer opens the dialog and closes the drawer", () => {
+    setAuth();
+    renderWithProviders(<Layout />, { route: "/dashboard" });
+    fireEvent.click(screen.getByRole("button", { name: /Abrir menu/i }));
+
+    const helpButtons = screen.getAllByRole("button", { name: /Ajuda/i });
+    fireEvent.click(helpButtons[helpButtons.length - 1]);
+
+    expect(screen.queryByRole("button", { name: /Fechar menu/i })).toBeNull();
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+  });
 });

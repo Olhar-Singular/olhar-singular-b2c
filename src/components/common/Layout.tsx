@@ -2,10 +2,17 @@ import { Link, useLocation, Outlet, useNavigate } from "react-router-dom";
 import {
   LayoutDashboard, Wand2, Users, MessageSquare,
   Coins, LogOut, Menu, X, BookOpen, ShieldCheck, History, LibraryBig,
+  HelpCircle, Mail,
 } from "lucide-react";
 import { useState } from "react";
 import { useAuth } from "@/hooks/useAuth";
+import {
+  Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
+} from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
 import logoImg from "@/assets/logo-olho-transparent.png";
+
+const SUPPORT_EMAIL = "contato@olharsingular.com";
 
 const NAV_ITEMS = [
   { path: "/dashboard",        label: "Dashboard",          icon: LayoutDashboard },
@@ -24,6 +31,7 @@ export default function Layout({ children }: { children?: React.ReactNode }) {
   const navigate = useNavigate();
   const { signOut, profile } = useAuth();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [helpOpen, setHelpOpen] = useState(false);
 
   const navItems = profile?.is_super_admin ? [...NAV_ITEMS, ADMIN_ITEM] : NAV_ITEMS;
 
@@ -43,6 +51,9 @@ export default function Layout({ children }: { children?: React.ReactNode }) {
         ? "bg-white/15 text-primary-foreground"
         : "text-primary-foreground/70 hover:text-primary-foreground hover:bg-white/10"
     }`;
+
+  const actionClass =
+    "flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-medium text-primary-foreground/70 hover:text-primary-foreground hover:bg-white/10 w-full transition-colors";
 
   return (
     <div className="min-h-screen flex bg-background">
@@ -100,12 +111,20 @@ export default function Layout({ children }: { children?: React.ReactNode }) {
           </Link>
         </nav>
 
-        {/* Logout */}
-        <div className="px-3 pb-3">
+        {/* Ajuda + Logout */}
+        <div className="px-3 pb-3 space-y-0.5">
+          <button
+            onClick={() => setHelpOpen(true)}
+            aria-label="Ajuda e suporte"
+            className={actionClass}
+          >
+            <HelpCircle className="w-4.5 h-4.5" aria-hidden="true" />
+            Ajuda
+          </button>
           <button
             onClick={handleLogout}
             aria-label="Sair da conta"
-            className="flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-medium text-primary-foreground/70 hover:text-primary-foreground hover:bg-white/10 w-full transition-colors"
+            className={actionClass}
           >
             <LogOut className="w-4.5 h-4.5" aria-hidden="true" />
             Sair
@@ -181,9 +200,17 @@ export default function Layout({ children }: { children?: React.ReactNode }) {
               )}
             </Link>
             <button
+              onClick={() => { setMobileOpen(false); setHelpOpen(true); }}
+              aria-label="Ajuda e suporte"
+              className={actionClass}
+            >
+              <HelpCircle className="w-4.5 h-4.5" aria-hidden="true" />
+              Ajuda
+            </button>
+            <button
               onClick={() => { setMobileOpen(false); handleLogout(); }}
               aria-label="Sair da conta"
-              className="flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-medium text-primary-foreground/70 hover:text-primary-foreground hover:bg-white/10 w-full transition-colors"
+              className={actionClass}
             >
               <LogOut className="w-4.5 h-4.5" aria-hidden="true" />
               Sair
@@ -191,6 +218,36 @@ export default function Layout({ children }: { children?: React.ReactNode }) {
           </nav>
         </div>
       )}
+
+      {/* ── Ajuda / Suporte ── */}
+      <Dialog open={helpOpen} onOpenChange={setHelpOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <HelpCircle className="w-5 h-5 text-primary" aria-hidden="true" />
+              Precisa de ajuda?
+            </DialogTitle>
+            <DialogDescription>
+              Se tiver qualquer dúvida ou problema com a plataforma, fale com a gente. Nosso time
+              responde sobre uso das ferramentas, adaptações, créditos e pagamentos.
+            </DialogDescription>
+          </DialogHeader>
+
+          <a
+            href={`mailto:${SUPPORT_EMAIL}`}
+            className="flex items-center gap-3 rounded-lg border bg-muted/40 px-4 py-3 text-sm font-medium hover:bg-muted transition-colors"
+          >
+            <Mail className="w-4.5 h-4.5 shrink-0 text-primary" aria-hidden="true" />
+            {SUPPORT_EMAIL}
+          </a>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setHelpOpen(false)}>
+              Fechar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <div aria-live="polite" aria-atomic="true" className="sr-only" id="live-announcer" />
 
