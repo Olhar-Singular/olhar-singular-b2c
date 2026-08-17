@@ -13,6 +13,7 @@
 import { Fragment, type ComponentProps } from "react";
 import type { QuestionAnswer } from "@/lib/adaptation/canonical/schema";
 import { indexToLetter } from "@/components/adaptation/render/letters";
+import { ALTERNATIVE_MARKER_CLASS } from "@/components/adaptation/render/answers/markerColumn";
 import { RichTextField } from "../RichTextField";
 import {
   setAlternativeContent,
@@ -54,7 +55,7 @@ export function AnswerPreview({ answer, onChange, disabled = false }: AnswerPrev
         <div className="flex flex-col gap-2" data-testid="answer-preview-multipleChoice">
           {answer.alternatives.map((alt, i) => (
             <div key={alt.id} className="flex min-w-0 items-start gap-2.5">
-              <span data-testid="preview-alternative-marker" className="shrink-0 font-medium">
+              <span data-testid="preview-alternative-marker" className={ALTERNATIVE_MARKER_CLASS}>
                 {indexToLetter(i)})
               </span>
               <PreviewField

@@ -6,6 +6,7 @@
 import type { QuestionAnswer } from "@/lib/adaptation/canonical/schema";
 import { RichTextView } from "../RichTextView";
 import { indexToLetter } from "../letters";
+import { ALTERNATIVE_MARKER_CLASS } from "./markerColumn";
 
 type MultipleChoiceAnswer = Extract<QuestionAnswer, { kind: "multipleChoice" }>;
 
@@ -17,7 +18,9 @@ export function MultipleChoiceView({ answer }: { answer: MultipleChoiceAnswer })
           key={alt.id}
           className="flex items-start gap-2"
         >
-          <span className="font-medium">{indexToLetter(i)})</span>
+          <span data-testid="alternative-marker" className={ALTERNATIVE_MARKER_CLASS}>
+            {indexToLetter(i)})
+          </span>
           <span className="flex-1">
             <RichTextView content={alt.content} />
           </span>

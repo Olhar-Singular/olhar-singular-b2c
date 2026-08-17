@@ -2,6 +2,7 @@ import { describe, it, expect, vi } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 import type { RichText, QuestionAnswer } from "@/lib/adaptation/canonical/schema";
 import { AnswerPreview } from "./AnswerPreview";
+import { ALTERNATIVE_MARKER_CLASS } from "@/components/adaptation/render/answers/markerColumn";
 
 // Mock RichTextField as a plain textbox keyed by ariaLabel, so we can drive the
 // inline content edits without the real ProseMirror editor.
@@ -72,6 +73,17 @@ describe("AnswerPreview — multipleChoice", () => {
     const container = screen.getByTestId("answer-preview-multipleChoice");
     expect(container.className).not.toContain("grid-cols-2");
     expect(container.className).toContain("flex-col");
+  });
+
+  // Achado 0202: `shrink-0` sozinho não fixa a largura do marcador — cada letra
+  // ocupa a largura natural do glifo e o texto das alternativas começa em x
+  // diferentes (margem esquerda serrilhada). O PDF já usa coluna fixa (width: 22).
+  it("puts the letter marker in a fixed-width column, mirroring the PDF", () => {
+    render(<AnswerPreview answer={answer} onChange={vi.fn()} />);
+    screen.getAllByTestId("preview-alternative-marker").forEach((marker) => {
+      expect(marker.className).toContain(ALTERNATIVE_MARKER_CLASS);
+    });
+    expect(ALTERNATIVE_MARKER_CLASS).toMatch(/\bw-\[[\d.]+em\]/);
   });
 });
 
