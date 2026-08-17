@@ -32,6 +32,27 @@ describe("ImageResizer", () => {
     expect(screen.getByRole("img")).toHaveAttribute("alt", "figura de apoio");
   });
 
+  /**
+   * 0311 — a imagem do editor era desenhada com `border border-zinc-200` e
+   * `rounded-md` no PRÓPRIO conteúdo, então a folha do Revisar mostrava uma
+   * figura emoldurada e de cantos arredondados enquanto a prévia do Exportar e
+   * o PDF saíam sem nada disso (e com 2px a mais de largura útil). Decoração de
+   * edição não pode viver no conteúdo impresso: se precisar de contorno, ele é
+   * chrome do wrapper (outline, fora do fluxo), só no hover/foco.
+   */
+  it("não pinta borda nem raio no conteúdo da imagem", () => {
+    render(<ImageResizer src="https://x.png" alt="ilustração" onResize={vi.fn()} />);
+    const img = screen.getByRole("img");
+    expect(img.className).toBe("w-full");
+  });
+
+  it("dá o contorno de edição como outline no wrapper, sem entrar no fluxo", () => {
+    render(<ImageResizer src="https://x.png" alt="ilustração" onResize={vi.fn()} />);
+    const wrapper = screen.getByRole("img").parentElement!;
+    expect(wrapper.className).toContain("hover:outline");
+    expect(wrapper.className).toContain("focus-within:outline");
+  });
+
   it("displays width indicator text reflecting current size", () => {
     render(<ImageResizer src="https://x.png" alt="ilustração" initialWidth={250} onResize={vi.fn()} />);
     expect(screen.getByText("250px")).toBeInTheDocument();

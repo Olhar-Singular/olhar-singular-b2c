@@ -77,14 +77,17 @@ export default function ImageResizer({ src, alt, initialWidth, onResize }: Props
   return (
     <div
       ref={containerRef}
-      className="relative inline-block group my-1.5"
+      className="relative inline-block group my-1.5 hover:outline hover:outline-1 hover:outline-offset-2 hover:outline-border focus-within:outline focus-within:outline-1 focus-within:outline-offset-2 focus-within:outline-border"
       style={{ width }}
     >
-      <img
-        src={src}
-        alt={alt}
-        className="w-full rounded-md border border-zinc-200"
-      />
+      {/*
+        0311 — a moldura de edição (borda + cantos arredondados) vivia no
+        próprio <img>: a folha do Revisar mostrava uma figura emoldurada que a
+        prévia do Exportar e o PDF não desenham, e a borda ainda comia 2px da
+        largura útil. O contorno agora é chrome do wrapper, via `outline` (fora
+        do fluxo, não altera a caixa) e só no hover/foco.
+      */}
+      <img src={src} alt={alt} className="w-full" />
       {/* Resize handle - bottom right corner */}
       <div
         onMouseDown={handleMouseDown}
