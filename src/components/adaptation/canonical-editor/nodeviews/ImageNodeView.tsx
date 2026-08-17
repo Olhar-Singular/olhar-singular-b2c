@@ -16,6 +16,13 @@ const ALIGNMENTS = [
   { value: "right", Icon: AlignRight, label: "Alinhar à direita" },
 ] as const;
 
+/** Alinhamento herdado pela legenda (paridade com a prévia e o PDF — achado 0116). */
+const CAPTION_ALIGN: Record<string, "left" | "center" | "right"> = {
+  left: "left",
+  center: "center",
+  right: "right",
+};
+
 export function ImageNodeView({ node, updateAttributes, deleteNode, editor }: NodeViewProps) {
   const [modalOpen, setModalOpen] = useState(false);
   const { src, alt, width, alignment, caption } = node.attrs as {
@@ -138,7 +145,17 @@ export function ImageNodeView({ node, updateAttributes, deleteNode, editor }: No
                   <Trash2 className="h-3 w-3" />
                 </Button>
               </div>
-              <div style={{ fontSize: "var(--doc-fs-caption, inherit)" }}>
+              {/*
+                A legenda é impressa junto da figura: a prévia alinha o `figure`
+                inteiro (text-center) e o PDF alinha a `View` inteira, então a
+                legenda acompanha a imagem nas duas. Aqui a legenda mora fora do
+                contêiner alinhado (o chrome de edição fica no meio), então o
+                alinhamento chega nela pelo text-align. Achado 0116.
+              */}
+              <div
+                data-testid="image-caption-text"
+                style={{ fontSize: "var(--doc-fs-caption, inherit)", textAlign: CAPTION_ALIGN[alignment ?? "left"] }}
+              >
                 <RichTextField
                   value={caption}
                   placeholder="Escreva uma legenda para a imagem…"

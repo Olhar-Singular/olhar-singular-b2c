@@ -279,4 +279,31 @@ describe("ImageNodeView", () => {
     expect(getByTestId("image-align-container").className).not.toContain("justify-center");
     expect(getByTestId("image-align-container").className).not.toContain("justify-end");
   });
+
+  // --- Legenda acompanha o alinhamento (achado 0116) -------------------------
+
+  /**
+   * 0116 — o `alignment` do bloco só chegava ao contêiner da imagem; a legenda,
+   * que mora fora dele, ficava sempre encostada na margem esquerda enquanto a
+   * prévia (figure.text-center) e o PDF (View com alignItems) já centralizavam a
+   * legenda junto da figura. Eram 278 px de divergência na mesma legenda.
+   */
+  it("centraliza o texto da legenda quando alignment é center", () => {
+    const { getByTestId } = renderImage({ alignment: "center", caption: [{ type: "text", text: "cap" }] });
+    expect(getByTestId("image-caption-text")).toHaveStyle({ textAlign: "center" });
+  });
+
+  it("alinha o texto da legenda à direita quando alignment é right", () => {
+    const { getByTestId } = renderImage({ alignment: "right", caption: [{ type: "text", text: "cap" }] });
+    expect(getByTestId("image-caption-text")).toHaveStyle({ textAlign: "right" });
+  });
+
+  it("mantém a legenda à esquerda quando alignment é left ou null", () => {
+    const left = renderImage({ alignment: "left", caption: [{ type: "text", text: "cap" }] });
+    expect(left.getByTestId("image-caption-text")).toHaveStyle({ textAlign: "left" });
+    left.unmount();
+
+    const none = renderImage({ alignment: null, caption: [{ type: "text", text: "cap" }] });
+    expect(none.getByTestId("image-caption-text")).toHaveStyle({ textAlign: "left" });
+  });
 });
