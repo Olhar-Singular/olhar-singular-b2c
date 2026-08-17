@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, ArrowRight, Info, RefreshCw } from "lucide-react";
 import { EditorContent, BubbleMenu } from "@tiptap/react";
@@ -83,6 +83,7 @@ export function StepReview({
   onCaptureFailure,
 }: Props) {
   const [aboutOpen, setAboutOpen] = useState(false);
+  const surfaceRef = useRef<HTMLDivElement>(null);
   const { editor } = useCanonicalEditor({
     value: document,
     onChange: onDocumentChange,
@@ -92,6 +93,20 @@ export function StepReview({
 
   const handleAppearanceChange = (partial: PageStyle) => {
     onPageStyleChange?.({ ...pageStyle, ...partial });
+  };
+
+  /**
+   * Alt+F10 (padrão APG) leva o foco do editor para o primeiro controle da barra
+   * de seleção. É o único caminho de teclado até ela: Tab a partir do editor
+   * colapsa a seleção e fecha o bubble, e cor / tamanho de fonte não têm atalho
+   * próprio no Tiptap. `Escape` na barra devolve o foco ao editor.
+   */
+  const handleSurfaceKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
+    if (!event.altKey || event.key !== "F10") return;
+    const first = surfaceRef.current?.querySelector<HTMLElement>('[role="toolbar"] [tabindex="0"]');
+    if (!first) return;
+    event.preventDefault();
+    first.focus();
   };
 
   return (
@@ -139,12 +154,16 @@ export function StepReview({
       />
 
       {editor && (
-        <>
+        <div ref={surfaceRef} onKeyDown={handleSurfaceKeyDown}>
           {/* Bubble de seleção (plano §6.2): aparece só com seleção não-vazia no
               editor principal — editores aninhados (RichTextField) são instâncias
-              separadas, então o bubble não os atinge. */}
+              separadas, então o bubble não os atinge.
+              `appendTo: "parent"` mantém o popover adjacente à referência na ordem
+              do DOM (caça 0208); sem isso o tippy o joga no fim do <body> e a barra
+              fica a ~15 elementos focáveis do editor. */}
           <BubbleMenu
             editor={editor}
+            tippyOptions={{ duration: 100, appendTo: "parent" }}
             shouldShow={({ state }) => isTextSelection(state.selection) && !state.selection.empty}
           >
             <SelectionBubble editor={editor} />
@@ -156,7 +175,7 @@ export function StepReview({
               <BlockInserter editor={editor} />
             </div>
           </PageSheet>
-        </>
+        </div>
       )}
 
       <div className="flex justify-between pt-4">

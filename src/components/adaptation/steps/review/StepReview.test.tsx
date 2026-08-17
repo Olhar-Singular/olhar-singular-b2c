@@ -7,6 +7,10 @@ import type { CanonicalDocument } from "@/lib/adaptation/canonical/schema";
 
 // Capture shouldShow so tests can verify it filters node selections.
 let capturedShouldShow: ((props: { state: { selection: { empty: boolean } } }) => boolean) | undefined;
+// Capture tippyOptions: o bubble precisa ficar adjacente ao editor na ordem do DOM.
+let capturedTippyOptions: Record<string, unknown> | undefined;
+// Simula o bubble fechado (sem seleção) — o atalho de teclado não pode quebrar aí.
+const bubble = { visible: true };
 
 const mockIsTextSelection = vi.fn();
 vi.mock("@tiptap/core", async (importOriginal) => {
@@ -23,24 +27,22 @@ vi.mock("@tiptap/react", () => ({
     editor,
     children,
     shouldShow,
+    tippyOptions,
   }: {
     editor: unknown;
     children: React.ReactNode;
     shouldShow?: (props: { state: { selection: { empty: boolean } } }) => boolean;
+    tippyOptions?: Record<string, unknown>;
   }) => {
     capturedShouldShow = shouldShow;
+    capturedTippyOptions = tippyOptions;
     return (
       <div data-testid="bubble-menu">
         {String(editor !== null)}
-        {children}
+        {bubble.visible ? children : null}
       </div>
     );
   },
-}));
-
-// Mock SelectionBubble (it reads the editor object; we just need it to render).
-vi.mock("@/components/adaptation/canonical-editor/SelectionBubble", () => ({
-  SelectionBubble: () => <div data-testid="selection-bubble" />,
 }));
 
 // Mock useCanonicalEditor to return a truthy editor so PageSheet renders.
@@ -56,10 +58,26 @@ vi.mock("@/components/adaptation/canonical-editor/block-inserter/BlockInserter",
 
 beforeEach(() => {
   capturedShouldShow = undefined;
+  capturedTippyOptions = undefined;
+  bubble.visible = true;
   mockIsTextSelection.mockReset();
 });
 
-const fakeEditor = { isEditable: true } as unknown as import("@tiptap/react").Editor;
+/**
+ * Editor suficiente para o SelectionBubble REAL renderizar (ele lê isActive /
+ * getAttributes e dispara comandos por chain). Não é mockado aqui de propósito:
+ * o caminho de teclado da caça 0208 atravessa StepReview → SelectionBubble.
+ */
+const chainStub: Record<string, unknown> = {};
+for (const m of ["focus", "setColor", "unsetColor", "setFontSize", "run"]) {
+  chainStub[m] = () => chainStub;
+}
+const fakeEditor = {
+  isEditable: true,
+  isActive: () => false,
+  getAttributes: () => ({}),
+  chain: () => chainStub,
+} as unknown as import("@tiptap/react").Editor;
 
 const id = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, "0")}`;
 
@@ -108,7 +126,46 @@ describe("StepReview", () => {
   it("monta o BubbleMenu de seleção ligado ao editor principal", () => {
     setup();
     expect(screen.getByTestId("bubble-menu")).toBeInTheDocument();
-    expect(screen.getByTestId("selection-bubble")).toBeInTheDocument();
+    expect(screen.getByRole("toolbar")).toBeInTheDocument();
+  });
+
+  /**
+   * Regressão (caça 0208): o BubbleMenu era montado sem `tippyOptions`, então o
+   * tippy o anexava ao `<body>` — 15 elementos focáveis longe do `.ProseMirror`
+   * (e o próprio tippy.js loga o aviso de acessibilidade). Além disso não havia
+   * atalho algum para levar o foco do editor até a barra, e Tab só destruía a
+   * seleção. Sem isso, cor e tamanho de fonte são inalcançáveis sem mouse.
+   */
+  describe("caminho de teclado até a barra de seleção (caça 0208)", () => {
+    it("ancora o bubble ao pai do editor para preservar a ordem do DOM", () => {
+      setup();
+      expect(capturedTippyOptions).toEqual(expect.objectContaining({ appendTo: "parent" }));
+    });
+
+    it("Alt+F10 no editor leva o foco para o primeiro controle da barra", () => {
+      setup();
+      const first = screen.getByRole("button", { name: "Negrito" });
+      expect(document.activeElement).not.toBe(first);
+      fireEvent.keyDown(screen.getByTestId("editor-content"), { key: "F10", altKey: true });
+      expect(document.activeElement).toBe(first);
+    });
+
+    it("não sequestra outras teclas", () => {
+      setup();
+      const first = screen.getByRole("button", { name: "Negrito" });
+      fireEvent.keyDown(screen.getByTestId("editor-content"), { key: "F10" });
+      expect(document.activeElement).not.toBe(first);
+      fireEvent.keyDown(screen.getByTestId("editor-content"), { key: "F9", altKey: true });
+      expect(document.activeElement).not.toBe(first);
+    });
+
+    it("com a barra fechada, o atalho não quebra", () => {
+      bubble.visible = false;
+      setup();
+      expect(() =>
+        fireEvent.keyDown(screen.getByTestId("editor-content"), { key: "F10", altKey: true }),
+      ).not.toThrow();
+    });
   });
 
   it("BubbleMenu shouldShow — só exibe para TextSelection não-vazia", () => {

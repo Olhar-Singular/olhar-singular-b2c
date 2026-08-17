@@ -150,4 +150,94 @@ describe("SelectionBubble", () => {
     const call = editor.ops.find((o) => o.name === "setFontSize");
     expect(call?.args[0]).toBe("20px");
   });
+
+  /**
+   * Regressão (caça 0208): a barra era a única superfície de formatação de trecho
+   * e não tinha caminho de teclado — sem `role="toolbar"`, sem roving tabindex e
+   * sem volta para o editor. Cor e tamanho de fonte, que não têm atalho no Tiptap,
+   * ficavam inalcançáveis sem mouse (WCAG 2.2 SC 2.1.1).
+   */
+  describe("caminho de teclado (caça 0208)", () => {
+    const controls = () =>
+      Array.from(global.document.querySelectorAll<HTMLElement>("[data-toolbar-control]"));
+
+    it("expõe a barra como toolbar nomeada", () => {
+      render(<SelectionBubble editor={makeEditor()} />);
+      const toolbar = screen.getByRole("toolbar", { name: "Formatação do trecho selecionado" });
+      expect(toolbar).toHaveAttribute("aria-orientation", "horizontal");
+    });
+
+    it("roving tabindex: só o primeiro controle é tabulável", () => {
+      render(<SelectionBubble editor={makeEditor()} />);
+      const items = controls();
+      expect(items.length).toBe(4 + 2 + TEXT_COLORS.length + 1);
+      expect(items[0]).toHaveAttribute("tabindex", "0");
+      for (const item of items.slice(1)) expect(item).toHaveAttribute("tabindex", "-1");
+    });
+
+    it("seta para a direita move o foco para o próximo controle", () => {
+      render(<SelectionBubble editor={makeEditor()} />);
+      const toolbar = screen.getByRole("toolbar");
+      const items = controls();
+      items[0].focus();
+      fireEvent.keyDown(toolbar, { key: "ArrowRight" });
+      expect(global.document.activeElement).toBe(items[1]);
+      expect(items[1]).toHaveAttribute("tabindex", "0");
+      expect(items[0]).toHaveAttribute("tabindex", "-1");
+    });
+
+    it("seta para a esquerda a partir do primeiro dá a volta para o último", () => {
+      render(<SelectionBubble editor={makeEditor()} />);
+      const toolbar = screen.getByRole("toolbar");
+      const items = controls();
+      items[0].focus();
+      fireEvent.keyDown(toolbar, { key: "ArrowLeft" });
+      expect(global.document.activeElement).toBe(items[items.length - 1]);
+    });
+
+    it("seta para a direita a partir do último dá a volta para o primeiro", () => {
+      render(<SelectionBubble editor={makeEditor()} />);
+      const toolbar = screen.getByRole("toolbar");
+      const items = controls();
+      items[items.length - 1].focus();
+      fireEvent.keyDown(toolbar, { key: "ArrowRight" });
+      expect(global.document.activeElement).toBe(items[0]);
+    });
+
+    it("Home e End vão para as pontas", () => {
+      render(<SelectionBubble editor={makeEditor()} />);
+      const toolbar = screen.getByRole("toolbar");
+      const items = controls();
+      items[2].focus();
+      fireEvent.keyDown(toolbar, { key: "End" });
+      expect(global.document.activeElement).toBe(items[items.length - 1]);
+      fireEvent.keyDown(toolbar, { key: "Home" });
+      expect(global.document.activeElement).toBe(items[0]);
+    });
+
+    it("sem foco em nenhum controle, a seta parte do controle ativo", () => {
+      render(<SelectionBubble editor={makeEditor()} />);
+      const toolbar = screen.getByRole("toolbar");
+      const items = controls();
+      // Foco fora da barra: o índice ativo (0) é a base.
+      fireEvent.keyDown(toolbar, { key: "ArrowRight" });
+      expect(global.document.activeElement).toBe(items[1]);
+    });
+
+    it("Escape devolve o foco ao editor", () => {
+      const editor = makeEditor();
+      render(<SelectionBubble editor={editor} />);
+      fireEvent.keyDown(screen.getByRole("toolbar"), { key: "Escape" });
+      expect(editor.ops.map((o) => o.name)).toContain("focus");
+    });
+
+    it("ignora teclas que não são de navegação", () => {
+      render(<SelectionBubble editor={makeEditor()} />);
+      const toolbar = screen.getByRole("toolbar");
+      const items = controls();
+      items[0].focus();
+      fireEvent.keyDown(toolbar, { key: "a" });
+      expect(global.document.activeElement).toBe(items[0]);
+    });
+  });
 });
