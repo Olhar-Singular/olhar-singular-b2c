@@ -14,6 +14,12 @@
  *       flavour is rejected — see the failure message for the detected tag.
  *   (b) The cmap covers the essential pt-BR letters (accents + cedilla) and the
  *       em dash — a font missing these renders tofu/blanks in adapted activities.
+ *   (c) The GSUB does not enable `liga`. Standard ligatures are ON by default in
+ *       both the browser and fontkit/@react-pdf, so a shipped `liga` fuses `fi`,
+ *       `fl`, `ff` and `ffi` into single narrow glyphs. In OpenDyslexic the `fi`
+ *       ligature is 40% narrower than `f`+`i`, which destroys the uniform, wide
+ *       letter spacing the font was chosen for (see finding 0214). These are
+ *       accessibility families: every letter must stay a letter.
  *
  * The sfnt/cmap parsing is intentionally minimal and inline (no new dependency):
  * it reads the offset table, locates `cmap`, picks the best Unicode subtable and
@@ -127,6 +133,24 @@ function glyphIdFor(buf: Buffer, subOff: number, cp: number): number {
   throw new Error(`Unsupported cmap subtable format ${format}`);
 }
 
+/**
+ * Read every feature tag registered in the font's GSUB FeatureList.
+ * GSUB header: version(4) scriptListOffset(2) featureListOffset(2) lookupListOffset(2).
+ * FeatureList: featureCount(2) then featureCount records of tag(4) + offset(2).
+ * Returns an empty array when the font has no GSUB at all.
+ */
+function gsubFeatureTags(buf: Buffer): string[] {
+  const gsub = findTable(buf, "GSUB");
+  if (!gsub) return [];
+  const featureListOff = gsub.offset + u16(buf, gsub.offset + 6);
+  const count = u16(buf, featureListOff);
+  const tags: string[] = [];
+  for (let i = 0, p = featureListOff + 2; i < count; i++, p += 6) {
+    tags.push(buf.toString("latin1", p, p + 4));
+  }
+  return tags;
+}
+
 const fontFiles = readdirSync(FONTS_DIR)
   .filter((f) => f.toLowerCase().endsWith(".ttf"))
   .sort();
@@ -157,5 +181,15 @@ describe("public/fonts/*.ttf — binary integrity (PDF corruption guard)", () =>
         .map((c) => `'${c}' (U+${c.codePointAt(0)!.toString(16).toUpperCase().padStart(4, "0")})`)
         .join(", ")}`,
     ).toEqual([]);
+  });
+
+  it.each(fontFiles)("%s does not enable standard ligatures (GSUB 'liga')", (file) => {
+    const buf = readFileSync(join(FONTS_DIR, file));
+    expect(
+      gsubFeatureTags(buf),
+      `${file}: GSUB still registers 'liga'. Standard ligatures are on by default on screen ` +
+        `and in @react-pdf, so 'fi'/'fl'/'ff'/'ffi' get fused into single narrow glyphs. ` +
+        `Regenerate the asset with scripts/strip-font-ligatures.py.`,
+    ).not.toContain("liga");
   });
 });
