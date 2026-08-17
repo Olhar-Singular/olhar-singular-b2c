@@ -21,6 +21,7 @@ import type { QuestionAnswer } from "@/lib/adaptation/canonical/schema";
 import { indexToLetter } from "../letters";
 import { PdfRichText } from "./PdfRichText";
 import { resolveElementFontSizes, resolvePageStyle, type ElementFontSizesPt } from "../pageStyle";
+import { ANSWER_LINE_COLOR } from "../pageTokens";
 
 const ROW = { flexDirection: "row", marginBottom: 3 } as const;
 // flexShrink: 0 prevents the marker column from collapsing when the row is
@@ -56,7 +57,12 @@ export function PdfAnswer({
           {Array.from({ length: lines }, (_, i) => (
             <View
               key={i}
-              style={{ borderBottomWidth: 1, borderBottomColor: "#999999", borderBottomStyle: "dashed", marginBottom: 10 }}
+              style={{
+                borderBottomWidth: 1,
+                borderBottomColor: ANSWER_LINE_COLOR,
+                borderBottomStyle: "dashed",
+                marginBottom: 10,
+              }}
             />
           ))}
         </View>

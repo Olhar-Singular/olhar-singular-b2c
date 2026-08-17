@@ -14,6 +14,7 @@ import { Fragment, type ComponentProps } from "react";
 import type { QuestionAnswer } from "@/lib/adaptation/canonical/schema";
 import { indexToLetter } from "@/components/adaptation/render/letters";
 import { ALTERNATIVE_MARKER_CLASS } from "@/components/adaptation/render/answers/markerColumn";
+import { ANSWER_LINE_COLOR } from "@/components/adaptation/render/pageTokens";
 import { RichTextField } from "../RichTextField";
 import {
   setAlternativeContent,
@@ -196,7 +197,12 @@ export function AnswerPreview({ answer, onChange, disabled = false }: AnswerPrev
       return (
         <div className="flex flex-col gap-[18px] pt-1.5" data-testid="answer-preview-open">
           {Array.from({ length: lines }, (_, i) => (
-            <div key={i} data-testid="preview-answer-line" className="h-px border-b border-dashed border-surface-line-2" />
+            <div
+              key={i}
+              data-testid="preview-answer-line"
+              className="h-px border-b border-dashed"
+              style={{ borderBottomColor: ANSWER_LINE_COLOR }}
+            />
           ))}
         </div>
       );

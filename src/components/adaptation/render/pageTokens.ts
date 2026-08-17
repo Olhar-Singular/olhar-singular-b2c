@@ -31,6 +31,22 @@ export const BASE_BLOCK_SPACING_PX = 16;
 export const DEFAULT_IMAGE_WIDTH_PX = 300;
 
 /**
+ * Cor da linha pautada da questão aberta — a pauta em que o aluno escreve.
+ *
+ * Ponto único das TRÊS superfícies (folha do Revisar, prévia do Exportar e PDF).
+ * Antes cada uma tinha a sua: a folha herdava `--sf-line-2` (1,38:1 sobre o
+ * branco), a prévia herdava `--border`, que é token do chrome do app e nem sequer
+ * é cor de papel (1,33:1), e o PDF trazia `#999999` literal (2,85:1). Nenhuma
+ * alcançava os 3:1 que a WCAG 1.4.11 exige de objeto gráfico, e a 1,3:1 a linha
+ * simplesmente some numa impressão a laser em preto e branco.
+ *
+ * `#767676` é o cinza mais claro que ainda dá 4,5:1 sobre papel branco: contraste
+ * de texto, não só de objeto gráfico, porque esta linha precisa aparecer depois de
+ * fotocopiada.
+ */
+export const ANSWER_LINE_COLOR = "#767676";
+
+/**
  * Família usada quando o documento NÃO traz `pageStyle.fontFamily` — o caso
  * normal, já que nenhuma UI grava a fonte até o professor escolher uma no
  * popover "Formato".

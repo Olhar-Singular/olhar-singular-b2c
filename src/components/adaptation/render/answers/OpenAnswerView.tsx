@@ -4,6 +4,7 @@
  */
 
 import type { QuestionAnswer } from "@/lib/adaptation/canonical/schema";
+import { ANSWER_LINE_COLOR } from "../pageTokens";
 
 type OpenAnswer = Extract<QuestionAnswer, { kind: "open" }>;
 
@@ -12,7 +13,7 @@ export function OpenAnswerView({ answer }: { answer: OpenAnswer }) {
   return (
     <div data-testid="answer-open" className="space-y-3" aria-label="Linhas de resposta">
       {Array.from({ length: lines }, (_, i) => (
-        <div key={i} className="border-b border-dashed border-border" />
+        <div key={i} className="border-b border-dashed" style={{ borderBottomColor: ANSWER_LINE_COLOR }} />
       ))}
     </div>
   );
