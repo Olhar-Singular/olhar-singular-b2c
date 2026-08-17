@@ -23,9 +23,13 @@ import { Decoration, DecorationSet, type EditorView } from "@tiptap/pm/view";
 import type { Node as PMNode } from "@tiptap/pm/model";
 import { Extension } from "@tiptap/core";
 import type { NodeStyle } from "@/lib/adaptation/canonical/schema";
+import { PAGE_BREAK_LABEL } from "@/components/adaptation/render/PageBreakMark";
 
-/** Uppercase label rendered on the dashed marker. */
-export const PAGE_BREAK_LABEL = "QUEBRA DE PÁGINA";
+/**
+ * Uppercase label rendered on the dashed marker. Vive junto do `PageBreakMark`
+ * da prévia do Exportar para que as duas superfícies digam a mesma coisa.
+ */
+export { PAGE_BREAK_LABEL };
 
 export interface PageBreakSpec {
   /** Position right before the flagged block (where the widget is placed). */

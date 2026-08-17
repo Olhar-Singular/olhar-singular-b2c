@@ -420,6 +420,67 @@ describe("CanonicalRenderer (defaults / edge branches)", () => {
     expect(enunciadoPos).toBeLessThan(stemPos);
   });
 
+  /**
+   * Regressão (achado 0110): o switch "Quebra de página por questão" mudava o PDF
+   * (questão 2 sozinha na página 2) e não mudava nada na prévia do Exportar — o
+   * professor só descobria o efeito baixando o arquivo e contando páginas.
+   */
+  describe("marca de quebra por questão", () => {
+    const twoQuestions = () =>
+      wrap([
+        {
+          id: id(1),
+          type: "question",
+          stem: [{ id: id(2), type: "paragraph", content: [{ type: "text", text: "Q1" }] }],
+          answer: { kind: "open" },
+        },
+        {
+          id: id(3),
+          type: "question",
+          stem: [{ id: id(4), type: "paragraph", content: [{ type: "text", text: "Q2" }] }],
+          answer: { kind: "open" },
+        },
+      ]);
+
+    it("draws no break mark when the toggle is off", () => {
+      render(<CanonicalRenderer document={twoQuestions()} />);
+      expect(screen.queryAllByTestId("preview-page-break")).toHaveLength(0);
+    });
+
+    it("draws one break mark per question from the second when the toggle is on", () => {
+      render(<CanonicalRenderer document={twoQuestions()} pageBreakPerQuestion />);
+      const marks = screen.getAllByTestId("preview-page-break");
+      expect(marks).toHaveLength(1);
+      expect(marks[0]).toHaveTextContent("QUEBRA DE PÁGINA");
+    });
+
+    it("places the mark immediately before the question it breaks", () => {
+      const { container } = render(
+        <CanonicalRenderer document={twoQuestions()} pageBreakPerQuestion />,
+      );
+      const html = container.innerHTML;
+      expect(html.indexOf("Q1")).toBeLessThan(html.indexOf("QUEBRA DE P"));
+      expect(html.indexOf("QUEBRA DE P")).toBeLessThan(html.indexOf("Q2"));
+    });
+
+    it("never marks a single question — nothing breaks before page 1", () => {
+      render(
+        <CanonicalRenderer
+          document={wrap([
+            {
+              id: id(1),
+              type: "question",
+              stem: [{ id: id(2), type: "paragraph", content: [{ type: "text", text: "Q1" }] }],
+              answer: { kind: "open" },
+            },
+          ])}
+          pageBreakPerQuestion
+        />,
+      );
+      expect(screen.queryAllByTestId("preview-page-break")).toHaveLength(0);
+    });
+  });
+
   it("question with empty enunciado array renders no enunciado node", () => {
     render(
       <CanonicalRenderer

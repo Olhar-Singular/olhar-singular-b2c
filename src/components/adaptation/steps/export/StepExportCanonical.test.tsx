@@ -9,8 +9,16 @@ import type {
 } from "@/lib/adaptation/canonical/schema";
 
 vi.mock("@/components/adaptation/render/CanonicalRenderer", () => ({
-  CanonicalRenderer: ({ document }: { document: CanonicalDocument }) => (
-    <div data-testid="renderer">{document.blocks.length}</div>
+  CanonicalRenderer: ({
+    document,
+    pageBreakPerQuestion,
+  }: {
+    document: CanonicalDocument;
+    pageBreakPerQuestion?: boolean;
+  }) => (
+    <div data-testid="renderer" data-page-break={String(pageBreakPerQuestion ?? false)}>
+      {document.blocks.length}
+    </div>
   ),
 }));
 
@@ -20,11 +28,13 @@ vi.mock("@/components/adaptation/export/ExportPanel", () => ({
     pageStyle,
     header,
     onHeaderChange,
+    onPageBreakPerQuestionChange,
   }: {
     document: CanonicalDocument;
     pageStyle?: PageStyle;
     header?: DocumentHeader;
     onHeaderChange?: (h: DocumentHeader) => void;
+    onPageBreakPerQuestionChange?: (v: boolean) => void;
   }) => (
     <div
       data-testid="export-panel"
@@ -33,6 +43,7 @@ vi.mock("@/components/adaptation/export/ExportPanel", () => ({
     >
       {document.blocks.length}
       <button onClick={() => onHeaderChange?.({ title: "edited" })}>edit-header</button>
+      <button onClick={() => onPageBreakPerQuestionChange?.(true)}>toggle-page-break</button>
     </div>
   ),
 }));
@@ -164,6 +175,22 @@ describe("StepExportCanonical", () => {
       expect(sheet).toHaveTextContent("EMEF Teste");
       expect(sheet).toHaveTextContent("Professor(a): Prof. Caca");
       expect(sheet).toHaveTextContent("Data: 04/06/2026");
+    });
+
+    /**
+     * Regressão (achado 0110): o switch "Quebra de página por questão" mudava o
+     * PDF (2 páginas) e a prévia continuava uma folha contínua — controle sem
+     * nenhum retorno na única tela feita para conferir o arquivo.
+     */
+    it("starts the preview without per-question breaks", () => {
+      renderStep();
+      expect(screen.getByTestId("renderer").dataset.pageBreak).toBe("false");
+    });
+
+    it("propagates the page-break toggle from the panel to the preview", () => {
+      renderStep();
+      fireEvent.click(screen.getByRole("button", { name: "toggle-page-break" }));
+      expect(screen.getByTestId("renderer").dataset.pageBreak).toBe("true");
     });
 
     it("renders no header block in the preview when the result has no header", () => {

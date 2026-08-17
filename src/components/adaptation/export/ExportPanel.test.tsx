@@ -95,6 +95,30 @@ describe("ExportPanel", () => {
     await waitFor(() => expect(toast.success).toHaveBeenCalledWith("PDF gerado!"));
   });
 
+  /**
+   * Regressão (achado 0110): o estado do switch nascia e morria dentro do painel,
+   * então a prévia irmã não tinha como reagir a ele.
+   */
+  it("reports every page-break toggle change to the parent", () => {
+    const onPageBreakPerQuestionChange = vi.fn();
+    render(
+      <ExportPanel
+        document={document}
+        onDownload={vi.fn()}
+        onPageBreakPerQuestionChange={onPageBreakPerQuestionChange}
+      />,
+    );
+    fireEvent.click(screen.getByRole("switch"));
+    expect(onPageBreakPerQuestionChange).toHaveBeenLastCalledWith(true);
+    fireEvent.click(screen.getByRole("switch"));
+    expect(onPageBreakPerQuestionChange).toHaveBeenLastCalledWith(false);
+  });
+
+  it("is safe to toggle the page break without a parent listener", () => {
+    render(<ExportPanel document={document} onDownload={vi.fn()} />);
+    expect(() => fireEvent.click(screen.getByRole("switch"))).not.toThrow();
+  });
+
   it("is safe to use without an onHeaderChange handler (a field change does not throw)", () => {
     render(<ExportPanel document={document} onDownload={vi.fn()} />);
     expect(() =>

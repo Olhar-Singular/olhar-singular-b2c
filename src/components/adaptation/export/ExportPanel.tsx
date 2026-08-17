@@ -47,6 +47,12 @@ type Props = {
   onHeaderChange?: (header: DocumentHeader) => void;
   /** Document-level presentation style (font, size, spacing). Comes from pageStyle in the result. */
   pageStyle?: PageStyle;
+  /**
+   * Avisa o pai a cada mudança do switch "Quebra de página por questão", para que
+   * a prévia irmã possa desenhar a quebra. O estado continua morando aqui (é uma
+   * escolha de exportação, não vai para o documento salvo).
+   */
+  onPageBreakPerQuestionChange?: (value: boolean) => void;
   /** Override the PDF download trigger (used in tests). */
   onDownload?: (document: CanonicalDocument, settings: PanelSettings, pageStyle?: PageStyle) => Promise<void>;
   /** Override the Word download trigger (used in tests). */
@@ -58,6 +64,7 @@ export function ExportPanel({
   header = {},
   onHeaderChange = () => {},
   pageStyle,
+  onPageBreakPerQuestionChange = () => {},
   onDownload = downloadPdf,
   onDownloadWord = downloadDocx,
 }: Props) {
@@ -188,7 +195,10 @@ export function ExportPanel({
         <Switch
           id="pdf-page-break"
           checked={pageBreakPerQuestion}
-          onCheckedChange={setPageBreakPerQuestion}
+          onCheckedChange={(value) => {
+            setPageBreakPerQuestion(value);
+            onPageBreakPerQuestionChange(value);
+          }}
         />
         <Label htmlFor="pdf-page-break">Quebra de página por questão</Label>
       </div>

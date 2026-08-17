@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, RotateCcw, Save, Loader2 } from "lucide-react";
 import { CanonicalRenderer } from "@/components/adaptation/render/CanonicalRenderer";
@@ -29,6 +30,12 @@ export function StepExportCanonical({
   onRestart,
 }: Props) {
   const document = result.document;
+  /*
+    Espelho do switch do ExportPanel: a escolha é só de exportação (não entra no
+    documento salvo), mas a prévia precisa dela para desenhar onde a página vira.
+    Sem isso o switch mudava o PDF e a folha aqui não mexia um pixel (achado 0110).
+  */
+  const [pageBreakPerQuestion, setPageBreakPerQuestion] = useState(false);
 
   return (
     <div className="space-y-6">
@@ -39,6 +46,7 @@ export function StepExportCanonical({
         header={result.header}
         onHeaderChange={onHeaderChange}
         pageStyle={result.pageStyle}
+        onPageBreakPerQuestionChange={setPageBreakPerQuestion}
       />
 
       <div className="flex flex-wrap gap-2">
@@ -66,7 +74,7 @@ export function StepExportCanonical({
           H1 do documento) depois do download. Mesmo bloco do `PdfHeader`.
         */}
         <DocumentHeaderView header={result.header ?? {}} />
-        <CanonicalRenderer document={document} />
+        <CanonicalRenderer document={document} pageBreakPerQuestion={pageBreakPerQuestion} />
       </PageSheet>
 
       <div className="flex justify-between">

@@ -22,6 +22,7 @@ import {
 } from "@/components/adaptation/export/panelSettings";
 import { PdfBlock } from "./PdfBlock";
 import { questionNumbers } from "../questionNumbering";
+import { perQuestionBreakFlags } from "../perQuestionBreaks";
 import { pageTokensToPdf } from "../pageTokens";
 import { resolvePageStyle, resolveElementFontSizes } from "../pageStyle";
 
@@ -76,12 +77,10 @@ export function AdaptationPdf({ document, settings = DEFAULT_PANEL_SETTINGS, pag
         <PdfHeader header={settings.header} />
         {(() => {
           const numbers = questionNumbers(document.blocks);
-          let questionsSeen = 0;
+          // Mesma derivação que a prévia do Exportar desenha como régua tracejada.
+          const breaks = perQuestionBreakFlags(document.blocks);
           return document.blocks.map((block, i) => {
-            const isQuestion = block.type === "question";
-            const forceBreak =
-              settings.pageBreakPerQuestion && isQuestion && questionsSeen > 0;
-            if (isQuestion) questionsSeen++;
+            const forceBreak = settings.pageBreakPerQuestion && breaks[i];
             return forceBreak ? (
               <View key={block.id} break>
                 <PdfBlock block={block} number={numbers[i]} blockGap={blockGap} elementSizes={elementSizes} />
