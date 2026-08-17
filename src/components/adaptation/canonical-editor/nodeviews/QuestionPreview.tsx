@@ -62,7 +62,17 @@ export function QuestionPreview({
   ) : null;
 
   return (
-    <div className="relative">
+    // O rail é um overlay opaco em `top-0` ancorado neste container, que também
+    // é o container do enunciado: em telas estreitas ele cobria a primeira linha
+    // do texto (achado 0205). Reservamos a altura do rail (~34px → pt-9) usando
+    // os MESMOS gatilhos de visibilidade dele (group-hover / group-focus-within,
+    // do `group` no NodeViewWrapper), de modo que a reserva só existe enquanto o
+    // chrome está visível — em repouso a folha continua medindo o que o PDF mede
+    // (achado 0102).
+    <div
+      data-testid="question-preview"
+      className="relative transition-[padding] group-hover:pt-9 group-focus-within:pt-9"
+    >
       {rail}
       {/* Espaçamento vertical espelha `render/blocks/QuestionView` (gap-2 /
           space-y-2 = 8px): a folha do Revisar tem de medir o mesmo que o

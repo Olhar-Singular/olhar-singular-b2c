@@ -75,6 +75,16 @@ describe("QuestionPreview", () => {
     expect(screen.getByTestId("rail-slot")).toBeInTheDocument();
   });
 
+  it("reserva espaço no topo quando o rail aparece, para não cobrir o enunciado (achado 0205)", () => {
+    setup();
+    const preview = screen.getByTestId("question-preview");
+    // O rail é um overlay opaco ancorado em top-0; sem reserva ele cobre a
+    // primeira linha do enunciado em telas estreitas. A reserva usa os mesmos
+    // gatilhos de visibilidade do rail (group-hover / group-focus-within).
+    expect(preview.className).toMatch(/group-hover:pt-9/);
+    expect(preview.className).toMatch(/group-focus-within:pt-9/);
+  });
+
   it("renders the print-faithful AnswerPreview, not the structural AnswerEditor", () => {
     setup();
     expect(screen.getByTestId("answer-preview-multipleChoice")).toBeInTheDocument();
