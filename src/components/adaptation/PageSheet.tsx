@@ -36,9 +36,40 @@ interface PageSheetProps {
   children: ReactNode;
 }
 
+/**
+ * Largura da folha A4 na tela, em px (o mesmo valor do `w-[794px]` abaixo —
+ * Tailwind exige a classe literal, então o número vive nos dois lugares).
+ */
+const SHEET_WIDTH_PX = 794;
+
 export function PageSheet({ toolbar, pageStyle, paginated = false, children }: PageSheetProps) {
+  const frameRef = useRef<HTMLDivElement>(null);
   const sheetRef = useRef<HTMLDivElement>(null);
   const [pageCount, setPageCount] = useState(1);
+  const [scale, setScale] = useState(1);
+  const [sheetHeight, setSheetHeight] = useState(PAGE_HEIGHT_PX);
+
+  /*
+    Achado 0215: no modo paginado a folha NÃO reflowa. Largura travada em 794px
+    (a do A4) e, quando a tela é mais estreita, a folha inteira encolhe por
+    `transform: scale`. Antes a largura cedia (`max-w-full`) enquanto a altura
+    ficava presa em 1123px, e a prévia mostrava um papel 3,38:1 — nem A4 nem
+    coisa nenhuma. Escalando, a razão 1,41:1, a quebra de linha e a contagem de
+    folhas continuam iguais às do arquivo em qualquer viewport.
+  */
+  useLayoutEffect(() => {
+    if (!paginated) return;
+    const frame = frameRef.current;
+    const fit = () => {
+      const available = frame.clientWidth;
+      // jsdom (e o primeiro layout) devolve 0: sem medida, não encolhe nada.
+      setScale(available > 0 ? Math.min(1, available / SHEET_WIDTH_PX) : 1);
+    };
+    fit();
+    const observer = new ResizeObserver(fit);
+    observer.observe(frame);
+    return () => observer.disconnect();
+  }, [paginated]);
 
   /*
     Medição pós-layout em vez de altura declarada: a quantidade de folhas depende
@@ -50,7 +81,10 @@ export function PageSheet({ toolbar, pageStyle, paginated = false, children }: P
   useLayoutEffect(() => {
     if (!paginated) return;
     const sheet = sheetRef.current;
+    // `offsetHeight` é medida de layout: ignora o `scale` e já vem na geometria
+    // do A4. `getBoundingClientRect`, abaixo, vem escalada — daí a divisão.
     const height = sheet.offsetHeight;
+    setSheetHeight(height);
     /*
       Achado 0121: a quebra por questão, na prévia, é uma régua decorativa de
       ~30px (`PageBreakMark`), não uma quebra de fluxo. Medir a folha inteira
@@ -60,7 +94,7 @@ export function PageSheet({ toolbar, pageStyle, paginated = false, children }: P
     */
     const sheetTop = sheet.getBoundingClientRect().top;
     const cuts = Array.from(sheet.querySelectorAll(".adaptar-page-break")).map(
-      (mark) => mark.getBoundingClientRect().top - sheetTop,
+      (mark) => (mark.getBoundingClientRect().top - sheetTop) / scale,
     );
     const pages = [...cuts, height].reduce(
       (acc, end) => {
@@ -71,7 +105,40 @@ export function PageSheet({ toolbar, pageStyle, paginated = false, children }: P
       { total: 0, start: 0 },
     ).total;
     setPageCount(Math.max(1, pages));
-  }, [paginated, children]);
+    // `scale` entra nas dependências porque o efeito lê rects já escalados: sem
+    // ele a contagem ficaria presa na escala do render anterior.
+  }, [paginated, children, scale]);
+
+  const sheet = (
+    <div
+      ref={sheetRef}
+      data-testid="page-sheet"
+      className={
+        paginated
+          ? "w-[794px] origin-top-left bg-surface-paper text-surface-ink rounded-[3px]"
+          : "mx-auto w-[794px] max-w-full bg-surface-paper text-surface-ink rounded-[3px]"
+      }
+      style={{
+        ...pageTokensToCss(resolvePageStyle(pageStyle)),
+        boxShadow: "var(--sf-paper-shadow)",
+        ...(paginated
+          ? {
+              minHeight: `${PAGE_HEIGHT_PX}px`,
+              transform: `scale(${scale})`,
+              /*
+                Régua da virada de página: uma linha a cada altura de A4, sem
+                cortar o conteúdo. Recortar o fluxo em folhas de verdade
+                exigiria unificar editor/prévia/PDF numa única paginação —
+                fora do escopo desta correção.
+              */
+              backgroundImage: `repeating-linear-gradient(to bottom, transparent 0, transparent ${PAGE_HEIGHT_PX - 1}px, hsl(var(--sf-line-2)) ${PAGE_HEIGHT_PX - 1}px, hsl(var(--sf-line-2)) ${PAGE_HEIGHT_PX}px)`,
+            }
+          : {}),
+      }}
+    >
+      {children}
+    </div>
+  );
 
   return (
     // `overflow-clip` (e não `overflow-hidden`) porque hidden cria um contexto de
@@ -82,37 +149,34 @@ export function PageSheet({ toolbar, pageStyle, paginated = false, children }: P
         className="flex-1 p-3 sm:p-6 lg:p-10"
         style={{ background: "var(--sf-mesa-gradient)" }}
       >
-        {paginated && (
-          <p
-            data-testid="page-count"
-            className="mx-auto w-[794px] max-w-full mb-2 text-xs text-muted-foreground text-right"
-          >
-            {pageCount === 1 ? "1 página A4" : `${pageCount} páginas A4`}
-          </p>
+        {paginated ? (
+          <>
+            <p
+              data-testid="page-count"
+              className="mx-auto mb-2 text-xs text-muted-foreground text-right"
+              style={{ width: `${SHEET_WIDTH_PX * scale}px` }}
+            >
+              {pageCount === 1 ? "1 página A4" : `${pageCount} páginas A4`}
+            </p>
+            {/*
+              A moldura mede a largura disponível; o "vão" interno reserva o
+              tamanho JÁ escalado da folha (que, por estar em `transform`, não
+              ocupa espaço no fluxo) e a centraliza.
+            */}
+            <div ref={frameRef} className="flex justify-center">
+              <div
+                style={{
+                  width: `${SHEET_WIDTH_PX * scale}px`,
+                  height: `${sheetHeight * scale}px`,
+                }}
+              >
+                {sheet}
+              </div>
+            </div>
+          </>
+        ) : (
+          sheet
         )}
-        <div
-          ref={sheetRef}
-          data-testid="page-sheet"
-          className="mx-auto w-[794px] max-w-full bg-surface-paper text-surface-ink rounded-[3px]"
-          style={{
-            ...pageTokensToCss(resolvePageStyle(pageStyle)),
-            boxShadow: "var(--sf-paper-shadow)",
-            ...(paginated
-              ? {
-                  minHeight: `${PAGE_HEIGHT_PX}px`,
-                  /*
-                    Régua da virada de página: uma linha a cada altura de A4, sem
-                    cortar o conteúdo. Recortar o fluxo em folhas de verdade
-                    exigiria unificar editor/prévia/PDF numa única paginação —
-                    fora do escopo desta correção.
-                  */
-                  backgroundImage: `repeating-linear-gradient(to bottom, transparent 0, transparent ${PAGE_HEIGHT_PX - 1}px, hsl(var(--sf-line-2)) ${PAGE_HEIGHT_PX - 1}px, hsl(var(--sf-line-2)) ${PAGE_HEIGHT_PX}px)`,
-                }
-              : {}),
-          }}
-        >
-          {children}
-        </div>
       </div>
     </div>
   );

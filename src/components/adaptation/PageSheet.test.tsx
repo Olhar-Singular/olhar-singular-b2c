@@ -64,6 +64,66 @@ describe("PageSheet", () => {
       }
     };
 
+    const withClientWidth = (width: number, run: () => void) => {
+      const spy = vi
+        .spyOn(HTMLElement.prototype, "clientWidth", "get")
+        .mockReturnValue(width);
+      try {
+        run();
+      } finally {
+        spy.mockRestore();
+      }
+    };
+
+    /*
+      Achado 0215: altura travada em A4 + largura fluida davam uma folha 3,38:1
+      em 390px (332 x 1123). A prévia escala a folha de 794px em vez de deixar o
+      texto reflowar, então a razão continua 1,41:1 em qualquer viewport.
+    */
+    it("escala a folha em vez de deixá-la reflowar em tela estreita (achado 0215)", () => {
+      withClientWidth(397, () => {
+        withHeight(1123, () => {
+          render(<PageSheet paginated toolbar={null}><span>x</span></PageSheet>);
+          const sheet = screen.getByTestId("page-sheet");
+          expect(sheet.className).toContain("w-[794px]");
+          expect(sheet.className).not.toContain("max-w-full");
+          expect(sheet.style.transform).toBe("scale(0.5)");
+          // O contêiner reserva a altura JÁ escalada: 1123 * 0,5.
+          const slot = sheet.parentElement!;
+          expect(slot.style.width).toBe("397px");
+          expect(slot.style.height).toBe("561.5px");
+        });
+      });
+    });
+
+    it("não amplia a folha além do tamanho real quando sobra espaço", () => {
+      withClientWidth(1200, () => {
+        withHeight(1123, () => {
+          render(<PageSheet paginated toolbar={null}><span>x</span></PageSheet>);
+          expect(screen.getByTestId("page-sheet").style.transform).toBe("scale(1)");
+        });
+      });
+    });
+
+    it("conta as páginas na geometria não escalada (achado 0215)", () => {
+      withClientWidth(397, () => {
+        withHeight(2246, () => {
+          withTops(() => {
+            render(
+              <PageSheet paginated toolbar={null}>
+                <span>questão 1</span>
+                {/* 1123px de conteúdo vistos a 0,5 de escala. */}
+                <div className="adaptar-page-break" data-test-top="561.5" />
+                <span>questão 2</span>
+              </PageSheet>,
+            );
+            // 2246px de folha = 2 A4 exatos; a quebra cai no fim da 1ª folha.
+            expect(screen.getByTestId("page-count")).toHaveTextContent("2 páginas A4");
+          });
+        });
+      });
+    });
+
     it("não pagina por padrão (a folha do Revisar continua contínua)", () => {
       render(<PageSheet toolbar={null}><span>x</span></PageSheet>);
       expect(screen.getByTestId("page-sheet").style.minHeight).toBe("");
