@@ -114,7 +114,9 @@ export function SelectionBubble({ editor }: Props) {
       aria-label={SELECTION_TOOLBAR_LABEL}
       aria-orientation="horizontal"
       onKeyDown={handleKeyDown}
-      className="flex items-center gap-0.5 rounded-md border border-surface-line-2 bg-surface-paper p-1 shadow-md"
+      // `flex-wrap` + largura máxima: com as amostras em 28 px a barra passa a não
+      // caber em 390 — ela quebra em duas linhas em vez de encolher os alvos.
+      className="flex max-w-[calc(100vw-2rem)] flex-wrap items-center gap-0.5 rounded-md border border-surface-line-2 bg-surface-paper p-1 shadow-md"
     >
       {MARKS.map(({ name, label, Icon, toggle }, index) => (
         <Button
@@ -158,19 +160,26 @@ export function SelectionBubble({ editor }: Props) {
       <span className="mx-0.5 h-5 w-px bg-surface-line-2" aria-hidden="true" />
 
       {TEXT_COLORS.map((color, index) => (
+        // O disco continua com 20 px (decoração), mas o alvo tocável é o botão de
+        // 28x28 — igual aos de ícone e acima do mínimo de 24x24 (WCAG 2.2 SC 2.5.8).
         <button
           key={color}
           type="button"
-          className={cn(
-            "h-5 w-5 rounded-full border border-surface-line-2",
-            editor.isActive("textStyle", { color }) && "ring-2 ring-surface-accent ring-offset-1",
-          )}
-          style={{ backgroundColor: color }}
+          className="flex h-7 w-7 items-center justify-center rounded-full"
           aria-label={`Cor ${color}`}
           aria-pressed={editor.isActive("textStyle", { color })}
           onClick={() => editor.chain().focus().setColor(color).run()}
           {...rove(FIRST_COLOR_INDEX + index)}
-        />
+        >
+          <span
+            aria-hidden="true"
+            className={cn(
+              "h-5 w-5 rounded-full border border-surface-line-2",
+              editor.isActive("textStyle", { color }) && "ring-2 ring-surface-accent ring-offset-1",
+            )}
+            style={{ backgroundColor: color }}
+          />
+        </button>
       ))}
 
       <Button

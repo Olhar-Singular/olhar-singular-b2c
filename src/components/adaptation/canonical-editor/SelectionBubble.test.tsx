@@ -101,6 +101,39 @@ describe("SelectionBubble", () => {
     }
   });
 
+  /**
+   * Regressão (caça 0210): as amostras de cor eram o próprio disco de 20x20
+   * (`h-5 w-5`) com 2 px de gap — abaixo do mínimo de 24x24 do WCAG 2.2 SC 2.5.8
+   * e sem direito à exceção de espaçamento (centros a 22 px). O disco continua
+   * com 20 px, mas como decoração dentro de um botão de 28x28.
+   */
+  describe("alvo de toque das amostras de cor (caça 0210)", () => {
+    it("cada amostra tem pelo menos 24x24 de área tocável", () => {
+      render(<SelectionBubble editor={makeEditor()} />);
+      for (const color of TEXT_COLORS) {
+        const btn = screen.getByRole("button", { name: `Cor ${color}` });
+        expect(btn.className).toMatch(/(^|\s)h-7(\s|$)/);
+        expect(btn.className).toMatch(/(^|\s)w-7(\s|$)/);
+        expect(btn.className).not.toMatch(/(^|\s)[hw]-5(\s|$)/);
+      }
+    });
+
+    it("mantém o disco de cor em 20 px como decoração interna", () => {
+      render(<SelectionBubble editor={makeEditor()} />);
+      const btn = screen.getByRole("button", { name: `Cor ${TEXT_COLORS[0]}` });
+      const disc = btn.querySelector("span");
+      expect(disc).not.toBeNull();
+      expect(disc).toHaveStyle({ backgroundColor: TEXT_COLORS[0] });
+      expect(disc?.className).toMatch(/(^|\s)h-5(\s|$)/);
+      expect(disc?.className).toMatch(/(^|\s)w-5(\s|$)/);
+    });
+
+    it("a barra quebra em linhas em vez de estourar telas estreitas", () => {
+      render(<SelectionBubble editor={makeEditor()} />);
+      expect(screen.getByRole("toolbar").className).toMatch(/(^|\s)flex-wrap(\s|$)/);
+    });
+  });
+
   // --- Fonte por seleção (A+ / A-) ---
 
   it("aumenta o tamanho de fonte via setFontSize (+1px)", () => {
