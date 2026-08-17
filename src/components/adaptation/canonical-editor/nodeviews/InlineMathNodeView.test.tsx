@@ -105,15 +105,32 @@ describe("InlineMathNodeView", () => {
   it("exposes the formula as math with the alt as accessible name", () => {
     const { props } = makeProps({ alt: "x ao quadrado" });
     render(<InlineMathNodeView {...props} />);
-    const rendered = screen.getByTestId("inlinemath-render");
-    expect(rendered).toHaveAttribute("role", "math");
-    expect(rendered).toHaveAttribute("aria-label", "x ao quadrado");
+    const math = screen.getByTestId("inlinemath-math");
+    expect(math).toHaveAttribute("role", "math");
+    expect(math).toHaveAttribute("aria-label", "x ao quadrado");
+  });
+
+  /**
+   * Achado 0403 — o `role="math"` do 0006 estava no próprio `<button>` e
+   * substituía o papel implícito, apagando a afordância de edição para o leitor
+   * de tela (WCAG 4.1.2). O papel `math` pertence a um elemento não interativo.
+   */
+  it("keeps the clickable element announced as a button naming the formula", () => {
+    const { props } = makeProps({ alt: "x ao quadrado" });
+    render(<InlineMathNodeView {...props} />);
+    const trigger = screen.getByTestId("inlinemath-render");
+    expect(trigger).not.toHaveAttribute("role");
+    expect(screen.getByRole("button", { name: "Editar fórmula: x ao quadrado" })).toBe(trigger);
   });
 
   it("falls back to the latex as accessible name when there is no alt", () => {
     const { props } = makeProps({ alt: null });
     render(<InlineMathNodeView {...props} />);
-    expect(screen.getByTestId("inlinemath-render")).toHaveAttribute("aria-label", "x^2");
+    expect(screen.getByTestId("inlinemath-math")).toHaveAttribute("aria-label", "x^2");
+    expect(screen.getByTestId("inlinemath-render")).toHaveAttribute(
+      "aria-label",
+      "Editar fórmula: x^2",
+    );
   });
 
   /**

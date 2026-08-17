@@ -4,6 +4,11 @@
  * Click the rendered math to edit the latex (and alt) inline. The KaTeX HTML is
  * produced by the reused `renderMathToHtml` from `lib/domain/latexRenderer`.
  * A delete button appears on hover (top-right rail) to remove the block.
+ *
+ * `role="math"` (with the teacher's alt as accessible name) lives on an inner
+ * non-interactive `<span>`, never on the `<button>`: an explicit role REPLACES
+ * the implicit one, so putting it on the button would erase the edit affordance
+ * from the accessibility tree (WCAG 4.1.2).
  */
 
 import { useState } from "react";
@@ -69,11 +74,16 @@ export function BlockMathNodeView({ node, updateAttributes, editor, deleteNode }
           disabled={disabled}
           onClick={() => setEditing(true)}
           title="Editar fórmula"
-          role="math"
-          aria-label={alt ?? latex}
+          aria-label={`Editar fórmula: ${alt ?? latex}`}
           data-testid="blockmath-render"
-          dangerouslySetInnerHTML={{ __html: latexToHtml(latex) }}
-        />
+        >
+          <span
+            role="math"
+            aria-label={alt ?? latex}
+            data-testid="blockmath-math"
+            dangerouslySetInnerHTML={{ __html: latexToHtml(latex) }}
+          />
+        </button>
       )}
     </NodeViewWrapper>
   );

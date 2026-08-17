@@ -8,6 +8,9 @@
  * same exposure the read-only `RichTextView` gives it: the alt the teacher typed
  * has to be announced on the screen where he reviews the activity, and without
  * the aria-label the accessible name collapses into the duplicated MathML text.
+ * That role lives on an inner non-interactive `<span>`, never on the `<button>`:
+ * an explicit role REPLACES the implicit one, so `role="math"` on the button
+ * would erase the edit affordance from the accessibility tree (WCAG 4.1.2).
  */
 
 import { useState } from "react";
@@ -55,11 +58,16 @@ export function InlineMathNodeView({ node, updateAttributes, editor }: NodeViewP
           disabled={disabled}
           onClick={() => setEditing(true)}
           title="Editar fórmula"
-          role="math"
-          aria-label={alt ?? latex}
+          aria-label={`Editar fórmula: ${alt ?? latex}`}
           data-testid="inlinemath-render"
-          dangerouslySetInnerHTML={{ __html: inlineLatexToHtml(latex) }}
-        />
+        >
+          <span
+            role="math"
+            aria-label={alt ?? latex}
+            data-testid="inlinemath-math"
+            dangerouslySetInnerHTML={{ __html: inlineLatexToHtml(latex) }}
+          />
+        </button>
       )}
     </NodeViewWrapper>
   );
