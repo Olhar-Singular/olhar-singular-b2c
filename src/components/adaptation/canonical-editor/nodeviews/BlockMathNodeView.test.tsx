@@ -108,6 +108,42 @@ describe("BlockMathNodeView", () => {
     expect(screen.getByRole("button", { name: "Editar fórmula: x ao quadrado" })).toBe(trigger);
   });
 
+  /**
+   * Achado 0405 — o alvo de clique embrulhava a fórmula num `<button>` com
+   * `p-2` + `border`, e ainda bloqueava o colapso da margem do `.katex-display`
+   * com o `my-3` do wrapper: a mesma fórmula reservava 47px a mais de papel no
+   * Revisar do que no impresso (`render/blocks/BlockMathView`), que é só um div
+   * `my-3 text-center`. Chrome de edição não entra no fluxo vertical.
+   */
+  it("desenha o alvo de clique fora do fluxo vertical (achado 0405)", () => {
+    const { props } = makeProps();
+    render(<BlockMathNodeView {...props} />);
+    const trigger = screen.getByTestId("blockmath-render");
+    const math = screen.getByTestId("blockmath-math");
+
+    // O botão é overlay: não ocupa altura nem empurra o bloco seguinte.
+    expect(trigger.className).toContain("absolute");
+    expect(trigger.className).not.toMatch(/(^|\s)p-\d/);
+    expect(trigger.className).not.toMatch(/(^|\s)border(\s|$)/);
+    // E a fórmula fica FORA dele: um botão no fluxo bloquearia o colapso da
+    // margem do `.katex-display` com a do wrapper, somando as duas.
+    expect(trigger.contains(math)).toBe(false);
+  });
+
+  it("espelha o espaçamento do impresso: my-3 no wrapper, sem chrome no meio", () => {
+    const { props } = makeProps();
+    render(<BlockMathNodeView {...props} />);
+    const wrapper = screen.getByTestId("blockmath-node");
+    expect(wrapper.className).toContain("my-3");
+    const math = screen.getByTestId("blockmath-math");
+    // nenhum ancestral entre a fórmula e o wrapper acrescenta padding/borda
+    let el = math.parentElement;
+    while (el && el !== wrapper) {
+      expect(el.className).not.toMatch(/(^|\s)p-\d|(^|\s)border(\s|$)|(^|\s)my-\d/);
+      el = el.parentElement;
+    }
+  });
+
   it("falls back to the latex as accessible name when there is no alt", () => {
     const { props } = makeProps({ alt: null });
     render(<BlockMathNodeView {...props} />);

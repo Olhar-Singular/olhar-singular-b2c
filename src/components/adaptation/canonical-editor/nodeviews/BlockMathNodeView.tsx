@@ -5,10 +5,13 @@
  * produced by the reused `renderMathToHtml` from `lib/domain/latexRenderer`.
  * A delete button appears on hover (top-right rail) to remove the block.
  *
- * `role="math"` (with the teacher's alt as accessible name) lives on an inner
+ * `role="math"` (with the teacher's alt as accessible name) lives on a
  * non-interactive `<span>`, never on the `<button>`: an explicit role REPLACES
  * the implicit one, so putting it on the button would erase the edit affordance
  * from the accessibility tree (WCAG 4.1.2).
+ *
+ * O botão de edição é um OVERLAY absoluto sobre a fórmula, não um embrulho: o
+ * chrome de edição não pode entrar no fluxo vertical da folha (achado 0405).
  */
 
 import { useState } from "react";
@@ -68,22 +71,32 @@ export function BlockMathNodeView({ node, updateAttributes, editor, deleteNode }
           </Button>
         </div>
       ) : (
-        <button
-          type="button"
-          className="block w-full rounded-lg border border-transparent p-2 text-center hover:border-border"
-          disabled={disabled}
-          onClick={() => setEditing(true)}
-          title="Editar fórmula"
-          aria-label={`Editar fórmula: ${alt ?? latex}`}
-          data-testid="blockmath-render"
-        >
+        <div className="relative">
           <span
             role="math"
             aria-label={alt ?? latex}
             data-testid="blockmath-math"
+            className="block text-center"
             dangerouslySetInnerHTML={{ __html: latexToHtml(latex) }}
           />
-        </button>
+          {/* Overlay: o alvo de clique e a moldura de hover são chrome e vivem
+              FORA do fluxo vertical (achado 0405). Antes o botão embrulhava a
+              fórmula com `p-2` + `border` e, por ter padding/borda, ainda
+              bloqueava o colapso da margem do `.katex-display` com o `my-3` do
+              wrapper — 47px de papel a mais que o impresso
+              (`render/blocks/BlockMathView`, um div `my-3 text-center`).
+              `-inset-2` alarga o alvo e `outline` desenha a moldura sem ocupar
+              fluxo. */}
+          <button
+            type="button"
+            className="absolute -inset-2 rounded-lg hover:outline hover:outline-1 hover:outline-border"
+            disabled={disabled}
+            onClick={() => setEditing(true)}
+            title="Editar fórmula"
+            aria-label={`Editar fórmula: ${alt ?? latex}`}
+            data-testid="blockmath-render"
+          />
+        </div>
       )}
     </NodeViewWrapper>
   );
