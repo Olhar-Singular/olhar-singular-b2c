@@ -5,8 +5,9 @@ import { FONT_FAMILY_TOKENS, fontFamilyToPdf } from "@/lib/adaptation/canonical/
 
 // Mock @react-pdf/renderer before importing registerFonts
 const mockRegister = vi.fn();
+const mockRegisterHyphenationCallback = vi.fn();
 vi.mock("@react-pdf/renderer", () => ({
-  Font: { register: mockRegister },
+  Font: { register: mockRegister, registerHyphenationCallback: mockRegisterHyphenationCallback },
 }));
 
 // We import dynamically inside each test so we can reset module state between runs.
@@ -15,6 +16,7 @@ vi.mock("@react-pdf/renderer", () => ({
 describe("registerPdfFonts", () => {
   beforeEach(() => {
     mockRegister.mockClear();
+    mockRegisterHyphenationCallback.mockClear();
     // Reset module registry so the `done` guard is cleared between tests.
     vi.resetModules();
   });
@@ -88,6 +90,26 @@ describe("registerPdfFonts", () => {
 
     registerPdfFonts(); // second call — the `done` guard must prevent any new register calls
     expect(mockRegister.mock.calls.length).toBe(callsAfterFirst); // no new calls
+    expect(mockRegisterHyphenationCallback.mock.calls.length).toBe(1); // idem for the hyphenation callback
+  });
+
+  /**
+   * Without a registered callback, @react-pdf/textkit falls back to its builtin
+   * hyphenator, whose dictionary is en-US: it splits Portuguese words and prints
+   * a trailing "-" at every line break, which the screen renderer never does
+   * (CanonicalRenderer uses `break-words`, no hyphen). Registering the identity
+   * callback turns hyphenation off and restores PDF↔screen parity.
+   */
+  it("registers a hyphenation callback that disables hyphenation (identity)", async () => {
+    const { registerPdfFonts } = await import("./registerFonts");
+    registerPdfFonts();
+
+    expect(mockRegisterHyphenationCallback).toHaveBeenCalledTimes(1);
+    const callback = mockRegisterHyphenationCallback.mock.calls[0][0] as (word: string) => string[];
+    expect(typeof callback).toBe("function");
+    // The word must come back whole — one part, no syllable split, no hyphen.
+    expect(callback("supercalifragilisticexpialidoso")).toEqual(["supercalifragilisticexpialidoso"]);
+    expect(callback("orientador")).toEqual(["orientador"]);
   });
 });
 

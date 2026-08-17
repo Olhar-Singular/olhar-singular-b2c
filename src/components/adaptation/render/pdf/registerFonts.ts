@@ -26,6 +26,15 @@ export function registerPdfFonts(): void {
   if (done) return;
   done = true;
 
+  // Turn hyphenation OFF. Without a callback, @react-pdf/textkit falls back to
+  // its builtin hyphenator, which is loaded with en-US patterns: it splits
+  // Portuguese words at English syllable boundaries and prints a trailing "-"
+  // at every line break. The screen renderer never does that (CanonicalRenderer
+  // breaks with `break-words`, no hyphen), so the PDF diverged from the preview
+  // and students got hyphens suggesting syllable splits that do not exist.
+  // The identity callback returns the word as a single part = no break inserted.
+  Font.registerHyphenationCallback((word) => [word]);
+
   Font.register({
     family: "Atkinson Hyperlegible",
     fonts: [
