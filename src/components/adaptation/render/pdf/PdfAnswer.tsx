@@ -21,9 +21,11 @@ import type { QuestionAnswer } from "@/lib/adaptation/canonical/schema";
 import { indexToLetter } from "../letters";
 import { PdfRichText } from "./PdfRichText";
 import { resolveElementFontSizes, resolvePageStyle, type ElementFontSizesPt } from "../pageStyle";
-import { ANSWER_LINE_COLOR, ANSWER_LINE_GAP_PT } from "../pageTokens";
+import { ANSWER_LINE_COLOR, ANSWER_LINE_GAP_PT, ANSWER_ITEM_GAP_PT } from "../pageTokens";
 
-const ROW = { flexDirection: "row", marginBottom: 3 } as const;
+// O vão entre itens vem de pageTokens para o papel imprimir o mesmo passo que as
+// duas telas mostram (achado 0313).
+const ROW = { flexDirection: "row", marginBottom: ANSWER_ITEM_GAP_PT } as const;
 // flexShrink: 0 prevents the marker column from collapsing when the row is
 // tight, which would push marker text over the content column.
 const MARKER = { width: 22, flexShrink: 0 } as const;

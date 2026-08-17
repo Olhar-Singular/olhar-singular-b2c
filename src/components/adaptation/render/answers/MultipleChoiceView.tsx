@@ -7,12 +7,17 @@ import type { QuestionAnswer } from "@/lib/adaptation/canonical/schema";
 import { RichTextView } from "../RichTextView";
 import { indexToLetter } from "../letters";
 import { ALTERNATIVE_MARKER_CLASS } from "./markerColumn";
+import { ANSWER_ITEM_GAP_PX } from "../pageTokens";
 
 type MultipleChoiceAnswer = Extract<QuestionAnswer, { kind: "multipleChoice" }>;
 
 export function MultipleChoiceView({ answer }: { answer: MultipleChoiceAnswer }) {
   return (
-    <ul data-testid="answer-multipleChoice" className="space-y-2">
+    <ul
+      data-testid="answer-multipleChoice"
+      className="flex flex-col"
+      style={{ rowGap: `${ANSWER_ITEM_GAP_PX}px` }}
+    >
       {answer.alternatives.map((alt, i) => (
         <li
           key={alt.id}

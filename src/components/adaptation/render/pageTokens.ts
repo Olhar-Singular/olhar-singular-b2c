@@ -74,6 +74,21 @@ export const ANSWER_LINE_COLOR = "#767676";
 export const ANSWER_LINE_GAP_PX = 18;
 
 /**
+ * Vão entre um item de lista de resposta e o seguinte (alternativas de múltipla
+ * escolha). Ponto único das TRÊS superfícies, na mesma família de
+ * `ANSWER_LINE_GAP_PX`, que o achado 0111 unificou para a pauta da questão aberta.
+ *
+ * Antes cada superfície tinha o seu: `gap-2` (8px) na folha do Revisar,
+ * `space-y-2` (8px) na prévia do Exportar e `marginBottom: 3` (3pt = 4px) no PDF.
+ * As duas telas concordavam e o papel saía ~14% mais compacto por linha, então o
+ * professor dimensionava a prova olhando a tela e a paginação impressa não batia.
+ *
+ * O valor adotado é o que as duas telas já mostravam (8px = 6pt): quem se move é
+ * o PDF, que passa a imprimir o que o professor vê.
+ */
+export const ANSWER_ITEM_GAP_PX = 8;
+
+/**
  * Família usada quando o documento NÃO traz `pageStyle.fontFamily` — o caso
  * normal, já que nenhuma UI grava a fonte até o professor escolher uma no
  * popover "Formato".
@@ -113,6 +128,9 @@ export const PAGE_HEIGHT_PX = Math.round(PAGE_HEIGHT_PT * PT_TO_PX);
 
 /** `ANSWER_LINE_GAP_PX` na unidade do PDF (pt), pela mesma razão 72/96. */
 export const ANSWER_LINE_GAP_PT = ANSWER_LINE_GAP_PX / PT_TO_PX;
+
+/** `ANSWER_ITEM_GAP_PX` na unidade do PDF (pt), pela mesma razão 72/96. */
+export const ANSWER_ITEM_GAP_PT = ANSWER_ITEM_GAP_PX / PT_TO_PX;
 
 /**
  * Tamanho de cada elemento do documento como FRAÇÃO do tamanho base.

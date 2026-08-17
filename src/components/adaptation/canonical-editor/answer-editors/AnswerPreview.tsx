@@ -14,7 +14,11 @@ import { Fragment, type ComponentProps } from "react";
 import type { QuestionAnswer } from "@/lib/adaptation/canonical/schema";
 import { indexToLetter } from "@/components/adaptation/render/letters";
 import { ALTERNATIVE_MARKER_CLASS } from "@/components/adaptation/render/answers/markerColumn";
-import { ANSWER_LINE_COLOR, ANSWER_LINE_GAP_PX } from "@/components/adaptation/render/pageTokens";
+import {
+  ANSWER_LINE_COLOR,
+  ANSWER_LINE_GAP_PX,
+  ANSWER_ITEM_GAP_PX,
+} from "@/components/adaptation/render/pageTokens";
 import { RichTextField } from "../RichTextField";
 import {
   setAlternativeContent,
@@ -53,7 +57,11 @@ export function AnswerPreview({ answer, onChange, disabled = false }: AnswerPrev
   switch (answer.kind) {
     case "multipleChoice":
       return (
-        <div className="flex flex-col gap-2" data-testid="answer-preview-multipleChoice">
+        <div
+          className="flex flex-col"
+          style={{ rowGap: `${ANSWER_ITEM_GAP_PX}px` }}
+          data-testid="answer-preview-multipleChoice"
+        >
           {answer.alternatives.map((alt, i) => (
             <div key={alt.id} className="flex min-w-0 items-start gap-2.5">
               <span data-testid="preview-alternative-marker" className={ALTERNATIVE_MARKER_CLASS}>
