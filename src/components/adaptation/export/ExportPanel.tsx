@@ -223,10 +223,11 @@ export function ExportPanel({
             </AlertDialogTitle>
             <AlertDialogDescription asChild>
               <div>
+                {/* A referência é sempre a prévia, a única superfície que o professor
+                    tem na tela. Comparar com o PDF mentiria quando há fórmula: os dois
+                    formatos imprimem o mesmo LaTeX cru. */}
                 <p className="mb-2">
-                  {pending?.format === "pdf"
-                    ? "O arquivo será gerado, mas estes itens não saem como aparecem na prévia:"
-                    : "O arquivo será gerado, mas estes itens não saem iguais ao PDF:"}
+                  O arquivo será gerado, mas estes itens não saem como aparecem na prévia:
                 </p>
                 <ul className="list-disc space-y-1 pl-5 text-left">
                   {(pending?.warnings ?? []).map((warning) => (

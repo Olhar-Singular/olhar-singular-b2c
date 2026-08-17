@@ -413,3 +413,47 @@ describe("aviso antes do download do PDF (0003)", () => {
     expect(screen.queryByText(/Baixar mesmo assim/i)).not.toBeInTheDocument();
   });
 });
+
+// ---------------------------------------------------------------------------
+// 0408 — o aviso compara com a prévia, e não afirma diferença onde não há
+// ---------------------------------------------------------------------------
+
+/** Só imagem: aqui o PDF é de fato mais fiel que o Word. */
+const imageOnlyDocument: CanonicalDocument = {
+  schemaVersion: 1,
+  blocks: [{ id: id(1), type: "image", src: "https://example.com/a.png", alt: "figura" }],
+};
+
+describe("referência do aviso de exportação (0408)", () => {
+  it("com fórmula, o aviso do Word não afirma que o item sai diferente do PDF", async () => {
+    render(
+      <ExportPanel
+        document={mathDocument}
+        onDownload={vi.fn()}
+        onDownloadWord={vi.fn().mockResolvedValue(undefined)}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /Exportar Word/i }));
+
+    expect(await screen.findByText(/fórmulas saem como texto LaTeX/i)).toBeInTheDocument();
+    expect(screen.queryByText(/não saem iguais ao PDF/i)).not.toBeInTheDocument();
+    expect(screen.getByText(/não saem como aparecem na prévia/i)).toBeInTheDocument();
+  });
+
+  it("com imagem e sem fórmula, o Word continua podendo recomendar o PDF", async () => {
+    render(
+      <ExportPanel
+        document={imageOnlyDocument}
+        onDownload={vi.fn()}
+        onDownloadWord={vi.fn().mockResolvedValue(undefined)}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /Exportar Word/i }));
+
+    expect(await screen.findByText(/não são embutidas no Word/i)).toBeInTheDocument();
+    expect(screen.getByText(/não saem como aparecem na prévia/i)).toBeInTheDocument();
+    expect(screen.getByText(/Para fidelidade total, exporte em PDF/i)).toBeInTheDocument();
+  });
+});
