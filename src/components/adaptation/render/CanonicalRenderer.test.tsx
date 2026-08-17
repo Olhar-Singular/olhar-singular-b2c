@@ -14,6 +14,13 @@ describe("CanonicalRenderer (rich fixture)", () => {
     expect(screen.getByTestId("canonical-renderer")).toBeInTheDocument();
   });
 
+  it("breaks long unbroken words inside the sheet (export preview parity)", () => {
+    render(<CanonicalRenderer document={renderDocument} />);
+    // jsdom does not lay out text, so the contract is the style declaration:
+    // without it a 1.200-char token overflows the A4 sheet in the Exportar preview.
+    expect(screen.getByTestId("canonical-renderer")).toHaveClass("break-words");
+  });
+
   it("renders heading with the authored level and style", () => {
     const { container } = render(<CanonicalRenderer document={renderDocument} />);
     const h2 = container.querySelector("h2");
