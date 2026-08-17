@@ -15,6 +15,27 @@ export const TEXT_COLORS = [
   "#6B7280",
 ] as const;
 
+export type TextColor = (typeof TEXT_COLORS)[number];
+
+/**
+ * Nome humano de cada cor de texto, em pt-BR.
+ *
+ * O swatch do SelectionBubble é um disco sem rótulo visível: o `aria-label` é a
+ * única informação que o leitor de tela tem. Com o hex cru ali, ele soletrava
+ * "Cor sustenido um F dois nove três sete" (caça 0211 — WCAG 2.2 SC 1.1.1 /
+ * 4.1.2). O mapa mora ao lado da allowlist e é tipado sobre ela, então uma cor
+ * nova sem nome quebra o teste em vez de vazar hex para a árvore de
+ * acessibilidade.
+ */
+export const TEXT_COLOR_LABELS: Record<TextColor, string> = {
+  "#1F2937": "preta",
+  "#DC2626": "vermelha",
+  "#2563EB": "azul",
+  "#16A34A": "verde",
+  "#9333EA": "roxa",
+  "#6B7280": "cinza",
+};
+
 /** Highlight / background colors (from HIGHLIGHT_COLORS in QuestionRichEditor.tsx). */
 const HIGHLIGHT_COLORS = [
   "#FEF08A",

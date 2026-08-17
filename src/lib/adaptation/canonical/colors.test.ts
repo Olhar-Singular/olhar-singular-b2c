@@ -1,7 +1,13 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, it, expect } from "vitest";
-import { ALLOWED_COLORS, isAllowedColor, normalizeColor } from "./colors";
+import {
+  ALLOWED_COLORS,
+  TEXT_COLORS,
+  TEXT_COLOR_LABELS,
+  isAllowedColor,
+  normalizeColor,
+} from "./colors";
 
 /**
  * Drift guard: ALLOWED_COLORS mirrors the TEXT_COLORS + HIGHLIGHT_COLORS
@@ -120,5 +126,30 @@ describe("normalizeColor", () => {
     for (const probe of probes) {
       expect(isAllowedColor(normalizeColor(probe))).toBe(true);
     }
+  });
+});
+
+/**
+ * Regressão (caça 0211): as amostras de cor do SelectionBubble anunciavam o hex
+ * ("Cor #DC2626") ao leitor de tela. O mapa de rótulos mora ao lado da
+ * allowlist para que uma cor nova sem nome humano quebre aqui, em vez de vazar
+ * hex para o nome acessível.
+ */
+describe("TEXT_COLOR_LABELS", () => {
+  it("dá um rótulo em pt-BR para cada cor de texto da allowlist", () => {
+    for (const color of TEXT_COLORS) {
+      const label = TEXT_COLOR_LABELS[color];
+      expect(label).toBeTruthy();
+      expect(label).not.toMatch(/#/);
+    }
+  });
+
+  it("não repete rótulo entre cores (nomes distinguíveis no leitor de tela)", () => {
+    const labels = TEXT_COLORS.map((c) => TEXT_COLOR_LABELS[c]);
+    expect(new Set(labels).size).toBe(TEXT_COLORS.length);
+  });
+
+  it("não tem rótulo para cor fora da paleta de texto", () => {
+    expect(Object.keys(TEXT_COLOR_LABELS).sort()).toEqual([...TEXT_COLORS].sort());
   });
 });

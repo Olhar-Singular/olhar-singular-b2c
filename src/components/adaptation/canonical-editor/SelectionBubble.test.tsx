@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 import type { Editor } from "@tiptap/react";
 import { SelectionBubble } from "./SelectionBubble";
-import { TEXT_COLORS } from "@/lib/adaptation/canonical/colors";
+import { TEXT_COLORS, TEXT_COLOR_LABELS } from "@/lib/adaptation/canonical/colors";
 
 /**
  * Fake editor recording chain ops and answering isActive / getAttributes
@@ -59,7 +59,7 @@ describe("SelectionBubble", () => {
     const editor = makeEditor();
     render(<SelectionBubble editor={editor} />);
 
-    fireEvent.click(screen.getByRole("button", { name: `Cor ${TEXT_COLORS[0]}` }));
+    fireEvent.click(screen.getByRole("button", { name: `Cor ${TEXT_COLOR_LABELS[TEXT_COLORS[0]]}` }));
 
     const setColor = (editor as unknown as { ops: { name: string; args: unknown[] }[] }).ops.find(
       (o) => o.name === "setColor",
@@ -83,11 +83,11 @@ describe("SelectionBubble", () => {
 
     expect(screen.getByRole("button", { name: "Negrito" })).toHaveAttribute("aria-pressed", "true");
     expect(screen.getByRole("button", { name: "Itálico" })).toHaveAttribute("aria-pressed", "false");
-    expect(screen.getByRole("button", { name: `Cor ${TEXT_COLORS[0]}` })).toHaveAttribute(
+    expect(screen.getByRole("button", { name: `Cor ${TEXT_COLOR_LABELS[TEXT_COLORS[0]]}` })).toHaveAttribute(
       "aria-pressed",
       "true",
     );
-    expect(screen.getByRole("button", { name: `Cor ${TEXT_COLORS[1]}` })).toHaveAttribute(
+    expect(screen.getByRole("button", { name: `Cor ${TEXT_COLOR_LABELS[TEXT_COLORS[1]]}` })).toHaveAttribute(
       "aria-pressed",
       "false",
     );
@@ -97,8 +97,33 @@ describe("SelectionBubble", () => {
     const editor = makeEditor();
     render(<SelectionBubble editor={editor} />);
     for (const color of TEXT_COLORS) {
-      expect(screen.getByRole("button", { name: `Cor ${color}` })).toBeInTheDocument();
+      expect(
+        screen.getByRole("button", { name: `Cor ${TEXT_COLOR_LABELS[color]}` }),
+      ).toBeInTheDocument();
     }
+  });
+
+  /**
+   * Regressão (caça 0211): o disco de cor não tem rótulo visível, então o
+   * `aria-label` é a única informação disponível — e ele trazia o hex, que o
+   * leitor de tela soletra ("Cor sustenido um F dois nove três sete").
+   * WCAG 2.2 SC 1.1.1 / SC 4.1.2: o nome tem que descrever o propósito.
+   */
+  describe("nome acessível das amostras de cor (caça 0211)", () => {
+    it("anuncia o nome da cor em pt-BR, nunca o hexadecimal", () => {
+      render(<SelectionBubble editor={makeEditor()} />);
+      for (const color of TEXT_COLORS) {
+        const btn = screen.getByRole("button", { name: `Cor ${TEXT_COLOR_LABELS[color]}` });
+        expect(btn.getAttribute("aria-label")).not.toMatch(/#/);
+      }
+      expect(screen.queryByRole("button", { name: `Cor ${TEXT_COLORS[0]}` })).toBeNull();
+    });
+
+    it("mantém o hex visível como title para quem enxerga", () => {
+      render(<SelectionBubble editor={makeEditor()} />);
+      const btn = screen.getByRole("button", { name: `Cor ${TEXT_COLOR_LABELS[TEXT_COLORS[1]]}` });
+      expect(btn).toHaveAttribute("title", TEXT_COLORS[1]);
+    });
   });
 
   /**
@@ -111,7 +136,7 @@ describe("SelectionBubble", () => {
     it("cada amostra tem pelo menos 24x24 de área tocável", () => {
       render(<SelectionBubble editor={makeEditor()} />);
       for (const color of TEXT_COLORS) {
-        const btn = screen.getByRole("button", { name: `Cor ${color}` });
+        const btn = screen.getByRole("button", { name: `Cor ${TEXT_COLOR_LABELS[color]}` });
         expect(btn.className).toMatch(/(^|\s)h-7(\s|$)/);
         expect(btn.className).toMatch(/(^|\s)w-7(\s|$)/);
         expect(btn.className).not.toMatch(/(^|\s)[hw]-5(\s|$)/);
@@ -120,7 +145,7 @@ describe("SelectionBubble", () => {
 
     it("mantém o disco de cor em 20 px como decoração interna", () => {
       render(<SelectionBubble editor={makeEditor()} />);
-      const btn = screen.getByRole("button", { name: `Cor ${TEXT_COLORS[0]}` });
+      const btn = screen.getByRole("button", { name: `Cor ${TEXT_COLOR_LABELS[TEXT_COLORS[0]]}` });
       const disc = btn.querySelector("span");
       expect(disc).not.toBeNull();
       expect(disc).toHaveStyle({ backgroundColor: TEXT_COLORS[0] });

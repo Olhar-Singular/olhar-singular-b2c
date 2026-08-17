@@ -15,7 +15,7 @@ import { Bold, Italic, Underline, Strikethrough, Ban } from "lucide-react";
 import type { Editor } from "@tiptap/react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { TEXT_COLORS } from "@/lib/adaptation/canonical/colors";
+import { TEXT_COLORS, TEXT_COLOR_LABELS } from "@/lib/adaptation/canonical/colors";
 
 type Props = { editor: Editor };
 
@@ -166,7 +166,11 @@ export function SelectionBubble({ editor }: Props) {
           key={color}
           type="button"
           className="flex h-7 w-7 items-center justify-center rounded-full"
-          aria-label={`Cor ${color}`}
+          // O nome acessível é o nome da cor, nunca o hex: o disco não tem
+          // rótulo visível, então este é o único texto que o leitor de tela lê
+          // (caça 0211). O hex fica no `title`, para quem enxerga.
+          aria-label={`Cor ${TEXT_COLOR_LABELS[color]}`}
+          title={color}
           aria-pressed={editor.isActive("textStyle", { color })}
           onClick={() => editor.chain().focus().setColor(color).run()}
           {...rove(FIRST_COLOR_INDEX + index)}
