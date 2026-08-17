@@ -47,6 +47,22 @@ export const DEFAULT_IMAGE_WIDTH_PX = 300;
 export const ANSWER_LINE_COLOR = "#767676";
 
 /**
+ * Distância entre uma pauta e a seguinte — a altura útil que sobra para o aluno
+ * escrever. Ponto único das TRÊS superfícies, ao lado de `ANSWER_LINE_COLOR`.
+ *
+ * Antes cada superfície tinha o seu valor à mão: 18px de gap na folha do Revisar,
+ * `space-y-3` (12px) na prévia do Exportar e 10pt (13,3px) de `marginBottom` no
+ * PDF. O professor dimensionava a resposta olhando a folha (~5 mm no papel) e o
+ * aluno recebia ~3,9 mm impressos — quase 25% menos altura de escrita por linha,
+ * exatamente o encolhimento que faz a resposta não caber para quem tem disgrafia
+ * ou letra grande.
+ *
+ * O valor que manda é o do papel, então adota-se o MAIOR dos três (o da folha do
+ * Revisar, ~5 mm): reduzir seria piorar a acessibilidade do produto.
+ */
+export const ANSWER_LINE_GAP_PX = 18;
+
+/**
  * Família usada quando o documento NÃO traz `pageStyle.fontFamily` — o caso
  * normal, já que nenhuma UI grava a fonte até o professor escolher uma no
  * popover "Formato".
@@ -80,6 +96,9 @@ const DEFAULT_RESOLVED: ResolvedPageStyle = {
 /** pt -> px na tela (CSS px = pt * 96/72). */
 const PT_TO_PX = 96 / 72;
 const px = (pt: number) => `${Math.round(pt * PT_TO_PX * 100) / 100}px`;
+
+/** `ANSWER_LINE_GAP_PX` na unidade do PDF (pt), pela mesma razão 72/96. */
+export const ANSWER_LINE_GAP_PT = ANSWER_LINE_GAP_PX / PT_TO_PX;
 
 /**
  * Tamanho de cada elemento do documento como FRAÇÃO do tamanho base.

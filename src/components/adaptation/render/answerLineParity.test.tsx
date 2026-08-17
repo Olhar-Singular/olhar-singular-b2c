@@ -15,7 +15,7 @@ import { describe, it, expect, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import type { ReactElement } from "react";
 import type { QuestionAnswer } from "@/lib/adaptation/canonical/schema";
-import { ANSWER_LINE_COLOR } from "./pageTokens";
+import { ANSWER_LINE_COLOR, ANSWER_LINE_GAP_PX, ANSWER_LINE_GAP_PT } from "./pageTokens";
 import { OpenAnswerView } from "./answers/OpenAnswerView";
 import { PdfAnswer } from "./pdf/PdfAnswer";
 import { AnswerPreview } from "../canonical-editor/answer-editors/AnswerPreview";
@@ -44,22 +44,28 @@ function luminance(hex: string): number {
   return 0.2126 * channels[0] + 0.7152 * channels[1] + 0.0722 * channels[2];
 }
 
-/** Varre a árvore do react-pdf atrás do primeiro `borderBottomColor`. */
-function findBorderColor(node: unknown): string | undefined {
+type PdfLineStyle = { borderBottomColor?: string; marginBottom?: number };
+
+/** Varre a árvore do react-pdf atrás do estilo da primeira linha pautada. */
+function findLineStyle(node: unknown): PdfLineStyle | undefined {
   if (!node || typeof node !== "object") return undefined;
   if (Array.isArray(node)) {
     for (const child of node) {
-      const found = findBorderColor(child);
+      const found = findLineStyle(child);
       if (found) return found;
     }
     return undefined;
   }
   const props = (node as ReactElement).props as
-    | { style?: { borderBottomColor?: string }; children?: unknown }
+    | { style?: PdfLineStyle; children?: unknown }
     | undefined;
   if (!props) return undefined;
-  if (props.style?.borderBottomColor) return props.style.borderBottomColor;
-  return findBorderColor(props.children);
+  if (props.style?.borderBottomColor) return props.style;
+  return findLineStyle(props.children);
+}
+
+function findBorderColor(node: unknown): string | undefined {
+  return findLineStyle(node)?.borderBottomColor;
 }
 
 describe("linha de resposta — paridade de cor entre as três superfícies", () => {
@@ -88,5 +94,37 @@ describe("linha de resposta — paridade de cor entre as três superfícies", ()
 
   it("desenha a linha do PDF com ANSWER_LINE_COLOR", () => {
     expect(findBorderColor(PdfAnswer({ answer: OPEN }))).toBe(ANSWER_LINE_COLOR);
+  });
+});
+
+/**
+ * Contrato de paridade do ESPAÇAMENTO da pauta (achado 0111).
+ *
+ * Cada superfície tinha o seu próprio valor escrito à mão — 18px de gap na folha
+ * do Revisar, `space-y-3` (12px) na prévia do Exportar e 10pt (13,3px) de
+ * `marginBottom` no PDF. O professor dimensionava a resposta pela folha e o aluno
+ * recebia no papel ~25% menos altura por linha, justamente o que quebra para quem
+ * escreve grande. `ANSWER_LINE_GAP_PX` é o ponto único; o PDF consome o mesmo
+ * valor convertido para pt.
+ */
+describe("linha de resposta — paridade de espaçamento entre as três superfícies", () => {
+  it("converte o gap para pt pela mesma razão 72/96 usada no resto do PDF", () => {
+    expect(ANSWER_LINE_GAP_PT).toBeCloseTo(ANSWER_LINE_GAP_PX * (72 / 96), 5);
+  });
+
+  it("espaça a pauta da folha do Revisar por ANSWER_LINE_GAP_PX", () => {
+    render(<AnswerPreview answer={OPEN} onChange={() => {}} />);
+    const container = screen.getByTestId("answer-preview-open");
+    expect(container.style.rowGap).toBe(`${ANSWER_LINE_GAP_PX}px`);
+  });
+
+  it("espaça a pauta da prévia do Exportar por ANSWER_LINE_GAP_PX", () => {
+    render(<OpenAnswerView answer={OPEN} />);
+    const container = screen.getByTestId("answer-open");
+    expect(container.style.rowGap).toBe(`${ANSWER_LINE_GAP_PX}px`);
+  });
+
+  it("espaça a pauta do PDF pelo equivalente em pt de ANSWER_LINE_GAP_PX", () => {
+    expect(findLineStyle(PdfAnswer({ answer: OPEN }))?.marginBottom).toBe(ANSWER_LINE_GAP_PT);
   });
 });

@@ -14,7 +14,7 @@ import { Fragment, type ComponentProps } from "react";
 import type { QuestionAnswer } from "@/lib/adaptation/canonical/schema";
 import { indexToLetter } from "@/components/adaptation/render/letters";
 import { ALTERNATIVE_MARKER_CLASS } from "@/components/adaptation/render/answers/markerColumn";
-import { ANSWER_LINE_COLOR } from "@/components/adaptation/render/pageTokens";
+import { ANSWER_LINE_COLOR, ANSWER_LINE_GAP_PX } from "@/components/adaptation/render/pageTokens";
 import { RichTextField } from "../RichTextField";
 import {
   setAlternativeContent,
@@ -195,7 +195,11 @@ export function AnswerPreview({ answer, onChange, disabled = false }: AnswerPrev
     default: {
       const lines = answer.answerLines ?? 3;
       return (
-        <div className="flex flex-col gap-[18px] pt-1.5" data-testid="answer-preview-open">
+        <div
+          className="flex flex-col pt-1.5"
+          style={{ rowGap: `${ANSWER_LINE_GAP_PX}px` }}
+          data-testid="answer-preview-open"
+        >
           {Array.from({ length: lines }, (_, i) => (
             <div
               key={i}

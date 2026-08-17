@@ -4,14 +4,19 @@
  */
 
 import type { QuestionAnswer } from "@/lib/adaptation/canonical/schema";
-import { ANSWER_LINE_COLOR } from "../pageTokens";
+import { ANSWER_LINE_COLOR, ANSWER_LINE_GAP_PX } from "../pageTokens";
 
 type OpenAnswer = Extract<QuestionAnswer, { kind: "open" }>;
 
 export function OpenAnswerView({ answer }: { answer: OpenAnswer }) {
   const lines = answer.answerLines ?? 3;
   return (
-    <div data-testid="answer-open" className="space-y-3" aria-label="Linhas de resposta">
+    <div
+      data-testid="answer-open"
+      className="flex flex-col"
+      style={{ rowGap: `${ANSWER_LINE_GAP_PX}px` }}
+      aria-label="Linhas de resposta"
+    >
       {Array.from({ length: lines }, (_, i) => (
         <div key={i} className="border-b border-dashed" style={{ borderBottomColor: ANSWER_LINE_COLOR }} />
       ))}

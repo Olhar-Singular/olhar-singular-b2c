@@ -21,7 +21,7 @@ import type { QuestionAnswer } from "@/lib/adaptation/canonical/schema";
 import { indexToLetter } from "../letters";
 import { PdfRichText } from "./PdfRichText";
 import { resolveElementFontSizes, resolvePageStyle, type ElementFontSizesPt } from "../pageStyle";
-import { ANSWER_LINE_COLOR } from "../pageTokens";
+import { ANSWER_LINE_COLOR, ANSWER_LINE_GAP_PT } from "../pageTokens";
 
 const ROW = { flexDirection: "row", marginBottom: 3 } as const;
 // flexShrink: 0 prevents the marker column from collapsing when the row is
@@ -61,7 +61,7 @@ export function PdfAnswer({
                 borderBottomWidth: 1,
                 borderBottomColor: ANSWER_LINE_COLOR,
                 borderBottomStyle: "dashed",
-                marginBottom: 10,
+                marginBottom: ANSWER_LINE_GAP_PT,
               }}
             />
           ))}
