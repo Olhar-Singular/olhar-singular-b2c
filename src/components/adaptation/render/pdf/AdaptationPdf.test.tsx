@@ -3,6 +3,7 @@ import { isValidElement, type ReactElement } from "react";
 import { Document, Page, Text, View } from "@react-pdf/renderer";
 import { AdaptationPdf, PdfHeader } from "./AdaptationPdf";
 import { pageTokensToPdf } from "../pageTokens";
+import { HEADER_SPACING_PT } from "../headerSpacing";
 import { PdfBlock } from "./PdfBlock";
 import { PdfHeading, PdfParagraph, PdfImage, PdfScaffolding, PdfDivider } from "./PdfLeafBlocks";
 import { PdfMath } from "./PdfMath";
@@ -148,6 +149,19 @@ describe("PdfHeader", () => {
   it("renders a non-ISO date string as-is (graceful fallback)", () => {
     const { text } = collect(PdfHeader({ header: { title: "X", date: "sem data" } }));
     expect(text).toContain("sem data");
+  });
+
+  it("separates school from the title with explicit spacing (not line-height)", () => {
+    // Achado 0117: sem margem explícita, o respiro título -> escola nascia só da
+    // entrelinha e o PDF colava os dois (0,76 mm contra 3,97 mm na prévia).
+    const el = PdfHeader({ header: { title: "Prova", school: "Escola X" } })!;
+    const children = (el.props as { children: unknown[] }).children.flat();
+    const school = children.find(
+      (child) => isValidElement(child) && (child.props as { children?: unknown }).children === "Escola X",
+    ) as ReactElement;
+    expect((school.props as { style: { marginTop?: number } }).style.marginTop).toBe(
+      HEADER_SPACING_PT.schoolTop,
+    );
   });
 
   it("renders placeholder cells when teacher/date are blank but another field is set", () => {

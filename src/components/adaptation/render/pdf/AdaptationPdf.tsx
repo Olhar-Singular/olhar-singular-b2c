@@ -24,6 +24,7 @@ import { PdfBlock } from "./PdfBlock";
 import { questionNumbers } from "../questionNumbering";
 import { perQuestionBreakFlags } from "../perQuestionBreaks";
 import { pageTokensToPdf } from "../pageTokens";
+import { HEADER_SPACING_PT } from "../headerSpacing";
 import { resolvePageStyle, resolveElementFontSizes } from "../pageStyle";
 
 /** Convert pixels (screen) to points (PDF). 1px = 72/96 pt. */
@@ -33,15 +34,29 @@ export function PdfHeader({ header }: { header: HeaderSettings }) {
   if (!hasHeaderContent(header)) return null;
   return (
     <View
-      style={{ marginBottom: 16, paddingBottom: 8, borderBottomWidth: 1, borderBottomColor: "#333333" }}
+      style={{
+        marginBottom: HEADER_SPACING_PT.bottomMargin,
+        paddingBottom: HEADER_SPACING_PT.bottomPadding,
+        borderBottomWidth: 1,
+        borderBottomColor: "#333333",
+      }}
     >
       {header.title && header.title.trim() !== "" && (
         <Text style={{ fontSize: 18, fontWeight: "bold", textAlign: "center" }}>{header.title}</Text>
       )}
       {header.school && header.school.trim() !== "" && (
-        <Text style={{ fontSize: 11, textAlign: "center" }}>{header.school}</Text>
+        <Text style={{ fontSize: 11, textAlign: "center", marginTop: HEADER_SPACING_PT.schoolTop }}>
+          {header.school}
+        </Text>
       )}
-      <View style={{ flexDirection: "row", justifyContent: "space-between", marginTop: 6, fontSize: 10 }}>
+      <View
+        style={{
+          flexDirection: "row",
+          justifyContent: "space-between",
+          marginTop: HEADER_SPACING_PT.metaTop,
+          fontSize: 10,
+        }}
+      >
         {header.teacher && header.teacher.trim() !== "" ? (
           <Text>Professor(a): {header.teacher}</Text>
         ) : (

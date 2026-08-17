@@ -13,6 +13,7 @@
 
 import type { HeaderSettings } from "@/components/adaptation/export/panelSettings";
 import { formatHeaderDateBR, hasHeaderContent } from "@/components/adaptation/export/panelSettings";
+import { HEADER_SPACING_PT } from "./headerSpacing";
 
 /** Converte pontos (unidade do PDF) para pixels (unidade da tela). */
 const pt2px = (pt: number): number => pt * (96 / 72);
@@ -26,8 +27,8 @@ export function DocumentHeaderView({ header }: { header: HeaderSettings }) {
     <div
       data-testid="preview-header"
       style={{
-        marginBottom: pt2px(16),
-        paddingBottom: pt2px(8),
+        marginBottom: pt2px(HEADER_SPACING_PT.bottomMargin),
+        paddingBottom: pt2px(HEADER_SPACING_PT.bottomPadding),
         borderBottom: "1px solid #333333",
       }}
     >
@@ -37,13 +38,21 @@ export function DocumentHeaderView({ header }: { header: HeaderSettings }) {
         </div>
       )}
       {filled(header.school) && (
-        <div style={{ fontSize: pt2px(11), textAlign: "center" }}>{header.school}</div>
+        <div
+          style={{
+            fontSize: pt2px(11),
+            textAlign: "center",
+            marginTop: pt2px(HEADER_SPACING_PT.schoolTop),
+          }}
+        >
+          {header.school}
+        </div>
       )}
       <div
         style={{
           display: "flex",
           justifyContent: "space-between",
-          marginTop: pt2px(6),
+          marginTop: pt2px(HEADER_SPACING_PT.metaTop),
           fontSize: pt2px(10),
         }}
       >

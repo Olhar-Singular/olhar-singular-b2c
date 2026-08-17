@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { render, screen } from "@testing-library/react";
 import { DocumentHeaderView } from "./DocumentHeaderView";
+import { HEADER_SPACING_PT } from "./headerSpacing";
 
 describe("DocumentHeaderView", () => {
   it("renders nothing when every header field is empty", () => {
@@ -39,6 +40,14 @@ describe("DocumentHeaderView", () => {
     const block = screen.getByTestId("preview-header");
     expect(block).toHaveTextContent("Professor(a): Ana");
     expect(block).not.toHaveTextContent("Data:");
+  });
+
+  it("separates school from the title with the same explicit spacing as the PDF", () => {
+    // Achado 0117: o par título -> escola precisa de margem explícita nos dois
+    // lados; entrelinha sozinha não dá o mesmo respiro nas duas engines.
+    render(<DocumentHeaderView header={{ title: "Prova", school: "Escola X" }} />);
+    const school = screen.getByText("Escola X") as HTMLElement;
+    expect(parseFloat(school.style.marginTop)).toBeCloseTo(HEADER_SPACING_PT.schoolTop * (96 / 72), 2);
   });
 
   it("converts the PDF point measures to pixels on screen", () => {
