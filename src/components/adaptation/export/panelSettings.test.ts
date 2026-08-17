@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   DEFAULT_PANEL_SETTINGS,
+  formatHeaderDateBR,
   hasHeaderContent,
 } from "./panelSettings";
 
@@ -27,6 +28,16 @@ describe("panelSettings", () => {
     it("is true when any field has content", () => {
       expect(hasHeaderContent({ title: "Prova" })).toBe(true);
       expect(hasHeaderContent({ teacher: "Ana" })).toBe(true);
+    });
+  });
+
+  describe("formatHeaderDateBR", () => {
+    it("converts an ISO date to DD/MM/AAAA", () => {
+      expect(formatHeaderDateBR("2026-06-04")).toBe("04/06/2026");
+    });
+
+    it("passes any other string through unchanged", () => {
+      expect(formatHeaderDateBR("sem data")).toBe("sem data");
     });
   });
 });

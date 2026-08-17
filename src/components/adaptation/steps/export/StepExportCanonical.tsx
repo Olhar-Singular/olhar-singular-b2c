@@ -1,6 +1,7 @@
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, RotateCcw, Save, Loader2 } from "lucide-react";
 import { CanonicalRenderer } from "@/components/adaptation/render/CanonicalRenderer";
+import { DocumentHeaderView } from "@/components/adaptation/render/DocumentHeaderView";
 import { ExportPanel } from "@/components/adaptation/export/ExportPanel";
 import { PageSheet } from "@/components/adaptation/PageSheet";
 import type { AdaptationResult, DocumentHeader } from "@/lib/adaptation/canonical/schema";
@@ -59,6 +60,12 @@ export function StepExportCanonical({
         printer — exactly on the screen meant for checking it.
       */}
       <PageSheet pageStyle={result.pageStyle}>
+        {/*
+          O cabeçalho preenchido acima sai no PDF e no Word; a prévia não o
+          mostrava, então o professor só via o bloco (e o título repetido com o
+          H1 do documento) depois do download. Mesmo bloco do `PdfHeader`.
+        */}
+        <DocumentHeaderView header={result.header ?? {}} />
         <CanonicalRenderer document={document} />
       </PageSheet>
 

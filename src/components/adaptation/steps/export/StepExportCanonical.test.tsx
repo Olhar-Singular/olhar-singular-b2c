@@ -145,6 +145,31 @@ describe("StepExportCanonical", () => {
       // 12pt base -> 16px.
       expect(screen.getByTestId("page-sheet")).toHaveStyle({ fontSize: "16px" });
     });
+
+    /**
+     * Regressão (achado 0109): os campos Título/Escola/Professor(a)/Data viravam
+     * um bloco de cabeçalho no PDF que a prévia nunca mostrava. O professor
+     * preenchia, não via mudança nenhuma na folha e só descobria o cabeçalho
+     * (e o título duplicado com o H1 do documento) no arquivo baixado.
+     */
+    it("renders the header block inside the preview sheet when the header has content", () => {
+      renderStep({
+        result: {
+          ...result,
+          header: { title: "Prova bimestral", school: "EMEF Teste", teacher: "Prof. Caca", date: "2026-06-04" },
+        },
+      });
+      const sheet = screen.getByTestId("page-sheet");
+      expect(sheet).toHaveTextContent("Prova bimestral");
+      expect(sheet).toHaveTextContent("EMEF Teste");
+      expect(sheet).toHaveTextContent("Professor(a): Prof. Caca");
+      expect(sheet).toHaveTextContent("Data: 04/06/2026");
+    });
+
+    it("renders no header block in the preview when the result has no header", () => {
+      renderStep({ result });
+      expect(screen.queryByTestId("preview-header")).not.toBeInTheDocument();
+    });
   });
 
   it("fires onPrev and onRestart", () => {

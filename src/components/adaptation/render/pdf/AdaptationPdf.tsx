@@ -15,7 +15,11 @@
 import { Document, Page, View, Text } from "@react-pdf/renderer";
 import type { CanonicalDocument, PageStyle } from "@/lib/adaptation/canonical/schema";
 import type { PanelSettings, HeaderSettings } from "@/components/adaptation/export/panelSettings";
-import { DEFAULT_PANEL_SETTINGS, hasHeaderContent } from "@/components/adaptation/export/panelSettings";
+import {
+  DEFAULT_PANEL_SETTINGS,
+  formatHeaderDateBR,
+  hasHeaderContent,
+} from "@/components/adaptation/export/panelSettings";
 import { PdfBlock } from "./PdfBlock";
 import { questionNumbers } from "../questionNumbering";
 import { pageTokensToPdf } from "../pageTokens";
@@ -23,12 +27,6 @@ import { resolvePageStyle, resolveElementFontSizes } from "../pageStyle";
 
 /** Convert pixels (screen) to points (PDF). 1px = 72/96 pt. */
 const px2pt = (px: number): number => px * (72 / 96);
-
-/** Convert ISO date (YYYY-MM-DD) to Brazilian format (DD/MM/AAAA); passes through any other string. */
-function formatDateBR(date: string): string {
-  const match = date.match(/^(\d{4})-(\d{2})-(\d{2})$/);
-  return match ? `${match[3]}/${match[2]}/${match[1]}` : date;
-}
 
 export function PdfHeader({ header }: { header: HeaderSettings }) {
   if (!hasHeaderContent(header)) return null;
@@ -48,7 +46,11 @@ export function PdfHeader({ header }: { header: HeaderSettings }) {
         ) : (
           <Text> </Text>
         )}
-        {header.date && header.date.trim() !== "" ? <Text>Data: {formatDateBR(header.date)}</Text> : <Text> </Text>}
+        {header.date && header.date.trim() !== "" ? (
+          <Text>Data: {formatHeaderDateBR(header.date)}</Text>
+        ) : (
+          <Text> </Text>
+        )}
       </View>
     </View>
   );
