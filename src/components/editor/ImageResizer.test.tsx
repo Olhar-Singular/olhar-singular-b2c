@@ -9,7 +9,7 @@ describe("ImageResizer", () => {
   });
 
   it("renders the image and uses initialWidth when provided", () => {
-    render(<ImageResizer src="https://x.png" initialWidth={400} onResize={vi.fn()} />);
+    render(<ImageResizer src="https://x.png" alt="ilustração" initialWidth={400} onResize={vi.fn()} />);
     const img = screen.getByRole("img");
     expect(img).toHaveAttribute("src", "https://x.png");
     const wrapper = img.parentElement!;
@@ -17,13 +17,23 @@ describe("ImageResizer", () => {
   });
 
   it("uses default 300 width when initialWidth is omitted", () => {
-    render(<ImageResizer src="https://y.png" onResize={vi.fn()} />);
+    render(<ImageResizer src="https://y.png" alt="ilustração" onResize={vi.fn()} />);
     const wrapper = screen.getByRole("img").parentElement!;
     expect((wrapper as HTMLElement).style.width).toBe("300px");
   });
 
+  /**
+   * 0105 — o alt era `"Imagem da questão"` hardcoded, então o texto alternativo
+   * autoral do bloco canônico (usado no read-only, no PDF e no marcador
+   * `[Imagem: alt]` do Word) sumia justamente na superfície de edição.
+   */
+  it("usa o alt recebido em vez de um rótulo genérico fixo", () => {
+    render(<ImageResizer src="https://x.png" alt="figura de apoio" onResize={vi.fn()} />);
+    expect(screen.getByRole("img")).toHaveAttribute("alt", "figura de apoio");
+  });
+
   it("displays width indicator text reflecting current size", () => {
-    render(<ImageResizer src="https://x.png" initialWidth={250} onResize={vi.fn()} />);
+    render(<ImageResizer src="https://x.png" alt="ilustração" initialWidth={250} onResize={vi.fn()} />);
     expect(screen.getByText("250px")).toBeInTheDocument();
   });
 
@@ -48,7 +58,7 @@ describe("ImageResizer", () => {
    */
   it("commits the width the drag ENDED on, not the one it started from", () => {
     const onResize = vi.fn();
-    render(<ImageResizer src="https://x.png" initialWidth={300} onResize={onResize} />);
+    render(<ImageResizer src="https://x.png" alt="ilustração" initialWidth={300} onResize={onResize} />);
 
     drag(100, 250); // +150 → 450
 
@@ -60,7 +70,7 @@ describe("ImageResizer", () => {
 
   it("does not lag one drag behind across consecutive drags", () => {
     const onResize = vi.fn();
-    render(<ImageResizer src="https://x.png" initialWidth={300} onResize={onResize} />);
+    render(<ImageResizer src="https://x.png" alt="ilustração" initialWidth={300} onResize={onResize} />);
 
     drag(100, 200); // +100 → 400
     drag(0, 50); //  +50  → 450
@@ -70,7 +80,7 @@ describe("ImageResizer", () => {
 
   it("commits the clamped width when the drag runs past the maximum", () => {
     const onResize = vi.fn();
-    render(<ImageResizer src="https://x.png" initialWidth={300} onResize={onResize} />);
+    render(<ImageResizer src="https://x.png" alt="ilustração" initialWidth={300} onResize={onResize} />);
 
     drag(100, 5000);
 
@@ -85,7 +95,7 @@ describe("ImageResizer", () => {
    */
   it("commits once when a drag starts before the previous mouseup arrived", () => {
     const onResize = vi.fn();
-    render(<ImageResizer src="https://x.png" initialWidth={300} onResize={onResize} />);
+    render(<ImageResizer src="https://x.png" alt="ilustração" initialWidth={300} onResize={onResize} />);
     const handle = screen.getByTitle("Arraste para redimensionar");
 
     // First drag: no mouseup (lost outside the window).
@@ -113,7 +123,7 @@ describe("ImageResizer", () => {
   it("detaches its document listeners when unmounted mid-drag", () => {
     const onResize = vi.fn();
     const { unmount } = render(
-      <ImageResizer src="https://x.png" initialWidth={300} onResize={onResize} />,
+      <ImageResizer src="https://x.png" alt="ilustração" initialWidth={300} onResize={onResize} />,
     );
     fireEvent.mouseDown(screen.getByTitle("Arraste para redimensionar"), { clientX: 100 });
 
@@ -133,7 +143,7 @@ describe("ImageResizer", () => {
   });
 
   it("clamps width between 50 and 800", () => {
-    render(<ImageResizer src="https://x.png" initialWidth={300} onResize={vi.fn()} />);
+    render(<ImageResizer src="https://x.png" alt="ilustração" initialWidth={300} onResize={vi.fn()} />);
     const handle = screen.getByTitle("Arraste para redimensionar");
     fireEvent.mouseDown(handle, { clientX: 100 });
     act(() => {

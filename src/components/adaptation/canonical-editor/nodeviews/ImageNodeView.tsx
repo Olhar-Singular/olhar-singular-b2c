@@ -2,6 +2,7 @@ import { useState } from "react";
 import { AlignLeft, AlignCenter, AlignRight, ImageIcon, Trash2 } from "lucide-react";
 import { NodeViewWrapper, type NodeViewProps } from "@tiptap/react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import ImageResizer from "@/components/editor/ImageResizer";
 import ImageManagerModal from "@/components/editor/ImageManagerModal";
 import type { ImageItem } from "@/components/editor/imageManagerUtils";
@@ -17,8 +18,9 @@ const ALIGNMENTS = [
 
 export function ImageNodeView({ node, updateAttributes, deleteNode, editor }: NodeViewProps) {
   const [modalOpen, setModalOpen] = useState(false);
-  const { src, width, alignment, caption } = node.attrs as {
+  const { src, alt, width, alignment, caption } = node.attrs as {
     src: string;
+    alt: string;
     width: number | null;
     alignment: string | null;
     caption: RichText | null;
@@ -39,6 +41,7 @@ export function ImageNodeView({ node, updateAttributes, deleteNode, editor }: No
         >
           <ImageResizer
             src={src}
+            alt={alt}
             initialWidth={width ?? undefined}
             onResize={(w) => updateAttributes({ width: w })}
           />
@@ -83,6 +86,25 @@ export function ImageNodeView({ node, updateAttributes, deleteNode, editor }: No
             >
               <Trash2 className="h-3.5 w-3.5" />
             </Button>
+          </div>
+
+          {/*
+            Texto alternativo: é o campo de acessibilidade da imagem (vai para o
+            leitor de tela, para o PDF e para o marcador `[Imagem: alt]` do Word).
+            Fica no chrome, não na folha, porque não é impresso.
+          */}
+          <div>
+            <span className="mb-1 block text-[10.5px] font-semibold uppercase tracking-wide text-surface-ink-faint">
+              Texto alternativo
+            </span>
+            <Input
+              value={alt}
+              disabled={disabled}
+              aria-label="Texto alternativo"
+              placeholder="Descreva a imagem para quem não a enxerga…"
+              className="h-8 text-xs"
+              onChange={(e) => updateAttributes({ alt: e.target.value })}
+            />
           </div>
 
           {/* Legenda: toggle — null = hidden, not-null = visible with trash in header */}

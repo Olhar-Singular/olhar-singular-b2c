@@ -36,8 +36,8 @@ vi.mock("../RichTextField", () => ({
 }));
 
 vi.mock("@/components/editor/ImageResizer", () => ({
-  default: ({ onResize }: { onResize: (w: number) => void }) => (
-    <button data-testid="resizer" onClick={() => onResize(123)}>resizer</button>
+  default: ({ alt, onResize }: { alt: string; onResize: (w: number) => void }) => (
+    <button data-testid="resizer" data-alt={alt} onClick={() => onResize(123)}>resizer</button>
   ),
 }));
 
@@ -97,10 +97,8 @@ describe("ImageNodeView", () => {
     expect(screen.getByRole("button", { name: "Excluir imagem" })).toBeDisabled();
   });
 
-  it("sem campo de texto alternativo (removido)", () => {
-    renderImage();
-    expect(screen.queryByLabelText("Texto alternativo")).not.toBeInTheDocument();
-  });
+  // (o antigo guard "sem campo de texto alternativo (removido)" caiu com o achado
+  // 0105: o campo voltou — ver o bloco "Texto alternativo" mais abaixo.)
 
   it("controles de edição ficam dentro do wrapper image-controls", () => {
     const { getByTestId } = renderImage();
@@ -229,6 +227,33 @@ describe("ImageNodeView", () => {
     render(<ImageNodeView {...props} />);
     modalOnConfirm?.([]);
     expect(updateAttributes).not.toHaveBeenCalled();
+  });
+
+  // --- Texto alternativo (achado 0105) --------------------------------------
+
+  /**
+   * 0105 — o alt autoral do bloco canônico não chegava à folha do Revisar (o
+   * resizer hardcodava "Imagem da questão") e não havia campo para editá-lo,
+   * embora o mesmo dado alimente o read-only, o PDF e o `[Imagem: alt]` do Word.
+   */
+  it("passa o alt do nó para a imagem da folha", () => {
+    const { getByTestId } = renderImage({ alt: "figura de apoio" });
+    expect(getByTestId("resizer")).toHaveAttribute("data-alt", "figura de apoio");
+  });
+
+  it("expõe o texto alternativo num campo editável", () => {
+    const { props, updateAttributes } = makeProps({ alt: "figura de apoio" });
+    render(<ImageNodeView {...props} />);
+    const field = screen.getByLabelText("Texto alternativo") as HTMLInputElement;
+    expect(field.value).toBe("figura de apoio");
+
+    fireEvent.change(field, { target: { value: "gráfico de barras" } });
+    expect(updateAttributes).toHaveBeenCalledWith({ alt: "gráfico de barras" });
+  });
+
+  it("desabilita o campo de texto alternativo quando o editor é read-only", () => {
+    renderImage({ alt: "figura de apoio" }, false);
+    expect(screen.getByLabelText("Texto alternativo")).toBeDisabled();
   });
 
   // --- Alignment container --------------------------------------------------

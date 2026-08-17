@@ -3,11 +3,17 @@ import { DEFAULT_IMAGE_WIDTH_PX } from "@/components/adaptation/render/pageToken
 
 type Props = {
   src: string;
+  /**
+   * Texto alternativo do bloco, obrigatório de propósito: era um rótulo fixo
+   * ("Imagem da questão") e o alt autoral do documento — o mesmo que o
+   * read-only, o PDF e o `[Imagem: alt]` do Word usam — sumia na edição.
+   */
+  alt: string;
   initialWidth?: number;
   onResize: (width: number) => void;
 };
 
-export default function ImageResizer({ src, initialWidth, onResize }: Props) {
+export default function ImageResizer({ src, alt, initialWidth, onResize }: Props) {
   // No explicit width → the shared default, kept in sync with the export preview
   // and the PDF so an un-resized image is the same size on every surface.
   const [width, setWidth] = useState(initialWidth ?? DEFAULT_IMAGE_WIDTH_PX);
@@ -76,7 +82,7 @@ export default function ImageResizer({ src, initialWidth, onResize }: Props) {
     >
       <img
         src={src}
-        alt="Imagem da questão"
+        alt={alt}
         className="w-full rounded-md border border-zinc-200"
       />
       {/* Resize handle - bottom right corner */}
