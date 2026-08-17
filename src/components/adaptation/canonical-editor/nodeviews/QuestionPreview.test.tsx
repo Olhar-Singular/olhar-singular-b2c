@@ -228,6 +228,28 @@ describe("QuestionPreview", () => {
     expect(() => fireEvent.change(field, { target: { value: "x" } })).not.toThrow();
   });
 
+  /**
+   * Regressão (achado 0102): a folha do Revisar precisa reproduzir o espaçamento
+   * vertical do impresso. `render/blocks/QuestionView` usa gap-2 / space-y-2 (8px)
+   * entre ordinal, enunciado, instrução e resposta; a prévia usava gap-2.5 e mt-3,
+   * somando altura que não existe no PDF.
+   */
+  it("uses the same vertical spacing as the printed QuestionView (gap-2, mt-2)", () => {
+    setup();
+    const row = screen.getByTestId("question-ordinal").parentElement as HTMLElement;
+    expect(row.className).toContain("gap-2");
+    expect(row.className).not.toContain("gap-2.5");
+
+    const stemColumn = screen.getByTestId("stem-slot").parentElement?.parentElement as HTMLElement;
+    expect(stemColumn.className).toContain("gap-2");
+    expect(stemColumn.className).not.toContain("gap-2.5");
+
+    const answerWrapper = screen.getByTestId("answer-preview-multipleChoice")
+      .parentElement as HTMLElement;
+    expect(answerWrapper.className).toContain("mt-2");
+    expect(answerWrapper.className).not.toContain("mt-3");
+  });
+
   // --- customNumber ---
 
   it("uses customNumber as the ordinal when set", () => {

@@ -127,7 +127,13 @@ export function RichTextField({
           // `rich-text-field` marks this as a NESTED inline editor so the folha's
           // top-level block labels (`.tiptap > p` ⇒ "Instrução" etc., in index.css)
           // never leak onto answer fields. Wrap long answers instead of scrolling.
-          "rich-text-field w-full px-2 py-1 focus:outline-none min-h-[2rem] whitespace-normal break-words",
+          "rich-text-field w-full focus:outline-none whitespace-normal break-words",
+          // Chrome de input (padding + altura mínima de alvo de clique) só no
+          // card. Na folha (`plain`) o campo É o texto impresso: `min-h-[2rem]`
+          // + `py-1` contra uma linha de ~22px empurrava cada alternativa de
+          // 30px para 40px, e a folha inteira crescia ~60% em relação ao PDF
+          // (achado 0102). Chrome de edição não entra no fluxo vertical.
+          !plain && "px-2 py-1 min-h-[2rem]",
           // Tamanho da fonte: `font-size` é herdada, e o popover Formato move os
           // page tokens (`--doc-fs-*` / font-size da folha) no ancestral. Um valor
           // fixo AQUI vence a herança e congela o campo. Na folha (`plain`) o campo

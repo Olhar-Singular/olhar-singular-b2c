@@ -168,6 +168,32 @@ describe("RichTextField — component", () => {
     expect(cls).toContain("leading-[inherit]");
   });
 
+  /**
+   * Regressão (achado 0102): a folha do Revisar media 62% a mais de altura que a
+   * mesma folha no Exportar/PDF. O campo `plain` é o texto IMPRESSO, e carregava
+   * chrome de input (`min-h-[2rem]` + `py-1`), o que empurrava cada alternativa
+   * de 30px para 40px. Chrome de edição não pode entrar no fluxo vertical.
+   */
+  it("plain mode carries no input chrome (no min-height, no vertical padding)", () => {
+    render(<RichTextField plain value={t("a")} onChange={vi.fn()} />);
+    const attrs = (capturedConfig as { editorProps?: { attributes?: Record<string, string> } })
+      .editorProps?.attributes;
+    const cls = attrs?.class ?? "";
+    expect(cls).not.toContain("min-h-");
+    expect(cls).not.toContain("py-1");
+    expect(cls).not.toContain("px-2");
+  });
+
+  it("non-plain (card) keeps the input chrome — it is a real form field", () => {
+    render(<RichTextField value={t("a")} onChange={vi.fn()} />);
+    const attrs = (capturedConfig as { editorProps?: { attributes?: Record<string, string> } })
+      .editorProps?.attributes;
+    const cls = attrs?.class ?? "";
+    expect(cls).toContain("min-h-[2rem]");
+    expect(cls).toContain("py-1");
+    expect(cls).toContain("px-2");
+  });
+
   it("non-plain (card) keeps the compact text-sm — structural editor, not the folha", () => {
     render(<RichTextField value={t("a")} onChange={vi.fn()} />);
     const attrs = (capturedConfig as { editorProps?: { attributes?: Record<string, string> } })

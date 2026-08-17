@@ -64,11 +64,14 @@ export function QuestionPreview({
   return (
     <div className="relative">
       {rail}
-      <div className="flex items-baseline gap-2.5">
+      {/* Espaçamento vertical espelha `render/blocks/QuestionView` (gap-2 /
+          space-y-2 = 8px): a folha do Revisar tem de medir o mesmo que o
+          impresso, senão o professor não antecipa paginação (achado 0102). */}
+      <div className="flex items-baseline gap-2">
         <span data-testid="question-ordinal" contentEditable={false} className="shrink-0 font-bold text-surface-ink">
           {displayNumber ? `${displayNumber}.` : ""}
         </span>
-        <div className="flex min-w-0 flex-1 flex-col gap-2.5">
+        <div className="flex min-w-0 flex-1 flex-col gap-2">
           {enunciadoPosition === "above" && enunciadoNode}
           <div style={{ fontSize: "var(--doc-fs-stem, inherit)" }}>
             {stem}
@@ -101,7 +104,7 @@ export function QuestionPreview({
           )}
         </div>
       </div>
-      <div contentEditable={false} className="mt-3" style={{ fontSize: "var(--doc-fs-alternative, inherit)" }}>
+      <div contentEditable={false} className="mt-2" style={{ fontSize: "var(--doc-fs-alternative, inherit)" }}>
         <AnswerPreview answer={answer} disabled={disabled} onChange={onAnswerChange} />
       </div>
     </div>
