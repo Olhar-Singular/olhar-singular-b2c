@@ -90,6 +90,56 @@ describe("PageSheet", () => {
         expect(screen.getByTestId("page-count")).toHaveTextContent("3 páginas A4");
       });
     });
+
+    /*
+      Achado 0121: a régua de quebra por questão é só chrome (uns 30px no fluxo),
+      então medir a folha inteira dizia "1 página A4" enquanto o PDF saía com 2.
+      A contagem tem que somar por trecho entre quebras.
+    */
+    const withTops = (run: () => void) => {
+      const spy = vi
+        .spyOn(HTMLElement.prototype, "getBoundingClientRect")
+        .mockImplementation(function (this: HTMLElement) {
+          const top = Number(this.dataset.testTop ?? 0);
+          return { top, bottom: top, left: 0, right: 0, width: 0, height: 0, x: 0, y: 0, toJSON: () => ({}) } as DOMRect;
+        });
+      try {
+        run();
+      } finally {
+        spy.mockRestore();
+      }
+    };
+
+    it("conta uma folha a mais por quebra forçada, mesmo com a folha curta", () => {
+      withHeight(1123, () => {
+        withTops(() => {
+          render(
+            <PageSheet paginated toolbar={null}>
+              <span>questão 1</span>
+              <div className="adaptar-page-break" data-test-top="500" />
+              <span>questão 2</span>
+            </PageSheet>,
+          );
+          expect(screen.getByTestId("page-count")).toHaveTextContent("2 páginas A4");
+        });
+      });
+    });
+
+    it("soma as folhas de cada trecho entre quebras", () => {
+      withHeight(3000, () => {
+        withTops(() => {
+          render(
+            <PageSheet paginated toolbar={null}>
+              <span>questão 1 longa</span>
+              <div className="adaptar-page-break" data-test-top="1500" />
+              <span>questão 2</span>
+            </PageSheet>,
+          );
+          // trecho 1: 1500px -> 2 folhas; trecho 2: 1500px -> 2 folhas.
+          expect(screen.getByTestId("page-count")).toHaveTextContent("4 páginas A4");
+        });
+      });
+    });
   });
 
   it("reflete o pageStyle na folha (fonte, tamanho e var de espaçamento)", () => {

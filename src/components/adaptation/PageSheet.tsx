@@ -49,8 +49,28 @@ export function PageSheet({ toolbar, pageStyle, paginated = false, children }: P
   */
   useLayoutEffect(() => {
     if (!paginated) return;
-    const height = sheetRef.current.offsetHeight;
-    setPageCount(Math.max(1, Math.ceil(height / PAGE_HEIGHT_PX)));
+    const sheet = sheetRef.current;
+    const height = sheet.offsetHeight;
+    /*
+      Achado 0121: a quebra por questão, na prévia, é uma régua decorativa de
+      ~30px (`PageBreakMark`), não uma quebra de fluxo. Medir a folha inteira
+      dizia "1 página A4" enquanto o PDF (onde a quebra é real) saía com N+1.
+      Então a contagem soma folha a folha CADA TRECHO entre as réguas: cada
+      trecho começa numa página nova, exatamente como no `<View break>` do PDF.
+    */
+    const sheetTop = sheet.getBoundingClientRect().top;
+    const cuts = Array.from(sheet.querySelectorAll(".adaptar-page-break")).map(
+      (mark) => mark.getBoundingClientRect().top - sheetTop,
+    );
+    const pages = [...cuts, height].reduce(
+      (acc, end) => {
+        acc.total += Math.max(1, Math.ceil((end - acc.start) / PAGE_HEIGHT_PX));
+        acc.start = end;
+        return acc;
+      },
+      { total: 0, start: 0 },
+    ).total;
+    setPageCount(Math.max(1, pages));
   }, [paginated, children]);
 
   return (
