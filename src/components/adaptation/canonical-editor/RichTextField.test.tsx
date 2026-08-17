@@ -203,6 +203,28 @@ describe("RichTextField — component", () => {
     expect(cls).not.toContain("text-[length:inherit]");
   });
 
+  /**
+   * Regressão (achado 0209): `focus:outline-none` do Tailwind 3 NÃO remove o
+   * outline — compila para `outline: 2px solid transparent` e, com
+   * especificidade 0,2,0, vence a regra global `:focus-visible` de `index.css`.
+   * Resultado: todo campo da folha ficava sem indicador de foco (WCAG 2.4.7).
+   * O indicador tem de ser `outline`/`ring` com offset, que desenha FORA do
+   * fluxo — `border`/`padding` reabririam o achado 0102 (folha mais alta que o PDF).
+   */
+  it("shows a visible focus ring on keyboard focus (no transparent focus:outline-none)", () => {
+    render(<RichTextField plain value={t("a")} onChange={vi.fn()} />);
+    const attrs = (capturedConfig as { editorProps?: { attributes?: Record<string, string> } })
+      .editorProps?.attributes;
+    const cls = attrs?.class ?? "";
+    expect(cls).not.toContain("focus:outline-none");
+    expect(cls).toContain("focus-visible:outline-2");
+    expect(cls).toContain("focus-visible:outline-offset-2");
+    expect(cls).toContain("focus-visible:outline-ring");
+    // O indicador não pode entrar no fluxo vertical (achado 0102).
+    expect(cls).not.toContain("focus-visible:border");
+    expect(cls).not.toContain("focus-visible:p");
+  });
+
   it("passes ariaLabel into the editor attributes", () => {
     render(<RichTextField value={t("a")} onChange={vi.fn()} ariaLabel="Alternativa" />);
     const attrs = (capturedConfig as { editorProps?: { attributes?: Record<string, string> } })

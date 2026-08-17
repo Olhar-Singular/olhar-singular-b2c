@@ -127,7 +127,15 @@ export function RichTextField({
           // `rich-text-field` marks this as a NESTED inline editor so the folha's
           // top-level block labels (`.tiptap > p` ⇒ "Instrução" etc., in index.css)
           // never leak onto answer fields. Wrap long answers instead of scrolling.
-          "rich-text-field w-full focus:outline-none whitespace-normal break-words",
+          "rich-text-field w-full whitespace-normal break-words",
+          // Foco visível (achado 0209). `focus:outline-none` do Tailwind 3 não
+          // apaga o outline: compila para `outline: 2px solid transparent` e,
+          // com especificidade 0,2,0, vencia a regra global `:focus-visible` de
+          // `index.css` — o campo ficava sem NENHUM indicador (WCAG 2.4.7), e na
+          // folha, onde o campo é só o texto impresso, foco e repouso eram
+          // idênticos. O indicador é `outline` com offset: desenha fora do fluxo
+          // e não muda a altura do bloco (o que reabriria o achado 0102).
+          "rounded-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring",
           // Chrome de input (padding + altura mínima de alvo de clique) só no
           // card. Na folha (`plain`) o campo É o texto impresso: `min-h-[2rem]`
           // + `py-1` contra uma linha de ~22px empurrava cada alternativa de
