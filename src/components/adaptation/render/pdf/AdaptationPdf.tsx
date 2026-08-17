@@ -72,6 +72,55 @@ export function PdfHeader({ header }: { header: HeaderSettings }) {
   );
 }
 
+/**
+ * Distância (pt) entre a base da folha e o rodapé fixo. Menor que
+ * `PAGE_MARGIN_PT`, então o rodapé mora DENTRO da margem inferior: ele não entra
+ * no fluxo dos blocos nem empurra o conteúdo da página 1.
+ */
+export const FOOTER_BOTTOM_PT = 18;
+
+/**
+ * Texto do rodapé de uma página. Prova é folha solta: sem isto, a partir da
+ * página 2 o papel sai sem título, sem escola e sem número (achado 0119), e
+ * ninguém percebe que faltou uma folha no monte.
+ *
+ * Título e escola em branco são descartados para não sobrar separador solto.
+ */
+export function pdfFooterLabel(
+  header: HeaderSettings,
+  pageNumber: number,
+  totalPages: number,
+): string {
+  const parts = [header.title, header.school]
+    .map((part) => part?.trim() ?? "")
+    .filter((part) => part !== "");
+  parts.push(`Página ${pageNumber} de ${totalPages}`);
+  return parts.join(" · ");
+}
+
+/**
+ * Rodapé repetido em TODA página (`fixed` do react-pdf), posicionado dentro da
+ * margem inferior. É a única superfície do PDF que identifica a folha a partir
+ * da página 2, já que `PdfHeader` flui com o conteúdo e sai uma vez só.
+ */
+export function PdfPageFooter({ header }: { header: HeaderSettings }) {
+  return (
+    <Text
+      fixed
+      style={{
+        position: "absolute",
+        bottom: FOOTER_BOTTOM_PT,
+        left: 0,
+        right: 0,
+        textAlign: "center",
+        fontSize: 8,
+        color: "#555555",
+      }}
+      render={({ pageNumber, totalPages }) => pdfFooterLabel(header, pageNumber, totalPages)}
+    />
+  );
+}
+
 type Props = {
   document: CanonicalDocument;
   settings?: PanelSettings;
@@ -105,6 +154,7 @@ export function AdaptationPdf({ document, settings = DEFAULT_PANEL_SETTINGS, pag
             );
           });
         })()}
+        <PdfPageFooter header={settings.header} />
       </Page>
     </Document>
   );

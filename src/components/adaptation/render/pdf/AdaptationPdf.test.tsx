@@ -263,6 +263,67 @@ describe("PdfQuestion — customNumber and enunciado branches", () => {
   });
 });
 
+describe("AdaptationPdf — rodapé de identificação da página (achado 0119)", () => {
+  /** Localiza o <Text fixed> do rodapé entre os filhos diretos da <Page>. */
+  function footerOf(el: ReactElement): ReactElement {
+    const pageChildren = (el.props.children.props.children as unknown[]).flat();
+    // Resolve componentes de função para enxergar o <Text fixed> que eles emitem.
+    const resolved = pageChildren.map((c) =>
+      isValidElement(c) && typeof c.type === "function"
+        ? (c.type as (p: unknown) => unknown)(c.props)
+        : c,
+    );
+    const footer = resolved.find(
+      (c) => isValidElement(c) && (c.props as { fixed?: boolean }).fixed,
+    ) as ReactElement | undefined;
+    expect(footer, "a <Page> precisa de um elemento fixed (repetido em toda folha)").toBeDefined();
+    return footer!;
+  }
+
+  const renderFooter = (el: ReactElement, pageNumber: number, totalPages: number) =>
+    (el.props as { render: (p: { pageNumber: number; totalPages: number }) => string }).render({
+      pageNumber,
+      totalPages,
+    });
+
+  it("numera TODA página, inclusive a 2ª (que hoje sai sem identificação)", () => {
+    const el = AdaptationPdf({ document: renderDocument, settings });
+    const footer = footerOf(el);
+    expect(renderFooter(footer, 2, 3)).toContain("Página 2 de 3");
+  });
+
+  it("repete título e escola no rodapé, para a folha solta voltar ao aluno certo", () => {
+    const el = AdaptationPdf({
+      document: renderDocument,
+      settings: { ...settings, header: { title: "Prova bimestral", school: "EMEF Teste" } },
+    });
+    const label = renderFooter(footerOf(el), 2, 2);
+    expect(label).toContain("Prova bimestral");
+    expect(label).toContain("EMEF Teste");
+    expect(label).toContain("Página 2 de 2");
+  });
+
+  it("sem cabeçalho, o rodapé ainda traz a numeração", () => {
+    const el = AdaptationPdf({ document: renderDocument, settings });
+    expect(renderFooter(footerOf(el), 1, 1)).toBe("Página 1 de 1");
+  });
+
+  it("ignora título/escola em branco em vez de emitir separador vazio", () => {
+    const el = AdaptationPdf({
+      document: renderDocument,
+      settings: { ...settings, header: { title: "   ", school: "EMEF Teste" } },
+    });
+    expect(renderFooter(footerOf(el), 1, 2)).toBe("EMEF Teste · Página 1 de 2");
+  });
+
+  it("fica dentro da margem inferior, sem empurrar o conteúdo da folha", () => {
+    const el = AdaptationPdf({ document: renderDocument, settings });
+    const style = (footerOf(el).props as { style: { position?: string; bottom?: number } }).style;
+    expect(style.position).toBe("absolute");
+    expect(style.bottom).toBeLessThan(pageTokensToPdf().padding);
+  });
+});
+
 describe("AdaptationPdf — blockGap threading", () => {
   it("passes the resolved blockGap (12pt from default 16px) to blocks", () => {
     // Default pageStyle → blockSpacing=16px → 16*72/96=12pt
