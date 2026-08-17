@@ -56,7 +56,8 @@ function answerToLines(answer: QuestionAnswer): string[] {
 /**
  * Project a block to plain-text lines. Questions are auto-numbered: `number` is
  * the question's 1-based ordinal in document order, computed by the caller (the
- * block itself stores no number). Non-question blocks ignore `number`.
+ * block itself stores no ordinal), and `block.customNumber` overrides it when
+ * the teacher typed one. Non-question blocks ignore `number`.
  */
 function blockToLines(block: Block, number: number): string[] {
   switch (block.type) {
@@ -72,7 +73,11 @@ function blockToLines(block: Block, number: number): string[] {
     case "divider":
       return ["---"];
     case "question": {
-      const prefix = `${number}) `;
+      // Same label the screen (QuestionView), the PDF (PdfQuestion) and Word
+      // (exportDocx) print: the authored `customNumber` wins over the ordinal,
+      // and the separator is "." so the copied text keeps questions ("1.")
+      // visually apart from alternatives ("a)").
+      const prefix = `${block.customNumber ?? number}. `;
       let questionCount = 0;
       const stem = block.stem.flatMap((child) =>
         blockToLines(child, child.type === "question" ? ++questionCount : 0),
