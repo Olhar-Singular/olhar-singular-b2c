@@ -250,6 +250,33 @@ describe("QuestionPreview", () => {
     expect(answerWrapper.className).not.toContain("mt-3");
   });
 
+  /**
+   * Regressão (achado 0103): a instrução ficava DENTRO da coluna do enunciado,
+   * portanto recuada pela largura do ordinal + gap (32px), enquanto o read-only
+   * (`render/blocks/QuestionView`) e o PDF a imprimem no nível do bloco, colada à
+   * margem. Duas das três superfícies concordam: quem muda é o Revisar.
+   */
+  it("renders the instruction at block level, not indented inside the stem column", () => {
+    setup({ instruction: [{ type: "text", text: "Marque a alternativa correta." }] });
+    const instruction = screen.getByTestId("question-instruction");
+    const ordinalRow = screen.getByTestId("question-ordinal").parentElement as HTMLElement;
+    // fora da linha do ordinal (senão herda o recuo do ordinal shrink-0 + gap)
+    expect(ordinalRow.contains(instruction)).toBe(false);
+    // e irmã dessa linha, no mesmo container do bloco
+    expect(instruction.parentElement).toBe(ordinalRow.parentElement);
+  });
+
+  it("keeps the instruction between the ordinal row and the answer, spaced like the printed view", () => {
+    setup({ instruction: [{ type: "text", text: "Marque a alternativa correta." }] });
+    const instruction = screen.getByTestId("question-instruction");
+    expect(instruction.className).toContain("mt-2");
+    const answerWrapper = screen.getByTestId("answer-preview-multipleChoice")
+      .parentElement as HTMLElement;
+    expect(instruction.compareDocumentPosition(answerWrapper)).toBe(
+      Node.DOCUMENT_POSITION_FOLLOWING
+    );
+  });
+
   // --- customNumber ---
 
   it("uses customNumber as the ordinal when set", () => {

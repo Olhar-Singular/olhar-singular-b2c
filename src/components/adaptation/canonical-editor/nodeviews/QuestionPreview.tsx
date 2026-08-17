@@ -77,33 +77,38 @@ export function QuestionPreview({
             {stem}
           </div>
           {enunciadoPosition === "below" && enunciadoNode}
-          {instruction != null && instruction.length > 0 && (
-            <div contentEditable={false} className="group/instruction flex items-start gap-1 italic text-surface-ink-soft" style={{ fontSize: "var(--doc-fs-instruction, 0.875em)" }} data-testid="question-instruction">
-              <div className="min-w-0">
-                <RichTextField
-                  value={instruction}
-                  disabled={disabled}
-                  onChange={(rt) => onInstructionChange(rt.length > 0 ? rt : null)}
-                  placeholder="Instrução para responder"
-                  ariaLabel="Instrução da questão"
-                  plain
-                />
-              </div>
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon"
-                className="h-7 w-7 shrink-0 text-muted-foreground opacity-0 transition-opacity group-hover/instruction:opacity-100 group-focus-within/instruction:opacity-100 focus-visible:opacity-100"
-                disabled={disabled}
-                onClick={() => onInstructionChange(null)}
-                aria-label="Remover instrução"
-              >
-                <X className="h-4 w-4" />
-              </Button>
-            </div>
-          )}
         </div>
       </div>
+      {/* A instrução vive no NÍVEL DO BLOCO, irmã da linha do ordinal — igual a
+          `render/blocks/QuestionView` e ao PDF, que a imprimem colada à margem.
+          Dentro da coluna do enunciado ela herdava o recuo do ordinal
+          (`shrink-0` + gap = 32px) e o Revisar divergia das outras duas
+          superfícies (achado 0103). */}
+      {instruction != null && instruction.length > 0 && (
+        <div contentEditable={false} className="group/instruction mt-2 flex items-start gap-1 italic text-surface-ink-soft" style={{ fontSize: "var(--doc-fs-instruction, 0.875em)" }} data-testid="question-instruction">
+          <div className="min-w-0">
+            <RichTextField
+              value={instruction}
+              disabled={disabled}
+              onChange={(rt) => onInstructionChange(rt.length > 0 ? rt : null)}
+              placeholder="Instrução para responder"
+              ariaLabel="Instrução da questão"
+              plain
+            />
+          </div>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="h-7 w-7 shrink-0 text-muted-foreground opacity-0 transition-opacity group-hover/instruction:opacity-100 group-focus-within/instruction:opacity-100 focus-visible:opacity-100"
+            disabled={disabled}
+            onClick={() => onInstructionChange(null)}
+            aria-label="Remover instrução"
+          >
+            <X className="h-4 w-4" />
+          </Button>
+        </div>
+      )}
       <div contentEditable={false} className="mt-2" style={{ fontSize: "var(--doc-fs-alternative, inherit)" }}>
         <AnswerPreview answer={answer} disabled={disabled} onChange={onAnswerChange} />
       </div>
