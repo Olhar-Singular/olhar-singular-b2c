@@ -193,6 +193,17 @@ describe("StepExportCanonical", () => {
       expect(screen.getByTestId("renderer").dataset.pageBreak).toBe("true");
     });
 
+    /**
+     * Regressão (achado 0118): a prévia era uma folha branca contínua de altura
+     * livre enquanto o arquivo saía com N páginas A4 — o professor não via
+     * quantas folhas ia imprimir nem quanto sobrava na última.
+     */
+    it("renders the preview sheet with A4 page height and a page count", () => {
+      renderStep();
+      expect(screen.getByTestId("page-sheet").style.minHeight).toBe("1123px");
+      expect(screen.getByTestId("page-count")).toBeInTheDocument();
+    });
+
     it("renders no header block in the preview when the result has no header", () => {
       renderStep({ result });
       expect(screen.queryByTestId("preview-header")).not.toBeInTheDocument();

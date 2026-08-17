@@ -10,8 +10,8 @@
  * (`--sf-*`, plano §4). A tipografia/margem da folha vêm de `pageTokensToCss`
  * (paridade com o PDF — não mexer aqui). É só apresentação — não conhece o documento.
  */
-import type { ReactNode } from "react";
-import { pageTokensToCss } from "./render/pageTokens";
+import { useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { pageTokensToCss, PAGE_HEIGHT_PX } from "./render/pageTokens";
 import { resolvePageStyle } from "./render/pageStyle";
 import type { PageStyle } from "@/lib/adaptation/canonical/schema";
 
@@ -24,10 +24,35 @@ interface PageSheetProps {
   toolbar?: ReactNode;
   /** Estilo do documento (fonte/tamanho/espaçamento) vindo da Aparência. */
   pageStyle?: PageStyle;
+  /**
+   * Liga o modo "impresso": a folha ganha a ALTURA da página A4, uma régua
+   * tracejada a cada página e a contagem de folhas acima dela.
+   *
+   * Só a prévia do Exportar usa (achado 0118) — é a tela que promete mostrar o
+   * arquivo. A folha do Revisar continua contínua de propósito: lá se edita
+   * texto, e uma quebra rígida no meio da edição atrapalharia mais do que ajuda.
+   */
+  paginated?: boolean;
   children: ReactNode;
 }
 
-export function PageSheet({ toolbar, pageStyle, children }: PageSheetProps) {
+export function PageSheet({ toolbar, pageStyle, paginated = false, children }: PageSheetProps) {
+  const sheetRef = useRef<HTMLDivElement>(null);
+  const [pageCount, setPageCount] = useState(1);
+
+  /*
+    Medição pós-layout em vez de altura declarada: a quantidade de folhas depende
+    do que o conteúdo ocupa depois de renderizado (fonte, imagens, quebras), e é
+    exatamente esse número que o professor não tinha antes de baixar. `children`
+    entra nas dependências para remedir quando o conteúdo muda (ligar a quebra por
+    questão, por exemplo); `setState` com o mesmo valor não re-renderiza, sem laço.
+  */
+  useLayoutEffect(() => {
+    if (!paginated) return;
+    const height = sheetRef.current.offsetHeight;
+    setPageCount(Math.max(1, Math.ceil(height / PAGE_HEIGHT_PX)));
+  }, [paginated, children]);
+
   return (
     // `overflow-clip` (e não `overflow-hidden`) porque hidden cria um contexto de
     // rolagem e prenderia a barra sticky a esta moldura em vez do viewport.
@@ -37,10 +62,34 @@ export function PageSheet({ toolbar, pageStyle, children }: PageSheetProps) {
         className="flex-1 p-3 sm:p-6 lg:p-10"
         style={{ background: "var(--sf-mesa-gradient)" }}
       >
+        {paginated && (
+          <p
+            data-testid="page-count"
+            className="mx-auto w-[794px] max-w-full mb-2 text-xs text-muted-foreground text-right"
+          >
+            {pageCount === 1 ? "1 página A4" : `${pageCount} páginas A4`}
+          </p>
+        )}
         <div
+          ref={sheetRef}
           data-testid="page-sheet"
           className="mx-auto w-[794px] max-w-full bg-surface-paper text-surface-ink rounded-[3px]"
-          style={{ ...pageTokensToCss(resolvePageStyle(pageStyle)), boxShadow: "var(--sf-paper-shadow)" }}
+          style={{
+            ...pageTokensToCss(resolvePageStyle(pageStyle)),
+            boxShadow: "var(--sf-paper-shadow)",
+            ...(paginated
+              ? {
+                  minHeight: `${PAGE_HEIGHT_PX}px`,
+                  /*
+                    Régua da virada de página: uma linha a cada altura de A4, sem
+                    cortar o conteúdo. Recortar o fluxo em folhas de verdade
+                    exigiria unificar editor/prévia/PDF numa única paginação —
+                    fora do escopo desta correção.
+                  */
+                  backgroundImage: `repeating-linear-gradient(to bottom, transparent 0, transparent ${PAGE_HEIGHT_PX - 1}px, hsl(var(--sf-line-2)) ${PAGE_HEIGHT_PX - 1}px, hsl(var(--sf-line-2)) ${PAGE_HEIGHT_PX}px)`,
+                }
+              : {}),
+          }}
         >
           {children}
         </div>

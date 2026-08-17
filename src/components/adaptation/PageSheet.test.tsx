@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import { PageSheet } from "./PageSheet";
 
@@ -50,6 +50,46 @@ describe("PageSheet", () => {
     expect(bar.className).toContain("top-0");
     // A moldura não pode ser um contexto de rolagem, senão o sticky gruda nela.
     expect(bar.parentElement!.className).not.toContain("overflow-hidden");
+  });
+
+  describe("modo paginado (achado 0118)", () => {
+    const withHeight = (height: number, run: () => void) => {
+      const spy = vi
+        .spyOn(HTMLElement.prototype, "offsetHeight", "get")
+        .mockReturnValue(height);
+      try {
+        run();
+      } finally {
+        spy.mockRestore();
+      }
+    };
+
+    it("não pagina por padrão (a folha do Revisar continua contínua)", () => {
+      render(<PageSheet toolbar={null}><span>x</span></PageSheet>);
+      expect(screen.getByTestId("page-sheet").style.minHeight).toBe("");
+      expect(screen.queryByTestId("page-count")).toBeNull();
+    });
+
+    it("dá altura de página A4 à folha e desenha a régua de quebra", () => {
+      render(<PageSheet paginated toolbar={null}><span>x</span></PageSheet>);
+      const sheet = screen.getByTestId("page-sheet");
+      expect(sheet.style.minHeight).toBe("1123px");
+      expect(sheet.style.backgroundImage).toContain("1123px");
+    });
+
+    it("conta uma página quando o conteúdo cabe numa folha", () => {
+      withHeight(900, () => {
+        render(<PageSheet paginated toolbar={null}><span>x</span></PageSheet>);
+        expect(screen.getByTestId("page-count")).toHaveTextContent("1 página A4");
+      });
+    });
+
+    it("conta as páginas a partir da altura do conteúdo", () => {
+      withHeight(2300, () => {
+        render(<PageSheet paginated toolbar={null}><span>x</span></PageSheet>);
+        expect(screen.getByTestId("page-count")).toHaveTextContent("3 páginas A4");
+      });
+    });
   });
 
   it("reflete o pageStyle na folha (fonte, tamanho e var de espaçamento)", () => {

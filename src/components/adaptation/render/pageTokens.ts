@@ -13,6 +13,17 @@ import { fontFamilyToCss, fontFamilyToPdf } from "@/lib/adaptation/canonical/fon
 
 /** Margem da página A4, em pontos (1pt = 1/72in) — igual ao PDF atual. */
 export const PAGE_MARGIN_PT = 40;
+/**
+ * Altura útil da página A4, em pontos (o `size="A4"` do react-pdf é 595x842pt).
+ *
+ * Existe para a prévia do Exportar saber o que o PDF sempre soube: onde a folha
+ * acaba. Antes só a LARGURA da página vivia na tela (os 794px do `PageSheet`), e
+ * a altura era livre — o mesmo documento saía com N páginas no arquivo e aparecia
+ * como uma folha só, esticada, na única tela feita para conferir a impressão
+ * (achado 0118).
+ */
+export const PAGE_HEIGHT_PT = 842;
+
 /** Tamanho de fonte base, em pontos. */
 export const BASE_FONT_PT = 12;
 /** Entrelinha base (multiplicador). */
@@ -96,6 +107,9 @@ const DEFAULT_RESOLVED: ResolvedPageStyle = {
 /** pt -> px na tela (CSS px = pt * 96/72). */
 const PT_TO_PX = 96 / 72;
 const px = (pt: number) => `${Math.round(pt * PT_TO_PX * 100) / 100}px`;
+
+/** `PAGE_HEIGHT_PT` na unidade da tela (px) — 842pt = 1123px a 96 dpi. */
+export const PAGE_HEIGHT_PX = Math.round(PAGE_HEIGHT_PT * PT_TO_PX);
 
 /** `ANSWER_LINE_GAP_PX` na unidade do PDF (pt), pela mesma razão 72/96. */
 export const ANSWER_LINE_GAP_PT = ANSWER_LINE_GAP_PX / PT_TO_PX;

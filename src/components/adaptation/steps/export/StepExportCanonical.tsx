@@ -67,7 +67,14 @@ export function StepExportCanonical({
         showed a different document from the one that would come out of the
         printer — exactly on the screen meant for checking it.
       */}
-      <PageSheet pageStyle={result.pageStyle}>
+      {/*
+        `paginated`: aqui a folha ganha a altura do A4, a régua de virada de
+        página e a contagem de folhas. A prévia era contínua e de altura livre
+        enquanto o arquivo saía com N páginas, então o professor só descobria
+        quantas folhas ia imprimir (e quanto sobrava na última) depois do
+        download (achado 0118).
+      */}
+      <PageSheet pageStyle={result.pageStyle} paginated>
         {/*
           O cabeçalho preenchido acima sai no PDF e no Word; a prévia não o
           mostrava, então o professor só via o bloco (e o título repetido com o
