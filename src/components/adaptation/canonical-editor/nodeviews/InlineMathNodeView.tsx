@@ -11,6 +11,11 @@
  * That role lives on an inner non-interactive `<span>`, never on the `<button>`:
  * an explicit role REPLACES the implicit one, so `role="math"` on the button
  * would erase the edit affordance from the accessibility tree (WCAG 4.1.2).
+ *
+ * The button's horizontal padding (the click target / hover highlight) is undone
+ * by an equal negative margin: the printed surface renders the formula as a bare
+ * `<span>`, so any leftover box space would push the neighbouring text apart on
+ * the review sheet only, and the sheet has to compose exactly like the print.
  */
 
 import { useState } from "react";
@@ -54,7 +59,7 @@ export function InlineMathNodeView({ node, updateAttributes, editor }: NodeViewP
       ) : (
         <button
           type="button"
-          className="rounded px-0.5 align-middle hover:bg-accent"
+          className="-mx-0.5 rounded px-0.5 align-middle hover:bg-accent"
           disabled={disabled}
           onClick={() => setEditing(true)}
           title="Editar fórmula"

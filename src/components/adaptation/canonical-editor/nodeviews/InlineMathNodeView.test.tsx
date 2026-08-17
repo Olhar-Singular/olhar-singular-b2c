@@ -134,6 +134,30 @@ describe("InlineMathNodeView", () => {
   });
 
   /**
+   * Achado 0406 — o alvo de clique embrulhava a fórmula num botão com `px-0.5`,
+   * somando 2 px de cada lado que o impresso (`RichTextView`, um `<span>` pelado)
+   * não tem: o `?` logo depois da fórmula aparecia descolado só no Revisar. O
+   * realce pode continuar maior que a fórmula, mas não pode ocupar caixa: todo
+   * padding horizontal precisa ser compensado por margem negativa igual.
+   */
+  it("does not add horizontal box space around the formula", () => {
+    const { props } = makeProps();
+    render(<InlineMathNodeView {...props} />);
+    const classes = screen.getByTestId("inlinemath-render").className.split(/\s+/);
+
+    const spacing = (prefix: string) =>
+      classes
+        .filter((c) => c.startsWith(prefix))
+        .reduce((sum, c) => sum + Number(c.slice(prefix.length)), 0);
+
+    const horizontal =
+      spacing("px-") + spacing("pl-") + spacing("pr-") -
+      (spacing("-mx-") + spacing("-ml-") + spacing("-mr-"));
+
+    expect(horizontal).toBe(0);
+  });
+
+  /**
    * Achado 0006 — without this field the `alt` of an inlineMath is editable
    * nowhere in the UI, so the accessible name above can never be filled in.
    */
