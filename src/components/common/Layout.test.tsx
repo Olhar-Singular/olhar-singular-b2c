@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { screen, fireEvent } from "@testing-library/react";
+import { screen, fireEvent, waitFor } from "@testing-library/react";
 import Layout from "./Layout";
 import { renderWithProviders, buildAuthState } from "@/test/helpers";
 
@@ -98,15 +98,15 @@ describe("Layout", () => {
     expect(screen.queryByText(/^\d+$/)).toBeNull();
   });
 
-  it("Sair button calls signOut and navigates to /", async () => {
+  it("Sair (inside the account menu) calls signOut and navigates to /", async () => {
     const signOut = vi.fn().mockResolvedValue(undefined);
     setAuth({ signOut });
     renderWithProviders(<Layout />, { route: "/dashboard" });
-    const buttons = screen.getAllByRole("button", { name: /Sair/i });
-    fireEvent.click(buttons[0]);
-    await Promise.resolve();
-    await Promise.resolve();
-    expect(signOut).toHaveBeenCalled();
+    const trigger = screen.getAllByRole("button", { name: /menu da conta/i })[0];
+    fireEvent.pointerDown(trigger);
+    fireEvent.click(trigger);
+    await waitFor(() => fireEvent.click(screen.getByText(/^Sair$/i)));
+    await waitFor(() => expect(signOut).toHaveBeenCalled());
   });
 
   it("mobile menu opens and closes via the hamburger button", () => {
@@ -134,16 +134,17 @@ describe("Layout", () => {
     expect(screen.getByRole("main")).toBeInTheDocument();
   });
 
-  it("mobile drawer Sair button calls signOut and navigates to /", async () => {
+  it("mobile drawer Sair (inside the account menu) calls signOut and navigates to /", async () => {
     const signOut = vi.fn().mockResolvedValue(undefined);
     setAuth({ signOut });
     renderWithProviders(<Layout />, { route: "/dashboard" });
     fireEvent.click(screen.getByRole("button", { name: /Abrir menu/i }));
-    const sairButtons = screen.getAllByRole("button", { name: /Sair/i });
-    fireEvent.click(sairButtons[sairButtons.length - 1]);
-    await Promise.resolve();
-    await Promise.resolve();
-    expect(signOut).toHaveBeenCalled();
+    const triggers = screen.getAllByRole("button", { name: /menu da conta/i });
+    const trigger = triggers[triggers.length - 1];
+    fireEvent.pointerDown(trigger);
+    fireEvent.click(trigger);
+    await waitFor(() => fireEvent.click(screen.getByText(/^Sair$/i)));
+    await waitFor(() => expect(signOut).toHaveBeenCalled());
   });
 
   it("backdrop click on mobile drawer closes it", () => {

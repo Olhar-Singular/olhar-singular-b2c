@@ -15,14 +15,18 @@ export function ScaffoldNodeView({ node, updateAttributes, editor, deleteNode }:
   const disabled = !editor.isEditable;
 
   return (
-    <NodeViewWrapper className="my-3 rounded-lg border border-border bg-muted/30 p-3" data-testid="scaffold-node" contentEditable={false}>
+    <NodeViewWrapper
+      className="my-3 rounded-lg border border-surface-chrome-line bg-surface-mesa/40 p-3"
+      data-testid="scaffold-node"
+      contentEditable={false}
+    >
       <div className="mb-2 flex items-center justify-between">
-        <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Andaime</p>
+        <p className="text-xs font-semibold uppercase tracking-wide text-surface-ink-faint">Andaime</p>
         <Button
           type="button"
           variant="ghost"
           size="icon"
-          className="h-6 w-6 text-destructive"
+          className="h-6 w-6 text-destructive hover:bg-surface-paper/60"
           disabled={disabled}
           onClick={() => deleteNode()}
           title="Excluir andaime"
@@ -34,19 +38,20 @@ export function ScaffoldNodeView({ node, updateAttributes, editor, deleteNode }:
       <div className="flex flex-col gap-1.5">
         {items.map((item, index) => (
           <div key={index} className="flex items-center gap-2">
-            <span className="text-xs text-muted-foreground">{index + 1}.</span>
+            <span className="text-xs text-surface-ink-faint">{index + 1}.</span>
             <Input
               value={item}
               disabled={disabled}
               onChange={(e) => updateAttributes({ items: setStep(items, index, e.target.value) })}
               placeholder="Passo"
               aria-label={`Passo ${index + 1}`}
+              className="border-surface-line bg-surface-paper text-surface-ink placeholder:text-surface-ink-faint"
             />
             <Button
               type="button"
               variant="ghost"
               size="icon"
-              className="h-7 w-7"
+              className="h-7 w-7 text-surface-ink-soft hover:bg-surface-paper/60"
               disabled={disabled}
               onClick={() => updateAttributes({ items: removeStep(items, index) })}
               title="Remover passo"
@@ -60,7 +65,7 @@ export function ScaffoldNodeView({ node, updateAttributes, editor, deleteNode }:
           type="button"
           variant="outline"
           size="sm"
-          className="self-start gap-1"
+          className="self-start gap-1 border-surface-line bg-surface-paper text-surface-ink-soft hover:bg-surface-mesa hover:text-surface-ink"
           disabled={disabled}
           onClick={() => updateAttributes({ items: addStep(items) })}
         >

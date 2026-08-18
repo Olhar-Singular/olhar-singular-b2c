@@ -28,10 +28,15 @@ export function getAiConfig(env: EnvGetter = (k) => (globalThis as any).Deno?.en
   const googleKey = env("AI_API_KEY");
 
   if (googleKey) {
+    // Local-dev escape hatch: some AI Studio keys/projects don't have access
+    // to every model in MODEL_MAP (e.g. a key without gemini-2.5-pro access).
+    // Unset in production — when present it wins over MODEL_MAP for every
+    // call site, so no edge function code needs touching to test with it.
+    const modelOverride = env("AI_MODEL_OVERRIDE");
     return {
       apiKey: googleKey,
       baseUrl: "https://generativelanguage.googleapis.com/v1beta/openai",
-      resolveModel: (model) => MODEL_MAP[model] ?? model,
+      resolveModel: (model) => modelOverride || (MODEL_MAP[model] ?? model),
     };
   }
 

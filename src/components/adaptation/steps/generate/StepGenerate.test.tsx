@@ -1,10 +1,10 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
-import { screen, fireEvent, waitFor } from "@testing-library/react";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { screen, fireEvent, waitFor, act } from "@testing-library/react";
 import { renderWithProviders } from "@/test/helpers";
 import { StepGenerate } from "./StepGenerate";
 import { validateDocument } from "@/lib/adaptation/canonical/validate";
 import type { AdaptationResult } from "@/lib/adaptation/canonical/schema";
-import type { WizardData } from "@/lib/adaptation/wizard/wizardState";
+import type { UploadedExam, WizardData } from "@/lib/adaptation/wizard/wizardState";
 
 const invokeMock = vi.fn();
 vi.mock("@/integrations/supabase/client", () => ({
@@ -16,7 +16,12 @@ vi.mock("@/integrations/supabase/client", () => ({
 vi.mock("sonner", () => ({ toast: { error: vi.fn(), success: vi.fn() } }));
 
 vi.mock("@/hooks/useAuth", () => ({
-  useAuth: vi.fn(() => ({ refreshProfile: vi.fn().mockResolvedValue(undefined) })),
+  useAuth: vi.fn(() => ({ user: { id: "user-1" }, refreshProfile: vi.fn().mockResolvedValue(undefined) })),
+}));
+
+const extractExamQuestionsMock = vi.fn();
+vi.mock("../upload-exam/extractExamQuestions", () => ({
+  extractExamQuestions: (...a: unknown[]) => extractExamQuestionsMock(...a),
 }));
 
 const id = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, "0")}`;
@@ -50,15 +55,27 @@ const okResponse = () => ({
 const baseData: WizardData = {
   activityType: "exercício",
   activityText: "1) Q?",
+  activityInputMode: "bank",
+  uploadedExam: null,
   selectedQuestions: [],
   barriers: [{ dimension: "tea", barrier_key: "tea_abstracao", label: "x", is_active: true }],
   barrierProfileId: null,
   result: null,
 };
 
+const uploadedExam: UploadedExam = {
+  fileName: "prova.pdf",
+  fileType: "pdf",
+  text: "1) Q1 (bruto)",
+  pageImages: [],
+};
+
+const uploadData: WizardData = { ...baseData, activityInputMode: "upload", activityText: "", uploadedExam };
+
 beforeEach(() => {
   vi.clearAllMocks();
   invokeMock.mockReset();
+  extractExamQuestionsMock.mockReset();
 });
 
 describe("StepGenerate", () => {
@@ -185,7 +202,7 @@ describe("StepGenerate", () => {
   it("calls refreshProfile after a successful generation", async () => {
     const mockRefresh = vi.fn().mockResolvedValue(undefined);
     const { useAuth } = await import("@/hooks/useAuth");
-    vi.mocked(useAuth).mockReturnValueOnce({ refreshProfile: mockRefresh } as never);
+    vi.mocked(useAuth).mockReturnValueOnce({ user: { id: "user-1" }, refreshProfile: mockRefresh } as never);
     invokeMock.mockResolvedValueOnce(okResponse());
     renderWithProviders(
       <StepGenerate data={baseData} onResult={vi.fn()} onNext={vi.fn()} onPrev={vi.fn()} />,
@@ -196,7 +213,7 @@ describe("StepGenerate", () => {
   it("swallows a refreshProfile rejection silently", async () => {
     const mockRefresh = vi.fn().mockRejectedValue(new Error("auth fail"));
     const { useAuth } = await import("@/hooks/useAuth");
-    vi.mocked(useAuth).mockReturnValueOnce({ refreshProfile: mockRefresh } as never);
+    vi.mocked(useAuth).mockReturnValueOnce({ user: { id: "user-1" }, refreshProfile: mockRefresh } as never);
     const onResult = vi.fn();
     invokeMock.mockResolvedValueOnce(okResponse());
     renderWithProviders(
@@ -312,5 +329,162 @@ describe("StepGenerate", () => {
     expect(onNext).toHaveBeenCalled();
     fireEvent.click(screen.getByRole("button", { name: /Voltar/i }));
     expect(onPrev).toHaveBeenCalled();
+  });
+
+  // ── Upload path: extraction runs here, bundled with the paid adaptation call ──
+
+  it("does not call extractExamQuestions on the bank/text path (no uploadedExam)", async () => {
+    invokeMock.mockResolvedValueOnce(okResponse());
+    renderWithProviders(
+      <StepGenerate data={baseData} onResult={vi.fn()} onNext={vi.fn()} onPrev={vi.fn()} />,
+    );
+    await waitFor(() => expect(invokeMock).toHaveBeenCalled());
+    expect(extractExamQuestionsMock).not.toHaveBeenCalled();
+  });
+
+  it("shows the extraction loading message first, before the adaptation one", async () => {
+    extractExamQuestionsMock.mockImplementation(() => new Promise(() => undefined));
+    renderWithProviders(
+      <StepGenerate data={uploadData} onResult={vi.fn()} onNext={vi.fn()} onPrev={vi.fn()} />,
+    );
+    expect(screen.getByText(/Lendo o arquivo enviado/i)).toBeInTheDocument();
+    expect(invokeMock).not.toHaveBeenCalled();
+  });
+
+  it("extracts the uploaded exam, builds the activity text, and sends it to adapt-activity", async () => {
+    extractExamQuestionsMock.mockResolvedValueOnce({
+      status: "ok",
+      questions: [{ text: "Primeira", options: null, image_url: null }],
+    });
+    invokeMock.mockResolvedValueOnce(okResponse());
+    renderWithProviders(
+      <StepGenerate data={uploadData} onResult={vi.fn()} onNext={vi.fn()} onPrev={vi.fn()} />,
+    );
+    await waitFor(() => expect(invokeMock).toHaveBeenCalled());
+    expect(extractExamQuestionsMock).toHaveBeenCalledWith(uploadedExam, "user-1", expect.any(AbortSignal));
+    expect(invokeMock.mock.calls[0][1].body.original_activity).toBe("1) Primeira");
+  });
+
+  it("shows the adaptation loading message once extraction has finished", async () => {
+    extractExamQuestionsMock.mockResolvedValueOnce({
+      status: "ok",
+      questions: [{ text: "Primeira", options: null, image_url: null }],
+    });
+    invokeMock.mockImplementation(() => new Promise(() => undefined));
+    renderWithProviders(
+      <StepGenerate data={uploadData} onResult={vi.fn()} onNext={vi.fn()} onPrev={vi.fn()} />,
+    );
+    await waitFor(() => expect(screen.getByText(/ISA está adaptando/i)).toBeInTheDocument());
+  });
+
+  it("shows a retry screen when no questions were extracted from the file", async () => {
+    extractExamQuestionsMock.mockResolvedValueOnce({ status: "empty" });
+    renderWithProviders(
+      <StepGenerate data={uploadData} onResult={vi.fn()} onNext={vi.fn()} onPrev={vi.fn()} />,
+    );
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: /Tentar novamente/i })).toBeInTheDocument(),
+    );
+    expect(invokeMock).not.toHaveBeenCalled();
+  });
+
+  it("surfaces the extraction's own error (e.g. AI rate limit) via toast", async () => {
+    const { toast } = await import("sonner");
+    extractExamQuestionsMock.mockRejectedValueOnce(
+      new Error("Limite de requisições IA atingido. Tente novamente em alguns minutos."),
+    );
+    renderWithProviders(
+      <StepGenerate data={uploadData} onResult={vi.fn()} onNext={vi.fn()} onPrev={vi.fn()} />,
+    );
+    await waitFor(() =>
+      expect(toast.error).toHaveBeenCalledWith("Limite de requisições IA atingido. Tente novamente em alguns minutos."),
+    );
+    expect(invokeMock).not.toHaveBeenCalled();
+  });
+
+  it("warns before proceeding when more than 12 questions are extracted, without calling adapt-activity yet", async () => {
+    const questions = Array.from({ length: 15 }, (_, i) => ({ text: `Questão ${i + 1}`, options: null, image_url: null }));
+    extractExamQuestionsMock.mockResolvedValueOnce({ status: "ok", questions });
+    renderWithProviders(
+      <StepGenerate data={uploadData} onResult={vi.fn()} onNext={vi.fn()} onPrev={vi.fn()} />,
+    );
+    await waitFor(() => expect(screen.getByText(/15 questões/i)).toBeInTheDocument());
+    expect(screen.getByText(/limite para essa adaptação é 12/i)).toBeInTheDocument();
+    expect(invokeMock).not.toHaveBeenCalled();
+  });
+
+  it("truncates to the first 12 questions and proceeds to adapt-activity on confirm", async () => {
+    const questions = Array.from({ length: 15 }, (_, i) => ({ text: `Questão ${i + 1}`, options: null, image_url: null }));
+    extractExamQuestionsMock.mockResolvedValueOnce({ status: "ok", questions });
+    invokeMock.mockResolvedValueOnce(okResponse());
+    renderWithProviders(
+      <StepGenerate data={uploadData} onResult={vi.fn()} onNext={vi.fn()} onPrev={vi.fn()} />,
+    );
+    await waitFor(() => screen.getByText(/15 questões/i));
+    fireEvent.click(screen.getByRole("button", { name: /^continuar$/i }));
+    await waitFor(() => expect(invokeMock).toHaveBeenCalled());
+    const text = invokeMock.mock.calls[0][1].body.original_activity as string;
+    expect(text).toContain("12) Questão 12");
+    expect(text).not.toContain("Questão 13");
+  });
+
+  it("cancelling the 12-question warning returns to the previous step without calling adapt-activity", async () => {
+    const questions = Array.from({ length: 13 }, (_, i) => ({ text: `Questão ${i + 1}`, options: null, image_url: null }));
+    extractExamQuestionsMock.mockResolvedValueOnce({ status: "ok", questions });
+    const onPrev = vi.fn();
+    renderWithProviders(
+      <StepGenerate data={uploadData} onResult={vi.fn()} onNext={vi.fn()} onPrev={onPrev} />,
+    );
+    await waitFor(() => screen.getByText(/13 questões/i));
+    fireEvent.click(screen.getByRole("button", { name: /cancelar/i }));
+    expect(onPrev).toHaveBeenCalled();
+    expect(invokeMock).not.toHaveBeenCalled();
+  });
+
+  it("does not warn when exactly at the question cap", async () => {
+    const questions = Array.from({ length: 12 }, (_, i) => ({ text: `Questão ${i + 1}`, options: null, image_url: null }));
+    extractExamQuestionsMock.mockResolvedValueOnce({ status: "ok", questions });
+    invokeMock.mockResolvedValueOnce(okResponse());
+    renderWithProviders(
+      <StepGenerate data={uploadData} onResult={vi.fn()} onNext={vi.fn()} onPrev={vi.fn()} />,
+    );
+    await waitFor(() => expect(invokeMock).toHaveBeenCalled());
+    expect(invokeMock.mock.calls[0][1].body.original_activity as string).toContain("12) Questão 12");
+  });
+
+  // ── Rotating loading copy: long generations (real ones run for minutes)
+  // shouldn't sit on one static line the whole time. ──
+  describe("rotating loading messages", () => {
+    beforeEach(() => vi.useFakeTimers());
+    afterEach(() => vi.useRealTimers());
+
+    it("starts on the first adaptation-phase message, then rotates every ~2.8s", () => {
+      invokeMock.mockImplementation(() => new Promise(() => undefined));
+      renderWithProviders(
+        <StepGenerate data={baseData} onResult={vi.fn()} onNext={vi.fn()} onPrev={vi.fn()} />,
+      );
+      expect(screen.getByText("ISA está adaptando a atividade...")).toBeInTheDocument();
+      act(() => { vi.advanceTimersByTime(2800); });
+      expect(screen.getByText(/Desenho Universal para a Aprendizagem \(DUA\)/i)).toBeInTheDocument();
+    });
+
+    it("wraps back to the first adaptation message after a full cycle", () => {
+      invokeMock.mockImplementation(() => new Promise(() => undefined));
+      renderWithProviders(
+        <StepGenerate data={baseData} onResult={vi.fn()} onNext={vi.fn()} onPrev={vi.fn()} />,
+      );
+      act(() => { vi.advanceTimersByTime(2800 * 5); }); // 5 = ADAPTING_MESSAGES.length
+      expect(screen.getByText("ISA está adaptando a atividade...")).toBeInTheDocument();
+    });
+
+    it("rotates a separate message pool during extraction, reset to its own first message on phase change", () => {
+      extractExamQuestionsMock.mockImplementation(() => new Promise(() => undefined));
+      renderWithProviders(
+        <StepGenerate data={uploadData} onResult={vi.fn()} onNext={vi.fn()} onPrev={vi.fn()} />,
+      );
+      expect(screen.getByText("Lendo o arquivo enviado...")).toBeInTheDocument();
+      act(() => { vi.advanceTimersByTime(2800); });
+      expect(screen.getByText("Identificando as questões da prova...")).toBeInTheDocument();
+    });
   });
 });

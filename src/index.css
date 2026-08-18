@@ -143,26 +143,42 @@
     --sf-mesa-gradient: radial-gradient(120% 60% at 50% 0, hsl(var(--sf-mesa)) 40%, hsl(var(--sf-mesa-2)));
   }
 
+  /* Deliberately "bem leve" (soft), not the usual near-black dark theme: a
+     professor may be picking colors on the Revisar sheet right next to this
+     chrome, and a harsh dark surface fights that. Same brand hues (195 teal /
+     40 gold) as :root, just a much shorter lightness jump — a soft charcoal
+     instead of near-black, foreground short of pure white. The --sf-* (folha)
+     tokens are INTENTIONALLY not overridden here — see the comment on :root's
+     --sf-* block: the page sheet stays paper-white regardless of this theme. */
   .dark {
-    --background: 195 30% 8%;
-    --foreground: 40 15% 94%;
-    --card: 195 25% 12%;
-    --card-foreground: 40 15% 94%;
-    --popover: 195 25% 12%;
-    --popover-foreground: 40 15% 94%;
-    --primary: 195 35% 45%;
+    --background: 195 18% 20%;
+    --foreground: 40 12% 88%;
+    --card: 195 18% 25%;
+    --card-foreground: 40 12% 88%;
+    --popover: 195 18% 25%;
+    --popover-foreground: 40 12% 88%;
+    /* NOT matched to .gradient-sidebar's dark stops: --primary doubles as
+       text/icon color (text-primary) all over the app (e.g. the "Adaptar
+       direto do arquivo" CTA), not just button fill. A value dark enough to
+       blend with the sidebar reads as near-invisible text against --card.
+       Same hue as the sidebar (195), just kept bright enough to stay legible
+       as foreground content. */
+    --primary: 195 38% 52%;
     --primary-foreground: 0 0% 100%;
-    --secondary: 195 25% 18%;
-    --secondary-foreground: 195 30% 75%;
-    --muted: 195 15% 16%;
-    --muted-foreground: 195 10% 55%;
-    --accent: 40 55% 50%;
-    --accent-foreground: 0 0% 100%;
-    --destructive: 0 62% 45%;
+    --secondary: 195 18% 36%;
+    --secondary-foreground: 195 20% 88%;
+    --muted: 195 14% 27%;
+    --muted-foreground: 195 10% 65%;
+    --accent: 40 50% 55%;
+    --accent-foreground: 195 30% 15%;
+    --destructive: 0 55% 52%;
     --destructive-foreground: 0 0% 100%;
-    --border: 195 15% 20%;
-    --input: 195 15% 20%;
-    --ring: 195 35% 45%;
+    --border: 195 15% 33%;
+    /* Brighter than --border: this also lights up the outline Button variant's
+       border (shares --input with Input/Select/Textarea per shadcn's outline
+       recipe) — it was reading as almost invisible against --card. */
+    --input: 195 20% 42%;
+    --ring: 195 38% 52%;
   }
 }
 
@@ -203,6 +219,18 @@
 @layer utilities {
   .gradient-hero {
     background: linear-gradient(135deg, hsl(195 35% 38%), hsl(195 30% 28%));
+  }
+
+  /* Authenticated shell sidebar/header (Layout.tsx). Same brand gradient as
+     .gradient-hero in light mode, but with its own .dark override — unlike
+     .gradient-hero (marketing pages, always brand teal regardless of theme),
+     this chrome IS meant to respond to the theme toggle. */
+  .gradient-sidebar {
+    background: linear-gradient(135deg, hsl(195 35% 38%), hsl(195 30% 28%));
+  }
+
+  .dark .gradient-sidebar {
+    background: linear-gradient(135deg, hsl(195 28% 18%), hsl(195 24% 11%));
   }
 
   .gradient-accent {

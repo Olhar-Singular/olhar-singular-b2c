@@ -87,9 +87,11 @@ export default function CanonicalAdaptationWizard({ editMode }: Props = {}) {
   const navigate = useNavigate();
   const markReady = useMarkReady();
   const [isGenerating, setIsGenerating] = useState(false);
-  // Upload-direto-de-prova only: true while StepUploadExam is parsing/extracting
-  // a file. Blocks navigation the same way isGenerating does, but there is no
-  // credit at stake here (extraction is free) — the dialog wording differs.
+  // Upload-direto-de-prova only: true while StepUploadExam is parsing a file
+  // locally (no AI, no network — pdf-utils/docx-utils only; AI extraction is
+  // deferred to "Gerar", bundled with the paid adapt-activity call). Blocks
+  // navigation the same way isGenerating does, but there is no credit at stake
+  // here — the dialog wording differs.
   const [isUploading, setIsUploading] = useState(false);
   const [isSaved, setIsSaved] = useState(!!editMode);
 

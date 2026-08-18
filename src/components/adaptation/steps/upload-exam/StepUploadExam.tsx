@@ -1,24 +1,9 @@
 import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
 import { ArrowLeft, ArrowRight, CheckCircle2, Clock, FileText, Loader2, Trash2, Upload } from "lucide-react";
-import { supabase } from "@/integrations/supabase/client";
-import { useAuth } from "@/hooks/useAuth";
 import { detectFileType } from "@/lib/utils/fileValidation";
 import { parsePdf } from "@/lib/utils/pdf-utils";
 import { extractDocxWithImages } from "@/lib/utils/docx-utils";
-import { autoCropFromBbox, dataUrlToBlob } from "@/lib/utils/extraction-utils";
-import { buildActivityTextFromExtraction, type ExamExtractedQuestion } from "./buildActivityTextFromExtraction";
-import { parseInvokeError } from "@/lib/utils/errors";
 import type { WizardData } from "@/lib/adaptation/wizard/wizardState";
 
 type Props = {
@@ -30,70 +15,23 @@ type Props = {
 };
 
 const MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024;
-export const MAX_QUESTIONS = 12;
 
-type RawExtractedQuestion = {
-  text: string;
-  options?: string[];
-  has_figure?: boolean;
-  image_page?: number;
-  figure_bbox?: { x: number; y: number; width: number; height: number };
-};
-
-/** PDF pages are rasterized whole (crop needed); DOCX images are already isolated per-figure. */
-async function resolveImageUrl(
-  fileType: "pdf" | "docx",
-  q: RawExtractedQuestion,
-  pageImages: string[],
-  userId: string,
-): Promise<string | null> {
-  if (!q.has_figure || !q.image_page || q.image_page < 1 || q.image_page > pageImages.length) {
-    return null;
-  }
-  const source = pageImages[q.image_page - 1];
-  const dataUrl = fileType === "pdf" && q.figure_bbox ? await autoCropFromBbox(source, q.figure_bbox) : source;
-
-  const blob = dataUrlToBlob(dataUrl);
-  const path = `${userId}/${Date.now()}_${Math.random().toString(36).slice(2)}.png`;
-  const { error: uploadError } = await supabase.storage
-    .from("question-images")
-    .upload(path, blob, { contentType: "image/png" });
-  if (uploadError) {
-    console.error("Exam image upload error:", uploadError);
-    return null;
-  }
-  const { data: { publicUrl } } = supabase.storage.from("question-images").getPublicUrl(path);
-  return publicUrl;
-}
-
-export function StepUploadExam({ updateData, onNext, onLoadingChange }: Props) {
-  const { user } = useAuth();
-  const [fileName, setFileName] = useState("");
+export function StepUploadExam({ data, updateData, onNext, onLoadingChange }: Props) {
   const [processing, setProcessing] = useState(false);
   const [error, setError] = useState("");
-  const [pendingQuestions, setPendingQuestions] = useState<ExamExtractedQuestion[] | null>(null);
-  const [totalExtracted, setTotalExtracted] = useState(0);
-  // Set once extraction succeeds — the file is "attached": dropzone locks, the
-  // file card + Delete appear, and Continuar becomes the explicit trigger to
-  // advance (no more auto-advance the moment processing finishes).
-  const [readyQuestions, setReadyQuestions] = useState<ExamExtractedQuestion[] | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+  const attached = data.uploadedExam ?? null;
 
-  // Guards against a stray completion after this step is left mid-processing
-  // (Voltar is disabled while processing, but the wizard's step pills / sidebar
-  // nav are not) — without it, an extraction that finishes AFTER the user has
-  // moved on would still fire state updates against a screen they no longer
-  // expect to change.
+  // Guards against a stray completion after this step is left mid-parse (Voltar
+  // is disabled while processing, but the wizard's step pills / sidebar nav are
+  // not) — without it, a parse that finishes AFTER the user has moved on would
+  // still fire state updates against a screen they no longer expect to change.
   //
   // The app runs in <StrictMode>, which mounts effects twice (mount → cleanup
   // → mount). Setting the ref only via `useRef(true)` left it permanently
-  // `false` after that throwaway first cleanup — every guard below then
-  // treated the component as unmounted forever, so a real 200 response would
-  // never reach setReadyQuestions/setPendingQuestions, and `finally` would
-  // skip setProcessing(false) too: the loading spinner never stopped even
-  // though the request had already succeeded. Setting it to `true` INSIDE the
-  // effect (not just the initial ref value) makes the second, real mount
-  // reset it correctly.
+  // `false` after that throwaway first cleanup. Setting it to `true` INSIDE the
+  // effect (not just the initial ref value) makes the second, real mount reset
+  // it correctly.
   const mountedRef = useRef(true);
   useEffect(() => {
     mountedRef.current = true;
@@ -102,33 +40,25 @@ export function StepUploadExam({ updateData, onNext, onLoadingChange }: Props) {
     };
   }, []);
 
-  function finish(questions: ExamExtractedQuestion[]) {
-    updateData({ activityText: buildActivityTextFromExtraction(questions) });
-    onNext();
-  }
-
   /** Cancels the upload path and returns to the tabs (Colar Texto / Banco de Questões), same step. */
   function backToTabs() {
     updateData({ activityInputMode: "bank" });
   }
 
   function handleContinue() {
-    /* v8 ignore next -- guard: the button only renders while readyQuestions is set */
-    if (!readyQuestions) return;
-    finish(readyQuestions);
+    /* v8 ignore next -- guard: the button only renders while a file is attached */
+    if (!attached) return;
+    onNext();
   }
 
   /** Detaches the current file, re-enabling the dropzone for a new upload. */
   function handleRemoveFile() {
-    setFileName("");
-    setReadyQuestions(null);
+    updateData({ uploadedExam: null });
     setError("");
-    setTotalExtracted(0);
   }
 
   async function handleFile(file: File) {
     setError("");
-    setFileName(file.name);
 
     if (file.size > MAX_FILE_SIZE_BYTES) {
       setError("Arquivo muito grande (máximo 10MB).");
@@ -150,39 +80,13 @@ export function StepUploadExam({ updateData, onNext, onLoadingChange }: Props) {
           ? await parsePdf(file)
           : await extractDocxWithImages(file).then((r) => ({ text: r.text, pageImages: r.images }));
 
-      const { data: fnResult, error: fnError } = await supabase.functions.invoke("extract-exam-for-adaptation", {
-        body: { pdfText: text, pdfFileName: file.name, pageImages },
-      });
+      /* v8 ignore next -- both outcomes are exercised (see the "unmount while
+         parsing" and "stores the locally-parsed file" tests); v8's branch
+         instrumentation misattributes the fall-through hit on this exact shape. */
       if (!mountedRef.current) return;
-      if (fnError) {
-        const msg = await parseInvokeError(fnError, "Não foi possível processar o arquivo enviado. Tente novamente.");
-        throw new Error(msg);
-      }
-
-      const rawQuestions: RawExtractedQuestion[] = fnResult?.questions ?? [];
-      if (rawQuestions.length === 0) {
-        setError("Não foi possível identificar questões neste arquivo. Tente outro arquivo ou use o Banco de Questões.");
-        return;
-      }
-
-      /* v8 ignore next -- user is always set: this step only renders inside the authenticated wizard */
-      const userId = user?.id ?? "";
-      const resolved: ExamExtractedQuestion[] = [];
-      for (const q of rawQuestions) {
-        const image_url = await resolveImageUrl(fileType, q, pageImages, userId);
-        resolved.push({ text: q.text, options: q.options && q.options.length > 0 ? q.options : null, image_url });
-      }
-      if (!mountedRef.current) return;
-
-      if (resolved.length > MAX_QUESTIONS) {
-        setTotalExtracted(resolved.length);
-        setPendingQuestions(resolved);
-        return;
-      }
-
-      setReadyQuestions(resolved);
+      updateData({ uploadedExam: { fileName: file.name, fileType, text, pageImages } });
     } catch (e) {
-      console.error("Exam upload/extraction error:", e);
+      console.error("Exam parsing error:", e);
       if (!mountedRef.current) return;
       setError(e instanceof Error ? e.message : "Falha ao processar o arquivo. Tente novamente.");
     } finally {
@@ -199,19 +103,6 @@ export function StepUploadExam({ updateData, onNext, onLoadingChange }: Props) {
     e.target.value = "";
   }
 
-  function confirmTruncate() {
-    /* v8 ignore next -- guard: the dialog only renders while pendingQuestions is set */
-    if (!pendingQuestions) return;
-    const truncated = pendingQuestions.slice(0, MAX_QUESTIONS);
-    setPendingQuestions(null);
-    setReadyQuestions(truncated);
-  }
-
-  function cancelTruncate() {
-    setPendingQuestions(null);
-    setFileName("");
-  }
-
   return (
     <div className="space-y-4">
       <div>
@@ -224,10 +115,10 @@ export function StepUploadExam({ updateData, onNext, onLoadingChange }: Props) {
 
       <div
         onClick={() => {
-          if (!readyQuestions) fileRef.current?.click();
+          if (!attached) fileRef.current?.click();
         }}
         className={`border-2 border-dashed rounded-lg p-8 text-center transition-colors ${
-          readyQuestions
+          attached
             ? "cursor-not-allowed opacity-60"
             : "cursor-pointer hover:border-primary hover:bg-primary/5"
         }`}
@@ -238,20 +129,19 @@ export function StepUploadExam({ updateData, onNext, onLoadingChange }: Props) {
           accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
           className="hidden"
           data-upload-input
-          disabled={!!readyQuestions}
+          disabled={!!attached}
           onChange={handleFileInputChange}
         />
         {processing ? (
           <div className="flex flex-col items-center gap-3 py-2">
             <Loader2 className="w-12 h-12 animate-spin text-primary" />
-            <p className="font-serif text-base text-foreground">"{fileName}"</p>
-            <p className="text-sm text-muted-foreground">Lendo a atividade...</p>
+            <p className="text-sm text-muted-foreground">Lendo o arquivo...</p>
             <p className="text-xs text-muted-foreground/70 flex items-center gap-1.5">
               <Clock className="w-3.5 h-3.5" />
-              Pode levar alguns minutos — não feche esta aba.
+              Pode levar alguns instantes — não feche esta aba.
             </p>
           </div>
-        ) : readyQuestions ? (
+        ) : attached ? (
           <div className="flex flex-col items-center gap-2 text-primary">
             <CheckCircle2 className="w-8 h-8" />
             <p className="text-sm font-medium">Arquivo pronto para adaptar</p>
@@ -264,16 +154,11 @@ export function StepUploadExam({ updateData, onNext, onLoadingChange }: Props) {
         )}
       </div>
 
-      {readyQuestions && (
+      {attached && (
         <div className="flex items-center justify-between gap-3 rounded-lg border bg-muted/40 p-3">
           <div className="flex items-center gap-2 min-w-0">
             <FileText className="w-4 h-4 text-primary shrink-0" />
-            <div className="min-w-0">
-              <p className="text-sm font-medium truncate">{fileName}</p>
-              <p className="text-xs text-muted-foreground">
-                {readyQuestions.length} questão(ões) prontas para adaptar
-              </p>
-            </div>
+            <p className="text-sm font-medium truncate font-serif">{attached.fileName}</p>
           </div>
           <Button
             variant="ghost"
@@ -296,35 +181,13 @@ export function StepUploadExam({ updateData, onNext, onLoadingChange }: Props) {
           <ArrowLeft className="w-4 h-4 mr-2" />
           Voltar
         </Button>
-        {readyQuestions && (
+        {attached && (
           <Button onClick={handleContinue}>
             Continuar
             <ArrowRight className="w-4 h-4 ml-2" />
           </Button>
         )}
       </div>
-
-      <AlertDialog
-        open={!!pendingQuestions}
-        onOpenChange={(open) => {
-          /* v8 ignore next -- no trigger opens this; Radix only fires open=false */
-          if (!open) cancelTruncate();
-        }}
-      >
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Atividade com muitas questões</AlertDialogTitle>
-            <AlertDialogDescription>
-              Sua atividade tem {totalExtracted} questões — o limite para essa adaptação é {MAX_QUESTIONS}. Apenas
-              as {MAX_QUESTIONS} primeiras serão adaptadas. Continuar?
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel onClick={cancelTruncate}>Cancelar</AlertDialogCancel>
-            <AlertDialogAction onClick={confirmTruncate}>Continuar</AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
     </div>
   );
 }

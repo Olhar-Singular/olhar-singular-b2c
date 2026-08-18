@@ -32,6 +32,7 @@ describe("INITIAL_WIZARD_DATA", () => {
       activityType: null,
       activityText: "",
       activityInputMode: "bank",
+      uploadedExam: null,
       selectedQuestions: [],
       barriers: [],
       barrierProfileId: null,

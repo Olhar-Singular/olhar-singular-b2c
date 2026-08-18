@@ -1,10 +1,11 @@
 import { Link, useLocation, Outlet, useNavigate } from "react-router-dom";
 import {
   LayoutDashboard, Wand2, Users, MessageSquare,
-  Coins, LogOut, Menu, X, BookOpen, ShieldCheck, History, LibraryBig,
+  Coins, Menu, X, BookOpen, ShieldCheck, History, LibraryBig,
 } from "lucide-react";
 import { useState } from "react";
 import { useAuth } from "@/hooks/useAuth";
+import { UserAccountMenu } from "@/components/common/UserAccountMenu";
 import logoImg from "@/assets/logo-olho-transparent.png";
 
 const NAV_ITEMS = [
@@ -56,7 +57,7 @@ export default function Layout({ children }: { children?: React.ReactNode }) {
 
       {/* ── Desktop Sidebar ── */}
       <aside
-        className="hidden lg:flex flex-col w-60 gradient-hero text-primary-foreground shrink-0 sticky top-0 h-screen overflow-y-auto"
+        className="hidden lg:flex flex-col w-60 gradient-sidebar text-primary-foreground shrink-0 sticky top-0 h-screen overflow-y-auto"
         role="navigation"
         aria-label="Menu principal"
       >
@@ -100,16 +101,9 @@ export default function Layout({ children }: { children?: React.ReactNode }) {
           </Link>
         </nav>
 
-        {/* Logout */}
+        {/* Account menu (Configurações, Suporte, Sair) */}
         <div className="px-3 pb-3">
-          <button
-            onClick={handleLogout}
-            aria-label="Sair da conta"
-            className="flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-medium text-primary-foreground/70 hover:text-primary-foreground hover:bg-white/10 w-full transition-colors"
-          >
-            <LogOut className="w-4.5 h-4.5" aria-hidden="true" />
-            Sair
-          </button>
+          <UserAccountMenu onLogout={handleLogout} />
         </div>
 
         {/* Disclaimer */}
@@ -119,7 +113,7 @@ export default function Layout({ children }: { children?: React.ReactNode }) {
       </aside>
 
       {/* ── Mobile Header ── */}
-      <div className="lg:hidden fixed top-0 left-0 right-0 z-50 gradient-hero text-primary-foreground px-4 py-3 flex items-center justify-between">
+      <div className="lg:hidden fixed top-0 left-0 right-0 z-50 gradient-sidebar text-primary-foreground px-4 py-3 flex items-center justify-between">
         <Link to="/dashboard" className="flex items-center gap-2">
           <img src={logoImg} alt="Olhar Singular" className="h-7 w-auto" loading="eager" />
           <span className="text-[0.65rem] font-semibold text-primary-foreground tracking-widest uppercase">Olhar Singular</span>
@@ -150,7 +144,7 @@ export default function Layout({ children }: { children?: React.ReactNode }) {
           onClick={() => setMobileOpen(false)}
         >
           <nav
-            className="absolute top-14 left-0 right-0 gradient-hero text-primary-foreground p-4 space-y-1 max-h-[calc(100vh-3.5rem)] overflow-y-auto"
+            className="absolute top-14 left-0 right-0 gradient-sidebar text-primary-foreground p-4 space-y-1 max-h-[calc(100vh-3.5rem)] overflow-y-auto"
             onClick={(e) => e.stopPropagation()}
             aria-label="Menu de navegação mobile"
           >
@@ -180,14 +174,7 @@ export default function Layout({ children }: { children?: React.ReactNode }) {
                 </span>
               )}
             </Link>
-            <button
-              onClick={() => { setMobileOpen(false); handleLogout(); }}
-              aria-label="Sair da conta"
-              className="flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-medium text-primary-foreground/70 hover:text-primary-foreground hover:bg-white/10 w-full transition-colors"
-            >
-              <LogOut className="w-4.5 h-4.5" aria-hidden="true" />
-              Sair
-            </button>
+            <UserAccountMenu onLogout={() => { setMobileOpen(false); handleLogout(); }} />
           </nav>
         </div>
       )}

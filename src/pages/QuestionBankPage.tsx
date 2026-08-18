@@ -651,7 +651,7 @@ export default function QuestionBankPage() {
           {extractedQuestions.map((q, i) => (
             <Card
               key={i}
-              className={`transition-all ${q.saved ? "border-green-400 bg-green-50/50" : ""} ${
+              className={`transition-all ${q.saved ? "border-green-400 bg-green-50/50 dark:border-green-700 dark:bg-green-950/30" : ""} ${
                 q.isDuplicate && !q.saved ? "border-destructive/30 bg-destructive/5" : ""
               } ${!q.selected && !q.saved ? "opacity-60" : ""}`}
             >
@@ -731,7 +731,7 @@ export default function QuestionBankPage() {
                         className="text-sm"
                       />
                     ) : (
-                      <p className="text-sm leading-relaxed whitespace-pre-wrap">{q.text}</p>
+                      <p className="text-sm leading-relaxed whitespace-pre-wrap text-card-foreground">{q.text}</p>
                     )}
 
                     {q.imageUrl && (
