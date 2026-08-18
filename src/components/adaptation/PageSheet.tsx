@@ -113,11 +113,10 @@ export function PageSheet({ toolbar, pageStyle, paginated = false, children }: P
       trecho começa numa página nova, exatamente como no `<View break>` do PDF.
 
       Achado 0123: o MESMO percurso decide onde desenhar a virada. Antes o
-      desenho era um gradiente cego nos múltiplos de 1123px, então a régua nunca
-      caía na quebra que a contagem usou: a prévia anunciava "2 páginas A4" e
-      mostrava uma folha só, sem nenhuma linha. Agora sai uma régua por virada
-      (as internas do trecho e a da própria quebra) e a folha vai até o fim da
-      última página, deixando visível o branco que sobra.
+      desenho era um gradiente cego, sem relação com a contagem: a prévia
+      anunciava "2 páginas A4" e mostrava uma folha só, sem nenhuma linha. Agora
+      sai uma régua por virada e a folha vai até o fim da última página,
+      deixando visível o branco que sobra.
     */
     // `offsetHeight` é medida de layout: ignora o `scale` e já vem na geometria
     // do A4. `getBoundingClientRect`, abaixo, vem escalada — daí a divisão.
@@ -126,36 +125,44 @@ export function PageSheet({ toolbar, pageStyle, paginated = false, children }: P
       (mark) => (mark.getBoundingClientRect().top - sheetTop) / scale,
     );
     const ends = [...cuts, height];
-    const rules: number[] = [];
     let start = 0;
     let total = 0;
-    let paperHeight = PAGE_HEIGHT_PX;
-    ends.forEach((end, index) => {
-      const sheets = Math.max(1, Math.ceil((end - start) / PAGE_HEIGHT_PX));
-      for (let page = 1; page < sheets; page += 1) {
-        rules.push(start + page * PAGE_HEIGHT_PX);
-      }
-      total += sheets;
-      // A última folha do trecho sempre vale uma página inteira: é ela que
-      // mostra quanto papel sobra.
-      paperHeight = start + sheets * PAGE_HEIGHT_PX;
-      // Toda quebra (tudo menos o fim do conteúdo) é uma virada desenhada.
-      if (index < ends.length - 1) rules.push(end);
+    ends.forEach((end) => {
+      // O comprimento do trecho é medido no CONTEÚDO (do corte até o próximo),
+      // porque é isso que o leitor vê na tela; só a origem dele é que passa a
+      // ser o fim da página anterior.
+      total += Math.max(1, Math.ceil((end - start) / PAGE_HEIGHT_PX));
       start = end;
     });
+    /*
+      Achado 0131: a folha é N páginas INTEIRAS, e as viradas caem nos múltiplos
+      de A4. Antes o papel era medido a partir do corte (`corte + folhas *
+      1123px`), então a prévia anunciava "2 páginas A4" e desenhava 1,71 folha:
+      sumia justamente o pé em branco da página 1 que o PDF tem, e o professor
+      lia "2 páginas" sem ver nenhuma página 2. Cada trecho entre quebras começa
+      numa página nova (como o `<View break>` do PDF), logo toda origem de trecho
+      é múltipla de `PAGE_HEIGHT_PX` e toda virada também.
+
+      O conteúdo pós-quebra continua encostado na régua do `PageBreakMark` (que é
+      chrome de ~30px, não quebra de fluxo): empurrá-lo até o topo da folha
+      seguinte exigiria unificar editor/prévia/PDF numa única paginação, fora do
+      escopo desta correção.
+    */
     setPageCount(total);
-    setSheetHeight(paperHeight);
-    setPageRules(rules);
+    setSheetHeight(total * PAGE_HEIGHT_PX);
+    setPageRules(
+      Array.from({ length: total - 1 }, (_, page) => (page + 1) * PAGE_HEIGHT_PX),
+    );
     // `scale` entra nas dependências porque o efeito lê rects já escalados: sem
     // ele a contagem ficaria presa na escala do render anterior.
   }, [paginated, children, scale]);
 
   /*
-    Régua da virada de página: uma linha em CADA posição calculada acima (a
-    virada por quebra de questão inclusive). Recortar o fluxo em folhas de
-    verdade (empurrando o conteúdo pós-quebra para o topo da folha seguinte)
-    exigiria unificar editor/prévia/PDF numa única paginação, fora do escopo
-    desta correção.
+    Régua da virada de página: uma linha no fim de cada folha (achado 0131 — são
+    sempre múltiplos de A4, porque todo trecho entre quebras começa numa página
+    nova). Recortar o fluxo em folhas de verdade (empurrando o conteúdo
+    pós-quebra para o topo da folha seguinte) exigiria unificar
+    editor/prévia/PDF numa única paginação, fora do escopo desta correção.
   */
   const ruleColor = "hsl(var(--sf-line-2))";
   const pageRulesBackground = pageRules.length

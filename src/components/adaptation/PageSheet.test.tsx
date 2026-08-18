@@ -246,13 +246,42 @@ describe("PageSheet", () => {
           );
           const sheet = screen.getByTestId("page-sheet");
           expect(screen.getByTestId("page-count")).toHaveTextContent("2 páginas A4");
-          // A virada é onde a quebra está, não no múltiplo de 1123px.
-          expect(sheet.style.backgroundImage).toContain("500px");
-          expect(sheet.style.backgroundImage).not.toContain("1123px");
-          // A folha vai até o fim da 2ª página (500 + 1123): o conteúdo pós-quebra
-          // cai na faixa seguinte e o branco do fim fica visível.
-          expect(sheet.style.minHeight).toBe("1623px");
-          expect(sheet.parentElement!.style.height).toBe("1623px");
+          // A quebra forçada gera uma virada desenhada (antes do 0123 não saía
+          // régua nenhuma); ela cai no fim da página 1, que é onde o papel acaba
+          // (achado 0131 — antes era desenhada em cima do corte, em 500px).
+          expect(sheet.style.backgroundImage).toContain("1123px");
+          expect(sheet.style.backgroundImage).not.toContain("500px");
+          // A folha vai até o fim da 2ª página: o branco do fim fica visível.
+          expect(sheet.style.minHeight).toBe("2246px");
+          expect(sheet.parentElement!.style.height).toBe("2246px");
+        });
+      });
+    });
+
+    /*
+      Achado 0131: a folha era medida a partir do CORTE, não do fim da página em
+      que o corte caiu. Com a quebra por questão ligada a prévia anunciava "2
+      páginas A4" e desenhava 1919px (1,71 folha), escondendo justamente o pé em
+      branco da página 1 que o PDF tem.
+    */
+    it("desenha N folhas inteiras quando anuncia N páginas (achado 0131)", () => {
+      withHeight(1150, () => {
+        withTops(() => {
+          render(
+            <PageSheet paginated toolbar={null}>
+              <span>questão 1</span>
+              <div className="adaptar-page-break" data-test-top="796" />
+              <span>questão 2</span>
+            </PageSheet>,
+          );
+          const sheet = screen.getByTestId("page-sheet");
+          expect(screen.getByTestId("page-count")).toHaveTextContent("2 páginas A4");
+          // 2 páginas anunciadas => 2 x 1123px de papel, não 796 + 1123.
+          expect(sheet.style.minHeight).toBe("2246px");
+          expect(sheet.parentElement!.style.height).toBe("2246px");
+          // A virada fica no fim da página 1, onde o papel realmente acaba.
+          expect(sheet.style.backgroundImage).toContain("1123px");
+          expect(sheet.style.backgroundImage).not.toContain("1919px");
         });
       });
     });
@@ -269,11 +298,11 @@ describe("PageSheet", () => {
           );
           const sheet = screen.getByTestId("page-sheet");
           expect(screen.getByTestId("page-count")).toHaveTextContent("4 páginas A4");
-          // trecho 1: régua interna em 1123 + a virada da quebra em 1500;
-          // trecho 2: régua interna em 1500 + 1123 = 2623. Três réguas, 4 folhas.
-          const rules = sheet.style.backgroundImage.match(/1123px|1500px|2623px/g) ?? [];
-          expect(new Set(rules)).toEqual(new Set(["1123px", "1500px", "2623px"]));
-          expect(sheet.style.minHeight).toBe("3746px");
+          // trecho 1: 1500px de conteúdo -> 2 folhas; trecho 2 começa no fim da
+          // página 2 e também gasta 2. As três viradas caem nos múltiplos de A4.
+          const rules = sheet.style.backgroundImage.match(/\d+px/g) ?? [];
+          expect(new Set(rules)).toEqual(new Set(["1122px", "1123px", "2245px", "2246px", "3368px", "3369px"]));
+          expect(sheet.style.minHeight).toBe("4492px");
         });
       });
     });
