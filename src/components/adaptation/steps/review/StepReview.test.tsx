@@ -219,4 +219,37 @@ describe("StepReview", () => {
       fireEvent.click(screen.getByRole("button", { name: "Aumentar tamanho do texto" })),
     ).not.toThrow();
   });
+
+  describe("originalExam (Adaptar direto do arquivo)", () => {
+    it("does not show 'Ver prova original' when there is no original file (Banco de Questões)", () => {
+      setup();
+      expect(screen.queryByRole("button", { name: /Ver prova original/i })).not.toBeInTheDocument();
+    });
+
+    it("shows and opens 'Ver prova original' when an original file is present", () => {
+      setup({
+        originalExam: { file: new File(["x"], "prova.pdf"), pageImages: ["data:image/png;base64,P1"], userId: "user-1" },
+      });
+      expect(screen.queryByText("Prova original")).not.toBeInTheDocument();
+      fireEvent.click(screen.getByRole("button", { name: /Ver prova original/i }));
+      expect(screen.getByText("Prova original")).toBeInTheDocument();
+      expect(screen.getByRole("img")).toHaveAttribute("src", "data:image/png;base64,P1");
+    });
+
+    it("configures UploadedExamExtension with the file, pages and userId when present", () => {
+      const file = new File(["x"], "prova.pdf");
+      setup({ originalExam: { file, pageImages: ["data:image/png;base64,P1"], userId: "user-1" } });
+      const call = useCanonicalEditor.mock.calls.at(-1)?.[0];
+      const ext = call.extraExtensions.find((e: { name: string }) => e.name === "uploadedExam");
+      expect(ext).toBeDefined();
+      expect(ext.options).toEqual({ file, pageImages: ["data:image/png;base64,P1"], userId: "user-1" });
+    });
+
+    it("configures UploadedExamExtension with null/empty when there is no original file", () => {
+      setup();
+      const call = useCanonicalEditor.mock.calls.at(-1)?.[0];
+      const ext = call.extraExtensions.find((e: { name: string }) => e.name === "uploadedExam");
+      expect(ext.options).toEqual({ file: null, pageImages: [], userId: null });
+    });
+  });
 });

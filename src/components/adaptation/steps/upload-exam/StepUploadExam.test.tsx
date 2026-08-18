@@ -35,6 +35,11 @@ function pdfFile(name = "prova.pdf") {
   return new File(["pdf-bytes"], name, { type: "application/pdf" });
 }
 
+/** An already-attached uploadedExam fixture — used where the exact file identity isn't asserted. */
+function attachedExam() {
+  return { fileName: "prova.pdf", fileType: "pdf" as const, text: "1) Q1", pageImages: [], file: pdfFile() };
+}
+
 function selectFile(file: File) {
   const input = document.querySelector("input[data-upload-input]") as HTMLInputElement;
   fireEvent.change(input, { target: { files: [file] } });
@@ -98,9 +103,10 @@ describe("StepUploadExam", () => {
     const updateData = vi.fn();
     const onNext = vi.fn();
     renderWithProviders(<StepUploadExam data={baseData} updateData={updateData} onNext={onNext} onPrev={vi.fn()} />);
-    selectFile(pdfFile());
+    const file = pdfFile();
+    selectFile(file);
     await waitFor(() => expect(updateData).toHaveBeenCalledWith({
-      uploadedExam: { fileName: "prova.pdf", fileType: "pdf", text: "1) Q1", pageImages: [] },
+      uploadedExam: { fileName: "prova.pdf", fileType: "pdf", text: "1) Q1", pageImages: [], file },
     }));
     expect(onNext).not.toHaveBeenCalled();
   });
@@ -110,9 +116,10 @@ describe("StepUploadExam", () => {
     extractDocxWithImagesMock.mockResolvedValue({ text: "1) Q1", images: ["data:image/png;base64,IMG"] });
     const updateData = vi.fn();
     renderWithProviders(<StepUploadExam data={baseData} updateData={updateData} onNext={vi.fn()} onPrev={vi.fn()} />);
-    selectFile(new File(["docx-bytes"], "prova.docx", { type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document" }));
+    const file = new File(["docx-bytes"], "prova.docx", { type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document" });
+    selectFile(file);
     await waitFor(() => expect(updateData).toHaveBeenCalledWith({
-      uploadedExam: { fileName: "prova.docx", fileType: "docx", text: "1) Q1", pageImages: ["data:image/png;base64,IMG"] },
+      uploadedExam: { fileName: "prova.docx", fileType: "docx", text: "1) Q1", pageImages: ["data:image/png;base64,IMG"], file },
     }));
   });
 
@@ -120,7 +127,7 @@ describe("StepUploadExam", () => {
     const onNext = vi.fn();
     const attachedData: WizardData = {
       ...baseData,
-      uploadedExam: { fileName: "prova.pdf", fileType: "pdf", text: "1) Q1", pageImages: [] },
+      uploadedExam: attachedExam(),
     };
     renderWithProviders(<StepUploadExam data={attachedData} updateData={vi.fn()} onNext={onNext} onPrev={vi.fn()} />);
     expect(screen.getByText("prova.pdf")).toBeInTheDocument();
@@ -141,7 +148,7 @@ describe("StepUploadExam", () => {
     const clickSpy = vi.spyOn(HTMLInputElement.prototype, "click").mockImplementation(() => {});
     const attachedData: WizardData = {
       ...baseData,
-      uploadedExam: { fileName: "prova.pdf", fileType: "pdf", text: "1) Q1", pageImages: [] },
+      uploadedExam: attachedExam(),
     };
     renderWithProviders(<StepUploadExam data={attachedData} updateData={vi.fn()} onNext={vi.fn()} onPrev={vi.fn()} />);
     fireEvent.click(screen.getByText(/Arquivo pronto para adaptar/i).closest("div")!);
@@ -154,7 +161,7 @@ describe("StepUploadExam", () => {
     const updateData = vi.fn();
     const attachedData: WizardData = {
       ...baseData,
-      uploadedExam: { fileName: "prova.pdf", fileType: "pdf", text: "1) Q1", pageImages: [] },
+      uploadedExam: attachedExam(),
     };
     renderWithProviders(<StepUploadExam data={attachedData} updateData={updateData} onNext={vi.fn()} onPrev={vi.fn()} />);
     fireEvent.click(screen.getByRole("button", { name: /remover arquivo/i }));

@@ -1,5 +1,6 @@
 import { supabase } from "@/integrations/supabase/client";
-import { autoCropFromBbox, dataUrlToBlob } from "@/lib/utils/extraction-utils";
+import { autoCropFromBbox } from "@/lib/utils/extraction-utils";
+import { uploadImageDataUrl } from "@/lib/utils/imageUpload";
 import { parseInvokeError } from "@/lib/utils/errors";
 import type { UploadedExam } from "@/lib/adaptation/wizard/wizardState";
 import type { ExamExtractedQuestion } from "./buildActivityTextFromExtraction";
@@ -24,18 +25,7 @@ async function resolveImageUrl(
   }
   const source = pageImages[q.image_page - 1];
   const dataUrl = fileType === "pdf" && q.figure_bbox ? await autoCropFromBbox(source, q.figure_bbox) : source;
-
-  const blob = dataUrlToBlob(dataUrl);
-  const path = `${userId}/${Date.now()}_${Math.random().toString(36).slice(2)}.png`;
-  const { error: uploadError } = await supabase.storage
-    .from("question-images")
-    .upload(path, blob, { contentType: "image/png" });
-  if (uploadError) {
-    console.error("Exam image upload error:", uploadError);
-    return null;
-  }
-  const { data: { publicUrl } } = supabase.storage.from("question-images").getPublicUrl(path);
-  return publicUrl;
+  return uploadImageDataUrl(dataUrl, userId);
 }
 
 export type ExtractExamQuestionsResult =

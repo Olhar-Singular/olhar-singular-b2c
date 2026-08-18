@@ -1,6 +1,7 @@
 import { useState, useCallback, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { useNavigationGuard } from "@/hooks/useNavigationGuard";
+import { useAuth } from "@/hooks/useAuth";
 import { toast } from "sonner";
 import {
   AlertDialog,
@@ -85,6 +86,7 @@ const SAVE_STATUS_LABEL: Record<string, string> = {
 
 export default function CanonicalAdaptationWizard({ editMode }: Props = {}) {
   const navigate = useNavigate();
+  const { user } = useAuth();
   const markReady = useMarkReady();
   const [isGenerating, setIsGenerating] = useState(false);
   // Upload-direto-de-prova only: true while StepUploadExam is parsing a file
@@ -361,6 +363,11 @@ export default function CanonicalAdaptationWizard({ editMode }: Props = {}) {
             onNext={onNext}
             onPrev={onPrev}
             onCaptureFailure={setCaptureFailure}
+            originalExam={
+              data.uploadedExam
+                ? { file: data.uploadedExam.file, pageImages: data.uploadedExam.pageImages, userId: user?.id ?? null }
+                : null
+            }
           />
         );
       case "export":

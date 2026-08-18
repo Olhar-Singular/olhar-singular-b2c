@@ -10,6 +10,13 @@ vi.mock("@tiptap/react", () => ({
   ReactNodeViewRenderer: vi.fn(() => ({ __nodeView: true })),
 }));
 
+// ImageNodeView (wired below via buildCanonicalEditorExtensions) statically
+// imports PdfPreviewModal for "Recortar do original", which pulls in
+// pdfjs-dist — that references DOMMatrix, undefined under jsdom. Mocking
+// @tiptap/react above stops the NodeViews from ever rendering, but not this
+// module-load-time import, so it needs breaking here too.
+vi.mock("@/components/forms/PdfPreviewModal", () => ({ default: () => null }));
+
 import { useEditor, ReactNodeViewRenderer } from "@tiptap/react";
 
 const para = (text: string) => ({ type: "text" as const, text });

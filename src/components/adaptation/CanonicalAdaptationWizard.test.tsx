@@ -22,7 +22,8 @@ vi.mock("react-router-dom", async (orig) => ({
   useNavigate: () => mockNavigate,
 }));
 
-vi.mock("@/hooks/useAuth", () => ({ useAuth: () => ({ user: { id: "u1" } }) }));
+vi.mock("@/hooks/useAuth", () => ({ useAuth: vi.fn(() => ({ user: { id: "u1" } })) }));
+import { useAuth } from "@/hooks/useAuth";
 
 vi.mock("@/lib/adaptation/persistence/adaptationsRepo");
 vi.mock("@/lib/adaptation/persistence/draftMirror");
@@ -218,6 +219,7 @@ vi.mock("./steps/review/StepReview", () => ({
     onNext,
     onPrev,
     onCaptureFailure,
+    originalExam,
   }: {
     document: CanonicalDocument;
     pageStyle?: unknown;
@@ -227,10 +229,14 @@ vi.mock("./steps/review/StepReview", () => ({
     onNext: () => void;
     onPrev: () => void;
     onCaptureFailure?: (reason: string | null) => void;
+    originalExam?: { file: File; pageImages: string[]; userId: string | null } | null;
   }) => (
     <div>
       <pre data-testid="review-doc">{JSON.stringify(document)}</pre>
       <pre data-testid="review-pagestyle">{JSON.stringify(pageStyle ?? null)}</pre>
+      <pre data-testid="review-original-exam">
+        {originalExam ? JSON.stringify({ fileName: originalExam.file.name, userId: originalExam.userId }) : "null"}
+      </pre>
       <button
         data-testid="edit-content"
         onClick={() =>
@@ -554,6 +560,74 @@ describe("CanonicalAdaptationWizard", () => {
     await waitFor(() => expect(screen.getByTestId("edit-content")).toHaveTextContent("gerado"));
     await waitFor(() => expect(adoptedDraftId()).toBe("srv-2"));
     expect(adoptedUpdatedAt()).toBe("2026-02-01T00:00:00Z");
+  });
+
+  // --- originalExam (Adaptar direto do arquivo) passthrough into StepReview -
+
+  it("passes originalExam=null into StepReview when the adaptation has no uploadedExam (Banco de Questões)", () => {
+    renderWithProviders(<CanonicalAdaptationWizard editMode={editSeed()} />);
+    expect(screen.getByTestId("review-original-exam")).toHaveTextContent("null");
+  });
+
+  it("passes the uploaded file, pages and userId into StepReview when uploadedExam is set", () => {
+    renderWithProviders(
+      <CanonicalAdaptationWizard
+        editMode={{
+          adaptationId: "edit-1",
+          initialData: {
+            activityType: "prova",
+            activityText: "",
+            activityInputMode: "upload",
+            uploadedExam: {
+              fileName: "prova.pdf",
+              fileType: "pdf",
+              text: "1) Q1",
+              pageImages: ["data:image/png;base64,P1"],
+              file: new File(["x"], "prova.pdf", { type: "application/pdf" }),
+            },
+            selectedQuestions: [],
+            barriers: [],
+            barrierProfileId: null,
+            result: makeResult(),
+          },
+          initialUpdatedAt: "2026-01-01T00:00:00Z",
+        }}
+      />,
+    );
+    expect(screen.getByTestId("review-original-exam")).toHaveTextContent(
+      JSON.stringify({ fileName: "prova.pdf", userId: "u1" }),
+    );
+  });
+
+  it("falls back to userId=null when uploadedExam is set but there is no authenticated user yet", () => {
+    vi.mocked(useAuth).mockReturnValueOnce({ user: null } as never);
+    renderWithProviders(
+      <CanonicalAdaptationWizard
+        editMode={{
+          adaptationId: "edit-1",
+          initialData: {
+            activityType: "prova",
+            activityText: "",
+            activityInputMode: "upload",
+            uploadedExam: {
+              fileName: "prova.pdf",
+              fileType: "pdf",
+              text: "1) Q1",
+              pageImages: [],
+              file: new File(["x"], "prova.pdf", { type: "application/pdf" }),
+            },
+            selectedQuestions: [],
+            barriers: [],
+            barrierProfileId: null,
+            result: makeResult(),
+          },
+          initialUpdatedAt: "2026-01-01T00:00:00Z",
+        }}
+      />,
+    );
+    expect(screen.getByTestId("review-original-exam")).toHaveTextContent(
+      JSON.stringify({ fileName: "prova.pdf", userId: null }),
+    );
   });
 
   // --- C1-a crash-mirror restore -------------------------------------------

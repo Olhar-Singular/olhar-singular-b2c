@@ -46,6 +46,13 @@ export type UploadedExam = {
   fileType: "pdf" | "docx";
   text: string;
   pageImages: string[];
+  /**
+   * The raw file, kept around (in memory only — never persisted/mirrored, see
+   * useAdaptationDraft/draftMirror, which only ever touch `result`) so Revisar
+   * can offer "ver prova original" and "recortar do original" against the
+   * real source instead of just the already-extracted page images.
+   */
+  file: File;
 };
 
 export type WizardData = {

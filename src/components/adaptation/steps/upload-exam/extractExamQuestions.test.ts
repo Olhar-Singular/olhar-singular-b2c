@@ -28,6 +28,7 @@ const pdfExam: UploadedExam = {
   fileType: "pdf",
   text: "1) Q1",
   pageImages: [],
+  file: new File(["pdf-bytes"], "prova.pdf", { type: "application/pdf" }),
 };
 
 beforeEach(() => {

@@ -1,15 +1,17 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, ArrowRight, Info, RefreshCw } from "lucide-react";
+import { ArrowLeft, ArrowRight, FileText, Info, RefreshCw } from "lucide-react";
 import { EditorContent, BubbleMenu } from "@tiptap/react";
 import { isTextSelection } from "@tiptap/core";
 import { useCanonicalEditor } from "@/components/adaptation/canonical-editor/useCanonicalEditor";
 import { BlockInserter } from "@/components/adaptation/canonical-editor/block-inserter/BlockInserter";
 import { PageBreakMarker } from "@/components/adaptation/canonical-editor/page-break/pageBreakDecoration";
 import { OriginalDocExtension } from "@/components/adaptation/canonical-editor/originalDocExtension";
+import { UploadedExamExtension } from "@/components/adaptation/canonical-editor/uploadedExamExtension";
 import { PageSheet } from "@/components/adaptation/PageSheet";
 import { AppearancePopover } from "./AppearancePopover";
 import { MetadataDrawer } from "./MetadataDrawer";
+import { OriginalExamDialog } from "./OriginalExamDialog";
 import { SelectionBubble } from "@/components/adaptation/canonical-editor/SelectionBubble";
 import { resolvePageStyle } from "@/components/adaptation/render/pageStyle";
 import "katex/dist/katex.min.css";
@@ -38,14 +40,22 @@ type Props = {
    * into a visible warning so a freeze can never look like "Salvo".
    */
   onCaptureFailure?: (reason: string | null) => void;
+  /**
+   * Only set for adaptações do "Adaptar direto do arquivo" — the raw file and
+   * its rasterized pages, so the teacher can open "Ver prova original" to
+   * compare, and ImageNodeView can offer "Recortar do original". Absent for
+   * adaptações montadas pelo Banco de Questões (no source file to compare).
+   */
+  originalExam?: { file: File; pageImages: string[]; userId: string | null } | null;
 };
 
 const FALLBACK_TITLE = "Atividade adaptada";
 
 /**
  * Extensions specific to the Revisar surface, beyond the canonical set: the
- * page-break marker (§6.6 / Fase 5b). Module-level constant so the editor is
- * built once (stable reference) instead of rebuilt on every render.
+ * page-break marker (§6.6 / Fase 5b) and the original-question snapshot
+ * (§Reset). Stable across renders — UploadedExamExtension (which DOES vary
+ * per adaptation) is added separately, memoized on `originalExam`.
  */
 const REVIEW_EXTENSIONS = [PageBreakMarker, OriginalDocExtension];
 
@@ -81,12 +91,30 @@ export function StepReview({
   onNext,
   onPrev,
   onCaptureFailure,
+  originalExam = null,
 }: Props) {
   const [aboutOpen, setAboutOpen] = useState(false);
+  const [originalOpen, setOriginalOpen] = useState(false);
+
+  // useEditor (inside useCanonicalEditor) only reads extensions once, at
+  // mount — this only needs to be stable across a single Revisar session,
+  // which it is: originalExam is set once at upload and never changes after.
+  const extensions = useMemo(
+    () => [
+      ...REVIEW_EXTENSIONS,
+      UploadedExamExtension.configure({
+        file: originalExam?.file ?? null,
+        pageImages: originalExam?.pageImages ?? [],
+        userId: originalExam?.userId ?? null,
+      }),
+    ],
+    [originalExam],
+  );
+
   const { editor } = useCanonicalEditor({
     value: document,
     onChange: onDocumentChange,
-    extraExtensions: REVIEW_EXTENSIONS,
+    extraExtensions: extensions,
     onCaptureFailure,
   });
 
@@ -109,6 +137,16 @@ export function StepReview({
             <RefreshCw className="w-4 h-4 mr-1" /> Regerar
           </Button>
           <AppearancePopover value={resolvePageStyle(pageStyle)} onChange={handleAppearanceChange} />
+          {originalExam && (
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => setOriginalOpen(true)}
+              className="shrink-0 text-surface-ink-soft hover:text-surface-ink"
+            >
+              <FileText className="w-4 h-4 mr-1" /> Ver prova original
+            </Button>
+          )}
           <Button
             size="sm"
             variant="ghost"
@@ -127,6 +165,14 @@ export function StepReview({
         tips={metadata.implementationTips}
         justification={metadata.pedagogicalJustification}
       />
+
+      {originalExam && (
+        <OriginalExamDialog
+          open={originalOpen}
+          onOpenChange={setOriginalOpen}
+          pageImages={originalExam.pageImages}
+        />
+      )}
 
       {editor && (
         <>

@@ -84,7 +84,7 @@ export function StepUploadExam({ data, updateData, onNext, onLoadingChange }: Pr
          parsing" and "stores the locally-parsed file" tests); v8's branch
          instrumentation misattributes the fall-through hit on this exact shape. */
       if (!mountedRef.current) return;
-      updateData({ uploadedExam: { fileName: file.name, fileType, text, pageImages } });
+      updateData({ uploadedExam: { fileName: file.name, fileType, text, pageImages, file } });
     } catch (e) {
       console.error("Exam parsing error:", e);
       if (!mountedRef.current) return;

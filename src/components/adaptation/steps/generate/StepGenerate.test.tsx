@@ -68,6 +68,7 @@ const uploadedExam: UploadedExam = {
   fileType: "pdf",
   text: "1) Q1 (bruto)",
   pageImages: [],
+  file: new File(["pdf-bytes"], "prova.pdf", { type: "application/pdf" }),
 };
 
 const uploadData: WizardData = { ...baseData, activityInputMode: "upload", activityText: "", uploadedExam };

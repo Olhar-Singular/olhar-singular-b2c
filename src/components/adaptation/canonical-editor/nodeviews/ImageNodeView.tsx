@@ -1,11 +1,15 @@
 import { useState } from "react";
-import { AlignLeft, AlignCenter, AlignRight, ImageIcon, Trash2 } from "lucide-react";
+import { AlignLeft, AlignCenter, AlignRight, Crop, ImageIcon, Trash2 } from "lucide-react";
 import { NodeViewWrapper, type NodeViewProps } from "@tiptap/react";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import ImageResizer from "@/components/editor/ImageResizer";
 import ImageManagerModal from "@/components/editor/ImageManagerModal";
+import PdfPreviewModal from "@/components/forms/PdfPreviewModal";
 import type { ImageItem } from "@/components/editor/imageManagerUtils";
 import type { RichText } from "@/lib/adaptation/canonical/schema";
+import type { UploadedExamOptions } from "../uploadedExamExtension";
+import { uploadImageDataUrl } from "@/lib/utils/imageUpload";
 import { RichTextField } from "../RichTextField";
 import { cn } from "@/lib/utils";
 
@@ -17,6 +21,8 @@ const ALIGNMENTS = [
 
 export function ImageNodeView({ node, updateAttributes, deleteNode, editor }: NodeViewProps) {
   const [modalOpen, setModalOpen] = useState(false);
+  const [cropOpen, setCropOpen] = useState(false);
+  const [cropping, setCropping] = useState(false);
   const { src, width, alignment, caption } = node.attrs as {
     src: string;
     width: number | null;
@@ -25,9 +31,37 @@ export function ImageNodeView({ node, updateAttributes, deleteNode, editor }: No
   };
   const disabled = !editor.isEditable;
 
+  // Only set for adaptações do "Adaptar direto do arquivo" (UploadedExamExtension,
+  // configured per Revisar session) — absent for Banco de Questões adaptações
+  // (no source file to re-crop from) AND for any editor instance that never
+  // registered the extension at all (it's opt-in, not part of the base set —
+  // e.g. read-only/preview mounts), so this must not assume it is present.
+  // PdfPreviewModal is PDF-only (renderPdfPage/pdf.js), same limitation the
+  // Banco de Questões crop tool has.
+  const uploadedExam = editor.storage.uploadedExam as UploadedExamOptions | undefined;
+  const originalFile = uploadedExam?.file ?? null;
+  const canCropFromOriginal = !!originalFile && originalFile.type === "application/pdf";
+
   const handlePick = (images: ImageItem[]) => {
     const first = images[0];
     if (first) updateAttributes({ src: first.src, alignment: first.align });
+  };
+
+  const handleCropFromOriginal = async (dataUrl: string) => {
+    const userId = uploadedExam?.userId;
+    /* v8 ignore next -- guard: the crop button (and thus this modal) only renders while UploadedExamExtension carries a userId */
+    if (!userId) return;
+    setCropping(true);
+    try {
+      const url = await uploadImageDataUrl(dataUrl, userId);
+      if (url) {
+        updateAttributes({ src: url });
+      } else {
+        toast.error("Não foi possível enviar a imagem recortada. Tente novamente.");
+      }
+    } finally {
+      setCropping(false);
+    }
   };
 
   return (
@@ -72,6 +106,18 @@ export function ImageNodeView({ node, updateAttributes, deleteNode, editor }: No
             >
               <ImageIcon className="h-3.5 w-3.5" /> Trocar imagem
             </Button>
+            {canCropFromOriginal && (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="gap-1"
+                disabled={disabled || cropping}
+                onClick={() => setCropOpen(true)}
+              >
+                <Crop className="h-3.5 w-3.5" /> Recortar do original
+              </Button>
+            )}
             <Button
               type="button"
               variant="ghost"
@@ -129,6 +175,14 @@ export function ImageNodeView({ node, updateAttributes, deleteNode, editor }: No
         </div>
       </div>
       <ImageManagerModal open={modalOpen} onClose={() => setModalOpen(false)} onConfirm={handlePick} />
+      {canCropFromOriginal && (
+        <PdfPreviewModal
+          open={cropOpen}
+          onOpenChange={setCropOpen}
+          file={originalFile}
+          onCrop={handleCropFromOriginal}
+        />
+      )}
     </NodeViewWrapper>
   );
 }

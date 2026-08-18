@@ -48,7 +48,11 @@ export function dataUrlToBlob(dataUrl: string): Blob {
 export async function autoCropFromBbox(
   pageImageUrl: string,
   bbox: { x: number; y: number; width: number; height: number },
-  padding = 0.02
+  // The AI estimates this bbox by eye from the page image — general-purpose
+  // vision models are not precise at pixel-level localization, so a tight
+  // margin routinely cropped part of the actual figure off. 6% gives enough
+  // slack to keep the whole figure without pulling in much surrounding text.
+  padding = 0.06
 ): Promise<string> {
   return new Promise((resolve, reject) => {
     const img = new Image();
