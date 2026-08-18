@@ -204,3 +204,61 @@ describe("documentToPlainText", () => {
     expect(documentToPlainText(doc)).toBe("\n\ndepois");
   });
 });
+
+describe("documentToPlainText — cabeçalho e quebra de página (achado 0127)", () => {
+  const doc: CanonicalDocument = {
+    schemaVersion: 1,
+    blocks: [
+      { id: id(1), type: "paragraph", content: [{ type: "text", text: "corpo" }] },
+      {
+        id: id(2),
+        type: "question",
+        stem: [{ id: id(3), type: "paragraph", content: [{ type: "text", text: "q1" }] }],
+        answer: { kind: "open" },
+      },
+      {
+        id: id(4),
+        type: "question",
+        stem: [{ id: id(5), type: "paragraph", content: [{ type: "text", text: "q2" }] }],
+        answer: { kind: "open" },
+      },
+    ],
+  };
+
+  it("prints the filled header fields above the document, date in BR format", () => {
+    const text = documentToPlainText(doc, {
+      header: {
+        title: "Prova de Ciências",
+        school: "Escola Municipal Teste",
+        teacher: "Profa. Ana",
+        date: "2026-08-18",
+      },
+    });
+    expect(text.startsWith("Título: Prova de Ciências\n")).toBe(true);
+    expect(text).toContain("Escola: Escola Municipal Teste");
+    expect(text).toContain("Professor(a): Profa. Ana");
+    expect(text).toContain("Data: 18/08/2026");
+    expect(text).toContain("corpo");
+  });
+
+  it("omits empty header fields and emits nothing when the header is empty", () => {
+    expect(documentToPlainText(doc, { header: { school: "  ", teacher: "Ana" } })).toContain(
+      "Professor(a): Ana",
+    );
+    expect(documentToPlainText(doc, { header: { school: "  ", teacher: "Ana" } })).not.toContain(
+      "Escola:",
+    );
+    expect(documentToPlainText(doc, { header: {} })).toBe(documentToPlainText(doc));
+    expect(documentToPlainText(doc, {})).toBe(documentToPlainText(doc));
+  });
+
+  it("marks the page break before every question but the first when the switch is on", () => {
+    const off = documentToPlainText(doc, { pageBreakPerQuestion: false });
+    expect(off).not.toContain("QUEBRA DE PÁGINA");
+
+    const on = documentToPlainText(doc, { pageBreakPerQuestion: true });
+    expect(on.match(/QUEBRA DE PÁGINA/g)).toHaveLength(1);
+    expect(on.indexOf("QUEBRA DE PÁGINA")).toBeGreaterThan(on.indexOf("q1"));
+    expect(on.indexOf("QUEBRA DE PÁGINA")).toBeLessThan(on.indexOf("q2"));
+  });
+});

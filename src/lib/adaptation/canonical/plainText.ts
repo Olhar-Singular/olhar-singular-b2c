@@ -14,6 +14,10 @@
 
 import type { Block, CanonicalDocument, QuestionAnswer, RichText } from "./schema.ts";
 import { indexToLetter } from "@/components/adaptation/render/letters";
+import { formatHeaderDateBR } from "@/components/adaptation/export/panelSettings";
+import type { HeaderSettings } from "@/components/adaptation/export/panelSettings";
+import { perQuestionBreakFlags } from "@/components/adaptation/render/perQuestionBreaks";
+import { PAGE_BREAK_LABEL } from "@/components/adaptation/render/PageBreakMark";
 
 // Math is projected as its LaTeX SOURCE, never as `alt`. `alt` is the
 // accessibility label of the canonical schema (read by screen readers), not a
@@ -97,12 +101,60 @@ function blockToLines(block: Block, number: number): string[] {
   }
 }
 
-/** Project a CanonicalDocument to plain text (blocks separated by blank lines). */
-export function documentToPlainText(document: CanonicalDocument): string {
+/**
+ * Cabeçalho projetado como uma linha rotulada por campo preenchido (campos
+ * vazios são omitidos), na mesma ordem e com os mesmos rótulos do Word
+ * (`headerParagraphs`) e dos campos do painel. A data passa por
+ * `formatHeaderDateBR`, como na prévia (`DocumentHeaderView`) e no PDF
+ * (`PdfHeader`): copiar "2026-08-18" enquanto a folha mostra "18/08/2026"
+ * seria mais uma divergência entre superfícies.
+ */
+function headerToLines(header: HeaderSettings): string[] {
+  return (
+    [
+      ["Título", header.title],
+      ["Escola", header.school],
+      ["Professor(a)", header.teacher],
+      ["Data", header.date === undefined ? undefined : formatHeaderDateBR(header.date)],
+    ] as const
+  )
+    .filter(([, value]) => value !== undefined && value.trim() !== "")
+    .map(([label, value]) => `${label}: ${(value as string).trim()}`);
+}
+
+/**
+ * Opções de saída do "Copiar", espelhando o que a prévia desenha e o PDF
+ * imprime. As duas nascem do ExportPanel: o `header` é controlado pelo wizard e
+ * o `pageBreakPerQuestion` é o switch do painel.
+ */
+export type PlainTextOptions = {
+  header?: HeaderSettings;
+  pageBreakPerQuestion?: boolean;
+};
+
+/**
+ * Project a CanonicalDocument to plain text (blocks separated by blank lines).
+ *
+ * O cabeçalho preenchido no Exportar entra no topo do texto: sem ele, "Copiar"
+ * era a única das três saídas (PDF, Word, Copiar) que descartava o que o
+ * professor tinha acabado de digitar, sem aviso (achado 0127). A quebra por
+ * questão vira um marcador textual pelo mesmo motivo — o switch mudava o PDF e
+ * a prévia e não deixava rastro no texto copiado.
+ */
+export function documentToPlainText(
+  document: CanonicalDocument,
+  { header = {}, pageBreakPerQuestion = false }: PlainTextOptions = {},
+): string {
+  // Mesma derivação da prévia e do PDF: nunca quebra antes da primeira questão.
+  const breaks = perQuestionBreakFlags(document.blocks);
   let questionCount = 0;
-  return document.blocks
-    .map((block) =>
-      blockToLines(block, block.type === "question" ? ++questionCount : 0).join("\n"),
-    )
-    .join("\n\n");
+  const blocks = document.blocks.map((block, i) => {
+    const lines = blockToLines(block, block.type === "question" ? ++questionCount : 0).join("\n");
+    return pageBreakPerQuestion && breaks[i] ? `--- ${PAGE_BREAK_LABEL} ---\n\n${lines}` : lines;
+  });
+  // O cabeçalho é UM bloco (uma linha por campo), separado do corpo pela mesma
+  // linha em branco que separa os demais blocos.
+  const headerLines = headerToLines(header);
+  const headerBlock = headerLines.length > 0 ? [headerLines.join("\n")] : [];
+  return [...headerBlock, ...blocks].join("\n\n");
 }

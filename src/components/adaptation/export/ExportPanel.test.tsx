@@ -457,3 +457,48 @@ describe("referência do aviso de exportação (0408)", () => {
     expect(screen.getByText(/Para fidelidade total, exporte em PDF/i)).toBeInTheDocument();
   });
 });
+
+describe("ExportPanel — Copiar leva o cabeçalho (achado 0127)", () => {
+  it("copies the header fields the preview and the PDF print", async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.assign(navigator, { clipboard: { writeText } });
+    render(<Harness onDownload={vi.fn()} />);
+
+    fireEvent.change(screen.getByLabelText("Título"), { target: { value: "Minha Prova" } });
+    fireEvent.change(screen.getByLabelText("Escola"), { target: { value: "Escola X" } });
+    fireEvent.change(screen.getByLabelText("Professor(a)"), { target: { value: "Ana" } });
+    fireEvent.change(screen.getByLabelText("Data"), { target: { value: "2026-06-04" } });
+
+    fireEvent.click(screen.getByRole("button", { name: /Copiar/i }));
+    await waitFor(() => expect(writeText).toHaveBeenCalled());
+    const copied = writeText.mock.calls[0][0] as string;
+    expect(copied).toContain("Título: Minha Prova");
+    expect(copied).toContain("Escola: Escola X");
+    expect(copied).toContain("Professor(a): Ana");
+    expect(copied).toContain("Data: 04/06/2026");
+    expect(copied).toContain("olá mundo");
+  });
+
+  it("copies the page break marker when the switch is on", async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.assign(navigator, { clipboard: { writeText } });
+    const twoQuestions: CanonicalDocument = {
+      ...document,
+      blocks: [
+        ...document.blocks,
+        {
+          id: id(4),
+          type: "question",
+          stem: [{ id: id(5), type: "paragraph", content: [{ type: "text", text: "q2" }] }],
+          answer: { kind: "open" },
+        },
+      ],
+    };
+    render(<ExportPanel document={twoQuestions} onDownload={vi.fn()} />);
+
+    fireEvent.click(screen.getByRole("switch"));
+    fireEvent.click(screen.getByRole("button", { name: /Copiar/i }));
+    await waitFor(() => expect(writeText).toHaveBeenCalled());
+    expect(writeText.mock.calls[0][0]).toContain("QUEBRA DE PÁGINA");
+  });
+});

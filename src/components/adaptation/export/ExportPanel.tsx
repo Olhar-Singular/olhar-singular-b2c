@@ -5,7 +5,8 @@
  * and exposes two actions:
  *   - "Exportar PDF" → builds the PDF from the current document + settings +
  *     optional pageStyle and triggers a download.
- *   - "Copiar" → copies the plain-text projection to the clipboard.
+ *   - "Copiar" → copies the plain-text projection to the clipboard, com o mesmo
+ *     cabeçalho e a mesma quebra por questão que a prévia e o PDF usam.
  *
  * Since Fase 4a, font family/size/spacing come from the document-level
  * `pageStyle` prop (set by the "Aparência" popover upstream), NOT from a panel
@@ -88,7 +89,12 @@ export function ExportPanel({
 
   const handleCopy = async () => {
     try {
-      await navigator.clipboard.writeText(documentToPlainText(document));
+      // O "Copiar" recebe as MESMAS opções que o PDF (`runPdfExport`) e o Word:
+      // sem elas era a única saída que descartava o cabeçalho recém-digitado e
+      // ignorava o switch de quebra (achado 0127).
+      await navigator.clipboard.writeText(
+        documentToPlainText(document, { header, pageBreakPerQuestion }),
+      );
       toast.success("Copiado para a área de transferência!");
     } catch {
       toast.error("Erro ao copiar.");
