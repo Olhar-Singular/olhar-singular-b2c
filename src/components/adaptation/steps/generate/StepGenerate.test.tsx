@@ -126,6 +126,38 @@ describe("StepGenerate", () => {
     );
   });
 
+  // MODO FIEL exists in the prompt and is accepted by the edge function, but
+  // nothing ever sent the flag — so the promise the upload screen makes
+  // ("preservando a ordem das questões e as imagens originais") was backed by
+  // a block that never reached the model.
+  it("turns on fidelity_mode when the activity came from an uploaded exam", async () => {
+    extractExamQuestionsMock.mockResolvedValueOnce({
+      status: "ok",
+      questions: [{ text: "Primeira", options: null, image_url: null }],
+    });
+    invokeMock.mockResolvedValueOnce(okResponse());
+    renderWithProviders(
+      <StepGenerate data={uploadData} onResult={vi.fn()} onNext={vi.fn()} onPrev={vi.fn()} />,
+    );
+    await waitFor(() => expect(invokeMock).toHaveBeenCalled());
+    expect(invokeMock).toHaveBeenCalledWith(
+      "adapt-activity",
+      expect.objectContaining({ body: expect.objectContaining({ fidelity_mode: true }) }),
+    );
+  });
+
+  it("leaves fidelity_mode off for the bank/paste flow", async () => {
+    invokeMock.mockResolvedValueOnce(okResponse());
+    renderWithProviders(
+      <StepGenerate data={baseData} onResult={vi.fn()} onNext={vi.fn()} onPrev={vi.fn()} />,
+    );
+    await waitFor(() => expect(invokeMock).toHaveBeenCalled());
+    expect(invokeMock).toHaveBeenCalledWith(
+      "adapt-activity",
+      expect.objectContaining({ body: expect.objectContaining({ fidelity_mode: false }) }),
+    );
+  });
+
   it("sends barrier_profile_id so the server-written row keeps the profile link", async () => {
     invokeMock.mockResolvedValueOnce(okResponse());
     renderWithProviders(

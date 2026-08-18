@@ -230,9 +230,19 @@ describe("buildSystemPrompt — fidelityMode", () => {
     expect(prompt).toContain("preserve a redação original");
   });
 
-  it("still allows adding scaffolding/support text without replacing the original content", () => {
+  it("requires support text rather than merely permitting it", () => {
+    // The other two MODO FIEL rules are "inegociáveis" and both pull towards
+    // leaving the exam alone. A permissive third rule ("você pode adicionar")
+    // loses that tug-of-war, so turning fidelity on would make adaptations
+    // MORE like the original — the opposite of what was asked for.
     const prompt = buildSystemPrompt([{ dimension: "tea" }], { fidelityMode: true });
-    expect(prompt).toContain("ADICIONAR textos de apoio");
+    expect(prompt).toContain("ADICIONE textos de apoio");
+    expect(prompt).not.toContain("pode ADICIONAR textos de apoio");
+  });
+
+  it("does not let fidelity be read as a licence to skip support", () => {
+    const prompt = buildSystemPrompt([{ dimension: "tea" }], { fidelityMode: true });
+    expect(prompt).toMatch(/NÃO dispensa o apoio/i);
   });
 });
 

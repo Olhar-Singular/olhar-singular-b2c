@@ -105,6 +105,12 @@ export function StepGenerate({ data, onResult, onNext, onPrev, onLoadingChange }
         // The server writes the adaptation row itself now, so it needs the
         // profile link the row carries.
         barrier_profile_id: data.barrierProfileId ?? undefined,
+        // The activity text was extracted from a real exam the teacher
+        // uploaded, so question and image order must survive the adaptation.
+        // Turns on the MODO FIEL block of the system prompt — which is what
+        // the upload screen already promises ("preservando a ordem das
+        // questões e as imagens originais").
+        fidelity_mode: !!data.uploadedExam,
         // Idempotency key for the credit reservation: it makes a replayed
         // request (retried transport, double-click) impossible to charge
         // twice. Fresh per attempt — a real retry IS a new charge.

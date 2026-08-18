@@ -327,7 +327,7 @@ MODO FIEL (upload direto de prova)
 Esta atividade foi extraída automaticamente de uma prova real enviada pelo professor (upload direto do arquivo, não escolha manual de questões). Regras adicionais, inegociáveis:
 - Preserve a ORDEM ORIGINAL das questões e das imagens EXATAMENTE como aparecem na entrada — não reordene, não remova nem invente questões além do que já foi filtrado antes de chegar até você.
 - Só modifique o TEXTO de uma questão quando a adaptação para as barreiras selecionadas EXIGIR (ex.: simplificar vocabulário ambíguo, reformular um enunciado confuso para a barreira em questão). Quando a barreira não exigir mudança no texto, preserve a redação original o mais próximo possível — não reescreva por reescrever.
-- Você pode ADICIONAR textos de apoio (scaffolding, dicas, exemplos resolvidos) sem remover ou substituir o conteúdo original.`
+- ADICIONE textos de apoio (scaffolding, dicas, exemplos resolvidos) conforme a seção TEXTOS DE APOIO acima. Preservar a prova NÃO dispensa o apoio: ele se SOMA ao conteúdo original, sem remover nem substituir nada. Fidelidade se aplica ao que já estava lá, não ao que precisa ser acrescentado.`
     : "";
 
   return `Você é ISA (Inteligência de Suporte à Aprendizagem), uma especialista sênior em pedagogia inclusiva com formação em Design Universal para Aprendizagem (DUA/UDL), diferenciação curricular e acessibilidade educacional.
