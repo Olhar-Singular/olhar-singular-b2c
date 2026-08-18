@@ -84,9 +84,11 @@ describe("documentToPlainText", () => {
     });
   });
 
-  it("renders scaffolding items and divider", () => {
+  it("numbers scaffolding steps like the screen and the PDF, and renders the divider", () => {
     const text = documentToPlainText(renderDocument);
-    expect(text).toContain("- Passo 1: leia o enunciado");
+    expect(text).toContain("1. Passo 1: leia o enunciado");
+    expect(text).toContain("2. Passo 2: identifique os dados");
+    expect(text).not.toContain("- Passo 1: leia o enunciado");
     expect(text).toContain("---");
   });
 

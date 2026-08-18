@@ -73,7 +73,11 @@ function blockToLines(block: Block, number: number): string[] {
     case "image":
       return block.caption ? [richTextToText(block.caption)] : [];
     case "scaffolding":
-      return block.items.map((item) => `- ${item}`);
+      // NUMBERED, like the screen (`<ol list-decimal>` in ScaffoldingView) and
+      // the PDF (`{i + 1}.` in PdfScaffolding): the order of the steps IS the
+      // pedagogical content of the block, so a bullet would drop information in
+      // the very surface the teacher pastes into an editor to adapt by hand.
+      return block.items.map((item, i) => `${i + 1}. ${item}`);
     case "divider":
       return ["---"];
     case "question": {
