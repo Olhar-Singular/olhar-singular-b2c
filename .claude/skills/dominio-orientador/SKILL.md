@@ -106,6 +106,35 @@ Plataforma educacional B2C. **Educadores adaptam atividades pedagógicas (provas
   `refetchOnWindowFocus/OnMount: false`) e `EditAdaptationPage` usa `key={row.id}` — **sem** o
   `updated_at`. Como todo autosave bumpa o `updated_at`, a key antiga remontava o wizard no meio da
   edição (perdia cursor, scroll e passo, voltando pro Revisar) a cada refetch.
+- **O prompt exige scaffolding — e o exemplo é código, não string** (`_shared/adaptationPrompt.ts`).
+  Havia uma assimetria que sumia com os textos de apoio: das quatro linhas de "ADAPTAÇÃO POR TIPO
+  DE ATIVIDADE", só **EXERCÍCIO** citava scaffolding ("pode incluir"); **PROVA** não citava e ainda
+  mandava "preserve o número de questões". Como o upload direto gera `activityType: "prova"`, o
+  modelo concluía que apoio era coisa de exercício e o omitia. Hoje há a seção **TEXTOS DE APOIO
+  (SCAFFOLDING) — OBRIGATÓRIO** e a linha PROVA diz que apoio é esperado ali também. O few-shot vive
+  em **`SCAFFOLDING_EXAMPLE_QUESTION`** (constante exportada, não trecho de string) justamente pro
+  teste validá-lo contra o **`AiBlockSchema` real** — exemplo fora de sincronia com o schema ensina
+  o modelo a emitir exatamente o que o validador recusa.
+- **Três sinais do professor só chegam na IA porque alguém os liga explicitamente.** Todos já
+  existiam nas pontas e morriam no meio: **(1)** `observationNotes` — o `observation` do perfil
+  (até 2000 chars) é copiado no `handleProfileChange` (`StepBarrierSelection`); sem isso o PILAR 1
+  do system prompt roda vazio, porque `rowMapping` só reidrata esse campo numa adaptação **já
+  salva**. **(2)** `label` da barreira no payload de `StepGenerate` — sem ele o prompt mostra
+  `dislexia_leitura` em vez da frase que descreve a barreira (e o `barriers_used` persistido guarda
+  só chaves). **(3)** `fidelity_mode: !!data.uploadedExam` — o bloco MODO FIEL existia, era testado
+  e era repassado pelo `index.ts`, mas **nenhum caller mandava o campo**. Ao ligá-lo, a 3ª regra do
+  bloco teve de virar imperativa ("ADICIONE textos de apoio"): as duas primeiras são "inegociáveis"
+  e puxam pra deixar a prova como está, então uma permissiva perdia a queda de braço e deixava a
+  adaptação **mais** parecida com o original.
+- **Gate semântico é OBSERVE-ONLY hoje** (`_shared/adaptationQuality.ts`, `inspectAdaptationQuality`).
+  `interpretAiResponse` valida JSON + Zod, ou seja **sintaxe**: um documento que perdeu metade das
+  questões, veio sem nenhum apoio ou com justificativa vazia é indistinguível de sucesso — e é
+  cobrado igual. O gate calcula 3 sinais (`missing_questions`, `no_scaffolding`,
+  `empty_justification`) e só faz `console.warn`; **não** dá reask nem derruba a request. A decisão
+  que falta é de dinheiro (cobra? estorna? entrega com aviso?), e o caminho de crédito tem duas
+  saídas só (`settle`/`reverse`) — por isso primeiro medimos a frequência. `expected_question_count`
+  vem do cliente (extração ou seleção do banco); **0 = desconhecido** (texto digitado) e pula a
+  checagem. Ao ligar enforcement, lembre que cada reask custa ~50s de um orçamento de 240s.
 - 1ª adaptação grátis: flag **`profiles.free_adaptation_used`**; só depois debita. A flag é
   **reivindicada antes** da chamada de IA (UPDATE atômico `… WHERE free_adaptation_used = false`,
   pra fechar a corrida de duplo-grátis) e **devolvida em qualquer falha** — senão uma geração
