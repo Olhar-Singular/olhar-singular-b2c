@@ -89,6 +89,26 @@ export const ANSWER_LINE_GAP_PX = 18;
 export const ANSWER_ITEM_GAP_PX = 8;
 
 /**
+ * Caixa do bloco ANDAIME: recuo interno, respiro vertical e largura da coluna do
+ * ordinal ("1.", "2." …). Ponto único das duas superfícies impressas — a prévia
+ * do Exportar e o PDF —, na mesma família de `ANSWER_ITEM_GAP_PX` (achado 0313).
+ *
+ * Antes cada uma escolhia a sua: na tela, `p-3` (12px) mais `pl-5` (20px) da
+ * `<ol>` recuavam os passos 32px; no PDF, `padding: 6` (6pt = 8px) e nenhuma
+ * coluna de ordinal (a numeração era texto corrido). O mesmo passo saía 24px à
+ * esquerda no papel — o pior desvio horizontal do documento e o único bloco em
+ * que a lista de apoio troca de coluna entre a tela e a impressão (achado 0124).
+ *
+ * O valor adotado é o que a tela já mostrava, porque é ele que dá ao andaime a
+ * leitura de caixa de apoio destacada do texto; quem se move é o PDF.
+ */
+export const SCAFFOLDING_PADDING_PX = 12;
+/** Margem acima e abaixo da caixa do andaime (o `my-3` da tela). */
+export const SCAFFOLDING_MARGIN_Y_PX = 12;
+/** Recuo do texto do passo em relação à caixa (o `pl-5` da `<ol>` da tela). */
+export const SCAFFOLDING_STEP_INDENT_PX = 20;
+
+/**
  * Família usada quando o documento NÃO traz `pageStyle.fontFamily` — o caso
  * normal, já que nenhuma UI grava a fonte até o professor escolher uma no
  * popover "Formato".
@@ -131,6 +151,11 @@ export const ANSWER_LINE_GAP_PT = ANSWER_LINE_GAP_PX / PT_TO_PX;
 
 /** `ANSWER_ITEM_GAP_PX` na unidade do PDF (pt), pela mesma razão 72/96. */
 export const ANSWER_ITEM_GAP_PT = ANSWER_ITEM_GAP_PX / PT_TO_PX;
+
+/** Tokens da caixa do andaime na unidade do PDF (pt), pela mesma razão 72/96. */
+export const SCAFFOLDING_PADDING_PT = SCAFFOLDING_PADDING_PX / PT_TO_PX;
+export const SCAFFOLDING_MARGIN_Y_PT = SCAFFOLDING_MARGIN_Y_PX / PT_TO_PX;
+export const SCAFFOLDING_STEP_INDENT_PT = SCAFFOLDING_STEP_INDENT_PX / PT_TO_PX;
 
 /**
  * Tamanho de cada elemento do documento como FRAÇÃO do tamanho base.

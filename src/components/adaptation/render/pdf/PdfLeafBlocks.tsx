@@ -19,7 +19,13 @@ import { View, Text, Image } from "@react-pdf/renderer";
 import type { Block } from "@/lib/adaptation/canonical/schema";
 import { nodeStyleToPdf } from "./nodeStyleToPdf";
 import { PdfRichText } from "./PdfRichText";
-import { PAGE_MARGIN_PT, DEFAULT_IMAGE_WIDTH_PX } from "../pageTokens";
+import {
+  PAGE_MARGIN_PT,
+  DEFAULT_IMAGE_WIDTH_PX,
+  SCAFFOLDING_PADDING_PT,
+  SCAFFOLDING_MARGIN_Y_PT,
+  SCAFFOLDING_STEP_INDENT_PT,
+} from "../pageTokens";
 import { resolveElementFontSizes, resolvePageStyle, type ElementFontSizesPt } from "../pageStyle";
 
 /** Sizes used when a leaf block is rendered standalone. */
@@ -128,11 +134,23 @@ export function PdfImage({
 
 export function PdfScaffolding({ block }: { block: ScaffoldingBlock }) {
   return (
-    <View style={{ backgroundColor: "#F3F4F6", borderWidth: 1, borderColor: "#E5E7EB", padding: 6, marginVertical: 6, ...nodeStyleToPdf(block.style) }}>
+    <View
+      style={{
+        backgroundColor: "#F3F4F6",
+        borderWidth: 1,
+        borderColor: "#E5E7EB",
+        padding: SCAFFOLDING_PADDING_PT,
+        marginVertical: SCAFFOLDING_MARGIN_Y_PT,
+        ...nodeStyleToPdf(block.style),
+      }}
+    >
       {block.items.map((item, i) => (
-        <Text key={i} style={{ marginBottom: 2 }}>
-          {i + 1}. {item}
-        </Text>
+        <View key={i} style={{ flexDirection: "row", marginBottom: 2 }}>
+          {/* Coluna de ordinal com a largura do recuo da <ol> da tela: o texto
+              do passo começa na mesma coluna nas duas superfícies. */}
+          <Text style={{ width: SCAFFOLDING_STEP_INDENT_PT, flexShrink: 0 }}>{i + 1}.</Text>
+          <Text style={{ flexGrow: 1, flexShrink: 1 }}>{item}</Text>
+        </View>
       ))}
     </View>
   );
