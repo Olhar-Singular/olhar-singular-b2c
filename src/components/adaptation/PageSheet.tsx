@@ -177,6 +177,14 @@ export function PageSheet({ toolbar, pageStyle, paginated = false, children }: P
         .join(", ")})`
     : "none";
 
+  /*
+    Achado 0222: a folha passa da mesa quando a escala trava no piso, e o que
+    sobra só é alcançável rolando. Saber disso aqui (e não só no CSS) é o que
+    permite dar rota de teclado e pista visual apenas quando fazem falta: uma
+    parada de tabulação numa moldura que não rola seria ruído.
+  */
+  const overflows = paginated && SHEET_WIDTH_PX * scale > frameWidth + 0.5;
+
   const sheet = (
     <div
       ref={sheetRef}
@@ -242,17 +250,51 @@ export function PageSheet({ toolbar, pageStyle, paginated = false, children }: P
               da folha para fora do alcance da rolagem; a margem automática
               colapsa para zero nesse caso e a folha rola inteira.
             */}
-            <div ref={frameRef} className="overflow-x-auto">
+            <div className="relative">
               <div
-                className="mx-auto"
-                style={{
-                  width: `${SHEET_WIDTH_PX * scale}px`,
-                  height: `${sheetHeight * scale}px`,
-                }}
+                ref={frameRef}
+                className="overflow-x-auto focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                /*
+                  Achado 0222: sem nenhum focável dentro (a prévia é render de
+                  leitura), o Chrome só dá rolagem por seta a um container que
+                  seja ele mesmo focável. Sem isto o Tab pulava da folha direto
+                  para os botões do rodapé e o texto escondido ficava
+                  inalcançável por teclado (WCAG 2.1.1).
+                */
+                tabIndex={overflows ? 0 : undefined}
+                role={overflows ? "region" : undefined}
+                aria-label={overflows ? "Prévia da folha A4" : undefined}
               >
-                {sheet}
+                <div
+                  className="mx-auto"
+                  style={{
+                    width: `${SHEET_WIDTH_PX * scale}px`,
+                    height: `${sheetHeight * scale}px`,
+                  }}
+                >
+                  {sheet}
+                </div>
               </div>
+              {/*
+                Máscara na borda direita: no touch a barra de rolagem é
+                sobreposta e só aparece durante o gesto, então a folha terminava
+                cortada na borda sem nenhuma pista de que continua.
+              */}
+              {overflows && (
+                <div
+                  aria-hidden="true"
+                  className="pointer-events-none absolute inset-y-0 right-0 w-6 bg-gradient-to-l from-black/15 to-transparent"
+                />
+              )}
             </div>
+            {overflows && (
+              <p
+                data-testid="page-overflow-hint"
+                className="mt-2 text-xs text-muted-foreground"
+              >
+                A folha é mais larga que a tela: role na horizontal para ver o resto.
+              </p>
+            )}
           </>
         ) : (
           sheet

@@ -155,6 +155,47 @@ describe("PageSheet", () => {
       });
     });
 
+    /*
+      Achado 0222: a rolagem horizontal que o 0216 deixou como saída era um beco
+      para quem não arrasta com o dedo. A moldura não entrava na tabulação, não
+      tinha nome acessível e não há nenhum focável dentro dela (a prévia é render
+      de leitura), então metade da folha só existia para quem descobria o gesto.
+    */
+    it("deixa a moldura rolável alcançável por teclado quando a folha não cabe (achado 0222)", () => {
+      withClientWidth(332, () => {
+        withHeight(1123, () => {
+          render(<PageSheet paginated toolbar={null}><span>x</span></PageSheet>);
+          const frame = screen.getByTestId("page-sheet").parentElement!.parentElement!;
+          expect(frame).toHaveAttribute("tabindex", "0");
+          expect(frame).toHaveAttribute("role", "region");
+          expect(frame).toHaveAccessibleName("Prévia da folha A4");
+        });
+      });
+    });
+
+    it("anuncia por escrito que a folha continua fora da vista (achado 0222)", () => {
+      withClientWidth(332, () => {
+        withHeight(1123, () => {
+          render(<PageSheet paginated toolbar={null}><span>x</span></PageSheet>);
+          // No touch a barra de rolagem é sobreposta e só aparece durante o
+          // gesto: sem uma pista visível a folha parece simplesmente cortada.
+          expect(screen.getByTestId("page-overflow-hint")).toBeInTheDocument();
+        });
+      });
+    });
+
+    it("não cria parada de tabulação nem aviso quando a folha cabe inteira (achado 0222)", () => {
+      withClientWidth(1200, () => {
+        withHeight(1123, () => {
+          render(<PageSheet paginated toolbar={null}><span>x</span></PageSheet>);
+          const frame = screen.getByTestId("page-sheet").parentElement!.parentElement!;
+          expect(frame).not.toHaveAttribute("tabindex");
+          expect(frame).not.toHaveAttribute("role");
+          expect(screen.queryByTestId("page-overflow-hint")).not.toBeInTheDocument();
+        });
+      });
+    });
+
     it("não amplia a folha além do tamanho real quando sobra espaço", () => {
       withClientWidth(1200, () => {
         withHeight(1123, () => {
