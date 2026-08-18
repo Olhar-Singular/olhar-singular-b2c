@@ -130,11 +130,21 @@ describe("PageSheet", () => {
       expect(screen.queryByTestId("page-count")).toBeNull();
     });
 
-    it("dá altura de página A4 à folha e desenha a régua de quebra", () => {
+    it("dá altura de página A4 à folha", () => {
       render(<PageSheet paginated toolbar={null}><span>x</span></PageSheet>);
       const sheet = screen.getByTestId("page-sheet");
       expect(sheet.style.minHeight).toBe("1123px");
-      expect(sheet.style.backgroundImage).toContain("1123px");
+    });
+
+    it("desenha a régua da virada nos múltiplos de A4 quando não há quebra forçada", () => {
+      withHeight(1500, () => {
+        render(<PageSheet paginated toolbar={null}><span>x</span></PageSheet>);
+        const sheet = screen.getByTestId("page-sheet");
+        expect(screen.getByTestId("page-count")).toHaveTextContent("2 páginas A4");
+        expect(sheet.style.backgroundImage).toContain("1123px");
+        // A folha vai até o fim da 2ª página: o branco que sobra fica visível.
+        expect(sheet.style.minHeight).toBe("2246px");
+      });
     });
 
     it("conta uma página quando o conteúdo cabe numa folha", () => {
@@ -181,6 +191,55 @@ describe("PageSheet", () => {
             </PageSheet>,
           );
           expect(screen.getByTestId("page-count")).toHaveTextContent("2 páginas A4");
+        });
+      });
+    });
+
+    /*
+      Achado 0123: a contagem respeitava a quebra por questão e o DESENHO não:
+      a régua só aparecia nos múltiplos de 1123px. O rótulo dizia "2 páginas A4"
+      e a folha continuava com uma folha só, sem nenhuma linha de virada.
+    */
+    it("desenha a régua da virada na posição da quebra forçada (achado 0123)", () => {
+      withHeight(900, () => {
+        withTops(() => {
+          render(
+            <PageSheet paginated toolbar={null}>
+              <span>questão 1</span>
+              <div className="adaptar-page-break" data-test-top="500" />
+              <span>questão 2</span>
+            </PageSheet>,
+          );
+          const sheet = screen.getByTestId("page-sheet");
+          expect(screen.getByTestId("page-count")).toHaveTextContent("2 páginas A4");
+          // A virada é onde a quebra está, não no múltiplo de 1123px.
+          expect(sheet.style.backgroundImage).toContain("500px");
+          expect(sheet.style.backgroundImage).not.toContain("1123px");
+          // A folha vai até o fim da 2ª página (500 + 1123): o conteúdo pós-quebra
+          // cai na faixa seguinte e o branco do fim fica visível.
+          expect(sheet.style.minHeight).toBe("1623px");
+          expect(sheet.parentElement!.style.height).toBe("1623px");
+        });
+      });
+    });
+
+    it("desenha uma régua a menos que a contagem de folhas", () => {
+      withHeight(3000, () => {
+        withTops(() => {
+          render(
+            <PageSheet paginated toolbar={null}>
+              <span>questão 1 longa</span>
+              <div className="adaptar-page-break" data-test-top="1500" />
+              <span>questão 2</span>
+            </PageSheet>,
+          );
+          const sheet = screen.getByTestId("page-sheet");
+          expect(screen.getByTestId("page-count")).toHaveTextContent("4 páginas A4");
+          // trecho 1: régua interna em 1123 + a virada da quebra em 1500;
+          // trecho 2: régua interna em 1500 + 1123 = 2623. Três réguas, 4 folhas.
+          const rules = sheet.style.backgroundImage.match(/1123px|1500px|2623px/g) ?? [];
+          expect(new Set(rules)).toEqual(new Set(["1123px", "1500px", "2623px"]));
+          expect(sheet.style.minHeight).toBe("3746px");
         });
       });
     });

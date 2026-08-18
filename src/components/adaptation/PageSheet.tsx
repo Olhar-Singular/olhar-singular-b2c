@@ -45,9 +45,12 @@ const SHEET_WIDTH_PX = 794;
 export function PageSheet({ toolbar, pageStyle, paginated = false, children }: PageSheetProps) {
   const frameRef = useRef<HTMLDivElement>(null);
   const sheetRef = useRef<HTMLDivElement>(null);
+  const contentRef = useRef<HTMLDivElement>(null);
   const [pageCount, setPageCount] = useState(1);
   const [scale, setScale] = useState(1);
   const [sheetHeight, setSheetHeight] = useState(PAGE_HEIGHT_PX);
+  /** Posição (px, geometria não escalada) de cada virada de página na folha. */
+  const [pageRules, setPageRules] = useState<number[]>([]);
 
   /*
     Achado 0215: no modo paginado a folha NÃO reflowa. Largura travada em 794px
@@ -81,33 +84,74 @@ export function PageSheet({ toolbar, pageStyle, paginated = false, children }: P
   useLayoutEffect(() => {
     if (!paginated) return;
     const sheet = sheetRef.current;
-    // `offsetHeight` é medida de layout: ignora o `scale` e já vem na geometria
-    // do A4. `getBoundingClientRect`, abaixo, vem escalada — daí a divisão.
-    const height = sheet.offsetHeight;
-    setSheetHeight(height);
+    /*
+      Achado 0123: a altura medida é a do CONTEÚDO, nunca a da folha. A folha
+      passou a crescer até o fim da última página (abaixo), então medi-la aqui
+      realimentaria a própria medição a cada layout: mais altura, mais páginas,
+      mais altura.
+    */
+    const height = contentRef.current.offsetHeight;
     /*
       Achado 0121: a quebra por questão, na prévia, é uma régua decorativa de
       ~30px (`PageBreakMark`), não uma quebra de fluxo. Medir a folha inteira
       dizia "1 página A4" enquanto o PDF (onde a quebra é real) saía com N+1.
       Então a contagem soma folha a folha CADA TRECHO entre as réguas: cada
       trecho começa numa página nova, exatamente como no `<View break>` do PDF.
+
+      Achado 0123: o MESMO percurso decide onde desenhar a virada. Antes o
+      desenho era um gradiente cego nos múltiplos de 1123px, então a régua nunca
+      caía na quebra que a contagem usou: a prévia anunciava "2 páginas A4" e
+      mostrava uma folha só, sem nenhuma linha. Agora sai uma régua por virada
+      (as internas do trecho e a da própria quebra) e a folha vai até o fim da
+      última página, deixando visível o branco que sobra.
     */
+    // `offsetHeight` é medida de layout: ignora o `scale` e já vem na geometria
+    // do A4. `getBoundingClientRect`, abaixo, vem escalada — daí a divisão.
     const sheetTop = sheet.getBoundingClientRect().top;
     const cuts = Array.from(sheet.querySelectorAll(".adaptar-page-break")).map(
       (mark) => (mark.getBoundingClientRect().top - sheetTop) / scale,
     );
-    const pages = [...cuts, height].reduce(
-      (acc, end) => {
-        acc.total += Math.max(1, Math.ceil((end - acc.start) / PAGE_HEIGHT_PX));
-        acc.start = end;
-        return acc;
-      },
-      { total: 0, start: 0 },
-    ).total;
-    setPageCount(Math.max(1, pages));
+    const ends = [...cuts, height];
+    const rules: number[] = [];
+    let start = 0;
+    let total = 0;
+    let paperHeight = PAGE_HEIGHT_PX;
+    ends.forEach((end, index) => {
+      const sheets = Math.max(1, Math.ceil((end - start) / PAGE_HEIGHT_PX));
+      for (let page = 1; page < sheets; page += 1) {
+        rules.push(start + page * PAGE_HEIGHT_PX);
+      }
+      total += sheets;
+      // A última folha do trecho sempre vale uma página inteira: é ela que
+      // mostra quanto papel sobra.
+      paperHeight = start + sheets * PAGE_HEIGHT_PX;
+      // Toda quebra (tudo menos o fim do conteúdo) é uma virada desenhada.
+      if (index < ends.length - 1) rules.push(end);
+      start = end;
+    });
+    setPageCount(total);
+    setSheetHeight(paperHeight);
+    setPageRules(rules);
     // `scale` entra nas dependências porque o efeito lê rects já escalados: sem
     // ele a contagem ficaria presa na escala do render anterior.
   }, [paginated, children, scale]);
+
+  /*
+    Régua da virada de página: uma linha em CADA posição calculada acima (a
+    virada por quebra de questão inclusive). Recortar o fluxo em folhas de
+    verdade (empurrando o conteúdo pós-quebra para o topo da folha seguinte)
+    exigiria unificar editor/prévia/PDF numa única paginação, fora do escopo
+    desta correção.
+  */
+  const ruleColor = "hsl(var(--sf-line-2))";
+  const pageRulesBackground = pageRules.length
+    ? `linear-gradient(to bottom, ${pageRules
+        .map(
+          (y) =>
+            `transparent ${y - 1}px, ${ruleColor} ${y - 1}px, ${ruleColor} ${y}px, transparent ${y}px`,
+        )
+        .join(", ")})`
+    : "none";
 
   const sheet = (
     <div
@@ -123,20 +167,18 @@ export function PageSheet({ toolbar, pageStyle, paginated = false, children }: P
         boxShadow: "var(--sf-paper-shadow)",
         ...(paginated
           ? {
-              minHeight: `${PAGE_HEIGHT_PX}px`,
+              minHeight: `${sheetHeight}px`,
               transform: `scale(${scale})`,
-              /*
-                Régua da virada de página: uma linha a cada altura de A4, sem
-                cortar o conteúdo. Recortar o fluxo em folhas de verdade
-                exigiria unificar editor/prévia/PDF numa única paginação —
-                fora do escopo desta correção.
-              */
-              backgroundImage: `repeating-linear-gradient(to bottom, transparent 0, transparent ${PAGE_HEIGHT_PX - 1}px, hsl(var(--sf-line-2)) ${PAGE_HEIGHT_PX - 1}px, hsl(var(--sf-line-2)) ${PAGE_HEIGHT_PX}px)`,
+              backgroundImage: pageRulesBackground,
             }
           : {}),
       }}
     >
-      {children}
+      {/*
+        Envelope do conteúdo: dá a altura NATURAL do documento, que a folha (já
+        esticada até o fim da última página) não dá mais (achado 0123).
+      */}
+      {paginated ? <div ref={contentRef}>{children}</div> : children}
     </div>
   );
 
