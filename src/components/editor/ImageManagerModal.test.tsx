@@ -377,4 +377,68 @@ describe("ImageManagerModal", () => {
     fireEvent.change(input);
     await waitFor(() => expect(screen.queryAllByRole("img").length).toBeGreaterThan(0));
   });
+
+  it("encodes a transparent PNG as PNG (never JPEG, which would flatten alpha onto black)", async () => {
+    const toDataURL = vi.fn(() => "data:image/png;base64,OUT");
+    HTMLCanvasElement.prototype.toDataURL = toDataURL as never;
+    const fillRect = vi.fn();
+    HTMLCanvasElement.prototype.getContext = vi.fn(() => ({
+      drawImage: vi.fn(),
+      fillRect,
+      set fillStyle(_v: string) {},
+    })) as never;
+
+    class FR {
+      onload: (() => void) | null = null;
+      result: string | null = null;
+      readAsDataURL() {
+        this.result = "data:image/png;base64,ALPHA";
+        queueMicrotask(() => this.onload?.());
+      }
+    }
+    (globalThis as { FileReader: unknown }).FileReader = FR as unknown;
+
+    render(<ImageManagerModal open onClose={vi.fn()} onConfirm={vi.fn()} />);
+    const input = document.querySelector('input[type="file"]') as HTMLInputElement;
+    const png = new File([new Uint8Array([0x89])], "alpha.png", { type: "image/png" });
+    Object.defineProperty(input, "files", { value: [png], writable: false, configurable: true });
+    fireEvent.change(input);
+    await waitFor(() => expect(toDataURL).toHaveBeenCalled());
+    expect(toDataURL).toHaveBeenCalledWith("image/png", undefined);
+    expect(fillRect).not.toHaveBeenCalled();
+  });
+
+  it("paints a white backdrop before encoding a JPEG, so alpha never composites onto black", async () => {
+    const toDataURL = vi.fn(() => "data:image/jpeg;base64,OUT");
+    HTMLCanvasElement.prototype.toDataURL = toDataURL as never;
+    const fillRect = vi.fn();
+    let fill = "";
+    HTMLCanvasElement.prototype.getContext = vi.fn(() => ({
+      drawImage: vi.fn(),
+      fillRect,
+      set fillStyle(v: string) {
+        fill = v;
+      },
+    })) as never;
+
+    class FR {
+      onload: (() => void) | null = null;
+      result: string | null = null;
+      readAsDataURL() {
+        this.result = "data:image/jpeg;base64,JPG";
+        queueMicrotask(() => this.onload?.());
+      }
+    }
+    (globalThis as { FileReader: unknown }).FileReader = FR as unknown;
+
+    render(<ImageManagerModal open onClose={vi.fn()} onConfirm={vi.fn()} />);
+    const input = document.querySelector('input[type="file"]') as HTMLInputElement;
+    const jpg = new File([new Uint8Array([0xff])], "photo.jpg", { type: "image/jpeg" });
+    Object.defineProperty(input, "files", { value: [jpg], writable: false, configurable: true });
+    fireEvent.change(input);
+    await waitFor(() => expect(toDataURL).toHaveBeenCalled());
+    expect(toDataURL).toHaveBeenCalledWith("image/jpeg", 0.85);
+    expect(fillRect).toHaveBeenCalledWith(0, 0, 100, 100);
+    expect(fill).toBe("#ffffff");
+  });
 });

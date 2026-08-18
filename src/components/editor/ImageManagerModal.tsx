@@ -17,6 +17,7 @@ import {
   AlignRight,
   Clipboard,
 } from "lucide-react";
+import { chooseImageEncoding } from "./imageManagerUtils";
 import type { ImageItem, ImageAlign } from "./imageManagerUtils";
 
 type Props = {
@@ -26,7 +27,6 @@ type Props = {
 };
 
 const MAX_DIMENSION = 800;
-const JPEG_QUALITY = 0.85;
 
 function generateId() {
   return Math.random().toString(36).slice(2, 10);
@@ -48,8 +48,15 @@ function resizeImage(file: File): Promise<string> {
         canvas.width = width;
         canvas.height = height;
         const ctx = canvas.getContext("2d")!;
+        const { mime, quality } = chooseImageEncoding(file.type);
+        if (mime === "image/jpeg") {
+          // JPEG has no alpha: without an explicit backdrop the browser
+          // composites transparency over black. The sheet is white.
+          ctx.fillStyle = "#ffffff";
+          ctx.fillRect(0, 0, width, height);
+        }
         ctx.drawImage(img, 0, 0, width, height);
-        resolve(canvas.toDataURL("image/jpeg", JPEG_QUALITY));
+        resolve(canvas.toDataURL(mime, quality));
       };
       img.onerror = reject;
       img.src = reader.result as string;

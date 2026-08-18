@@ -82,3 +82,24 @@ export function expandImageRegistry(
     return `[img:${url}${params ?? ""}]`;
   });
 }
+
+/** Formats that can carry an alpha channel: re-encoding them as JPEG would
+ * composite the transparent pixels over black (per the HTML spec). */
+const ALPHA_CAPABLE_MIME = new Set([
+  "image/png",
+  "image/gif",
+  "image/webp",
+  "image/avif",
+  "image/svg+xml",
+]);
+
+export const JPEG_QUALITY = 0.85;
+
+export function chooseImageEncoding(fileType: string): {
+  mime: string;
+  quality: number | undefined;
+} {
+  return ALPHA_CAPABLE_MIME.has(fileType.toLowerCase())
+    ? { mime: "image/png", quality: undefined }
+    : { mime: "image/jpeg", quality: JPEG_QUALITY };
+}

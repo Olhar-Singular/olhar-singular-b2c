@@ -5,6 +5,7 @@ import {
   resolveImageSrc,
   scanAndRegisterUrls,
   expandImageRegistry,
+  chooseImageEncoding,
   type ImageItem,
 } from "./imageManagerUtils";
 
@@ -105,5 +106,25 @@ describe("expandImageRegistry", () => {
   it("preserves trailing parameters when expanding", () => {
     const out = expandImageRegistry("[img:imagem-1 align=center]", { "imagem-1": "https://x.png" });
     expect(out).toBe("[img:https://x.png align=center]");
+  });
+});
+
+describe("chooseImageEncoding", () => {
+  it("keeps alpha-capable formats as PNG so transparency is not flattened", () => {
+    for (const type of ["image/png", "image/gif", "image/webp", "image/avif", "image/svg+xml"]) {
+      expect(chooseImageEncoding(type)).toEqual({ mime: "image/png", quality: undefined });
+    }
+  });
+
+  it("is case insensitive", () => {
+    expect(chooseImageEncoding("IMAGE/PNG").mime).toBe("image/png");
+  });
+
+  it("encodes JPEG input as JPEG with quality", () => {
+    expect(chooseImageEncoding("image/jpeg")).toEqual({ mime: "image/jpeg", quality: 0.85 });
+  });
+
+  it("falls back to JPEG for unknown types", () => {
+    expect(chooseImageEncoding("").mime).toBe("image/jpeg");
   });
 });
