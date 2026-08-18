@@ -204,6 +204,66 @@ export function getRelevantProfiles(barriers: Array<{ dimension?: string }>): st
   return Array.from(profiles);
 }
 
+/** One selected barrier, as the client sends it in the request body. */
+export interface PromptBarrier {
+  dimension?: string;
+  barrier_key?: string;
+  /**
+   * The human-readable barrier name ("Dificuldade na leitura e interpretação
+   * de enunciados"). Optional because older persisted payloads predate it —
+   * those still fall back to the key.
+   */
+  label?: string;
+  notes?: string;
+}
+
+export interface BuildUserPromptInput {
+  /** Already sanitised by the caller (see MAX_* caps above). */
+  activityType: string;
+  barriers: PromptBarrier[];
+  /** Already sanitised; empty string means "the teacher wrote nothing". */
+  observations: string;
+  /** Already sanitised. */
+  activity: string;
+}
+
+/**
+ * The user-turn prompt: what the model is asked to adapt, and for whom.
+ *
+ * Names each barrier by its LABEL when available. Sending only the key made
+ * the model read `dislexia_leitura` where the teacher had picked "Dificuldade
+ * na leitura e interpretação de enunciados" — the key is an internal
+ * identifier, and asking a model to infer pedagogy from a snake_case token
+ * throws away the one sentence that actually describes the student's barrier.
+ */
+export function buildUserPrompt({
+  activityType,
+  barriers,
+  observations,
+  activity,
+}: BuildUserPromptInput): string {
+  const barriersList = barriers
+    .map((b) => {
+      const parts = [b.label || b.barrier_key || b.dimension || "barreira"];
+      if (b.dimension) parts.push(`(dimensão: ${b.dimension})`);
+      if (b.notes) parts.push(`— nota: ${b.notes}`);
+      return parts.join(" ");
+    })
+    .join("\n- ");
+
+  let prompt = `TIPO DE ATIVIDADE: ${activityType}
+
+BARREIRAS OBSERVÁVEIS:
+- ${barriersList}`;
+
+  if (observations) {
+    prompt += `\n\nOBSERVAÇÕES DO PROFESSOR:\n${observations}`;
+  }
+
+  prompt += `\n\nATIVIDADE ORIGINAL:\n${activity}`;
+  return prompt;
+}
+
 export interface BuildSystemPromptOptions {
   /**
    * Upload-direto-de-prova flow only: the activity text was extracted

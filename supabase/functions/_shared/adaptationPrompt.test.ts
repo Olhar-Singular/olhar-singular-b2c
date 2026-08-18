@@ -11,7 +11,73 @@ import {
   attemptTimeoutMs,
   getRelevantProfiles,
   buildSystemPrompt,
+  buildUserPrompt,
 } from "./adaptationPrompt";
+
+describe("buildUserPrompt", () => {
+  const base = { activityType: "prova", observations: "", activity: "1) Quanto é 2+2?" };
+
+  it("names each barrier by its human label, not the technical key", () => {
+    const out = buildUserPrompt({
+      ...base,
+      barriers: [
+        { dimension: "dislexia", barrier_key: "dislexia_leitura", label: "Dificuldade na leitura e interpretação de enunciados" },
+      ],
+    });
+    expect(out).toContain("Dificuldade na leitura e interpretação de enunciados");
+    expect(out).toContain("(dimensão: dislexia)");
+  });
+
+  it("falls back to the key, then the dimension, then a generic word", () => {
+    const out = buildUserPrompt({
+      ...base,
+      barriers: [
+        { dimension: "tea", barrier_key: "tea_abstracao" },
+        { dimension: "tdah" },
+        {},
+      ],
+    });
+    expect(out).toContain("tea_abstracao");
+    expect(out).toContain("tdah (dimensão: tdah)");
+    expect(out).toContain("barreira");
+  });
+
+  it("appends the per-barrier note when present", () => {
+    const out = buildUserPrompt({
+      ...base,
+      barriers: [{ dimension: "tea", label: "Sobrecarga sensorial", notes: "piora no fim da aula" }],
+    });
+    expect(out).toContain("— nota: piora no fim da aula");
+  });
+
+  it("lists several barriers one per line", () => {
+    const out = buildUserPrompt({
+      ...base,
+      barriers: [{ label: "Primeira" }, { label: "Segunda" }],
+    });
+    expect(out).toContain("- Primeira\n- Segunda");
+  });
+
+  it("includes the teacher's observations block when there are notes", () => {
+    const out = buildUserPrompt({
+      ...base,
+      observations: "Lê devagar e trava com layout carregado.",
+      barriers: [{ label: "X" }],
+    });
+    expect(out).toContain("OBSERVAÇÕES DO PROFESSOR:\nLê devagar e trava com layout carregado.");
+  });
+
+  it("omits the observations block entirely when there are none", () => {
+    const out = buildUserPrompt({ ...base, barriers: [{ label: "X" }] });
+    expect(out).not.toContain("OBSERVAÇÕES DO PROFESSOR");
+  });
+
+  it("carries the activity type and the original activity", () => {
+    const out = buildUserPrompt({ ...base, barriers: [{ label: "X" }] });
+    expect(out).toContain("TIPO DE ATIVIDADE: prova");
+    expect(out).toContain("ATIVIDADE ORIGINAL:\n1) Quanto é 2+2?");
+  });
+});
 
 describe("getRelevantProfiles", () => {
   it("returns the dimensions that map to a known strategy", () => {

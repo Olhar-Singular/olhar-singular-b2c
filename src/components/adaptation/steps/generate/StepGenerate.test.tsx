@@ -118,7 +118,9 @@ describe("StepGenerate", () => {
           original_activity: "1) Q?",
           activity_type: "exercício",
           observation_notes: "obs",
-          barriers: [{ dimension: "tea", barrier_key: "tea_abstracao", notes: undefined }],
+          // `label` rides along so the prompt can name the barrier in words
+          // instead of making the model infer pedagogy from a snake_case key.
+          barriers: [{ dimension: "tea", barrier_key: "tea_abstracao", label: "x", notes: undefined }],
         }),
       }),
     );

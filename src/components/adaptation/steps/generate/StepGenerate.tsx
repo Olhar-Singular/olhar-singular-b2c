@@ -85,7 +85,16 @@ export function StepGenerate({ data, onResult, onNext, onPrev, onLoadingChange }
   const adaptActivity = useCallback(async (activityText: string, controller: AbortController) => {
     const activeBarriers = data.barriers
       .filter((b) => b.is_active)
-      .map((b) => ({ dimension: b.dimension, barrier_key: b.barrier_key, notes: b.notes }));
+      // `label` is the human name the teacher actually picked ("Dificuldade na
+      // leitura e interpretação de enunciados"); without it the prompt only
+      // shows the snake_case key. It also lands in the persisted
+      // `barriers_used`, which until now stored keys alone.
+      .map((b) => ({
+        dimension: b.dimension,
+        barrier_key: b.barrier_key,
+        label: b.label,
+        notes: b.notes,
+      }));
 
     const { data: fnResult, error: fnError } = await supabase.functions.invoke("adapt-activity", {
       body: {

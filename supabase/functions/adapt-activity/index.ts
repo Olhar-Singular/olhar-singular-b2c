@@ -25,10 +25,12 @@ import { extractImageMarkers, stripFabricatedImages } from "../_shared/imageSour
 import { stripGapTokens } from "../_shared/gapTokenGuard.ts";
 import {
   buildSystemPrompt,
+  buildUserPrompt,
   MAX_ACTIVITY_CHARS,
   MAX_ACTIVITY_TYPE_CHARS,
   MAX_OBSERVATION_CHARS,
   attemptTimeoutMs,
+  type PromptBarrier,
 } from "../_shared/adaptationPrompt.ts";
 import { aiActivityJsonSchema } from "../../../src/lib/adaptation/canonical/ai.ts";
 
@@ -169,25 +171,12 @@ serve(async (req) => {
       const sanitizedType = sanitize(activity_type, MAX_ACTIVITY_TYPE_CHARS);
       const sanitizedObservations = observation_notes ? sanitize(observation_notes, MAX_OBSERVATION_CHARS) : "";
 
-      const activeBarriersList = (barriers as Array<{ dimension?: string; barrier_key?: string; notes?: string }>)
-        .map((b) => {
-          const parts = [b.barrier_key || b.dimension || "barreira"];
-          if (b.dimension) parts.push(`(dimensão: ${b.dimension})`);
-          if (b.notes) parts.push(`— nota: ${b.notes}`);
-          return parts.join(" ");
-        })
-        .join("\n- ");
-
-      let userPrompt = `TIPO DE ATIVIDADE: ${sanitizedType}
-
-BARREIRAS OBSERVÁVEIS:
-- ${activeBarriersList}`;
-
-      if (sanitizedObservations) {
-        userPrompt += `\n\nOBSERVAÇÕES DO PROFESSOR:\n${sanitizedObservations}`;
-      }
-
-      userPrompt += `\n\nATIVIDADE ORIGINAL:\n${sanitizedActivity}`;
+      const userPrompt = buildUserPrompt({
+        activityType: sanitizedType,
+        barriers: barriers as PromptBarrier[],
+        observations: sanitizedObservations,
+        activity: sanitizedActivity,
+      });
 
       const systemPrompt = buildSystemPrompt(barriers, { fidelityMode: fidelity_mode === true });
       const jsonSchema = aiActivityJsonSchema();
