@@ -12,7 +12,51 @@ import {
   getRelevantProfiles,
   buildSystemPrompt,
   buildUserPrompt,
+  SCAFFOLDING_EXAMPLE_QUESTION,
 } from "./adaptationPrompt";
+import { AiBlockSchema } from "../../../src/lib/adaptation/canonical/ai";
+
+describe("scaffolding mandate", () => {
+  const prompt = () => buildSystemPrompt([{ dimension: "tea" }]);
+
+  it("demands support blocks instead of merely allowing them", () => {
+    expect(prompt()).toContain("TEXTOS DE APOIO (SCAFFOLDING) — OBRIGATÓRIO");
+  });
+
+  it("says support belongs in a PROVA too", () => {
+    // The direct-upload flow is almost always activityType "prova". While the
+    // PROVA line was the only per-type line that never mentioned support — and
+    // EXERCÍCIO explicitly allowed it — the model correctly inferred that
+    // scaffolding was an exercise-only device and left it out of every exam.
+    const provaLine = prompt().split("\n").find((l) => l.startsWith("PROVA:"));
+    expect(provaLine).toBeDefined();
+    expect(provaLine).toMatch(/apoio/i);
+  });
+
+  it("forbids putting the answer in the support steps", () => {
+    expect(prompt()).toMatch(/nunca a resposta/i);
+  });
+
+  it("embeds the worked example so the rule has a shape to copy", () => {
+    expect(prompt()).toContain(JSON.stringify(SCAFFOLDING_EXAMPLE_QUESTION));
+  });
+
+  it("keeps the worked example valid against the real AI schema", () => {
+    // The example is a promise to the model about what valid output looks
+    // like. If the canonical schema moves and this drifts, we would be
+    // teaching the model to emit exactly what the validator then rejects.
+    expect(() => AiBlockSchema.parse(SCAFFOLDING_EXAMPLE_QUESTION)).not.toThrow();
+  });
+
+  it("shows 2-4 support steps in the example", () => {
+    const scaffold = SCAFFOLDING_EXAMPLE_QUESTION.stem.find((b) => b.type === "scaffolding") as
+      | { items: string[] }
+      | undefined;
+    expect(scaffold).toBeDefined();
+    expect(scaffold!.items.length).toBeGreaterThanOrEqual(2);
+    expect(scaffold!.items.length).toBeLessThanOrEqual(4);
+  });
+});
 
 describe("buildUserPrompt", () => {
   const base = { activityType: "prova", observations: "", activity: "1) Quanto é 2+2?" };

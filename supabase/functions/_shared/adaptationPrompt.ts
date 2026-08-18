@@ -204,6 +204,42 @@ export function getRelevantProfiles(barriers: Array<{ dimension?: string }>): st
   return Array.from(profiles);
 }
 
+/**
+ * A single adapted question, embedded verbatim in the system prompt as a
+ * worked example.
+ *
+ * The prompt was 100% declarative before this: nine DUA bullets and a schema,
+ * with nothing showing what "good" looks like. One concrete pair does more to
+ * fix the shape of the output than another paragraph of instruction.
+ *
+ * Kept as a value (not a string) so the test suite can parse it against the
+ * real `AiBlockSchema` — an example that drifts out of sync with the schema
+ * would be teaching the model to emit exactly what the validator rejects.
+ */
+export const SCAFFOLDING_EXAMPLE_QUESTION = {
+  type: "question",
+  stem: [
+    {
+      type: "paragraph",
+      content: [
+        {
+          type: "text",
+          text: "Uma padaria vendeu 24 pães pela manhã e 18 pães à tarde. Quantos pães ela vendeu no dia todo?",
+        },
+      ],
+    },
+    {
+      type: "scaffolding",
+      items: [
+        "Sublinhe no enunciado os dois números que aparecem.",
+        "Decida a operação: juntar quantidades pede adição.",
+        "Efetue a soma e escreva o resultado com a unidade (pães).",
+      ],
+    },
+  ],
+  answer: { kind: "open", answerLines: 3 },
+} as const;
+
 /** One selected barrier, as the client sends it in the request body. */
 export interface PromptBarrier {
   dimension?: string;
@@ -348,13 +384,23 @@ PRINCÍPIOS GERAIS DE ADAPTAÇÃO EM EXATAS
 - Diversificar avaliação
 
 ADAPTAÇÃO POR TIPO DE ATIVIDADE
-PROVA: mantenha o rigor avaliativo; adapte o FORMATO, não o CONTEÚDO conceitual; preserve o número de questões ou justifique a redução.
+PROVA: mantenha o rigor avaliativo; adapte o FORMATO, não o CONTEÚDO conceitual; preserve o número de questões ou justifique a redução. Textos de apoio SÃO esperados também aqui — apoio de PROCESSO (o que fazer) não entrega a resposta nem rebaixa o nível de Bloom.
 EXERCÍCIO: pode incluir scaffolding mais intenso (dicas, exemplos parciais) e questões preparatórias; maior flexibilidade no formato de resposta.
 ATIVIDADE DE CASA: instruções mais detalhadas e autoexplicativas, considerando ausência de mediação.
 TRABALHO: divida em etapas com entregas parciais; forneça rubrica e templates.
 
 TAXONOMIA DE BLOOM — PRESERVAÇÃO
 Identifique o nível cognitivo de cada questão e PRESERVE-O na adaptação (lembrar, compreender, aplicar, analisar, avaliar, criar). A adaptação remove BARREIRAS DE ACESSO, não reduz o nível cognitivo.
+
+TEXTOS DE APOIO (SCAFFOLDING) — OBRIGATÓRIO
+O apoio passo a passo é a adaptação que mais remove barreira de ACESSO sem tocar no nível cognitivo, e é o que o professor mais espera encontrar na atividade adaptada. NÃO é opcional:
+- Para CADA questão que exija leitura de enunciado longo, interpretação, ou mais de uma etapa de raciocínio, inclua um bloco "scaffolding" DENTRO do "stem", logo após o enunciado.
+- De 2 a 4 itens curtos, no imperativo, dizendo O QUE FAZER — nunca a resposta. "Sublinhe o que a questão pede" é apoio; "o resultado é 42" é gabarito e está PROIBIDO.
+- Numa atividade com mais de duas questões, ao menos uma DEVE trazer apoio.
+- O apoio SOMA-SE ao conteúdo original: não encurte nem substitua o enunciado para abrir espaço para ele.
+
+EXEMPLO DE QUESTÃO COM APOIO (ilustra o nível de detalhe esperado — NÃO copie este conteúdo, adapte o da atividade real):
+${JSON.stringify(SCAFFOLDING_EXAMPLE_QUESTION)}
 ${fidelityBlock}
 
 FORMATO DE SAÍDA (OBRIGATÓRIO — JSON ESTRUTURADO)
