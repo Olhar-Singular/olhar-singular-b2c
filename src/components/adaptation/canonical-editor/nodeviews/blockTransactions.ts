@@ -1,7 +1,7 @@
 /**
  * Transaction builders for the question-card actions that mutate the document
- * structure: moving a top-level block up/down and appending an image to a
- * question's stem.
+ * structure: moving a top-level block up/down and inserting images (into a
+ * question's stem, or as siblings of an image block).
  *
  * These take an `EditorState` and return a `Transaction` (or null) so they can
  * be unit-tested against the real ProseMirror schema without a browser/view —
@@ -46,21 +46,49 @@ export interface StemImage {
   id: string;
   src: string;
   alt: string;
+  alignment: string | null;
+}
+
+/** Materialize a batch of canonical images as PM `image` nodes, in order. */
+function imageNodes(state: EditorState, images: StemImage[]) {
+  return images.map((image) =>
+    state.schema.nodes.image.create({
+      id: image.id,
+      src: image.src,
+      alt: image.alt,
+      alignment: image.alignment,
+    }),
+  );
 }
 
 /**
- * Build a transaction that appends `image` as the last stem child of the
+ * Build a transaction that appends `images` as the last stem children of the
  * question block at `pos`.
+ *
+ * Takes the WHOLE batch (achado 0318): the image modal is multi-select from end
+ * to end ("Inserir (3)"), so dropping everything past the first silently threw
+ * away the user's input.
  */
-export function buildStemImageTransaction(
+export function buildStemImagesTransaction(
   state: EditorState,
   pos: number,
-  image: StemImage,
+  images: StemImage[],
 ): Transaction {
-  const node = state.schema.nodes.image.create({
-    id: image.id,
-    src: image.src,
-    alt: image.alt,
-  });
-  return state.tr.insert(stemInsertPos(state.doc, pos), node);
+  return state.tr.insert(stemInsertPos(state.doc, pos), imageNodes(state, images));
+}
+
+/**
+ * Build a transaction that inserts `images` right after the block at `pos`, as
+ * siblings. Used by the image block when the modal returns a batch: the first
+ * image replaces the block itself and the remainder lands just below it
+ * (achado 0318). Returns null when there is no node at `pos`.
+ */
+export function buildSiblingImagesTransaction(
+  state: EditorState,
+  pos: number,
+  images: StemImage[],
+): Transaction | null {
+  const node = state.doc.resolve(pos).nodeAfter;
+  if (!node) return null;
+  return state.tr.insert(pos + node.nodeSize, imageNodes(state, images));
 }

@@ -5,7 +5,11 @@ import { getEditorSchema } from "@/lib/adaptation/tiptap/getEditorSchema";
 import { canonicalToProseMirror } from "@/lib/adaptation/tiptap/fromCanonical";
 import { proseMirrorToCanonical } from "@/lib/adaptation/tiptap/toCanonical";
 import type { CanonicalDocument } from "@/lib/adaptation/canonical/schema";
-import { buildMoveTransaction, buildStemImageTransaction } from "./blockTransactions";
+import {
+  buildMoveTransaction,
+  buildSiblingImagesTransaction,
+  buildStemImagesTransaction,
+} from "./blockTransactions";
 
 const schema = getEditorSchema();
 
@@ -118,10 +122,10 @@ describe("buildMoveTransaction — question swap", () => {
 });
 
 // ---------------------------------------------------------------------------
-// buildStemImageTransaction
+// buildStemImagesTransaction
 // ---------------------------------------------------------------------------
 
-describe("buildStemImageTransaction (real schema)", () => {
+describe("buildStemImagesTransaction (real schema)", () => {
   const withQuestion: CanonicalDocument = {
     schemaVersion: 1,
     blocks: [
@@ -136,20 +140,76 @@ describe("buildStemImageTransaction (real schema)", () => {
     ],
   };
 
+  function stemOf(doc: PMNode) {
+    const canonical = proseMirrorToCanonical(doc.toJSON());
+    const question = canonical.blocks.find((b) => b.id === uid(9));
+    expect(question?.type).toBe("question");
+    return (question as { stem: { type: string; id: string }[] }).stem;
+  }
+
   it("inserts the image as the question's last stem child", () => {
     const state = makeState(withQuestion);
     const pos = posOfChild(state.doc, 0);
-    const tr = buildStemImageTransaction(state, pos, {
-      id: uid(11),
-      src: "https://example.com/x.png",
-      alt: "",
-    });
+    const tr = buildStemImagesTransaction(state, pos, [
+      { id: uid(11), src: "https://example.com/x.png", alt: "", alignment: "center" },
+    ]);
     const next = state.apply(tr);
-    const canonical = proseMirrorToCanonical(next.doc.toJSON());
-    const question = canonical.blocks.find((b) => b.id === uid(9));
-    expect(question?.type).toBe("question");
-    const stem = (question as { stem: { type: string; id: string }[] }).stem;
+    const stem = stemOf(next.doc);
     const last = stem[stem.length - 1];
     expect(last).toMatchObject({ type: "image", id: uid(11), src: "https://example.com/x.png" });
+  });
+
+  // 0318 — a modal é multi-seleção; o lote inteiro tem que chegar ao stem,
+  // cada imagem com o alinhamento escolhido na grade.
+  it("inserts the WHOLE batch, in order, keeping each alignment", () => {
+    const state = makeState(withQuestion);
+    const pos = posOfChild(state.doc, 0);
+    const tr = buildStemImagesTransaction(state, pos, [
+      { id: uid(11), src: "https://example.com/a.png", alt: "", alignment: "left" },
+      { id: uid(12), src: "https://example.com/b.png", alt: "", alignment: "center" },
+      { id: uid(13), src: "https://example.com/c.png", alt: "", alignment: "right" },
+    ]);
+    const stem = stemOf(state.apply(tr).doc);
+    expect(stem.slice(-3)).toMatchObject([
+      { type: "image", id: uid(11), src: "https://example.com/a.png", alignment: "left" },
+      { type: "image", id: uid(12), src: "https://example.com/b.png", alignment: "center" },
+      { type: "image", id: uid(13), src: "https://example.com/c.png", alignment: "right" },
+    ]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// buildSiblingImagesTransaction (achado 0318)
+// ---------------------------------------------------------------------------
+
+describe("buildSiblingImagesTransaction (real schema)", () => {
+  const withImage: CanonicalDocument = {
+    schemaVersion: 1,
+    blocks: [
+      { id: uid(20), type: "image", src: "https://example.com/orig.png", alt: "" },
+      p(21),
+    ],
+  };
+
+  it("inserts the batch right after the image block, keeping alignment", () => {
+    const state = makeState(withImage);
+    const tr = buildSiblingImagesTransaction(state, posOfChild(state.doc, 0), [
+      { id: uid(22), src: "https://example.com/b.png", alt: "", alignment: "right" },
+      { id: uid(23), src: "https://example.com/c.png", alt: "", alignment: "left" },
+    ]);
+    expect(tr).not.toBeNull();
+    const next = state.apply(tr!);
+    expect(order(next.doc)).toEqual([uid(20), uid(22), uid(23), uid(21)]);
+    const blocks = proseMirrorToCanonical(next.doc.toJSON()).blocks;
+    expect(blocks[1]).toMatchObject({ type: "image", src: "https://example.com/b.png", alignment: "right" });
+  });
+
+  it("returns null when there is no node at the given position", () => {
+    const state = makeState(withImage);
+    expect(
+      buildSiblingImagesTransaction(state, state.doc.content.size, [
+        { id: uid(22), src: "https://example.com/b.png", alt: "", alignment: "center" },
+      ]),
+    ).toBeNull();
   });
 });

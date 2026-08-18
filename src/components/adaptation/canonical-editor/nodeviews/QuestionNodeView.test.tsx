@@ -19,10 +19,10 @@ vi.mock("@/components/editor/ImageManagerModal", () => ({
 }));
 
 const buildMoveTransaction = vi.fn();
-const buildStemImageTransaction = vi.fn();
+const buildStemImagesTransaction = vi.fn();
 vi.mock("./blockTransactions", () => ({
   buildMoveTransaction: (...args: unknown[]) => buildMoveTransaction(...args),
-  buildStemImageTransaction: (...args: unknown[]) => buildStemImageTransaction(...args),
+  buildStemImagesTransaction: (...args: unknown[]) => buildStemImagesTransaction(...args),
 }));
 
 const canMoveUp = vi.fn();
@@ -370,18 +370,36 @@ describe("QuestionNodeView — rail actions", () => {
 
   it("opens the image modal and inserts the picked image into the stem", () => {
     const tr = { isImage: true };
-    buildStemImageTransaction.mockReturnValue(tr);
+    buildStemImagesTransaction.mockReturnValue(tr);
     const { props, dispatch } = makeProps(mc);
     render(<QuestionNodeView {...props} />);
     expect(screen.queryByTestId("image-modal")).not.toBeInTheDocument();
     fireEvent.click(screen.getByLabelText("Adicionar imagem à questão"));
     expect(screen.getByTestId("image-modal")).toBeInTheDocument();
     modalOnConfirm?.([{ id: "x", src: "https://example.com/a.png", align: "center" }]);
-    expect(buildStemImageTransaction).toHaveBeenCalledWith(props.editor.state, 100, {
-      id: "new-id",
-      src: "https://example.com/a.png",
-      alt: "",
-    });
+    expect(buildStemImagesTransaction).toHaveBeenCalledWith(props.editor.state, 100, [
+      { id: "new-id", src: "https://example.com/a.png", alt: "", alignment: "center" },
+    ]);
+    expect(dispatch).toHaveBeenCalledWith(tr);
+  });
+
+  // 0318 — a modal conta "Inserir (3)"; as três têm que chegar ao enunciado.
+  it("inserts the WHOLE batch into the stem, each with its alignment", () => {
+    const tr = { isImage: true };
+    buildStemImagesTransaction.mockReturnValue(tr);
+    const { props, dispatch } = makeProps(mc);
+    render(<QuestionNodeView {...props} />);
+    fireEvent.click(screen.getByLabelText("Adicionar imagem à questão"));
+    modalOnConfirm?.([
+      { id: "x", src: "a.png", align: "left" },
+      { id: "y", src: "b.png", align: "center" },
+      { id: "z", src: "c.png", align: "right" },
+    ]);
+    expect(buildStemImagesTransaction).toHaveBeenCalledWith(props.editor.state, 100, [
+      { id: "new-id", src: "a.png", alt: "", alignment: "left" },
+      { id: "new-id", src: "b.png", alt: "", alignment: "center" },
+      { id: "new-id", src: "c.png", alt: "", alignment: "right" },
+    ]);
     expect(dispatch).toHaveBeenCalledWith(tr);
   });
 
@@ -390,7 +408,7 @@ describe("QuestionNodeView — rail actions", () => {
     render(<QuestionNodeView {...props} />);
     fireEvent.click(screen.getByLabelText("Adicionar imagem à questão"));
     modalOnConfirm?.([]);
-    expect(buildStemImageTransaction).not.toHaveBeenCalled();
+    expect(buildStemImagesTransaction).not.toHaveBeenCalled();
     expect(dispatch).not.toHaveBeenCalled();
   });
 

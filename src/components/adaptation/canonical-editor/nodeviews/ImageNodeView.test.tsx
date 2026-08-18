@@ -35,6 +35,16 @@ vi.mock("../RichTextField", () => ({
   },
 }));
 
+const buildSiblingImagesTransaction = vi.fn();
+vi.mock("./blockTransactions", () => ({
+  buildSiblingImagesTransaction: (...args: unknown[]) => buildSiblingImagesTransaction(...args),
+}));
+
+vi.mock("@/lib/adaptation/canonical/ids", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/adaptation/canonical/ids")>();
+  return { ...actual, newId: () => "new-id" };
+});
+
 vi.mock("@/components/editor/ImageResizer", () => ({
   default: ({ alt, onResize }: { alt: string; onResize: (w: number) => void }) => (
     <button data-testid="resizer" data-alt={alt} onClick={() => onResize(123)}>resizer</button>
@@ -51,16 +61,18 @@ vi.mock("@/components/editor/ImageManagerModal", () => ({
   },
 }));
 
-function makeProps(attrs: Record<string, unknown> = {}, editable = true) {
+function makeProps(attrs: Record<string, unknown> = {}, editable = true, pos: unknown = 7) {
   const updateAttributes = vi.fn();
   const deleteNode = vi.fn();
+  const dispatch = vi.fn();
   const props = {
     node: { attrs: { src: "x.png", alt: "", width: null, alignment: null, caption: null, ...attrs } },
     updateAttributes,
     deleteNode,
-    editor: { isEditable: editable },
+    getPos: vi.fn().mockReturnValue(pos),
+    editor: { isEditable: editable, state: { doc: "doc" }, view: { dispatch } },
   } as unknown as NodeViewProps;
-  return { props, updateAttributes, deleteNode };
+  return { props, updateAttributes, deleteNode, dispatch };
 }
 
 beforeEach(() => {
@@ -125,7 +137,7 @@ describe("ImageNodeView", () => {
     expect(screen.getByRole("button", { name: "Alinhar à esquerda" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Centralizar" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Alinhar à direita" })).toBeInTheDocument();
-    expect(screen.getByText("Trocar imagem")).toBeInTheDocument();
+    expect(screen.getByText("Trocar ou adicionar imagem")).toBeInTheDocument();
   });
 
   // --- Legenda: toggle -------------------------------------------------------
@@ -206,16 +218,67 @@ describe("ImageNodeView", () => {
   it("opens the modal and applies the first picked image", () => {
     const { props, updateAttributes } = makeProps();
     render(<ImageNodeView {...props} />);
-    fireEvent.click(screen.getByText("Trocar imagem"));
+    fireEvent.click(screen.getByText("Trocar ou adicionar imagem"));
     expect(screen.getByTestId("image-modal")).toBeInTheDocument();
     modalOnConfirm?.([{ id: "a", src: "new.png", align: "right" }]);
     expect(updateAttributes).toHaveBeenCalledWith({ src: "new.png", alignment: "right" });
   });
 
+  // 0318 — a modal diz "Inserir (3)" e o bloco gravava só a primeira: as demais
+  // entram como blocos irmãos logo abaixo, com o alinhamento escolhido.
+  it("applies the first pick and inserts the rest as sibling image blocks", () => {
+    const tr = { isBatch: true };
+    buildSiblingImagesTransaction.mockReturnValue(tr);
+    const { props, updateAttributes, dispatch } = makeProps();
+    render(<ImageNodeView {...props} />);
+    fireEvent.click(screen.getByText("Trocar ou adicionar imagem"));
+    modalOnConfirm?.([
+      { id: "a", src: "first.png", align: "left" },
+      { id: "b", src: "second.png", align: "center" },
+      { id: "c", src: "third.png", align: "right" },
+    ]);
+    expect(updateAttributes).toHaveBeenCalledWith({ src: "first.png", alignment: "left" });
+    expect(buildSiblingImagesTransaction).toHaveBeenCalledWith(props.editor.state, 7, [
+      { id: "new-id", src: "second.png", alt: "", alignment: "center" },
+      { id: "new-id", src: "third.png", alt: "", alignment: "right" },
+    ]);
+    expect(dispatch).toHaveBeenCalledWith(tr);
+  });
+
+  it("does not dispatch anything when a single image is picked", () => {
+    const { props, dispatch } = makeProps();
+    render(<ImageNodeView {...props} />);
+    modalOnConfirm?.([{ id: "a", src: "only.png", align: "center" }]);
+    expect(buildSiblingImagesTransaction).not.toHaveBeenCalled();
+    expect(dispatch).not.toHaveBeenCalled();
+  });
+
+  it("skips the sibling insert when the position is unknown", () => {
+    const { props, dispatch } = makeProps({}, true, null);
+    render(<ImageNodeView {...props} />);
+    modalOnConfirm?.([
+      { id: "a", src: "first.png", align: "left" },
+      { id: "b", src: "second.png", align: "center" },
+    ]);
+    expect(buildSiblingImagesTransaction).not.toHaveBeenCalled();
+    expect(dispatch).not.toHaveBeenCalled();
+  });
+
+  it("skips the dispatch when the transaction cannot be built", () => {
+    buildSiblingImagesTransaction.mockReturnValue(null);
+    const { props, dispatch } = makeProps();
+    render(<ImageNodeView {...props} />);
+    modalOnConfirm?.([
+      { id: "a", src: "first.png", align: "left" },
+      { id: "b", src: "second.png", align: "center" },
+    ]);
+    expect(dispatch).not.toHaveBeenCalled();
+  });
+
   it("closes the modal via onClose", () => {
     const { props } = makeProps();
     render(<ImageNodeView {...props} />);
-    fireEvent.click(screen.getByText("Trocar imagem"));
+    fireEvent.click(screen.getByText("Trocar ou adicionar imagem"));
     expect(screen.getByTestId("image-modal")).toBeInTheDocument();
     fireEvent.click(screen.getByTestId("image-modal"));
     expect(screen.queryByTestId("image-modal")).not.toBeInTheDocument();

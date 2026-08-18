@@ -86,7 +86,7 @@ export function buildQuestionNode(kind: QuestionKind, generate: Generate = newId
  * empty one is not "an image without a picture yet" — it is a document that
  * cannot be represented at all. Inserting one used to freeze the autosave for
  * the WHOLE sheet, silently, until a file was chosen. A data URI keeps the node
- * valid from the moment it exists; the NodeView still shows its "Trocar imagem"
+ * valid from the moment it exists; the NodeView still shows its "Trocar ou adicionar imagem"
  * affordance, and PNG (not SVG) is what the PDF renderer accepts.
  */
 export const IMAGE_PLACEHOLDER_SRC =

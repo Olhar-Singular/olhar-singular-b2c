@@ -30,7 +30,7 @@ import type { QuestionAnswer, RichText } from "@/lib/adaptation/canonical/schema
 import { newId } from "@/lib/adaptation/canonical/ids";
 import { questionOrdinal } from "./nodeViewUtils";
 import { canMoveUp, canMoveDown, type MoveDirection } from "./blockMove";
-import { buildMoveTransaction, buildStemImageTransaction } from "./blockTransactions";
+import { buildMoveTransaction, buildStemImagesTransaction } from "./blockTransactions";
 import { useQuestionCard } from "./questionCardState";
 import { QuestionPreview } from "./QuestionPreview";
 import { QuestionCard } from "./QuestionCard";
@@ -106,13 +106,18 @@ export function QuestionNodeView({ node, updateAttributes, editor, getPos, delet
     if (tr) editor.view.dispatch(tr);
   };
 
+  // Achado 0318: a modal é multi-seleção (conta "Inserir (3)") — o lote inteiro
+  // entra no enunciado, cada imagem com o alinhamento escolhido na grade.
   const handlePick = (images: ImageItem[]) => {
-    const first = images[0];
-    if (!first) return;
+    if (images.length === 0) return;
     const currentPos = getPos();
     /* v8 ignore next -- defensive type-narrow; the add-image button is disabled when pos is null */
     if (typeof currentPos !== "number") return;
-    const tr = buildStemImageTransaction(editor.state, currentPos, { id: newId(), src: first.src, alt: "" });
+    const tr = buildStemImagesTransaction(
+      editor.state,
+      currentPos,
+      images.map((image) => ({ id: newId(), src: image.src, alt: "", alignment: image.align })),
+    );
     editor.view.dispatch(tr);
   };
 

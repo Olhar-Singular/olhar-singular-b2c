@@ -7,6 +7,8 @@ import ImageResizer from "@/components/editor/ImageResizer";
 import ImageManagerModal from "@/components/editor/ImageManagerModal";
 import type { ImageItem } from "@/components/editor/imageManagerUtils";
 import type { RichText } from "@/lib/adaptation/canonical/schema";
+import { newId } from "@/lib/adaptation/canonical/ids";
+import { buildSiblingImagesTransaction } from "./blockTransactions";
 import { RichTextField } from "../RichTextField";
 import { cn } from "@/lib/utils";
 
@@ -23,7 +25,7 @@ const CAPTION_ALIGN: Record<string, "left" | "center" | "right"> = {
   right: "right",
 };
 
-export function ImageNodeView({ node, updateAttributes, deleteNode, editor }: NodeViewProps) {
+export function ImageNodeView({ node, updateAttributes, deleteNode, editor, getPos }: NodeViewProps) {
   const [modalOpen, setModalOpen] = useState(false);
   const { src, alt, width, alignment, caption } = node.attrs as {
     src: string;
@@ -34,9 +36,25 @@ export function ImageNodeView({ node, updateAttributes, deleteNode, editor }: No
   };
   const disabled = !editor.isEditable;
 
+  /**
+   * Achado 0318: a modal é multi-seleção e anuncia o lote ("Inserir (3)").
+   * A primeira imagem troca este bloco; as demais entram como blocos irmãos
+   * logo abaixo, cada uma com o alinhamento escolhido na grade — em vez de
+   * sumirem em silêncio.
+   */
   const handlePick = (images: ImageItem[]) => {
-    const first = images[0];
-    if (first) updateAttributes({ src: first.src, alignment: first.align });
+    const [first, ...rest] = images;
+    if (!first) return;
+    updateAttributes({ src: first.src, alignment: first.align });
+    if (rest.length === 0) return;
+    const currentPos = getPos();
+    if (typeof currentPos !== "number") return;
+    const tr = buildSiblingImagesTransaction(
+      editor.state,
+      currentPos,
+      rest.map((image) => ({ id: newId(), src: image.src, alt: "", alignment: image.align })),
+    );
+    if (tr) editor.view.dispatch(tr);
   };
 
   return (
@@ -80,7 +98,7 @@ export function ImageNodeView({ node, updateAttributes, deleteNode, editor }: No
               disabled={disabled}
               onClick={() => setModalOpen(true)}
             >
-              <ImageIcon className="h-3.5 w-3.5" /> Trocar imagem
+              <ImageIcon className="h-3.5 w-3.5" /> Trocar ou adicionar imagem
             </Button>
             <Button
               type="button"
