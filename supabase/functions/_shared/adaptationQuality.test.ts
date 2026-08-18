@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { inspectAdaptationQuality } from "./adaptationQuality";
+import { buildAdaptationResult } from "../../../src/lib/adaptation/canonical/ai";
 
 const question = (stem: Array<{ type: string }> = []) => ({ type: "question", stem });
 const scaffold = { type: "scaffolding" };
@@ -7,7 +8,49 @@ const scaffold = { type: "scaffolding" };
 const activity = (
   blocks: Array<{ type: string; stem?: Array<{ type: string }> }>,
   justification = "Reduz a carga de leitura.",
-) => ({ blocks, pedagogical_justification: justification });
+) => ({ document: { blocks }, pedagogical_justification: justification });
+
+// Regression guard for the shape itself. The first version of this module read
+// `activity.blocks`, which is never a thing: buildAdaptationResult nests the
+// document one level down. Every fixture above is hand-written, so none of them
+// could catch that — only feeding the gate something the real builder produced
+// can. This test is the reason the fixtures are trustworthy.
+describe("shape agreement with buildAdaptationResult", () => {
+  const realResult = buildAdaptationResult({
+    blocks: [
+      {
+        type: "question",
+        stem: [
+          { type: "paragraph", content: [{ type: "text", text: "Quanto é 2+2?" }] },
+          { type: "scaffolding", items: ["Some os dois números."] },
+        ],
+        answer: { kind: "open", answerLines: 2 },
+      },
+    ],
+    strategies_applied: ["Linguagem direta"],
+    pedagogical_justification: "Reduz a carga de leitura.",
+    implementation_tips: ["Leia em voz alta."],
+    // deno-lint-ignore no-explicit-any
+  } as any);
+
+  it("reads a real AdaptationResult without throwing", () => {
+    expect(() => inspectAdaptationQuality(realResult, 1)).not.toThrow();
+  });
+
+  it("finds the questions where the real builder actually puts them", () => {
+    // One question in, one expected: a gate that could not see into
+    // `document.blocks` would report it as missing.
+    expect(inspectAdaptationQuality(realResult, 1)).toEqual([]);
+  });
+
+  it("still detects a shortfall on a real AdaptationResult", () => {
+    expect(inspectAdaptationQuality(realResult, 4)).toContainEqual({
+      code: "missing_questions",
+      expected: 4,
+      got: 1,
+    });
+  });
+});
 
 describe("inspectAdaptationQuality", () => {
   it("reports nothing for an adaptation that looks healthy", () => {

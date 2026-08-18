@@ -22,8 +22,15 @@ export type QualitySignal =
 type StemBlock = { type: string };
 type ActivityBlock = { type: string; stem?: StemBlock[] };
 
+/**
+ * Structurally an `AdaptationResult` (see `buildAdaptationResult`): the blocks
+ * live under `document`, NOT at the top level. Getting this wrong is what made
+ * the first version of this module throw
+ * "Cannot read properties of undefined (reading 'filter')" on every generation
+ * — after the AI call had already succeeded and the user had already waited.
+ */
 export interface InspectableActivity {
-  blocks: ActivityBlock[];
+  document: { blocks: ActivityBlock[] };
   pedagogical_justification: string;
 }
 
@@ -39,7 +46,8 @@ export function inspectAdaptationQuality(
   expectedQuestionCount?: number,
 ): QualitySignal[] {
   const signals: QualitySignal[] = [];
-  const questions = activity.blocks.filter((b) => b.type === "question");
+  const blocks = activity.document.blocks;
+  const questions = blocks.filter((b) => b.type === "question");
 
   // Only meaningful when the caller actually knows how many questions went in
   // (upload extraction and bank selection both do; free-typed text does not).
@@ -51,7 +59,7 @@ export function inspectAdaptationQuality(
     });
   }
 
-  const hasScaffolding = activity.blocks.some(
+  const hasScaffolding = blocks.some(
     (b) => b.type === "scaffolding" || (b.stem ?? []).some((s) => s.type === "scaffolding"),
   );
   if (questions.length > SCAFFOLDING_REQUIRED_ABOVE && !hasScaffolding) {

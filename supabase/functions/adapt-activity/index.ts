@@ -22,10 +22,7 @@ import {
   type ChatMessage,
 } from "../_shared/adaptActivityCore.ts";
 import { extractImageMarkers, stripFabricatedImages } from "../_shared/imageSourceGuard.ts";
-import {
-  inspectAdaptationQuality,
-  type InspectableActivity,
-} from "../_shared/adaptationQuality.ts";
+import { inspectAdaptationQuality } from "../_shared/adaptationQuality.ts";
 import { stripGapTokens } from "../_shared/gapTokenGuard.ts";
 import {
   buildSystemPrompt,
@@ -291,8 +288,12 @@ serve(async (req) => {
           // back with half the questions and no support text, and both are
           // charged today. Logging first tells us how often each signal fires
           // before we decide what enforcement should cost the user.
+          // Passed straight, with no cast. The `as unknown as` that used to be
+          // here is exactly what let a shape mismatch reach production: it
+          // silenced the one check that would have caught `blocks` living
+          // under `document`. If AdaptationResult drifts, this stops compiling.
           const qualitySignals = inspectAdaptationQuality(
-            adaptation as unknown as InspectableActivity,
+            adaptation,
             typeof expected_question_count === "number" ? expected_question_count : undefined,
           );
           if (qualitySignals.length > 0) {
