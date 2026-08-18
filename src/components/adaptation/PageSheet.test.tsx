@@ -81,17 +81,51 @@ describe("PageSheet", () => {
       texto reflowar, então a razão continua 1,41:1 em qualquer viewport.
     */
     it("escala a folha em vez de deixá-la reflowar em tela estreita (achado 0215)", () => {
-      withClientWidth(397, () => {
+      withClientWidth(714.6, () => {
         withHeight(1123, () => {
           render(<PageSheet paginated toolbar={null}><span>x</span></PageSheet>);
           const sheet = screen.getByTestId("page-sheet");
           expect(sheet.className).toContain("w-[794px]");
           expect(sheet.className).not.toContain("max-w-full");
-          expect(sheet.style.transform).toBe("scale(0.5)");
-          // O contêiner reserva a altura JÁ escalada: 1123 * 0,5.
+          expect(sheet.style.transform).toBe("scale(0.9)");
+          // O contêiner reserva a altura JÁ escalada: 1123 * 0,9.
           const slot = sheet.parentElement!;
-          expect(slot.style.width).toBe("397px");
-          expect(slot.style.height).toBe("561.5px");
+          expect(slot.style.width).toBe("714.6px");
+          expect(slot.style.height).toBe("1010.7px");
+        });
+      });
+    });
+
+    /*
+      Achado 0216: a escala do 0215 não tinha piso. Em 390px de viewport a
+      moldura mede ~332px, o fator caía para 0,42 e o corpo de 12pt virava ~6,7px
+      na única tela de conferência antes do download. Agora a folha para de
+      encolher no mínimo legível e passa a rolar na horizontal.
+    */
+    it("não encolhe a folha abaixo do mínimo legível (achado 0216)", () => {
+      withClientWidth(332, () => {
+        withHeight(1123, () => {
+          render(<PageSheet paginated toolbar={null}><span>x</span></PageSheet>);
+          const sheet = screen.getByTestId("page-sheet");
+          expect(sheet.style.transform).toBe("scale(0.75)");
+          // O vão reserva a folha no tamanho mínimo, maior que a moldura.
+          const slot = sheet.parentElement!;
+          expect(slot.style.width).toBe("595.5px");
+          expect(slot.style.height).toBe("842.25px");
+        });
+      });
+    });
+
+    it("deixa a folha rolar na horizontal quando não cabe na moldura (achado 0216)", () => {
+      withClientWidth(332, () => {
+        withHeight(1123, () => {
+          render(<PageSheet paginated toolbar={null}><span>x</span></PageSheet>);
+          const frame = screen.getByTestId("page-sheet").parentElement!.parentElement!;
+          expect(frame.className).toContain("overflow-x-auto");
+          // `justify-center` do flex cortaria a borda esquerda ao rolar: o vão é
+          // um bloco centralizado por margem, que colapsa quando não cabe.
+          expect(frame.className).not.toContain("justify-center");
+          expect(screen.getByTestId("page-sheet").parentElement!.className).toContain("mx-auto");
         });
       });
     });
@@ -112,8 +146,8 @@ describe("PageSheet", () => {
             render(
               <PageSheet paginated toolbar={null}>
                 <span>questão 1</span>
-                {/* 1123px de conteúdo vistos a 0,5 de escala. */}
-                <div className="adaptar-page-break" data-test-top="561.5" />
+                {/* 1123px de conteúdo vistos a 0,75 de escala (o piso do 0216). */}
+                <div className="adaptar-page-break" data-test-top="842.25" />
                 <span>questão 2</span>
               </PageSheet>,
             );

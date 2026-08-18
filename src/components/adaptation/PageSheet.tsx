@@ -42,6 +42,14 @@ interface PageSheetProps {
  */
 const SHEET_WIDTH_PX = 794;
 
+/**
+ * Piso da escala da prévia (achado 0216). Abaixo disso a folha deixa de ser
+ * conferível: em 390px de viewport a moldura mede ~332px, o fator caía para
+ * 0,42 e o corpo de 12pt saía com ~6,7px efetivos. Em 0,75 o mesmo corpo fica
+ * com 12px e a folha, quando não cabe, rola na horizontal dentro da mesa.
+ */
+const MIN_SCALE = 0.75;
+
 export function PageSheet({ toolbar, pageStyle, paginated = false, children }: PageSheetProps) {
   const frameRef = useRef<HTMLDivElement>(null);
   const sheetRef = useRef<HTMLDivElement>(null);
@@ -66,7 +74,13 @@ export function PageSheet({ toolbar, pageStyle, paginated = false, children }: P
     const fit = () => {
       const available = frame.clientWidth;
       // jsdom (e o primeiro layout) devolve 0: sem medida, não encolhe nada.
-      setScale(available > 0 ? Math.min(1, available / SHEET_WIDTH_PX) : 1);
+      // O piso (achado 0216) impede que a folha vire miniatura ilegível; quem
+      // absorve o que não coube é a rolagem horizontal da moldura.
+      setScale(
+        available > 0
+          ? Math.min(1, Math.max(MIN_SCALE, available / SHEET_WIDTH_PX))
+          : 1,
+      );
     };
     fit();
     const observer = new ResizeObserver(fit);
@@ -204,9 +218,16 @@ export function PageSheet({ toolbar, pageStyle, paginated = false, children }: P
               A moldura mede a largura disponível; o "vão" interno reserva o
               tamanho JÁ escalado da folha (que, por estar em `transform`, não
               ocupa espaço no fluxo) e a centraliza.
+
+              Achado 0216: a centralização é `mx-auto` de bloco, não
+              `flex justify-center`. Com a escala pisada o vão pode ficar MAIOR
+              que a moldura, e o flex centralizado empurraria a borda esquerda
+              da folha para fora do alcance da rolagem; a margem automática
+              colapsa para zero nesse caso e a folha rola inteira.
             */}
-            <div ref={frameRef} className="flex justify-center">
+            <div ref={frameRef} className="overflow-x-auto">
               <div
+                className="mx-auto"
                 style={{
                   width: `${SHEET_WIDTH_PX * scale}px`,
                   height: `${sheetHeight * scale}px`,
