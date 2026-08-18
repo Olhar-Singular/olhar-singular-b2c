@@ -22,6 +22,10 @@ import {
   type ChatMessage,
 } from "../_shared/adaptActivityCore.ts";
 import { extractImageMarkers, stripFabricatedImages } from "../_shared/imageSourceGuard.ts";
+import {
+  inspectAdaptationQuality,
+  type InspectableActivity,
+} from "../_shared/adaptationQuality.ts";
 import { stripGapTokens } from "../_shared/gapTokenGuard.ts";
 import {
   buildSystemPrompt,
@@ -78,7 +82,7 @@ serve(async (req) => {
     const serviceClient = createClient(supabaseUrl, supabaseServiceKey);
 
     const body = await req.json();
-    const { original_activity, activity_type, barriers, observation_notes, barrier_profile_id, fidelity_mode } = body;
+    const { original_activity, activity_type, barriers, observation_notes, barrier_profile_id, fidelity_mode, expected_question_count } = body;
 
     if (!original_activity || !activity_type || !barriers || !Array.isArray(barriers) || barriers.length === 0) {
       return new Response(JSON.stringify({ error: "Campos obrigatórios ausentes: original_activity, activity_type, barriers." }), {
@@ -281,6 +285,22 @@ serve(async (req) => {
           const adaptation = stripGapTokens(
             stripFabricatedImages(interpreted.result, allowedImageSrcs),
           );
+
+          // OBSERVE ONLY — does not reask, does not fail the request. Schema
+          // validation cannot tell a complete adaptation from one that came
+          // back with half the questions and no support text, and both are
+          // charged today. Logging first tells us how often each signal fires
+          // before we decide what enforcement should cost the user.
+          const qualitySignals = inspectAdaptationQuality(
+            adaptation as unknown as InspectableActivity,
+            typeof expected_question_count === "number" ? expected_question_count : undefined,
+          );
+          if (qualitySignals.length > 0) {
+            console.warn(
+              "adaptation quality signals:",
+              JSON.stringify({ attempt, signals: qualitySignals }),
+            );
+          }
 
           // PERSIST BEFORE SETTLING. The response body used to be the ONLY copy
           // of a document the user had already paid for — the browser did the

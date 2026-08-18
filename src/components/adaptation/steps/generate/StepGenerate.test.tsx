@@ -146,6 +146,54 @@ describe("StepGenerate", () => {
     );
   });
 
+  // Lets the server tell "adapted all 12 questions" apart from "quietly came
+  // back with 6" — today both look like success and both cost a credit.
+  it("tells the server how many questions the extraction found", async () => {
+    extractExamQuestionsMock.mockResolvedValueOnce({
+      status: "ok",
+      questions: [
+        { text: "Primeira", options: null, image_url: null },
+        { text: "Segunda", options: null, image_url: null },
+      ],
+    });
+    invokeMock.mockResolvedValueOnce(okResponse());
+    renderWithProviders(
+      <StepGenerate data={uploadData} onResult={vi.fn()} onNext={vi.fn()} onPrev={vi.fn()} />,
+    );
+    await waitFor(() => expect(invokeMock).toHaveBeenCalled());
+    expect(invokeMock.mock.calls[0][1].body.expected_question_count).toBe(2);
+  });
+
+  it("counts the questions picked from the bank", async () => {
+    invokeMock.mockResolvedValueOnce(okResponse());
+    renderWithProviders(
+      <StepGenerate
+        data={{
+          ...baseData,
+          selectedQuestions: [
+            { id: "q1", text: "A" },
+            { id: "q2", text: "B" },
+            { id: "q3", text: "C" },
+          ] as WizardData["selectedQuestions"],
+        }}
+        onResult={vi.fn()}
+        onNext={vi.fn()}
+        onPrev={vi.fn()}
+      />,
+    );
+    await waitFor(() => expect(invokeMock).toHaveBeenCalled());
+    expect(invokeMock.mock.calls[0][1].body.expected_question_count).toBe(3);
+  });
+
+  it("reports zero for free-typed text, where no count is knowable", async () => {
+    invokeMock.mockResolvedValueOnce(okResponse());
+    renderWithProviders(
+      <StepGenerate data={baseData} onResult={vi.fn()} onNext={vi.fn()} onPrev={vi.fn()} />,
+    );
+    await waitFor(() => expect(invokeMock).toHaveBeenCalled());
+    expect(invokeMock.mock.calls[0][1].body.expected_question_count).toBe(0);
+  });
+
   it("leaves fidelity_mode off for the bank/paste flow", async () => {
     invokeMock.mockResolvedValueOnce(okResponse());
     renderWithProviders(
@@ -461,6 +509,9 @@ describe("StepGenerate", () => {
     const text = invokeMock.mock.calls[0][1].body.original_activity as string;
     expect(text).toContain("12) Questão 12");
     expect(text).not.toContain("Questão 13");
+    // The expected count follows the truncation: 12 went in, so anything less
+    // than 12 coming back is a real loss — not an echo of the 15 found.
+    expect(invokeMock.mock.calls[0][1].body.expected_question_count).toBe(12);
   });
 
   it("cancelling the 12-question warning returns to the previous step without calling adapt-activity", async () => {

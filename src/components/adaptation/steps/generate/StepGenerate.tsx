@@ -82,7 +82,11 @@ export function StepGenerate({ data, onResult, onNext, onPrev, onLoadingChange }
     return () => clearInterval(id);
   }, [phase, loading]);
 
-  const adaptActivity = useCallback(async (activityText: string, controller: AbortController) => {
+  const adaptActivity = useCallback(async (
+    activityText: string,
+    controller: AbortController,
+    expectedQuestionCount: number,
+  ) => {
     const activeBarriers = data.barriers
       .filter((b) => b.is_active)
       // `label` is the human name the teacher actually picked ("Dificuldade na
@@ -111,6 +115,10 @@ export function StepGenerate({ data, onResult, onNext, onPrev, onLoadingChange }
         // the upload screen already promises ("preservando a ordem das
         // questões e as imagens originais").
         fidelity_mode: !!data.uploadedExam,
+        // How many questions actually went in, so the server can tell a
+        // complete adaptation from one that quietly came back short. Zero
+        // means "not knowable" (free-typed activity) and is not inspected.
+        expected_question_count: expectedQuestionCount,
         // Idempotency key for the credit reservation: it makes a replayed
         // request (retried transport, double-click) impossible to charge
         // twice. Fresh per attempt — a real retry IS a new charge.
@@ -155,12 +163,16 @@ export function StepGenerate({ data, onResult, onNext, onPrev, onLoadingChange }
     onNext();
   }, [data, onResult, onNext, refreshProfile]);
 
-  const proceedToAdapt = useCallback(async (activityText: string, controller: AbortController) => {
+  const proceedToAdapt = useCallback(async (
+    activityText: string,
+    controller: AbortController,
+    expectedQuestionCount: number,
+  ) => {
     setPhase("adapting");
     setLoading(true);
     onLoadingChange?.(true);
     try {
-      await adaptActivity(activityText, controller);
+      await adaptActivity(activityText, controller, expectedQuestionCount);
     } catch (e) {
       /* v8 ignore next -- AbortController race */
       if ((e as Error).name === "AbortError" || controller.signal.aborted) return;
@@ -186,7 +198,9 @@ export function StepGenerate({ data, onResult, onNext, onPrev, onLoadingChange }
     setPendingExtracted(null);
 
     if (!data.uploadedExam) {
-      await proceedToAdapt(data.activityText, controller);
+      // Questions picked from the bank are countable; free-typed text is not,
+      // and 0 tells the server to skip that check rather than guess.
+      await proceedToAdapt(data.activityText, controller, data.selectedQuestions.length);
       return;
     }
 
@@ -223,7 +237,7 @@ export function StepGenerate({ data, onResult, onNext, onPrev, onLoadingChange }
       return;
     }
 
-    await proceedToAdapt(buildActivityTextFromExtraction(extracted), controller);
+    await proceedToAdapt(buildActivityTextFromExtraction(extracted), controller, extracted.length);
   }, [data, user, proceedToAdapt, onLoadingChange]);
 
   function confirmTruncate() {
@@ -233,7 +247,7 @@ export function StepGenerate({ data, onResult, onNext, onPrev, onLoadingChange }
     setPendingExtracted(null);
     /* v8 ignore next -- guard: generate() always sets abortRef before pendingExtracted can be set */
     const controller = abortRef.current ?? new AbortController();
-    void proceedToAdapt(buildActivityTextFromExtraction(truncated), controller);
+    void proceedToAdapt(buildActivityTextFromExtraction(truncated), controller, truncated.length);
   }
 
   /** Bails out to the Atividade step — the file stays attached, so the user can re-attach or swap it. */
