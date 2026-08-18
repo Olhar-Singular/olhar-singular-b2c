@@ -4,6 +4,12 @@ export type ImageItem = {
   id: string;
   src: string;
   align: ImageAlign;
+  /**
+   * `true` só depois de o usuário clicar num alinhamento na modal. Sem essa
+   * marca, o padrão `center` de um item recém-adicionado é indistinguível de
+   * uma escolha e apaga o alinhamento já definido na folha (achado 0317).
+   */
+  alignTouched?: boolean;
 };
 
 export type ImageRegistry = Record<string, string>;

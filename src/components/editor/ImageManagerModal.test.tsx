@@ -162,6 +162,62 @@ describe("ImageManagerModal", () => {
     expect(screen.queryByRole("img")).not.toBeNull();
   });
 
+  // 0317 — o bloco da folha precisa distinguir "o usuário escolheu center" do
+  // padrão center; sem essa marca o padrão da modal apaga o alinhamento da folha.
+  it("marca alignTouched só depois de o usuário clicar num alinhamento", async () => {
+    class FR {
+      onload: (() => void) | null = null;
+      result: string | null = null;
+      readAsDataURL() {
+        this.result = "data:image/png;base64,A";
+        queueMicrotask(() => this.onload?.());
+      }
+    }
+    (globalThis as { FileReader: unknown }).FileReader = FR as unknown;
+
+    const onConfirm = vi.fn();
+    render(<ImageManagerModal open onClose={vi.fn()} onConfirm={onConfirm} />);
+    const input = document.querySelector('input[type="file"]') as HTMLInputElement;
+    const png = new File([new Uint8Array([0x89])], "x.png", { type: "image/png" });
+    Object.defineProperty(input, "files", { value: [png], writable: false, configurable: true });
+    fireEvent.change(input);
+    await waitFor(() => expect(screen.queryAllByRole("img").length).toBeGreaterThan(0));
+
+    fireEvent.click(screen.getByRole("button", { name: /Inserir/i }));
+    expect(onConfirm).toHaveBeenCalledWith([
+      expect.objectContaining({ align: "center", alignTouched: false }),
+    ]);
+  });
+
+  it("marca alignTouched ao clicar num botão de alinhamento da modal", async () => {
+    class FR {
+      onload: (() => void) | null = null;
+      result: string | null = null;
+      readAsDataURL() {
+        this.result = "data:image/png;base64,A";
+        queueMicrotask(() => this.onload?.());
+      }
+    }
+    (globalThis as { FileReader: unknown }).FileReader = FR as unknown;
+
+    const onConfirm = vi.fn();
+    render(<ImageManagerModal open onClose={vi.fn()} onConfirm={onConfirm} />);
+    const input = document.querySelector('input[type="file"]') as HTMLInputElement;
+    const png = new File([new Uint8Array([0x89])], "y.png", { type: "image/png" });
+    Object.defineProperty(input, "files", { value: [png], writable: false, configurable: true });
+    fireEvent.change(input);
+    await waitFor(() => expect(screen.queryAllByRole("img").length).toBeGreaterThan(0));
+
+    const alignRight = screen
+      .getAllByRole("button")
+      .filter((b) => b.querySelector("svg.lucide-align-right"))[0];
+    fireEvent.click(alignRight);
+    fireEvent.click(screen.getByRole("button", { name: /Inserir/i }));
+    expect(onConfirm).toHaveBeenCalledWith([
+      expect.objectContaining({ align: "right", alignTouched: true }),
+    ]);
+  });
+
   it("calls onConfirm with current images and onClose on confirm", async () => {
     class FR {
       onload: (() => void) | null = null;

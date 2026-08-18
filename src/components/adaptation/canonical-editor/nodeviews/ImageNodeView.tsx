@@ -45,7 +45,22 @@ export function ImageNodeView({ node, updateAttributes, deleteNode, editor, getP
   const handlePick = (images: ImageItem[]) => {
     const [first, ...rest] = images;
     if (!first) return;
-    updateAttributes({ src: first.src, alignment: first.align });
+    /**
+     * Achado 0317: o arquivo novo não herda o que descrevia o antigo. `alt` e
+     * legenda descrevem AQUELA figura (o alt vai para o leitor de tela e a
+     * legenda é impressa no PDF), e a largura foi ajustada para a proporção
+     * dela. A legenda só é zerada, não removida: quem tinha legenda continua
+     * com o campo aberto para reescrever. O alinhamento é o contrário — é do
+     * lugar na folha, não do arquivo — então o padrão `center` da modal só
+     * vence se o usuário tiver mexido nos controles dela.
+     */
+    updateAttributes({
+      src: first.src,
+      alt: "",
+      width: null,
+      caption: caption === null ? null : [],
+      alignment: first.alignTouched ? first.align : alignment,
+    });
     if (rest.length === 0) return;
     const currentPos = getPos();
     if (typeof currentPos !== "number") return;

@@ -220,8 +220,61 @@ describe("ImageNodeView", () => {
     render(<ImageNodeView {...props} />);
     fireEvent.click(screen.getByText("Trocar ou adicionar imagem"));
     expect(screen.getByTestId("image-modal")).toBeInTheDocument();
-    modalOnConfirm?.([{ id: "a", src: "new.png", align: "right" }]);
-    expect(updateAttributes).toHaveBeenCalledWith({ src: "new.png", alignment: "right" });
+    modalOnConfirm?.([{ id: "a", src: "new.png", align: "right", alignTouched: true }]);
+    expect(updateAttributes).toHaveBeenCalledWith({
+      src: "new.png",
+      alt: "",
+      width: null,
+      caption: null,
+      alignment: "right",
+    });
+  });
+
+  // 0317 — trocar o arquivo invalida o que descreve o arquivo: alt, legenda e
+  // largura da figura antiga não podem sobreviver à troca.
+  it("limpa alt, legenda e largura da figura antiga ao trocar o arquivo", () => {
+    const { props, updateAttributes } = makeProps({
+      alt: "figura larga de apoio",
+      width: 2400,
+      caption: [{ type: "text", text: "Figura 1 - esquema largo de apoio" }],
+      alignment: "right",
+    });
+    render(<ImageNodeView {...props} />);
+    modalOnConfirm?.([{ id: "a", src: "grafico.png", align: "center" }]);
+    expect(updateAttributes).toHaveBeenCalledWith({
+      src: "grafico.png",
+      alt: "",
+      width: null,
+      caption: [],
+      alignment: "right",
+    });
+  });
+
+  it("mantém a legenda oculta quando o bloco não tinha legenda", () => {
+    const { props, updateAttributes } = makeProps({ caption: null });
+    render(<ImageNodeView {...props} />);
+    modalOnConfirm?.([{ id: "a", src: "grafico.png", align: "center" }]);
+    expect(updateAttributes).toHaveBeenCalledWith(
+      expect.objectContaining({ caption: null }),
+    );
+  });
+
+  it("o padrão center da modal não vence o alinhamento escolhido na folha", () => {
+    const { props, updateAttributes } = makeProps({ alignment: "right" });
+    render(<ImageNodeView {...props} />);
+    modalOnConfirm?.([{ id: "a", src: "grafico.png", align: "center" }]);
+    expect(updateAttributes).toHaveBeenCalledWith(
+      expect.objectContaining({ alignment: "right" }),
+    );
+  });
+
+  it("usa o alinhamento da modal quando o usuário mexe nos controles dela", () => {
+    const { props, updateAttributes } = makeProps({ alignment: "right" });
+    render(<ImageNodeView {...props} />);
+    modalOnConfirm?.([{ id: "a", src: "grafico.png", align: "left", alignTouched: true }]);
+    expect(updateAttributes).toHaveBeenCalledWith(
+      expect.objectContaining({ alignment: "left" }),
+    );
   });
 
   // 0318 — a modal diz "Inserir (3)" e o bloco gravava só a primeira: as demais
@@ -237,7 +290,9 @@ describe("ImageNodeView", () => {
       { id: "b", src: "second.png", align: "center" },
       { id: "c", src: "third.png", align: "right" },
     ]);
-    expect(updateAttributes).toHaveBeenCalledWith({ src: "first.png", alignment: "left" });
+    expect(updateAttributes).toHaveBeenCalledWith(
+      expect.objectContaining({ src: "first.png", alignment: null }),
+    );
     expect(buildSiblingImagesTransaction).toHaveBeenCalledWith(props.editor.state, 7, [
       { id: "new-id", src: "second.png", alt: "", alignment: "center" },
       { id: "new-id", src: "third.png", alt: "", alignment: "right" },

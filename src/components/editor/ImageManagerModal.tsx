@@ -84,7 +84,7 @@ export default function ImageManagerModal({ open, onClose, onConfirm }: Props) {
     for (const file of validFiles) {
       try {
         const src = await resizeImage(file);
-        newImages.push({ id: generateId(), src, align: "center" });
+        newImages.push({ id: generateId(), src, align: "center", alignTouched: false });
       } catch {
         // skip invalid files
       }
@@ -147,7 +147,7 @@ export default function ImageManagerModal({ open, onClose, onConfirm }: Props) {
 
   const setAlign = useCallback((id: string, align: ImageAlign) => {
     setImages((prev) =>
-      prev.map((img) => (img.id === id ? { ...img, align } : img))
+      prev.map((img) => (img.id === id ? { ...img, align, alignTouched: true } : img))
     );
   }, []);
 
