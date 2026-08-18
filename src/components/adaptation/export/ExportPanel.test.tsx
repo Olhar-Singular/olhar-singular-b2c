@@ -33,7 +33,7 @@ function Harness({
   initialHeader = {},
 }: {
   onDownload: (d: CanonicalDocument, s: PanelSettings, ps?: PageStyle) => Promise<void>;
-  onDownloadWord?: (d: CanonicalDocument, h: DocumentHeader, ps?: PageStyle) => Promise<void>;
+  onDownloadWord?: (d: CanonicalDocument, s: PanelSettings, ps?: PageStyle) => Promise<void>;
   pageStyle?: PageStyle;
   initialHeader?: DocumentHeader;
 }) {
@@ -190,15 +190,28 @@ describe("ExportPanel", () => {
   });
 
   it("clicar 'Exportar Word' chama onDownloadWord com o documento e o cabeçalho", async () => {
-    const onDownloadWord = vi.fn<(d: CanonicalDocument, h: DocumentHeader, ps?: PageStyle) => Promise<void>>().mockResolvedValue(undefined);
+    const onDownloadWord = vi.fn<(d: CanonicalDocument, s: PanelSettings, ps?: PageStyle) => Promise<void>>().mockResolvedValue(undefined);
     const { toast } = await import("sonner");
     render(<Harness onDownload={vi.fn()} onDownloadWord={onDownloadWord} initialHeader={{ title: "Minha Prova" }} />);
     fireEvent.click(screen.getByRole("button", { name: /Exportar Word/i }));
     await waitFor(() => expect(onDownloadWord).toHaveBeenCalled());
-    const [doc, header] = onDownloadWord.mock.calls[0];
+    const [doc, settings] = onDownloadWord.mock.calls[0];
     expect(doc).toBe(document);
-    expect(header).toMatchObject({ title: "Minha Prova" });
+    expect(settings.header).toMatchObject({ title: "Minha Prova" });
     await waitFor(() => expect(toast.success).toHaveBeenCalledWith("Word gerado!"));
+  });
+
+  /**
+   * Achado 0132: o switch chegava ao PDF e ao "Copiar" e não ao Word — a
+   * professora ligava a quebra e baixava um .docx em fluxo contínuo.
+   */
+  it("repassa o switch de quebra por questão ao Word, como faz com o PDF", async () => {
+    const onDownloadWord = vi.fn<(d: CanonicalDocument, s: PanelSettings, ps?: PageStyle) => Promise<void>>().mockResolvedValue(undefined);
+    render(<Harness onDownload={vi.fn()} onDownloadWord={onDownloadWord} />);
+    fireEvent.click(screen.getByLabelText(/Quebra de página por questão/i));
+    fireEvent.click(screen.getByRole("button", { name: /Exportar Word/i }));
+    await waitFor(() => expect(onDownloadWord).toHaveBeenCalled());
+    expect(onDownloadWord.mock.calls[0][1].pageBreakPerQuestion).toBe(true);
   });
 
   it("mostra toast de erro quando exportar Word falha", async () => {

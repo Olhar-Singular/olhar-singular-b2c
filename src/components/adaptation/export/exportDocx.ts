@@ -7,6 +7,8 @@
  * `docxExportWarnings`  — what will NOT survive the trip to Word (shown BEFORE the
  *                         download, so "Word gerado!" never covers a silent loss).
  * `documentRunStyle`    — pure pageStyle → docx run mapping (font + half-points).
+ * `docxContentBlocks`   — pure document + PanelSettings → docx blocks, já com as
+ *                         quebras de página (switch do painel e `style.pageBreakBefore`).
  * `downloadDocx`        — side-effecting blob + DOM download (v8 ignore).
  *
  * Presentation mirrors the PDF (`render/pdf/PdfAnswer`, `PdfLeafBlocks`,
@@ -28,6 +30,7 @@ import {
   WidthType,
   HeadingLevel,
   AlignmentType,
+  PageBreak,
 } from "docx";
 import type {
   CanonicalDocument,
@@ -44,6 +47,8 @@ import {
 } from "@/lib/adaptation/canonical/fontFamily";
 import { indexToLetter } from "../render/letters";
 import { documentHasMath, everyBlock } from "./exportWarnings";
+import { perQuestionBreakFlags } from "../render/perQuestionBreaks";
+import { DEFAULT_PANEL_SETTINGS, type PanelSettings } from "./panelSettings";
 
 /** A docx section child. Tables are blocks too, not paragraphs. */
 export type DocxBlock = Paragraph | Table;
@@ -317,17 +322,57 @@ export function documentRunStyle(pageStyle?: PageStyle): { font?: string; size?:
   return run;
 }
 
+/**
+ * Prende uma quebra de página REAL ao início do bloco.
+ *
+ * A quebra vai como primeiro run do primeiro parágrafo (e não como um parágrafo
+ * solto só com a quebra), senão o Word abriria cada página nova com uma linha
+ * vazia que o PDF não tem. Quando o bloco começa por uma tabela — que não aceita
+ * run —, aí sim entra um parágrafo dedicado.
+ */
+export function withPageBreak(blocks: DocxBlock[]): DocxBlock[] {
+  const [first] = blocks;
+  if (first instanceof Paragraph) {
+    first.addRunToFront(new PageBreak());
+    return blocks;
+  }
+  return [new Paragraph({ children: [new PageBreak()] }), ...blocks];
+}
+
+/**
+ * O corpo do .docx: os blocos do documento já com a numeração das questões e as
+ * quebras de página.
+ *
+ * Mora fora de `downloadDocx` (que é `v8 ignore` pelos efeitos de DOM) porque é
+ * exatamente aqui que estava o achado 0132: o switch "Quebra de página por
+ * questão" chegava à prévia, ao PDF e ao "Copiar" e sumia no Word — o arquivo
+ * saía num fluxo contínuo, sem nenhum `<w:br w:type="page"/>`. A derivação é a
+ * mesma `perQuestionBreakFlags` que a prévia e o PDF leem, e o
+ * `style.pageBreakBefore` do nó canônico (que o PDF já honra) também entra.
+ */
+export function docxContentBlocks(
+  document: CanonicalDocument,
+  settings: PanelSettings = DEFAULT_PANEL_SETTINGS,
+): DocxBlock[] {
+  const breaks = perQuestionBreakFlags(document.blocks);
+  let questionIndex = 0;
+  return document.blocks.flatMap((block, i) => {
+    if (block.type === "question") questionIndex++;
+    const paragraphs = blockToDocxParagraphs(block, questionIndex);
+    const forceBreak =
+      (settings.pageBreakPerQuestion && breaks[i]) || block.style?.pageBreakBefore === true;
+    return forceBreak ? withPageBreak(paragraphs) : paragraphs;
+  });
+}
+
 /* v8 ignore start */
 export async function downloadDocx(
   document: CanonicalDocument,
-  header: DocumentHeader,
+  settings: PanelSettings = DEFAULT_PANEL_SETTINGS,
   pageStyle?: PageStyle,
 ): Promise<void> {
-  let questionIndex = 0;
-  const contentParagraphs = document.blocks.flatMap((block) => {
-    if (block.type === "question") questionIndex++;
-    return blockToDocxParagraphs(block, questionIndex);
-  });
+  const header = settings.header;
+  const contentParagraphs = docxContentBlocks(document, settings);
 
   const doc = new Document({
     styles: { default: { document: { run: documentRunStyle(pageStyle) } } },

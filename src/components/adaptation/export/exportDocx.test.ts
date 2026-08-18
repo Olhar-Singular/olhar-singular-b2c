@@ -1,7 +1,10 @@
 import { describe, it, expect } from "vitest";
-import { TextRun } from "docx";
+import { TextRun, Paragraph, PageBreak, Table, TableRow, TableCell, WidthType } from "docx";
 import {
   docxFileName,
+  docxContentBlocks,
+  withPageBreak,
+  type DocxBlock,
   richTextToRuns,
   blockToDocxParagraphs,
   headerParagraphs,
@@ -680,5 +683,84 @@ describe("documentRunStyle", () => {
       font: "Lexend",
       size: 32,
     });
+  });
+});
+
+/**
+ * Achado 0132 — o switch "Quebra de página por questão" chegava à prévia, ao PDF
+ * e ao "Copiar" e sumia no Word: o .docx saía sem nenhum `<w:br w:type="page"/>`,
+ * com a questão 2 colada no fim da questão 1. O mesmo valia para o
+ * `style.pageBreakBefore` do nó canônico, que o PDF já honrava.
+ */
+describe("docxContentBlocks · quebra de página (achado 0132)", () => {
+  const q = (n: number, style?: Block["style"]): Block => ({
+    id: id(n),
+    type: "question",
+    stem: [{ id: id(n + 100), type: "paragraph", content: text(`questão ${n}`) }],
+    answer: { kind: "open", answerLines: 1 },
+    ...(style ? { style } : {}),
+  });
+  const doc = (blocks: Block[]): CanonicalDocument => ({ schemaVersion: 1, blocks });
+  const hasPageBreak = (block: DocxBlock): boolean =>
+    block instanceof Paragraph &&
+    (block as unknown as { root: unknown[] }).root.some((child) => child instanceof PageBreak);
+
+  it("sem o switch, nenhum bloco carrega quebra", () => {
+    const blocks = docxContentBlocks(doc([q(1), q(2)]));
+    expect(blocks.filter(hasPageBreak)).toHaveLength(0);
+  });
+
+  it("com o switch, quebra antes da segunda questão em diante (nunca antes da primeira)", () => {
+    const blocks = docxContentBlocks(doc([q(1), q(2), q(3)]), {
+      header: {},
+      pageBreakPerQuestion: true,
+    });
+    // Uma quebra por questão a partir da segunda — a mesma derivação do PDF.
+    expect(blocks.filter(hasPageBreak)).toHaveLength(2);
+    expect(hasPageBreak(blocks[0])).toBe(false);
+  });
+
+  it("honra o style.pageBreakBefore do nó canônico mesmo com o switch desligado", () => {
+    const blocks = docxContentBlocks(
+      doc([
+        { id: id(1), type: "paragraph", content: text("intro") },
+        q(2, { pageBreakBefore: true }),
+      ]),
+    );
+    expect(blocks.filter(hasPageBreak)).toHaveLength(1);
+  });
+
+  it("a quebra não desloca a numeração das questões", () => {
+    const blocks = docxContentBlocks(doc([q(1), q(2)]), {
+      header: {},
+      pageBreakPerQuestion: true,
+    });
+    // O primeiro parágrafo do bloco quebrado continua sendo o "2. " da questão.
+    const broken = blocks.find(hasPageBreak) as unknown as { root: { root?: unknown[] }[] };
+    expect(JSON.stringify(broken.root)).toContain("2. ");
+  });
+});
+
+describe("withPageBreak", () => {
+  it("prende a quebra ao primeiro parágrafo do bloco, sem parágrafo vazio extra", () => {
+    const paragraphs = [new Paragraph({ children: [new TextRun({ text: "a" })] })];
+    const out = withPageBreak(paragraphs);
+    expect(out).toHaveLength(1);
+    expect((out[0] as unknown as { root: unknown[] }).root.some((c) => c instanceof PageBreak)).toBe(
+      true,
+    );
+  });
+
+  it("quando o bloco começa por uma tabela, insere um parágrafo só com a quebra", () => {
+    const table = new Table({
+      width: { size: 100, type: WidthType.PERCENTAGE },
+      rows: [new TableRow({ children: [new TableCell({ children: [new Paragraph({})] })] })],
+    });
+    const out = withPageBreak([table]);
+    expect(out).toHaveLength(2);
+    expect((out[0] as unknown as { root: unknown[] }).root.some((c) => c instanceof PageBreak)).toBe(
+      true,
+    );
+    expect(out[1]).toBe(table);
   });
 });

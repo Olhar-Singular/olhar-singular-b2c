@@ -57,7 +57,7 @@ type Props = {
   /** Override the PDF download trigger (used in tests). */
   onDownload?: (document: CanonicalDocument, settings: PanelSettings, pageStyle?: PageStyle) => Promise<void>;
   /** Override the Word download trigger (used in tests). */
-  onDownloadWord?: (document: CanonicalDocument, header: DocumentHeader, pageStyle?: PageStyle) => Promise<void>;
+  onDownloadWord?: (document: CanonicalDocument, settings: PanelSettings, pageStyle?: PageStyle) => Promise<void>;
 };
 
 export function ExportPanel({
@@ -125,7 +125,9 @@ export function ExportPanel({
   const runWordExport = async () => {
     setExportingWord(true);
     try {
-      await onDownloadWord(document, header, pageStyle);
+      // As MESMAS opções que o PDF recebe: sem o `pageBreakPerQuestion` o Word
+      // era a única saída que ignorava o switch de quebra (achado 0132).
+      await onDownloadWord(document, { header, pageBreakPerQuestion }, pageStyle);
       toast.success("Word gerado!");
     } catch {
       toast.error("Erro ao gerar Word.");
