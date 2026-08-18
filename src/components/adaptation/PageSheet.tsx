@@ -56,6 +56,12 @@ export function PageSheet({ toolbar, pageStyle, paginated = false, children }: P
   const contentRef = useRef<HTMLDivElement>(null);
   const [pageCount, setPageCount] = useState(1);
   const [scale, setScale] = useState(1);
+  /**
+   * Largura da MESA (a moldura visível), medida junto com a escala. O chrome da
+   * prévia se alinha por ela, não pela folha: com a escala no piso a folha fica
+   * mais larga que a mesa (achado 0221).
+   */
+  const [frameWidth, setFrameWidth] = useState(SHEET_WIDTH_PX);
   const [sheetHeight, setSheetHeight] = useState(PAGE_HEIGHT_PX);
   /** Posição (px, geometria não escalada) de cada virada de página na folha. */
   const [pageRules, setPageRules] = useState<number[]>([]);
@@ -72,15 +78,12 @@ export function PageSheet({ toolbar, pageStyle, paginated = false, children }: P
     if (!paginated) return;
     const frame = frameRef.current;
     const fit = () => {
-      const available = frame.clientWidth;
-      // jsdom (e o primeiro layout) devolve 0: sem medida, não encolhe nada.
-      // O piso (achado 0216) impede que a folha vire miniatura ilegível; quem
-      // absorve o que não coube é a rolagem horizontal da moldura.
-      setScale(
-        available > 0
-          ? Math.min(1, Math.max(MIN_SCALE, available / SHEET_WIDTH_PX))
-          : 1,
-      );
+      // jsdom (e o primeiro layout) devolve 0: sem medida, vale a folha inteira
+      // e nada encolhe. O piso (achado 0216) impede que a folha vire miniatura
+      // ilegível; quem absorve o que não coube é a rolagem horizontal da moldura.
+      const available = frame.clientWidth || SHEET_WIDTH_PX;
+      setScale(Math.min(1, Math.max(MIN_SCALE, available / SHEET_WIDTH_PX)));
+      setFrameWidth(available);
     };
     fit();
     const observer = new ResizeObserver(fit);
@@ -217,7 +220,14 @@ export function PageSheet({ toolbar, pageStyle, paginated = false, children }: P
             <p
               data-testid="page-count"
               className="mx-auto mb-2 text-xs text-muted-foreground text-right"
-              style={{ width: `${SHEET_WIDTH_PX * scale}px` }}
+              /*
+                Achado 0221: a largura acompanha a folha ATÉ o limite da mesa.
+                Com a escala no piso a folha passa da moldura, e copiar sua
+                largura empurrava o texto (alinhado à direita) para fora do
+                `overflow-clip` da mesa — irrecuperável, porque o contador fica
+                fora do quadro rolável.
+              */
+              style={{ width: `${Math.min(SHEET_WIDTH_PX * scale, frameWidth)}px` }}
             >
               {pageCount === 1 ? "1 página A4" : `${pageCount} páginas A4`}
             </p>

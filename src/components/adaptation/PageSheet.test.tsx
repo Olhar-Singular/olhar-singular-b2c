@@ -130,6 +130,31 @@ describe("PageSheet", () => {
       });
     });
 
+    /*
+      Achado 0221: o contador é chrome da prévia, não parte da folha. Com a
+      escala no piso a folha fica MAIOR que a moldura, e a largura do parágrafo,
+      copiada da folha, jogava o texto (alinhado à direita) para fora do recorte
+      da mesa — sem rolagem que o alcançasse, porque o contador vive fora da
+      moldura rolável.
+    */
+    it("mantém o contador de folhas dentro da mesa quando a escala trava no piso (achado 0221)", () => {
+      withClientWidth(332, () => {
+        withHeight(1123, () => {
+          render(<PageSheet paginated toolbar={null}><span>x</span></PageSheet>);
+          expect(screen.getByTestId("page-count").style.width).toBe("332px");
+        });
+      });
+    });
+
+    it("alinha o contador pela borda direita da folha quando ela cabe na mesa", () => {
+      withClientWidth(1200, () => {
+        withHeight(1123, () => {
+          render(<PageSheet paginated toolbar={null}><span>x</span></PageSheet>);
+          expect(screen.getByTestId("page-count").style.width).toBe("794px");
+        });
+      });
+    });
+
     it("não amplia a folha além do tamanho real quando sobra espaço", () => {
       withClientWidth(1200, () => {
         withHeight(1123, () => {
