@@ -18,9 +18,16 @@ describe("documentToPlainText", () => {
     expect(text).toContain("Considere");
   });
 
-  it("renders inline math via its alt text", () => {
+  it("renders inline math as its LaTeX source, not the accessibility alt", () => {
     const text = documentToPlainText(renderDocument);
-    expect(text).toContain("a sobre b");
+    expect(text).toContain("\\frac{a}{b}");
+    expect(text).not.toContain("a sobre b");
+  });
+
+  it("renders blockMath as its LaTeX source, not the accessibility alt", () => {
+    const text = documentToPlainText(renderDocument);
+    expect(text).toContain("x^2 + y^2 = z^2");
+    expect(text).not.toContain("teorema de Pit\u00e1goras");
   });
 
   it("prefixes numbered questions and labels multiple-choice alternatives", () => {

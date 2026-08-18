@@ -15,10 +15,13 @@
 import type { Block, CanonicalDocument, QuestionAnswer, RichText } from "./schema.ts";
 import { indexToLetter } from "@/components/adaptation/render/letters";
 
+// Math is projected as its LaTeX SOURCE, never as `alt`. `alt` is the
+// accessibility label of the canonical schema (read by screen readers), not a
+// textual projection: emitting it here made "Copiar" the only surface that
+// dropped the equation ("teorema de pitagoras" instead of `a^2 + b^2 = c^2`),
+// diverging from the PDF (mathToPdfText, raw LaTeX) and from the screen (KaTeX).
 function richTextToText(rt: RichText): string {
-  return rt
-    .map((node) => (node.type === "text" ? node.text : node.alt ?? node.latex))
-    .join("");
+  return rt.map((node) => (node.type === "text" ? node.text : node.latex)).join("");
 }
 
 function answerToLines(answer: QuestionAnswer): string[] {
@@ -65,7 +68,8 @@ function blockToLines(block: Block, number: number): string[] {
     case "paragraph":
       return [richTextToText(block.content)];
     case "blockMath":
-      return [block.alt ?? block.latex];
+      // LaTeX source, not `alt` — see richTextToText.
+      return [block.latex];
     case "image":
       return block.caption ? [richTextToText(block.caption)] : [];
     case "scaffolding":
