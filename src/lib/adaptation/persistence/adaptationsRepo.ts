@@ -167,12 +167,12 @@ export async function markReady(
   id: string,
   expectedUpdatedAt: string,
   /**
-   * Filed alongside the status flip. `subject` is a column, so the autosave
-   * (which only ever patches the result blob) never carries it — and doing it
-   * as a SECOND update would bump `updated_at` again, leaving the caller's
-   * optimistic token one version behind.
+   * Filed alongside the status flip. `subject` and `folder_id` are columns, so
+   * the autosave (which only ever patches the result blob) never carries them —
+   * and doing either as a SECOND update would bump `updated_at` again, leaving
+   * the caller's optimistic token one version behind.
    */
-  patch: { subject?: string | null } = {},
+  patch: { subject?: string | null; folder_id?: string | null } = {},
 ): Promise<MarkReadyResult> {
   const { data, error } = await table()
     .update({ status: "ready", ...patch })

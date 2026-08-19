@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { ArrowLeft, ArrowRight, FileText, Info, RefreshCw, Save } from "lucide-react";
 import { EditorContent, BubbleMenu } from "@tiptap/react";
 import { isTextSelection } from "@tiptap/core";
@@ -62,6 +63,18 @@ type Props = {
    */
   subject?: string | null;
   onSubjectChange?: (subject: string | null) => void;
+  /**
+   * Named folders the teacher already has. The picker also offers "Nova
+   * pasta…", which does NOT create anything here — it only collects the name,
+   * so a folder is never left behind by someone who changed their mind and
+   * never saved.
+   */
+  folders?: Array<{ id: string; name: string }>;
+  folderId?: string | null;
+  onFolderChange?: (folderId: string | null) => void;
+  /** Name typed for a folder that does not exist yet; created on save. */
+  newFolder?: string;
+  onNewFolderChange?: (name: string) => void;
   /** Whether there is a persisted draft row to mark as saved. */
   canSave?: boolean;
   /** A save is in flight. */
@@ -82,6 +95,8 @@ type Props = {
  * NULL column), so it needs a sentinel of its own.
  */
 const NO_SUBJECT = "__sem_materia__";
+const NO_FOLDER = "__sem_pasta__";
+const NEW_FOLDER = "__nova_pasta__";
 
 const FALLBACK_TITLE = "Atividade adaptada";
 
@@ -129,6 +144,11 @@ export function StepReview({
   onTitleChange,
   subject = null,
   onSubjectChange,
+  folders = [],
+  folderId = null,
+  onFolderChange,
+  newFolder = "",
+  onNewFolderChange,
   canSave = false,
   saving = false,
   onSave,
@@ -136,6 +156,10 @@ export function StepReview({
 }: Props) {
   const [aboutOpen, setAboutOpen] = useState(false);
   const [originalOpen, setOriginalOpen] = useState(false);
+  // Local: whether the "Nova pasta…" field is open. The NAME goes up so the
+  // wizard can create the folder at save time; the open/closed state is pure
+  // chrome and has no business round-tripping through the parent.
+  const [creatingFolder, setCreatingFolder] = useState(false);
 
   // useEditor (inside useCanonicalEditor) only reads extensions once, at
   // mount — this only needs to be stable across a single Revisar session,
@@ -181,6 +205,49 @@ export function StepReview({
               desenhada pelo navegador e não aceita as cores nem a fonte do
               projeto. O popover é portalado, então recebe a paleta surface-*
               explicitamente — mesmo padrão do seletor de tipo no QuestionCard. */}
+          <Select
+            value={creatingFolder ? NEW_FOLDER : (folderId ?? NO_FOLDER)}
+            onValueChange={(v) => {
+              // "Nova pasta…" only opens the field. Creating the folder here
+              // would leave an empty one behind whenever someone changes their
+              // mind and never saves — so it is created on save, or never.
+              if (v === NEW_FOLDER) {
+                setCreatingFolder(true);
+                onFolderChange?.(null);
+                return;
+              }
+              setCreatingFolder(false);
+              onNewFolderChange?.("");
+              onFolderChange?.(v === NO_FOLDER ? null : v);
+            }}
+          >
+            <SelectTrigger
+              aria-label="Pasta"
+              title="Pasta"
+              className="mr-1 h-7 w-auto gap-1 border-surface-chrome-line bg-surface-paper px-2 text-xs font-medium text-surface-ink-soft shadow-none hover:text-surface-ink focus:ring-1 focus:ring-surface-accent"
+            >
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent className="border-surface-chrome-line bg-surface-chrome text-surface-ink">
+              <SelectItem value={NO_FOLDER}>Sem pasta</SelectItem>
+              {folders.map((f) => (
+                <SelectItem key={f.id} value={f.id}>{f.name}</SelectItem>
+              ))}
+              <SelectItem value={NEW_FOLDER}>+ Nova pasta…</SelectItem>
+            </SelectContent>
+          </Select>
+
+          {creatingFolder && (
+            <Input
+              autoFocus
+              aria-label="Nome da nova pasta"
+              placeholder="Ex.: 6º ano B"
+              value={newFolder}
+              onChange={(e) => onNewFolderChange?.(e.target.value)}
+              className="mr-1 h-7 w-36 border-surface-chrome-line bg-surface-paper text-xs text-surface-ink"
+            />
+          )}
+
           <Select
             value={subject ?? NO_SUBJECT}
             onValueChange={(v) => onSubjectChange?.(v === NO_SUBJECT ? null : v)}

@@ -39,6 +39,7 @@ import {
 import { readMirror, clearMirror, type MirrorEntry } from "@/lib/adaptation/persistence/draftMirror";
 import { shouldOfferRestore } from "@/lib/adaptation/persistence/restoreDecision";
 import { useAdaptationDraft } from "@/hooks/useAdaptationDraft";
+import { useFolders, useCreateFolder } from "@/hooks/useFolders";
 import { useMarkReady } from "@/hooks/useAdaptations";
 import type { AdaptationResult, CanonicalDocument, DocumentHeader, PageStyle } from "@/lib/adaptation/canonical/schema";
 
@@ -70,8 +71,9 @@ export type EditModeSeed = {
   adaptationId: string;
   initialData: WizardData;
   initialUpdatedAt: string;
-  /** The folder it was filed under — a column, so it rides beside the blob. */
+  /** Matéria e pasta são COLUNAS, então viajam ao lado do blob, não dentro. */
   subject?: string | null;
+  folderId?: string | null;
 };
 
 type Props = {
@@ -99,6 +101,8 @@ export default function CanonicalAdaptationWizard({ editMode }: Props = {}) {
   const navigate = useNavigate();
   const { user } = useAuth();
   const markReady = useMarkReady();
+  const { data: folders = [] } = useFolders();
+  const createFolder = useCreateFolder();
   const [isGenerating, setIsGenerating] = useState(false);
   // Upload-direto-de-prova only: true while StepUploadExam is parsing a file
   // locally (no AI, no network — pdf-utils/docx-utils only; AI extraction is
@@ -114,6 +118,9 @@ export default function CanonicalAdaptationWizard({ editMode }: Props = {}) {
    * `null` = unclassified, which is not the same as the real subject "Geral".
    */
   const [subject, setSubject] = useState<string | null>(editMode?.subject ?? null);
+  /** Pasta escolhida (id) e/ou nome de uma pasta nova, criada só ao salvar. */
+  const [folderId, setFolderId] = useState<string | null>(editMode?.folderId ?? null);
+  const [newFolder, setNewFolder] = useState("");
 
   const [data, setData] = useState<WizardData>(
     editMode ? editMode.initialData : INITIAL_WIZARD_DATA,
@@ -323,10 +330,29 @@ export default function CanonicalAdaptationWizard({ editMode }: Props = {}) {
     // markReady uses the latest known updated_at (advanced by every autosave) so
     // the optimistic-concurrency guard does not desync. A conflict means another
     // writer touched the row — warn + reload instead of navigating away blind.
+    // Uma pasta nova é criada AQUI, no salvar — não no momento em que o nome é
+    // digitado. Assim ninguém que desiste de salvar deixa uma pasta vazia para
+    // trás. Se a criação falhar, o salvar para: arquivar numa pasta que não
+    // existe seria pior do que não arquivar.
+    let targetFolder = folderId;
+    const wanted = newFolder.trim();
+    if (wanted) {
+      try {
+        const created = await createFolder.mutateAsync(wanted);
+        targetFolder = created.id;
+        setFolderId(created.id);
+        setNewFolder("");
+      } catch {
+        // useCreateFolder já mostrou o motivo (nome repetido, rede…).
+        return;
+      }
+    }
+
     const res = await markReady.mutateAsync({
       id: draftId,
       expectedUpdatedAt: latestUpdatedAt,
       subject,
+      folderId: targetFolder,
     });
     if (!res.ok) {
       handleConflict();
@@ -343,7 +369,7 @@ export default function CanonicalAdaptationWizard({ editMode }: Props = {}) {
     // at the time it was last rebuilt, so picking a subject and pressing
     // Salvar would file the adaptation under the PREVIOUS one — or under
     // nothing at all, on the first pick.
-  }, [draftId, currentUpdatedAt, flush, markReady, handleConflict, syncUpdatedAt, subject]);
+  }, [draftId, currentUpdatedAt, flush, markReady, handleConflict, syncUpdatedAt, subject, folderId, newFolder, createFolder]);
 
   const renderStep = () => {
     switch (currentKey) {
@@ -407,6 +433,17 @@ export default function CanonicalAdaptationWizard({ editMode }: Props = {}) {
             onSubjectChange={(s) => {
               setIsSaved(false);
               setSubject(s);
+            }}
+            folders={folders}
+            folderId={folderId}
+            onFolderChange={(id) => {
+              setIsSaved(false);
+              setFolderId(id);
+            }}
+            newFolder={newFolder}
+            onNewFolderChange={(name) => {
+              setIsSaved(false);
+              setNewFolder(name);
             }}
             canSave={!!draftId}
             saving={markReady.isPending}
