@@ -41,6 +41,13 @@ export type AdaptationRow = {
   observation_notes: string | null;
   adaptation_result: AdaptationResult;
   status: AdaptationStatus;
+  /**
+   * The "folder" the teacher filed this under. NULL = unclassified: the server
+   * INSERT never sets it (it runs before the credit charge is settled and must
+   * not depend on anything the client chose), and 'Geral' is a real subject, so
+   * it cannot double as the sentinel.
+   */
+  subject: string | null;
   credits_spent: number;
   created_at: string;
   updated_at: string;
@@ -66,6 +73,7 @@ export type AdaptationPayload = {
   barriers_used: unknown;
   observation_notes: string | null;
   adaptation_result: AdaptationResult;
+  subject: string | null;
 };
 
 export type UpdateResult =
@@ -156,9 +164,16 @@ export async function updateAdaptation(
 export async function markReady(
   id: string,
   expectedUpdatedAt: string,
+  /**
+   * Filed alongside the status flip. `subject` is a column, so the autosave
+   * (which only ever patches the result blob) never carries it — and doing it
+   * as a SECOND update would bump `updated_at` again, leaving the caller's
+   * optimistic token one version behind.
+   */
+  patch: { subject?: string | null } = {},
 ): Promise<MarkReadyResult> {
   const { data, error } = await table()
-    .update({ status: "ready" })
+    .update({ status: "ready", ...patch })
     .eq("id", id)
     .eq("updated_at", expectedUpdatedAt)
     .select("updated_at")
@@ -172,7 +187,7 @@ export async function markReady(
 export async function listAdaptations(): Promise<AdaptationListItem[]> {
   const { data, error } = await table()
     .select(
-      "id,user_id,barrier_profile_id,title,original_activity,activity_type,barriers_used,observation_notes,status,credits_spent,created_at,updated_at",
+      "id,user_id,barrier_profile_id,title,original_activity,activity_type,barriers_used,observation_notes,status,subject,credits_spent,created_at,updated_at",
     )
     .order("updated_at", { ascending: false });
   if (error) throw error;

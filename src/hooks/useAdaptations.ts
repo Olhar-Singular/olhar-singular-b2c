@@ -63,8 +63,18 @@ export function useAdaptation(id: string | undefined) {
 export function useMarkReady() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ id, expectedUpdatedAt }: { id: string; expectedUpdatedAt: string }) =>
-      markReady(id, expectedUpdatedAt),
+    mutationFn: ({
+      id,
+      expectedUpdatedAt,
+      subject,
+    }: {
+      id: string;
+      expectedUpdatedAt: string;
+      // The folder rides along with the status flip: it is a column, so the
+      // autosave never carries it, and a separate UPDATE would bump the row
+      // version a second time behind the caller's optimistic token.
+      subject?: string | null;
+    }) => markReady(id, expectedUpdatedAt, subject === undefined ? {} : { subject }),
     onSuccess: (res, { id }) => {
       if (!res.ok) return;
       qc.invalidateQueries({ queryKey: adaptationKeys.list() });

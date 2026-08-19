@@ -47,6 +47,7 @@ export type Database = {
           original_activity: string
           request_id: string | null
           status: string
+          subject: string | null
           title: string
           updated_at: string
           user_id: string
@@ -63,6 +64,7 @@ export type Database = {
           original_activity?: string
           request_id?: string | null
           status?: string
+          subject?: string | null
           title?: string
           updated_at?: string
           user_id: string
@@ -79,6 +81,7 @@ export type Database = {
           original_activity?: string
           request_id?: string | null
           status?: string
+          subject?: string | null
           title?: string
           updated_at?: string
           user_id?: string

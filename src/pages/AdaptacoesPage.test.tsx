@@ -60,6 +60,52 @@ describe("AdaptacoesPage", () => {
     expect(within(readyCard).getByText("Concluída")).toBeInTheDocument();
   });
 
+  describe("pastas por matéria", () => {
+    const filed = [
+      { id: "f1", title: "Prova de Geografia", activity_type: "prova", status: "ready", subject: "Geografia", credits_spent: 1, updated_at: "2026-06-01T00:00:00Z" },
+      { id: "f2", title: "Prova de Física", activity_type: "prova", status: "ready", subject: "Física", credits_spent: 1, updated_at: "2026-06-02T00:00:00Z" },
+      { id: "f3", title: "Outra de Geografia", activity_type: "prova", status: "draft", subject: "Geografia", credits_spent: 1, updated_at: "2026-06-03T00:00:00Z" },
+      { id: "f4", title: "Ainda sem pasta", activity_type: null, status: "draft", subject: null, credits_spent: 0, updated_at: "2026-06-04T00:00:00Z" },
+    ];
+
+    async function renderFiled() {
+      const m = await import("@/hooks/useAdaptations");
+      vi.mocked(m.useAdaptations).mockReturnValue({ data: filed, isLoading: false } as never);
+      renderPage();
+    }
+
+    it("groups the adaptations under a heading per subject", async () => {
+      await renderFiled();
+      expect(screen.getByRole("heading", { name: "Geografia" })).toBeInTheDocument();
+      expect(screen.getByRole("heading", { name: "Física" })).toBeInTheDocument();
+    });
+
+    it("puts the unclassified ones in their own group", async () => {
+      await renderFiled();
+      expect(screen.getByRole("heading", { name: "Sem matéria" })).toBeInTheDocument();
+    });
+
+    it("files each adaptation under its own subject", async () => {
+      await renderFiled();
+      const geografia = screen.getByRole("heading", { name: "Geografia" }).closest("section")!;
+      expect(within(geografia).getByText("Prova de Geografia")).toBeInTheDocument();
+      expect(within(geografia).getByText("Outra de Geografia")).toBeInTheDocument();
+      expect(within(geografia).queryByText("Prova de Física")).not.toBeInTheDocument();
+    });
+
+    it("keeps the unclassified group last, after the named folders", async () => {
+      await renderFiled();
+      const headings = screen.getAllByRole("heading", { level: 2 }).map((h) => h.textContent);
+      expect(headings[headings.length - 1]).toBe("Sem matéria");
+    });
+
+    it("does not render a folder heading when nothing is classified", () => {
+      // Every fixture in `items` predates the subject column.
+      renderPage();
+      expect(screen.queryByRole("heading", { name: "Sem matéria" })).not.toBeInTheDocument();
+    });
+  });
+
   it("shows loading state", async () => {
     const m = await import("@/hooks/useAdaptations");
     vi.mocked(m.useAdaptations).mockReturnValue({ data: undefined, isLoading: true } as never);

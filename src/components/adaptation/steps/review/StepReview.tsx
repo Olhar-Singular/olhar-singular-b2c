@@ -14,6 +14,7 @@ import { MetadataDrawer } from "./MetadataDrawer";
 import { OriginalExamDialog } from "./OriginalExamDialog";
 import { SelectionBubble } from "@/components/adaptation/canonical-editor/SelectionBubble";
 import { resolvePageStyle } from "@/components/adaptation/render/pageStyle";
+import { SUBJECTS } from "@/lib/utils/constants";
 import "katex/dist/katex.min.css";
 import type { Block, CanonicalDocument, PageStyle } from "@/lib/adaptation/canonical/schema";
 
@@ -48,6 +49,12 @@ type Props = {
    */
   title?: string;
   onTitleChange?: (title: string) => void;
+  /**
+   * The folder the adaptation is filed under. `null` = unclassified, which is
+   * NOT the same as "Geral" — that is a real subject a teacher may pick.
+   */
+  subject?: string | null;
+  onSubjectChange?: (subject: string | null) => void;
   /** Whether there is a persisted draft row to mark as saved. */
   canSave?: boolean;
   /** A save is in flight. */
@@ -106,6 +113,8 @@ export function StepReview({
   onCaptureFailure,
   title = "",
   onTitleChange,
+  subject = null,
+  onSubjectChange,
   canSave = false,
   saving = false,
   onSave,
@@ -154,6 +163,20 @@ export function StepReview({
           className="min-w-0 flex-1 truncate border-0 bg-transparent p-0 text-base font-semibold text-surface-ink outline-none placeholder:font-semibold placeholder:text-surface-ink-faint focus:ring-0"
         />
         <div className="flex shrink-0 items-center gap-1">
+          {/* Native select on purpose: this sits inside the folha's chrome,
+              where the shadcn Select's portalled popover would inherit the
+              app theme instead of the surface-* palette. */}
+          <select
+            aria-label="Matéria"
+            value={subject ?? ""}
+            onChange={(e) => onSubjectChange?.(e.target.value || null)}
+            className="mr-1 max-w-[10rem] rounded-md border border-surface-chrome-line bg-surface-paper px-2 py-1 text-xs text-surface-ink outline-none"
+          >
+            <option value="">Sem matéria</option>
+            {SUBJECTS.map((s) => (
+              <option key={s} value={s}>{s}</option>
+            ))}
+          </select>
           <Button
             size="sm"
             variant="ghost"

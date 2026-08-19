@@ -135,6 +135,26 @@ describe("adaptationsRepo", () => {
       expect(res).toEqual({ ok: true, updatedAt: "2026-01-03T00:00:00Z" });
     });
 
+    // The folder is a column, not part of the result blob, so the autosave
+    // never carries it. Filing it in the SAME write as the status flip keeps
+    // it to one row version bump — a second UPDATE would advance updated_at
+    // again and leave the optimistic token behind.
+    it("files the adaptation under a subject in the same write", async () => {
+      const ready = { ...baseRow, status: "ready", updated_at: "2026-01-03T00:00:00Z" };
+      const chain = buildChain({ data: ready, error: null });
+      vi.mocked(supabase.from).mockReturnValue(chain as never);
+      await markReady("a1", "2026-01-01T00:00:00Z", { subject: "Geografia" });
+      expect(chain.update).toHaveBeenCalledWith({ status: "ready", subject: "Geografia" });
+    });
+
+    it("stores an explicit null when the adaptation has no subject", async () => {
+      const ready = { ...baseRow, status: "ready", updated_at: "2026-01-03T00:00:00Z" };
+      const chain = buildChain({ data: ready, error: null });
+      vi.mocked(supabase.from).mockReturnValue(chain as never);
+      await markReady("a1", "2026-01-01T00:00:00Z", { subject: null });
+      expect(chain.update).toHaveBeenCalledWith({ status: "ready", subject: null });
+    });
+
     it("returns a conflict result when 0 rows match (stale updated_at)", async () => {
       const chain = buildChain({ data: null, error: null });
       vi.mocked(supabase.from).mockReturnValue(chain as never);

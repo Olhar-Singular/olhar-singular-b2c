@@ -270,6 +270,41 @@ describe("StepReview", () => {
   // Saving lived only on the Exportar step, at the very end of the flow. A
   // teacher who finished editing and left never filed the adaptation — which
   // is why every row in the database sat at `draft`.
+  describe("matéria (a pasta)", () => {
+    it("shows the chosen subject", () => {
+      setup({ subject: "Geografia" });
+      expect(screen.getByLabelText("Matéria")).toHaveValue("Geografia");
+    });
+
+    it("starts unclassified rather than guessing a subject", () => {
+      // "" maps to NULL, not to "Geral" — 'Geral' is a real subject, so it
+      // cannot double as the "never classified" sentinel.
+      setup({ subject: null });
+      expect(screen.getByLabelText("Matéria")).toHaveValue("");
+    });
+
+    it("emits the picked subject", () => {
+      const onSubjectChange = vi.fn();
+      setup({ subject: null, onSubjectChange });
+      fireEvent.change(screen.getByLabelText("Matéria"), { target: { value: "Matemática" } });
+      expect(onSubjectChange).toHaveBeenCalledWith("Matemática");
+    });
+
+    it("emits null when the teacher clears the subject", () => {
+      const onSubjectChange = vi.fn();
+      setup({ subject: "Geografia", onSubjectChange });
+      fireEvent.change(screen.getByLabelText("Matéria"), { target: { value: "" } });
+      expect(onSubjectChange).toHaveBeenCalledWith(null);
+    });
+
+    it("does not break without a handler", () => {
+      setup({ subject: null });
+      expect(() =>
+        fireEvent.change(screen.getByLabelText("Matéria"), { target: { value: "Física" } }),
+      ).not.toThrow();
+    });
+  });
+
   describe("salvar a adaptação", () => {
     it("offers Salvar once there is a draft to save", () => {
       const onSave = vi.fn();

@@ -70,6 +70,8 @@ export type EditModeSeed = {
   adaptationId: string;
   initialData: WizardData;
   initialUpdatedAt: string;
+  /** The folder it was filed under — a column, so it rides beside the blob. */
+  subject?: string | null;
 };
 
 type Props = {
@@ -105,6 +107,13 @@ export default function CanonicalAdaptationWizard({ editMode }: Props = {}) {
   // here — the dialog wording differs.
   const [isUploading, setIsUploading] = useState(false);
   const [isSaved, setIsSaved] = useState(!!editMode);
+  /**
+   * The folder the adaptation is filed under. Lives here, not in WizardData:
+   * it is a COLUMN, not part of the result blob, so it rides the explicit save
+   * (with `markReady`) rather than the autosave, which only patches the blob.
+   * `null` = unclassified, which is not the same as the real subject "Geral".
+   */
+  const [subject, setSubject] = useState<string | null>(editMode?.subject ?? null);
 
   const [data, setData] = useState<WizardData>(
     editMode ? editMode.initialData : INITIAL_WIZARD_DATA,
@@ -314,7 +323,11 @@ export default function CanonicalAdaptationWizard({ editMode }: Props = {}) {
     // markReady uses the latest known updated_at (advanced by every autosave) so
     // the optimistic-concurrency guard does not desync. A conflict means another
     // writer touched the row — warn + reload instead of navigating away blind.
-    const res = await markReady.mutateAsync({ id: draftId, expectedUpdatedAt: latestUpdatedAt });
+    const res = await markReady.mutateAsync({
+      id: draftId,
+      expectedUpdatedAt: latestUpdatedAt,
+      subject,
+    });
     if (!res.ok) {
       handleConflict();
       return;
@@ -386,6 +399,11 @@ export default function CanonicalAdaptationWizard({ editMode }: Props = {}) {
             onCaptureFailure={setCaptureFailure}
             title={data.result.header?.title ?? ""}
             onTitleChange={handleTitleChange}
+            subject={subject}
+            onSubjectChange={(s) => {
+              setIsSaved(false);
+              setSubject(s);
+            }}
             canSave={!!draftId}
             saving={markReady.isPending}
             onSave={handleSave}

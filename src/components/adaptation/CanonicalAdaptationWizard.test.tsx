@@ -222,6 +222,8 @@ vi.mock("./steps/review/StepReview", () => ({
     originalExam,
     title,
     onTitleChange,
+    subject,
+    onSubjectChange,
     canSave,
     onSave,
   }: {
@@ -236,6 +238,8 @@ vi.mock("./steps/review/StepReview", () => ({
     originalExam?: { file: File; pageImages: string[]; userId: string | null } | null;
     title?: string;
     onTitleChange?: (t: string) => void;
+    subject?: string | null;
+    onSubjectChange?: (s: string | null) => void;
     canSave?: boolean;
     onSave?: () => void;
   }) => (
@@ -247,6 +251,9 @@ vi.mock("./steps/review/StepReview", () => ({
       <button data-testid="review-rename" onClick={() => onTitleChange?.("Prova de Geografia")}>
         renomear
       </button>
+      <pre data-testid="review-subject">{subject ?? "null"}</pre>
+      <button data-testid="review-file" onClick={() => onSubjectChange?.("Geografia")}>arquivar</button>
+      <button data-testid="review-unfile" onClick={() => onSubjectChange?.(null)}>desarquivar</button>
       <button data-testid="review-save" onClick={() => onSave?.()}>salvar na revisar</button>
       <pre data-testid="review-original-exam">
         {originalExam ? JSON.stringify({ fileName: originalExam.file.name, userId: originalExam.userId }) : "null"}
@@ -503,6 +510,7 @@ describe("CanonicalAdaptationWizard", () => {
       expect(mockMarkReady).toHaveBeenCalledWith({
         id: "srv-1",
         expectedUpdatedAt: "2026-01-01T00:00:00Z",
+        subject: null,
       }),
     );
     expect(toast.success).toHaveBeenCalled();
@@ -523,6 +531,7 @@ describe("CanonicalAdaptationWizard", () => {
       expect(mockMarkReady).toHaveBeenCalledWith({
         id: "srv-1",
         expectedUpdatedAt: "2026-09-09T00:00:00Z",
+        subject: null,
       }),
     );
   });
@@ -538,6 +547,7 @@ describe("CanonicalAdaptationWizard", () => {
       expect(mockMarkReady).toHaveBeenCalledWith({
         id: "srv-1",
         expectedUpdatedAt: "2026-01-01T00:00:00Z",
+        subject: null,
       }),
     );
   });
@@ -1156,6 +1166,30 @@ describe("CanonicalAdaptationWizard — navigation guard", () => {
       advanceToReview();
       fireEvent.click(screen.getByTestId("review-rename"));
       expect(screen.getByTestId("review-title")).toHaveTextContent("Prova de Geografia");
+    });
+
+    it("starts unfiled and files the adaptation under the picked subject", async () => {
+      renderWithProviders(<CanonicalAdaptationWizard />);
+      advanceToReview();
+      expect(screen.getByTestId("review-subject")).toHaveTextContent("null");
+
+      fireEvent.click(screen.getByTestId("review-file"));
+      expect(screen.getByTestId("review-subject")).toHaveTextContent("Geografia");
+
+      fireEvent.click(screen.getByTestId("review-save"));
+      await waitFor(() =>
+        expect(mockMarkReady).toHaveBeenCalledWith(
+          expect.objectContaining({ subject: "Geografia" }),
+        ),
+      );
+    });
+
+    it("sends null when the teacher unfiles it, so the column is cleared", async () => {
+      renderWithProviders(<CanonicalAdaptationWizard />);
+      advanceToReview();
+      fireEvent.click(screen.getByTestId("review-file"));
+      fireEvent.click(screen.getByTestId("review-unfile"));
+      expect(screen.getByTestId("review-subject")).toHaveTextContent("null");
     });
 
     it("marks the adaptation ready from the Revisar step", async () => {
