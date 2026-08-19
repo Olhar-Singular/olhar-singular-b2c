@@ -122,7 +122,50 @@ describe("StepBarrierSelection", () => {
     const user = userEvent.setup();
     renderStep({ ...baseData, barrierProfileId: "prof-1" });
     await user.selectOptions(screen.getByRole("combobox"), "");
-    expect(mockUpdateData).toHaveBeenCalledWith({ barrierProfileId: null, barriers: [] });
+    expect(mockUpdateData).toHaveBeenCalledWith({
+      barrierProfileId: null,
+      barriers: [],
+      observationNotes: undefined,
+    });
+  });
+
+  // The profile's free-text observation is the richest signal the teacher ever
+  // gives about the student ("lê devagar", "trava com layout carregado"). It
+  // feeds PILAR 1 of the system prompt, so it has to survive profile selection
+  // — StepGenerate reads it straight off WizardData.observationNotes.
+  it("carries the profile's observation into observationNotes", async () => {
+    const user = userEvent.setup();
+    renderStep();
+    await user.selectOptions(screen.getByRole("combobox"), "prof-1");
+    expect(mockUpdateData).toHaveBeenCalledWith(
+      expect.objectContaining({ observationNotes: "Aluno com TEA leve" }),
+    );
+  });
+
+  it("leaves observationNotes undefined when the profile has no observation", async () => {
+    const user = userEvent.setup();
+    vi.mocked(useBarrierProfiles).mockReturnValueOnce({
+      data: [{ id: "p-empty", user_id: "u1", barriers: ["tea_abstracao"], observation: "", name: "Sem obs", created_at: "2026-01-01" }],
+      isLoading: false,
+    } as never);
+    renderStep();
+    await user.selectOptions(screen.getByRole("combobox"), "p-empty");
+    expect(mockUpdateData).toHaveBeenCalledWith(
+      expect.objectContaining({ observationNotes: undefined }),
+    );
+  });
+
+  it("leaves observationNotes undefined when the observation column is null", async () => {
+    const user = userEvent.setup();
+    vi.mocked(useBarrierProfiles).mockReturnValueOnce({
+      data: [{ id: "p-null", user_id: "u1", barriers: ["tea_abstracao"], observation: null, name: "Obs nula", created_at: "2026-01-01" }],
+      isLoading: false,
+    } as never);
+    renderStep();
+    await user.selectOptions(screen.getByRole("combobox"), "p-null");
+    expect(mockUpdateData).toHaveBeenCalledWith(
+      expect.objectContaining({ observationNotes: undefined }),
+    );
   });
 
   it("maps profile barrier to known dimension when key exists in BARRIER_DIMENSIONS", async () => {

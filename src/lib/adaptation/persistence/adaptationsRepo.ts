@@ -41,6 +41,13 @@ export type AdaptationRow = {
   observation_notes: string | null;
   adaptation_result: AdaptationResult;
   status: AdaptationStatus;
+  /**
+   * The "folder" the teacher filed this under. NULL = unclassified: the server
+   * INSERT never sets it (it runs before the credit charge is settled and must
+   * not depend on anything the client chose), and 'Geral' is a real subject, so
+   * it cannot double as the sentinel.
+   */
+  subject: string | null;
   credits_spent: number;
   created_at: string;
   updated_at: string;
@@ -66,6 +73,7 @@ export type AdaptationPayload = {
   barriers_used: unknown;
   observation_notes: string | null;
   adaptation_result: AdaptationResult;
+  subject: string | null;
 };
 
 export type UpdateResult =
@@ -156,9 +164,16 @@ export async function updateAdaptation(
 export async function markReady(
   id: string,
   expectedUpdatedAt: string,
+  /**
+   * Filed alongside the status flip. `subject` is a column, so the autosave
+   * (which only ever patches the result blob) never carries it — and doing it
+   * as a SECOND update would bump `updated_at` again, leaving the caller's
+   * optimistic token one version behind.
+   */
+  patch: { subject?: string | null } = {},
 ): Promise<MarkReadyResult> {
   const { data, error } = await table()
-    .update({ status: "ready" })
+    .update({ status: "ready", ...patch })
     .eq("id", id)
     .eq("updated_at", expectedUpdatedAt)
     .select("updated_at")
@@ -172,7 +187,7 @@ export async function markReady(
 export async function listAdaptations(): Promise<AdaptationListItem[]> {
   const { data, error } = await table()
     .select(
-      "id,user_id,barrier_profile_id,title,original_activity,activity_type,barriers_used,observation_notes,status,credits_spent,created_at,updated_at",
+      "id,user_id,barrier_profile_id,title,original_activity,activity_type,barriers_used,observation_notes,status,subject,credits_spent,created_at,updated_at",
     )
     .order("updated_at", { ascending: false });
   if (error) throw error;
@@ -182,6 +197,45 @@ export async function listAdaptations(): Promise<AdaptationListItem[]> {
 /** Fetch a single adaptation by id, validating the result blob. */
 export async function getAdaptation(id: string): Promise<AdaptationRow> {
   const { data, error } = await table().select("*").eq("id", id).single();
+  if (error) throw error;
+  return parseRow(data as Record<string, unknown>);
+}
+
+/**
+ * Copy an adaptation into a brand-new row.
+ *
+ * This is the safe half of "salvar como nova". Doing that choice *inside* the
+ * editor would mean racing the autosave — it writes to the original row every
+ * ~1200ms from the first keystroke, so by the time any dialog appeared the
+ * overwrite would already have happened, and "as new" would have to create a
+ * copy AND roll the original back to its opening snapshot AND clear its crash
+ * mirror. Here there is no autosave in flight, no optimistic token to rebind
+ * and no mirror in play: it is a plain INSERT the owner is allowed to make.
+ *
+ * Deliberately NOT copied:
+ * - `request_id`: it is the credit-reservation idempotency key, under a unique
+ *   partial index. Reusing it would collide; the copy was never charged.
+ * - `credits_spent`: 0, for the same reason — nobody paid for a copy.
+ * `status` starts 'ready' because the teacher asked for this one explicitly.
+ */
+export async function duplicateAdaptation(id: string, title: string): Promise<AdaptationRow> {
+  const source = await getAdaptation(id);
+  const { data, error } = await table()
+    .insert({
+      user_id: source.user_id,
+      title,
+      original_activity: source.original_activity,
+      activity_type: source.activity_type,
+      barrier_profile_id: source.barrier_profile_id,
+      barriers_used: source.barriers_used,
+      observation_notes: source.observation_notes,
+      adaptation_result: source.adaptation_result,
+      subject: source.subject,
+      status: "ready",
+      credits_spent: 0,
+    })
+    .select("*")
+    .single();
   if (error) throw error;
   return parseRow(data as Record<string, unknown>);
 }

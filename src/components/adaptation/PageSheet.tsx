@@ -33,7 +33,13 @@ export function PageSheet({ toolbar, pageStyle, children }: PageSheetProps) {
       >
         <div
           data-testid="page-sheet"
-          className="mx-auto w-[794px] max-w-full bg-surface-paper text-surface-ink rounded-[3px]"
+          /* [color-scheme:light] — the sheet is paper and stays light whatever
+             the app theme is. Native controls (the "correct alternative" radio,
+             checkboxes) are painted by the BROWSER from color-scheme, not from
+             Tailwind classes, so under the dark theme they came out as dark
+             filled circles on white paper. Pinning it here covers every native
+             control on the sheet, including ones not written yet. */
+          className="mx-auto w-[794px] max-w-full bg-surface-paper text-surface-ink rounded-[3px] [color-scheme:light] [accent-color:hsl(var(--sf-accent))]"
           style={{ ...pageTokensToCss(resolvePageStyle(pageStyle)), boxShadow: "var(--sf-paper-shadow)" }}
         >
           {children}

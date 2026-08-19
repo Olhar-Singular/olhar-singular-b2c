@@ -6,6 +6,7 @@ import {
   useAdaptations,
   useAdaptation,
   useMarkReady,
+  useDuplicateAdaptation,
   useDeleteAdaptation,
   adaptationKeys,
 } from "./useAdaptations";
@@ -107,7 +108,38 @@ describe("useMarkReady", () => {
     await act(async () => {
       await result.current.mutateAsync({ id: "a1", expectedUpdatedAt: "2026-01-01T00:00:00Z" });
     });
-    expect(repo.markReady).toHaveBeenCalledWith("a1", "2026-01-01T00:00:00Z");
+    // No subject passed → no `subject` key in the patch at all, so filing is
+    // left untouched. Sending `{ subject: undefined }` would be a different
+    // thing entirely: supabase-js serialises it and would blank the column.
+    expect(repo.markReady).toHaveBeenCalledWith("a1", "2026-01-01T00:00:00Z", {});
+  });
+
+  it("files the adaptation under a subject when one is given", async () => {
+    vi.mocked(repo.markReady).mockResolvedValue({ ok: true, updatedAt: "2026-01-02T00:00:00Z" });
+    const { result } = renderHook(() => useMarkReady(), { wrapper });
+    await act(async () => {
+      await result.current.mutateAsync({
+        id: "a1",
+        expectedUpdatedAt: "2026-01-01T00:00:00Z",
+        subject: "Geografia",
+      });
+    });
+    expect(repo.markReady).toHaveBeenCalledWith("a1", "2026-01-01T00:00:00Z", {
+      subject: "Geografia",
+    });
+  });
+
+  it("clears the subject when the teacher unfiles it", async () => {
+    vi.mocked(repo.markReady).mockResolvedValue({ ok: true, updatedAt: "2026-01-02T00:00:00Z" });
+    const { result } = renderHook(() => useMarkReady(), { wrapper });
+    await act(async () => {
+      await result.current.mutateAsync({
+        id: "a1",
+        expectedUpdatedAt: "2026-01-01T00:00:00Z",
+        subject: null,
+      });
+    });
+    expect(repo.markReady).toHaveBeenCalledWith("a1", "2026-01-01T00:00:00Z", { subject: null });
   });
 
   it("does not invalidate when the mark-ready conflicts", async () => {
@@ -130,6 +162,31 @@ describe("useMarkReady", () => {
       } catch {
         /* expected */
       }
+    });
+    expect(toast.error).toHaveBeenCalled();
+  });
+});
+
+describe("useDuplicateAdaptation", () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it("copies the adaptation and refreshes the library", async () => {
+    vi.mocked(repo.duplicateAdaptation).mockResolvedValue({ ...ROW, id: "a2" } as never);
+    const { toast } = await import("sonner");
+    const { result } = renderHook(() => useDuplicateAdaptation(), { wrapper });
+    await act(async () => {
+      await result.current.mutateAsync({ id: "a1", title: "T (cópia)" });
+    });
+    expect(repo.duplicateAdaptation).toHaveBeenCalledWith("a1", "T (cópia)");
+    expect(toast.success).toHaveBeenCalled();
+  });
+
+  it("surfaces a failure instead of silently doing nothing", async () => {
+    vi.mocked(repo.duplicateAdaptation).mockRejectedValue(new Error("nope"));
+    const { toast } = await import("sonner");
+    const { result } = renderHook(() => useDuplicateAdaptation(), { wrapper });
+    await act(async () => {
+      await result.current.mutateAsync({ id: "a1", title: "x" }).catch(() => undefined);
     });
     expect(toast.error).toHaveBeenCalled();
   });

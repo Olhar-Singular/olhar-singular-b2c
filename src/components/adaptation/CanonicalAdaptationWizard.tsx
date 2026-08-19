@@ -1,6 +1,7 @@
 import { useState, useCallback, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { useNavigationGuard } from "@/hooks/useNavigationGuard";
+import { useAuth } from "@/hooks/useAuth";
 import { toast } from "sonner";
 import {
   AlertDialog,
@@ -21,6 +22,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { StepActivityType } from "./steps/activity-type/StepActivityType";
 import { StepActivityInput } from "./steps/activity-input/StepActivityInput";
+import { StepUploadExam } from "./steps/upload-exam/StepUploadExam";
 import { StepBarrierSelection } from "./steps/barriers/StepBarrierSelection";
 import { StepGenerate, type GeneratedRow } from "./steps/generate/StepGenerate";
 import { StepReview } from "./steps/review/StepReview";
@@ -68,6 +70,8 @@ export type EditModeSeed = {
   adaptationId: string;
   initialData: WizardData;
   initialUpdatedAt: string;
+  /** The folder it was filed under — a column, so it rides beside the blob. */
+  subject?: string | null;
 };
 
 type Props = {
@@ -75,25 +79,48 @@ type Props = {
   editMode?: EditModeSeed;
 };
 
+/**
+ * The autosave state, which is NOT the same thing as the "Salvar" button.
+ *
+ * This used to read "Salvo" — the same word as the button that marks the
+ * adaptation finished. The passive one fires first and took the word, so the
+ * teacher read "Salvo", concluded the work was filed, and never pressed
+ * Salvar: every row in the database sat at `draft` forever. Naming the draft
+ * explicitly is what keeps the two states distinguishable.
+ */
 const SAVE_STATUS_LABEL: Record<string, string> = {
   saving: "Salvando…",
-  saved: "Salvo",
+  saved: "Rascunho salvo",
   error: "Erro ao salvar",
   conflict: "Conflito — recarregue",
 };
 
 export default function CanonicalAdaptationWizard({ editMode }: Props = {}) {
   const navigate = useNavigate();
+  const { user } = useAuth();
   const markReady = useMarkReady();
   const [isGenerating, setIsGenerating] = useState(false);
+  // Upload-direto-de-prova only: true while StepUploadExam is parsing a file
+  // locally (no AI, no network — pdf-utils/docx-utils only; AI extraction is
+  // deferred to "Gerar", bundled with the paid adapt-activity call). Blocks
+  // navigation the same way isGenerating does, but there is no credit at stake
+  // here — the dialog wording differs.
+  const [isUploading, setIsUploading] = useState(false);
   const [isSaved, setIsSaved] = useState(!!editMode);
+  /**
+   * The folder the adaptation is filed under. Lives here, not in WizardData:
+   * it is a COLUMN, not part of the result blob, so it rides the explicit save
+   * (with `markReady`) rather than the autosave, which only patches the blob.
+   * `null` = unclassified, which is not the same as the real subject "Geral".
+   */
+  const [subject, setSubject] = useState<string | null>(editMode?.subject ?? null);
 
   const [data, setData] = useState<WizardData>(
     editMode ? editMode.initialData : INITIAL_WIZARD_DATA,
   );
 
   const hasUnsavedResult = !!data.result && !isSaved && !isGenerating;
-  const navGuard = useNavigationGuard(isGenerating || hasUnsavedResult);
+  const navGuard = useNavigationGuard(isGenerating || isUploading || hasUnsavedResult);
   const [stepIndex, setStepIndex] = useState(editMode ? REVIEW_INDEX : 0);
   const [confirmRegenerate, setConfirmRegenerate] = useState(false);
   /**
@@ -222,15 +249,27 @@ export default function CanonicalAdaptationWizard({ editMode }: Props = {}) {
     setDraftUpdatedAt(row.updatedAt);
   }, []);
 
+  // Every edit re-arms "unsaved". `isSaved` only ever went true before, so
+  // after the first save the wizard could no longer tell that the teacher had
+  // kept editing: the exit guard stopped warning, and there was no signal that
+  // the filed version had fallen behind the sheet on screen.
   const handleDocumentChange = useCallback((document: CanonicalDocument) => {
+    setIsSaved(false);
     setData((prev) => setDocument(prev, document));
   }, []);
 
   const handleHeaderChange = useCallback((header: DocumentHeader) => {
+    setIsSaved(false);
     setData((prev) => setHeader(prev, header));
   }, []);
 
+  const handleTitleChange = useCallback((title: string) => {
+    setIsSaved(false);
+    setData((prev) => setHeader(prev, { ...prev.result?.header, title }));
+  }, []);
+
   const handlePageStyleChange = useCallback((pageStyle: PageStyle) => {
+    setIsSaved(false);
     setData((prev) => setPageStyle(prev, pageStyle));
   }, []);
 
@@ -284,7 +323,11 @@ export default function CanonicalAdaptationWizard({ editMode }: Props = {}) {
     // markReady uses the latest known updated_at (advanced by every autosave) so
     // the optimistic-concurrency guard does not desync. A conflict means another
     // writer touched the row — warn + reload instead of navigating away blind.
-    const res = await markReady.mutateAsync({ id: draftId, expectedUpdatedAt: latestUpdatedAt });
+    const res = await markReady.mutateAsync({
+      id: draftId,
+      expectedUpdatedAt: latestUpdatedAt,
+      subject,
+    });
     if (!res.ok) {
       handleConflict();
       return;
@@ -296,7 +339,11 @@ export default function CanonicalAdaptationWizard({ editMode }: Props = {}) {
     syncUpdatedAt(res.updatedAt);
     toast.success("Adaptação salva!");
     setIsSaved(true);
-  }, [draftId, currentUpdatedAt, flush, markReady, handleConflict, syncUpdatedAt]);
+    // `subject` belongs here: without it the callback keeps the folder chosen
+    // at the time it was last rebuilt, so picking a subject and pressing
+    // Salvar would file the adaptation under the PREVIOUS one — or under
+    // nothing at all, on the first pick.
+  }, [draftId, currentUpdatedAt, flush, markReady, handleConflict, syncUpdatedAt, subject]);
 
   const renderStep = () => {
     switch (currentKey) {
@@ -304,13 +351,26 @@ export default function CanonicalAdaptationWizard({ editMode }: Props = {}) {
         return (
           <StepActivityType
             onSelect={(type) => {
-              updateData({ activityType: type });
+              // Resets to "bank": re-picking a type after having toggled into the
+              // upload path (then navigating back) should not strand the Atividade
+              // step showing the upload view for a possibly different type.
+              updateData({ activityType: type, activityInputMode: "bank" });
               onNext();
             }}
           />
         );
       case "activity_input":
-        return <StepActivityInput data={data} updateData={updateData} onNext={onNext} onPrev={onPrev} />;
+        return data.activityInputMode === "upload" ? (
+          <StepUploadExam
+            data={data}
+            updateData={updateData}
+            onNext={onNext}
+            onPrev={onPrev}
+            onLoadingChange={setIsUploading}
+          />
+        ) : (
+          <StepActivityInput data={data} updateData={updateData} onNext={onNext} onPrev={onPrev} />
+        );
       case "barriers":
         return <StepBarrierSelection data={data} updateData={updateData} onNext={onNext} onPrev={onPrev} />;
       case "generate":
@@ -341,6 +401,21 @@ export default function CanonicalAdaptationWizard({ editMode }: Props = {}) {
             onNext={onNext}
             onPrev={onPrev}
             onCaptureFailure={setCaptureFailure}
+            title={data.result.header?.title ?? ""}
+            onTitleChange={handleTitleChange}
+            subject={subject}
+            onSubjectChange={(s) => {
+              setIsSaved(false);
+              setSubject(s);
+            }}
+            canSave={!!draftId}
+            saving={markReady.isPending}
+            onSave={handleSave}
+            originalExam={
+              data.uploadedExam
+                ? { file: data.uploadedExam.file, pageImages: data.uploadedExam.pageImages, userId: user?.id ?? null }
+                : null
+            }
           />
         );
       case "export":
@@ -423,7 +498,25 @@ export default function CanonicalAdaptationWizard({ editMode }: Props = {}) {
 
       <div className="min-h-[400px]">{renderStep()}</div>
 
-      {navGuard.state === "blocked" && isGenerating && (
+      {navGuard.state === "blocked" && isUploading && (
+        <Dialog open onOpenChange={() => navGuard.reset?.()}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>O arquivo ainda está sendo processado</DialogTitle>
+            </DialogHeader>
+            <p className="text-sm text-muted-foreground">
+              A IA ainda está lendo e extraindo a atividade enviada. Se sair agora, o processamento será perdido e
+              você vai precisar enviar o arquivo de novo — nenhum crédito foi usado nessa etapa.
+            </p>
+            <div className="flex justify-end gap-2 pt-2">
+              <Button variant="outline" onClick={() => navGuard.reset?.()}>Continuar aqui</Button>
+              <Button variant="destructive" onClick={() => navGuard.proceed?.()}>Sair mesmo assim</Button>
+            </div>
+          </DialogContent>
+        </Dialog>
+      )}
+
+      {navGuard.state === "blocked" && isGenerating && !isUploading && (
         <Dialog open onOpenChange={() => navGuard.reset?.()}>
           <DialogContent>
             <DialogHeader>
@@ -440,14 +533,14 @@ export default function CanonicalAdaptationWizard({ editMode }: Props = {}) {
         </Dialog>
       )}
 
-      {navGuard.state === "blocked" && !isGenerating && (
+      {navGuard.state === "blocked" && !isGenerating && !isUploading && (
         <Dialog open onOpenChange={() => navGuard.reset?.()}>
           <DialogContent>
             <DialogHeader>
               <DialogTitle>Sair sem salvar?</DialogTitle>
             </DialogHeader>
             <p className="text-sm text-muted-foreground">
-              Você tem uma adaptação não salva. O rascunho ficará disponível no Histórico.
+              Você tem uma adaptação não salva. O rascunho ficará disponível em Adaptações.
             </p>
             <div className="flex justify-end gap-2 pt-2">
               <Button variant="outline" onClick={() => navGuard.reset?.()}>Voltar e salvar</Button>

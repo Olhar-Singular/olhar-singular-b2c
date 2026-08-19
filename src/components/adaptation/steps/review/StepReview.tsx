@@ -1,17 +1,20 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, ArrowRight, Info, RefreshCw } from "lucide-react";
+import { ArrowLeft, ArrowRight, FileText, Info, RefreshCw, Save } from "lucide-react";
 import { EditorContent, BubbleMenu } from "@tiptap/react";
 import { isTextSelection } from "@tiptap/core";
 import { useCanonicalEditor } from "@/components/adaptation/canonical-editor/useCanonicalEditor";
 import { BlockInserter } from "@/components/adaptation/canonical-editor/block-inserter/BlockInserter";
 import { PageBreakMarker } from "@/components/adaptation/canonical-editor/page-break/pageBreakDecoration";
 import { OriginalDocExtension } from "@/components/adaptation/canonical-editor/originalDocExtension";
+import { UploadedExamExtension } from "@/components/adaptation/canonical-editor/uploadedExamExtension";
 import { PageSheet } from "@/components/adaptation/PageSheet";
 import { AppearancePopover } from "./AppearancePopover";
 import { MetadataDrawer } from "./MetadataDrawer";
+import { OriginalExamDialog } from "./OriginalExamDialog";
 import { SelectionBubble } from "@/components/adaptation/canonical-editor/SelectionBubble";
 import { resolvePageStyle } from "@/components/adaptation/render/pageStyle";
+import { SUBJECTS } from "@/lib/utils/constants";
 import "katex/dist/katex.min.css";
 import type { Block, CanonicalDocument, PageStyle } from "@/lib/adaptation/canonical/schema";
 
@@ -38,14 +41,41 @@ type Props = {
    * into a visible warning so a freeze can never look like "Salvo".
    */
   onCaptureFailure?: (reason: string | null) => void;
+  /**
+   * The adaptation's name, edited right on the sheet's chrome bar. Empty means
+   * "not named yet": the derived document heading shows as a placeholder but is
+   * never stored, so an untitled adaptation still falls back to the
+   * server-derived title instead of freezing a guess.
+   */
+  title?: string;
+  onTitleChange?: (title: string) => void;
+  /**
+   * The folder the adaptation is filed under. `null` = unclassified, which is
+   * NOT the same as "Geral" — that is a real subject a teacher may pick.
+   */
+  subject?: string | null;
+  onSubjectChange?: (subject: string | null) => void;
+  /** Whether there is a persisted draft row to mark as saved. */
+  canSave?: boolean;
+  /** A save is in flight. */
+  saving?: boolean;
+  onSave?: () => void;
+  /**
+   * Only set for adaptações do "Adaptar direto do arquivo" — the raw file and
+   * its rasterized pages, so the teacher can open "Ver prova original" to
+   * compare, and ImageNodeView can offer "Recortar do original". Absent for
+   * adaptações montadas pelo Banco de Questões (no source file to compare).
+   */
+  originalExam?: { file: File; pageImages: string[]; userId: string | null } | null;
 };
 
 const FALLBACK_TITLE = "Atividade adaptada";
 
 /**
  * Extensions specific to the Revisar surface, beyond the canonical set: the
- * page-break marker (§6.6 / Fase 5b). Module-level constant so the editor is
- * built once (stable reference) instead of rebuilt on every render.
+ * page-break marker (§6.6 / Fase 5b) and the original-question snapshot
+ * (§Reset). Stable across renders — UploadedExamExtension (which DOES vary
+ * per adaptation) is added separately, memoized on `originalExam`.
  */
 const REVIEW_EXTENSIONS = [PageBreakMarker, OriginalDocExtension];
 
@@ -81,12 +111,37 @@ export function StepReview({
   onNext,
   onPrev,
   onCaptureFailure,
+  title = "",
+  onTitleChange,
+  subject = null,
+  onSubjectChange,
+  canSave = false,
+  saving = false,
+  onSave,
+  originalExam = null,
 }: Props) {
   const [aboutOpen, setAboutOpen] = useState(false);
+  const [originalOpen, setOriginalOpen] = useState(false);
+
+  // useEditor (inside useCanonicalEditor) only reads extensions once, at
+  // mount — this only needs to be stable across a single Revisar session,
+  // which it is: originalExam is set once at upload and never changes after.
+  const extensions = useMemo(
+    () => [
+      ...REVIEW_EXTENSIONS,
+      UploadedExamExtension.configure({
+        file: originalExam?.file ?? null,
+        pageImages: originalExam?.pageImages ?? [],
+        userId: originalExam?.userId ?? null,
+      }),
+    ],
+    [originalExam],
+  );
+
   const { editor } = useCanonicalEditor({
     value: document,
     onChange: onDocumentChange,
-    extraExtensions: REVIEW_EXTENSIONS,
+    extraExtensions: extensions,
     onCaptureFailure,
   });
 
@@ -98,8 +153,30 @@ export function StepReview({
     <div className="space-y-4">
       {/* Barra superior (chrome) — plano §6.1. */}
       <div className="flex items-center justify-between gap-3 rounded-md border border-surface-chrome-line bg-surface-chrome px-4 py-2.5">
-        <h2 className="truncate text-base font-semibold text-surface-ink">{documentTitle(document)}</h2>
+        <input
+          type="text"
+          aria-label="Nome da adaptação"
+          value={title}
+          onChange={(e) => onTitleChange?.(e.target.value)}
+          placeholder={documentTitle(document)}
+          maxLength={120}
+          className="min-w-0 flex-1 truncate border-0 bg-transparent p-0 text-base font-semibold text-surface-ink outline-none placeholder:font-semibold placeholder:text-surface-ink-faint focus:ring-0"
+        />
         <div className="flex shrink-0 items-center gap-1">
+          {/* Native select on purpose: this sits inside the folha's chrome,
+              where the shadcn Select's portalled popover would inherit the
+              app theme instead of the surface-* palette. */}
+          <select
+            aria-label="Matéria"
+            value={subject ?? ""}
+            onChange={(e) => onSubjectChange?.(e.target.value || null)}
+            className="mr-1 max-w-[10rem] rounded-md border border-surface-chrome-line bg-surface-paper px-2 py-1 text-xs text-surface-ink outline-none"
+          >
+            <option value="">Sem matéria</option>
+            {SUBJECTS.map((s) => (
+              <option key={s} value={s}>{s}</option>
+            ))}
+          </select>
           <Button
             size="sm"
             variant="ghost"
@@ -109,6 +186,16 @@ export function StepReview({
             <RefreshCw className="w-4 h-4 mr-1" /> Regerar
           </Button>
           <AppearancePopover value={resolvePageStyle(pageStyle)} onChange={handleAppearanceChange} />
+          {originalExam && (
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => setOriginalOpen(true)}
+              className="shrink-0 text-surface-ink-soft hover:text-surface-ink"
+            >
+              <FileText className="w-4 h-4 mr-1" /> Ver prova original
+            </Button>
+          )}
           <Button
             size="sm"
             variant="ghost"
@@ -127,6 +214,14 @@ export function StepReview({
         tips={metadata.implementationTips}
         justification={metadata.pedagogicalJustification}
       />
+
+      {originalExam && (
+        <OriginalExamDialog
+          open={originalOpen}
+          onOpenChange={setOriginalOpen}
+          pageImages={originalExam.pageImages}
+        />
+      )}
 
       {editor && (
         <>
@@ -153,9 +248,21 @@ export function StepReview({
         <Button variant="outline" onClick={onPrev} aria-label="Voltar">
           <ArrowLeft className="w-4 h-4 mr-2" /> Voltar
         </Button>
-        <Button onClick={onNext} aria-label="Avançar para exportação">
-          Exportar <ArrowRight className="w-4 h-4 ml-2" />
-        </Button>
+        <div className="flex items-center gap-2">
+          {/* Filing the adaptation used to be possible only on the Exportar
+              step, so anyone who finished editing and left never filed it. */}
+          <Button
+            variant="outline"
+            onClick={() => onSave?.()}
+            disabled={!canSave || saving}
+            aria-label="Salvar adaptação"
+          >
+            <Save className="w-4 h-4 mr-2" /> {saving ? "Salvando…" : "Salvar adaptação"}
+          </Button>
+          <Button onClick={onNext} aria-label="Avançar para exportação">
+            Exportar <ArrowRight className="w-4 h-4 ml-2" />
+          </Button>
+        </div>
       </div>
     </div>
   );

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import type { NodeViewProps } from "@tiptap/react";
 import type { ImageItem } from "@/components/editor/imageManagerUtils";
 import { ImageNodeView } from "./ImageNodeView";
@@ -48,22 +48,51 @@ vi.mock("@/components/editor/ImageManagerModal", () => ({
   },
 }));
 
-function makeProps(attrs: Record<string, unknown> = {}, editable = true) {
+let cropOnCrop: ((dataUrl: string) => void) | undefined;
+vi.mock("@/components/forms/PdfPreviewModal", () => ({
+  default: ({ open, onCrop, file }: { open: boolean; onCrop: (dataUrl: string) => void; file: File | null }) => {
+    cropOnCrop = onCrop;
+    return open ? <div data-testid="crop-modal">{file?.name}</div> : null;
+  },
+}));
+
+const uploadImageDataUrlMock = vi.fn();
+vi.mock("@/lib/utils/imageUpload", () => ({
+  uploadImageDataUrl: (...a: unknown[]) => uploadImageDataUrlMock(...a),
+}));
+
+const toastErrorMock = vi.fn();
+vi.mock("sonner", () => ({ toast: { error: (...a: unknown[]) => toastErrorMock(...a) } }));
+
+function makeProps(
+  attrs: Record<string, unknown> = {},
+  editable = true,
+  uploadedExam: { file: File | null; userId?: string | null } = { file: null },
+) {
   const updateAttributes = vi.fn();
   const deleteNode = vi.fn();
   const props = {
     node: { attrs: { src: "x.png", alt: "", width: null, alignment: null, caption: null, ...attrs } },
     updateAttributes,
     deleteNode,
-    editor: { isEditable: editable },
+    editor: {
+      isEditable: editable,
+      storage: { uploadedExam: { file: uploadedExam.file, pageImages: [], userId: uploadedExam.userId ?? "user-1" } },
+    },
   } as unknown as NodeViewProps;
   return { props, updateAttributes, deleteNode };
+}
+
+function pdfFile(name = "prova.pdf") {
+  return new File(["pdf-bytes"], name, { type: "application/pdf" });
 }
 
 beforeEach(() => {
   vi.clearAllMocks();
   modalOnConfirm = undefined;
   modalOnClose = undefined;
+  cropOnCrop = undefined;
+  uploadImageDataUrlMock.mockResolvedValue("https://bucket.example/cropped.png");
 });
 
 function renderImage(attrs: Record<string, unknown> = {}, editable = true) {
@@ -232,5 +261,55 @@ describe("ImageNodeView", () => {
     const { getByTestId } = renderImage({ alignment: null });
     expect(getByTestId("image-align-container").className).not.toContain("justify-center");
     expect(getByTestId("image-align-container").className).not.toContain("justify-end");
+  });
+
+  // --- Recortar do original (Adaptar direto do arquivo only) ----------------
+
+  describe("Recortar do original", () => {
+    it("hides the button when there is no uploaded exam (Banco de Questões adaptations)", () => {
+      renderImage();
+      expect(screen.queryByText("Recortar do original")).not.toBeInTheDocument();
+    });
+
+    it("hides the button for a DOCX-originated upload — crop tool is PDF-only", () => {
+      const docxFile = new File(["x"], "prova.docx", { type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document" });
+      const { props } = makeProps({}, true, { file: docxFile });
+      render(<ImageNodeView {...props} />);
+      expect(screen.queryByText("Recortar do original")).not.toBeInTheDocument();
+    });
+
+    it("shows and opens the crop modal for a PDF-originated upload", () => {
+      const file = pdfFile();
+      const { props } = makeProps({}, true, { file });
+      render(<ImageNodeView {...props} />);
+      expect(screen.queryByTestId("crop-modal")).not.toBeInTheDocument();
+      fireEvent.click(screen.getByText("Recortar do original"));
+      expect(screen.getByTestId("crop-modal")).toHaveTextContent("prova.pdf");
+    });
+
+    it("disables the button when not editable", () => {
+      const { props } = makeProps({}, false, { file: pdfFile() });
+      render(<ImageNodeView {...props} />);
+      expect(screen.getByRole("button", { name: /Recortar do original/i })).toBeDisabled();
+    });
+
+    it("uploads the cropped data URL and updates src on success", async () => {
+      const { props, updateAttributes } = makeProps({}, true, { file: pdfFile() });
+      render(<ImageNodeView {...props} />);
+      fireEvent.click(screen.getByText("Recortar do original"));
+      cropOnCrop?.("data:image/png;base64,CROPPED");
+      await waitFor(() => expect(updateAttributes).toHaveBeenCalledWith({ src: "https://bucket.example/cropped.png" }));
+      expect(uploadImageDataUrlMock).toHaveBeenCalledWith("data:image/png;base64,CROPPED", "user-1");
+    });
+
+    it("shows an error toast and does not touch src when the upload fails", async () => {
+      uploadImageDataUrlMock.mockResolvedValueOnce(null);
+      const { props, updateAttributes } = makeProps({}, true, { file: pdfFile() });
+      render(<ImageNodeView {...props} />);
+      fireEvent.click(screen.getByText("Recortar do original"));
+      cropOnCrop?.("data:image/png;base64,CROPPED");
+      await waitFor(() => expect(toastErrorMock).toHaveBeenCalled());
+      expect(updateAttributes).not.toHaveBeenCalledWith(expect.objectContaining({ src: expect.anything() }));
+    });
   });
 });

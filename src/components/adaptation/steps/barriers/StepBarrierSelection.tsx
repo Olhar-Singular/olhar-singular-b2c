@@ -46,7 +46,7 @@ export function StepBarrierSelection({ data, updateData, onNext, onPrev }: Props
 
   const handleProfileChange = useCallback((profileId: string) => {
     if (!profileId) {
-      updateData({ barrierProfileId: null, barriers: [] });
+      updateData({ barrierProfileId: null, barriers: [], observationNotes: undefined });
       return;
     }
     const p = profiles.find((p) => p.id === profileId);
@@ -61,7 +61,16 @@ export function StepBarrierSelection({ data, updateData, onNext, onPrev }: Props
       return { dimension: "other", barrier_key: key, label: key, is_active: true };
     });
 
-    updateData({ barrierProfileId: profileId, barriers });
+    // The free-text observation is the richest signal about the student the
+    // teacher ever gives, and it feeds PILAR 1 of the system prompt. Carrying
+    // it here is what makes it reach the AI at all: StepGenerate sends
+    // `data.observationNotes`, and nothing else ever writes that field on a
+    // fresh adaptation (rowMapping only rehydrates it for a saved one).
+    updateData({
+      barrierProfileId: profileId,
+      barriers,
+      observationNotes: p.observation || undefined,
+    });
   }, [profiles, updateData]);
 
   useEffect(() => {

@@ -21,7 +21,7 @@
 --      Salvar.
 -- =============================================================================
 BEGIN;
-SELECT plan(11);
+SELECT plan(14);
 
 -- ── Fixtures ────────────────────────────────────────────────────────────────
 INSERT INTO auth.users (id, email) VALUES
@@ -39,6 +39,21 @@ SELECT col_type_is('public', 'adaptations', 'request_id', 'uuid',
 
 SELECT has_index('public', 'adaptations', 'adaptations_request_id_key',
   'a unique index backs the idempotency key');
+
+-- ═══════════════════════════════════════════════════════════════════════════
+-- 1b. The "pasta" column, and the fact that it is optional
+-- ═══════════════════════════════════════════════════════════════════════════
+SELECT has_column('public', 'adaptations', 'subject',
+  'adaptations.subject exists (the folder the teacher files it under)');
+
+SELECT col_type_is('public', 'adaptations', 'subject', 'text',
+  'adaptations.subject is free text — the canonical list lives in the domain');
+
+-- The server INSERT (buildAdaptationInsert) never supplies `subject`, and it
+-- runs BEFORE the credit reservation is settled. A NOT NULL here would turn
+-- every paid generation into a refund.
+SELECT col_is_null('public', 'adaptations', 'subject',
+  'adaptations.subject is nullable, so the server insert keeps working');
 
 -- ═══════════════════════════════════════════════════════════════════════════
 -- 2. The server write path (service_role) + replay protection
