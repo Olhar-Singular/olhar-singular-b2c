@@ -31,7 +31,12 @@ export default function AdaptacoesPage() {
   const remove = useDeleteAdaptation();
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
 
-  const adaptations = all.filter((a) => a.status === "ready");
+  // No status filter. The row is written by the edge function BEFORE the
+  // credit reservation is settled, so every adaptation listed here has already
+  // been paid for — hiding the ones the teacher never explicitly "finished"
+  // meant a generation could be bought and then vanish. `status` is a badge
+  // here, not a permission.
+  const adaptations = all;
 
   async function handleDelete() {
     /* v8 ignore next -- guard: Confirmar só aparece quando há target */
@@ -54,7 +59,7 @@ export default function AdaptacoesPage() {
       ) : adaptations.length === 0 ? (
         <div className="text-center py-16 space-y-3">
           <FileText className="w-10 h-10 text-muted-foreground mx-auto" />
-          <p className="text-sm text-muted-foreground">Nenhuma adaptação concluída ainda.</p>
+          <p className="text-sm text-muted-foreground">Nenhuma adaptação ainda.</p>
           <Button variant="outline" onClick={() => navigate("/adaptar")}>Criar primeira adaptação</Button>
         </div>
       ) : (
@@ -71,6 +76,9 @@ export default function AdaptacoesPage() {
                         {a.activity_type && (
                           <Badge variant="secondary" className="text-xs">{a.activity_type}</Badge>
                         )}
+                        <Badge variant={a.status === "ready" ? "default" : "outline"} className="text-xs">
+                          {a.status === "ready" ? "Concluída" : "Rascunho"}
+                        </Badge>
                         <span className="text-xs text-muted-foreground">{formatDate(a.updated_at)}</span>
                         <CreditsLabel n={a.credits_spent ?? 0} />
                       </div>

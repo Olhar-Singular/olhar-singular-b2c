@@ -1090,7 +1090,9 @@ describe("CanonicalAdaptationWizard — navigation guard", () => {
     renderWithProviders(<CanonicalAdaptationWizard />);
     advanceToReview(); // result set, isGenerating=false
     expect(screen.getByText(/sair sem salvar/i)).toBeInTheDocument();
-    expect(screen.getByText(/rascunho ficará disponível no Histórico/i)).toBeInTheDocument();
+    // Points at Adaptações, where the draft now actually shows up — the page
+    // used to filter drafts out, so this promise was false.
+    expect(screen.getByText(/rascunho ficará disponível em Adaptações/i)).toBeInTheDocument();
   });
 
   it("calls reset() on 'Voltar e salvar' in unsaved dialog", () => {
@@ -1136,6 +1138,21 @@ describe("CanonicalAdaptationWizard — navigation guard", () => {
       expect(warning).toBeInTheDocument();
       expect(warning).toHaveTextContent(/não estão sendo salvas/i);
       // The reassuring label must be gone — not sitting next to the warning.
+      expect(screen.queryByText("Rascunho salvo")).not.toBeInTheDocument();
+    });
+
+    /**
+     * The autosave label used to read just "Salvo", which is also the name of
+     * the button that marks the adaptation finished. The passive one fires
+     * first and took the word, so the teacher read "Salvo", concluded the work
+     * was filed, and never clicked Salvar — every row in the database stayed
+     * `draft` forever. Two states, two names.
+     */
+    it("names the autosave state 'Rascunho salvo', not 'Salvo'", () => {
+      mockDraftStatus.value = "saved";
+      renderWithProviders(<CanonicalAdaptationWizard />);
+      advanceToReview();
+      expect(screen.getByText("Rascunho salvo")).toBeInTheDocument();
       expect(screen.queryByText("Salvo")).not.toBeInTheDocument();
     });
 

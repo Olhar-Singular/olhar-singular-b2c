@@ -77,9 +77,18 @@ type Props = {
   editMode?: EditModeSeed;
 };
 
+/**
+ * The autosave state, which is NOT the same thing as the "Salvar" button.
+ *
+ * This used to read "Salvo" — the same word as the button that marks the
+ * adaptation finished. The passive one fires first and took the word, so the
+ * teacher read "Salvo", concluded the work was filed, and never pressed
+ * Salvar: every row in the database sat at `draft` forever. Naming the draft
+ * explicitly is what keeps the two states distinguishable.
+ */
 const SAVE_STATUS_LABEL: Record<string, string> = {
   saving: "Salvando…",
-  saved: "Salvo",
+  saved: "Rascunho salvo",
   error: "Erro ao salvar",
   conflict: "Conflito — recarregue",
 };
@@ -492,7 +501,7 @@ export default function CanonicalAdaptationWizard({ editMode }: Props = {}) {
               <DialogTitle>Sair sem salvar?</DialogTitle>
             </DialogHeader>
             <p className="text-sm text-muted-foreground">
-              Você tem uma adaptação não salva. O rascunho ficará disponível no Histórico.
+              Você tem uma adaptação não salva. O rascunho ficará disponível em Adaptações.
             </p>
             <div className="flex justify-end gap-2 pt-2">
               <Button variant="outline" onClick={() => navGuard.reset?.()}>Voltar e salvar</Button>

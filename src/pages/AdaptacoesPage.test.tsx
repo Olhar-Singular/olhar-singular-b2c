@@ -40,11 +40,24 @@ describe("AdaptacoesPage", () => {
     expect(screen.getByRole("heading", { name: /adaptações/i })).toBeInTheDocument();
   });
 
-  it("shows only ready adaptations — drafts are excluded", () => {
+  // This page used to filter to `status === "ready"`, which hid every
+  // adaptation the teacher had not explicitly "finished". The row is written
+  // by the edge function BEFORE the credit reservation is settled, so a draft
+  // is something already paid for — hiding it was the bug, not the feature.
+  // `status` is information now, not permission.
+  it("lists drafts alongside finished adaptations", () => {
     renderPage();
     expect(screen.getByText("Prova de Física")).toBeInTheDocument();
     expect(screen.getByText("Exercício de Português")).toBeInTheDocument();
-    expect(screen.queryByText("Rascunho inacabado")).not.toBeInTheDocument();
+    expect(screen.getByText("Rascunho inacabado")).toBeInTheDocument();
+  });
+
+  it("badges a draft as Rascunho and a finished one as Concluída", () => {
+    renderPage();
+    const draftCard = screen.getByText("Rascunho inacabado").closest("li")!;
+    expect(within(draftCard).getByText("Rascunho")).toBeInTheDocument();
+    const readyCard = screen.getByText("Prova de Física").closest("li")!;
+    expect(within(readyCard).getByText("Concluída")).toBeInTheDocument();
   });
 
   it("shows loading state", async () => {
@@ -54,18 +67,19 @@ describe("AdaptacoesPage", () => {
     expect(screen.getByText(/carregando/i)).toBeInTheDocument();
   });
 
-  it("shows empty state when no ready adaptations exist", async () => {
+  it("shows the empty state only when there is genuinely nothing", async () => {
     const m = await import("@/hooks/useAdaptations");
     vi.mocked(m.useAdaptations).mockReturnValue({ data: [], isLoading: false } as never);
     renderPage();
-    expect(screen.getByText(/nenhuma adaptação concluída/i)).toBeInTheDocument();
+    expect(screen.getByText(/nenhuma adaptação ainda/i)).toBeInTheDocument();
   });
 
-  it("shows empty state even when only drafts exist", async () => {
+  it("shows the draft instead of an empty state when only drafts exist", async () => {
     const m = await import("@/hooks/useAdaptations");
     vi.mocked(m.useAdaptations).mockReturnValue({ data: [items[2]], isLoading: false } as never);
     renderPage();
-    expect(screen.getByText(/nenhuma adaptação concluída/i)).toBeInTheDocument();
+    expect(screen.getByText("Rascunho inacabado")).toBeInTheDocument();
+    expect(screen.queryByText(/nenhuma adaptação/i)).not.toBeInTheDocument();
   });
 
   it("shows credits spent per card (non-zero)", () => {
