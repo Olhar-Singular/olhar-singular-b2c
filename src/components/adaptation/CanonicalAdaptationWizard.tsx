@@ -339,7 +339,11 @@ export default function CanonicalAdaptationWizard({ editMode }: Props = {}) {
     syncUpdatedAt(res.updatedAt);
     toast.success("Adaptação salva!");
     setIsSaved(true);
-  }, [draftId, currentUpdatedAt, flush, markReady, handleConflict, syncUpdatedAt]);
+    // `subject` belongs here: without it the callback keeps the folder chosen
+    // at the time it was last rebuilt, so picking a subject and pressing
+    // Salvar would file the adaptation under the PREVIOUS one — or under
+    // nothing at all, on the first pick.
+  }, [draftId, currentUpdatedAt, flush, markReady, handleConflict, syncUpdatedAt, subject]);
 
   const renderStep = () => {
     switch (currentKey) {
