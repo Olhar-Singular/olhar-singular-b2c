@@ -39,16 +39,27 @@ describe("ScaffoldNodeView", () => {
     expect(screen.getByLabelText("Passo 1")).toBeDisabled();
   });
 
+  // "Andaime" is the pedagogical jargon for this block; the teacher reading
+  // the sheet needs a word that says what it does. The label is editor chrome
+  // only — ScaffoldingView (screen render and PDF) prints no heading at all,
+  // so the student's exam is unaffected either way.
+  it("labels the block 'Apoio', not the jargon", () => {
+    const { props } = makeProps(["a"]);
+    render(<ScaffoldNodeView {...props} />);
+    expect(screen.getByText("Apoio")).toBeInTheDocument();
+    expect(screen.queryByText(/andaime/i)).not.toBeInTheDocument();
+  });
+
   it("calls deleteNode when the delete button is clicked", () => {
     const { props, deleteNode } = makeProps(["a"]);
     render(<ScaffoldNodeView {...props} />);
-    fireEvent.click(screen.getByRole("button", { name: "Excluir andaime" }));
+    fireEvent.click(screen.getByRole("button", { name: "Excluir apoio" }));
     expect(deleteNode).toHaveBeenCalledTimes(1);
   });
 
   it("disables the delete button when not editable", () => {
     const { props } = makeProps(["a"], false);
     render(<ScaffoldNodeView {...props} />);
-    expect(screen.getByRole("button", { name: "Excluir andaime" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Excluir apoio" })).toBeDisabled();
   });
 });

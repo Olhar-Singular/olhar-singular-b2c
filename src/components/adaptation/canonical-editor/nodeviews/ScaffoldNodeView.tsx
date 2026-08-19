@@ -21,7 +21,7 @@ export function ScaffoldNodeView({ node, updateAttributes, editor, deleteNode }:
       contentEditable={false}
     >
       <div className="mb-2 flex items-center justify-between">
-        <p className="text-xs font-semibold uppercase tracking-wide text-surface-ink-faint">Andaime</p>
+        <p className="text-xs font-semibold uppercase tracking-wide text-surface-ink-faint">Apoio</p>
         <Button
           type="button"
           variant="ghost"
@@ -29,8 +29,8 @@ export function ScaffoldNodeView({ node, updateAttributes, editor, deleteNode }:
           className="h-6 w-6 text-destructive hover:bg-surface-paper/60"
           disabled={disabled}
           onClick={() => deleteNode()}
-          title="Excluir andaime"
-          aria-label="Excluir andaime"
+          title="Excluir apoio"
+          aria-label="Excluir apoio"
         >
           <Trash2 className="h-3 w-3" />
         </Button>
