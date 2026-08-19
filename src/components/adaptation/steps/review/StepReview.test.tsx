@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { StepReview } from "./StepReview";
 import { PageBreakMarker } from "@/components/adaptation/canonical-editor/page-break/pageBreakDecoration";
 import { OriginalDocExtension } from "@/components/adaptation/canonical-editor/originalDocExtension";
@@ -271,37 +271,123 @@ describe("StepReview", () => {
   // teacher who finished editing and left never filed the adaptation — which
   // is why every row in the database sat at `draft`.
   describe("matéria (a pasta)", () => {
+    const openMenu = () => fireEvent.click(screen.getByLabelText("Matéria"));
+
     it("shows the chosen subject", () => {
       setup({ subject: "Geografia" });
-      expect(screen.getByLabelText("Matéria")).toHaveValue("Geografia");
+      expect(screen.getByLabelText("Matéria")).toHaveTextContent("Geografia");
     });
 
     it("starts unclassified rather than guessing a subject", () => {
-      // "" maps to NULL, not to "Geral" — 'Geral' is a real subject, so it
+      // NULL, not "Geral" — 'Geral' is a real subject a teacher may pick, so it
       // cannot double as the "never classified" sentinel.
       setup({ subject: null });
-      expect(screen.getByLabelText("Matéria")).toHaveValue("");
+      expect(screen.getByLabelText("Matéria")).toHaveTextContent("Sem matéria");
     });
 
-    it("emits the picked subject", () => {
+    it("emits the picked subject", async () => {
       const onSubjectChange = vi.fn();
       setup({ subject: null, onSubjectChange });
-      fireEvent.change(screen.getByLabelText("Matéria"), { target: { value: "Matemática" } });
+      openMenu();
+      await waitFor(() => screen.getByRole("option", { name: "Matemática" }));
+      fireEvent.click(screen.getByRole("option", { name: "Matemática" }));
       expect(onSubjectChange).toHaveBeenCalledWith("Matemática");
     });
 
-    it("emits null when the teacher clears the subject", () => {
+    it("emits null when the teacher clears the subject", async () => {
       const onSubjectChange = vi.fn();
       setup({ subject: "Geografia", onSubjectChange });
-      fireEvent.change(screen.getByLabelText("Matéria"), { target: { value: "" } });
+      openMenu();
+      await waitFor(() => screen.getByRole("option", { name: "Sem matéria" }));
+      fireEvent.click(screen.getByRole("option", { name: "Sem matéria" }));
       expect(onSubjectChange).toHaveBeenCalledWith(null);
     });
 
-    it("does not break without a handler", () => {
+    it("does not break without a handler", async () => {
       setup({ subject: null });
+      openMenu();
+      await waitFor(() => screen.getByRole("option", { name: "Física" }));
+      expect(() => fireEvent.click(screen.getByRole("option", { name: "Física" }))).not.toThrow();
+    });
+  });
+
+  // A pasta responde "onde guardei" (nome livre); a matéria responde "o que é"
+  // (lista fixa, etiqueta e filtro). Campos separados de propósito: uma pasta
+  // "6º ano B" costuma ter provas de várias matérias.
+  describe("pasta", () => {
+    const FOLDERS = [
+      { id: "f1", name: "6º ano B" },
+      { id: "f2", name: "Recuperação" },
+    ];
+
+    it("lists the folders the teacher already has", async () => {
+      setup({ folders: FOLDERS });
+      fireEvent.click(screen.getByLabelText("Pasta"));
+      await waitFor(() => screen.getByRole("option", { name: "6º ano B" }));
+      expect(screen.getByRole("option", { name: "Recuperação" })).toBeInTheDocument();
+    });
+
+    it("shows the folder it is already filed in", () => {
+      setup({ folders: FOLDERS, folderId: "f2" });
+      expect(screen.getByLabelText("Pasta")).toHaveTextContent("Recuperação");
+    });
+
+    it("starts unfiled", () => {
+      setup({ folders: FOLDERS });
+      expect(screen.getByLabelText("Pasta")).toHaveTextContent("Sem pasta");
+    });
+
+    it("emits the picked folder", async () => {
+      const onFolderChange = vi.fn();
+      setup({ folders: FOLDERS, onFolderChange });
+      fireEvent.click(screen.getByLabelText("Pasta"));
+      await waitFor(() => screen.getByRole("option", { name: "6º ano B" }));
+      fireEvent.click(screen.getByRole("option", { name: "6º ano B" }));
+      expect(onFolderChange).toHaveBeenCalledWith("f1");
+    });
+
+    it("emits null when taken out of every folder", async () => {
+      const onFolderChange = vi.fn();
+      setup({ folders: FOLDERS, folderId: "f1", onFolderChange });
+      fireEvent.click(screen.getByLabelText("Pasta"));
+      await waitFor(() => screen.getByRole("option", { name: "Sem pasta" }));
+      fireEvent.click(screen.getByRole("option", { name: "Sem pasta" }));
+      expect(onFolderChange).toHaveBeenCalledWith(null);
+    });
+
+    it("opens a field for a brand-new folder name", async () => {
+      setup({ folders: FOLDERS });
+      fireEvent.click(screen.getByLabelText("Pasta"));
+      await waitFor(() => screen.getByRole("option", { name: /Nova pasta/i }));
+      fireEvent.click(screen.getByRole("option", { name: /Nova pasta/i }));
+      expect(await screen.findByLabelText("Nome da nova pasta")).toBeInTheDocument();
+    });
+
+    it("emits the typed name so the folder can be created on save", async () => {
+      const onNewFolderChange = vi.fn();
+      setup({ folders: FOLDERS, onNewFolderChange });
+      fireEvent.click(screen.getByLabelText("Pasta"));
+      await waitFor(() => screen.getByRole("option", { name: /Nova pasta/i }));
+      fireEvent.click(screen.getByRole("option", { name: /Nova pasta/i }));
+      fireEvent.change(await screen.findByLabelText("Nome da nova pasta"), {
+        target: { value: "7º ano A" },
+      });
+      expect(onNewFolderChange).toHaveBeenCalledWith("7º ano A");
+    });
+
+    it("does not break without folder handlers", async () => {
+      setup({ folders: FOLDERS });
+      fireEvent.click(screen.getByLabelText("Pasta"));
+      await waitFor(() => screen.getByRole("option", { name: "6º ano B" }));
       expect(() =>
-        fireEvent.change(screen.getByLabelText("Matéria"), { target: { value: "Física" } }),
+        fireEvent.click(screen.getByRole("option", { name: "6º ano B" })),
       ).not.toThrow();
+    });
+
+    it("hides the folder picker when the library has no folders and none is being created", () => {
+      // Nothing to choose from yet — the control would be an empty dropdown.
+      setup({ folders: [] });
+      expect(screen.getByLabelText("Pasta")).toBeInTheDocument();
     });
   });
 

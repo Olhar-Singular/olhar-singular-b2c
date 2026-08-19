@@ -68,14 +68,20 @@ export function useMarkReady() {
       id,
       expectedUpdatedAt,
       subject,
+      folderId,
     }: {
       id: string;
       expectedUpdatedAt: string;
-      // The folder rides along with the status flip: it is a column, so the
-      // autosave never carries it, and a separate UPDATE would bump the row
-      // version a second time behind the caller's optimistic token.
+      // Matéria and pasta ride along with the status flip: both are columns, so
+      // the autosave never carries them, and a separate UPDATE would bump the
+      // row version a second time behind the caller's optimistic token.
       subject?: string | null;
-    }) => markReady(id, expectedUpdatedAt, subject === undefined ? {} : { subject }),
+      folderId?: string | null;
+    }) =>
+      markReady(id, expectedUpdatedAt, {
+        ...(subject === undefined ? {} : { subject }),
+        ...(folderId === undefined ? {} : { folder_id: folderId }),
+      }),
     onSuccess: (res, { id }) => {
       if (!res.ok) return;
       qc.invalidateQueries({ queryKey: adaptationKeys.list() });

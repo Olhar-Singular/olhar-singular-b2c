@@ -48,6 +48,8 @@ export type AdaptationRow = {
    * it cannot double as the sentinel.
    */
   subject: string | null;
+  /** Named folder the teacher filed it under. NULL = sem pasta. */
+  folder_id: string | null;
   credits_spent: number;
   created_at: string;
   updated_at: string;
@@ -165,12 +167,12 @@ export async function markReady(
   id: string,
   expectedUpdatedAt: string,
   /**
-   * Filed alongside the status flip. `subject` is a column, so the autosave
-   * (which only ever patches the result blob) never carries it — and doing it
-   * as a SECOND update would bump `updated_at` again, leaving the caller's
-   * optimistic token one version behind.
+   * Filed alongside the status flip. `subject` and `folder_id` are columns, so
+   * the autosave (which only ever patches the result blob) never carries them —
+   * and doing either as a SECOND update would bump `updated_at` again, leaving
+   * the caller's optimistic token one version behind.
    */
-  patch: { subject?: string | null } = {},
+  patch: { subject?: string | null; folder_id?: string | null } = {},
 ): Promise<MarkReadyResult> {
   const { data, error } = await table()
     .update({ status: "ready", ...patch })
@@ -187,7 +189,7 @@ export async function markReady(
 export async function listAdaptations(): Promise<AdaptationListItem[]> {
   const { data, error } = await table()
     .select(
-      "id,user_id,barrier_profile_id,title,original_activity,activity_type,barriers_used,observation_notes,status,subject,credits_spent,created_at,updated_at",
+      "id,user_id,barrier_profile_id,title,original_activity,activity_type,barriers_used,observation_notes,status,subject,folder_id,credits_spent,created_at,updated_at",
     )
     .order("updated_at", { ascending: false });
   if (error) throw error;

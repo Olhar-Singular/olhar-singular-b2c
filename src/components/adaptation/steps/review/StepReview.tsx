@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { ArrowLeft, ArrowRight, FileText, Info, RefreshCw, Save } from "lucide-react";
 import { EditorContent, BubbleMenu } from "@tiptap/react";
 import { isTextSelection } from "@tiptap/core";
@@ -15,6 +16,13 @@ import { OriginalExamDialog } from "./OriginalExamDialog";
 import { SelectionBubble } from "@/components/adaptation/canonical-editor/SelectionBubble";
 import { resolvePageStyle } from "@/components/adaptation/render/pageStyle";
 import { SUBJECTS } from "@/lib/utils/constants";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import "katex/dist/katex.min.css";
 import type { Block, CanonicalDocument, PageStyle } from "@/lib/adaptation/canonical/schema";
 
@@ -55,6 +63,18 @@ type Props = {
    */
   subject?: string | null;
   onSubjectChange?: (subject: string | null) => void;
+  /**
+   * Named folders the teacher already has. The picker also offers "Nova
+   * pasta…", which does NOT create anything here — it only collects the name,
+   * so a folder is never left behind by someone who changed their mind and
+   * never saved.
+   */
+  folders?: Array<{ id: string; name: string }>;
+  folderId?: string | null;
+  onFolderChange?: (folderId: string | null) => void;
+  /** Name typed for a folder that does not exist yet; created on save. */
+  newFolder?: string;
+  onNewFolderChange?: (name: string) => void;
   /** Whether there is a persisted draft row to mark as saved. */
   canSave?: boolean;
   /** A save is in flight. */
@@ -68,6 +88,15 @@ type Props = {
    */
   originalExam?: { file: File; pageImages: string[]; userId: string | null } | null;
 };
+
+/**
+ * Radix Select refuses an empty-string value — it reserves "" for "nothing
+ * selected" and throws. "Sem matéria" is a real choice here (it maps to a
+ * NULL column), so it needs a sentinel of its own.
+ */
+const NO_SUBJECT = "__sem_materia__";
+const NO_FOLDER = "__sem_pasta__";
+const NEW_FOLDER = "__nova_pasta__";
 
 const FALLBACK_TITLE = "Atividade adaptada";
 
@@ -115,6 +144,11 @@ export function StepReview({
   onTitleChange,
   subject = null,
   onSubjectChange,
+  folders = [],
+  folderId = null,
+  onFolderChange,
+  newFolder = "",
+  onNewFolderChange,
   canSave = false,
   saving = false,
   onSave,
@@ -122,6 +156,10 @@ export function StepReview({
 }: Props) {
   const [aboutOpen, setAboutOpen] = useState(false);
   const [originalOpen, setOriginalOpen] = useState(false);
+  // Local: whether the "Nova pasta…" field is open. The NAME goes up so the
+  // wizard can create the folder at save time; the open/closed state is pure
+  // chrome and has no business round-tripping through the parent.
+  const [creatingFolder, setCreatingFolder] = useState(false);
 
   // useEditor (inside useCanonicalEditor) only reads extensions once, at
   // mount — this only needs to be stable across a single Revisar session,
@@ -163,20 +201,71 @@ export function StepReview({
           className="min-w-0 flex-1 truncate border-0 bg-transparent p-0 text-base font-semibold text-surface-ink outline-none placeholder:font-semibold placeholder:text-surface-ink-faint focus:ring-0"
         />
         <div className="flex shrink-0 items-center gap-1">
-          {/* Native select on purpose: this sits inside the folha's chrome,
-              where the shadcn Select's portalled popover would inherit the
-              app theme instead of the surface-* palette. */}
-          <select
-            aria-label="Matéria"
-            value={subject ?? ""}
-            onChange={(e) => onSubjectChange?.(e.target.value || null)}
-            className="mr-1 max-w-[10rem] rounded-md border border-surface-chrome-line bg-surface-paper px-2 py-1 text-xs text-surface-ink outline-none"
+          {/* shadcn Select, não o <select> nativo: a lista de <option> é
+              desenhada pelo navegador e não aceita as cores nem a fonte do
+              projeto. O popover é portalado, então recebe a paleta surface-*
+              explicitamente — mesmo padrão do seletor de tipo no QuestionCard. */}
+          <Select
+            value={creatingFolder ? NEW_FOLDER : (folderId ?? NO_FOLDER)}
+            onValueChange={(v) => {
+              // "Nova pasta…" only opens the field. Creating the folder here
+              // would leave an empty one behind whenever someone changes their
+              // mind and never saves — so it is created on save, or never.
+              if (v === NEW_FOLDER) {
+                setCreatingFolder(true);
+                onFolderChange?.(null);
+                return;
+              }
+              setCreatingFolder(false);
+              onNewFolderChange?.("");
+              onFolderChange?.(v === NO_FOLDER ? null : v);
+            }}
           >
-            <option value="">Sem matéria</option>
-            {SUBJECTS.map((s) => (
-              <option key={s} value={s}>{s}</option>
-            ))}
-          </select>
+            <SelectTrigger
+              aria-label="Pasta"
+              title="Pasta"
+              className="mr-1 h-7 w-auto gap-1 border-surface-chrome-line bg-surface-paper px-2 text-xs font-medium text-surface-ink-soft shadow-none hover:text-surface-ink focus:ring-1 focus:ring-surface-accent"
+            >
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent className="border-surface-chrome-line bg-surface-chrome text-surface-ink">
+              <SelectItem value={NO_FOLDER}>Sem pasta</SelectItem>
+              {folders.map((f) => (
+                <SelectItem key={f.id} value={f.id}>{f.name}</SelectItem>
+              ))}
+              <SelectItem value={NEW_FOLDER}>+ Nova pasta…</SelectItem>
+            </SelectContent>
+          </Select>
+
+          {creatingFolder && (
+            <Input
+              autoFocus
+              aria-label="Nome da nova pasta"
+              placeholder="Ex.: 6º ano B"
+              value={newFolder}
+              onChange={(e) => onNewFolderChange?.(e.target.value)}
+              className="mr-1 h-7 w-36 border-surface-chrome-line bg-surface-paper text-xs text-surface-ink"
+            />
+          )}
+
+          <Select
+            value={subject ?? NO_SUBJECT}
+            onValueChange={(v) => onSubjectChange?.(v === NO_SUBJECT ? null : v)}
+          >
+            <SelectTrigger
+              aria-label="Matéria"
+              title="Matéria"
+              className="mr-1 h-7 w-auto gap-1 border-surface-chrome-line bg-surface-paper px-2 text-xs font-medium text-surface-ink-soft shadow-none hover:text-surface-ink focus:ring-1 focus:ring-surface-accent"
+            >
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent className="border-surface-chrome-line bg-surface-chrome text-surface-ink">
+              <SelectItem value={NO_SUBJECT}>Sem matéria</SelectItem>
+              {SUBJECTS.map((s) => (
+                <SelectItem key={s} value={s}>{s}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
           <Button
             size="sm"
             variant="ghost"

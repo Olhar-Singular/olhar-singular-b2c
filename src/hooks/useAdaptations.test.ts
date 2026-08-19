@@ -129,6 +129,39 @@ describe("useMarkReady", () => {
     });
   });
 
+  it("files the adaptation into a folder in the same write as the status flip", async () => {
+    // A second UPDATE for the folder would bump updated_at again and leave the
+    // caller's optimistic token one version behind — the exact mechanism that
+    // has cost user work in this codebase before.
+    vi.mocked(repo.markReady).mockResolvedValue({ ok: true, updatedAt: "2026-01-02T00:00:00Z" });
+    const { result } = renderHook(() => useMarkReady(), { wrapper });
+    await act(async () => {
+      await result.current.mutateAsync({
+        id: "a1",
+        expectedUpdatedAt: "2026-01-01T00:00:00Z",
+        subject: "Física",
+        folderId: "f1",
+      });
+    });
+    expect(repo.markReady).toHaveBeenCalledWith("a1", "2026-01-01T00:00:00Z", {
+      subject: "Física",
+      folder_id: "f1",
+    });
+  });
+
+  it("takes the adaptation out of every folder with an explicit null", async () => {
+    vi.mocked(repo.markReady).mockResolvedValue({ ok: true, updatedAt: "2026-01-02T00:00:00Z" });
+    const { result } = renderHook(() => useMarkReady(), { wrapper });
+    await act(async () => {
+      await result.current.mutateAsync({
+        id: "a1",
+        expectedUpdatedAt: "2026-01-01T00:00:00Z",
+        folderId: null,
+      });
+    });
+    expect(repo.markReady).toHaveBeenCalledWith("a1", "2026-01-01T00:00:00Z", { folder_id: null });
+  });
+
   it("clears the subject when the teacher unfiles it", async () => {
     vi.mocked(repo.markReady).mockResolvedValue({ ok: true, updatedAt: "2026-01-02T00:00:00Z" });
     const { result } = renderHook(() => useMarkReady(), { wrapper });

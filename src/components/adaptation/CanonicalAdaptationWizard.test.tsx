@@ -28,6 +28,12 @@ import { useAuth } from "@/hooks/useAuth";
 vi.mock("@/lib/adaptation/persistence/adaptationsRepo");
 vi.mock("@/lib/adaptation/persistence/draftMirror");
 
+const mockCreateFolder = vi.fn();
+vi.mock("@/hooks/useFolders", () => ({
+  useFolders: () => ({ data: [{ id: "f1", name: "6º ano B" }] }),
+  useCreateFolder: () => ({ mutateAsync: mockCreateFolder, isPending: false }),
+}));
+
 const mockDraftStatus = { value: "idle" as string };
 const mockCurrentUpdatedAt = { value: "2026-01-01T00:00:00Z" as string | null };
 const mockFlush = vi.fn().mockResolvedValue({ status: "saved", updatedAt: "2026-01-01T00:00:00Z" });
@@ -224,6 +230,10 @@ vi.mock("./steps/review/StepReview", () => ({
     onTitleChange,
     subject,
     onSubjectChange,
+    folderId,
+    onFolderChange,
+    newFolder,
+    onNewFolderChange,
     canSave,
     onSave,
   }: {
@@ -240,6 +250,10 @@ vi.mock("./steps/review/StepReview", () => ({
     onTitleChange?: (t: string) => void;
     subject?: string | null;
     onSubjectChange?: (s: string | null) => void;
+    folderId?: string | null;
+    onFolderChange?: (id: string | null) => void;
+    newFolder?: string;
+    onNewFolderChange?: (n: string) => void;
     canSave?: boolean;
     onSave?: () => void;
   }) => (
@@ -254,6 +268,12 @@ vi.mock("./steps/review/StepReview", () => ({
       <pre data-testid="review-subject">{subject ?? "null"}</pre>
       <button data-testid="review-file" onClick={() => onSubjectChange?.("Geografia")}>arquivar</button>
       <button data-testid="review-unfile" onClick={() => onSubjectChange?.(null)}>desarquivar</button>
+      <pre data-testid="review-folder">{folderId ?? "null"}</pre>
+      <pre data-testid="review-new-folder">{newFolder ?? ""}</pre>
+      <button data-testid="review-pick-folder" onClick={() => onFolderChange?.("f1")}>pasta</button>
+      <button data-testid="review-name-folder" onClick={() => onNewFolderChange?.("7º ano A")}>
+        nomear pasta
+      </button>
       <button data-testid="review-save" onClick={() => onSave?.()}>salvar na revisar</button>
       <pre data-testid="review-original-exam">
         {originalExam ? JSON.stringify({ fileName: originalExam.file.name, userId: originalExam.userId }) : "null"}
@@ -511,6 +531,7 @@ describe("CanonicalAdaptationWizard", () => {
         id: "srv-1",
         expectedUpdatedAt: "2026-01-01T00:00:00Z",
         subject: null,
+        folderId: null,
       }),
     );
     expect(toast.success).toHaveBeenCalled();
@@ -532,6 +553,7 @@ describe("CanonicalAdaptationWizard", () => {
         id: "srv-1",
         expectedUpdatedAt: "2026-09-09T00:00:00Z",
         subject: null,
+        folderId: null,
       }),
     );
   });
@@ -548,6 +570,7 @@ describe("CanonicalAdaptationWizard", () => {
         id: "srv-1",
         expectedUpdatedAt: "2026-01-01T00:00:00Z",
         subject: null,
+        folderId: null,
       }),
     );
   });
@@ -1190,6 +1213,48 @@ describe("CanonicalAdaptationWizard — navigation guard", () => {
       fireEvent.click(screen.getByTestId("review-file"));
       fireEvent.click(screen.getByTestId("review-unfile"));
       expect(screen.getByTestId("review-subject")).toHaveTextContent("null");
+    });
+
+    it("files the adaptation into an existing folder on save", async () => {
+      renderWithProviders(<CanonicalAdaptationWizard />);
+      advanceToReview();
+      fireEvent.click(screen.getByTestId("review-pick-folder"));
+      expect(screen.getByTestId("review-folder")).toHaveTextContent("f1");
+      fireEvent.click(screen.getByTestId("review-save"));
+      await waitFor(() =>
+        expect(mockMarkReady).toHaveBeenCalledWith(expect.objectContaining({ folderId: "f1" })),
+      );
+    });
+
+    /**
+     * The folder is created at SAVE time, not when the name is typed: someone
+     * who opens the field, types, and then changes their mind must not leave an
+     * empty folder behind.
+     */
+    it("creates a brand-new folder on save and files the adaptation in it", async () => {
+      mockCreateFolder.mockResolvedValue({ id: "f-novo", name: "7º ano A" });
+      renderWithProviders(<CanonicalAdaptationWizard />);
+      advanceToReview();
+      fireEvent.click(screen.getByTestId("review-name-folder"));
+      expect(screen.getByTestId("review-new-folder")).toHaveTextContent("7º ano A");
+
+      fireEvent.click(screen.getByTestId("review-save"));
+      await waitFor(() => expect(mockCreateFolder).toHaveBeenCalledWith("7º ano A"));
+      await waitFor(() =>
+        expect(mockMarkReady).toHaveBeenCalledWith(expect.objectContaining({ folderId: "f-novo" })),
+      );
+    });
+
+    it("aborts the save when the folder cannot be created", async () => {
+      // Filing into a folder that does not exist would be worse than not
+      // filing — and useCreateFolder has already explained why it failed.
+      mockCreateFolder.mockRejectedValue(new Error("nome repetido"));
+      renderWithProviders(<CanonicalAdaptationWizard />);
+      advanceToReview();
+      fireEvent.click(screen.getByTestId("review-name-folder"));
+      fireEvent.click(screen.getByTestId("review-save"));
+      await waitFor(() => expect(mockCreateFolder).toHaveBeenCalled());
+      expect(mockMarkReady).not.toHaveBeenCalled();
     });
 
     it("marks the adaptation ready from the Revisar step", async () => {
