@@ -106,6 +106,40 @@ Plataforma educacional B2C. **Educadores adaptam atividades pedagógicas (provas
   `refetchOnWindowFocus/OnMount: false`) e `EditAdaptationPage` usa `key={row.id}` — **sem** o
   `updated_at`. Como todo autosave bumpa o `updated_at`, a key antiga remontava o wizard no meio da
   edição (perdia cursor, scroll e passo, voltando pro Revisar) a cada refetch.
+- **"Salvo" e "Salvar" são coisas DIFERENTES — e confundi-las escondia a adaptação.** O rótulo
+  da barra do wizard é o **autosave do blob** (`SAVE_STATUS_LABEL`), que nunca toca a coluna
+  `status`; quem promove `draft → ready` é o **`markReady`**, chamado só pelo `handleSave`. Como
+  o rótulo passivo dizia "Salvo" primeiro, ninguém clicava em Salvar: **todas** as linhas do banco
+  ficavam `draft` para sempre — e a `/adaptacoes` filtrava `status === "ready"`, então a prova
+  paga simplesmente sumia. Hoje: rótulo é **"Rascunho salvo"**, a página **não filtra** (status é
+  badge, não permissão — a linha é escrita pela edge fn **antes** de liquidar o crédito, logo tudo
+  que está lá já foi pago) e o botão Salvar existe também na **Revisar**, não só no Exportar.
+  `isSaved` volta a `false` a cada edição, senão o aviso de saída desarma para sempre depois do
+  1º salvar.
+- **Duas listas, dois papéis**: **`/adaptacoes`** (`AdaptacoesPage`) é a **biblioteca** — nome,
+  pastas por matéria, editar, duplicar, excluir. **`/historico`** (`MyAdaptationsPage`, rotulado
+  **"Atividade"** no menu) é o **log de consumo de crédito**, read-only, misturado com extrações.
+  Não volte a tratá-las como duas versões da mesma tela.
+- **Nome da adaptação = `result.header.title`**, editado na barra da Revisar. Não há campo novo:
+  o autosave já espelha esse valor para a coluna `adaptations.title`, que é o que a listagem lê.
+  O título derivado do documento é **placeholder**, nunca valor gravado — senão uma adaptação sem
+  nome congelaria um palpite em vez de cair no título do servidor.
+- **`adaptations.subject` é a "pasta" — coluna, nullable, e gravada junto do `markReady`.**
+  `NULL` = não classificada; **'Geral' é matéria de verdade** e não serve de sentinela. Nunca
+  torne `NOT NULL`: o `buildAdaptationInsert` do servidor não passa subject e roda **antes** de
+  liquidar a reserva — quebrá-lo vira estorno de geração paga. E não a grave num UPDATE separado:
+  ela viaja no mesmo write do `markReady` porque um segundo UPDATE bumparia o `updated_at` de novo
+  e deixaria o token otimista uma versão atrás. O agrupamento por pasta é **no cliente** (não há
+  query `where subject = ?`, e por isso a migration **não** tem índice — um
+  `(user_id, subject, updated_at)` seria morto, já que `subject` sem filtro no meio impede o
+  Postgres de aproveitar a ordenação; `idx_adaptations_user_updated` já serve a listagem).
+- **"Salvar como nova" virou "Duplicar", e na LISTA de propósito.** Dentro do editor a escolha
+  corre contra o autosave (grava na original a cada ~1200ms desde a 1ª tecla): quando o diálogo
+  aparecesse, o "por cima" já teria acontecido, e a opção "nova" exigiria criar a cópia **e**
+  reverter a original ao snapshot de abertura **e** limpar o mirror dela — senão o
+  `shouldOfferRestore` ofereceria recuperar justo as edições levadas para a cópia. Da lista não há
+  autosave em voo, token para religar nem mirror em jogo. A cópia **não** leva `request_id` (chave
+  de idempotência da reserva, índice único parcial) nem `credits_spent`.
 - **O prompt exige scaffolding — e o exemplo é código, não string** (`_shared/adaptationPrompt.ts`).
   Havia uma assimetria que sumia com os textos de apoio: das quatro linhas de "ADAPTAÇÃO POR TIPO
   DE ATIVIDADE", só **EXERCÍCIO** citava scaffolding ("pode incluir"); **PROVA** não citava e ainda
