@@ -185,9 +185,14 @@ describe("StepActivityInput — Banco de Questões tab", () => {
       expect.objectContaining({
         selectedQuestions: expect.arrayContaining([expect.objectContaining({ id: "q1" })]),
         activityText: expect.stringContaining("Questão 1"),
+        // Changing which questions make up the activity invalidates whatever
+        // was generated from the old set — StepGenerate skips generation while
+        // a result is present, so a stale one silently blocks the new run.
+        result: null,
       }),
     );
   });
+
 
   it("shows selected questions in bank tab after confirmation", async () => {
     const q = { id: "q1", text: "Questão selecionada", subject: "Física", topic: null, difficulty: null, image_url: null, options: null };
@@ -205,7 +210,10 @@ describe("StepActivityInput — Banco de Questões tab", () => {
     fireEvent.click(screen.getByRole("button", { name: /Banco de Questões/i }));
     fireEvent.click(screen.getByRole("button", { name: /Remover questão/i }));
     expect(updateData).toHaveBeenCalledWith(
-      expect.objectContaining({ selectedQuestions: [], activityText: "" }),
+      // `result: null` for the same reason as the upload path: StepGenerate
+      // skips generation while a result is present, so removing a question
+      // without clearing it would silently reuse the old adaptation.
+      expect.objectContaining({ selectedQuestions: [], activityText: "", result: null }),
     );
   });
 

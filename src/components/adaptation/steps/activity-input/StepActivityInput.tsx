@@ -179,7 +179,10 @@ export function StepActivityInput({ data, updateData, onNext, onPrev }: Props) {
     }));
     const existingIds = new Set(data.selectedQuestions.map((q) => q.id));
     const merged = [...data.selectedQuestions, ...newQuestions.filter((q) => !existingIds.has(q.id))];
-    updateData({ selectedQuestions: merged, activityText: buildActivityText(merged) });
+    // `result: null` for the same reason as the upload path: StepGenerate
+    // skips generation while a result is present, so changing the question set
+    // without clearing it would silently reuse the adaptation of the old set.
+    updateData({ selectedQuestions: merged, activityText: buildActivityText(merged), result: null });
     setShowBankModal(false);
     setCheckedIds(new Set());
     toast.success(`${selected.length} questão(ões) adicionada(s)`);
@@ -187,7 +190,7 @@ export function StepActivityInput({ data, updateData, onNext, onPrev }: Props) {
 
   function removeQuestion(id: string) {
     const updated = data.selectedQuestions.filter((q) => q.id !== id);
-    updateData({ selectedQuestions: updated, activityText: buildActivityText(updated) });
+    updateData({ selectedQuestions: updated, activityText: buildActivityText(updated), result: null });
   }
 
   // ── Render ────────────────────────────────────────────────────────────────

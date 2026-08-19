@@ -84,7 +84,15 @@ export function StepUploadExam({ data, updateData, onNext, onLoadingChange }: Pr
          parsing" and "stores the locally-parsed file" tests); v8's branch
          instrumentation misattributes the fall-through hit on this exact shape. */
       if (!mountedRef.current) return;
-      updateData({ uploadedExam: { fileName: file.name, fileType, text, pageImages, file } });
+      // Dropping the previous result is what makes a SECOND adaptation
+      // possible: StepGenerate only generates while `data.result` is empty, so
+      // a leftover one makes the Gerar step silently do nothing and land the
+      // teacher back on the adaptation of the *previous* exam. Nothing is lost
+      // — the row was already written server-side and stays in the history.
+      updateData({
+        uploadedExam: { fileName: file.name, fileType, text, pageImages, file },
+        result: null,
+      });
     } catch (e) {
       console.error("Exam parsing error:", e);
       if (!mountedRef.current) return;

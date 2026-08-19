@@ -107,8 +107,29 @@ describe("StepUploadExam", () => {
     selectFile(file);
     await waitFor(() => expect(updateData).toHaveBeenCalledWith({
       uploadedExam: { fileName: "prova.pdf", fileType: "pdf", text: "1) Q1", pageImages: [], file },
+      result: null,
     }));
     expect(onNext).not.toHaveBeenCalled();
+  });
+
+  // StepGenerate only generates when `data.result` is empty, so a leftover
+  // result from a previous adaptation makes the Gerar step silently do
+  // nothing: the teacher uploads a second exam and lands back on the FIRST
+  // adaptation. The generated row is already saved server-side, so dropping
+  // the local copy costs nothing — it stays in "Minhas adaptações".
+  it("discards the previous adaptation when a different exam is attached", async () => {
+    const updateData = vi.fn();
+    const withPreviousResult = {
+      ...baseData,
+      result: { schemaVersion: 1, document: { schemaVersion: 1, blocks: [] } },
+    } as unknown as typeof baseData;
+    renderWithProviders(
+      <StepUploadExam data={withPreviousResult} updateData={updateData} onNext={vi.fn()} onPrev={vi.fn()} />,
+    );
+    selectFile(pdfFile());
+    await waitFor(() =>
+      expect(updateData).toHaveBeenCalledWith(expect.objectContaining({ result: null })),
+    );
   });
 
   it("parses a DOCX file via extractDocxWithImages", async () => {
@@ -120,6 +141,7 @@ describe("StepUploadExam", () => {
     selectFile(file);
     await waitFor(() => expect(updateData).toHaveBeenCalledWith({
       uploadedExam: { fileName: "prova.docx", fileType: "docx", text: "1) Q1", pageImages: ["data:image/png;base64,IMG"], file },
+      result: null,
     }));
   });
 
