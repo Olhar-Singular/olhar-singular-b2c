@@ -19,6 +19,15 @@ const ALIGNMENTS = [
   { value: "right", Icon: AlignRight, label: "Alinhar à direita" },
 ] as const;
 
+/**
+ * Controls sit ON the sheet, which is always light — the folha never follows
+ * the app theme. shadcn's `outline` variant resolves `bg-background` /
+ * `border-input`, so in dark mode it painted a dark teal button on white
+ * paper. The surface-* family is the sheet's own palette.
+ */
+const FOLHA_BUTTON =
+  "gap-1 border-surface-line-2 bg-surface-paper text-surface-ink hover:bg-surface-mesa hover:text-surface-ink";
+
 export function ImageNodeView({ node, updateAttributes, deleteNode, editor }: NodeViewProps) {
   const [modalOpen, setModalOpen] = useState(false);
   const [cropOpen, setCropOpen] = useState(false);
@@ -85,9 +94,12 @@ export function ImageNodeView({ node, updateAttributes, deleteNode, editor }: No
               <Button
                 key={value}
                 type="button"
-                variant={alignment === value ? "default" : "ghost"}
+                variant="ghost"
                 size="icon"
-                className="h-7 w-7"
+                className={cn(
+                  "h-7 w-7 text-surface-ink-soft hover:bg-surface-mesa hover:text-surface-ink",
+                  alignment === value && "bg-surface-mesa-2 text-surface-ink",
+                )}
                 disabled={disabled}
                 onClick={() => updateAttributes({ alignment: value })}
                 title={label}
@@ -100,7 +112,7 @@ export function ImageNodeView({ node, updateAttributes, deleteNode, editor }: No
               type="button"
               variant="outline"
               size="sm"
-              className="gap-1"
+              className={FOLHA_BUTTON}
               disabled={disabled}
               onClick={() => setModalOpen(true)}
             >
@@ -111,7 +123,7 @@ export function ImageNodeView({ node, updateAttributes, deleteNode, editor }: No
                 type="button"
                 variant="outline"
                 size="sm"
-                className="gap-1"
+                className={FOLHA_BUTTON}
                 disabled={disabled || cropping}
                 onClick={() => setCropOpen(true)}
               >
@@ -122,7 +134,7 @@ export function ImageNodeView({ node, updateAttributes, deleteNode, editor }: No
               type="button"
               variant="ghost"
               size="sm"
-              className="gap-1 text-destructive hover:text-destructive"
+              className="gap-1 text-destructive hover:bg-surface-mesa hover:text-destructive"
               disabled={disabled}
               onClick={() => deleteNode()}
               aria-label="Excluir imagem"
@@ -137,7 +149,7 @@ export function ImageNodeView({ node, updateAttributes, deleteNode, editor }: No
               type="button"
               variant="ghost"
               size="sm"
-              className="self-start text-xs text-surface-ink-faint"
+              className="self-start text-xs text-surface-ink-faint hover:bg-surface-mesa hover:text-surface-ink"
               disabled={disabled}
               onClick={() => updateAttributes({ caption: [] })}
               aria-label="Adicionar legenda"

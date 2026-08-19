@@ -248,6 +248,33 @@ describe("CanonicalRenderer (defaults / edge branches)", () => {
     expect(screen.getByTestId("answer-open").children).toHaveLength(3);
   });
 
+  // Baseline alignment put the number level with the BOTTOM of the first stem
+  // block — the baseline of a replaced element like <img> is its bottom edge —
+  // so a question opening with a figure printed its number halfway down the
+  // page, beside the image's foot. PdfQuestion already uses flex-start; this
+  // is the screen catching up to it.
+  it("aligns the question number to the TOP of the stem, matching the PDF", () => {
+    render(
+      <CanonicalRenderer
+        document={wrap([
+          {
+            id: id(20),
+            type: "question",
+            stem: [
+              { id: id(21), type: "image", src: "https://x/y.png", alt: "cartaz" },
+              { id: id(22), type: "paragraph", content: [{ type: "text", text: "Qual a ação?" }] },
+            ],
+            answer: { kind: "open" },
+          },
+        ])}
+      />
+    );
+    const row = screen.getByTestId("question-number").parentElement!;
+    expect(row.className).toContain("items-start");
+    expect(row.className).not.toContain("items-baseline");
+  });
+
+
   it("fill-blank renders nothing — answer key hidden (gaps live inline in stem)", () => {
     render(
       <CanonicalRenderer
