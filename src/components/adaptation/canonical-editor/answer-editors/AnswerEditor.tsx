@@ -13,6 +13,8 @@
 
 import { Plus, Trash2, ArrowUp, ArrowDown } from "lucide-react";
 import { Input } from "@/components/ui/input";
+import { FOLHA_BUTTON } from "@/components/adaptation/canonical-editor/folhaChrome";
+import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import type { QuestionAnswer } from "@/lib/adaptation/canonical/schema";
@@ -90,7 +92,7 @@ export function AnswerEditor({ answer, onChange, disabled = false }: AnswerEdito
               </IconButton>
             </div>
           ))}
-          <Button type="button" variant="outline" size="sm" className="self-start gap-1" onClick={() => onChange(addAlternative(answer))} disabled={disabled}>
+          <Button type="button" variant="outline" size="sm" className={cn("self-start gap-1", FOLHA_BUTTON)} onClick={() => onChange(addAlternative(answer))} disabled={disabled}>
             <Plus className="w-3.5 h-3.5" /> Alternativa
           </Button>
         </div>
@@ -171,7 +173,7 @@ export function AnswerEditor({ answer, onChange, disabled = false }: AnswerEdito
               </IconButton>
             </div>
           ))}
-          <Button type="button" variant="outline" size="sm" className="self-start gap-1" onClick={() => onChange(addMatchingPair(answer))} disabled={disabled}>
+          <Button type="button" variant="outline" size="sm" className={cn("self-start gap-1", FOLHA_BUTTON)} onClick={() => onChange(addMatchingPair(answer))} disabled={disabled}>
             <Plus className="w-3.5 h-3.5" /> Par
           </Button>
         </div>
@@ -220,7 +222,7 @@ export function AnswerEditor({ answer, onChange, disabled = false }: AnswerEdito
               </IconButton>
             </div>
           ))}
-          <Button type="button" variant="outline" size="sm" className="self-start gap-1" onClick={() => onChange(addGap(answer))} disabled={disabled}>
+          <Button type="button" variant="outline" size="sm" className={cn("self-start gap-1", FOLHA_BUTTON)} onClick={() => onChange(addGap(answer))} disabled={disabled}>
             <Plus className="w-3.5 h-3.5" /> Lacuna
           </Button>
         </div>
