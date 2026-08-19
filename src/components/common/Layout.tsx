@@ -11,8 +11,12 @@ import logoImg from "@/assets/logo-olho-transparent.png";
 const NAV_ITEMS = [
   { path: "/dashboard",        label: "Dashboard",          icon: LayoutDashboard },
   { path: "/adaptar",          label: "Adaptar",            icon: Wand2 },
+  // Two lists with two jobs. "Adaptações" is the library — named, filed by
+  // subject, editable. "Atividade" is the consumption log: everything that
+  // ever ran, including extractions, read-only. They used to both read as
+  // "my adaptations" and disagree about what counted as one.
   { path: "/adaptacoes",       label: "Adaptações",         icon: LibraryBig },
-  { path: "/historico",        label: "Histórico",          icon: History },
+  { path: "/historico",        label: "Atividade",          icon: History },
   { path: "/perfis-barreira",  label: "Perfis de Barreira", icon: Users },
   { path: "/chat",             label: "Chat com a ISA",     icon: MessageSquare },
   { path: "/banco-questoes",   label: "Banco de Questões",  icon: BookOpen },

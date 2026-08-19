@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { FileText, Pencil, Trash2, Plus } from "lucide-react";
+import { FileText, Pencil, Trash2, Plus, Copy } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
@@ -14,7 +14,11 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { useAdaptations, useDeleteAdaptation } from "@/hooks/useAdaptations";
+import {
+  useAdaptations,
+  useDeleteAdaptation,
+  useDuplicateAdaptation,
+} from "@/hooks/useAdaptations";
 
 function formatDate(iso: string): string {
   return new Date(iso).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric" });
@@ -60,6 +64,7 @@ export default function AdaptacoesPage() {
   const navigate = useNavigate();
   const { data: all = [], isLoading } = useAdaptations();
   const remove = useDeleteAdaptation();
+  const duplicate = useDuplicateAdaptation();
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
 
   // No status filter. The row is written by the edge function BEFORE the
@@ -131,6 +136,20 @@ export default function AdaptacoesPage() {
                       aria-label={`Editar ${a.title || "adaptação"}`}
                     >
                       <Pencil className="w-4 h-4" />
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() =>
+                        duplicate.mutateAsync({
+                          id: a.id,
+                          title: `${a.title || "Adaptação sem título"} (cópia)`,
+                        })
+                      }
+                      disabled={duplicate.isPending}
+                      aria-label={`Duplicar ${a.title || "adaptação"}`}
+                    >
+                      <Copy className="w-4 h-4" />
                     </Button>
                     <Button
                       variant="outline"

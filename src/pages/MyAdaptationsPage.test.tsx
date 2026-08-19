@@ -18,16 +18,16 @@ function renderPage() {
   return render(<MemoryRouter><MyAdaptationsPage /></MemoryRouter>);
 }
 
-describe("MyAdaptationsPage (Histórico)", () => {
+describe("MyAdaptationsPage (Atividade)", () => {
   beforeEach(async () => {
     vi.clearAllMocks();
     const m = await import("@/hooks/useActivityLog");
     vi.mocked(m.useActivityLog).mockReturnValue({ data: items, isLoading: false } as never);
   });
 
-  it("renders 'Histórico' heading", () => {
+  it("renders 'Atividade' heading", () => {
     renderPage();
-    expect(screen.getByRole("heading", { name: /histórico/i })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: /atividade/i })).toBeInTheDocument();
   });
 
   it("shows loading state", async () => {

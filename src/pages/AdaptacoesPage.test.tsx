@@ -10,9 +10,11 @@ vi.mock("react-router-dom", async (orig) => ({
 }));
 
 const mockDelete = vi.fn();
+const mockDuplicate = vi.fn();
 vi.mock("@/hooks/useAdaptations", () => ({
   useAdaptations: vi.fn(),
   useDeleteAdaptation: vi.fn(() => ({ mutateAsync: mockDelete, isPending: false })),
+  useDuplicateAdaptation: vi.fn(() => ({ mutateAsync: mockDuplicate, isPending: false })),
 }));
 
 const items = [
@@ -33,6 +35,31 @@ describe("AdaptacoesPage", () => {
     const m = await import("@/hooks/useAdaptations");
     vi.mocked(m.useAdaptations).mockReturnValue({ data: items, isLoading: false } as never);
     vi.mocked(m.useDeleteAdaptation).mockReturnValue({ mutateAsync: mockDelete, isPending: false } as never);
+    vi.mocked(m.useDuplicateAdaptation).mockReturnValue({ mutateAsync: mockDuplicate, isPending: false } as never);
+  });
+
+  // The safe half of "salvar como nova": from the list there is no autosave in
+  // flight racing the copy, so it needs none of the roll-the-original-back
+  // machinery the same choice would require inside the editor.
+  describe("duplicar", () => {
+    it("copies an adaptation under a clearly derived name", async () => {
+      renderPage();
+      fireEvent.click(screen.getByRole("button", { name: /Duplicar Prova de Física/i }));
+      await waitFor(() =>
+        expect(mockDuplicate).toHaveBeenCalledWith({ id: "a1", title: "Prova de Física (cópia)" }),
+      );
+    });
+
+    it("names the copy of an untitled adaptation without inheriting the blank", async () => {
+      renderPage();
+      fireEvent.click(screen.getByRole("button", { name: /Duplicar adaptação/i }));
+      await waitFor(() =>
+        expect(mockDuplicate).toHaveBeenCalledWith({
+          id: "a4",
+          title: "Adaptação sem título (cópia)",
+        }),
+      );
+    });
   });
 
   it("renders the page heading", () => {

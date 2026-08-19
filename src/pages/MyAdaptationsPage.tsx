@@ -64,7 +64,7 @@ export default function MyAdaptationsPage() {
 
   return (
     <div className="mx-auto max-w-4xl px-4 py-6 space-y-6">
-      <h1 className="text-2xl font-semibold text-foreground">Histórico</h1>
+      <h1 className="text-2xl font-semibold text-foreground">Atividade</h1>
 
       {isLoading ? (
         <p className="text-sm text-muted-foreground">Carregando…</p>

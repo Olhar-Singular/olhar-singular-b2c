@@ -201,6 +201,45 @@ export async function getAdaptation(id: string): Promise<AdaptationRow> {
   return parseRow(data as Record<string, unknown>);
 }
 
+/**
+ * Copy an adaptation into a brand-new row.
+ *
+ * This is the safe half of "salvar como nova". Doing that choice *inside* the
+ * editor would mean racing the autosave — it writes to the original row every
+ * ~1200ms from the first keystroke, so by the time any dialog appeared the
+ * overwrite would already have happened, and "as new" would have to create a
+ * copy AND roll the original back to its opening snapshot AND clear its crash
+ * mirror. Here there is no autosave in flight, no optimistic token to rebind
+ * and no mirror in play: it is a plain INSERT the owner is allowed to make.
+ *
+ * Deliberately NOT copied:
+ * - `request_id`: it is the credit-reservation idempotency key, under a unique
+ *   partial index. Reusing it would collide; the copy was never charged.
+ * - `credits_spent`: 0, for the same reason — nobody paid for a copy.
+ * `status` starts 'ready' because the teacher asked for this one explicitly.
+ */
+export async function duplicateAdaptation(id: string, title: string): Promise<AdaptationRow> {
+  const source = await getAdaptation(id);
+  const { data, error } = await table()
+    .insert({
+      user_id: source.user_id,
+      title,
+      original_activity: source.original_activity,
+      activity_type: source.activity_type,
+      barrier_profile_id: source.barrier_profile_id,
+      barriers_used: source.barriers_used,
+      observation_notes: source.observation_notes,
+      adaptation_result: source.adaptation_result,
+      subject: source.subject,
+      status: "ready",
+      credits_spent: 0,
+    })
+    .select("*")
+    .single();
+  if (error) throw error;
+  return parseRow(data as Record<string, unknown>);
+}
+
 /** Delete an adaptation by id. */
 export async function deleteAdaptation(id: string): Promise<void> {
   const { error } = await table().delete().eq("id", id);
