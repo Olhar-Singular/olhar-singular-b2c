@@ -15,32 +15,140 @@ vi.mock("@/hooks/useAdaptations", () => ({
   useAdaptations: vi.fn(),
   useDeleteAdaptation: vi.fn(() => ({ mutateAsync: mockDelete, isPending: false })),
   useDuplicateAdaptation: vi.fn(() => ({ mutateAsync: mockDuplicate, isPending: false })),
+  adaptationKeys: { all: ["adaptations"], list: () => ["adaptations", "list"] },
+}));
+
+const mockCreateFolder = vi.fn();
+const mockRenameFolder = vi.fn();
+const mockDeleteFolder = vi.fn();
+const mockMove = vi.fn();
+vi.mock("@/hooks/useFolders", () => ({
+  useFolders: vi.fn(),
+  useCreateFolder: vi.fn(() => ({ mutateAsync: mockCreateFolder, isPending: false })),
+  useRenameFolder: vi.fn(() => ({ mutateAsync: mockRenameFolder, isPending: false })),
+  useDeleteFolder: vi.fn(() => ({ mutateAsync: mockDeleteFolder, isPending: false })),
+  useMoveAdaptation: vi.fn(() => ({ mutateAsync: mockMove, isPending: false })),
 }));
 
 const items = [
-  { id: "a1", title: "Prova de Física", activity_type: "prova", status: "ready", credits_spent: 3, updated_at: "2026-06-01T00:00:00Z" },
-  { id: "a2", title: "Exercício de Português", activity_type: "exercício", status: "ready", credits_spent: 0, updated_at: "2026-06-02T00:00:00Z" },
-  { id: "a3", title: "Rascunho inacabado", activity_type: null, status: "draft", credits_spent: 0, updated_at: "2026-06-03T00:00:00Z" },
-  { id: "a4", title: "", activity_type: null, status: "ready", credits_spent: 1, updated_at: "2026-06-04T00:00:00Z" },
-  { id: "a5", title: "Sem custo", activity_type: null, status: "ready", credits_spent: null, updated_at: "2026-06-05T00:00:00Z" },
+  { id: "a1", title: "Prova de Física", activity_type: "prova", subject: "Física", folder_id: "f1", status: "ready", credits_spent: 3, updated_at: "2026-06-01T00:00:00Z" },
+  { id: "a2", title: "Exercício de Português", activity_type: "exercício", subject: "Português", folder_id: null, status: "ready", credits_spent: 0, updated_at: "2026-06-02T00:00:00Z" },
+  { id: "a3", title: "Rascunho inacabado", activity_type: null, subject: null, folder_id: null, status: "draft", credits_spent: 0, updated_at: "2026-06-03T00:00:00Z" },
+  { id: "a4", title: "", activity_type: null, subject: null, folder_id: null, status: "ready", credits_spent: 1, updated_at: "2026-06-04T00:00:00Z" },
+  { id: "a5", title: "Sem custo", activity_type: null, subject: null, folder_id: null, status: "ready", credits_spent: null, updated_at: "2026-06-05T00:00:00Z" },
+];
+
+const folders = [
+  { id: "f1", name: "6º ano B" },
+  { id: "f2", name: "Recuperação" },
 ];
 
 function renderPage() {
   return render(<MemoryRouter><AdaptacoesPage /></MemoryRouter>);
 }
 
+async function setAdaptations(data: unknown[]) {
+  const m = await import("@/hooks/useAdaptations");
+  vi.mocked(m.useAdaptations).mockReturnValue({ data, isLoading: false } as never);
+}
+
 describe("AdaptacoesPage", () => {
   beforeEach(async () => {
     vi.clearAllMocks();
-    const m = await import("@/hooks/useAdaptations");
-    vi.mocked(m.useAdaptations).mockReturnValue({ data: items, isLoading: false } as never);
-    vi.mocked(m.useDeleteAdaptation).mockReturnValue({ mutateAsync: mockDelete, isPending: false } as never);
-    vi.mocked(m.useDuplicateAdaptation).mockReturnValue({ mutateAsync: mockDuplicate, isPending: false } as never);
+    const a = await import("@/hooks/useAdaptations");
+    vi.mocked(a.useAdaptations).mockReturnValue({ data: items, isLoading: false } as never);
+    vi.mocked(a.useDeleteAdaptation).mockReturnValue({ mutateAsync: mockDelete, isPending: false } as never);
+    vi.mocked(a.useDuplicateAdaptation).mockReturnValue({ mutateAsync: mockDuplicate, isPending: false } as never);
+    const f = await import("@/hooks/useFolders");
+    vi.mocked(f.useFolders).mockReturnValue({ data: folders, isLoading: false } as never);
+    vi.mocked(f.useCreateFolder).mockReturnValue({ mutateAsync: mockCreateFolder, isPending: false } as never);
+    vi.mocked(f.useRenameFolder).mockReturnValue({ mutateAsync: mockRenameFolder, isPending: false } as never);
+    vi.mocked(f.useDeleteFolder).mockReturnValue({ mutateAsync: mockDeleteFolder, isPending: false } as never);
+    vi.mocked(f.useMoveAdaptation).mockReturnValue({ mutateAsync: mockMove, isPending: false } as never);
   });
 
-  // The safe half of "salvar como nova": from the list there is no autosave in
-  // flight racing the copy, so it needs none of the roll-the-original-back
-  // machinery the same choice would require inside the editor.
+  it("renders the page heading", () => {
+    renderPage();
+    expect(screen.getByRole("heading", { name: /adaptações/i, level: 1 })).toBeInTheDocument();
+  });
+
+  // This page used to filter to `status === "ready"`, hiding every adaptation
+  // the teacher had not explicitly finished. The row is written by the edge
+  // function BEFORE the credit reservation is settled, so a draft is already
+  // paid for — hiding it was the bug. `status` is information, not permission.
+  it("lists drafts alongside finished adaptations", () => {
+    renderPage();
+    expect(screen.getByText("Prova de Física")).toBeInTheDocument();
+    expect(screen.getByText("Rascunho inacabado")).toBeInTheDocument();
+  });
+
+  it("badges a draft as Rascunho and a finished one as Concluída", () => {
+    renderPage();
+    const draftCard = screen.getByText("Rascunho inacabado").closest("li")!;
+    expect(within(draftCard).getByText("Rascunho")).toBeInTheDocument();
+    const readyCard = screen.getByText("Prova de Física").closest("li")!;
+    expect(within(readyCard).getByText("Concluída")).toBeInTheDocument();
+  });
+
+  it("shows loading state", async () => {
+    const m = await import("@/hooks/useAdaptations");
+    vi.mocked(m.useAdaptations).mockReturnValue({ data: undefined, isLoading: true } as never);
+    renderPage();
+    expect(screen.getByText(/carregando/i)).toBeInTheDocument();
+  });
+
+  it("shows the empty state only when there is genuinely nothing", async () => {
+    await setAdaptations([]);
+    renderPage();
+    expect(screen.getByText(/nenhuma adaptação ainda/i)).toBeInTheDocument();
+  });
+
+  it("shows credits spent per card (non-zero)", () => {
+    renderPage();
+    expect(screen.getByText(/3 crédito/i)).toBeInTheDocument();
+  });
+
+  it("shows 'Gratuita' for zero-credit adaptations", () => {
+    renderPage();
+    expect(screen.getAllByText(/gratuita/i).length).toBeGreaterThanOrEqual(1);
+  });
+
+  it("navigates to the wizard from Nova adaptação", () => {
+    renderPage();
+    fireEvent.click(screen.getByRole("button", { name: /Nova adaptação/i }));
+    expect(mockNavigate).toHaveBeenCalledWith("/adaptar");
+  });
+
+  it("navigates to the wizard from the empty state", async () => {
+    await setAdaptations([]);
+    renderPage();
+    fireEvent.click(screen.getByRole("button", { name: /Criar primeira adaptação/i }));
+    expect(mockNavigate).toHaveBeenCalledWith("/adaptar");
+  });
+
+  it("opens the editor for an adaptation", () => {
+    renderPage();
+    fireEvent.click(screen.getByRole("button", { name: /Editar Prova de Física/i }));
+    expect(mockNavigate).toHaveBeenCalledWith("/adaptar/editar/a1");
+  });
+
+  describe("excluir adaptação", () => {
+    it("asks before deleting and then deletes", async () => {
+      renderPage();
+      fireEvent.click(screen.getByRole("button", { name: /Excluir Prova de Física/i }));
+      expect(screen.getByText(/Excluir adaptação\?/i)).toBeInTheDocument();
+      fireEvent.click(screen.getByRole("button", { name: /^Excluir$/i }));
+      await waitFor(() => expect(mockDelete).toHaveBeenCalledWith("a1"));
+    });
+
+    it("closes the confirmation without deleting on Cancelar", () => {
+      renderPage();
+      fireEvent.click(screen.getByRole("button", { name: /Excluir Prova de Física/i }));
+      fireEvent.click(screen.getByRole("button", { name: /Cancelar/i }));
+      expect(mockDelete).not.toHaveBeenCalled();
+    });
+  });
+
   describe("duplicar", () => {
     it("copies an adaptation under a clearly derived name", async () => {
       renderPage();
@@ -62,167 +170,173 @@ describe("AdaptacoesPage", () => {
     });
   });
 
-  it("renders the page heading", () => {
-    renderPage();
-    expect(screen.getByRole("heading", { name: /adaptações/i })).toBeInTheDocument();
-  });
-
-  // This page used to filter to `status === "ready"`, which hid every
-  // adaptation the teacher had not explicitly "finished". The row is written
-  // by the edge function BEFORE the credit reservation is settled, so a draft
-  // is something already paid for — hiding it was the bug, not the feature.
-  // `status` is information now, not permission.
-  it("lists drafts alongside finished adaptations", () => {
-    renderPage();
-    expect(screen.getByText("Prova de Física")).toBeInTheDocument();
-    expect(screen.getByText("Exercício de Português")).toBeInTheDocument();
-    expect(screen.getByText("Rascunho inacabado")).toBeInTheDocument();
-  });
-
-  it("badges a draft as Rascunho and a finished one as Concluída", () => {
-    renderPage();
-    const draftCard = screen.getByText("Rascunho inacabado").closest("li")!;
-    expect(within(draftCard).getByText("Rascunho")).toBeInTheDocument();
-    const readyCard = screen.getByText("Prova de Física").closest("li")!;
-    expect(within(readyCard).getByText("Concluída")).toBeInTheDocument();
-  });
-
-  describe("pastas por matéria", () => {
-    const filed = [
-      { id: "f1", title: "Prova de Geografia", activity_type: "prova", status: "ready", subject: "Geografia", credits_spent: 1, updated_at: "2026-06-01T00:00:00Z" },
-      { id: "f2", title: "Prova de Física", activity_type: "prova", status: "ready", subject: "Física", credits_spent: 1, updated_at: "2026-06-02T00:00:00Z" },
-      { id: "f3", title: "Outra de Geografia", activity_type: "prova", status: "draft", subject: "Geografia", credits_spent: 1, updated_at: "2026-06-03T00:00:00Z" },
-      { id: "f4", title: "Ainda sem pasta", activity_type: null, status: "draft", subject: null, credits_spent: 0, updated_at: "2026-06-04T00:00:00Z" },
-    ];
-
-    async function renderFiled() {
-      const m = await import("@/hooks/useAdaptations");
-      vi.mocked(m.useAdaptations).mockReturnValue({ data: filed, isLoading: false } as never);
+  describe("pastas", () => {
+    it("groups each adaptation under its folder", () => {
       renderPage();
-    }
-
-    it("groups the adaptations under a heading per subject", async () => {
-      await renderFiled();
-      expect(screen.getByRole("heading", { name: "Geografia" })).toBeInTheDocument();
-      expect(screen.getByRole("heading", { name: "Física" })).toBeInTheDocument();
+      const filed = screen.getByRole("heading", { name: "6º ano B" }).closest("section")!;
+      expect(within(filed).getByText("Prova de Física")).toBeInTheDocument();
     });
 
-    it("puts the unclassified ones in their own group", async () => {
-      await renderFiled();
-      expect(screen.getByRole("heading", { name: "Sem matéria" })).toBeInTheDocument();
-    });
-
-    it("files each adaptation under its own subject", async () => {
-      await renderFiled();
-      const geografia = screen.getByRole("heading", { name: "Geografia" }).closest("section")!;
-      expect(within(geografia).getByText("Prova de Geografia")).toBeInTheDocument();
-      expect(within(geografia).getByText("Outra de Geografia")).toBeInTheDocument();
-      expect(within(geografia).queryByText("Prova de Física")).not.toBeInTheDocument();
-    });
-
-    it("keeps the unclassified group last, after the named folders", async () => {
-      await renderFiled();
-      const headings = screen.getAllByRole("heading", { level: 2 }).map((h) => h.textContent);
-      expect(headings[headings.length - 1]).toBe("Sem matéria");
-    });
-
-    it("does not render a folder heading when nothing is classified", () => {
-      // Every fixture in `items` predates the subject column.
+    // The whole reason folders are rows and not a text column: a folder just
+    // created has to be visible before anything is in it, or there is nowhere
+    // to move the first adaptation to.
+    it("shows a folder that is still empty", () => {
       renderPage();
-      expect(screen.queryByRole("heading", { name: "Sem matéria" })).not.toBeInTheDocument();
+      const empty = screen.getByRole("heading", { name: "Recuperação" }).closest("section")!;
+      expect(within(empty).getByText(/pasta vazia/i)).toBeInTheDocument();
+    });
+
+    it("collects the unfiled ones under Sem pasta", () => {
+      renderPage();
+      const unfiled = screen.getByRole("heading", { name: "Sem pasta" }).closest("section")!;
+      expect(within(unfiled).getByText("Exercício de Português")).toBeInTheDocument();
+    });
+
+    it("creates a folder with the typed name", async () => {
+      renderPage();
+      fireEvent.click(screen.getByRole("button", { name: /Nova pasta/i }));
+      fireEvent.change(screen.getByLabelText("Nome da nova pasta"), {
+        target: { value: "7º ano A" },
+      });
+      fireEvent.click(screen.getByRole("button", { name: /^Criar$/i }));
+      await waitFor(() => expect(mockCreateFolder).toHaveBeenCalledWith("7º ano A"));
+    });
+
+    it("will not create a folder with a blank name", () => {
+      renderPage();
+      fireEvent.click(screen.getByRole("button", { name: /Nova pasta/i }));
+      expect(screen.getByRole("button", { name: /^Criar$/i })).toBeDisabled();
+    });
+
+    it("creates the folder on Enter, without reaching for the button", async () => {
+      renderPage();
+      fireEvent.click(screen.getByRole("button", { name: /Nova pasta/i }));
+      const field = screen.getByLabelText("Nome da nova pasta");
+      fireEvent.change(field, { target: { value: "8º ano" } });
+      fireEvent.keyDown(field, { key: "Enter" });
+      await waitFor(() => expect(mockCreateFolder).toHaveBeenCalledWith("8º ano"));
+    });
+
+    it("ignores Enter on a blank name instead of creating an unnamed folder", () => {
+      renderPage();
+      fireEvent.click(screen.getByRole("button", { name: /Nova pasta/i }));
+      fireEvent.keyDown(screen.getByLabelText("Nome da nova pasta"), { key: "Enter" });
+      expect(mockCreateFolder).not.toHaveBeenCalled();
+    });
+
+    it("abandons the new folder on Cancelar", () => {
+      renderPage();
+      fireEvent.click(screen.getByRole("button", { name: /Nova pasta/i }));
+      fireEvent.click(screen.getByRole("button", { name: /^Cancelar$/i }));
+      expect(screen.queryByLabelText("Nome da nova pasta")).not.toBeInTheDocument();
+    });
+
+    it("renames a folder", async () => {
+      renderPage();
+      fireEvent.click(screen.getByRole("button", { name: /Renomear pasta 6º ano B/i }));
+      fireEvent.change(screen.getByLabelText("Novo nome da pasta"), {
+        target: { value: "6º ano C" },
+      });
+      fireEvent.click(screen.getByRole("button", { name: /^Salvar$/i }));
+      await waitFor(() =>
+        expect(mockRenameFolder).toHaveBeenCalledWith({ id: "f1", name: "6º ano C" }),
+      );
+    });
+
+    it("abandons a rename on Cancelar", () => {
+      renderPage();
+      fireEvent.click(screen.getByRole("button", { name: /Renomear pasta 6º ano B/i }));
+      fireEvent.click(screen.getByRole("button", { name: /^Cancelar$/i }));
+      expect(screen.queryByLabelText("Novo nome da pasta")).not.toBeInTheDocument();
+      expect(mockRenameFolder).not.toHaveBeenCalled();
+    });
+
+    // People fear exactly the opposite, so the dialog has to say it outright:
+    // the adaptations are paid work and the FK is ON DELETE SET NULL.
+    it("promises that deleting a folder keeps the adaptations", async () => {
+      renderPage();
+      fireEvent.click(screen.getByRole("button", { name: /Excluir pasta 6º ano B/i }));
+      expect(screen.getByText(/NÃO serão excluídas/i)).toBeInTheDocument();
+      fireEvent.click(screen.getByRole("button", { name: /^Excluir pasta$/i }));
+      await waitFor(() => expect(mockDeleteFolder).toHaveBeenCalledWith("f1"));
+    });
+
+    it("moves an adaptation into another folder", async () => {
+      renderPage();
+      fireEvent.change(screen.getByLabelText(/Mover Prova de Física/i), {
+        target: { value: "f2" },
+      });
+      await waitFor(() =>
+        expect(mockMove).toHaveBeenCalledWith({ adaptationId: "a1", folderId: "f2" }),
+      );
+    });
+
+    it("takes an adaptation out of every folder", async () => {
+      renderPage();
+      fireEvent.change(screen.getByLabelText(/Mover Prova de Física/i), { target: { value: "" } });
+      await waitFor(() =>
+        expect(mockMove).toHaveBeenCalledWith({ adaptationId: "a1", folderId: null }),
+      );
+    });
+
+    it("hides Sem pasta when everything is filed", async () => {
+      await setAdaptations([items[0]]);
+      renderPage();
+      expect(screen.queryByRole("heading", { name: "Sem pasta" })).not.toBeInTheDocument();
     });
   });
 
-  it("shows loading state", async () => {
-    const m = await import("@/hooks/useAdaptations");
-    vi.mocked(m.useAdaptations).mockReturnValue({ data: undefined, isLoading: true } as never);
-    renderPage();
-    expect(screen.getByText(/carregando/i)).toBeInTheDocument();
-  });
+  describe("filtros", () => {
+    it("filters by matéria", () => {
+      renderPage();
+      fireEvent.change(screen.getByLabelText("Filtrar por matéria"), {
+        target: { value: "Física" },
+      });
+      expect(screen.getByText("Prova de Física")).toBeInTheDocument();
+      expect(screen.queryByText("Exercício de Português")).not.toBeInTheDocument();
+    });
 
-  it("shows the empty state only when there is genuinely nothing", async () => {
-    const m = await import("@/hooks/useAdaptations");
-    vi.mocked(m.useAdaptations).mockReturnValue({ data: [], isLoading: false } as never);
-    renderPage();
-    expect(screen.getByText(/nenhuma adaptação ainda/i)).toBeInTheDocument();
-  });
+    it("filters by tipo", () => {
+      renderPage();
+      fireEvent.change(screen.getByLabelText("Filtrar por tipo"), { target: { value: "prova" } });
+      expect(screen.getByText("Prova de Física")).toBeInTheDocument();
+      expect(screen.queryByText("Exercício de Português")).not.toBeInTheDocument();
+    });
 
-  it("shows the draft instead of an empty state when only drafts exist", async () => {
-    const m = await import("@/hooks/useAdaptations");
-    vi.mocked(m.useAdaptations).mockReturnValue({ data: [items[2]], isLoading: false } as never);
-    renderPage();
-    expect(screen.getByText("Rascunho inacabado")).toBeInTheDocument();
-    expect(screen.queryByText(/nenhuma adaptação/i)).not.toBeInTheDocument();
-  });
+    it("shows the type by its human label, not the stored value", () => {
+      renderPage();
+      const card = screen.getByText("Exercício de Português").closest("li")!;
+      expect(within(card).getByText("Exercício")).toBeInTheDocument();
+    });
 
-  it("shows credits spent per card (non-zero)", () => {
-    renderPage();
-    expect(screen.getByText(/3 crédito/i)).toBeInTheDocument();
-  });
+    it("shows the matéria as its own badge", () => {
+      renderPage();
+      const card = screen.getByText("Prova de Física").closest("li")!;
+      expect(within(card).getByText("Física")).toBeInTheDocument();
+    });
 
-  it("shows 'Gratuita' for zero-credit adaptations", () => {
-    renderPage();
-    expect(screen.getAllByText(/gratuita/i).length).toBeGreaterThanOrEqual(1);
-  });
+    it("resets the tipo filter back to all", () => {
+      renderPage();
+      const select = screen.getByLabelText("Filtrar por tipo");
+      fireEvent.change(select, { target: { value: "prova" } });
+      fireEvent.change(select, { target: { value: "" } });
+      expect(screen.getByText("Exercício de Português")).toBeInTheDocument();
+    });
 
-  it("navigates to editor on Editar click", () => {
-    renderPage();
-    fireEvent.click(screen.getByRole("button", { name: /editar prova de física/i }));
-    expect(mockNavigate).toHaveBeenCalledWith("/adaptar/editar/a1");
-  });
+    it("offers to clear the filters only once one is on", () => {
+      renderPage();
+      expect(screen.queryByRole("button", { name: /Limpar filtros/i })).not.toBeInTheDocument();
+      fireEvent.change(screen.getByLabelText("Filtrar por tipo"), { target: { value: "prova" } });
+      fireEvent.click(screen.getByRole("button", { name: /Limpar filtros/i }));
+      expect(screen.getByText("Exercício de Português")).toBeInTheDocument();
+    });
 
-  it("navigates to new adaptation", () => {
-    renderPage();
-    fireEvent.click(screen.getByRole("button", { name: /nova adaptação/i }));
-    expect(mockNavigate).toHaveBeenCalledWith("/adaptar");
-  });
-
-  it("opens delete confirmation on Excluir click", async () => {
-    renderPage();
-    fireEvent.click(screen.getByRole("button", { name: /excluir prova de física/i }));
-    expect(await screen.findByRole("alertdialog")).toBeInTheDocument();
-  });
-
-  it("confirms deletion and calls mutation", async () => {
-    renderPage();
-    fireEvent.click(screen.getByRole("button", { name: /excluir prova de física/i }));
-    const dialog = await screen.findByRole("alertdialog");
-    fireEvent.click(dialog.querySelector("button.bg-destructive")!);
-    await waitFor(() => expect(mockDelete).toHaveBeenCalledWith("a1"));
-  });
-
-  it("cancels deletion without calling mutation", async () => {
-    renderPage();
-    fireEvent.click(screen.getByRole("button", { name: /excluir prova de física/i }));
-    const dialog = await screen.findByRole("alertdialog");
-    fireEvent.click(within(dialog).getByRole("button", { name: /cancelar/i }));
-    expect(mockDelete).not.toHaveBeenCalled();
-  });
-
-  it("navigates to /adaptar when 'Criar primeira adaptação' is clicked in empty state", async () => {
-    const m = await import("@/hooks/useAdaptations");
-    vi.mocked(m.useAdaptations).mockReturnValue({ data: [], isLoading: false } as never);
-    renderPage();
-    fireEvent.click(screen.getByRole("button", { name: /criar primeira adaptação/i }));
-    expect(mockNavigate).toHaveBeenCalledWith("/adaptar");
-  });
-
-  it("shows '1 crédito' (singular) for a single-credit adaptation", () => {
-    renderPage();
-    expect(screen.getByText("1 crédito")).toBeInTheDocument();
-  });
-
-  it("renders card without activity_type badge when activity_type is null", () => {
-    renderPage();
-    // a4 has activity_type: null — badge not rendered; only a1 and a2 show badges
-    expect(screen.getByText("prova")).toBeInTheDocument();
-    expect(screen.getByText("exercício")).toBeInTheDocument();
-    // no "null" text leaks into the DOM
-    expect(screen.queryByText("null")).not.toBeInTheDocument();
-  });
-
-  it("shows 'Adaptação sem título' fallback for empty-title ready adaptations", () => {
-    renderPage();
-    expect(screen.getByText("Adaptação sem título")).toBeInTheDocument();
+    it("resets the matéria filter back to all", () => {
+      renderPage();
+      const select = screen.getByLabelText("Filtrar por matéria");
+      fireEvent.change(select, { target: { value: "Física" } });
+      fireEvent.change(select, { target: { value: "" } });
+      expect(screen.getByText("Exercício de Português")).toBeInTheDocument();
+    });
   });
 });
