@@ -43,6 +43,13 @@ const folders = [
   { id: "f2", name: "Recuperação" },
 ];
 
+/** Radix renders a button trigger and portals the list; it has no `value`. */
+async function pick(triggerLabel: RegExp | string, optionName: string) {
+  fireEvent.click(screen.getByLabelText(triggerLabel));
+  await waitFor(() => screen.getByRole("option", { name: optionName }));
+  fireEvent.click(screen.getByRole("option", { name: optionName }));
+}
+
 function renderPage() {
   return render(<MemoryRouter><AdaptacoesPage /></MemoryRouter>);
 }
@@ -263,9 +270,7 @@ describe("AdaptacoesPage", () => {
 
     it("moves an adaptation into another folder", async () => {
       renderPage();
-      fireEvent.change(screen.getByLabelText(/Mover Prova de Física/i), {
-        target: { value: "f2" },
-      });
+      await pick(/Mover Prova de Física/i, "Recuperação");
       await waitFor(() =>
         expect(mockMove).toHaveBeenCalledWith({ adaptationId: "a1", folderId: "f2" }),
       );
@@ -273,7 +278,7 @@ describe("AdaptacoesPage", () => {
 
     it("takes an adaptation out of every folder", async () => {
       renderPage();
-      fireEvent.change(screen.getByLabelText(/Mover Prova de Física/i), { target: { value: "" } });
+      await pick(/Mover Prova de Física/i, "Sem pasta");
       await waitFor(() =>
         expect(mockMove).toHaveBeenCalledWith({ adaptationId: "a1", folderId: null }),
       );
@@ -287,18 +292,16 @@ describe("AdaptacoesPage", () => {
   });
 
   describe("filtros", () => {
-    it("filters by matéria", () => {
+    it("filters by matéria", async () => {
       renderPage();
-      fireEvent.change(screen.getByLabelText("Filtrar por matéria"), {
-        target: { value: "Física" },
-      });
+      await pick("Filtrar por matéria", "Física");
       expect(screen.getByText("Prova de Física")).toBeInTheDocument();
       expect(screen.queryByText("Exercício de Português")).not.toBeInTheDocument();
     });
 
-    it("filters by tipo", () => {
+    it("filters by tipo", async () => {
       renderPage();
-      fireEvent.change(screen.getByLabelText("Filtrar por tipo"), { target: { value: "prova" } });
+      await pick("Filtrar por tipo", "Prova");
       expect(screen.getByText("Prova de Física")).toBeInTheDocument();
       expect(screen.queryByText("Exercício de Português")).not.toBeInTheDocument();
     });
@@ -315,27 +318,25 @@ describe("AdaptacoesPage", () => {
       expect(within(card).getByText("Física")).toBeInTheDocument();
     });
 
-    it("resets the tipo filter back to all", () => {
+    it("resets the tipo filter back to all", async () => {
       renderPage();
-      const select = screen.getByLabelText("Filtrar por tipo");
-      fireEvent.change(select, { target: { value: "prova" } });
-      fireEvent.change(select, { target: { value: "" } });
+      await pick("Filtrar por tipo", "Prova");
+      await pick("Filtrar por tipo", "Todos os tipos");
       expect(screen.getByText("Exercício de Português")).toBeInTheDocument();
     });
 
-    it("offers to clear the filters only once one is on", () => {
+    it("offers to clear the filters only once one is on", async () => {
       renderPage();
       expect(screen.queryByRole("button", { name: /Limpar filtros/i })).not.toBeInTheDocument();
-      fireEvent.change(screen.getByLabelText("Filtrar por tipo"), { target: { value: "prova" } });
+      await pick("Filtrar por tipo", "Prova");
       fireEvent.click(screen.getByRole("button", { name: /Limpar filtros/i }));
       expect(screen.getByText("Exercício de Português")).toBeInTheDocument();
     });
 
-    it("resets the matéria filter back to all", () => {
+    it("resets the matéria filter back to all", async () => {
       renderPage();
-      const select = screen.getByLabelText("Filtrar por matéria");
-      fireEvent.change(select, { target: { value: "Física" } });
-      fireEvent.change(select, { target: { value: "" } });
+      await pick("Filtrar por matéria", "Física");
+      await pick("Filtrar por matéria", "Todas as matérias");
       expect(screen.getByText("Exercício de Português")).toBeInTheDocument();
     });
   });

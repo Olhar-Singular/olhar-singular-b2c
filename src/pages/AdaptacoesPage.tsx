@@ -6,6 +6,13 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
   AlertDialog,
   AlertDialogAction,
   AlertDialogCancel,
@@ -30,6 +37,15 @@ import {
 import { SUBJECTS } from "@/lib/utils/constants";
 import { ACTIVITY_TYPES, activityTypeLabel } from "@/lib/domain/activityTypes";
 import { filterRows, groupByFolder } from "./adaptacoes/libraryView";
+
+/**
+ * Radix Select reserves the empty string for "nothing selected" and throws on
+ * an item that uses it. "Todas", "Todos" e "Sem pasta" são escolhas reais
+ * (mapeiam para null), então cada uma precisa da própria sentinela.
+ */
+const ALL_SUBJECTS = "__todas__";
+const ALL_TYPES = "__todos__";
+const NO_FOLDER = "__sem_pasta__";
 
 function formatDate(iso: string): string {
   return new Date(iso).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric" });
@@ -126,24 +142,32 @@ export default function AdaptacoesPage() {
       {/* Matéria e tipo são facetas do que a adaptação É; a pasta é onde ela foi
           guardada. Perguntas diferentes, por isso controles separados. */}
       <div className="flex flex-wrap items-center gap-2">
-        <select
-          aria-label="Filtrar por matéria"
-          className="rounded-md border border-input bg-background px-2 py-1.5 text-sm"
-          value={subject ?? ""}
-          onChange={(e) => setSubject(e.target.value || null)}
+        <Select
+          value={subject ?? ALL_SUBJECTS}
+          onValueChange={(v) => setSubject(v === ALL_SUBJECTS ? null : v)}
         >
-          <option value="">Todas as matérias</option>
-          {SUBJECTS.map((s) => <option key={s} value={s}>{s}</option>)}
-        </select>
-        <select
-          aria-label="Filtrar por tipo"
-          className="rounded-md border border-input bg-background px-2 py-1.5 text-sm"
-          value={activityType ?? ""}
-          onChange={(e) => setActivityType(e.target.value || null)}
+          <SelectTrigger aria-label="Filtrar por matéria" className="h-9 w-auto gap-1 text-sm">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value={ALL_SUBJECTS}>Todas as matérias</SelectItem>
+            {SUBJECTS.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+          </SelectContent>
+        </Select>
+        <Select
+          value={activityType ?? ALL_TYPES}
+          onValueChange={(v) => setActivityType(v === ALL_TYPES ? null : v)}
         >
-          <option value="">Todos os tipos</option>
-          {ACTIVITY_TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
-        </select>
+          <SelectTrigger aria-label="Filtrar por tipo" className="h-9 w-auto gap-1 text-sm">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value={ALL_TYPES}>Todos os tipos</SelectItem>
+            {ACTIVITY_TYPES.map((t) => (
+              <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
         {(subject || activityType) && (
           <Button
             variant="ghost"
@@ -238,19 +262,28 @@ export default function AdaptacoesPage() {
                           </div>
                         </div>
                         <div className="flex items-center gap-2 shrink-0">
-                          <select
-                            aria-label={`Mover ${a.title || "adaptação"} para outra pasta`}
-                            className="max-w-[9rem] rounded-md border border-input bg-background px-2 py-1 text-xs"
-                            value={a.folder_id ?? ""}
-                            onChange={(e) =>
-                              move.mutateAsync({ adaptationId: a.id, folderId: e.target.value || null })
+                          <Select
+                            value={a.folder_id ?? NO_FOLDER}
+                            onValueChange={(v) =>
+                              move.mutateAsync({
+                                adaptationId: a.id,
+                                folderId: v === NO_FOLDER ? null : v,
+                              })
                             }
                           >
-                            <option value="">Sem pasta</option>
-                            {folders.map((f) => (
-                              <option key={f.id} value={f.id}>{f.name}</option>
-                            ))}
-                          </select>
+                            <SelectTrigger
+                              aria-label={`Mover ${a.title || "adaptação"} para outra pasta`}
+                              className="h-9 w-[9rem] gap-1 text-xs"
+                            >
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value={NO_FOLDER}>Sem pasta</SelectItem>
+                              {folders.map((f) => (
+                                <SelectItem key={f.id} value={f.id}>{f.name}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
                           <Button
                             variant="outline"
                             size="sm"
