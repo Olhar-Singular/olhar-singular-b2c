@@ -1,11 +1,14 @@
+import { useState } from "react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { Coins, TrendingUp, TrendingDown, CreditCard, QrCode } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import PixPaymentDialog from "@/components/credits/PixPaymentDialog";
 import { useAuth } from "@/hooks/useAuth";
-import { useTransactionHistory, useCreateStripeCheckout, useCreateCheckout } from "@/hooks/useCredits";
+import { useTransactionHistory, useCreateStripeCheckout, useCreatePixPayment } from "@/hooks/useCredits";
+import type { PixPayment } from "@/hooks/useCredits";
 
 const PACKAGES = [
   { credits: 30, amountBrl: 9.9, label: "Básico" },
@@ -36,8 +39,19 @@ export default function CreditsPage() {
   const { profile } = useAuth();
   const { data: transactions = [], isLoading } = useTransactionHistory();
   const stripeCheckout = useCreateStripeCheckout();
-  const pixCheckout = useCreateCheckout();
-  const buying = stripeCheckout.isPending || pixCheckout.isPending;
+  const pixPayment = useCreatePixPayment();
+  const buying = stripeCheckout.isPending || pixPayment.isPending;
+  const [pix, setPix] = useState<PixPayment | null>(null);
+
+  // Checkout Transparente: the QR code is rendered here, so a failed create must
+  // leave the dialog closed instead of opening it empty (the hook already toasts).
+  async function startPix(credits: number, amountBrl: number) {
+    try {
+      setPix(await pixPayment.mutateAsync({ credits, amountBrl }));
+    } catch {
+      setPix(null);
+    }
+  }
 
   return (
     <div className="mx-auto max-w-2xl px-4 py-8 space-y-8">
@@ -105,12 +119,7 @@ export default function CreditsPage() {
                     className="w-full gap-1.5"
                     variant="ghost"
                     disabled={buying}
-                    onClick={() =>
-                      pixCheckout.mutateAsync({
-                        credits: pkg.credits,
-                        amountBrl: pkg.amountBrl,
-                      })
-                    }
+                    onClick={() => startPix(pkg.credits, pkg.amountBrl)}
                   >
                     <QrCode className="w-3.5 h-3.5" />
                     Pix
@@ -154,12 +163,7 @@ export default function CreditsPage() {
                     className="w-full gap-1.5"
                     variant="ghost"
                     disabled={buying}
-                    onClick={() =>
-                      pixCheckout.mutateAsync({
-                        credits: TEST_PACKAGE.credits,
-                        amountBrl: TEST_PACKAGE.amountBrl,
-                      })
-                    }
+                    onClick={() => startPix(TEST_PACKAGE.credits, TEST_PACKAGE.amountBrl)}
                   >
                     <QrCode className="w-3.5 h-3.5" />
                     Pix
@@ -173,6 +177,10 @@ export default function CreditsPage() {
           Cartão via Stripe, Pix via Mercado Pago. Créditos nunca expiram.
         </p>
       </section>
+
+      {/* The dialog is controlled and has no trigger, so every onOpenChange it
+          fires is a close gesture (Esc, overlay, X). */}
+      <PixPaymentDialog payment={pix} onOpenChange={() => setPix(null)} />
 
       {/* Transaction history */}
       <section className="space-y-4">

@@ -26,7 +26,10 @@ supabase/functions/
 │   ├── admin{Dashboard,GrantCredits,UserStatus}.ts  # core das functions admin
 │   ├── adapt{ActivityCore,ationPrompt}.ts  # core do adapt-activity
 │   ├── stripeEvents.ts  # parsing de webhooks Stripe (grant + falha async do Pix)
-│   ├── stripeCheckoutParams.ts # payload do Checkout (cartão | Pix)
+│   ├── stripeCheckoutParams.ts # payload do Checkout Stripe (cartão)
+│   ├── mpPixPayment.ts  # body do POST /v1/payments (Pix) + extração do QR — Checkout Transparente
+│   ├── mpEvents.ts      # parsing do webhook Mercado Pago (grant/reject por status do pagamento)
+│   ├── mpSignature.ts   # validateMpSignature() — HMAC do header x-signature
 │   └── sanitize.ts      # sanitize() — limpa strings antes de salvar
 └── <nome-da-function>/
     └── index.ts         # serve(async req => { ...glue... })

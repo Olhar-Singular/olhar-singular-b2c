@@ -2,7 +2,14 @@ import { renderHook, waitFor, act } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { createElement } from "react";
-import { useTransactionHistory, useCreateStripeCheckout, useCreateCheckout } from "./useCredits";
+import {
+  useTransactionHistory,
+  useCreateStripeCheckout,
+  useCreatePixPayment,
+  usePixPurchaseStatus,
+  pixPollInterval,
+  PIX_POLL_INTERVAL_MS,
+} from "./useCredits";
 import { supabase } from "@/integrations/supabase/client";
 import { MSG_NETWORK } from "@/lib/utils/errors";
 
@@ -190,8 +197,15 @@ describe("useCreateStripeCheckout", () => {
   });
 });
 
-describe("useCreateCheckout (Pix via Mercado Pago)", () => {
+describe("useCreatePixPayment (Pix inline, Checkout Transparente)", () => {
   const mockInvoke = supabase.functions.invoke as ReturnType<typeof vi.fn>;
+
+  const qrPayload = {
+    qrCode: "00020126580014br.gov.bcb.pix0136abc",
+    qrCodeBase64: "iVBORw0KGgo=",
+    purchaseId: "purchase-1",
+    ticketUrl: "https://mp.test/ticket/1",
+  };
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -199,35 +213,48 @@ describe("useCreateCheckout (Pix via Mercado Pago)", () => {
     (window as { location: unknown }).location = { href: "" };
   });
 
-  it("invokes create-checkout with credits and amountBrl (no method)", async () => {
-    mockInvoke.mockResolvedValue({ data: { url: "https://mp.test/pix" }, error: null });
+  it("invokes create-pix-payment with the package", async () => {
+    mockInvoke.mockResolvedValue({ data: qrPayload, error: null });
 
-    const { result } = renderHook(() => useCreateCheckout(), { wrapper });
+    const { result } = renderHook(() => useCreatePixPayment(), { wrapper });
     await act(async () => {
       await result.current.mutateAsync({ credits: 30, amountBrl: 9.9 });
     });
 
-    expect(mockInvoke).toHaveBeenCalledWith("create-checkout", {
+    expect(mockInvoke).toHaveBeenCalledWith("create-pix-payment", {
       body: { credits: 30, amountBrl: 9.9 },
     });
   });
 
-  it("redirects to the Mercado Pago url on success", async () => {
-    mockInvoke.mockResolvedValue({ data: { url: "https://mp.test/pix" }, error: null });
+  it("returns the QR payload for the page to render", async () => {
+    mockInvoke.mockResolvedValue({ data: qrPayload, error: null });
 
-    const { result } = renderHook(() => useCreateCheckout(), { wrapper });
+    const { result } = renderHook(() => useCreatePixPayment(), { wrapper });
+    let returned: unknown;
+    await act(async () => {
+      returned = await result.current.mutateAsync({ credits: 30, amountBrl: 9.9 });
+    });
+
+    expect(returned).toEqual(qrPayload);
+  });
+
+  // The whole point of Checkout Transparente: the buyer never leaves the app.
+  it("never navigates away from the app", async () => {
+    mockInvoke.mockResolvedValue({ data: qrPayload, error: null });
+
+    const { result } = renderHook(() => useCreatePixPayment(), { wrapper });
     await act(async () => {
       await result.current.mutateAsync({ credits: 30, amountBrl: 9.9 });
     });
 
-    expect(window.location.href).toBe("https://mp.test/pix");
+    expect(window.location.href).toBe("");
   });
 
   it("calls toast.error when invoke returns error", async () => {
     const { toast } = await import("sonner");
     mockInvoke.mockResolvedValue({ data: null, error: new Error("falha no servidor") });
 
-    const { result } = renderHook(() => useCreateCheckout(), { wrapper });
+    const { result } = renderHook(() => useCreatePixPayment(), { wrapper });
     await act(async () => {
       try { await result.current.mutateAsync({ credits: 30, amountBrl: 9.9 }); } catch { /* expected */ }
     });
@@ -239,11 +266,78 @@ describe("useCreateCheckout (Pix via Mercado Pago)", () => {
     const { toast } = await import("sonner");
     mockInvoke.mockRejectedValue(new TypeError("Failed to fetch"));
 
-    const { result } = renderHook(() => useCreateCheckout(), { wrapper });
+    const { result } = renderHook(() => useCreatePixPayment(), { wrapper });
     await act(async () => {
       try { await result.current.mutateAsync({ credits: 30, amountBrl: 9.9 }); } catch { /* expected */ }
     });
 
     expect(toast.error).toHaveBeenCalledWith(MSG_NETWORK);
+  });
+});
+
+describe("pixPollInterval", () => {
+  it("keeps polling every 3s while the payment is pending", () => {
+    expect(PIX_POLL_INTERVAL_MS).toBe(3000);
+    expect(pixPollInterval("pending")).toBe(PIX_POLL_INTERVAL_MS);
+  });
+
+  it("keeps polling when the purchase row has not been read yet", () => {
+    expect(pixPollInterval(undefined)).toBe(PIX_POLL_INTERVAL_MS);
+  });
+
+  it("stops polling once the payment is approved", () => {
+    expect(pixPollInterval("approved")).toBe(false);
+  });
+
+  it("stops polling once the payment terminally failed", () => {
+    expect(pixPollInterval("rejected")).toBe(false);
+    expect(pixPollInterval("cancelled")).toBe(false);
+  });
+});
+
+describe("usePixPurchaseStatus", () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  function chainReturning(result: { data: unknown; error: unknown }) {
+    return {
+      select: vi.fn().mockReturnThis(),
+      eq: vi.fn().mockReturnThis(),
+      maybeSingle: vi.fn().mockResolvedValue(result),
+    };
+  }
+
+  it("reads the status of the pending purchase", async () => {
+    const chain = chainReturning({ data: { status: "pending" }, error: null });
+    vi.mocked(supabase.from).mockReturnValue(chain as never);
+
+    const { result } = renderHook(() => usePixPurchaseStatus("purchase-1"), { wrapper });
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+
+    expect(supabase.from).toHaveBeenCalledWith("credit_purchases");
+    expect(chain.eq).toHaveBeenCalledWith("id", "purchase-1");
+    expect(result.current.data).toEqual({ status: "pending" });
+  });
+
+  it("reports the approval the webhook wrote", async () => {
+    const chain = chainReturning({ data: { status: "approved" }, error: null });
+    vi.mocked(supabase.from).mockReturnValue(chain as never);
+
+    const { result } = renderHook(() => usePixPurchaseStatus("purchase-1"), { wrapper });
+    await waitFor(() => expect(result.current.data?.status).toBe("approved"));
+  });
+
+  it("does not query while there is no purchase to watch", () => {
+    const { result } = renderHook(() => usePixPurchaseStatus(null), { wrapper });
+    expect(supabase.from).not.toHaveBeenCalled();
+    expect(result.current.fetchStatus).toBe("idle");
+  });
+
+  it("propagates a read error as failed query state", async () => {
+    const chain = chainReturning({ data: null, error: { message: "boom" } });
+    vi.mocked(supabase.from).mockReturnValue(chain as never);
+
+    const { result } = renderHook(() => usePixPurchaseStatus("purchase-1"), { wrapper });
+    await waitFor(() => expect(result.current.isError).toBe(true));
+    expect((result.current.error as { message: string }).message).toBe("boom");
   });
 });
