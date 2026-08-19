@@ -24,6 +24,7 @@ import {
 import { extractImageMarkers, stripFabricatedImages } from "../_shared/imageSourceGuard.ts";
 import { inspectAdaptationQuality } from "../_shared/adaptationQuality.ts";
 import { stripGapTokens } from "../_shared/gapTokenGuard.ts";
+import { stripQuestionNumbers } from "../_shared/questionNumberGuard.ts";
 import {
   buildSystemPrompt,
   buildUserPrompt,
@@ -279,8 +280,8 @@ serve(async (req) => {
 
         const interpreted = interpretAiResponse(responseContent);
         if (interpreted.ok) {
-          const adaptation = stripGapTokens(
-            stripFabricatedImages(interpreted.result, allowedImageSrcs),
+          const adaptation = stripQuestionNumbers(
+            stripGapTokens(stripFabricatedImages(interpreted.result, allowedImageSrcs)),
           );
 
           // OBSERVE ONLY — does not reask, does not fail the request. Schema
