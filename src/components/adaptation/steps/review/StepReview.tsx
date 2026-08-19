@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, ArrowRight, FileText, Info, RefreshCw } from "lucide-react";
+import { ArrowLeft, ArrowRight, FileText, Info, RefreshCw, Save } from "lucide-react";
 import { EditorContent, BubbleMenu } from "@tiptap/react";
 import { isTextSelection } from "@tiptap/core";
 import { useCanonicalEditor } from "@/components/adaptation/canonical-editor/useCanonicalEditor";
@@ -40,6 +40,19 @@ type Props = {
    * into a visible warning so a freeze can never look like "Salvo".
    */
   onCaptureFailure?: (reason: string | null) => void;
+  /**
+   * The adaptation's name, edited right on the sheet's chrome bar. Empty means
+   * "not named yet": the derived document heading shows as a placeholder but is
+   * never stored, so an untitled adaptation still falls back to the
+   * server-derived title instead of freezing a guess.
+   */
+  title?: string;
+  onTitleChange?: (title: string) => void;
+  /** Whether there is a persisted draft row to mark as saved. */
+  canSave?: boolean;
+  /** A save is in flight. */
+  saving?: boolean;
+  onSave?: () => void;
   /**
    * Only set for adaptações do "Adaptar direto do arquivo" — the raw file and
    * its rasterized pages, so the teacher can open "Ver prova original" to
@@ -91,6 +104,11 @@ export function StepReview({
   onNext,
   onPrev,
   onCaptureFailure,
+  title = "",
+  onTitleChange,
+  canSave = false,
+  saving = false,
+  onSave,
   originalExam = null,
 }: Props) {
   const [aboutOpen, setAboutOpen] = useState(false);
@@ -126,7 +144,15 @@ export function StepReview({
     <div className="space-y-4">
       {/* Barra superior (chrome) — plano §6.1. */}
       <div className="flex items-center justify-between gap-3 rounded-md border border-surface-chrome-line bg-surface-chrome px-4 py-2.5">
-        <h2 className="truncate text-base font-semibold text-surface-ink">{documentTitle(document)}</h2>
+        <input
+          type="text"
+          aria-label="Nome da adaptação"
+          value={title}
+          onChange={(e) => onTitleChange?.(e.target.value)}
+          placeholder={documentTitle(document)}
+          maxLength={120}
+          className="min-w-0 flex-1 truncate border-0 bg-transparent p-0 text-base font-semibold text-surface-ink outline-none placeholder:font-semibold placeholder:text-surface-ink-faint focus:ring-0"
+        />
         <div className="flex shrink-0 items-center gap-1">
           <Button
             size="sm"
@@ -199,9 +225,21 @@ export function StepReview({
         <Button variant="outline" onClick={onPrev} aria-label="Voltar">
           <ArrowLeft className="w-4 h-4 mr-2" /> Voltar
         </Button>
-        <Button onClick={onNext} aria-label="Avançar para exportação">
-          Exportar <ArrowRight className="w-4 h-4 ml-2" />
-        </Button>
+        <div className="flex items-center gap-2">
+          {/* Filing the adaptation used to be possible only on the Exportar
+              step, so anyone who finished editing and left never filed it. */}
+          <Button
+            variant="outline"
+            onClick={() => onSave?.()}
+            disabled={!canSave || saving}
+            aria-label="Salvar adaptação"
+          >
+            <Save className="w-4 h-4 mr-2" /> {saving ? "Salvando…" : "Salvar adaptação"}
+          </Button>
+          <Button onClick={onNext} aria-label="Avançar para exportação">
+            Exportar <ArrowRight className="w-4 h-4 ml-2" />
+          </Button>
+        </div>
       </div>
     </div>
   );

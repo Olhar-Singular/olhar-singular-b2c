@@ -95,7 +95,12 @@ function setup(over: Partial<React.ComponentProps<typeof StepReview>> = {}) {
 describe("StepReview", () => {
   it("renderiza a barra de chrome com o título do documento e a folha", () => {
     setup();
-    expect(screen.getByText("Prova Adaptada")).toBeInTheDocument();
+    // The derived heading is the name field's PLACEHOLDER now: it is what an
+    // unnamed adaptation shows, without being stored as a chosen name.
+    expect(screen.getByLabelText("Nome da adaptação")).toHaveAttribute(
+      "placeholder",
+      "Prova Adaptada",
+    );
     expect(screen.getByTestId("page-sheet")).toBeInTheDocument();
   });
 
@@ -132,7 +137,10 @@ describe("StepReview", () => {
         blocks: [{ id: id(1), type: "paragraph", content: [{ type: "text", text: "x" }] }],
       },
     });
-    expect(screen.getByText("Atividade adaptada")).toBeInTheDocument();
+    expect(screen.getByLabelText("Nome da adaptação")).toHaveAttribute(
+      "placeholder",
+      "Atividade adaptada",
+    );
   });
 
   it("usa fallback quando o heading não tem texto (só fórmula inline)", () => {
@@ -144,7 +152,10 @@ describe("StepReview", () => {
         ],
       },
     });
-    expect(screen.getByText("Atividade adaptada")).toBeInTheDocument();
+    expect(screen.getByLabelText("Nome da adaptação")).toHaveAttribute(
+      "placeholder",
+      "Atividade adaptada",
+    );
   });
 
   it("does not render the page sheet when editor is null", () => {
@@ -218,6 +229,71 @@ describe("StepReview", () => {
     expect(() =>
       fireEvent.click(screen.getByRole("button", { name: "Aumentar tamanho do texto" })),
     ).not.toThrow();
+  });
+
+  // The auto-derived title comes from the first line of the ORIGINAL activity,
+  // so saved adaptations were landing in the library named things like
+  // "1) QUESTÃO 1\nNa tirinha, o humor está n". Naming belongs where the
+  // teacher is already looking at the sheet.
+  describe("nome da adaptação", () => {
+    it("shows the given name in the editable field", () => {
+      setup({ title: "Prova de Geografia — 6º ano" });
+      expect(screen.getByLabelText("Nome da adaptação")).toHaveValue(
+        "Prova de Geografia — 6º ano",
+      );
+    });
+
+    it("falls back to the document heading as a placeholder, without storing it", () => {
+      setup({ title: "" });
+      const field = screen.getByLabelText("Nome da adaptação");
+      expect(field).toHaveValue("");
+      expect(field).toHaveAttribute("placeholder", "Prova Adaptada");
+    });
+
+    it("emits the typed name", () => {
+      const onTitleChange = vi.fn();
+      setup({ title: "", onTitleChange });
+      fireEvent.change(screen.getByLabelText("Nome da adaptação"), {
+        target: { value: "Recuperação de Geografia" },
+      });
+      expect(onTitleChange).toHaveBeenCalledWith("Recuperação de Geografia");
+    });
+
+    it("does not break when no handler is wired", () => {
+      setup({ title: "" });
+      expect(() =>
+        fireEvent.change(screen.getByLabelText("Nome da adaptação"), { target: { value: "x" } }),
+      ).not.toThrow();
+    });
+  });
+
+  // Saving lived only on the Exportar step, at the very end of the flow. A
+  // teacher who finished editing and left never filed the adaptation — which
+  // is why every row in the database sat at `draft`.
+  describe("salvar a adaptação", () => {
+    it("offers Salvar once there is a draft to save", () => {
+      const onSave = vi.fn();
+      setup({ canSave: true, onSave });
+      fireEvent.click(screen.getByRole("button", { name: /Salvar adaptação/i }));
+      expect(onSave).toHaveBeenCalled();
+    });
+
+    it("disables Salvar while there is no draft row yet", () => {
+      setup({ canSave: false });
+      expect(screen.getByRole("button", { name: /Salvar adaptação/i })).toBeDisabled();
+    });
+
+    it("disables Salvar while a save is in flight", () => {
+      setup({ canSave: true, saving: true });
+      expect(screen.getByRole("button", { name: /Salvar adaptação/i })).toBeDisabled();
+    });
+
+    it("does not break when no save handler is wired", () => {
+      setup({ canSave: true });
+      expect(() =>
+        fireEvent.click(screen.getByRole("button", { name: /Salvar adaptação/i })),
+      ).not.toThrow();
+    });
   });
 
   describe("originalExam (Adaptar direto do arquivo)", () => {

@@ -220,6 +220,10 @@ vi.mock("./steps/review/StepReview", () => ({
     onPrev,
     onCaptureFailure,
     originalExam,
+    title,
+    onTitleChange,
+    canSave,
+    onSave,
   }: {
     document: CanonicalDocument;
     pageStyle?: unknown;
@@ -230,10 +234,20 @@ vi.mock("./steps/review/StepReview", () => ({
     onPrev: () => void;
     onCaptureFailure?: (reason: string | null) => void;
     originalExam?: { file: File; pageImages: string[]; userId: string | null } | null;
+    title?: string;
+    onTitleChange?: (t: string) => void;
+    canSave?: boolean;
+    onSave?: () => void;
   }) => (
     <div>
       <pre data-testid="review-doc">{JSON.stringify(document)}</pre>
       <pre data-testid="review-pagestyle">{JSON.stringify(pageStyle ?? null)}</pre>
+      <pre data-testid="review-title">{title ?? ""}</pre>
+      <pre data-testid="review-can-save">{String(!!canSave)}</pre>
+      <button data-testid="review-rename" onClick={() => onTitleChange?.("Prova de Geografia")}>
+        renomear
+      </button>
+      <button data-testid="review-save" onClick={() => onSave?.()}>salvar na revisar</button>
       <pre data-testid="review-original-exam">
         {originalExam ? JSON.stringify({ fileName: originalExam.file.name, userId: originalExam.userId }) : "null"}
       </pre>
@@ -1127,6 +1141,49 @@ describe("CanonicalAdaptationWizard — navigation guard", () => {
    * persisted. The status line must SAY so instead of going on showing "Salvo",
    * which is what let people type for minutes into a sheet that was frozen.
    */
+  describe("nome e salvar na Revisar", () => {
+    it("carries the stored name into the Revisar chrome", () => {
+      renderWithProviders(<CanonicalAdaptationWizard />);
+      advanceToReview();
+      // Nothing named yet: the field is empty and the sheet's heading shows as
+      // a placeholder instead, so an unnamed adaptation still falls back to
+      // the server-derived title.
+      expect(screen.getByTestId("review-title")).toHaveTextContent("");
+    });
+
+    it("stores the typed name on the document header", () => {
+      renderWithProviders(<CanonicalAdaptationWizard />);
+      advanceToReview();
+      fireEvent.click(screen.getByTestId("review-rename"));
+      expect(screen.getByTestId("review-title")).toHaveTextContent("Prova de Geografia");
+    });
+
+    it("marks the adaptation ready from the Revisar step", async () => {
+      renderWithProviders(<CanonicalAdaptationWizard />);
+      advanceToReview();
+      expect(screen.getByTestId("review-can-save")).toHaveTextContent("true");
+      fireEvent.click(screen.getByTestId("review-save"));
+      await waitFor(() => expect(mockMarkReady).toHaveBeenCalled());
+    });
+
+    /**
+     * `isSaved` only ever went true. After the first save the exit guard
+     * disarmed for good, so editing on and leaving looked identical to leaving
+     * with everything filed.
+     */
+    it("re-arms the unsaved warning when the teacher keeps editing", async () => {
+      renderWithProviders(<CanonicalAdaptationWizard />);
+      advanceToReview();
+      fireEvent.click(screen.getByTestId("review-save"));
+      await waitFor(() => expect(mockMarkReady).toHaveBeenCalled());
+      // Filed: the guard stands down.
+      await waitFor(() => expect(mockNavGuard).toHaveBeenLastCalledWith(false));
+
+      fireEvent.click(screen.getByTestId("edit-content"));
+      expect(mockNavGuard).toHaveBeenLastCalledWith(true);
+    });
+  });
+
   describe("autosave frozen warning", () => {
     it("replaces the save status with a warning while capture is broken", () => {
       renderWithProviders(<CanonicalAdaptationWizard />);

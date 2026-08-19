@@ -240,15 +240,27 @@ export default function CanonicalAdaptationWizard({ editMode }: Props = {}) {
     setDraftUpdatedAt(row.updatedAt);
   }, []);
 
+  // Every edit re-arms "unsaved". `isSaved` only ever went true before, so
+  // after the first save the wizard could no longer tell that the teacher had
+  // kept editing: the exit guard stopped warning, and there was no signal that
+  // the filed version had fallen behind the sheet on screen.
   const handleDocumentChange = useCallback((document: CanonicalDocument) => {
+    setIsSaved(false);
     setData((prev) => setDocument(prev, document));
   }, []);
 
   const handleHeaderChange = useCallback((header: DocumentHeader) => {
+    setIsSaved(false);
     setData((prev) => setHeader(prev, header));
   }, []);
 
+  const handleTitleChange = useCallback((title: string) => {
+    setIsSaved(false);
+    setData((prev) => setHeader(prev, { ...prev.result?.header, title }));
+  }, []);
+
   const handlePageStyleChange = useCallback((pageStyle: PageStyle) => {
+    setIsSaved(false);
     setData((prev) => setPageStyle(prev, pageStyle));
   }, []);
 
@@ -372,6 +384,11 @@ export default function CanonicalAdaptationWizard({ editMode }: Props = {}) {
             onNext={onNext}
             onPrev={onPrev}
             onCaptureFailure={setCaptureFailure}
+            title={data.result.header?.title ?? ""}
+            onTitleChange={handleTitleChange}
+            canSave={!!draftId}
+            saving={markReady.isPending}
+            onSave={handleSave}
             originalExam={
               data.uploadedExam
                 ? { file: data.uploadedExam.file, pageImages: data.uploadedExam.pageImages, userId: user?.id ?? null }
