@@ -13,6 +13,8 @@
 
 import { Plus, Trash2, ArrowUp, ArrowDown } from "lucide-react";
 import { Input } from "@/components/ui/input";
+import { FOLHA_BUTTON } from "@/components/adaptation/canonical-editor/folhaChrome";
+import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import type { QuestionAnswer } from "@/lib/adaptation/canonical/schema";
@@ -90,7 +92,7 @@ export function AnswerEditor({ answer, onChange, disabled = false }: AnswerEdito
               </IconButton>
             </div>
           ))}
-          <Button type="button" variant="outline" size="sm" className="self-start gap-1" onClick={() => onChange(addAlternative(answer))} disabled={disabled}>
+          <Button type="button" variant="outline" size="sm" className={cn("self-start gap-1", FOLHA_BUTTON)} onClick={() => onChange(addAlternative(answer))} disabled={disabled}>
             <Plus className="w-3.5 h-3.5" /> Alternativa
           </Button>
         </div>
@@ -158,7 +160,7 @@ export function AnswerEditor({ answer, onChange, disabled = false }: AnswerEdito
                 placeholder="Coluna A"
                 ariaLabel="Coluna A"
               />
-              <span className="text-muted-foreground">↔</span>
+              <span className="text-surface-ink-faint">↔</span>
               <RichTextField
                 value={pair.right}
                 disabled={disabled}
@@ -171,7 +173,7 @@ export function AnswerEditor({ answer, onChange, disabled = false }: AnswerEdito
               </IconButton>
             </div>
           ))}
-          <Button type="button" variant="outline" size="sm" className="self-start gap-1" onClick={() => onChange(addMatchingPair(answer))} disabled={disabled}>
+          <Button type="button" variant="outline" size="sm" className={cn("self-start gap-1", FOLHA_BUTTON)} onClick={() => onChange(addMatchingPair(answer))} disabled={disabled}>
             <Plus className="w-3.5 h-3.5" /> Par
           </Button>
         </div>
@@ -182,7 +184,7 @@ export function AnswerEditor({ answer, onChange, disabled = false }: AnswerEdito
         <div className="flex flex-col gap-2" data-testid="answer-ordering">
           {answer.items.map((item, index) => (
             <div key={item.id} className="flex items-center gap-2 min-w-0">
-              <span className="text-xs text-muted-foreground w-5">{index + 1}.</span>
+              <span className="text-xs text-surface-ink-faint w-5">{index + 1}.</span>
               <RichTextField
                 value={item.content}
                 disabled={disabled}
@@ -206,20 +208,21 @@ export function AnswerEditor({ answer, onChange, disabled = false }: AnswerEdito
         <div className="flex flex-col gap-2" data-testid="answer-fillBlank">
           {answer.gaps.map((gap, index) => (
             <div key={gap.id} className="flex items-center gap-2">
-              <span className="text-xs text-muted-foreground w-12">Lacuna {index + 1}</span>
+              <span className="text-xs text-surface-ink-faint w-12">Lacuna {index + 1}</span>
               {/* The gap answer is the answer key (plain text, not formattable). */}
               <Input
                 value={gap.answer}
                 disabled={disabled}
                 onChange={(e) => onChange(setGapAnswer(answer, gap.id, e.target.value))}
                 placeholder="Resposta"
+                className="border-surface-line-2 bg-surface-paper text-surface-ink"
               />
               <IconButton onClick={() => onChange(removeGap(answer, gap.id))} title="Remover lacuna" disabled={disabled}>
                 <Trash2 className="w-3.5 h-3.5" />
               </IconButton>
             </div>
           ))}
-          <Button type="button" variant="outline" size="sm" className="self-start gap-1" onClick={() => onChange(addGap(answer))} disabled={disabled}>
+          <Button type="button" variant="outline" size="sm" className={cn("self-start gap-1", FOLHA_BUTTON)} onClick={() => onChange(addGap(answer))} disabled={disabled}>
             <Plus className="w-3.5 h-3.5" /> Lacuna
           </Button>
         </div>
@@ -250,11 +253,11 @@ export function AnswerEditor({ answer, onChange, disabled = false }: AnswerEdito
     default:
       return (
         <div className="flex items-center gap-2" data-testid="answer-open">
-          <span className="text-xs text-muted-foreground">Linhas de resposta:</span>
+          <span className="text-xs text-surface-ink-faint">Linhas de resposta:</span>
           <Input
             type="number"
             min={0}
-            className="w-20"
+            className="w-20 border-surface-line-2 bg-surface-paper text-surface-ink"
             value={answer.answerLines ?? 0}
             disabled={disabled}
             onChange={(e) => onChange(setAnswerLines(answer, Number(e.target.value)))}

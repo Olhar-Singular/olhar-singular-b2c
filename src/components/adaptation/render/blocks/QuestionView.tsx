@@ -51,7 +51,11 @@ export function QuestionView({
 
   return (
     <div data-testid="question" className="space-y-2" style={nodeStyleToCss(block.style)}>
-      <div className="flex items-baseline gap-2">
+      {/* items-start, not items-baseline: the baseline of a replaced element
+          like <img> is its BOTTOM edge, so a question opening with a figure
+          printed its number beside the image's foot. PdfQuestion already
+          uses flex-start — this keeps screen and PDF saying the same thing. */}
+      <div className="flex items-start gap-2">
         <span data-testid="question-number" className="shrink-0 font-bold text-foreground">
           {displayNumber}.
         </span>

@@ -189,10 +189,16 @@ export function PageSheet({ toolbar, pageStyle, paginated = false, children }: P
     <div
       ref={sheetRef}
       data-testid="page-sheet"
+      /* [color-scheme:light] — a folha é papel e continua clara sob qualquer
+         tema do app. Os controles nativos (o radio de "alternativa correta",
+         checkboxes) são pintados pelo NAVEGADOR a partir de color-scheme, não
+         das classes do Tailwind, e no tema escuro saíam como círculos escuros
+         sobre papel branco. Fixar aqui cobre todo controle nativo da folha,
+         inclusive os que ainda não existem. */
       className={
         paginated
-          ? "w-[794px] origin-top-left bg-surface-paper text-surface-ink rounded-[3px]"
-          : "mx-auto w-[794px] max-w-full bg-surface-paper text-surface-ink rounded-[3px]"
+          ? "w-[794px] origin-top-left bg-surface-paper text-surface-ink rounded-[3px] [color-scheme:light] [accent-color:hsl(var(--sf-accent))]"
+          : "mx-auto w-[794px] max-w-full bg-surface-paper text-surface-ink rounded-[3px] [color-scheme:light] [accent-color:hsl(var(--sf-accent))]"
       }
       style={{
         ...pageTokensToCss(resolvePageStyle(pageStyle)),

@@ -122,7 +122,7 @@ export function QuestionCard({
           >
             {currentLabel}
           </SelectTrigger>
-          <SelectContent>
+          <SelectContent className="border-surface-chrome-line bg-surface-chrome text-surface-ink">
             {QUESTION_KINDS.map(({ kind, label }) => (
               <SelectItem key={kind} value={kind}>
                 {label}

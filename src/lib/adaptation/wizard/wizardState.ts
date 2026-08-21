@@ -34,9 +34,34 @@ export type SelectedQuestion = {
   difficulty: string | null;
 };
 
+/**
+ * A file attached via "Adaptar direto do arquivo", parsed locally (no AI yet)
+ * — text/images pulled out client-side by pdf-utils/docx-utils. AI extraction
+ * (extract-exam-for-adaptation) only runs at the "Gerar" step, bundled with
+ * the paid adaptation call, so nothing calls the AI provider until the user
+ * actually commits to generating.
+ */
+export type UploadedExam = {
+  fileName: string;
+  fileType: "pdf" | "docx";
+  text: string;
+  pageImages: string[];
+  /**
+   * The raw file, kept around (in memory only — never persisted/mirrored, see
+   * useAdaptationDraft/draftMirror, which only ever touch `result`) so Revisar
+   * can offer "ver prova original" and "recortar do original" against the
+   * real source instead of just the already-extracted page images.
+   */
+  file: File;
+};
+
 export type WizardData = {
   activityType: string | null;
   activityText: string;
+  /** Which UI the "Atividade" step shows: pick/paste questions, or upload a whole exam file. */
+  activityInputMode: "bank" | "upload";
+  /** Set by the upload path instead of activityText — extraction is deferred to "Gerar". */
+  uploadedExam?: UploadedExam | null;
   selectedQuestions: SelectedQuestion[];
   barriers: BarrierItem[];
   barrierProfileId: string | null;
@@ -48,6 +73,8 @@ export type WizardData = {
 export const INITIAL_WIZARD_DATA: WizardData = {
   activityType: null,
   activityText: "",
+  activityInputMode: "bank",
+  uploadedExam: null,
   selectedQuestions: [],
   barriers: [],
   barrierProfileId: null,

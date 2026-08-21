@@ -21,6 +21,8 @@
 import { useState } from "react";
 import { NodeViewWrapper, type NodeViewProps } from "@tiptap/react";
 import { Input } from "@/components/ui/input";
+import { FOLHA_BUTTON } from "../folhaChrome";
+import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { inlineLatexToHtml } from "./nodeViewUtils";
 import { useLatexDraft } from "./useLatexDraft";
@@ -52,7 +54,7 @@ export function InlineMathNodeView({ node, updateAttributes, editor }: NodeViewP
             placeholder="Texto alternativo"
             aria-label="Texto alternativo da fórmula inline"
           />
-          <Button type="button" size="sm" variant="outline" className="h-6 px-1.5 text-xs" onClick={() => setEditing(false)}>
+          <Button type="button" size="sm" variant="outline" className={cn("h-6 px-1.5 text-xs", FOLHA_BUTTON)} onClick={() => setEditing(false)}>
             Pronto
           </Button>
         </span>

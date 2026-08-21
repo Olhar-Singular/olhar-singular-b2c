@@ -160,7 +160,17 @@ export function RichTextField({
   if (!editor) return null;
 
   return (
-    <div className={cn("flex-1 min-w-0", !plain && "rounded-md border border-input bg-background", disabled && "opacity-60")}>
+    <div
+      className={cn(
+        "flex-1 min-w-0",
+        // Non-plain (card) variant is chrome INSIDE the folha (§6.3 QuestionCard
+        // et al.) — always paper-styled regardless of the app theme, same as the
+        // rest of the sheet. Was `border-input bg-background`, which picks up the
+        // dark theme and rendered as an unreadable near-black box on the white card.
+        !plain && "rounded-md border border-surface-line-2 bg-surface-paper text-surface-ink",
+        disabled && "opacity-60",
+      )}
+    >
       {!disabled && !readOnly && !noBubble && (
         <BubbleMenu editor={editor} tippyOptions={{ duration: 100, appendTo: "parent" }}>
           <SelectionBubble editor={editor} />

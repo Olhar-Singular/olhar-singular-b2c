@@ -55,7 +55,7 @@ function Stepper({
           type="button"
           size="icon"
           variant="outline"
-          className="h-7 w-7"
+          className="h-7 w-7 border-surface-line-2 bg-surface-paper text-surface-ink hover:bg-surface-mesa"
           aria-label={`Diminuir ${label.toLowerCase()}`}
           onClick={onDecrease}
         >
@@ -68,7 +68,7 @@ function Stepper({
           type="button"
           size="icon"
           variant="outline"
-          className="h-7 w-7"
+          className="h-7 w-7 border-surface-line-2 bg-surface-paper text-surface-ink hover:bg-surface-mesa"
           aria-label={`Aumentar ${label.toLowerCase()}`}
           onClick={onIncrease}
         >
@@ -161,7 +161,10 @@ export function AppearancePopover({ value, onChange }: Props) {
           <span className="hidden sm:ml-1 sm:inline">Formato</span>
         </Button>
       </PopoverTrigger>
-      <PopoverContent align="end" className="w-72">
+      <PopoverContent
+        align="end"
+        className="w-72 border-surface-chrome-line bg-surface-chrome text-surface-ink"
+      >
         <AppearanceControls value={value} onChange={onChange} />
       </PopoverContent>
     </Popover>

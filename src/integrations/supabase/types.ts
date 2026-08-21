@@ -7,6 +7,11 @@ export type Json =
   | Json[]
 
 export type Database = {
+  // Allows to automatically instantiate createClient with right options
+  // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
+  __InternalSupabase: {
+    PostgrestVersion: "14.5"
+  }
   graphql_public: {
     Tables: {
       [_ in never]: never
@@ -34,6 +39,30 @@ export type Database = {
   }
   public: {
     Tables: {
+      adaptation_folders: {
+        Row: {
+          created_at: string
+          id: string
+          name: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          name: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          name?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       adaptations: {
         Row: {
           activity_type: string | null
@@ -42,11 +71,13 @@ export type Database = {
           barriers_used: Json
           created_at: string
           credits_spent: number
+          folder_id: string | null
           id: string
           observation_notes: string | null
           original_activity: string
           request_id: string | null
           status: string
+          subject: string | null
           title: string
           updated_at: string
           user_id: string
@@ -58,11 +89,13 @@ export type Database = {
           barriers_used?: Json
           created_at?: string
           credits_spent?: number
+          folder_id?: string | null
           id?: string
           observation_notes?: string | null
           original_activity?: string
           request_id?: string | null
           status?: string
+          subject?: string | null
           title?: string
           updated_at?: string
           user_id: string
@@ -74,11 +107,13 @@ export type Database = {
           barriers_used?: Json
           created_at?: string
           credits_spent?: number
+          folder_id?: string | null
           id?: string
           observation_notes?: string | null
           original_activity?: string
           request_id?: string | null
           status?: string
+          subject?: string | null
           title?: string
           updated_at?: string
           user_id?: string
@@ -89,6 +124,13 @@ export type Database = {
             columns: ["barrier_profile_id"]
             isOneToOne: false
             referencedRelation: "barrier_profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "adaptations_folder_id_fkey"
+            columns: ["folder_id"]
+            isOneToOne: false
+            referencedRelation: "adaptation_folders"
             referencedColumns: ["id"]
           },
         ]
@@ -671,4 +713,3 @@ export const Constants = {
     Enums: {},
   },
 } as const
-

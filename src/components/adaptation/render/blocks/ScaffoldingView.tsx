@@ -21,7 +21,7 @@ export function ScaffoldingView({ block }: { block: ScaffoldingBlock }) {
   return (
     <div
       data-testid="scaffolding"
-      className="rounded-md border border-border bg-muted/40"
+      className="rounded-md border border-surface-chrome-line bg-surface-mesa/40 text-surface-ink"
       style={{
         padding: `${SCAFFOLDING_PADDING_PX}px`,
         marginTop: `${SCAFFOLDING_MARGIN_Y_PX}px`,

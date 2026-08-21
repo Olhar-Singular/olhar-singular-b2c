@@ -187,8 +187,10 @@ function installFakeImage(behaviour: "load" | "error", naturalWidth = 100, natur
 describe("autoCropFromBbox", () => {
   let originalImage: typeof globalThis.Image;
   let originalCreateElement: typeof document.createElement;
+  let drawImageSpy: ReturnType<typeof vi.fn>;
 
   beforeEach(() => {
+    drawImageSpy = vi.fn();
     originalImage = (globalThis as { Image: typeof globalThis.Image }).Image;
     originalCreateElement = document.createElement.bind(document);
     document.createElement = ((tag: string) => {
@@ -199,7 +201,7 @@ describe("autoCropFromBbox", () => {
           getContext: () => ({
             fillStyle: "",
             fillRect: vi.fn(),
-            drawImage: vi.fn(),
+            drawImage: drawImageSpy,
           }),
           toDataURL: () => "data:image/png;base64,FAKE",
         } as unknown as HTMLCanvasElement;
@@ -229,6 +231,31 @@ describe("autoCropFromBbox", () => {
     await expect(
       autoCropFromBbox("http://example/img.png", { x: 0, y: 0, width: 1, height: 1 }),
     ).rejects.toThrow(/Failed to load/);
+  });
+
+  it("pads the AI-estimated bbox by 6% by default — LLM bounding boxes are imprecise enough that 2% padding routinely cropped the figure itself", async () => {
+    // 100x200 source image, bbox {x:.1,y:.1,w:.5,h:.5} → with 6% padding:
+    // sx = (.1-.06)*100 = 4, sy = (.1-.06)*200 = 8
+    // sw = (.5+.12)*100 = 62, sh = (.5+.12)*200 = 124
+    installFakeImage("load", 100, 200);
+    await autoCropFromBbox("http://example/img.png", { x: 0.1, y: 0.1, width: 0.5, height: 0.5 });
+    const [, sx, sy, sw, sh] = drawImageSpy.mock.calls[0];
+    expect(sx).toBeCloseTo(4);
+    expect(sy).toBeCloseTo(8);
+    expect(sw).toBeCloseTo(62);
+    expect(sh).toBeCloseTo(124);
+  });
+
+  it("clamps the padded crop to the image bounds instead of reading past the edge", async () => {
+    // bbox flush against the top-left corner: padding would push x/y negative,
+    // clamped to 0 — and the crop must not claim more width/height than exists.
+    installFakeImage("load", 100, 200);
+    await autoCropFromBbox("http://example/img.png", { x: 0, y: 0, width: 0.1, height: 0.1 });
+    const [, sx, sy, sw, sh] = drawImageSpy.mock.calls[0];
+    expect(sx).toBe(0);
+    expect(sy).toBe(0);
+    expect(sw).toBeLessThanOrEqual(100);
+    expect(sh).toBeLessThanOrEqual(200);
   });
 });
 

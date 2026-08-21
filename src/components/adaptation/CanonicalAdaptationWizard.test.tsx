@@ -22,10 +22,17 @@ vi.mock("react-router-dom", async (orig) => ({
   useNavigate: () => mockNavigate,
 }));
 
-vi.mock("@/hooks/useAuth", () => ({ useAuth: () => ({ user: { id: "u1" } }) }));
+vi.mock("@/hooks/useAuth", () => ({ useAuth: vi.fn(() => ({ user: { id: "u1" } })) }));
+import { useAuth } from "@/hooks/useAuth";
 
 vi.mock("@/lib/adaptation/persistence/adaptationsRepo");
 vi.mock("@/lib/adaptation/persistence/draftMirror");
+
+const mockCreateFolder = vi.fn();
+vi.mock("@/hooks/useFolders", () => ({
+  useFolders: () => ({ data: [{ id: "f1", name: "6º ano B" }] }),
+  useCreateFolder: () => ({ mutateAsync: mockCreateFolder, isPending: false }),
+}));
 
 const mockDraftStatus = { value: "idle" as string };
 const mockCurrentUpdatedAt = { value: "2026-01-01T00:00:00Z" as string | null };
@@ -102,8 +109,46 @@ vi.mock("./steps/activity-type/StepActivityType", () => ({
 }));
 
 vi.mock("./steps/activity-input/StepActivityInput", () => ({
-  StepActivityInput: ({ onNext }: { onNext: () => void }) => (
-    <button data-testid="input-next" onClick={onNext}>input</button>
+  StepActivityInput: ({
+    updateData,
+    onNext,
+  }: {
+    updateData: (p: { activityInputMode: "upload" }) => void;
+    onNext: () => void;
+  }) => (
+    <>
+      <button data-testid="input-next" onClick={onNext}>input</button>
+      <button data-testid="switch-to-upload" onClick={() => updateData({ activityInputMode: "upload" })}>
+        switch to upload
+      </button>
+    </>
+  ),
+}));
+
+vi.mock("./steps/upload-exam/StepUploadExam", () => ({
+  StepUploadExam: ({
+    updateData,
+    onNext,
+    onLoadingChange,
+  }: {
+    updateData: (p: { activityText: string }) => void;
+    onNext: () => void;
+    onLoadingChange?: (loading: boolean) => void;
+  }) => (
+    <>
+      <button
+        data-testid="upload-next"
+        onClick={() => {
+          updateData({ activityText: "1) Da prova enviada" });
+          onNext();
+        }}
+      >
+        upload-exam
+      </button>
+      <button data-testid="simulate-uploading" onClick={() => onLoadingChange?.(true)}>
+        start uploading
+      </button>
+    </>
   ),
 }));
 
@@ -180,6 +225,17 @@ vi.mock("./steps/review/StepReview", () => ({
     onNext,
     onPrev,
     onCaptureFailure,
+    originalExam,
+    title,
+    onTitleChange,
+    subject,
+    onSubjectChange,
+    folderId,
+    onFolderChange,
+    newFolder,
+    onNewFolderChange,
+    canSave,
+    onSave,
   }: {
     document: CanonicalDocument;
     pageStyle?: unknown;
@@ -189,10 +245,39 @@ vi.mock("./steps/review/StepReview", () => ({
     onNext: () => void;
     onPrev: () => void;
     onCaptureFailure?: (reason: string | null) => void;
+    originalExam?: { file: File; pageImages: string[]; userId: string | null } | null;
+    title?: string;
+    onTitleChange?: (t: string) => void;
+    subject?: string | null;
+    onSubjectChange?: (s: string | null) => void;
+    folderId?: string | null;
+    onFolderChange?: (id: string | null) => void;
+    newFolder?: string;
+    onNewFolderChange?: (n: string) => void;
+    canSave?: boolean;
+    onSave?: () => void;
   }) => (
     <div>
       <pre data-testid="review-doc">{JSON.stringify(document)}</pre>
       <pre data-testid="review-pagestyle">{JSON.stringify(pageStyle ?? null)}</pre>
+      <pre data-testid="review-title">{title ?? ""}</pre>
+      <pre data-testid="review-can-save">{String(!!canSave)}</pre>
+      <button data-testid="review-rename" onClick={() => onTitleChange?.("Prova de Geografia")}>
+        renomear
+      </button>
+      <pre data-testid="review-subject">{subject ?? "null"}</pre>
+      <button data-testid="review-file" onClick={() => onSubjectChange?.("Geografia")}>arquivar</button>
+      <button data-testid="review-unfile" onClick={() => onSubjectChange?.(null)}>desarquivar</button>
+      <pre data-testid="review-folder">{folderId ?? "null"}</pre>
+      <pre data-testid="review-new-folder">{newFolder ?? ""}</pre>
+      <button data-testid="review-pick-folder" onClick={() => onFolderChange?.("f1")}>pasta</button>
+      <button data-testid="review-name-folder" onClick={() => onNewFolderChange?.("7º ano A")}>
+        nomear pasta
+      </button>
+      <button data-testid="review-save" onClick={() => onSave?.()}>salvar na revisar</button>
+      <pre data-testid="review-original-exam">
+        {originalExam ? JSON.stringify({ fileName: originalExam.file.name, userId: originalExam.userId }) : "null"}
+      </pre>
       <button
         data-testid="edit-content"
         onClick={() =>
@@ -268,6 +353,24 @@ describe("CanonicalAdaptationWizard", () => {
     renderWithProviders(<CanonicalAdaptationWizard />);
     advanceToReview();
     expect(screen.getByTestId("edit-content")).toHaveTextContent("gerado");
+  });
+
+  it("switching to upload mode from within the Atividade step renders StepUploadExam in place, and still reaches barriers", () => {
+    renderWithProviders(<CanonicalAdaptationWizard />);
+    fireEvent.click(screen.getByTestId("pick-type"));
+    expect(screen.getByTestId("input-next")).toBeInTheDocument();
+    fireEvent.click(screen.getByTestId("switch-to-upload"));
+    expect(screen.getByTestId("upload-next")).toBeInTheDocument();
+    expect(screen.queryByTestId("input-next")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByTestId("upload-next"));
+    expect(screen.getByTestId("barriers-next")).toBeInTheDocument();
+  });
+
+  it("the bank path (default) renders StepActivityInput on arrival, unaffected by the upload path", () => {
+    renderWithProviders(<CanonicalAdaptationWizard />);
+    fireEvent.click(screen.getByTestId("pick-type"));
+    expect(screen.getByTestId("input-next")).toBeInTheDocument();
+    expect(screen.queryByTestId("upload-next")).not.toBeInTheDocument();
   });
 
   it("generation sets a valid canonical document", () => {
@@ -452,6 +555,8 @@ describe("CanonicalAdaptationWizard", () => {
       expect(mockMarkReady).toHaveBeenCalledWith({
         id: "srv-1",
         expectedUpdatedAt: "2026-01-01T00:00:00Z",
+        subject: null,
+        folderId: null,
       }),
     );
     expect(toast.success).toHaveBeenCalled();
@@ -472,6 +577,8 @@ describe("CanonicalAdaptationWizard", () => {
       expect(mockMarkReady).toHaveBeenCalledWith({
         id: "srv-1",
         expectedUpdatedAt: "2026-09-09T00:00:00Z",
+        subject: null,
+        folderId: null,
       }),
     );
   });
@@ -487,6 +594,8 @@ describe("CanonicalAdaptationWizard", () => {
       expect(mockMarkReady).toHaveBeenCalledWith({
         id: "srv-1",
         expectedUpdatedAt: "2026-01-01T00:00:00Z",
+        subject: null,
+        folderId: null,
       }),
     );
   });
@@ -524,6 +633,74 @@ describe("CanonicalAdaptationWizard", () => {
     await waitFor(() => expect(screen.getByTestId("edit-content")).toHaveTextContent("gerado"));
     await waitFor(() => expect(adoptedDraftId()).toBe("srv-2"));
     expect(adoptedUpdatedAt()).toBe("2026-02-01T00:00:00Z");
+  });
+
+  // --- originalExam (Adaptar direto do arquivo) passthrough into StepReview -
+
+  it("passes originalExam=null into StepReview when the adaptation has no uploadedExam (Banco de Questões)", () => {
+    renderWithProviders(<CanonicalAdaptationWizard editMode={editSeed()} />);
+    expect(screen.getByTestId("review-original-exam")).toHaveTextContent("null");
+  });
+
+  it("passes the uploaded file, pages and userId into StepReview when uploadedExam is set", () => {
+    renderWithProviders(
+      <CanonicalAdaptationWizard
+        editMode={{
+          adaptationId: "edit-1",
+          initialData: {
+            activityType: "prova",
+            activityText: "",
+            activityInputMode: "upload",
+            uploadedExam: {
+              fileName: "prova.pdf",
+              fileType: "pdf",
+              text: "1) Q1",
+              pageImages: ["data:image/png;base64,P1"],
+              file: new File(["x"], "prova.pdf", { type: "application/pdf" }),
+            },
+            selectedQuestions: [],
+            barriers: [],
+            barrierProfileId: null,
+            result: makeResult(),
+          },
+          initialUpdatedAt: "2026-01-01T00:00:00Z",
+        }}
+      />,
+    );
+    expect(screen.getByTestId("review-original-exam")).toHaveTextContent(
+      JSON.stringify({ fileName: "prova.pdf", userId: "u1" }),
+    );
+  });
+
+  it("falls back to userId=null when uploadedExam is set but there is no authenticated user yet", () => {
+    vi.mocked(useAuth).mockReturnValueOnce({ user: null } as never);
+    renderWithProviders(
+      <CanonicalAdaptationWizard
+        editMode={{
+          adaptationId: "edit-1",
+          initialData: {
+            activityType: "prova",
+            activityText: "",
+            activityInputMode: "upload",
+            uploadedExam: {
+              fileName: "prova.pdf",
+              fileType: "pdf",
+              text: "1) Q1",
+              pageImages: [],
+              file: new File(["x"], "prova.pdf", { type: "application/pdf" }),
+            },
+            selectedQuestions: [],
+            barriers: [],
+            barrierProfileId: null,
+            result: makeResult(),
+          },
+          initialUpdatedAt: "2026-01-01T00:00:00Z",
+        }}
+      />,
+    );
+    expect(screen.getByTestId("review-original-exam")).toHaveTextContent(
+      JSON.stringify({ fileName: "prova.pdf", userId: null }),
+    );
   });
 
   // --- C1-a crash-mirror restore -------------------------------------------
@@ -842,6 +1019,14 @@ describe("CanonicalAdaptationWizard — navigation guard", () => {
     expect(mockNavGuard).toHaveBeenCalledWith(true);
   });
 
+  it("calls useNavigationGuard with true while StepUploadExam reports loading", () => {
+    renderWithProviders(<CanonicalAdaptationWizard />);
+    fireEvent.click(screen.getByTestId("pick-type"));
+    fireEvent.click(screen.getByTestId("switch-to-upload"));
+    fireEvent.click(screen.getByTestId("simulate-uploading"));
+    expect(mockNavGuard).toHaveBeenCalledWith(true);
+  });
+
   it("calls useNavigationGuard with true after generation completes (unsaved result)", () => {
     renderWithProviders(<CanonicalAdaptationWizard />);
     fireEvent.click(screen.getByTestId("pick-type"));
@@ -892,6 +1077,38 @@ describe("CanonicalAdaptationWizard — navigation guard", () => {
     expect(screen.getByText(/adaptação ainda está em andamento/i)).toBeInTheDocument();
   });
 
+  it("shows 'O arquivo ainda está sendo processado' dialog when uploading and blocked (not the generation dialog)", () => {
+    mockNavGuard.mockReturnValue({ state: "blocked", reset: vi.fn(), proceed: vi.fn() });
+    renderWithProviders(<CanonicalAdaptationWizard />);
+    fireEvent.click(screen.getByTestId("pick-type"));
+    fireEvent.click(screen.getByTestId("switch-to-upload"));
+    fireEvent.click(screen.getByTestId("simulate-uploading"));
+    expect(screen.getByText(/arquivo ainda está sendo processado/i)).toBeInTheDocument();
+    expect(screen.queryByText(/adaptação ainda está em andamento/i)).not.toBeInTheDocument();
+  });
+
+  it("calls reset() when user clicks 'Continuar aqui' (upload dialog)", () => {
+    const reset = vi.fn();
+    mockNavGuard.mockReturnValue({ state: "blocked", reset, proceed: vi.fn() });
+    renderWithProviders(<CanonicalAdaptationWizard />);
+    fireEvent.click(screen.getByTestId("pick-type"));
+    fireEvent.click(screen.getByTestId("switch-to-upload"));
+    fireEvent.click(screen.getByTestId("simulate-uploading"));
+    fireEvent.click(screen.getByRole("button", { name: /Continuar aqui/i }));
+    expect(reset).toHaveBeenCalled();
+  });
+
+  it("calls proceed() when user clicks 'Sair mesmo assim' (upload dialog)", () => {
+    const proceed = vi.fn();
+    mockNavGuard.mockReturnValue({ state: "blocked", reset: vi.fn(), proceed });
+    renderWithProviders(<CanonicalAdaptationWizard />);
+    fireEvent.click(screen.getByTestId("pick-type"));
+    fireEvent.click(screen.getByTestId("switch-to-upload"));
+    fireEvent.click(screen.getByTestId("simulate-uploading"));
+    fireEvent.click(screen.getByRole("button", { name: /Sair mesmo assim/i }));
+    expect(proceed).toHaveBeenCalled();
+  });
+
   it("calls reset() when user clicks 'Continuar aqui' (generation dialog)", () => {
     const reset = vi.fn();
     mockNavGuard.mockReturnValue({ state: "blocked", reset, proceed: vi.fn() });
@@ -928,6 +1145,17 @@ describe("CanonicalAdaptationWizard — navigation guard", () => {
     expect(reset).toHaveBeenCalled();
   });
 
+  it("calls reset() when upload dialog is dismissed via Escape key", () => {
+    const reset = vi.fn();
+    mockNavGuard.mockReturnValue({ state: "blocked", reset, proceed: vi.fn() });
+    renderWithProviders(<CanonicalAdaptationWizard />);
+    fireEvent.click(screen.getByTestId("pick-type"));
+    fireEvent.click(screen.getByTestId("switch-to-upload"));
+    fireEvent.click(screen.getByTestId("simulate-uploading"));
+    fireEvent.keyDown(document, { key: "Escape" });
+    expect(reset).toHaveBeenCalled();
+  });
+
   // --- unsaved guard dialog ---------------------------------------------------
 
   it("shows 'Sair sem salvar?' dialog when blocked after generation (unsaved result)", () => {
@@ -935,7 +1163,9 @@ describe("CanonicalAdaptationWizard — navigation guard", () => {
     renderWithProviders(<CanonicalAdaptationWizard />);
     advanceToReview(); // result set, isGenerating=false
     expect(screen.getByText(/sair sem salvar/i)).toBeInTheDocument();
-    expect(screen.getByText(/rascunho ficará disponível no Histórico/i)).toBeInTheDocument();
+    // Points at Adaptações, where the draft now actually shows up — the page
+    // used to filter drafts out, so this promise was false.
+    expect(screen.getByText(/rascunho ficará disponível em Adaptações/i)).toBeInTheDocument();
   });
 
   it("calls reset() on 'Voltar e salvar' in unsaved dialog", () => {
@@ -970,6 +1200,115 @@ describe("CanonicalAdaptationWizard — navigation guard", () => {
    * persisted. The status line must SAY so instead of going on showing "Salvo",
    * which is what let people type for minutes into a sheet that was frozen.
    */
+  describe("nome e salvar na Revisar", () => {
+    it("carries the stored name into the Revisar chrome", () => {
+      renderWithProviders(<CanonicalAdaptationWizard />);
+      advanceToReview();
+      // Nothing named yet: the field is empty and the sheet's heading shows as
+      // a placeholder instead, so an unnamed adaptation still falls back to
+      // the server-derived title.
+      expect(screen.getByTestId("review-title")).toHaveTextContent("");
+    });
+
+    it("stores the typed name on the document header", () => {
+      renderWithProviders(<CanonicalAdaptationWizard />);
+      advanceToReview();
+      fireEvent.click(screen.getByTestId("review-rename"));
+      expect(screen.getByTestId("review-title")).toHaveTextContent("Prova de Geografia");
+    });
+
+    it("starts unfiled and files the adaptation under the picked subject", async () => {
+      renderWithProviders(<CanonicalAdaptationWizard />);
+      advanceToReview();
+      expect(screen.getByTestId("review-subject")).toHaveTextContent("null");
+
+      fireEvent.click(screen.getByTestId("review-file"));
+      expect(screen.getByTestId("review-subject")).toHaveTextContent("Geografia");
+
+      fireEvent.click(screen.getByTestId("review-save"));
+      await waitFor(() =>
+        expect(mockMarkReady).toHaveBeenCalledWith(
+          expect.objectContaining({ subject: "Geografia" }),
+        ),
+      );
+    });
+
+    it("sends null when the teacher unfiles it, so the column is cleared", async () => {
+      renderWithProviders(<CanonicalAdaptationWizard />);
+      advanceToReview();
+      fireEvent.click(screen.getByTestId("review-file"));
+      fireEvent.click(screen.getByTestId("review-unfile"));
+      expect(screen.getByTestId("review-subject")).toHaveTextContent("null");
+    });
+
+    it("files the adaptation into an existing folder on save", async () => {
+      renderWithProviders(<CanonicalAdaptationWizard />);
+      advanceToReview();
+      fireEvent.click(screen.getByTestId("review-pick-folder"));
+      expect(screen.getByTestId("review-folder")).toHaveTextContent("f1");
+      fireEvent.click(screen.getByTestId("review-save"));
+      await waitFor(() =>
+        expect(mockMarkReady).toHaveBeenCalledWith(expect.objectContaining({ folderId: "f1" })),
+      );
+    });
+
+    /**
+     * The folder is created at SAVE time, not when the name is typed: someone
+     * who opens the field, types, and then changes their mind must not leave an
+     * empty folder behind.
+     */
+    it("creates a brand-new folder on save and files the adaptation in it", async () => {
+      mockCreateFolder.mockResolvedValue({ id: "f-novo", name: "7º ano A" });
+      renderWithProviders(<CanonicalAdaptationWizard />);
+      advanceToReview();
+      fireEvent.click(screen.getByTestId("review-name-folder"));
+      expect(screen.getByTestId("review-new-folder")).toHaveTextContent("7º ano A");
+
+      fireEvent.click(screen.getByTestId("review-save"));
+      await waitFor(() => expect(mockCreateFolder).toHaveBeenCalledWith("7º ano A"));
+      await waitFor(() =>
+        expect(mockMarkReady).toHaveBeenCalledWith(expect.objectContaining({ folderId: "f-novo" })),
+      );
+    });
+
+    it("aborts the save when the folder cannot be created", async () => {
+      // Filing into a folder that does not exist would be worse than not
+      // filing — and useCreateFolder has already explained why it failed.
+      mockCreateFolder.mockRejectedValue(new Error("nome repetido"));
+      renderWithProviders(<CanonicalAdaptationWizard />);
+      advanceToReview();
+      fireEvent.click(screen.getByTestId("review-name-folder"));
+      fireEvent.click(screen.getByTestId("review-save"));
+      await waitFor(() => expect(mockCreateFolder).toHaveBeenCalled());
+      expect(mockMarkReady).not.toHaveBeenCalled();
+    });
+
+    it("marks the adaptation ready from the Revisar step", async () => {
+      renderWithProviders(<CanonicalAdaptationWizard />);
+      advanceToReview();
+      expect(screen.getByTestId("review-can-save")).toHaveTextContent("true");
+      fireEvent.click(screen.getByTestId("review-save"));
+      await waitFor(() => expect(mockMarkReady).toHaveBeenCalled());
+    });
+
+    /**
+     * `isSaved` only ever went true. After the first save the exit guard
+     * disarmed for good, so editing on and leaving looked identical to leaving
+     * with everything filed.
+     */
+    it("re-arms the unsaved warning when the teacher keeps editing", async () => {
+      renderWithProviders(<CanonicalAdaptationWizard />);
+      advanceToReview();
+      fireEvent.click(screen.getByTestId("review-save"));
+      await waitFor(() => expect(mockMarkReady).toHaveBeenCalled());
+      // Filed: the guard stands down.
+      await waitFor(() => expect(mockNavGuard).toHaveBeenLastCalledWith(false));
+
+      fireEvent.click(screen.getByTestId("edit-content"));
+      expect(mockNavGuard).toHaveBeenLastCalledWith(true);
+    });
+  });
+
   describe("autosave frozen warning", () => {
     it("replaces the save status with a warning while capture is broken", () => {
       renderWithProviders(<CanonicalAdaptationWizard />);
@@ -981,6 +1320,21 @@ describe("CanonicalAdaptationWizard — navigation guard", () => {
       expect(warning).toBeInTheDocument();
       expect(warning).toHaveTextContent(/não estão sendo salvas/i);
       // The reassuring label must be gone — not sitting next to the warning.
+      expect(screen.queryByText("Rascunho salvo")).not.toBeInTheDocument();
+    });
+
+    /**
+     * The autosave label used to read just "Salvo", which is also the name of
+     * the button that marks the adaptation finished. The passive one fires
+     * first and took the word, so the teacher read "Salvo", concluded the work
+     * was filed, and never clicked Salvar — every row in the database stayed
+     * `draft` forever. Two states, two names.
+     */
+    it("names the autosave state 'Rascunho salvo', not 'Salvo'", () => {
+      mockDraftStatus.value = "saved";
+      renderWithProviders(<CanonicalAdaptationWizard />);
+      advanceToReview();
+      expect(screen.getByText("Rascunho salvo")).toBeInTheDocument();
       expect(screen.queryByText("Salvo")).not.toBeInTheDocument();
     });
 

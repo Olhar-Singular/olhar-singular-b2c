@@ -74,10 +74,12 @@ export function QuestionPreview({
       className="relative transition-[padding] group-hover:pt-9 group-focus-within:pt-9"
     >
       {rail}
-      {/* Espaçamento vertical espelha `render/blocks/QuestionView` (gap-2 /
-          space-y-2 = 8px): a folha do Revisar tem de medir o mesmo que o
-          impresso, senão o professor não antecipa paginação (achado 0102). */}
-      <div className="flex items-baseline gap-2">
+      {/* items-start, não items-baseline: a baseline de um <img> é a borda de
+          baixo, o que jogava o número ao pé de uma questão que abre com figura.
+          gap-2 (8px) espelha `render/blocks/QuestionView`: a folha do Revisar
+          tem de medir o mesmo que o impresso, senão o professor não antecipa
+          a paginação (achado 0102). */}
+      <div className="flex items-start gap-2">
         <span data-testid="question-ordinal" contentEditable={false} className="shrink-0 font-bold text-surface-ink">
           {displayNumber ? `${displayNumber}.` : ""}
         </span>

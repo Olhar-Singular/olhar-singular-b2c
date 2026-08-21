@@ -18,6 +18,8 @@ import { useState } from "react";
 import { Trash2 } from "lucide-react";
 import { NodeViewWrapper, type NodeViewProps } from "@tiptap/react";
 import { Input } from "@/components/ui/input";
+import { FOLHA_BUTTON } from "../folhaChrome";
+import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { latexToHtml } from "./nodeViewUtils";
 import { useLatexDraft } from "./useLatexDraft";
@@ -66,7 +68,7 @@ export function BlockMathNodeView({ node, updateAttributes, editor, deleteNode }
             placeholder="Texto alternativo"
             aria-label="Texto alternativo da fórmula"
           />
-          <Button type="button" size="sm" variant="outline" className="self-start" onClick={() => setEditing(false)}>
+          <Button type="button" size="sm" variant="outline" className={cn("self-start", FOLHA_BUTTON)} onClick={() => setEditing(false)}>
             Pronto
           </Button>
         </div>
