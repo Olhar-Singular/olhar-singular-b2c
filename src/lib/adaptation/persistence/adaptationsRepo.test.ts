@@ -4,6 +4,7 @@ import {
   markReady,
   listAdaptations,
   getAdaptation,
+  duplicateAdaptation,
   deleteAdaptation,
   type AdaptationPayload,
 } from "./adaptationsRepo";
@@ -25,6 +26,7 @@ const baseRow = {
   observation_notes: "minhas notas",
   adaptation_result: validResult,
   status: "draft",
+  subject: null,
   credits_spent: 0,
   created_at: "2026-01-01T00:00:00Z",
   updated_at: "2026-01-01T00:00:00Z",
@@ -39,6 +41,7 @@ const payload: AdaptationPayload = {
   barriers_used: [],
   observation_notes: "minhas notas",
   adaptation_result: validResult,
+  subject: null,
 };
 
 /** Builds a chainable supabase mock; terminal resolves to `result`. */
@@ -123,6 +126,57 @@ describe("adaptationsRepo", () => {
     });
   });
 
+  describe("duplicateAdaptation", () => {
+    it("copies the content into a fresh row the teacher can edit apart", async () => {
+      const source = { ...baseRow, subject: "Geografia", credits_spent: 7 };
+      const copy = { ...source, id: "a2", title: "Cópia", credits_spent: 0, status: "ready" };
+      const chain = buildChain({ data: source, error: null });
+      chain.single = vi
+        .fn()
+        .mockResolvedValueOnce({ data: source, error: null })
+        .mockResolvedValueOnce({ data: copy, error: null });
+      vi.mocked(supabase.from).mockReturnValue(chain as never);
+
+      const out = await duplicateAdaptation("a1", "Cópia");
+
+      const inserted = (chain.insert as ReturnType<typeof vi.fn>).mock.calls[0][0];
+      expect(inserted).toMatchObject({
+        user_id: "u1",
+        title: "Cópia",
+        adaptation_result: validResult,
+        subject: "Geografia",
+        status: "ready",
+      });
+      expect(out.id).toBe("a2");
+    });
+
+    it("never carries the reservation key or the charge over to the copy", async () => {
+      // `request_id` is the credit-reservation idempotency key under a unique
+      // partial index — reusing it would collide with the original. And the
+      // copy was never paid for, so it cannot claim credits either.
+      const source = { ...baseRow, credits_spent: 7 };
+      const chain = buildChain({ data: source, error: null });
+      chain.single = vi.fn().mockResolvedValue({ data: { ...source, id: "a2" }, error: null });
+      vi.mocked(supabase.from).mockReturnValue(chain as never);
+
+      await duplicateAdaptation("a1", "Cópia");
+
+      const inserted = (chain.insert as ReturnType<typeof vi.fn>).mock.calls[0][0];
+      expect(inserted).not.toHaveProperty("request_id");
+      expect(inserted.credits_spent).toBe(0);
+    });
+
+    it("throws when the insert is rejected", async () => {
+      const chain = buildChain({ data: null, error: null });
+      chain.single = vi
+        .fn()
+        .mockResolvedValueOnce({ data: baseRow, error: null })
+        .mockResolvedValueOnce({ data: null, error: new Error("insert denied") });
+      vi.mocked(supabase.from).mockReturnValue(chain as never);
+      await expect(duplicateAdaptation("a1", "Cópia")).rejects.toBeInstanceOf(Error);
+    });
+  });
+
   describe("markReady", () => {
     it("flips status to ready with an optimistic guard and returns the new updated_at", async () => {
       const ready = { ...baseRow, status: "ready", updated_at: "2026-01-03T00:00:00Z" };
@@ -133,6 +187,26 @@ describe("adaptationsRepo", () => {
       expect(chain.eq).toHaveBeenCalledWith("id", "a1");
       expect(chain.eq).toHaveBeenCalledWith("updated_at", "2026-01-01T00:00:00Z");
       expect(res).toEqual({ ok: true, updatedAt: "2026-01-03T00:00:00Z" });
+    });
+
+    // The folder is a column, not part of the result blob, so the autosave
+    // never carries it. Filing it in the SAME write as the status flip keeps
+    // it to one row version bump — a second UPDATE would advance updated_at
+    // again and leave the optimistic token behind.
+    it("files the adaptation under a subject in the same write", async () => {
+      const ready = { ...baseRow, status: "ready", updated_at: "2026-01-03T00:00:00Z" };
+      const chain = buildChain({ data: ready, error: null });
+      vi.mocked(supabase.from).mockReturnValue(chain as never);
+      await markReady("a1", "2026-01-01T00:00:00Z", { subject: "Geografia" });
+      expect(chain.update).toHaveBeenCalledWith({ status: "ready", subject: "Geografia" });
+    });
+
+    it("stores an explicit null when the adaptation has no subject", async () => {
+      const ready = { ...baseRow, status: "ready", updated_at: "2026-01-03T00:00:00Z" };
+      const chain = buildChain({ data: ready, error: null });
+      vi.mocked(supabase.from).mockReturnValue(chain as never);
+      await markReady("a1", "2026-01-01T00:00:00Z", { subject: null });
+      expect(chain.update).toHaveBeenCalledWith({ status: "ready", subject: null });
     });
 
     it("returns a conflict result when 0 rows match (stale updated_at)", async () => {

@@ -204,12 +204,131 @@ export function getRelevantProfiles(barriers: Array<{ dimension?: string }>): st
   return Array.from(profiles);
 }
 
-export function buildSystemPrompt(barriers: Array<{ dimension?: string }>): string {
+/**
+ * A single adapted question, embedded verbatim in the system prompt as a
+ * worked example.
+ *
+ * The prompt was 100% declarative before this: nine DUA bullets and a schema,
+ * with nothing showing what "good" looks like. One concrete pair does more to
+ * fix the shape of the output than another paragraph of instruction.
+ *
+ * Kept as a value (not a string) so the test suite can parse it against the
+ * real `AiBlockSchema` — an example that drifts out of sync with the schema
+ * would be teaching the model to emit exactly what the validator rejects.
+ */
+export const SCAFFOLDING_EXAMPLE_QUESTION = {
+  type: "question",
+  stem: [
+    {
+      type: "paragraph",
+      content: [
+        {
+          type: "text",
+          text: "Uma padaria vendeu 24 pães pela manhã e 18 pães à tarde. Quantos pães ela vendeu no dia todo?",
+        },
+      ],
+    },
+    {
+      type: "scaffolding",
+      items: [
+        "Sublinhe no enunciado os dois números que aparecem.",
+        "Decida a operação: juntar quantidades pede adição.",
+        "Efetue a soma e escreva o resultado com a unidade (pães).",
+      ],
+    },
+  ],
+  answer: { kind: "open", answerLines: 3 },
+} as const;
+
+/** One selected barrier, as the client sends it in the request body. */
+export interface PromptBarrier {
+  dimension?: string;
+  barrier_key?: string;
+  /**
+   * The human-readable barrier name ("Dificuldade na leitura e interpretação
+   * de enunciados"). Optional because older persisted payloads predate it —
+   * those still fall back to the key.
+   */
+  label?: string;
+  notes?: string;
+}
+
+export interface BuildUserPromptInput {
+  /** Already sanitised by the caller (see MAX_* caps above). */
+  activityType: string;
+  barriers: PromptBarrier[];
+  /** Already sanitised; empty string means "the teacher wrote nothing". */
+  observations: string;
+  /** Already sanitised. */
+  activity: string;
+}
+
+/**
+ * The user-turn prompt: what the model is asked to adapt, and for whom.
+ *
+ * Names each barrier by its LABEL when available. Sending only the key made
+ * the model read `dislexia_leitura` where the teacher had picked "Dificuldade
+ * na leitura e interpretação de enunciados" — the key is an internal
+ * identifier, and asking a model to infer pedagogy from a snake_case token
+ * throws away the one sentence that actually describes the student's barrier.
+ */
+export function buildUserPrompt({
+  activityType,
+  barriers,
+  observations,
+  activity,
+}: BuildUserPromptInput): string {
+  const barriersList = barriers
+    .map((b) => {
+      const parts = [b.label || b.barrier_key || b.dimension || "barreira"];
+      if (b.dimension) parts.push(`(dimensão: ${b.dimension})`);
+      if (b.notes) parts.push(`— nota: ${b.notes}`);
+      return parts.join(" ");
+    })
+    .join("\n- ");
+
+  let prompt = `TIPO DE ATIVIDADE: ${activityType}
+
+BARREIRAS OBSERVÁVEIS:
+- ${barriersList}`;
+
+  if (observations) {
+    prompt += `\n\nOBSERVAÇÕES DO PROFESSOR:\n${observations}`;
+  }
+
+  prompt += `\n\nATIVIDADE ORIGINAL:\n${activity}`;
+  return prompt;
+}
+
+export interface BuildSystemPromptOptions {
+  /**
+   * Upload-direto-de-prova flow only: the activity text was extracted
+   * automatically from a real uploaded exam (not hand-picked bank questions),
+   * so question/image order must be preserved exactly and text should change
+   * only where the barrier genuinely requires it.
+   */
+  fidelityMode?: boolean;
+}
+
+export function buildSystemPrompt(
+  barriers: Array<{ dimension?: string }>,
+  options: BuildSystemPromptOptions = {},
+): string {
   const relevantProfiles = getRelevantProfiles(barriers);
   const strategies = relevantProfiles
     .map((p) => NEURODIVERGENCE_STRATEGIES[p])
     .filter(Boolean)
     .join("\n\n");
+
+  const fidelityBlock = options.fidelityMode
+    ? `
+
+MODO FIEL (upload direto de prova)
+Esta atividade foi extraída automaticamente de uma prova real enviada pelo professor (upload direto do arquivo, não escolha manual de questões). Regras adicionais, inegociáveis:
+- Preserve a ORDEM ORIGINAL das questões e das imagens EXATAMENTE como aparecem na entrada — não reordene, não remova nem invente questões além do que já foi filtrado antes de chegar até você.
+- Só modifique o TEXTO de uma questão quando a adaptação para as barreiras selecionadas EXIGIR (ex.: simplificar vocabulário ambíguo, reformular um enunciado confuso para a barreira em questão). Quando a barreira não exigir mudança no texto, preserve a redação original o mais próximo possível — não reescreva por reescrever.
+- ADICIONE textos de apoio (scaffolding, dicas, exemplos resolvidos) conforme a seção TEXTOS DE APOIO acima. Preservar a prova NÃO dispensa o apoio: ele se SOMA ao conteúdo original, sem remover nem substituir nada. Fidelidade se aplica ao que já estava lá, não ao que precisa ser acrescentado.`
+    : "";
 
   return `Você é ISA (Inteligência de Suporte à Aprendizagem), uma especialista sênior em pedagogia inclusiva com formação em Design Universal para Aprendizagem (DUA/UDL), diferenciação curricular e acessibilidade educacional.
 
@@ -265,13 +384,24 @@ PRINCÍPIOS GERAIS DE ADAPTAÇÃO EM EXATAS
 - Diversificar avaliação
 
 ADAPTAÇÃO POR TIPO DE ATIVIDADE
-PROVA: mantenha o rigor avaliativo; adapte o FORMATO, não o CONTEÚDO conceitual; preserve o número de questões ou justifique a redução.
+PROVA: mantenha o rigor avaliativo; adapte o FORMATO, não o CONTEÚDO conceitual; preserve o número de questões ou justifique a redução. Textos de apoio SÃO esperados também aqui — apoio de PROCESSO (o que fazer) não entrega a resposta nem rebaixa o nível de Bloom.
 EXERCÍCIO: pode incluir scaffolding mais intenso (dicas, exemplos parciais) e questões preparatórias; maior flexibilidade no formato de resposta.
 ATIVIDADE DE CASA: instruções mais detalhadas e autoexplicativas, considerando ausência de mediação.
 TRABALHO: divida em etapas com entregas parciais; forneça rubrica e templates.
 
 TAXONOMIA DE BLOOM — PRESERVAÇÃO
 Identifique o nível cognitivo de cada questão e PRESERVE-O na adaptação (lembrar, compreender, aplicar, analisar, avaliar, criar). A adaptação remove BARREIRAS DE ACESSO, não reduz o nível cognitivo.
+
+TEXTOS DE APOIO (SCAFFOLDING) — OBRIGATÓRIO
+O apoio passo a passo é a adaptação que mais remove barreira de ACESSO sem tocar no nível cognitivo, e é o que o professor mais espera encontrar na atividade adaptada. NÃO é opcional:
+- Para CADA questão que exija leitura de enunciado longo, interpretação, ou mais de uma etapa de raciocínio, inclua um bloco "scaffolding" DENTRO do "stem", logo após o enunciado.
+- De 2 a 4 itens curtos, no imperativo, dizendo O QUE FAZER — nunca a resposta. "Sublinhe o que a questão pede" é apoio; "o resultado é 42" é gabarito e está PROIBIDO.
+- Numa atividade com mais de duas questões, ao menos uma DEVE trazer apoio.
+- O apoio SOMA-SE ao conteúdo original: não encurte nem substitua o enunciado para abrir espaço para ele.
+
+EXEMPLO DE QUESTÃO COM APOIO (ilustra o nível de detalhe esperado — NÃO copie este conteúdo, adapte o da atividade real):
+${JSON.stringify(SCAFFOLDING_EXAMPLE_QUESTION)}
+${fidelityBlock}
 
 FORMATO DE SAÍDA (OBRIGATÓRIO — JSON ESTRUTURADO)
 Você DEVE responder APENAS com um objeto JSON que satisfaz o schema fornecido (response_format). NÃO use marcadores de seção (===), NÃO use markdown, NÃO escreva prosa fora do JSON.
@@ -281,6 +411,7 @@ Regras do conteúdo do JSON:
 - DOIS VOCABULÁRIOS SEPARADOS — NÃO OS MISTURE. O campo "type" (de um bloco) e o campo "answer.kind" (de uma questão) têm listas DIFERENTES e um nome NUNCA vale para os dois:
   · "type" de bloco aceita SOMENTE: "heading", "paragraph", "blockMath", "image", "scaffolding", "question". NÃO existem outros tipos de bloco. Em particular, "table" NÃO é um tipo de bloco: para uma tabela, use uma questão com "answer.kind": "table" (campo "rows"); se a tabela for apenas informativa, descreva-a em parágrafos. Isso vale também dentro do "stem" de uma questão.
   · "answer.kind" aceita SOMENTE: "open", "multipleChoice", "trueFalse", "checkbox", "matching", "ordering", "fillBlank", "table". NUNCA use um nome de bloco como "answer.kind" — "scaffolding", "paragraph" e "heading" são INVÁLIDOS aí. Para dar apoio passo a passo dentro de uma questão, coloque um bloco "scaffolding" no "stem" e use "answer.kind": "open".
+- NUMERAÇÃO: NÃO escreva o número da questão no texto ("1)", "2.", "Questão 3"). A numeração da prova é gerada automaticamente a partir da ordem dos blocos — repeti-la no enunciado faz a questão sair numerada duas vezes. A atividade original chega numerada só para você saber onde uma questão termina e a próxima começa; use isso para separar e ordenar, e não copie os números para a saída.
 - Em "multipleChoice", marque a alternativa correta com o BOOLEAN "correct": true (EXATAMENTE UMA correta). Em "trueFalse" use o BOOLEAN "value". Em "checkbox" use o BOOLEAN "checked".
 - MATEMÁTICA: use "inlineMath"/"blockMath" com o campo "latex" (LaTeX puro, SEM delimitadores de cifrão). Nunca escreva LaTeX dentro de texto comum.
 - IMAGENS — REGRA CRÍTICA: NUNCA invente imagens nem URLs de imagem. Só inclua um bloco de imagem (type "image") quando o texto original contiver um marcador no formato [IMAGEM: <url>]; nesse caso, no enunciado (stem) da questão correspondente, use "src" EXATAMENTE igual à <url> do marcador e um "alt" curto e descritivo (NUNCA deixe o "alt" vazio), e NÃO deixe o marcador literal [IMAGEM: ...] no texto de saída — substitua-o pelo bloco "image". Se uma figura ajudaria mas NÃO há marcador [IMAGEM:] no original, descreva-a em TEXTO (um parágrafo) — jamais gere um bloco "image" com URL inventada.

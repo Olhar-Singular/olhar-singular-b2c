@@ -51,14 +51,14 @@ describe("RichTextField — component", () => {
   it("plain mode renders the editor with no border (worksheet-faithful)", () => {
     const { container } = render(<RichTextField plain value={t("a")} onChange={vi.fn()} />);
     expect(screen.getByTestId("editor-content")).toBeInTheDocument();
-    expect(container.querySelector(".border-input")).toBeNull();
+    expect(container.querySelector(".border-surface-line-2")).toBeNull();
     expect(screen.queryByRole("button")).not.toBeInTheDocument();
   });
 
   it("non-plain mode renders editor with a bordered wrapper and no toolbar buttons", () => {
     const { container } = render(<RichTextField value={t("a")} onChange={vi.fn()} />);
     expect(screen.getByTestId("editor-content")).toBeInTheDocument();
-    expect(container.querySelector(".border-input")).not.toBeNull();
+    expect(container.querySelector(".border-surface-line-2")).not.toBeNull();
     // formatting lives in BubbleMenu — no per-field toolbar buttons
     expect(screen.queryByRole("button")).not.toBeInTheDocument();
   });

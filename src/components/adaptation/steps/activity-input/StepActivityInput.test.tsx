@@ -59,6 +59,17 @@ const baseData: WizardData = {
 
 // ── Existing textarea tests (Colar Texto tab) ──────────────────────────────
 
+describe("StepActivityInput — direct upload CTA", () => {
+  it("switches to upload mode via updateData, without touching activityType or advancing the step", () => {
+    const updateData = vi.fn();
+    const onNext = vi.fn();
+    render(<StepActivityInput data={baseData} updateData={updateData} onNext={onNext} onPrev={vi.fn()} />);
+    fireEvent.click(screen.getByRole("button", { name: /Adaptar direto do arquivo/i }));
+    expect(updateData).toHaveBeenCalledWith({ activityInputMode: "upload" });
+    expect(onNext).not.toHaveBeenCalled();
+  });
+});
+
 describe("StepActivityInput — Colar Texto tab", () => {
   it("renders heading and textarea", () => {
     render(<StepActivityInput data={baseData} updateData={vi.fn()} onNext={vi.fn()} onPrev={vi.fn()} />);
@@ -175,9 +186,14 @@ describe("StepActivityInput — Banco de Questões tab", () => {
       expect.objectContaining({
         selectedQuestions: expect.arrayContaining([expect.objectContaining({ id: "q1" })]),
         activityText: expect.stringContaining("Questão 1"),
+        // Changing which questions make up the activity invalidates whatever
+        // was generated from the old set — StepGenerate skips generation while
+        // a result is present, so a stale one silently blocks the new run.
+        result: null,
       }),
     );
   });
+
 
   it("shows selected questions in bank tab after confirmation", async () => {
     const q = { id: "q1", text: "Questão selecionada", subject: "Física", topic: null, difficulty: null, image_url: null, options: null };
@@ -195,7 +211,10 @@ describe("StepActivityInput — Banco de Questões tab", () => {
     fireEvent.click(screen.getByRole("button", { name: /Banco de Questões/i }));
     fireEvent.click(screen.getByRole("button", { name: /Remover questão/i }));
     expect(updateData).toHaveBeenCalledWith(
-      expect.objectContaining({ selectedQuestions: [], activityText: "" }),
+      // `result: null` for the same reason as the upload path: StepGenerate
+      // skips generation while a result is present, so removing a question
+      // without clearing it would silently reuse the old adaptation.
+      expect.objectContaining({ selectedQuestions: [], activityText: "", result: null }),
     );
   });
 

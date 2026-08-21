@@ -22,13 +22,17 @@ import {
   type ChatMessage,
 } from "../_shared/adaptActivityCore.ts";
 import { extractImageMarkers, stripFabricatedImages } from "../_shared/imageSourceGuard.ts";
+import { inspectAdaptationQuality } from "../_shared/adaptationQuality.ts";
 import { stripGapTokens } from "../_shared/gapTokenGuard.ts";
+import { stripQuestionNumbers } from "../_shared/questionNumberGuard.ts";
 import {
   buildSystemPrompt,
+  buildUserPrompt,
   MAX_ACTIVITY_CHARS,
   MAX_ACTIVITY_TYPE_CHARS,
   MAX_OBSERVATION_CHARS,
   attemptTimeoutMs,
+  type PromptBarrier,
 } from "../_shared/adaptationPrompt.ts";
 import { aiActivityJsonSchema } from "../../../src/lib/adaptation/canonical/ai.ts";
 
@@ -76,7 +80,7 @@ serve(async (req) => {
     const serviceClient = createClient(supabaseUrl, supabaseServiceKey);
 
     const body = await req.json();
-    const { original_activity, activity_type, barriers, observation_notes, barrier_profile_id } = body;
+    const { original_activity, activity_type, barriers, observation_notes, barrier_profile_id, fidelity_mode, expected_question_count } = body;
 
     if (!original_activity || !activity_type || !barriers || !Array.isArray(barriers) || barriers.length === 0) {
       return new Response(JSON.stringify({ error: "Campos obrigatórios ausentes: original_activity, activity_type, barriers." }), {
@@ -169,27 +173,14 @@ serve(async (req) => {
       const sanitizedType = sanitize(activity_type, MAX_ACTIVITY_TYPE_CHARS);
       const sanitizedObservations = observation_notes ? sanitize(observation_notes, MAX_OBSERVATION_CHARS) : "";
 
-      const activeBarriersList = (barriers as Array<{ dimension?: string; barrier_key?: string; notes?: string }>)
-        .map((b) => {
-          const parts = [b.barrier_key || b.dimension || "barreira"];
-          if (b.dimension) parts.push(`(dimensão: ${b.dimension})`);
-          if (b.notes) parts.push(`— nota: ${b.notes}`);
-          return parts.join(" ");
-        })
-        .join("\n- ");
+      const userPrompt = buildUserPrompt({
+        activityType: sanitizedType,
+        barriers: barriers as PromptBarrier[],
+        observations: sanitizedObservations,
+        activity: sanitizedActivity,
+      });
 
-      let userPrompt = `TIPO DE ATIVIDADE: ${sanitizedType}
-
-BARREIRAS OBSERVÁVEIS:
-- ${activeBarriersList}`;
-
-      if (sanitizedObservations) {
-        userPrompt += `\n\nOBSERVAÇÕES DO PROFESSOR:\n${sanitizedObservations}`;
-      }
-
-      userPrompt += `\n\nATIVIDADE ORIGINAL:\n${sanitizedActivity}`;
-
-      const systemPrompt = buildSystemPrompt(barriers);
+      const systemPrompt = buildSystemPrompt(barriers, { fidelityMode: fidelity_mode === true });
       const jsonSchema = aiActivityJsonSchema();
 
       // Attempt loop: 1 initial call + up to 2 reasks (MAX_ATTEMPTS total).
@@ -289,9 +280,29 @@ BARREIRAS OBSERVÁVEIS:
 
         const interpreted = interpretAiResponse(responseContent);
         if (interpreted.ok) {
-          const adaptation = stripGapTokens(
-            stripFabricatedImages(interpreted.result, allowedImageSrcs),
+          const adaptation = stripQuestionNumbers(
+            stripGapTokens(stripFabricatedImages(interpreted.result, allowedImageSrcs)),
           );
+
+          // OBSERVE ONLY — does not reask, does not fail the request. Schema
+          // validation cannot tell a complete adaptation from one that came
+          // back with half the questions and no support text, and both are
+          // charged today. Logging first tells us how often each signal fires
+          // before we decide what enforcement should cost the user.
+          // Passed straight, with no cast. The `as unknown as` that used to be
+          // here is exactly what let a shape mismatch reach production: it
+          // silenced the one check that would have caught `blocks` living
+          // under `document`. If AdaptationResult drifts, this stops compiling.
+          const qualitySignals = inspectAdaptationQuality(
+            adaptation,
+            typeof expected_question_count === "number" ? expected_question_count : undefined,
+          );
+          if (qualitySignals.length > 0) {
+            console.warn(
+              "adaptation quality signals:",
+              JSON.stringify({ attempt, signals: qualitySignals }),
+            );
+          }
 
           // PERSIST BEFORE SETTLING. The response body used to be the ONLY copy
           // of a document the user had already paid for — the browser did the

@@ -64,7 +64,9 @@ export function QuestionPreview({
   return (
     <div className="relative">
       {rail}
-      <div className="flex items-baseline gap-2.5">
+      {/* items-start: see QuestionView — baseline drops the number to the
+          bottom of a leading image. */}
+      <div className="flex items-start gap-2.5">
         <span data-testid="question-ordinal" contentEditable={false} className="shrink-0 font-bold text-surface-ink">
           {displayNumber ? `${displayNumber}.` : ""}
         </span>

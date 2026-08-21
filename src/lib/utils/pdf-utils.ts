@@ -11,7 +11,14 @@ export type PdfParseResult = {
   truncated: boolean;
 };
 
-const MAX_TEXT_CHARS = 8000;
+/**
+ * Matches `MAX_PDF_TEXT_CHARS` in `_shared/examExtractionCore.ts`, which is
+ * where this text is sanitised on the way into the extraction prompt. Cutting
+ * at 8000 here meant discarding 84% of the budget the server would have
+ * accepted — and left the DOCX path (uncapped) sending several times more
+ * text than a PDF of the very same exam.
+ */
+const MAX_TEXT_CHARS = 50000;
 const MAX_IMAGE_PAGES = 8;
 const RENDER_SCALE = 3.0;
 
@@ -32,7 +39,17 @@ export async function parsePdf(
     const page = await pdf.getPage(i);
 
     const textContent = await page.getTextContent();
-    const pageText = textContent.items.map((item: any) => item.str).join(" ");
+    // pdf.js hands back positioned runs, not lines. Flattening them all with a
+    // single space destroyed the one structural cue the extraction model has:
+    // an enunciado and its alternatives arrived as a single blob, and the
+    // extraction prompt is told to treat that blob as the source of truth.
+    // `hasEOL` marks the runs that ended a visual line — honour it.
+    const pageText = (textContent.items as Array<{ str: string; hasEOL?: boolean }>)
+      .map((item) => item.str + (item.hasEOL ? "\n" : " "))
+      .join("")
+      .replace(/[ \t]+\n/g, "\n")
+      .replace(/\n{3,}/g, "\n\n")
+      .trim();
     fullText += `\n--- Página ${i} ---\n${pageText}`;
 
     if (pageImages.length < MAX_IMAGE_PAGES) {

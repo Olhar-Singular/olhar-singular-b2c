@@ -56,6 +56,18 @@ describe("getAiConfig", () => {
     expect(toCanonicalModel("openai/gpt-4")).toBe("openai/gpt-4");
   });
 
+  it("overrides every resolved model when AI_MODEL_OVERRIDE is set (local dev: swap model without touching call sites)", () => {
+    const cfg = getAiConfig(envMap({ AI_API_KEY: "g-key", AI_MODEL_OVERRIDE: "gemini-2.5-flash" }));
+    expect(cfg.resolveModel("google/gemini-2.5-pro")).toBe("gemini-2.5-flash");
+    expect(cfg.resolveModel("google/gemini-2.5-flash")).toBe("gemini-2.5-flash");
+    expect(cfg.resolveModel("openai/gpt-4")).toBe("gemini-2.5-flash");
+  });
+
+  it("falls back to the normal MODEL_MAP resolution when AI_MODEL_OVERRIDE is unset", () => {
+    const cfg = getAiConfig(envMap({ AI_API_KEY: "g-key", AI_MODEL_OVERRIDE: undefined }));
+    expect(cfg.resolveModel("google/gemini-2.5-pro")).toBe("gemini-2.5-pro");
+  });
+
   it("uses the default EnvGetter (globalThis.Deno) when no argument is passed (line 18)", () => {
     (globalThis as { Deno?: unknown }).Deno = {
       env: { get: (k: string) => (k === "AI_API_KEY" ? "deno-g-key" : undefined) },

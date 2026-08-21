@@ -20,6 +20,22 @@ function makePage(text: string) {
   };
 }
 
+/** A page whose text runs carry pdf.js's real `hasEOL` line-break flag. */
+function makePageWithItems(items: Array<{ str: string; hasEOL?: boolean }>) {
+  return {
+    getTextContent: vi.fn().mockResolvedValue({ items }),
+    getViewport: vi.fn().mockReturnValue({ width: 100, height: 200 }),
+    render: vi.fn().mockReturnValue({ promise: Promise.resolve() }),
+    cleanup: vi.fn(),
+  };
+}
+
+function singlePage(page: ReturnType<typeof makePageWithItems>) {
+  getDocument.mockReturnValue({
+    promise: Promise.resolve({ numPages: 1, getPage: () => Promise.resolve(page) }),
+  });
+}
+
 function fakeFile() {
   return new File([new Uint8Array([0x25, 0x50, 0x44, 0x46])], "f.pdf", { type: "application/pdf" });
 }
@@ -72,8 +88,50 @@ describe("pdf-utils — parsePdf", () => {
     expect(onProgress).toHaveBeenCalledWith(2, 2);
   });
 
+  // Line structure is what separates an enunciado from its alternatives.
+  // Flattening every run with a single space turned "Qual é o valor? (a) 2
+  // (b) 4" into one undifferentiated blob, and the extraction prompt is told
+  // to treat that blob as the source of truth.
+  it("keeps the line breaks the PDF actually has", async () => {
+    singlePage(
+      makePageWithItems([
+        { str: "Qual é o valor de x?", hasEOL: true },
+        { str: "(a) 2", hasEOL: true },
+        { str: "(b) 4" },
+      ]),
+    );
+    const result = await parsePdf(fakeFile());
+    expect(result.text).toContain("Qual é o valor de x?\n(a) 2\n(b) 4");
+  });
+
+  it("still joins runs inside the same line with a space", async () => {
+    singlePage(makePageWithItems([{ str: "Qual é" }, { str: "o valor?", hasEOL: true }]));
+    const result = await parsePdf(fakeFile());
+    expect(result.text).toContain("Qual é o valor?");
+  });
+
+  it("does not leave a dangling space before a line break", async () => {
+    singlePage(makePageWithItems([{ str: "linha", hasEOL: true }, { str: "outra" }]));
+    const result = await parsePdf(fakeFile());
+    expect(result.text).not.toMatch(/ \n/);
+  });
+
+  it("collapses runs of blank lines instead of echoing PDF padding", async () => {
+    singlePage(
+      makePageWithItems([
+        { str: "topo", hasEOL: true },
+        { str: "", hasEOL: true },
+        { str: "", hasEOL: true },
+        { str: "", hasEOL: true },
+        { str: "fim" },
+      ]),
+    );
+    const result = await parsePdf(fakeFile());
+    expect(result.text).toContain("topo\n\nfim");
+  });
+
   it("truncates text when full text exceeds MAX_TEXT_CHARS", async () => {
-    const longChunk = "x".repeat(9000);
+    const longChunk = "x".repeat(51000);
     const pages = [makePage(longChunk)];
     getDocument.mockReturnValue({
       promise: Promise.resolve({
@@ -84,8 +142,19 @@ describe("pdf-utils — parsePdf", () => {
 
     const result = await parsePdf(fakeFile());
     expect(result.text).toMatch(/\[\.\.\. texto truncado\]$/);
-    expect(result.text.length).toBeLessThanOrEqual(8000 + "[... texto truncado]".length + 5);
+    expect(result.text.length).toBeLessThanOrEqual(50000 + "[... texto truncado]".length + 5);
     expect(result.truncated).toBe(true);
+  });
+
+  // The server sanitises this same text at MAX_PDF_TEXT_CHARS = 50000, so a
+  // client cap of 8000 was throwing away 84% of the budget before the request
+  // was even built — and the DOCX path, which has no such cap, was sending
+  // several times more text than a PDF of the same exam.
+  it("keeps a 9k-char exam whole instead of cutting it at 8k", async () => {
+    singlePage(makePageWithItems([{ str: "y".repeat(9000) }]));
+    const result = await parsePdf(fakeFile());
+    expect(result.truncated).toBe(false);
+    expect(result.text).toContain("y".repeat(9000));
   });
 
   it("sets truncated=false when text is within MAX_TEXT_CHARS", async () => {

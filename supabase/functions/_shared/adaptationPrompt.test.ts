@@ -13,7 +13,117 @@ import {
   attemptTimeoutMs,
   getRelevantProfiles,
   buildSystemPrompt,
+  buildUserPrompt,
+  SCAFFOLDING_EXAMPLE_QUESTION,
 } from "./adaptationPrompt";
+import { AiBlockSchema } from "../../../src/lib/adaptation/canonical/ai";
+
+describe("scaffolding mandate", () => {
+  const prompt = () => buildSystemPrompt([{ dimension: "tea" }]);
+
+  it("demands support blocks instead of merely allowing them", () => {
+    expect(prompt()).toContain("TEXTOS DE APOIO (SCAFFOLDING) — OBRIGATÓRIO");
+  });
+
+  it("says support belongs in a PROVA too", () => {
+    // The direct-upload flow is almost always activityType "prova". While the
+    // PROVA line was the only per-type line that never mentioned support — and
+    // EXERCÍCIO explicitly allowed it — the model correctly inferred that
+    // scaffolding was an exercise-only device and left it out of every exam.
+    const provaLine = prompt().split("\n").find((l) => l.startsWith("PROVA:"));
+    expect(provaLine).toBeDefined();
+    expect(provaLine).toMatch(/apoio/i);
+  });
+
+  it("forbids putting the answer in the support steps", () => {
+    expect(prompt()).toMatch(/nunca a resposta/i);
+  });
+
+  it("embeds the worked example so the rule has a shape to copy", () => {
+    expect(prompt()).toContain(JSON.stringify(SCAFFOLDING_EXAMPLE_QUESTION));
+  });
+
+  it("keeps the worked example valid against the real AI schema", () => {
+    // The example is a promise to the model about what valid output looks
+    // like. If the canonical schema moves and this drifts, we would be
+    // teaching the model to emit exactly what the validator then rejects.
+    expect(() => AiBlockSchema.parse(SCAFFOLDING_EXAMPLE_QUESTION)).not.toThrow();
+  });
+
+  it("shows 2-4 support steps in the example", () => {
+    const scaffold = SCAFFOLDING_EXAMPLE_QUESTION.stem.find((b) => b.type === "scaffolding") as
+      | { items: string[] }
+      | undefined;
+    expect(scaffold).toBeDefined();
+    expect(scaffold!.items.length).toBeGreaterThanOrEqual(2);
+    expect(scaffold!.items.length).toBeLessThanOrEqual(4);
+  });
+});
+
+describe("buildUserPrompt", () => {
+  const base = { activityType: "prova", observations: "", activity: "1) Quanto é 2+2?" };
+
+  it("names each barrier by its human label, not the technical key", () => {
+    const out = buildUserPrompt({
+      ...base,
+      barriers: [
+        { dimension: "dislexia", barrier_key: "dislexia_leitura", label: "Dificuldade na leitura e interpretação de enunciados" },
+      ],
+    });
+    expect(out).toContain("Dificuldade na leitura e interpretação de enunciados");
+    expect(out).toContain("(dimensão: dislexia)");
+  });
+
+  it("falls back to the key, then the dimension, then a generic word", () => {
+    const out = buildUserPrompt({
+      ...base,
+      barriers: [
+        { dimension: "tea", barrier_key: "tea_abstracao" },
+        { dimension: "tdah" },
+        {},
+      ],
+    });
+    expect(out).toContain("tea_abstracao");
+    expect(out).toContain("tdah (dimensão: tdah)");
+    expect(out).toContain("barreira");
+  });
+
+  it("appends the per-barrier note when present", () => {
+    const out = buildUserPrompt({
+      ...base,
+      barriers: [{ dimension: "tea", label: "Sobrecarga sensorial", notes: "piora no fim da aula" }],
+    });
+    expect(out).toContain("— nota: piora no fim da aula");
+  });
+
+  it("lists several barriers one per line", () => {
+    const out = buildUserPrompt({
+      ...base,
+      barriers: [{ label: "Primeira" }, { label: "Segunda" }],
+    });
+    expect(out).toContain("- Primeira\n- Segunda");
+  });
+
+  it("includes the teacher's observations block when there are notes", () => {
+    const out = buildUserPrompt({
+      ...base,
+      observations: "Lê devagar e trava com layout carregado.",
+      barriers: [{ label: "X" }],
+    });
+    expect(out).toContain("OBSERVAÇÕES DO PROFESSOR:\nLê devagar e trava com layout carregado.");
+  });
+
+  it("omits the observations block entirely when there are none", () => {
+    const out = buildUserPrompt({ ...base, barriers: [{ label: "X" }] });
+    expect(out).not.toContain("OBSERVAÇÕES DO PROFESSOR");
+  });
+
+  it("carries the activity type and the original activity", () => {
+    const out = buildUserPrompt({ ...base, barriers: [{ label: "X" }] });
+    expect(out).toContain("TIPO DE ATIVIDADE: prova");
+    expect(out).toContain("ATIVIDADE ORIGINAL:\n1) Quanto é 2+2?");
+  });
+});
 
 describe("getRelevantProfiles", () => {
   it("returns the dimensions that map to a known strategy", () => {
@@ -110,6 +220,51 @@ describe("activity cap stays in sync with the frontend", () => {
     for (const sample of samples) {
       expect(frontendLimits.escapedLength(sample)).toBe(sanitize(sample, MAX_ACTIVITY_CHARS).length);
     }
+  });
+});
+
+describe("buildSystemPrompt — fidelityMode", () => {
+  it("omits the MODO FIEL block by default (bank/paste flow unchanged)", () => {
+    const prompt = buildSystemPrompt([{ dimension: "tea" }]);
+    expect(prompt).not.toContain("MODO FIEL");
+  });
+
+  it("omits the MODO FIEL block when fidelityMode is explicitly false", () => {
+    const prompt = buildSystemPrompt([{ dimension: "tea" }], { fidelityMode: false });
+    expect(prompt).not.toContain("MODO FIEL");
+  });
+
+  it("adds the MODO FIEL block when fidelityMode is true", () => {
+    const prompt = buildSystemPrompt([{ dimension: "tea" }], { fidelityMode: true });
+    expect(prompt).toContain("MODO FIEL");
+  });
+
+  it("instructs preserving the original order of questions and images exactly", () => {
+    const prompt = buildSystemPrompt([{ dimension: "tea" }], { fidelityMode: true });
+    expect(prompt).toContain("ORDEM ORIGINAL");
+    expect(prompt).toContain("não reordene");
+  });
+
+  it("instructs changing text only when the barrier requires it, preserving wording otherwise", () => {
+    const prompt = buildSystemPrompt([{ dimension: "tea" }], { fidelityMode: true });
+    expect(prompt).toContain("Só modifique o TEXTO");
+    expect(prompt).toContain("EXIGIR");
+    expect(prompt).toContain("preserve a redação original");
+  });
+
+  it("requires support text rather than merely permitting it", () => {
+    // The other two MODO FIEL rules are "inegociáveis" and both pull towards
+    // leaving the exam alone. A permissive third rule ("você pode adicionar")
+    // loses that tug-of-war, so turning fidelity on would make adaptations
+    // MORE like the original — the opposite of what was asked for.
+    const prompt = buildSystemPrompt([{ dimension: "tea" }], { fidelityMode: true });
+    expect(prompt).toContain("ADICIONE textos de apoio");
+    expect(prompt).not.toContain("pode ADICIONAR textos de apoio");
+  });
+
+  it("does not let fidelity be read as a licence to skip support", () => {
+    const prompt = buildSystemPrompt([{ dimension: "tea" }], { fidelityMode: true });
+    expect(prompt).toMatch(/NÃO dispensa o apoio/i);
   });
 });
 

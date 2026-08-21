@@ -34,6 +34,8 @@ export default function EditAdaptationPage() {
         adaptationId: row.id,
         initialData: rowToWizardData(row),
         initialUpdatedAt: row.updated_at,
+        subject: row.subject,
+        folderId: row.folder_id,
       }}
     />
   );

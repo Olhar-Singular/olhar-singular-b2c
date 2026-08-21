@@ -1,9 +1,16 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { render, waitFor } from "@testing-library/react";
 import { EditorContent } from "@tiptap/react";
 import { useCanonicalEditor } from "./useCanonicalEditor";
 import { richDocument } from "@/lib/adaptation/tiptap/__fixtures__/richDocument";
 import type { CanonicalDocument } from "@/lib/adaptation/canonical/schema";
+
+// ImageNodeView statically imports PdfPreviewModal (for "Recortar do original"),
+// which pulls in pdfjs-dist — that references DOMMatrix, undefined under jsdom.
+// This test never configures UploadedExamExtension, so the real component would
+// never actually render the modal anyway (canCropFromOriginal stays false) —
+// only the module-load-time import needs breaking here, not any behavior.
+vi.mock("@/components/forms/PdfPreviewModal", () => ({ default: () => null }));
 
 /**
  * Real-DOM mount smoke for the canonical editor — deliberately does NOT mock

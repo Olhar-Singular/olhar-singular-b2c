@@ -47,7 +47,10 @@ export function BlockInserterMenu({ gap, onPick }: Props) {
           <Plus className="h-4 w-4" />
         </Button>
       </PopoverTrigger>
-      <PopoverContent align="center" className="w-72 space-y-3">
+      <PopoverContent
+        align="center"
+        className="w-72 space-y-3 border-surface-chrome-line bg-surface-chrome"
+      >
         {INSERTER_SECTIONS.map((section) => {
           const items = section.items.filter((item) => isVisible(item, gap));
           /* v8 ignore next -- both sections always have visible items */

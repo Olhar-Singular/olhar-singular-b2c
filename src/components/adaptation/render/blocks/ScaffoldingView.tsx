@@ -12,7 +12,7 @@ export function ScaffoldingView({ block }: { block: ScaffoldingBlock }) {
   return (
     <div
       data-testid="scaffolding"
-      className="my-3 rounded-md border border-border bg-muted/40 p-3"
+      className="my-3 rounded-md border border-surface-chrome-line bg-surface-mesa/40 p-3 text-surface-ink"
       style={nodeStyleToCss(block.style)}
     >
       <ol className="list-decimal space-y-1 pl-5">

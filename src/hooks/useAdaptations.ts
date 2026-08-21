@@ -11,6 +11,7 @@ import {
   listAdaptations,
   getAdaptation,
   markReady,
+  duplicateAdaptation,
   deleteAdaptation,
 } from "@/lib/adaptation/persistence/adaptationsRepo";
 import { useAuth } from "@/hooks/useAuth";
@@ -63,14 +64,50 @@ export function useAdaptation(id: string | undefined) {
 export function useMarkReady() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ id, expectedUpdatedAt }: { id: string; expectedUpdatedAt: string }) =>
-      markReady(id, expectedUpdatedAt),
+    mutationFn: ({
+      id,
+      expectedUpdatedAt,
+      subject,
+      folderId,
+    }: {
+      id: string;
+      expectedUpdatedAt: string;
+      // Matéria and pasta ride along with the status flip: both are columns, so
+      // the autosave never carries them, and a separate UPDATE would bump the
+      // row version a second time behind the caller's optimistic token.
+      subject?: string | null;
+      folderId?: string | null;
+    }) =>
+      markReady(id, expectedUpdatedAt, {
+        ...(subject === undefined ? {} : { subject }),
+        ...(folderId === undefined ? {} : { folder_id: folderId }),
+      }),
     onSuccess: (res, { id }) => {
       if (!res.ok) return;
       qc.invalidateQueries({ queryKey: adaptationKeys.list() });
       qc.invalidateQueries({ queryKey: adaptationKeys.detail(id) });
     },
     onError: (err: Error) => toast.error(parseDbError(err, "Erro ao salvar a adaptação.")),
+  });
+}
+
+/**
+ * Copy an adaptation into a new row — the safe half of "salvar como nova".
+ *
+ * Runs from the LIST, not the editor: there is no autosave in flight here, no
+ * optimistic token to rebind and no crash mirror in play, so it is a plain
+ * INSERT instead of the create-copy-then-roll-the-original-back dance that the
+ * same choice would need mid-edit.
+ */
+export function useDuplicateAdaptation() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, title }: { id: string; title: string }) => duplicateAdaptation(id, title),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: adaptationKeys.list() });
+      toast.success("Cópia criada.");
+    },
+    onError: (err: Error) => toast.error(parseDbError(err, "Erro ao duplicar a adaptação.")),
   });
 }
 
