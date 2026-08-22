@@ -228,7 +228,7 @@ export function StepReview({
   return (
     <div className="space-y-4">
       {/* Barra superior (chrome) — plano §6.1. */}
-      <div className="flex items-center justify-between gap-3 rounded-md border border-surface-chrome-line bg-surface-chrome px-4 py-2.5">
+      <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 rounded-md border border-surface-chrome-line bg-surface-chrome px-4 py-2.5">
         {/*
           O título derivado aparece como placeholder (nunca é armazenado), mas
           é o nome pelo qual o professor vai reencontrar a adaptação: precisa
@@ -237,7 +237,13 @@ export function StepReview({
           "sugestão" com o mesmo texto, a diferença não pode ficar codificada
           só num cinza: o selo "Sem nome" diz o estado por escrito.
         */}
-        <div className="flex min-w-0 flex-1 items-center gap-2">
+        {/*
+          Abaixo de `sm` o nome fica com a linha inteira (`basis-full`): o grupo
+          dos controles é `shrink-0` e, dividindo a mesma linha em 390 px, não
+          sobrava largura nenhuma — o campo ia a 0 px e o selo transbordava por
+          baixo dos selects opacos (achado 0227).
+        */}
+        <div className="flex min-w-0 basis-full items-center gap-2 sm:flex-1 sm:basis-0">
           <input
             type="text"
             aria-label="Nome da adaptação"
@@ -255,7 +261,7 @@ export function StepReview({
         </div>
         {/* Em telas estreitas os botões viram só ícone (rótulo a partir de `sm`),
             senão o grupo `shrink-0` transborda a viewport e é clipado. */}
-        <div className="flex shrink-0 items-center gap-1">
+        <div className="flex shrink-0 flex-wrap items-center gap-1">
           {/* shadcn Select, não o <select> nativo: a lista de <option> é
               desenhada pelo navegador e não aceita as cores nem a fonte do
               projeto. O popover é portalado, então recebe a paleta surface-*

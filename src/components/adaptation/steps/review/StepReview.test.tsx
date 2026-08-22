@@ -396,6 +396,31 @@ describe("StepReview", () => {
       setup({ title: "Recuperação de Geografia" });
       expect(screen.queryByText("Sem nome")).not.toBeInTheDocument();
     });
+
+    // Achado 0227: o grupo da direita é `shrink-0`, então em 390 px ele ficava
+    // com a barra inteira, o campo do nome ia a 0 px e o selo "Sem nome"
+    // (`shrink-0` num contêiner espremido a ~1 px) transbordava por baixo dos
+    // selects, que são opacos e pintados depois. A barra passa a quebrar em
+    // duas linhas abaixo de `sm`, com o nome ocupando a linha inteira.
+    it("dá a linha inteira ao nome em telas estreitas (0227)", () => {
+      setup({ title: "" });
+      const nameGroup = screen.getByLabelText("Nome da adaptação").parentElement!;
+      const bar = nameGroup.parentElement!;
+      expect(bar.className).toMatch(/(?:^|\s)flex-wrap(?:\s|$)/);
+      expect(nameGroup.className).toMatch(/(?:^|\s)basis-full(?:\s|$)/);
+      expect(nameGroup.className).toMatch(/(?:^|\s)sm:basis-0(?:\s|$)/);
+      expect(nameGroup.className).toMatch(/(?:^|\s)min-w-0(?:\s|$)/);
+    });
+
+    it("mantém o selo 'Sem nome' na mesma linha do campo, sem transbordar (0227)", () => {
+      setup({ title: "" });
+      const nameGroup = screen.getByLabelText("Nome da adaptação").parentElement!;
+      expect(screen.getByText("Sem nome").parentElement).toBe(nameGroup);
+      // O grupo dos controles não pode mais empurrar o nome para fora: ele
+      // quebra dentro da própria linha em vez de exigir a largura toda.
+      const controls = screen.getByLabelText("Pasta").closest("div")!;
+      expect(controls.className).toMatch(/(?:^|\s)flex-wrap(?:\s|$)/);
+    });
   });
 
   // Saving lived only on the Exportar step, at the very end of the flow. A
