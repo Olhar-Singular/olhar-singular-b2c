@@ -144,14 +144,14 @@ describe("documentToPlainText", () => {
     expect(documentToPlainText(doc)).toBe("1a. Explique.");
   });
 
-  it("renders an image caption when present", () => {
+  it("marks the image before its caption, like Word (achado 0140)", () => {
     const doc: CanonicalDocument = {
       schemaVersion: 1,
       blocks: [
         { id: id(1), type: "image", src: "x.png", alt: "fig", caption: [{ type: "text", text: "Figura 1" }] },
       ],
     };
-    expect(documentToPlainText(doc)).toBe("Figura 1");
+    expect(documentToPlainText(doc)).toBe("[Imagem: fig]\nFigura 1");
   });
 
   it("renders a question with an empty stem (no prefix to apply)", () => {
@@ -193,7 +193,7 @@ describe("documentToPlainText", () => {
     expect(documentToPlainText(doc)).toBe("1. 1. inner");
   });
 
-  it("renders an image with no caption as an empty block", () => {
+  it("marks an image with no caption instead of dropping it (achado 0140)", () => {
     const doc: CanonicalDocument = {
       schemaVersion: 1,
       blocks: [
@@ -201,7 +201,20 @@ describe("documentToPlainText", () => {
         { id: id(2), type: "paragraph", content: [{ type: "text", text: "depois" }] },
       ],
     };
-    expect(documentToPlainText(doc)).toBe("\n\ndepois");
+    expect(documentToPlainText(doc)).toBe("[Imagem: fig]\n\ndepois");
+  });
+
+  // Mesma política do Word (exportDocx): sem `alt` (ou com `alt` só de espaços)
+  // o marcador genérico ainda entra, para a legenda nunca ficar órfã.
+  it("falls back to the bare [Imagem] marker when there is no alt (achado 0140)", () => {
+    const doc: CanonicalDocument = {
+      schemaVersion: 1,
+      blocks: [
+        { id: id(1), type: "image", src: "x.png", alt: "   " },
+        { id: id(2), type: "image", src: "y.png", alt: "", caption: [{ type: "text", text: "Figura 2" }] },
+      ],
+    };
+    expect(documentToPlainText(doc)).toBe("[Imagem]\n\n[Imagem]\nFigura 2");
   });
 });
 

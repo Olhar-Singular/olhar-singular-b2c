@@ -74,8 +74,15 @@ function blockToLines(block: Block, number: number): string[] {
     case "blockMath":
       // LaTeX source, not `alt` — see richTextToText.
       return [block.latex];
-    case "image":
-      return block.caption ? [richTextToText(block.caption)] : [];
+    case "image": {
+      // MESMA política do Word (`exportDocx`): a imagem não viaja no texto, mas
+      // deixa um marcador rotulado pelo `alt` autoral. Sem ele, "Copiar" era a
+      // única saída que apagava o bloco sem rastro — quem colava no e-mail
+      // recebia a legenda órfã referindo uma figura que não estava lá, e um
+      // bloco sem legenda sumia por completo (achado 0140).
+      const label = block.alt.trim() ? `[Imagem: ${block.alt.trim()}]` : "[Imagem]";
+      return block.caption ? [label, richTextToText(block.caption)] : [label];
+    }
     case "scaffolding":
       // NUMBERED, like the screen (`<ol list-decimal>` in ScaffoldingView) and
       // the PDF (`{i + 1}.` in PdfScaffolding): the order of the steps IS the
