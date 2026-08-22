@@ -438,6 +438,18 @@ describe("StepReview", () => {
       expect(await screen.findByLabelText("Nome da nova pasta")).toBeInTheDocument();
     });
 
+    it("moves the focus into the new-folder field", async () => {
+      // Radix devolve o foco ao gatilho ao fechar o popover, e esse efeito roda
+      // depois do `autoFocus` do campo: sem redirecionar o foco de saída, a
+      // próxima tecla digitada cai no combobox, não no campo recém-aberto.
+      setup({ folders: FOLDERS });
+      fireEvent.click(screen.getByLabelText("Pasta"));
+      await waitFor(() => screen.getByRole("option", { name: /Nova pasta/i }));
+      fireEvent.click(screen.getByRole("option", { name: /Nova pasta/i }));
+      const field = await screen.findByLabelText("Nome da nova pasta");
+      await waitFor(() => expect(field).toHaveFocus());
+    });
+
     it("emits the typed name so the folder can be created on save", async () => {
       const onNewFolderChange = vi.fn();
       setup({ folders: FOLDERS, onNewFolderChange });

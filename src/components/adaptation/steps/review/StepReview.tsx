@@ -161,6 +161,13 @@ export function StepReview({
   // wizard can create the folder at save time; the open/closed state is pure
   // chrome and has no business round-tripping through the parent.
   const [creatingFolder, setCreatingFolder] = useState(false);
+  // O `autoFocus` do campo sozinho não vence: o Radix devolve o foco ao gatilho
+  // no efeito de fechamento do popover, que roda depois do commit que monta o
+  // campo. Por isso o foco é redirecionado no `onCloseAutoFocus` (o hook que o
+  // Radix expõe justamente para isso), com estas duas refs: uma marca que o
+  // fechamento em curso veio de "+ Nova pasta…", a outra aponta para o campo.
+  const newFolderRef = useRef<HTMLInputElement>(null);
+  const focusNewFolder = useRef(false);
 
   // useEditor (inside useCanonicalEditor) only reads extensions once, at
   // mount — this only needs to be stable across a single Revisar session,
@@ -229,6 +236,7 @@ export function StepReview({
               // would leave an empty one behind whenever someone changes their
               // mind and never saves — so it is created on save, or never.
               if (v === NEW_FOLDER) {
+                focusNewFolder.current = true;
                 setCreatingFolder(true);
                 onFolderChange?.(null);
                 return;
@@ -245,7 +253,15 @@ export function StepReview({
             >
               <SelectValue />
             </SelectTrigger>
-            <SelectContent className="border-surface-chrome-line bg-surface-chrome text-surface-ink">
+            <SelectContent
+              className="border-surface-chrome-line bg-surface-chrome text-surface-ink"
+              onCloseAutoFocus={(event) => {
+                if (!focusNewFolder.current) return;
+                focusNewFolder.current = false;
+                event.preventDefault();
+                newFolderRef.current?.focus();
+              }}
+            >
               <SelectItem value={NO_FOLDER}>Sem pasta</SelectItem>
               {folders.map((f) => (
                 <SelectItem key={f.id} value={f.id}>{f.name}</SelectItem>
@@ -256,6 +272,7 @@ export function StepReview({
 
           {creatingFolder && (
             <Input
+              ref={newFolderRef}
               autoFocus
               aria-label="Nome da nova pasta"
               placeholder="Ex.: 6º ano B"
