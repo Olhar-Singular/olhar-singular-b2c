@@ -43,3 +43,32 @@ describe("rowToWizardData", () => {
     expect(data.observationNotes).toBeUndefined();
   });
 });
+
+describe("rowToWizardData — barriers persisted without is_active", () => {
+  it("marks a persisted barrier as active when the column omits is_active", () => {
+    const data = rowToWizardData({
+      ...ROW,
+      barriers_used: [
+        { dimension: "tea", barrier_key: "abstracao", label: "Abstração" },
+      ],
+    });
+    expect(data.barriers).toEqual([
+      {
+        dimension: "tea",
+        barrier_key: "abstracao",
+        label: "Abstração",
+        is_active: true,
+      },
+    ]);
+  });
+
+  it("keeps an explicit is_active: false from the row", () => {
+    const data = rowToWizardData({
+      ...ROW,
+      barriers_used: [
+        { dimension: "tea", barrier_key: "abstracao", label: "Abstração", is_active: false },
+      ],
+    });
+    expect(data.barriers[0].is_active).toBe(false);
+  });
+});
