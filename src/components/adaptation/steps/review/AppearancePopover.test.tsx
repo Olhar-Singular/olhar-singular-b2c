@@ -96,6 +96,38 @@ describe("AppearanceControls", () => {
     expect(onChange).not.toHaveBeenCalled();
   });
 
+  it("desabilita apenas o '+' do tamanho do texto no teto (28px)", () => {
+    setupControls({ fontSize: 28 * 0.75 });
+    expect(screen.getByRole("button", { name: "Aumentar tamanho do texto" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Diminuir tamanho do texto" })).toBeEnabled();
+  });
+
+  it("desabilita apenas o '−' do tamanho do texto no piso (11px)", () => {
+    setupControls({ fontSize: 11 * 0.75 });
+    expect(screen.getByRole("button", { name: "Diminuir tamanho do texto" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Aumentar tamanho do texto" })).toBeEnabled();
+  });
+
+  it("desabilita apenas o '+' do espaçamento no teto (40px)", () => {
+    setupControls({ blockSpacing: 40 });
+    expect(screen.getByRole("button", { name: "Aumentar espaçamento entre blocos" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Diminuir espaçamento entre blocos" })).toBeEnabled();
+  });
+
+  it("desabilita apenas o '−' do espaçamento no piso (8px)", () => {
+    setupControls({ blockSpacing: 8 });
+    expect(screen.getByRole("button", { name: "Diminuir espaçamento entre blocos" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Aumentar espaçamento entre blocos" })).toBeEnabled();
+  });
+
+  it("mantém os dois botões habilitados dentro dos limites", () => {
+    setupControls();
+    expect(screen.getByRole("button", { name: "Aumentar tamanho do texto" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Diminuir tamanho do texto" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Aumentar espaçamento entre blocos" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Diminuir espaçamento entre blocos" })).toBeEnabled();
+  });
+
   it("exibe a microcopy sobre as fontes de acessibilidade", () => {
     setupControls();
     expect(screen.getByText(/acessibilidade/i)).toBeInTheDocument();

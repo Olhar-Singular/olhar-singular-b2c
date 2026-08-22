@@ -38,12 +38,16 @@ function Stepper({
   label,
   display,
   testId,
+  canDecrease,
+  canIncrease,
   onDecrease,
   onIncrease,
 }: {
   label: string;
   display: string;
   testId: string;
+  canDecrease: boolean;
+  canIncrease: boolean;
   onDecrease: () => void;
   onIncrease: () => void;
 }) {
@@ -57,6 +61,7 @@ function Stepper({
           variant="outline"
           className="h-7 w-7 border-surface-line-2 bg-surface-paper text-surface-ink hover:bg-surface-mesa"
           aria-label={`Diminuir ${label.toLowerCase()}`}
+          disabled={!canDecrease}
           onClick={onDecrease}
         >
           −
@@ -70,6 +75,7 @@ function Stepper({
           variant="outline"
           className="h-7 w-7 border-surface-line-2 bg-surface-paper text-surface-ink hover:bg-surface-mesa"
           aria-label={`Aumentar ${label.toLowerCase()}`}
+          disabled={!canIncrease}
           onClick={onIncrease}
         >
           +
@@ -83,14 +89,15 @@ function Stepper({
 export function AppearanceControls({ value, onChange }: Props) {
   const sizePx = ptToPx(value.fontSize);
 
+  // O clamp continua sendo a rede: os botões no limite ficam `disabled`, então
+  // o clique nem chega aqui — mas um valor fora de faixa vindo do documento não
+  // consegue escapar da janela permitida.
   const stepFontSize = (deltaPx: number) => {
-    const next = clamp(sizePx + deltaPx, FONT_SIZE_MIN_PX, FONT_SIZE_MAX_PX);
-    if (next !== sizePx) onChange({ fontSize: pxToPt(next) });
+    onChange({ fontSize: pxToPt(clamp(sizePx + deltaPx, FONT_SIZE_MIN_PX, FONT_SIZE_MAX_PX)) });
   };
 
   const stepSpacing = (deltaPx: number) => {
-    const next = clamp(value.blockSpacing + deltaPx, SPACING_MIN_PX, SPACING_MAX_PX);
-    if (next !== value.blockSpacing) onChange({ blockSpacing: next });
+    onChange({ blockSpacing: clamp(value.blockSpacing + deltaPx, SPACING_MIN_PX, SPACING_MAX_PX) });
   };
 
   return (
@@ -122,6 +129,8 @@ export function AppearanceControls({ value, onChange }: Props) {
         label="Tamanho do texto"
         display={`${sizePx}px`}
         testId="font-size-value"
+        canDecrease={sizePx > FONT_SIZE_MIN_PX}
+        canIncrease={sizePx < FONT_SIZE_MAX_PX}
         onDecrease={() => stepFontSize(-1)}
         onIncrease={() => stepFontSize(1)}
       />
@@ -134,6 +143,8 @@ export function AppearanceControls({ value, onChange }: Props) {
         label="Espaçamento entre blocos"
         display={`${value.blockSpacing}px`}
         testId="block-spacing-value"
+        canDecrease={value.blockSpacing > SPACING_MIN_PX}
+        canIncrease={value.blockSpacing < SPACING_MAX_PX}
         onDecrease={() => stepSpacing(-SPACING_STEP_PX)}
         onIncrease={() => stepSpacing(SPACING_STEP_PX)}
       />
