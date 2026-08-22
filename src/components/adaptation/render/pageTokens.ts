@@ -75,6 +75,23 @@ export const ANSWER_LINE_COLOR = "#767676";
 export const RULE_COLOR = ANSWER_LINE_COLOR;
 
 /**
+ * Espessura de TODO traço estrutural do documento: régua do cabeçalho,
+ * divisória, borda da caixa do andaime e pauta da questão aberta. Ponto único
+ * das superfícies, fechando a família de `RULE_COLOR` (cor).
+ *
+ * O `0145` já tinha unificado a pauta; os outros três traços continuavam com `1`
+ * literal no `@react-pdf`, que é 1pt, contra o `1px` CSS das telas, que é
+ * 0,75pt. Todo traço estrutural saía do papel ~33% mais grosso do que na tela em
+ * que o professor conferiu a prova, e a espessura do traço é justamente o que ele
+ * não consegue checar antes de imprimir (achado 0150).
+ *
+ * O valor adotado é o que as telas já mostravam (1px = 0,75pt): quem se move é o
+ * PDF. Baixar mais tornaria o traço quase invisível numa laser gasta, exatamente
+ * o problema que a escolha de `RULE_COLOR` acabou de fechar.
+ */
+export const RULE_WIDTH_PX = 1;
+
+/**
  * Distância entre uma pauta e a seguinte — a altura útil que sobra para o aluno
  * escrever. Ponto único das TRÊS superfícies, ao lado de `ANSWER_LINE_COLOR`.
  *
@@ -104,7 +121,7 @@ export const ANSWER_LINE_GAP_PX = 18;
  * o PDF. Baixar mais tornaria a linha quase invisível numa laser gasta, exatamente o
  * problema que a escolha de `ANSWER_LINE_COLOR` acabou de fechar.
  */
-export const ANSWER_LINE_WIDTH_PX = 1;
+export const ANSWER_LINE_WIDTH_PX = RULE_WIDTH_PX;
 
 /**
  * Vão entre um item de lista de resposta e o seguinte (alternativas de múltipla
@@ -205,6 +222,9 @@ export const ANSWER_LINE_GAP_PT = ANSWER_LINE_GAP_PX / PT_TO_PX;
 
 /** `ANSWER_LINE_WIDTH_PX` na unidade do PDF (pt), pela mesma razão 72/96. */
 export const ANSWER_LINE_WIDTH_PT = ANSWER_LINE_WIDTH_PX / PT_TO_PX;
+
+/** `RULE_WIDTH_PX` na unidade do PDF (pt), pela mesma razão 72/96. */
+export const RULE_WIDTH_PT = RULE_WIDTH_PX / PT_TO_PX;
 
 /** `ANSWER_ITEM_GAP_PX` na unidade do PDF (pt), pela mesma razão 72/96. */
 export const ANSWER_ITEM_GAP_PT = ANSWER_ITEM_GAP_PX / PT_TO_PX;

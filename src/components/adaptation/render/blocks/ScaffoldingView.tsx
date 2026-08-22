@@ -15,6 +15,7 @@ import {
   SCAFFOLDING_STEP_INDENT_PX,
   SCAFFOLDING_BG,
   SCAFFOLDING_BORDER,
+  RULE_WIDTH_PX,
 } from "../pageTokens";
 
 type ScaffoldingBlock = Extract<Block, { type: "scaffolding" }>;
@@ -27,6 +28,7 @@ export function ScaffoldingView({ block }: { block: ScaffoldingBlock }) {
       style={{
         backgroundColor: SCAFFOLDING_BG,
         borderColor: SCAFFOLDING_BORDER,
+        borderWidth: `${RULE_WIDTH_PX}px`,
         padding: `${SCAFFOLDING_PADDING_PX}px`,
         marginTop: `${SCAFFOLDING_MARGIN_Y_PX}px`,
         marginBottom: `${SCAFFOLDING_MARGIN_Y_PX}px`,

@@ -14,6 +14,7 @@
 import type { HeaderSettings } from "@/components/adaptation/export/panelSettings";
 import { formatHeaderDateBR, hasHeaderContent } from "@/components/adaptation/export/panelSettings";
 import { HEADER_SPACING_PT } from "./headerSpacing";
+import { RULE_WIDTH_PX } from "./pageTokens";
 
 /** Converte pontos (unidade do PDF) para pixels (unidade da tela). */
 const pt2px = (pt: number): number => pt * (96 / 72);
@@ -29,7 +30,11 @@ export function DocumentHeaderView({ header }: { header: HeaderSettings }) {
       style={{
         marginBottom: pt2px(HEADER_SPACING_PT.bottomMargin),
         paddingBottom: pt2px(HEADER_SPACING_PT.bottomPadding),
-        borderBottom: "1px solid #333333",
+        // Espessura pelo token estrutural, o mesmo que o `PdfHeader` converte
+        // para pt — antes o PDF trazia 1pt contra estes 0,75pt (achado 0150).
+        borderBottomWidth: `${RULE_WIDTH_PX}px`,
+        borderBottomStyle: "solid",
+        borderBottomColor: "#333333",
       }}
     >
       {filled(header.title) && (

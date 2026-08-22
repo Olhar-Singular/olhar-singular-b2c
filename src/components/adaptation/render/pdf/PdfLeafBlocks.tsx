@@ -28,6 +28,7 @@ import {
   SCAFFOLDING_BG,
   SCAFFOLDING_BORDER,
   RULE_COLOR,
+  RULE_WIDTH_PT,
 } from "../pageTokens";
 import { resolveElementFontSizes, resolvePageStyle, type ElementFontSizesPt } from "../pageStyle";
 
@@ -140,7 +141,7 @@ export function PdfScaffolding({ block }: { block: ScaffoldingBlock }) {
     <View
       style={{
         backgroundColor: SCAFFOLDING_BG,
-        borderWidth: 1,
+        borderWidth: RULE_WIDTH_PT,
         borderColor: SCAFFOLDING_BORDER,
         padding: SCAFFOLDING_PADDING_PT,
         marginVertical: SCAFFOLDING_MARGIN_Y_PT,
@@ -163,7 +164,7 @@ export function PdfDivider({ block }: { block: DividerBlock }) {
   return (
     <View
       style={{
-        borderBottomWidth: 1,
+        borderBottomWidth: RULE_WIDTH_PT,
         borderBottomColor: RULE_COLOR,
         marginVertical: 8,
         ...nodeStyleToPdf(block.style),

@@ -23,7 +23,7 @@ import {
 import { PdfBlock } from "./PdfBlock";
 import { questionNumbers } from "../questionNumbering";
 import { perQuestionBreakFlags } from "../perQuestionBreaks";
-import { pageTokensToPdf } from "../pageTokens";
+import { pageTokensToPdf, RULE_WIDTH_PT } from "../pageTokens";
 import { HEADER_SPACING_PT } from "../headerSpacing";
 import { resolvePageStyle, resolveElementFontSizes } from "../pageStyle";
 
@@ -37,7 +37,9 @@ export function PdfHeader({ header }: { header: HeaderSettings }) {
       style={{
         marginBottom: HEADER_SPACING_PT.bottomMargin,
         paddingBottom: HEADER_SPACING_PT.bottomPadding,
-        borderBottomWidth: 1,
+        // Espessura pelo token estrutural: `1` literal aqui é 1pt e saía 33%
+        // mais grosso que o 1px (0,75pt) da prévia do Exportar (achado 0150).
+        borderBottomWidth: RULE_WIDTH_PT,
         borderBottomColor: "#333333",
       }}
     >
