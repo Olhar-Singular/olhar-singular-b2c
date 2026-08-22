@@ -58,6 +58,23 @@ export const DEFAULT_IMAGE_WIDTH_PX = 300;
 export const ANSWER_LINE_COLOR = "#767676";
 
 /**
+ * Cor do traço da DIVISÓRIA (bloco `divider`), na família de `ANSWER_LINE_COLOR`.
+ *
+ * Ponto único das TRÊS superfícies: a folha do Revisar (o `<hr>` do editor, que
+ * lê a var `--doc-rule-color`), a prévia do Exportar (`DividerView`) e o PDF
+ * (`PdfDivider`). Antes eram duas cores diferentes e nenhuma defensável: as duas
+ * telas herdavam `--border`, token do chrome do app que nem sequer é cor de
+ * papel (rgb(218,224,226), 1,33:1 sobre o branco), e o PDF trazia `#999999`
+ * literal (2,85:1). Ambas abaixo dos 3:1 que a WCAG 1.4.11 exige de objeto
+ * gráfico, e a 1,33:1 a divisória some numa fotocópia (achado 0148).
+ *
+ * Quem se move é a tela, que mostrava o traço quase invisível. O valor é o mesmo
+ * `ANSWER_LINE_COLOR` da pauta: os dois são traços horizontais do documento e não
+ * há razão para pesos diferentes, além de a pauta já ter provado o valor no papel.
+ */
+export const RULE_COLOR = ANSWER_LINE_COLOR;
+
+/**
  * Distância entre uma pauta e a seguinte — a altura útil que sobra para o aluno
  * escrever. Ponto único das TRÊS superfícies, ao lado de `ANSWER_LINE_COLOR`.
  *
@@ -265,6 +282,10 @@ export function pageTokensToCss(resolved: ResolvedPageStyle = DEFAULT_RESOLVED):
     color: DEFAULT_INK,
     fontFamily: fontFamilyToCss(resolved.fontFamily ?? DEFAULT_FONT_FAMILY_TOKEN),
     ["--doc-block-spacing"]: `${resolved.blockSpacing}px`,
+    /* Cor do traço da divisória. O `<hr>` do editor não tem NodeView (o schema
+       Tiptap só emite a tag), então a folha do Revisar lê o token por CSS, em
+       `index.css`; a prévia do Exportar e o PDF leem `RULE_COLOR` direto. */
+    ["--doc-rule-color"]: RULE_COLOR,
     ["--doc-fs-stem"]: px(efs.stem),
     ["--doc-fs-instruction"]: px(efs.instruction),
     ["--doc-fs-alternative"]: px(efs.alternative),

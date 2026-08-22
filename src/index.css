@@ -391,6 +391,16 @@
   border-left: 0;
 }
 
+/* Divisória do editor: o `<hr>` do nó `divider` não tem NodeView (o schema
+   Tiptap só emite a tag), então ele caía no `border-color` default do Tailwind,
+   que é `--border`, token do chrome do app: 1,33:1 sobre o papel, um traço que
+   some na fotocópia e nada parecido com o que sai no PDF. A cor vem agora do
+   token de página `RULE_COLOR`, publicado por `pageTokensToCss` na folha como
+   `--doc-rule-color` (achado 0148). */
+.tiptap hr[data-type="divider"] {
+  border-color: var(--doc-rule-color, #767676);
+}
+
 /* Keep top-level question cards spaced consistently with the new containers
  * (margin only — the card already has its own border; do NOT double-border). */
 .tiptap:not(.rich-text-field) > [data-type="question"] {
