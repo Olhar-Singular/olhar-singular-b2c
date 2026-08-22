@@ -112,6 +112,16 @@ export default function CanonicalAdaptationWizard({ editMode }: Props = {}) {
   const [isUploading, setIsUploading] = useState(false);
   const [isSaved, setIsSaved] = useState(!!editMode);
   /**
+   * Há escolha de arquivamento (matéria/pasta) feita e ainda NÃO persistida.
+   *
+   * `subject` e `folder_id` são COLUNAS: viajam no "Salvar adaptação", não no
+   * autosave, que só carimba o blob do resultado. Sem este estado a barra
+   * mostrava apenas o autosave, então escolher uma matéria não gerava sinal
+   * nenhum — e um "Rascunho salvo" herdado de uma edição de texto anterior
+   * ficava ao lado de uma escolha que não estava salva em lugar nenhum.
+   */
+  const [filingDirty, setFilingDirty] = useState(false);
+  /**
    * The folder the adaptation is filed under. Lives here, not in WizardData:
    * it is a COLUMN, not part of the result blob, so it rides the explicit save
    * (with `markReady`) rather than the autosave, which only patches the blob.
@@ -392,6 +402,8 @@ export default function CanonicalAdaptationWizard({ editMode }: Props = {}) {
     syncUpdatedAt(res.updatedAt);
     toast.success("Adaptação salva!");
     setIsSaved(true);
+    // As colunas acabaram de ir para o banco: o aviso de pendência sai junto.
+    setFilingDirty(false);
     // `subject` belongs here: without it the callback keeps the folder chosen
     // at the time it was last rebuilt, so picking a subject and pressing
     // Salvar would file the adaptation under the PREVIOUS one — or under
@@ -459,17 +471,20 @@ export default function CanonicalAdaptationWizard({ editMode }: Props = {}) {
             subject={subject}
             onSubjectChange={(s) => {
               setIsSaved(false);
+              setFilingDirty(true);
               setSubject(s);
             }}
             folders={folders}
             folderId={folderId}
             onFolderChange={(id) => {
               setIsSaved(false);
+              setFilingDirty(true);
               setFolderId(id);
             }}
             newFolder={newFolder}
             onNewFolderChange={(name) => {
               setIsSaved(false);
+              setFilingDirty(true);
               setNewFolder(name);
             }}
             canSave={!!draftId}
@@ -544,6 +559,18 @@ export default function CanonicalAdaptationWizard({ editMode }: Props = {}) {
             title={captureFailure}
           >
             Alterações não estão sendo salvas — desfaça a última edição
+          </p>
+        ) : draftId && stepIndex >= REVIEW_INDEX && stepIndex <= EXPORT_INDEX && filingDirty ? (
+          /* Matéria/pasta escolhidas e ainda não persistidas: este aviso tem
+             precedência sobre o rótulo do autosave, que fala só do blob e
+             mentiria ("Rascunho salvo") sobre uma escolha pendente. */
+          <p
+            className="text-xs font-medium text-amber-600 dark:text-amber-500"
+            role="status"
+            aria-live="polite"
+            data-testid="filing-dirty"
+          >
+            Matéria e pasta não salvas (clique em Salvar adaptação)
           </p>
         ) : (
           draftId &&

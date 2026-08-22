@@ -1309,6 +1309,88 @@ describe("CanonicalAdaptationWizard — navigation guard", () => {
     });
   });
 
+  /**
+   * 0143 · Matéria e Pasta são COLUNAS: viajam no "Salvar adaptação", não no
+   * autosave do blob. A barra mostrava só o estado do autosave, então escolher
+   * uma matéria não produzia sinal nenhum — e, pior, um "Rascunho salvo" vindo
+   * de uma edição de texto anterior ficava ao lado de uma escolha que não
+   * estava salva em lugar nenhum.
+   */
+  describe("matéria e pasta pendentes de salvamento", () => {
+    it("avisa que há alteração não salva assim que a matéria é escolhida", () => {
+      renderWithProviders(<CanonicalAdaptationWizard />);
+      advanceToReview();
+      expect(screen.queryByTestId("filing-dirty")).not.toBeInTheDocument();
+
+      fireEvent.click(screen.getByTestId("review-file"));
+
+      const pending = screen.getByTestId("filing-dirty");
+      expect(pending).toHaveTextContent(/não salvas/i);
+      expect(pending).toHaveAttribute("role", "status");
+      expect(pending).toHaveAttribute("aria-live", "polite");
+    });
+
+    it("não deixa 'Rascunho salvo' ao lado de uma matéria pendente", () => {
+      mockDraftStatus.value = "saved";
+      renderWithProviders(<CanonicalAdaptationWizard />);
+      advanceToReview();
+      expect(screen.getByText("Rascunho salvo")).toBeInTheDocument();
+
+      fireEvent.click(screen.getByTestId("review-file"));
+
+      expect(screen.queryByText("Rascunho salvo")).not.toBeInTheDocument();
+      expect(screen.getByTestId("filing-dirty")).toBeInTheDocument();
+    });
+
+    it("avisa também ao escolher uma pasta existente", () => {
+      renderWithProviders(<CanonicalAdaptationWizard />);
+      advanceToReview();
+      fireEvent.click(screen.getByTestId("review-pick-folder"));
+      expect(screen.getByTestId("filing-dirty")).toBeInTheDocument();
+    });
+
+    it("avisa também ao nomear uma pasta nova", () => {
+      renderWithProviders(<CanonicalAdaptationWizard />);
+      advanceToReview();
+      fireEvent.click(screen.getByTestId("review-name-folder"));
+      expect(screen.getByTestId("filing-dirty")).toBeInTheDocument();
+    });
+
+    it("limpa o aviso depois que 'Salvar adaptação' persiste as colunas", async () => {
+      renderWithProviders(<CanonicalAdaptationWizard />);
+      advanceToReview();
+      fireEvent.click(screen.getByTestId("review-file"));
+      expect(screen.getByTestId("filing-dirty")).toBeInTheDocument();
+
+      fireEvent.click(screen.getByTestId("review-save"));
+
+      await waitFor(() => expect(mockMarkReady).toHaveBeenCalled());
+      await waitFor(() => expect(screen.queryByTestId("filing-dirty")).not.toBeInTheDocument());
+    });
+
+    it("mantém o aviso quando o salvar falha por conflito", async () => {
+      mockMarkReady.mockResolvedValue({ ok: false });
+      renderWithProviders(<CanonicalAdaptationWizard />);
+      advanceToReview();
+      fireEvent.click(screen.getByTestId("review-file"));
+
+      fireEvent.click(screen.getByTestId("review-save"));
+
+      await waitFor(() => expect(mockMarkReady).toHaveBeenCalled());
+      expect(screen.getByTestId("filing-dirty")).toBeInTheDocument();
+    });
+
+    it("o aviso de captura quebrada continua tendo prioridade sobre o aviso de arquivamento", () => {
+      renderWithProviders(<CanonicalAdaptationWizard />);
+      advanceToReview();
+      fireEvent.click(screen.getByTestId("review-file"));
+      fireEvent.click(screen.getByTestId("break-capture"));
+
+      expect(screen.getByTestId("capture-failure")).toBeInTheDocument();
+      expect(screen.queryByTestId("filing-dirty")).not.toBeInTheDocument();
+    });
+  });
+
   describe("autosave frozen warning", () => {
     it("replaces the save status with a warning while capture is broken", () => {
       renderWithProviders(<CanonicalAdaptationWizard />);
