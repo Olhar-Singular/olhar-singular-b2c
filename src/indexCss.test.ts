@@ -117,3 +117,68 @@ describe("index.css — contraste do item destacado (accent)", () => {
     expect(ratio).toBeGreaterThanOrEqual(4.5);
   });
 });
+
+/**
+ * Contraste do chip de passo ja concluido do wizard (achado 0144 da caca autonoma).
+ *
+ * Os chips 1..N-1 do indicador de passos sao botoes habilitados (`goTo(i)`) com
+ * rotulo em `text-xs` (12 px), entao valem os 4,5:1 de texto normal da WCAG 1.4.3.
+ * O fundo e translucido (`bg-primary/10`, `hover:bg-primary/20`), logo o par real e
+ * a tinta contra a composicao da tinta diluida sobre `--background`.
+ */
+const wizardSource = readFileSync(
+  path.resolve(__dirname, "./components/adaptation/CanonicalAdaptationWizard.tsx"),
+  "utf8",
+);
+
+/** Classes do ramo `i < stepIndex` (passo ja concluido) do indicador de passos. */
+function completedChipClasses(): string {
+  const match = wizardSource.match(/i < stepIndex\s*\?\s*"([^"]+)"/);
+  expect(match, "ramo do chip concluido nao encontrado no wizard").not.toBeNull();
+  return match![1];
+}
+
+/** `bg-primary/10 hover:bg-primary/20` -> [["primary", 0.1], ["primary", 0.2]] */
+function chipBackgrounds(classes: string): [string, number][] {
+  const matches = [...classes.matchAll(/bg-([a-z-]+)(?:\/(\d+))?\b/g)];
+  expect(matches.length, `nenhum fundo no chip: ${classes}`).toBeGreaterThan(0);
+  return matches.map((m) => [m[1], m[2] ? Number(m[2]) / 100 : 1]);
+}
+
+function chipInk(classes: string): string {
+  const match = classes.match(/(?:^|\s)text-([a-z-]+)\b/);
+  expect(match, `nenhuma tinta no chip: ${classes}`).not.toBeNull();
+  return match![1];
+}
+
+function mix(fg: [number, number, number], bg: [number, number, number], alpha: number) {
+  return fg.map((v, i) => alpha * v + (1 - alpha) * bg[i]) as [number, number, number];
+}
+
+function ratioRgb(a: [number, number, number], b: [number, number, number]): number {
+  const [hi, lo] = [luminanceRgb(a), luminanceRgb(b)].sort((x, y) => y - x);
+  return (hi + 0.05) / (lo + 0.05);
+}
+
+function luminanceRgb(rgb: [number, number, number]): number {
+  const [r, g, b] = rgb.map((channel) =>
+    channel <= 0.03928 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4,
+  );
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+}
+
+describe("wizard — contraste do chip de passo concluido", () => {
+  it.each([
+    [":root", "tema claro"],
+    [".dark", "tema escuro"],
+  ])("%s (%s) atinge 4,5:1 em repouso e no hover", (selector) => {
+    const classes = completedChipClasses();
+    const ink = hslTokenToRgb(token(selector, chipInk(classes)));
+    const pageBg = hslTokenToRgb(token(selector, "background"));
+
+    for (const [bgToken, alpha] of chipBackgrounds(classes)) {
+      const chipBg = mix(hslTokenToRgb(token(selector, bgToken)), pageBg, alpha);
+      expect(ratioRgb(ink, chipBg), `fundo ${bgToken}/${alpha}`).toBeGreaterThanOrEqual(4.5);
+    }
+  });
+});

@@ -529,7 +529,7 @@ export default function CanonicalAdaptationWizard({ editMode }: Props = {}) {
                 i === stepIndex
                   ? "bg-primary text-primary-foreground"
                   : i < stepIndex
-                  ? "bg-primary/10 text-primary hover:bg-primary/20"
+                  ? "bg-primary/10 text-primary-strong hover:bg-primary/20"
                   : "bg-muted text-muted-foreground cursor-not-allowed"
               }`}
             >

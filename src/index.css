@@ -87,6 +87,11 @@
 
     --primary: 195 35% 38%;
     --primary-foreground: 0 0% 100%;
+    /* Variante escura de --primary para tinta sobre fundo translucido de
+       primary (ex.: bg-primary/10 do chip de passo concluido no wizard). Com
+       --primary puro o par ficava em 4,33:1, abaixo do minimo da WCAG 1.4.3
+       para texto normal. Mesmo matiz, so a luminosidade menor. */
+    --primary-strong: 195 35% 28%;
 
     --secondary: 195 20% 92%;
     --secondary-foreground: 195 35% 28%;
@@ -169,6 +174,10 @@
        as foreground content. */
     --primary: 195 38% 52%;
     --primary-foreground: 0 0% 100%;
+    /* Contraparte clara da variante do tema claro. Aqui o fundo translucido do
+       chip e escuro, entao a tinta legivel sobe de luminosidade em vez de
+       descer. */
+    --primary-strong: 195 38% 74%;
     --secondary: 195 18% 36%;
     --secondary-foreground: 195 20% 88%;
     --muted: 195 14% 27%;
