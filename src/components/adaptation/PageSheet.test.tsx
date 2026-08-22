@@ -226,8 +226,18 @@ describe("PageSheet", () => {
 
     it("não pagina por padrão (a folha do Revisar continua contínua)", () => {
       render(<PageSheet toolbar={null}><span>x</span></PageSheet>);
-      expect(screen.getByTestId("page-sheet").style.minHeight).toBe("");
+      const sheet = screen.getByTestId("page-sheet");
+      expect(sheet.style.backgroundImage).toBe("");
+      expect(sheet.style.transform).toBe("");
       expect(screen.queryByTestId("page-count")).toBeNull();
+    });
+
+    it("dá altura mínima de uma folha A4 ao papel do Revisar (achado 0329)", () => {
+      // Sem paginação a folha só tinha a altura do conteúdo: com pouco texto o
+      // papel encolhia (725px medidos em produção) e deixava de ter forma de
+      // página. A borda inferior é o que responde "isto cabe numa folha?".
+      render(<PageSheet toolbar={null}><span>x</span></PageSheet>);
+      expect(screen.getByTestId("page-sheet").style.minHeight).toBe("1123px");
     });
 
     it("dá altura de página A4 à folha", () => {

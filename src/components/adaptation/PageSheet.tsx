@@ -25,8 +25,9 @@ interface PageSheetProps {
   /** Estilo do documento (fonte/tamanho/espaçamento) vindo da Aparência. */
   pageStyle?: PageStyle;
   /**
-   * Liga o modo "impresso": a folha ganha a ALTURA da página A4, uma régua
-   * tracejada a cada página e a contagem de folhas acima dela.
+   * Liga o modo "impresso": a folha cresce em múltiplos EXATOS de página A4,
+   * com uma régua tracejada a cada virada e a contagem de folhas acima dela.
+   * (A altura mínima de uma folha vale nos dois modos — achado 0329.)
    *
    * Só a prévia do Exportar usa (achado 0118) — é a tela que promete mostrar o
    * arquivo. A folha do Revisar continua contínua de propósito: lá se edita
@@ -203,9 +204,18 @@ export function PageSheet({ toolbar, pageStyle, paginated = false, children }: P
       style={{
         ...pageTokensToCss(resolvePageStyle(pageStyle)),
         boxShadow: "var(--sf-paper-shadow)",
+        /*
+          Piso de uma folha A4 mesmo fora do modo paginado (achado 0329): sem
+          ele o papel do Revisar tinha só a altura do CONTEÚDO — com pouco
+          texto encolhia a 0,65 de página (razão 1:0,91) e deixava de ter forma
+          de folha, então o professor não via onde a página acaba. `minHeight`
+          é piso, não trava: o fluxo de edição continua contínuo e a folha
+          cresce com o conteúdo, sem a quebra rígida que o comentário do topo
+          deste arquivo rejeita.
+        */
+        minHeight: `${paginated ? sheetHeight : PAGE_HEIGHT_PX}px`,
         ...(paginated
           ? {
-              minHeight: `${sheetHeight}px`,
               transform: `scale(${scale})`,
               backgroundImage: pageRulesBackground,
             }
