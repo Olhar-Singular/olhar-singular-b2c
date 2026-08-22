@@ -28,10 +28,21 @@ function richTextToText(rt: RichText): string {
   return rt.map((node) => (node.type === "text" ? node.text : node.latex)).join("");
 }
 
+/**
+ * Pauta da questão aberta em texto puro: MESMA política já escolhida para o Word
+ * (`exportDocx`), 60 underscores por linha. Tela e PDF desenham a tracejada, que
+ * não existe em texto; o underscore é a tradução textual dela.
+ */
+const ANSWER_LINE = "_".repeat(60);
+
 function answerToLines(answer: QuestionAnswer): string[] {
   switch (answer.kind) {
     case "open":
-      return [];
+      // `answerLines` é dado AUTORAL (o professor escolhe quantas linhas) e o
+      // default 3 é o mesmo da tela (`OpenAnswerView`) e do Word. Devolver []
+      // fazia do "Copiar" a única saída em que a dissertativa colada no editor
+      // não tinha onde ser respondida, sem nenhum aviso (achado 0141).
+      return Array.from({ length: answer.answerLines ?? 3 }, () => ANSWER_LINE);
     case "multipleChoice":
       return answer.alternatives.map(
         (alt, i) => `${indexToLetter(i)}) ${richTextToText(alt.content)}`,

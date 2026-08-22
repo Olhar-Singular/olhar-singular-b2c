@@ -5,6 +5,10 @@ import type { CanonicalDocument } from "./schema";
 
 const id = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, "0")}`;
 
+/** Mesma pauta textual do Word (`exportDocx`): 60 underscores por linha. */
+const ANSWER_LINE = "_".repeat(60);
+const openLines = (n: number) => Array.from({ length: n }, () => ANSWER_LINE).join("\n");
+
 describe("documentToPlainText", () => {
   it("renders every block and answer kind without throwing", () => {
     const text = documentToPlainText(renderDocument);
@@ -110,7 +114,7 @@ describe("documentToPlainText", () => {
     expect(documentToPlainText(doc)).toBe("x^2");
   });
 
-  it("auto-prefixes the first question with 1. and produces no answer lines for open", () => {
+  it("auto-prefixes the first question with 1. and rules 3 answer lines by default", () => {
     const doc: CanonicalDocument = {
       schemaVersion: 1,
       blocks: [
@@ -122,7 +126,7 @@ describe("documentToPlainText", () => {
         },
       ],
     };
-    expect(documentToPlainText(doc)).toBe("1. Explique.");
+    expect(documentToPlainText(doc)).toBe(`1. Explique.\n${openLines(3)}`);
   });
 
   // Screen (QuestionView), PDF (PdfQuestion) and Word (exportDocx) all resolve
@@ -141,7 +145,7 @@ describe("documentToPlainText", () => {
         },
       ],
     };
-    expect(documentToPlainText(doc)).toBe("1a. Explique.");
+    expect(documentToPlainText(doc)).toBe(`1a. Explique.\n${openLines(3)}`);
   });
 
   it("marks the image before its caption, like Word (achado 0140)", () => {
@@ -167,7 +171,7 @@ describe("documentToPlainText", () => {
         },
       ],
     };
-    expect(documentToPlainText(doc)).toBe("Responda.");
+    expect(documentToPlainText(doc)).toBe(`Responda.\n${openLines(3)}`);
   });
 
   it("auto-numbers a question nested inside another question's stem", () => {
@@ -190,7 +194,9 @@ describe("documentToPlainText", () => {
       ],
     };
     // Outer question is 1. ; the nested stem question restarts at 1. within the stem.
-    expect(documentToPlainText(doc)).toBe("1. 1. inner");
+    expect(documentToPlainText(doc)).toBe(
+      `1. 1. inner\n${openLines(3)}\n${openLines(3)}`,
+    );
   });
 
   it("marks an image with no caption instead of dropping it (achado 0140)", () => {
@@ -215,6 +221,44 @@ describe("documentToPlainText", () => {
       ],
     };
     expect(documentToPlainText(doc)).toBe("[Imagem]\n\n[Imagem]\nFigura 2");
+  });
+
+  // Achado 0141: a pauta da questão aberta existe na tela (OpenAnswerView), no
+  // PDF (PdfAnswer) e no Word (exportDocx) — só o "Copiar" a descartava, e o
+  // professor colava no editor uma dissertativa sem onde responder. Quantas
+  // linhas é decisão autoral (`answerLines`), então perder isso é perder dado.
+  it("rules the authored number of answer lines for an open question (achado 0141)", () => {
+    const doc: CanonicalDocument = {
+      schemaVersion: 1,
+      blocks: [
+        {
+          id: id(1),
+          type: "question",
+          stem: [{ id: id(2), type: "paragraph", content: [{ type: "text", text: "Explique." }] }],
+          instruction: [{ type: "text", text: "Responda nas linhas abaixo." }],
+          answer: { kind: "open", answerLines: 4 },
+        },
+      ],
+    };
+    expect(documentToPlainText(doc)).toBe(
+      `1. Explique.\nResponda nas linhas abaixo.\n${openLines(4)}`,
+    );
+  });
+
+  // Mesmo default do Word e da tela (`answer.answerLines ?? 3`).
+  it("falls back to 3 answer lines when answerLines is absent (achado 0141)", () => {
+    const doc: CanonicalDocument = {
+      schemaVersion: 1,
+      blocks: [
+        {
+          id: id(1),
+          type: "question",
+          stem: [{ id: id(2), type: "paragraph", content: [{ type: "text", text: "Explique." }] }],
+          answer: { kind: "open" },
+        },
+      ],
+    };
+    expect(documentToPlainText(doc).split("\n").filter((l) => l === ANSWER_LINE)).toHaveLength(3);
   });
 });
 
