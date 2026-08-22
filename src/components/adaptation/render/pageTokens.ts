@@ -74,6 +74,22 @@ export const ANSWER_LINE_COLOR = "#767676";
 export const ANSWER_LINE_GAP_PX = 18;
 
 /**
+ * Espessura do traço da pauta da questão aberta. Ponto único das TRÊS superfícies,
+ * fechando a família de `ANSWER_LINE_COLOR` (cor) e `ANSWER_LINE_GAP_PX` (passo).
+ *
+ * Antes a espessura era o último literal solto: as duas telas herdavam o `border-b`
+ * do Tailwind (1px CSS = 0,75pt no papel) e o PDF trazia `borderBottomWidth: 1`,
+ * que no @react-pdf é 1pt. A mesma pauta saía 33% mais grossa impressa do que na
+ * tela em que a professora a conferiu — e a pauta é o único elemento cuja aparência
+ * ela não consegue checar antes de imprimir.
+ *
+ * O valor adotado é o que as duas telas já mostravam (1px = 0,75pt): quem se move é
+ * o PDF. Baixar mais tornaria a linha quase invisível numa laser gasta, exatamente o
+ * problema que a escolha de `ANSWER_LINE_COLOR` acabou de fechar.
+ */
+export const ANSWER_LINE_WIDTH_PX = 1;
+
+/**
  * Vão entre um item de lista de resposta e o seguinte (alternativas de múltipla
  * escolha). Ponto único das TRÊS superfícies, na mesma família de
  * `ANSWER_LINE_GAP_PX`, que o achado 0111 unificou para a pauta da questão aberta.
@@ -148,6 +164,9 @@ export const PAGE_HEIGHT_PX = Math.round(PAGE_HEIGHT_PT * PT_TO_PX);
 
 /** `ANSWER_LINE_GAP_PX` na unidade do PDF (pt), pela mesma razão 72/96. */
 export const ANSWER_LINE_GAP_PT = ANSWER_LINE_GAP_PX / PT_TO_PX;
+
+/** `ANSWER_LINE_WIDTH_PX` na unidade do PDF (pt), pela mesma razão 72/96. */
+export const ANSWER_LINE_WIDTH_PT = ANSWER_LINE_WIDTH_PX / PT_TO_PX;
 
 /** `ANSWER_ITEM_GAP_PX` na unidade do PDF (pt), pela mesma razão 72/96. */
 export const ANSWER_ITEM_GAP_PT = ANSWER_ITEM_GAP_PX / PT_TO_PX;

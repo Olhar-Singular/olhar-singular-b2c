@@ -21,7 +21,12 @@ import type { QuestionAnswer } from "@/lib/adaptation/canonical/schema";
 import { indexToLetter } from "../letters";
 import { PdfRichText } from "./PdfRichText";
 import { resolveElementFontSizes, resolvePageStyle, type ElementFontSizesPt } from "../pageStyle";
-import { ANSWER_LINE_COLOR, ANSWER_LINE_GAP_PT, ANSWER_ITEM_GAP_PT } from "../pageTokens";
+import {
+  ANSWER_LINE_COLOR,
+  ANSWER_LINE_GAP_PT,
+  ANSWER_LINE_WIDTH_PT,
+  ANSWER_ITEM_GAP_PT,
+} from "../pageTokens";
 
 // O vão entre itens vem de pageTokens para o papel imprimir o mesmo passo que as
 // duas telas mostram (achado 0313).
@@ -60,7 +65,7 @@ export function PdfAnswer({
             <View
               key={i}
               style={{
-                borderBottomWidth: 1,
+                borderBottomWidth: ANSWER_LINE_WIDTH_PT,
                 borderBottomColor: ANSWER_LINE_COLOR,
                 borderBottomStyle: "dashed",
                 marginBottom: ANSWER_LINE_GAP_PT,

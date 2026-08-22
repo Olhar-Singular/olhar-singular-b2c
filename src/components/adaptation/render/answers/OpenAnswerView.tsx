@@ -4,7 +4,7 @@
  */
 
 import type { QuestionAnswer } from "@/lib/adaptation/canonical/schema";
-import { ANSWER_LINE_COLOR, ANSWER_LINE_GAP_PX } from "../pageTokens";
+import { ANSWER_LINE_COLOR, ANSWER_LINE_GAP_PX, ANSWER_LINE_WIDTH_PX } from "../pageTokens";
 
 type OpenAnswer = Extract<QuestionAnswer, { kind: "open" }>;
 
@@ -18,7 +18,14 @@ export function OpenAnswerView({ answer }: { answer: OpenAnswer }) {
       aria-label="Linhas de resposta"
     >
       {Array.from({ length: lines }, (_, i) => (
-        <div key={i} className="border-b border-dashed" style={{ borderBottomColor: ANSWER_LINE_COLOR }} />
+        <div
+          key={i}
+          className="border-b border-dashed"
+          style={{
+            borderBottomColor: ANSWER_LINE_COLOR,
+            borderBottomWidth: `${ANSWER_LINE_WIDTH_PX}px`,
+          }}
+        />
       ))}
     </div>
   );

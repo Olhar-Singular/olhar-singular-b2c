@@ -15,7 +15,13 @@ import { describe, it, expect, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import type { ReactElement } from "react";
 import type { QuestionAnswer } from "@/lib/adaptation/canonical/schema";
-import { ANSWER_LINE_COLOR, ANSWER_LINE_GAP_PX, ANSWER_LINE_GAP_PT } from "./pageTokens";
+import {
+  ANSWER_LINE_COLOR,
+  ANSWER_LINE_GAP_PX,
+  ANSWER_LINE_GAP_PT,
+  ANSWER_LINE_WIDTH_PX,
+  ANSWER_LINE_WIDTH_PT,
+} from "./pageTokens";
 import { OpenAnswerView } from "./answers/OpenAnswerView";
 import { PdfAnswer } from "./pdf/PdfAnswer";
 import { AnswerPreview } from "../canonical-editor/answer-editors/AnswerPreview";
@@ -44,7 +50,11 @@ function luminance(hex: string): number {
   return 0.2126 * channels[0] + 0.7152 * channels[1] + 0.0722 * channels[2];
 }
 
-type PdfLineStyle = { borderBottomColor?: string; marginBottom?: number };
+type PdfLineStyle = {
+  borderBottomColor?: string;
+  marginBottom?: number;
+  borderBottomWidth?: number;
+};
 
 /** Varre a árvore do react-pdf atrás do estilo da primeira linha pautada. */
 function findLineStyle(node: unknown): PdfLineStyle | undefined {
@@ -126,5 +136,41 @@ describe("linha de resposta — paridade de espaçamento entre as três superfí
 
   it("espaça a pauta do PDF pelo equivalente em pt de ANSWER_LINE_GAP_PX", () => {
     expect(findLineStyle(PdfAnswer({ answer: OPEN }))?.marginBottom).toBe(ANSWER_LINE_GAP_PT);
+  });
+});
+
+/**
+ * Contrato de paridade da ESPESSURA da pauta (achado 0145).
+ *
+ * Último resíduo da família 0011/0104/0111: cor, estilo e passo já vinham de
+ * `pageTokens`, mas a espessura seguia escrita à mão uma vez por superfície — as
+ * duas telas herdavam o `border-b` do Tailwind (1px CSS = 0,75pt) e o PDF trazia
+ * `borderBottomWidth: 1` literal, que no papel é 1pt. A mesma pauta saía 33% mais
+ * grossa impressa do que na tela em que a professora a conferiu.
+ *
+ * `ANSWER_LINE_WIDTH_PX` é o ponto único; o PDF consome o mesmo valor convertido
+ * para pt pela razão 72/96, como os demais tokens.
+ */
+describe("linha de resposta — paridade de espessura entre as três superfícies", () => {
+  it("converte a espessura para pt pela mesma razão 72/96 usada no resto do PDF", () => {
+    expect(ANSWER_LINE_WIDTH_PT).toBeCloseTo(ANSWER_LINE_WIDTH_PX * (72 / 96), 5);
+  });
+
+  it("desenha a pauta da folha do Revisar com ANSWER_LINE_WIDTH_PX", () => {
+    render(<AnswerPreview answer={OPEN} onChange={() => {}} />);
+    for (const line of screen.getAllByTestId("preview-answer-line")) {
+      expect(line.style.borderBottomWidth).toBe(`${ANSWER_LINE_WIDTH_PX}px`);
+    }
+  });
+
+  it("desenha a pauta da prévia do Exportar com ANSWER_LINE_WIDTH_PX", () => {
+    render(<OpenAnswerView answer={OPEN} />);
+    for (const line of Array.from(screen.getByTestId("answer-open").children)) {
+      expect((line as HTMLElement).style.borderBottomWidth).toBe(`${ANSWER_LINE_WIDTH_PX}px`);
+    }
+  });
+
+  it("desenha a pauta do PDF pelo equivalente em pt de ANSWER_LINE_WIDTH_PX", () => {
+    expect(findLineStyle(PdfAnswer({ answer: OPEN }))?.borderBottomWidth).toBe(ANSWER_LINE_WIDTH_PT);
   });
 });

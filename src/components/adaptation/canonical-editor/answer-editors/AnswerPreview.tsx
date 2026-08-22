@@ -17,6 +17,7 @@ import { ALTERNATIVE_MARKER_CLASS } from "@/components/adaptation/render/answers
 import {
   ANSWER_LINE_COLOR,
   ANSWER_LINE_GAP_PX,
+  ANSWER_LINE_WIDTH_PX,
   ANSWER_ITEM_GAP_PX,
 } from "@/components/adaptation/render/pageTokens";
 import { RichTextField } from "../RichTextField";
@@ -213,7 +214,10 @@ export function AnswerPreview({ answer, onChange, disabled = false }: AnswerPrev
               key={i}
               data-testid="preview-answer-line"
               className="h-px border-b border-dashed"
-              style={{ borderBottomColor: ANSWER_LINE_COLOR }}
+              style={{
+                borderBottomColor: ANSWER_LINE_COLOR,
+                borderBottomWidth: `${ANSWER_LINE_WIDTH_PX}px`,
+              }}
             />
           ))}
         </div>
