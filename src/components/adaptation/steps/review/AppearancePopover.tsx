@@ -33,7 +33,13 @@ type Props = {
   onChange: (partial: Partial<PageStyle>) => void;
 };
 
-/** Stepper "− valor +" com rótulos acessíveis. */
+/**
+ * Stepper "− valor +" com rótulos acessíveis.
+ *
+ * O valor não é decoração: ele é uma região viva (`aria-live="polite"`) com `id`,
+ * e os dois botões o apontam por `aria-describedby`. Assim o leitor de tela fala o
+ * valor atual ao focar o botão e o novo valor a cada clique.
+ */
 function Stepper({
   label,
   display,
@@ -61,12 +67,19 @@ function Stepper({
           variant="outline"
           className="h-7 w-7 border-surface-line-2 bg-surface-paper text-surface-ink hover:bg-surface-mesa"
           aria-label={`Diminuir ${label.toLowerCase()}`}
+          aria-describedby={testId}
           disabled={!canDecrease}
           onClick={onDecrease}
         >
           −
         </Button>
-        <span data-testid={testId} className="w-12 text-center text-sm tabular-nums text-surface-ink">
+        <span
+          id={testId}
+          data-testid={testId}
+          aria-live="polite"
+          aria-atomic="true"
+          className="w-12 text-center text-sm tabular-nums text-surface-ink"
+        >
           {display}
         </span>
         <Button
@@ -75,6 +88,7 @@ function Stepper({
           variant="outline"
           className="h-7 w-7 border-surface-line-2 bg-surface-paper text-surface-ink hover:bg-surface-mesa"
           aria-label={`Aumentar ${label.toLowerCase()}`}
+          aria-describedby={testId}
           disabled={!canIncrease}
           onClick={onIncrease}
         >

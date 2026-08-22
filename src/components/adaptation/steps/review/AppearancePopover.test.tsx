@@ -138,6 +138,38 @@ describe("AppearanceControls", () => {
     expect(screen.queryByText(/tamanho por elemento/i)).not.toBeInTheDocument();
   });
 
+  it("anuncia o valor do tamanho do texto: região viva identificada e ligada aos botões", () => {
+    setupControls();
+    const valueEl = screen.getByTestId("font-size-value");
+    expect(valueEl.id).toBe("font-size-value");
+    expect(valueEl).toHaveAttribute("aria-live", "polite");
+    expect(valueEl).toHaveAttribute("aria-atomic", "true");
+    expect(screen.getByRole("button", { name: "Aumentar tamanho do texto" })).toHaveAttribute(
+      "aria-describedby",
+      "font-size-value",
+    );
+    expect(screen.getByRole("button", { name: "Diminuir tamanho do texto" })).toHaveAttribute(
+      "aria-describedby",
+      "font-size-value",
+    );
+  });
+
+  it("anuncia o valor do espaçamento: região viva identificada e ligada aos botões", () => {
+    setupControls();
+    const valueEl = screen.getByTestId("block-spacing-value");
+    expect(valueEl.id).toBe("block-spacing-value");
+    expect(valueEl).toHaveAttribute("aria-live", "polite");
+    expect(valueEl).toHaveAttribute("aria-atomic", "true");
+    expect(screen.getByRole("button", { name: "Aumentar espaçamento entre blocos" })).toHaveAttribute(
+      "aria-describedby",
+      "block-spacing-value",
+    );
+    expect(screen.getByRole("button", { name: "Diminuir espaçamento entre blocos" })).toHaveAttribute(
+      "aria-describedby",
+      "block-spacing-value",
+    );
+  });
+
   it("exibe aviso de que o tamanho afeta toda a prova", () => {
     setupControls();
     expect(screen.getByText(/toda a prova/i)).toBeInTheDocument();
