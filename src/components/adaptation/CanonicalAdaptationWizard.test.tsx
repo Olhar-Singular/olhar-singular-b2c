@@ -461,22 +461,76 @@ describe("CanonicalAdaptationWizard", () => {
   // the viewport and the container stays at scrollLeft 0. The chip must scroll
   // itself into view whenever the step changes.
   it("the step indicator scrolls the active step into view", () => {
-    const scrolled: Array<{ text: string; options: unknown }> = [];
-    const original = window.HTMLElement.prototype.scrollIntoView;
-    window.HTMLElement.prototype.scrollIntoView = function (this: HTMLElement, options?: unknown) {
-      scrolled.push({ text: this.textContent ?? "", options });
-    };
+    const proto = window.HTMLElement.prototype;
+    const originalLeft = Object.getOwnPropertyDescriptor(proto, "offsetLeft");
+    const originalWidth = Object.getOwnPropertyDescriptor(proto, "offsetWidth");
+    // each chip sits further right than the previous one, so the strip has to
+    // move to keep the active one visible
+    const offsets = new WeakMap<HTMLElement, number>();
+    Object.defineProperty(proto, "offsetLeft", {
+      configurable: true,
+      get(this: HTMLElement) {
+        return offsets.get(this) ?? 0;
+      },
+    });
+    Object.defineProperty(proto, "offsetWidth", { configurable: true, get: () => 100 });
     try {
       renderWithProviders(<CanonicalAdaptationWizard />);
+      const strip = screen.getByTestId("step-strip");
+      Object.defineProperty(strip, "clientWidth", { configurable: true, get: () => 358 });
+      screen.getAllByRole("button").forEach((button, i) => offsets.set(button, i * 120));
+
       advanceToReview();
-      const last = scrolled[scrolled.length - 1];
-      expect(last?.text).toMatch(/Revisar/);
-      expect(last?.options).toEqual({ block: "nearest", inline: "center" });
+      const atReview = strip.scrollLeft;
+      expect(atReview).toBeGreaterThan(0);
 
       fireEvent.click(screen.getByRole("button", { name: /1.*Tipo/i }));
-      expect(scrolled[scrolled.length - 1]?.text).toMatch(/Tipo/);
+      // back on the first chip the strip returns to its left edge
+      expect(strip.scrollLeft).toBeLessThan(atReview);
     } finally {
-      window.HTMLElement.prototype.scrollIntoView = original;
+      if (originalLeft) Object.defineProperty(proto, "offsetLeft", originalLeft);
+      if (originalWidth) Object.defineProperty(proto, "offsetWidth", originalWidth);
+    }
+  });
+
+  // 0231: scrollIntoView is not scoped to the strip — it scrolls EVERY scrollable
+  // ancestor, so on 390px the <main> (overflow-auto) was dragged sideways too and
+  // the step opened with its left edge cut off, without any gesture from the user.
+  // The strip must scroll itself, never an ancestor.
+  it("scrolls the step strip itself, without dragging any ancestor", () => {
+    const scrolledIntoView: string[] = [];
+    const originalScrollIntoView = window.HTMLElement.prototype.scrollIntoView;
+    window.HTMLElement.prototype.scrollIntoView = function (this: HTMLElement) {
+      scrolledIntoView.push(this.textContent ?? "");
+    };
+    const proto = window.HTMLElement.prototype;
+    const originalLeft = Object.getOwnPropertyDescriptor(proto, "offsetLeft");
+    const originalWidth = Object.getOwnPropertyDescriptor(proto, "offsetWidth");
+    Object.defineProperty(proto, "offsetLeft", { configurable: true, get: () => 300 });
+    Object.defineProperty(proto, "offsetWidth", { configurable: true, get: () => 100 });
+    try {
+      renderWithProviders(<CanonicalAdaptationWizard />);
+      const strip = screen.getByTestId("step-strip");
+      const writes: number[] = [];
+      Object.defineProperty(strip, "scrollLeft", {
+        configurable: true,
+        get: () => writes[writes.length - 1] ?? 0,
+        set: (value: number) => {
+          writes.push(value);
+        },
+      });
+      Object.defineProperty(strip, "clientWidth", { configurable: true, get: () => 358 });
+
+      advanceToReview();
+
+      // the chip is centred inside the strip: 300 - (358 - 100) / 2
+      expect(writes[writes.length - 1]).toBe(171);
+      // and nothing asked an ancestor to scroll
+      expect(scrolledIntoView).toEqual([]);
+    } finally {
+      window.HTMLElement.prototype.scrollIntoView = originalScrollIntoView;
+      if (originalLeft) Object.defineProperty(proto, "offsetLeft", originalLeft);
+      if (originalWidth) Object.defineProperty(proto, "offsetWidth", originalWidth);
     }
   });
 

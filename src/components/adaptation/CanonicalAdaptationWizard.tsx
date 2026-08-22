@@ -242,9 +242,16 @@ export default function CanonicalAdaptationWizard({ editMode }: Props = {}) {
 
   // On narrow viewports (390px) the step strip overflows horizontally and would
   // stay pinned at scrollLeft 0, hiding the chip of the step the user is on.
+  // We move the strip's own scrollLeft instead of calling scrollIntoView: that
+  // API is not scoped to the strip — it scrolls every scrollable ancestor, and
+  // the <main> (overflow-auto) was dragged sideways with it, opening the step
+  // with its left edge cut off before the user had touched anything.
+  const stepStripRef = useRef<HTMLDivElement>(null);
   const activeStepRef = useRef<HTMLButtonElement>(null);
   useEffect(() => {
-    activeStepRef.current.scrollIntoView({ block: "nearest", inline: "center" });
+    const strip = stepStripRef.current;
+    const chip = activeStepRef.current;
+    strip.scrollLeft = Math.max(0, chip.offsetLeft - (strip.clientWidth - chip.offsetWidth) / 2);
   }, [stepIndex]);
 
   const updateData = useCallback((partial: Partial<WizardData>) => {
@@ -549,7 +556,7 @@ export default function CanonicalAdaptationWizard({ editMode }: Props = {}) {
   return (
     <div className="mx-auto max-w-6xl px-4 py-6 space-y-6">
       {/* Step indicator */}
-      <div className="flex items-center gap-1 overflow-x-auto pb-1">
+      <div ref={stepStripRef} data-testid="step-strip" className="flex items-center gap-1 overflow-x-auto pb-1">
         {STEPS.map((key, i) => (
           <div key={key} className="flex items-center gap-1 shrink-0">
             <button
