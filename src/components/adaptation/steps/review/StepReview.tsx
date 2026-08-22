@@ -229,15 +229,30 @@ export function StepReview({
     <div className="space-y-4">
       {/* Barra superior (chrome) — plano §6.1. */}
       <div className="flex items-center justify-between gap-3 rounded-md border border-surface-chrome-line bg-surface-chrome px-4 py-2.5">
-        <input
-          type="text"
-          aria-label="Nome da adaptação"
-          value={title}
-          onChange={(e) => onTitleChange?.(e.target.value)}
-          placeholder={documentTitle(document)}
-          maxLength={120}
-          className="min-w-0 flex-1 truncate border-0 bg-transparent p-0 text-base font-semibold text-surface-ink outline-none placeholder:font-semibold placeholder:text-surface-ink-faint focus:ring-0"
-        />
+        {/*
+          O título derivado aparece como placeholder (nunca é armazenado), mas
+          é o nome pelo qual o professor vai reencontrar a adaptação: precisa
+          ser legível. `ink-faint` dava 2,36:1 sobre o chrome, abaixo dos 4,5:1
+          da WCAG 1.4.3 — daí `ink-soft`. E como o mesmo campo mostra "valor" e
+          "sugestão" com o mesmo texto, a diferença não pode ficar codificada
+          só num cinza: o selo "Sem nome" diz o estado por escrito.
+        */}
+        <div className="flex min-w-0 flex-1 items-center gap-2">
+          <input
+            type="text"
+            aria-label="Nome da adaptação"
+            value={title}
+            onChange={(e) => onTitleChange?.(e.target.value)}
+            placeholder={documentTitle(document)}
+            maxLength={120}
+            className="min-w-0 flex-1 truncate border-0 bg-transparent p-0 text-base font-semibold text-surface-ink outline-none placeholder:font-semibold placeholder:text-surface-ink-soft focus:ring-0"
+          />
+          {title.trim() === "" && (
+            <span className="shrink-0 rounded border border-surface-chrome-line bg-surface-mesa px-1.5 py-0.5 text-xs font-medium text-surface-ink">
+              Sem nome
+            </span>
+          )}
+        </div>
         {/* Em telas estreitas os botões viram só ícone (rótulo a partir de `sm`),
             senão o grupo `shrink-0` transborda a viewport e é clipado. */}
         <div className="flex shrink-0 items-center gap-1">

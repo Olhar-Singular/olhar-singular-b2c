@@ -4,6 +4,36 @@ import { StepReview } from "./StepReview";
 import { PageBreakMarker } from "@/components/adaptation/canonical-editor/page-break/pageBreakDecoration";
 import { OriginalDocExtension } from "@/components/adaptation/canonical-editor/originalDocExtension";
 import type { CanonicalDocument } from "@/lib/adaptation/canonical/schema";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
+
+/**
+ * Achado 0139: contraste do nome da adaptação. Os tokens vêm do `index.css`
+ * de verdade (jsdom não aplica Tailwind, então ler o arquivo é o único jeito
+ * de o teste falar do pixel que o professor vê).
+ */
+const INDEX_CSS = readFileSync(resolve(process.cwd(), "src/index.css"), "utf8");
+
+function readToken(name: string): [number, number, number] {
+  const raw = new RegExp(`${name}:\\s*([\\d.]+)\\s+([\\d.]+)%\\s+([\\d.]+)%`).exec(INDEX_CSS);
+  if (!raw) throw new Error(`token ${name} não encontrado em index.css`);
+  const [h, s, l] = [Number(raw[1]), Number(raw[2]) / 100, Number(raw[3]) / 100];
+  const c = (1 - Math.abs(2 * l - 1)) * s;
+  const x = c * (1 - Math.abs(((h / 60) % 2) - 1));
+  const m = l - c / 2;
+  const [r, g, b] = h < 60 ? [c, x, 0] : h < 120 ? [x, c, 0] : h < 180 ? [0, c, x] : h < 240 ? [0, x, c] : h < 300 ? [x, 0, c] : [c, 0, x];
+  return [r + m, g + m, b + m];
+}
+
+function luminance([r, g, b]: [number, number, number]): number {
+  const lin = (v: number) => (v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4);
+  return 0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b);
+}
+
+function contrast(a: [number, number, number], b: [number, number, number]): number {
+  const [hi, lo] = [luminance(a), luminance(b)].sort((x, y) => y - x);
+  return (hi + 0.05) / (lo + 0.05);
+}
 
 // Capture shouldShow so tests can verify it filters node selections.
 let capturedShouldShow: ((props: { state: { selection: { empty: boolean } } }) => boolean) | undefined;
@@ -339,6 +369,32 @@ describe("StepReview", () => {
       expect(() =>
         fireEvent.change(screen.getByLabelText("Nome da adaptação"), { target: { value: "x" } }),
       ).not.toThrow();
+    });
+
+    // Achado 0139: o nome derivado vinha no cinza mais fraco da paleta
+    // (--sf-ink-faint) sobre o chrome, 2,36:1 — abaixo do mínimo de 4,5:1 da
+    // WCAG 1.4.3 para texto normal. O teste lê os tokens reais do index.css
+    // para que trocar o token de volta quebre aqui.
+    it("desenha o nome derivado com contraste mínimo de 4,5:1 sobre o chrome", () => {
+      setup({ title: "" });
+      const field = screen.getByLabelText("Nome da adaptação");
+      const token = /placeholder:text-surface-(ink[\w-]*)/.exec(field.className)?.[1];
+      expect(token).toBeDefined();
+      expect(contrast(readToken(`--sf-${token}`), readToken("--sf-chrome"))).toBeGreaterThanOrEqual(
+        4.5,
+      );
+    });
+
+    // Só a cor não pode carregar a diferença entre "nome próprio" e "sugestão":
+    // o mesmo texto aparecia como valor e como placeholder sem nada distinguir.
+    it("marca visivelmente a adaptação ainda sem nome próprio", () => {
+      setup({ title: "" });
+      expect(screen.getByText("Sem nome")).toBeInTheDocument();
+    });
+
+    it("não marca 'Sem nome' quando a adaptação já tem nome próprio", () => {
+      setup({ title: "Recuperação de Geografia" });
+      expect(screen.queryByText("Sem nome")).not.toBeInTheDocument();
     });
   });
 
