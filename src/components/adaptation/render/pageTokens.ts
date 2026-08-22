@@ -142,6 +142,27 @@ export const SCAFFOLDING_MARGIN_Y_PX = 12;
 export const SCAFFOLDING_STEP_INDENT_PX = 20;
 
 /**
+ * Fundo e borda da caixa do ANDAIME. Ponto único das TRÊS superfícies (folha do
+ * Revisar, prévia do Exportar e PDF), fechando a família dos tokens de medida
+ * acima — a cor era o único atributo da caixa fora da unificação do `0124`.
+ *
+ * Antes as duas telas liam os tokens bege da folha (`--sf-mesa` a 40% sobre o
+ * papel e `--sf-chrome-line`) e o PDF trazia `#F3F4F6`/`#E5E7EB` literais, que
+ * são cinzas do Tailwind sem origem em token nenhum deste projeto. O resultado
+ * era um hue flip: quente na tela (245 > 243 > 240), frio no papel
+ * (246 > 244 > 243). A caixa de apoio é justamente o que precisa se destacar do
+ * corpo para o aluno achar a instrução, e esse destaque mudava de leitura entre
+ * a tela em que o professor decide e a folha que chega ao aluno (achado 0149).
+ *
+ * Quem se move é o PDF: o bege é a paleta da folha inteira. Os valores são as
+ * cores da tela JÁ COMPOSTAS sobre o papel branco — o `@react-pdf` não recebe
+ * alpha, e passar `--sf-mesa` cru deixaria a caixa mais escura no papel.
+ */
+export const SCAFFOLDING_BG = "#F5F3F0";
+/** Borda da caixa do andaime: `--sf-chrome-line` resolvido (rgb(228,223,215)). */
+export const SCAFFOLDING_BORDER = "#E4DFD7";
+
+/**
  * Família usada quando o documento NÃO traz `pageStyle.fontFamily` — o caso
  * normal, já que nenhuma UI grava a fonte até o professor escolher uma no
  * popover "Formato".

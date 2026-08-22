@@ -13,9 +13,10 @@
  * já mostrava: quem se move é o PDF.
  */
 
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
-import type { ReactElement } from "react";
+import type { ReactElement, ReactNode } from "react";
+import type { NodeViewProps } from "@tiptap/react";
 import type { Block } from "@/lib/adaptation/canonical/schema";
 import {
   SCAFFOLDING_PADDING_PX,
@@ -24,9 +25,16 @@ import {
   SCAFFOLDING_MARGIN_Y_PT,
   SCAFFOLDING_STEP_INDENT_PX,
   SCAFFOLDING_STEP_INDENT_PT,
+  SCAFFOLDING_BG,
+  SCAFFOLDING_BORDER,
 } from "./pageTokens";
 import { ScaffoldingView } from "./blocks/ScaffoldingView";
+import { ScaffoldNodeView } from "../canonical-editor/nodeviews/ScaffoldNodeView";
 import { PdfScaffolding } from "./pdf/PdfLeafBlocks";
+
+vi.mock("@tiptap/react", () => ({
+  NodeViewWrapper: ({ children, ...rest }: { children: ReactNode }) => <div {...rest}>{children}</div>,
+}));
 
 const BLOCK: Extract<Block, { type: "scaffolding" }> = {
   id: "00000000-0000-4000-8000-000000000001",
@@ -40,6 +48,16 @@ function boxStyle(node: ReactElement): Record<string, unknown> {
 }
 
 /** Estilo da coluna de ordinal do primeiro passo na árvore react-pdf. */
+/** Props mínimas do NodeView do andaime no editor. */
+function nodeViewProps(items: string[]): NodeViewProps {
+  return {
+    node: { attrs: { items } },
+    updateAttributes: vi.fn(),
+    deleteNode: vi.fn(),
+    editor: { isEditable: true },
+  } as unknown as NodeViewProps;
+}
+
 function firstMarkerStyle(node: ReactElement): { width?: number } {
   const rows = (node.props as { children: ReactElement[] }).children;
   const cells = (rows[0].props as { children: ReactElement[] }).children;
@@ -72,5 +90,32 @@ describe("andaime — paridade da caixa entre a prévia e o PDF", () => {
   it("recua o texto do passo no PDF por uma coluna de ordinal do mesmo tamanho", () => {
     const marker = firstMarkerStyle(PdfScaffolding({ block: BLOCK }) as ReactElement);
     expect(marker.width).toBe(SCAFFOLDING_STEP_INDENT_PT);
+  });
+});
+
+describe("andaime — paridade da COR da caixa entre as três superfícies (achado 0149)", () => {
+  it("expõe a cor da folha já composta sobre o papel branco, sem alpha", () => {
+    expect(SCAFFOLDING_BG).toBe("#F5F3F0");
+    expect(SCAFFOLDING_BORDER).toBe("#E4DFD7");
+  });
+
+  it("pinta a caixa do PDF com os mesmos tokens, não com os cinzas do Tailwind", () => {
+    const style = boxStyle(PdfScaffolding({ block: BLOCK }) as ReactElement);
+    expect(style.backgroundColor).toBe(SCAFFOLDING_BG);
+    expect(style.borderColor).toBe(SCAFFOLDING_BORDER);
+  });
+
+  it("pinta a caixa da prévia do Exportar com os mesmos tokens", () => {
+    render(<ScaffoldingView block={BLOCK} />);
+    const box = screen.getByTestId("scaffolding");
+    expect(box.style.backgroundColor).toBe("rgb(245, 243, 240)");
+    expect(box.style.borderColor).toBe("rgb(228, 223, 215)");
+  });
+
+  it("pinta a caixa do editor com os mesmos tokens", () => {
+    render(<ScaffoldNodeView {...nodeViewProps(["Leia duas vezes"])} />);
+    const box = screen.getByTestId("scaffold-node");
+    expect(box.style.backgroundColor).toBe("rgb(245, 243, 240)");
+    expect(box.style.borderColor).toBe("rgb(228, 223, 215)");
   });
 });

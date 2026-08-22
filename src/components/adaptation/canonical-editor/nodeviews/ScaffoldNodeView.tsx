@@ -2,6 +2,9 @@
  * ScaffoldNodeView — editable list of scaffolding step strings (`items` attr).
  * Mutations go through the pure `scaffoldOps` helpers and write back via
  * `updateAttributes({ items })`. A delete button in the header removes the block.
+ *
+ * Fundo e borda vêm de `pageTokens` (`SCAFFOLDING_BG` / `SCAFFOLDING_BORDER`):
+ * é o mesmo bege que a prévia do Exportar e o PDF pintam (achado 0149).
  */
 
 import { Plus, Trash2 } from "lucide-react";
@@ -9,6 +12,7 @@ import { NodeViewWrapper, type NodeViewProps } from "@tiptap/react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { setStep, addStep, removeStep } from "./scaffoldOps";
+import { SCAFFOLDING_BG, SCAFFOLDING_BORDER } from "../../render/pageTokens";
 
 export function ScaffoldNodeView({ node, updateAttributes, editor, deleteNode }: NodeViewProps) {
   const items = node.attrs.items as string[];
@@ -16,7 +20,8 @@ export function ScaffoldNodeView({ node, updateAttributes, editor, deleteNode }:
 
   return (
     <NodeViewWrapper
-      className="my-3 rounded-lg border border-surface-chrome-line bg-surface-mesa/40 p-3"
+      className="my-3 rounded-lg border p-3"
+      style={{ backgroundColor: SCAFFOLDING_BG, borderColor: SCAFFOLDING_BORDER }}
       data-testid="scaffold-node"
       contentEditable={false}
     >

@@ -4,7 +4,7 @@
  *
  * As medidas da caixa (recuo interno, margem vertical e recuo do passo) vêm de
  * `pageTokens` para o PDF imprimir a mesma coluna que esta tela mostra
- * (achado 0124).
+ * (achado 0124), e a cor do fundo e da borda também (achado 0149).
  */
 
 import type { Block } from "@/lib/adaptation/canonical/schema";
@@ -13,6 +13,8 @@ import {
   SCAFFOLDING_PADDING_PX,
   SCAFFOLDING_MARGIN_Y_PX,
   SCAFFOLDING_STEP_INDENT_PX,
+  SCAFFOLDING_BG,
+  SCAFFOLDING_BORDER,
 } from "../pageTokens";
 
 type ScaffoldingBlock = Extract<Block, { type: "scaffolding" }>;
@@ -21,8 +23,10 @@ export function ScaffoldingView({ block }: { block: ScaffoldingBlock }) {
   return (
     <div
       data-testid="scaffolding"
-      className="rounded-md border border-surface-chrome-line bg-surface-mesa/40 text-surface-ink"
+      className="rounded-md border text-surface-ink"
       style={{
+        backgroundColor: SCAFFOLDING_BG,
+        borderColor: SCAFFOLDING_BORDER,
         padding: `${SCAFFOLDING_PADDING_PX}px`,
         marginTop: `${SCAFFOLDING_MARGIN_Y_PX}px`,
         marginBottom: `${SCAFFOLDING_MARGIN_Y_PX}px`,
