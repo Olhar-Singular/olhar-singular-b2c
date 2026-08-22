@@ -471,6 +471,45 @@ describe("StepReview", () => {
       ).not.toThrow();
     });
 
+    it("keeps the trigger labelled with the current folder while the field is open", async () => {
+      // O gatilho informa ONDE a adaptação está; se ele passa a exibir o texto
+      // do comando ("+ Nova pasta…") o controle deixa de informar estado.
+      setup({ folders: FOLDERS });
+      fireEvent.click(screen.getByLabelText("Pasta"));
+      await waitFor(() => screen.getByRole("option", { name: /Nova pasta/i }));
+      fireEvent.click(screen.getByRole("option", { name: /Nova pasta/i }));
+      await screen.findByLabelText("Nome da nova pasta");
+      expect(screen.getByLabelText("Pasta")).toHaveTextContent("Sem pasta");
+      expect(screen.getByLabelText("Pasta")).not.toHaveTextContent(/Nova pasta/i);
+    });
+
+    it("cancels the new-folder field on Escape and gives the focus back", async () => {
+      // Sem isso o modo transitório não tem saída: nem botão de cancelar, nem
+      // Escape — só reabrir o listbox e escolher outra opção.
+      const onNewFolderChange = vi.fn();
+      setup({ folders: FOLDERS, onNewFolderChange });
+      fireEvent.click(screen.getByLabelText("Pasta"));
+      await waitFor(() => screen.getByRole("option", { name: /Nova pasta/i }));
+      fireEvent.click(screen.getByRole("option", { name: /Nova pasta/i }));
+      const field = await screen.findByLabelText("Nome da nova pasta");
+      fireEvent.keyDown(field, { key: "Escape" });
+      await waitFor(() =>
+        expect(screen.queryByLabelText("Nome da nova pasta")).not.toBeInTheDocument(),
+      );
+      expect(onNewFolderChange).toHaveBeenCalledWith("");
+      expect(screen.getByLabelText("Pasta")).toHaveFocus();
+      expect(screen.getByLabelText("Pasta")).toHaveTextContent("Sem pasta");
+    });
+
+    it("does not break on Escape without a new-folder handler", async () => {
+      setup({ folders: FOLDERS });
+      fireEvent.click(screen.getByLabelText("Pasta"));
+      await waitFor(() => screen.getByRole("option", { name: /Nova pasta/i }));
+      fireEvent.click(screen.getByRole("option", { name: /Nova pasta/i }));
+      const field = await screen.findByLabelText("Nome da nova pasta");
+      expect(() => fireEvent.keyDown(field, { key: "Escape" })).not.toThrow();
+    });
+
     it("hides the folder picker when the library has no folders and none is being created", () => {
       // Nothing to choose from yet — the control would be an empty dropdown.
       setup({ folders: [] });

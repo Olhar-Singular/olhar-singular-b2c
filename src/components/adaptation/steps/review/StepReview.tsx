@@ -168,6 +168,22 @@ export function StepReview({
   // fechamento em curso veio de "+ Nova pasta…", a outra aponta para o campo.
   const newFolderRef = useRef<HTMLInputElement>(null);
   const focusNewFolder = useRef(false);
+  const folderTriggerRef = useRef<HTMLButtonElement>(null);
+
+  /**
+   * O gatilho responde "em que pasta isto está", nunca "+ Nova pasta…": esse é
+   * o texto do COMANDO, e enquanto o campo de nome está aberto o `value` do
+   * Select é o sentinela NEW_FOLDER. Por isso o rótulo é calculado aqui em vez
+   * de deixar o Radix imprimir o item selecionado.
+   */
+  const folderLabel = folders.find((f) => f.id === folderId)?.name ?? "Sem pasta";
+
+  /** Escape cancela o modo transitório (APG) e devolve o foco ao gatilho. */
+  const cancelNewFolder = () => {
+    setCreatingFolder(false);
+    onNewFolderChange?.("");
+    folderTriggerRef.current?.focus();
+  };
 
   // useEditor (inside useCanonicalEditor) only reads extensions once, at
   // mount — this only needs to be stable across a single Revisar session,
@@ -247,11 +263,12 @@ export function StepReview({
             }}
           >
             <SelectTrigger
+              ref={folderTriggerRef}
               aria-label="Pasta"
               title="Pasta"
               className="mr-1 h-7 w-auto gap-1 border-surface-chrome-line bg-surface-paper px-2 text-xs font-medium text-surface-ink-soft shadow-none hover:text-surface-ink focus:ring-1 focus:ring-surface-accent"
             >
-              <SelectValue />
+              <SelectValue>{folderLabel}</SelectValue>
             </SelectTrigger>
             <SelectContent
               className="border-surface-chrome-line bg-surface-chrome text-surface-ink"
@@ -278,6 +295,14 @@ export function StepReview({
               placeholder="Ex.: 6º ano B"
               value={newFolder}
               onChange={(e) => onNewFolderChange?.(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key !== "Escape") return;
+                // Sem `stopPropagation` o Escape sobe e fecha o diálogo/wizard
+                // em volta, o que perderia bem mais do que o campo.
+                e.preventDefault();
+                e.stopPropagation();
+                cancelNewFolder();
+              }}
               className="mr-1 h-7 w-36 border-surface-chrome-line bg-surface-paper text-xs text-surface-ink"
             />
           )}
