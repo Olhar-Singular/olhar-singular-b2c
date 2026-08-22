@@ -198,6 +198,22 @@ export function resolveElementFontSizes(resolved: ResolvedPageStyle): ElementFon
   };
 }
 
+/**
+ * Tinta do corpo do documento (título, parágrafo, enunciado e alternativas:
+ * tudo o que não é o cinza secundário).
+ *
+ * Ponto único das TRÊS superfícies, ao lado de fonte, tamanho e espaçamento.
+ * Antes a cor era o ÚNICO token de página fora daqui: as duas telas herdavam
+ * `text-surface-ink` da moldura do `PageSheet` (`--sf-ink`, rgb(34,32,28)) e o
+ * PDF não emitia `color` nenhum, caindo no preto puro do @react-pdf: três
+ * superfícies, dois valores, e nenhum teste que reclamasse (achado 0324).
+ *
+ * Vence o valor das telas, que é o que o professor vê enquanto edita:
+ * `--sf-ink: 40 10% 12%` (`src/index.css`) resolvido para hex. Continua bem
+ * acima de AA sobre o papel branco (16,26:1).
+ */
+export const DEFAULT_INK = "#22201C";
+
 /** Estilo base do <Page> do react-pdf (em pt). */
 export function pageTokensToPdf(resolved: ResolvedPageStyle = DEFAULT_RESOLVED) {
   return {
@@ -205,6 +221,7 @@ export function pageTokensToPdf(resolved: ResolvedPageStyle = DEFAULT_RESOLVED) 
     padding: PAGE_MARGIN_PT,
     fontSize: resolved.fontSize,
     lineHeight: BASE_LINE_HEIGHT,
+    color: DEFAULT_INK,
     fontFamily: fontFamilyToPdf(resolved.fontFamily ?? DEFAULT_FONT_FAMILY_TOKEN),
   };
 }
@@ -226,6 +243,7 @@ export function pageTokensToCss(resolved: ResolvedPageStyle = DEFAULT_RESOLVED):
     padding: px(PAGE_MARGIN_PT),
     fontSize: px(resolved.fontSize),
     lineHeight: BASE_LINE_HEIGHT,
+    color: DEFAULT_INK,
     fontFamily: fontFamilyToCss(resolved.fontFamily ?? DEFAULT_FONT_FAMILY_TOKEN),
     ["--doc-block-spacing"]: `${resolved.blockSpacing}px`,
     ["--doc-fs-stem"]: px(efs.stem),

@@ -7,6 +7,7 @@ import {
   pageTokensToPdf,
   pageTokensToCss,
   DEFAULT_FONT_FAMILY_TOKEN,
+  DEFAULT_INK,
 } from "./pageTokens";
 import { fontFamilyToCss, fontFamilyToPdf } from "@/lib/adaptation/canonical/fontFamily";
 
@@ -24,6 +25,7 @@ describe("pageTokens", () => {
       padding: 40,
       fontSize: 12,
       lineHeight: 1.4,
+      color: "#22201C",
       fontFamily: "Helvetica",
     });
   });
@@ -137,5 +139,27 @@ describe("pageTokens — CSS vars por elemento (Formato)", () => {
     expect(css["--doc-fs-instruction"]).toBe("14px"); // derivado do base
     expect(css["--doc-fs-alternative"]).toBe("16px");
     expect(css["--doc-fs-caption"]).toBe("13.33px");
+  });
+});
+
+/**
+ * Achado 0324: a tinta do corpo do documento era `rgb(34,32,28)` nas duas telas
+ * (classe `text-surface-ink` na moldura do `PageSheet`) e preto puro no PDF, que
+ * é só o default do @react-pdf: nenhuma camada do pipeline emitia `color`.
+ * A cor era o único token de página fora do `pageTokens`.
+ */
+describe("pageTokens — tinta do documento (achado 0324)", () => {
+  it("pageTokensToPdf emite a tinta do documento (não deixa cair no preto puro do react-pdf)", () => {
+    expect(pageTokensToPdf().color).toBe("#22201C");
+    expect(pageTokensToPdf().color).toBe(DEFAULT_INK);
+  });
+
+  it("pageTokensToCss emite a MESMA tinta do PDF", () => {
+    expect(pageTokensToCss().color).toBe("#22201C");
+    expect(pageTokensToCss().color).toBe(pageTokensToPdf().color);
+  });
+
+  it("DEFAULT_INK é o valor resolvido de --sf-ink (40 10% 12%)", () => {
+    expect(DEFAULT_INK).toBe("#22201C");
   });
 });
