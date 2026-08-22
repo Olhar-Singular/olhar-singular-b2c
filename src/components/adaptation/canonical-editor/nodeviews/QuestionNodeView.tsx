@@ -3,8 +3,9 @@
  *
  * - PREVIEW (at rest): the folha as printed — positional ordinal, editable stem
  *   (NodeViewContent), light inline instruction, and the print-faithful answer
- *   with NO gabarito. A hover rail offers ✎ editar + move / image / delete /
- *   restore-original.
+ *   with NO gabarito. Um rail (FOLHA_RAIL) oferece ✎ editar + mover / imagem /
+ *   excluir / restaurar-original: some por opacidade no hover, nunca por
+ *   `display:none`, para continuar alcançável por teclado e por toque.
  * - CARD (expanded): the structural editor — stem, buffered instruction + answer
  *   (written to doc only on Concluir), Cancelar (restores stem + discards buffered
  *   changes), Concluir.
@@ -24,6 +25,8 @@ import { useEffect, useRef, useState } from "react";
 import { ArrowUp, ArrowDown, ImagePlus, Pencil, RotateCcw, Trash2 } from "lucide-react";
 import { NodeViewWrapper, NodeViewContent, type NodeViewProps } from "@tiptap/react";
 import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
+import { FOLHA_RAIL } from "../folhaChrome";
 import ImageManagerModal from "@/components/editor/ImageManagerModal";
 import type { ImageItem } from "@/components/editor/imageManagerUtils";
 import type { QuestionAnswer, RichText } from "@/lib/adaptation/canonical/schema";
@@ -187,7 +190,7 @@ export function QuestionNodeView({ node, updateAttributes, editor, getPos, delet
       // ele não cobre a primeira linha do enunciado em telas estreitas (achado
       // 0205) sem que a questão precise reservar 36px de papel no hover/foco,
       // que empurrava o texto sob o ponteiro e inflava a folha (achado 0413).
-      className="absolute right-0 top-0 z-10 hidden -translate-y-full items-center gap-1 rounded-md border border-surface-line-2 bg-surface-paper p-0.5 shadow-sm group-hover:flex group-focus-within:flex"
+      className={cn(FOLHA_RAIL, "-translate-y-full")}
       contentEditable={false}
     >
       <Button

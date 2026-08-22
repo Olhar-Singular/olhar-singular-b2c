@@ -17,3 +17,21 @@ export const FOLHA_BUTTON =
 /** Borderless variant, for controls that should recede until hovered. */
 export const FOLHA_GHOST =
   "text-surface-ink-soft hover:bg-surface-mesa hover:text-surface-ink";
+
+/**
+ * Rail de ações de um nodeview (chrome flutuante no canto superior direito).
+ *
+ * NÃO usar `hidden` + `group-hover:flex`: `display:none` tira os botões da ordem
+ * de tabulação, e o rail só reapareceria se algo dentro dele recebesse foco —
+ * ciclo fechado que deixa as ações inalcançáveis por teclado. E `:focus-within`
+ * do wrapper nunca dispara ao editar o texto, porque o `contenteditable` do
+ * Tiptap é o `.ProseMirror` ancestral, não um descendente do nodeview.
+ * Por isso: sempre no fluxo, escondido só por opacidade, e visível de saída em
+ * ponteiro grosso, que não tem hover nenhum (achado 0232).
+ */
+export const FOLHA_RAIL =
+  "absolute right-0 top-0 z-10 flex items-center gap-1 rounded-md border border-surface-line-2 " +
+  "bg-surface-paper p-0.5 shadow-sm pointer-events-none opacity-0 transition-opacity " +
+  "group-hover:pointer-events-auto group-hover:opacity-100 " +
+  "group-focus-within:pointer-events-auto group-focus-within:opacity-100 " +
+  "[@media(hover:none)]:pointer-events-auto [@media(hover:none)]:opacity-100";

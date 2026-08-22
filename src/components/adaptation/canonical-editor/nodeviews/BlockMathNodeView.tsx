@@ -3,7 +3,7 @@
  *
  * Click the rendered math to edit the latex (and alt) inline. The KaTeX HTML is
  * produced by the reused `renderMathToHtml` from `lib/domain/latexRenderer`.
- * A delete button appears on hover (top-right rail) to remove the block.
+ * A delete button lives in the top-right rail (FOLHA_RAIL) to remove the block.
  *
  * `role="math"` (with the teacher's alt as accessible name) lives on a
  * non-interactive `<span>`, never on the `<button>`: an explicit role REPLACES
@@ -18,7 +18,7 @@ import { useState } from "react";
 import { Trash2 } from "lucide-react";
 import { NodeViewWrapper, type NodeViewProps } from "@tiptap/react";
 import { Input } from "@/components/ui/input";
-import { FOLHA_BUTTON } from "../folhaChrome";
+import { FOLHA_BUTTON, FOLHA_RAIL } from "../folhaChrome";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { latexToHtml } from "./nodeViewUtils";
@@ -33,9 +33,10 @@ export function BlockMathNodeView({ node, updateAttributes, editor, deleteNode }
 
   return (
     <NodeViewWrapper className="group relative my-3" data-testid="blockmath-node" contentEditable={false}>
-      {/* Hover rail: delete button */}
+      {/* Rail de ações: excluir (ver FOLHA_RAIL) */}
       <div
-        className="absolute right-0 top-0 z-10 hidden items-center gap-1 rounded-md border border-surface-line-2 bg-surface-paper p-0.5 shadow-sm group-hover:flex group-focus-within:flex"
+        data-role="blockmath-rail"
+        className={FOLHA_RAIL}
         contentEditable={false}
       >
         <Button

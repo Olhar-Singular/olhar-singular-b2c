@@ -264,6 +264,20 @@ describe("QuestionNodeView — rail actions", () => {
     expect(rail?.className).toMatch(/absolute/);
   });
 
+  it("mantem o rail no DOM e alcancavel por toque e teclado (achado 0232)", () => {
+    const { props } = makeProps(mc);
+    const { container } = render(<QuestionNodeView {...props} />);
+    const rail = container.querySelector('[data-role="question-rail"]');
+    // `hidden` (display:none) tira os botoes da ordem de tabulacao: o teclado
+    // nunca alcanca o rail, porque ele so apareceria se algo dentro dele
+    // recebesse foco. O rail fica sempre no fluxo, escondido por opacidade.
+    expect(rail?.className).not.toMatch(/(^|\s)hidden(\s|$)/);
+    expect(rail?.className).toMatch(/opacity-0/);
+    expect(rail?.className).toMatch(/group-focus-within:opacity-100/);
+    // Ponteiro grosso (toque) nao tem hover: o rail fica visivel de saida.
+    expect(rail?.className).toMatch(/\[@media\(hover:none\)\]:opacity-100/);
+  });
+
   it("dispatches the move transaction when moving up", () => {
     const tr = { isMove: true };
     buildMoveTransaction.mockReturnValue(tr);

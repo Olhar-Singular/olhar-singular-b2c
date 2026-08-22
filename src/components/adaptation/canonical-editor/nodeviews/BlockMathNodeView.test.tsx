@@ -27,6 +27,16 @@ function makeProps(attrs: Record<string, unknown> = {}, editable = true) {
 beforeEach(() => vi.clearAllMocks());
 
 describe("BlockMathNodeView", () => {
+  it("mantem o rail no DOM e alcancavel por toque e teclado (achado 0232)", () => {
+    const { props } = makeProps();
+    const { container } = render(<BlockMathNodeView {...props} />);
+    const rail = container.querySelector('[data-role="blockmath-rail"]');
+    expect(rail?.className).not.toMatch(/(^|\s)hidden(\s|$)/);
+    expect(rail?.className).toMatch(/opacity-0/);
+    expect(rail?.className).toMatch(/group-focus-within:opacity-100/);
+    expect(rail?.className).toMatch(/\[@media\(hover:none\)\]:opacity-100/);
+  });
+
   it("renders KaTeX html and enters edit mode on click", () => {
     const { props } = makeProps();
     render(<BlockMathNodeView {...props} />);
