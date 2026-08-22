@@ -110,6 +110,17 @@ export default function CanonicalAdaptationWizard({ editMode }: Props = {}) {
   // navigation the same way isGenerating does, but there is no credit at stake
   // here — the dialog wording differs.
   const [isUploading, setIsUploading] = useState(false);
+  /**
+   * A adaptação que existia antes do "Regerar" em curso (0326).
+   *
+   * O Regerar precisa zerar `result` para o passo Gerar disparar uma nova
+   * geração — mas essa era a ÚNICA cópia em memória do documento. Quando a
+   * geração falhava, o professor ficava numa tela de erro com Revisar e
+   * Exportar desabilitados, embora a linha continuasse intacta no banco: só um
+   * reload devolvia o Passo 5. Guardar aqui mantém a volta disponível; a nova
+   * adaptação a descarta ao chegar.
+   */
+  const [stashedResult, setStashedResult] = useState<AdaptationResult | null>(null);
   const [isSaved, setIsSaved] = useState(!!editMode);
   /**
    * Há escolha de arquivamento (matéria/pasta) feita e ainda NÃO persistida.
@@ -269,6 +280,8 @@ export default function CanonicalAdaptationWizard({ editMode }: Props = {}) {
     // here ensures the navigation guard switches to "unsaved" mode, not "generating".
     setIsGenerating(false);
     setData((prev) => setResult(prev, result));
+    // A nova adaptação chegou: a anterior não é mais uma saída de emergência.
+    setStashedResult(null);
     setDraftId(row.id);
     setDraftUpdatedAt(row.updatedAt);
   }, []);
@@ -319,6 +332,7 @@ export default function CanonicalAdaptationWizard({ editMode }: Props = {}) {
     await flushPending();
     setData(INITIAL_WIZARD_DATA);
     setStepIndex(0);
+    setStashedResult(null);
     setDraftId(null);
     setDraftUpdatedAt(null);
     setIsSaved(false);
@@ -334,8 +348,25 @@ export default function CanonicalAdaptationWizard({ editMode }: Props = {}) {
   async function confirmRegenerateNow() {
     setConfirmRegenerate(false);
     await flushPending();
+    // O documento atual sai da tela, mas não da memória: se a geração falhar,
+    // `restorePreviousResult` o devolve sem exigir reload (0326).
+    setStashedResult(data.result);
     setData((prev) => clearResult(prev));
     setStepIndex(GENERATE_INDEX);
+  }
+
+  /**
+   * Devolve o Passo 5 com a adaptação anterior depois de um Regerar que falhou.
+   *
+   * `draftId` nunca foi solto no Regerar, então a linha e o autosave continuam
+   * apontando para a mesma adaptação: basta recolocar o documento no estado.
+   */
+  function restorePreviousResult() {
+    /* v8 ignore next -- guard: o botão só é oferecido quando há adaptação guardada */
+    if (!stashedResult) return;
+    setData((prev) => setResult(prev, stashedResult));
+    setStashedResult(null);
+    setStepIndex(REVIEW_INDEX);
   }
 
   // "Salvar": mark the draft ready (save happens before the export screen).
@@ -446,6 +477,7 @@ export default function CanonicalAdaptationWizard({ editMode }: Props = {}) {
             onNext={onNext}
             onPrev={onPrev}
             onLoadingChange={setIsGenerating}
+            onRestorePrevious={stashedResult ? restorePreviousResult : undefined}
           />
         );
       case "review":

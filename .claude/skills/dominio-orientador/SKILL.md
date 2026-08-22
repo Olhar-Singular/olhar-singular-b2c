@@ -71,6 +71,14 @@ Plataforma educacional B2C. **Educadores adaptam atividades pedagógicas (provas
   efeito cancelar o timer do debounce; como o crash mirror só é escrito **dentro** do save, uma
   edição dos últimos ~1.2s não chegava nem ao banco nem ao mirror. O resultado do flush é ignorado
   de propósito: falhou, a edição fica no mirror e o usuário sai da tela que pediu pra sair.
+- **Regerar guarda a adaptação anterior (`stashedResult` no wizard).** Zerar `result` é o que faz
+  o passo Gerar disparar uma geração nova, mas essa era a única cópia em memória do documento: se
+  a geração falhava, Revisar e Exportar ficavam desabilitados (o stepper desabilita `i > stepIndex`)
+  e só um reload devolvia o Passo 5, com a linha intacta no banco o tempo todo. O wizard guarda o
+  `result` na confirmação e passa `onRestorePrevious` ao `StepGenerate`, que oferece "Voltar para a
+  adaptação atual" nas telas de falha e de crédito insuficiente. `handleResult` (nova adaptação) e
+  "Nova adaptação" descartam o guardado. `draftId` nunca é solto no Regerar, então restaurar é só
+  recolocar o documento no estado.
 - **Mirror de crash: divergência manda, não timestamp.** `shouldOfferRestore` compara o conteúdo do
   mirror com o `result` que o servidor carregou; só cai no timestamp quando não há resultado pra
   comparar. E a checagem só "trava" (`checkedMirrorFor`) **depois** de decidir — o app roda em

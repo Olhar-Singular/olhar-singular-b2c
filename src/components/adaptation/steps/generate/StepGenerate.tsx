@@ -52,9 +52,18 @@ type Props = {
   onNext: () => void;
   onPrev: () => void;
   onLoadingChange?: (loading: boolean) => void;
+  /**
+   * Volta para a adaptação que existia ANTES deste "Regerar" (0326).
+   *
+   * Só chega definida quando o wizard tem uma adaptação guardada, ou seja, numa
+   * regeração. Sem ela, uma geração que falha deixava o professor numa tela de
+   * erro com os passos Revisar/Exportar desabilitados, embora o documento
+   * anterior continuasse intacto no servidor: só um reload devolvia o Passo 5.
+   */
+  onRestorePrevious?: () => void;
 };
 
-export function StepGenerate({ data, onResult, onNext, onPrev, onLoadingChange }: Props) {
+export function StepGenerate({ data, onResult, onNext, onPrev, onLoadingChange, onRestorePrevious }: Props) {
   const { user, refreshProfile } = useAuth();
   const [loading, setLoading] = useState(!data.result);
   const [phase, setPhase] = useState<"extracting" | "adapting">(data.uploadedExam ? "extracting" : "adapting");
@@ -315,6 +324,9 @@ export function StepGenerate({ data, onResult, onNext, onPrev, onLoadingChange }
           <Button asChild>
             <Link to="/creditos">Comprar créditos</Link>
           </Button>
+          {onRestorePrevious && (
+            <Button variant="outline" onClick={onRestorePrevious}>Voltar para a adaptação atual</Button>
+          )}
           <Button variant="outline" onClick={onPrev}>Voltar</Button>
         </div>
       </div>
@@ -326,6 +338,11 @@ export function StepGenerate({ data, onResult, onNext, onPrev, onLoadingChange }
       <div className="text-center py-20 space-y-4">
         <p className="text-muted-foreground">Não foi possível gerar a adaptação.</p>
         <Button onClick={generate}>Tentar novamente</Button>
+        {onRestorePrevious && (
+          <Button variant="outline" onClick={onRestorePrevious} className="ml-2">
+            Voltar para a adaptação atual
+          </Button>
+        )}
         <Button variant="outline" onClick={onPrev} className="ml-2">Voltar</Button>
       </div>
     );

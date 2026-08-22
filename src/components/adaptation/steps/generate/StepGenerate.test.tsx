@@ -346,6 +346,65 @@ describe("StepGenerate", () => {
     await waitFor(() => expect(onResult).toHaveBeenCalledWith(result, SERVER_ROW));
   });
 
+  /**
+   * Regressão 0326: um "Regerar" que falha não pode trancar o professor fora do
+   * documento que ele já tinha. O wizard guarda a adaptação anterior e passa a
+   * volta por `onRestorePrevious`; sem essa saída, só o reload devolvia o Passo 5.
+   */
+  describe("volta para a adaptação anterior após uma falha no Regerar (0326)", () => {
+    it("oferece a volta na tela de falha e a aciona", async () => {
+      const onRestorePrevious = vi.fn();
+      invokeMock.mockResolvedValueOnce({
+        data: null,
+        error: { context: { status: 500, json: async () => ({ error: "boom" }) } },
+      });
+      renderWithProviders(
+        <StepGenerate
+          data={baseData}
+          onResult={vi.fn()}
+          onNext={vi.fn()}
+          onPrev={vi.fn()}
+          onRestorePrevious={onRestorePrevious}
+        />,
+      );
+      const back = await screen.findByRole("button", { name: /Voltar para a adaptação atual/i });
+      fireEvent.click(back);
+      expect(onRestorePrevious).toHaveBeenCalled();
+    });
+
+    it("oferece a volta também quando faltam créditos", async () => {
+      const onRestorePrevious = vi.fn();
+      invokeMock.mockResolvedValueOnce({
+        data: null,
+        error: { context: { status: 402, json: async () => ({ error: "no" }) } },
+      });
+      renderWithProviders(
+        <StepGenerate
+          data={baseData}
+          onResult={vi.fn()}
+          onNext={vi.fn()}
+          onPrev={vi.fn()}
+          onRestorePrevious={onRestorePrevious}
+        />,
+      );
+      const back = await screen.findByRole("button", { name: /Voltar para a adaptação atual/i });
+      fireEvent.click(back);
+      expect(onRestorePrevious).toHaveBeenCalled();
+    });
+
+    it("não oferece a volta numa primeira geração, onde não há adaptação anterior", async () => {
+      invokeMock.mockResolvedValueOnce({
+        data: null,
+        error: { context: { status: 500, json: async () => ({ error: "boom" }) } },
+      });
+      renderWithProviders(
+        <StepGenerate data={baseData} onResult={vi.fn()} onNext={vi.fn()} onPrev={vi.fn()} />,
+      );
+      await screen.findByRole("button", { name: /Tentar novamente/i });
+      expect(screen.queryByRole("button", { name: /Voltar para a adaptação atual/i })).toBeNull();
+    });
+  });
+
   it("uses the fallback message when the error body has no error field", async () => {
     const { toast } = await import("sonner");
     invokeMock.mockResolvedValueOnce({ data: null, error: { context: { status: 500, json: async () => ({}) } } });

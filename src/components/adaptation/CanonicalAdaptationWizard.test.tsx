@@ -173,12 +173,20 @@ vi.mock("./steps/generate/StepGenerate", () => ({
     onResult,
     onNext,
     onLoadingChange,
+    onRestorePrevious,
   }: {
     onResult: (r: AdaptationResult, row: { id: string; updatedAt: string }) => void;
     onNext: () => void;
     onLoadingChange?: (loading: boolean) => void;
+    onRestorePrevious?: () => void;
   }) => (
     <>
+      <pre data-testid="generate-can-restore">{String(!!onRestorePrevious)}</pre>
+      {onRestorePrevious && (
+        <button data-testid="restore-previous" onClick={onRestorePrevious}>
+          Voltar para a adaptação atual
+        </button>
+      )}
       <button
         data-testid="simulate-loading"
         onClick={() => onLoadingChange?.(true)}
@@ -1479,6 +1487,74 @@ describe("CanonicalAdaptationWizard — navigation guard", () => {
 
       await waitFor(() => expect(mockFlush).toHaveBeenCalled());
       await waitFor(() => expect(screen.getByTestId("do-generate")).toBeInTheDocument());
+    });
+
+    /**
+     * Regressão 0326: o Regerar descartava o `result` ANTES de chamar o servidor.
+     * Se a geração falhasse, o documento continuava intacto no banco mas sumia da
+     * memória, e os chips Revisar/Exportar ficavam desabilitados — só o reload
+     * devolvia o Passo 5. Agora a adaptação anterior fica guardada até a nova
+     * chegar, e a tela de falha tem uma volta explícita.
+     */
+    it("Regerar guarda a adaptação atual e a devolve quando a geração falha (0326)", async () => {
+      renderWithProviders(<CanonicalAdaptationWizard />);
+      advanceToReview();
+      fireEvent.click(screen.getByTestId("edit-content"));
+      expect(screen.getByTestId("edit-content")).toHaveTextContent("EDITADO");
+
+      fireEvent.click(screen.getByRole("button", { name: /Regerar/i }));
+      const dialog = screen.getByRole("alertdialog");
+      fireEvent.click(within(dialog).getByRole("button", { name: /^Regerar$/i }));
+      await waitFor(() => expect(screen.getByTestId("do-generate")).toBeInTheDocument());
+
+      // A geração falhou: a volta para o documento anterior está oferecida.
+      expect(screen.getByTestId("generate-can-restore")).toHaveTextContent("true");
+      fireEvent.click(screen.getByTestId("restore-previous"));
+
+      // De volta ao Passo 5, com o texto editado intacto.
+      expect(screen.getByTestId("edit-content")).toHaveTextContent("EDITADO");
+      expect(screen.getByText(/Passo 5 de 6/)).toBeInTheDocument();
+    });
+
+    it("uma geração bem-sucedida descarta a adaptação guardada (0326)", async () => {
+      renderWithProviders(<CanonicalAdaptationWizard />);
+      advanceToReview();
+
+      fireEvent.click(screen.getByRole("button", { name: /Regerar/i }));
+      const dialog = screen.getByRole("alertdialog");
+      fireEvent.click(within(dialog).getByRole("button", { name: /^Regerar$/i }));
+      await waitFor(() => expect(screen.getByTestId("do-generate")).toBeInTheDocument());
+      fireEvent.click(screen.getByTestId("do-generate"));
+
+      // Volta ao Gerar pelo chip: não há mais nada guardado para restaurar.
+      fireEvent.click(screen.getByRole("button", { name: /4.*Gerar/i }));
+      expect(screen.getByTestId("generate-can-restore")).toHaveTextContent("false");
+    });
+
+    it("a primeira geração não oferece volta para adaptação anterior (0326)", () => {
+      renderWithProviders(<CanonicalAdaptationWizard />);
+      fireEvent.click(screen.getByTestId("pick-type"));
+      fireEvent.click(screen.getByTestId("input-next"));
+      fireEvent.click(screen.getByTestId("barriers-next"));
+      expect(screen.getByTestId("generate-can-restore")).toHaveTextContent("false");
+    });
+
+    it("Nova adaptação limpa a adaptação guardada pelo Regerar (0326)", async () => {
+      renderWithProviders(<CanonicalAdaptationWizard />);
+      advanceToReview();
+      fireEvent.click(screen.getByRole("button", { name: /Regerar/i }));
+      const dialog = screen.getByRole("alertdialog");
+      fireEvent.click(within(dialog).getByRole("button", { name: /^Regerar$/i }));
+      await waitFor(() => expect(screen.getByTestId("do-generate")).toBeInTheDocument());
+      fireEvent.click(screen.getByTestId("do-generate"));
+      fireEvent.click(screen.getByRole("button", { name: /Avançar para exportação/i }));
+      fireEvent.click(screen.getByRole("button", { name: /Nova adaptação/i }));
+      await waitFor(() => expect(screen.getByTestId("pick-type")).toBeInTheDocument());
+
+      fireEvent.click(screen.getByTestId("pick-type"));
+      fireEvent.click(screen.getByTestId("input-next"));
+      fireEvent.click(screen.getByTestId("barriers-next"));
+      expect(screen.getByTestId("generate-can-restore")).toHaveTextContent("false");
     });
 
     it("still restarts when the flush fails (the mirror keeps the edit)", async () => {
