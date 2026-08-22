@@ -95,7 +95,11 @@
     --muted-foreground: 195 10% 45%;
 
     --accent: 40 55% 50%;
-    --accent-foreground: 0 0% 100%;
+    /* Tinta escura sobre o dourado (mesma escolha do tema escuro): com branco o
+       par ficava em 2,66:1, abaixo do minimo da WCAG 1.4.3, e o item destacado
+       de Select/DropdownMenu (focus:bg-accent focus:text-accent-foreground)
+       era a linha menos legivel da lista. */
+    --accent-foreground: 195 30% 15%;
 
     --destructive: 0 72% 55%;
     --destructive-foreground: 0 0% 100%;
