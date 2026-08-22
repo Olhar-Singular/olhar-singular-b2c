@@ -62,17 +62,13 @@ export function QuestionPreview({
   ) : null;
 
   return (
-    // O rail é um overlay opaco em `top-0` ancorado neste container, que também
-    // é o container do enunciado: em telas estreitas ele cobria a primeira linha
-    // do texto (achado 0205). Reservamos a altura do rail (~34px → pt-9) usando
-    // os MESMOS gatilhos de visibilidade dele (group-hover / group-focus-within,
-    // do `group` no NodeViewWrapper), de modo que a reserva só existe enquanto o
-    // chrome está visível — em repouso a folha continua medindo o que o PDF mede
-    // (achado 0102).
-    <div
-      data-testid="question-preview"
-      className="relative transition-[padding] group-hover:pt-9 group-focus-within:pt-9"
-    >
+    // Este container ancora o rail (`absolute`), mas NÃO reserva papel para ele:
+    // o rail sobe para o vão entre blocos (`-translate-y-full`, em
+    // QuestionNodeView) em vez de cobrir a primeira linha do enunciado em telas
+    // estreitas (achado 0205). Reservar a altura dele com `group-hover:pt-9`
+    // empurrava o texto 36px sob o ponteiro e esticava a folha justamente
+    // durante a edição, quando ela precisa medir o que o PDF mede (0102, 0413).
+    <div data-testid="question-preview" className="relative">
       {rail}
       {/* items-start, não items-baseline: a baseline de um <img> é a borda de
           baixo, o que jogava o número ao pé de uma questão que abre com figura.

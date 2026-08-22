@@ -253,6 +253,17 @@ describe("QuestionNodeView — rail actions", () => {
     expect(screen.getByLabelText("Excluir questão")).toBeInTheDocument();
   });
 
+  it("ancora o rail acima do bloco, fora da coluna de texto (achado 0413)", () => {
+    const { props } = makeProps(mc);
+    const { container } = render(<QuestionNodeView {...props} />);
+    const rail = container.querySelector('[data-role="question-rail"]');
+    // O rail é chrome: sobe para o vão entre blocos (-translate-y-full) em vez de
+    // fazer a questão reservar 36px de papel quando ele aparece. Assim ele não
+    // cobre a primeira linha do enunciado (achado 0205) nem infla a folha (0413).
+    expect(rail?.className).toMatch(/-translate-y-full/);
+    expect(rail?.className).toMatch(/absolute/);
+  });
+
   it("dispatches the move transaction when moving up", () => {
     const tr = { isMove: true };
     buildMoveTransaction.mockReturnValue(tr);

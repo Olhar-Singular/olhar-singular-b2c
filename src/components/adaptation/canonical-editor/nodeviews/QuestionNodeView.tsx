@@ -182,7 +182,12 @@ export function QuestionNodeView({ node, updateAttributes, editor, getPos, delet
   const rail = (
     <div
       data-role="question-rail"
-      className="absolute right-0 top-0 z-10 hidden items-center gap-1 rounded-md border border-surface-line-2 bg-surface-paper p-0.5 shadow-sm group-hover:flex group-focus-within:flex"
+      // `-translate-y-full`: o rail é chrome e vive FORA do fluxo vertical da
+      // folha, no vão que o `my-3` do wrapper já reserva acima do bloco. Assim
+      // ele não cobre a primeira linha do enunciado em telas estreitas (achado
+      // 0205) sem que a questão precise reservar 36px de papel no hover/foco,
+      // que empurrava o texto sob o ponteiro e inflava a folha (achado 0413).
+      className="absolute right-0 top-0 z-10 hidden -translate-y-full items-center gap-1 rounded-md border border-surface-line-2 bg-surface-paper p-0.5 shadow-sm group-hover:flex group-focus-within:flex"
       contentEditable={false}
     >
       <Button

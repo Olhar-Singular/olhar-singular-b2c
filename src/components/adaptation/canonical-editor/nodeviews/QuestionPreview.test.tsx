@@ -75,14 +75,16 @@ describe("QuestionPreview", () => {
     expect(screen.getByTestId("rail-slot")).toBeInTheDocument();
   });
 
-  it("reserva espaço no topo quando o rail aparece, para não cobrir o enunciado (achado 0205)", () => {
+  it("não reserva fluxo vertical para o chrome: hover/foco não mudam o padding (achado 0413)", () => {
     setup();
     const preview = screen.getByTestId("question-preview");
-    // O rail é um overlay opaco ancorado em top-0; sem reserva ele cobre a
-    // primeira linha do enunciado em telas estreitas. A reserva usa os mesmos
-    // gatilhos de visibilidade do rail (group-hover / group-focus-within).
-    expect(preview.className).toMatch(/group-hover:pt-9/);
-    expect(preview.className).toMatch(/group-focus-within:pt-9/);
+    // O rail é chrome e vive FORA do fluxo (ancorado acima do bloco pelo
+    // QuestionNodeView). Reservar papel para ele com group-hover:pt-9 empurrava
+    // o enunciado 36px sob o ponteiro e esticava a folha do Revisar, que passava
+    // a divergir da prévia e do PDF durante a edição (achados 0102 e 0413).
+    expect(preview.className).not.toMatch(/group-hover:pt/);
+    expect(preview.className).not.toMatch(/group-focus-within:pt/);
+    expect(preview.className).not.toMatch(/transition-\[padding\]/);
   });
 
   it("renders the print-faithful AnswerPreview, not the structural AnswerEditor", () => {
