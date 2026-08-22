@@ -238,6 +238,15 @@ export function StepReview({
           só num cinza: o selo "Sem nome" diz o estado por escrito.
         */}
         {/*
+          O campo tem contorno e fundo de campo (os mesmos dos selects vizinhos):
+          sem eles, `border-0 bg-transparent p-0` sobre o chrome deixava o nome
+          indistinguível de um título estático, e no toque não há hover para
+          revelar. `outline-none`/`focus:ring-0` também saíram: eles venciam a
+          regra base `:focus-visible` do `index.css` (mesma especificidade,
+          utilitário depois na folha) e não sobrava indicador de foco nenhum
+          (WCAG 2.2 AA 2.4.7) — achado 0228.
+        */}
+        {/*
           Abaixo de `sm` o nome fica com a linha inteira (`basis-full`): o grupo
           dos controles é `shrink-0` e, dividindo a mesma linha em 390 px, não
           sobrava largura nenhuma — o campo ia a 0 px e o selo transbordava por
@@ -251,7 +260,7 @@ export function StepReview({
             onChange={(e) => onTitleChange?.(e.target.value)}
             placeholder={documentTitle(document)}
             maxLength={120}
-            className="min-w-0 flex-1 truncate border-0 bg-transparent p-0 text-base font-semibold text-surface-ink outline-none placeholder:font-semibold placeholder:text-surface-ink-soft focus:ring-0"
+            className="min-w-0 flex-1 truncate rounded border border-surface-chrome-line bg-surface-paper px-2 py-1 text-base font-semibold text-surface-ink placeholder:font-semibold placeholder:text-surface-ink-soft"
           />
           {title.trim() === "" && (
             <span className="shrink-0 rounded border border-surface-chrome-line bg-surface-mesa px-1.5 py-0.5 text-xs font-medium text-surface-ink">

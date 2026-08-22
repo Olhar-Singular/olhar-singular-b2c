@@ -412,6 +412,28 @@ describe("StepReview", () => {
       expect(nameGroup.className).toMatch(/(?:^|\s)min-w-0(?:\s|$)/);
     });
 
+    // Achado 0228: `border-0 bg-transparent p-0` deixava o campo pixel a pixel
+    // igual a um título estático sobre o chrome — o único controle da barra sem
+    // contorno — e `outline-none` + `focus:ring-0` anulavam o `:focus-visible`
+    // global do `index.css` (mesma especificidade, utilitário depois na folha),
+    // sem sobrar nenhum indicador de foco (WCAG 2.2 AA 2.4.7).
+    it("desenha o campo do nome como campo, com contorno e fundo próprios (0228)", () => {
+      setup({ title: "" });
+      const field = screen.getByLabelText("Nome da adaptação");
+      expect(field.className).not.toMatch(/(?:^|\s)border-0(?:\s|$)/);
+      expect(field.className).not.toMatch(/(?:^|\s)bg-transparent(?:\s|$)/);
+      expect(field.className).toMatch(/(?:^|\s)border(?:\s|$)/);
+      expect(field.className).toMatch(/(?:^|\s)border-surface-chrome-line(?:\s|$)/);
+      expect(field.className).toMatch(/(?:^|\s)bg-surface-paper(?:\s|$)/);
+    });
+
+    it("não anula o anel de foco global do campo do nome (0228)", () => {
+      setup({ title: "" });
+      const field = screen.getByLabelText("Nome da adaptação");
+      expect(field.className).not.toMatch(/(?:^|\s)outline-none(?:\s|$)/);
+      expect(field.className).not.toMatch(/(?:^|\s)focus:ring-0(?:\s|$)/);
+    });
+
     it("mantém o selo 'Sem nome' na mesma linha do campo, sem transbordar (0227)", () => {
       setup({ title: "" });
       const nameGroup = screen.getByLabelText("Nome da adaptação").parentElement!;
