@@ -111,6 +111,7 @@ export function PageSheet({ toolbar, pageStyle, paginated = false, children }: P
     questão, por exemplo); `setState` com o mesmo valor não re-renderiza, sem laço.
   */
   useLayoutEffect(() => {
+    const content = contentRef.current;
     /*
       Achado 0151: a medição vale nos DOIS modos. O 0329 tinha dado ao Revisar
       só um piso fixo de uma folha, então passando de uma página o papel crescia
@@ -121,71 +122,93 @@ export function PageSheet({ toolbar, pageStyle, paginated = false, children }: P
       vale 1) e o contador de folhas.
     */
     const sheet = sheetRef.current;
-    /*
-      Achado 0123: a altura medida é a do CONTEÚDO, nunca a da folha. A folha
-      passou a crescer até o fim da última página (abaixo), então medi-la aqui
-      realimentaria a própria medição a cada layout: mais altura, mais páginas,
-      mais altura.
-    */
-    const height = contentRef.current.offsetHeight;
-    /*
-      Achado 0121: a quebra por questão, na prévia, é uma régua decorativa de
-      ~30px (`PageBreakMark`), não uma quebra de fluxo. Medir a folha inteira
-      dizia "1 página A4" enquanto o PDF (onde a quebra é real) saía com N+1.
-      Então a contagem soma folha a folha CADA TRECHO entre as réguas: cada
-      trecho começa numa página nova, exatamente como no `<View break>` do PDF.
-
-      Achado 0123: o MESMO percurso decide onde desenhar a virada. Antes o
-      desenho era um gradiente cego, sem relação com a contagem: a prévia
-      anunciava "2 páginas A4" e mostrava uma folha só, sem nenhuma linha. Agora
-      sai uma régua por virada e a folha vai até o fim da última página,
-      deixando visível o branco que sobra.
-    */
-    // `offsetHeight` é medida de layout: ignora o `scale` e já vem na geometria
-    // do A4. `getBoundingClientRect`, abaixo, vem escalada — daí a divisão.
-    const sheetTop = sheet.getBoundingClientRect().top;
-    const cuts = Array.from(sheet.querySelectorAll(".adaptar-page-break")).map(
-      (mark) => (mark.getBoundingClientRect().top - sheetTop) / scale,
-    );
-    const ends = [...cuts, height];
-    let start = 0;
-    let total = 0;
-    ends.forEach((end) => {
-      // O comprimento do trecho é medido no CONTEÚDO (do corte até o próximo),
-      // porque é isso que o leitor vê na tela; só a origem dele é que passa a
-      // ser o fim da página anterior.
+    const measure = () => {
       /*
-        Achado 0153: o divisor é a área ÚTIL da página (`PAGE_CONTENT_HEIGHT_PX`),
-        não a A4 inteira. O que se mede aqui é a altura do CONTEÚDO, e o conteúdo
-        vive DENTRO das margens que `pageTokensToCss` (e o `<Page>` do react-pdf)
-        aplicam: dividir por 1123px contava os 107px de margem como texto, uma vez
-        por folha. A folha do Revisar voltava a terminar no meio de uma página sem
-        régua (o 0151 reaberto) e o contador anunciava menos folhas que o arquivo.
-        `PAGE_HEIGHT_PX` continua sendo o passo das réguas e da altura do papel:
-        a virada acontece nos múltiplos de A4 da GEOMETRIA da folha.
+        Achado 0123: a altura medida é a do CONTEÚDO, nunca a da folha. A folha
+        passou a crescer até o fim da última página (abaixo), então medi-la aqui
+        realimentaria a própria medição a cada layout: mais altura, mais páginas,
+        mais altura.
       */
-      total += Math.max(1, Math.ceil((end - start) / PAGE_CONTENT_HEIGHT_PX));
-      start = end;
-    });
-    /*
-      Achado 0131: a folha é N páginas INTEIRAS, e as viradas caem nos múltiplos
-      de A4. Antes o papel era medido a partir do corte (`corte + folhas *
-      1123px`), então a prévia anunciava "2 páginas A4" e desenhava 1,71 folha:
-      sumia justamente o pé em branco da página 1 que o PDF tem, e o professor
-      lia "2 páginas" sem ver nenhuma página 2. Cada trecho entre quebras começa
-      numa página nova (como o `<View break>` do PDF), logo toda origem de trecho
-      é múltipla de `PAGE_HEIGHT_PX` e toda virada também.
+      const height = content.offsetHeight;
+      /*
+        Achado 0121: a quebra por questão, na prévia, é uma régua decorativa de
+        ~30px (`PageBreakMark`), não uma quebra de fluxo. Medir a folha inteira
+        dizia "1 página A4" enquanto o PDF (onde a quebra é real) saía com N+1.
+        Então a contagem soma folha a folha CADA TRECHO entre as réguas: cada
+        trecho começa numa página nova, exatamente como no `<View break>` do PDF.
 
-      O conteúdo pós-quebra continua encostado na régua do `PageBreakMark` (que é
-      chrome de ~30px, não quebra de fluxo): empurrá-lo até o topo da folha
-      seguinte exigiria unificar editor/prévia/PDF numa única paginação, fora do
-      escopo desta correção.
+        Achado 0123: o MESMO percurso decide onde desenhar a virada. Antes o
+        desenho era um gradiente cego, sem relação com a contagem: a prévia
+        anunciava "2 páginas A4" e mostrava uma folha só, sem nenhuma linha. Agora
+        sai uma régua por virada e a folha vai até o fim da última página,
+        deixando visível o branco que sobra.
+      */
+      // `offsetHeight` é medida de layout: ignora o `scale` e já vem na geometria
+      // do A4. `getBoundingClientRect`, abaixo, vem escalada — daí a divisão.
+      const sheetTop = sheet.getBoundingClientRect().top;
+      const cuts = Array.from(sheet.querySelectorAll(".adaptar-page-break")).map(
+        (mark) => (mark.getBoundingClientRect().top - sheetTop) / scale,
+      );
+      const ends = [...cuts, height];
+      let start = 0;
+      let total = 0;
+      ends.forEach((end) => {
+        // O comprimento do trecho é medido no CONTEÚDO (do corte até o próximo),
+        // porque é isso que o leitor vê na tela; só a origem dele é que passa a
+        // ser o fim da página anterior.
+        /*
+          Achado 0153: o divisor é a área ÚTIL da página (`PAGE_CONTENT_HEIGHT_PX`),
+          não a A4 inteira. O que se mede aqui é a altura do CONTEÚDO, e o conteúdo
+          vive DENTRO das margens que `pageTokensToCss` (e o `<Page>` do react-pdf)
+          aplicam: dividir por 1123px contava os 107px de margem como texto, uma vez
+          por folha. A folha do Revisar voltava a terminar no meio de uma página sem
+          régua (o 0151 reaberto) e o contador anunciava menos folhas que o arquivo.
+          `PAGE_HEIGHT_PX` continua sendo o passo das réguas e da altura do papel:
+          a virada acontece nos múltiplos de A4 da GEOMETRIA da folha.
+        */
+        total += Math.max(1, Math.ceil((end - start) / PAGE_CONTENT_HEIGHT_PX));
+        start = end;
+      });
+      /*
+        Achado 0131: a folha é N páginas INTEIRAS, e as viradas caem nos múltiplos
+        de A4. Antes o papel era medido a partir do corte (`corte + folhas *
+        1123px`), então a prévia anunciava "2 páginas A4" e desenhava 1,71 folha:
+        sumia justamente o pé em branco da página 1 que o PDF tem, e o professor
+        lia "2 páginas" sem ver nenhuma página 2. Cada trecho entre quebras começa
+        numa página nova (como o `<View break>` do PDF), logo toda origem de trecho
+        é múltipla de `PAGE_HEIGHT_PX` e toda virada também.
+
+        O conteúdo pós-quebra continua encostado na régua do `PageBreakMark` (que é
+        chrome de ~30px, não quebra de fluxo): empurrá-lo até o topo da folha
+        seguinte exigiria unificar editor/prévia/PDF numa única paginação, fora do
+        escopo desta correção.
+      */
+      setPageCount(total);
+      setSheetHeight(total * PAGE_HEIGHT_PX);
+      setPageRules(
+        Array.from({ length: total - 1 }, (_, page) => (page + 1) * PAGE_HEIGHT_PX),
+      );
+    };
+    measure();
+    /*
+      Achado 0158: as dependencias do efeito (`children` e companhia) so disparam
+      quando o REACT re-renderiza. O conteudo, porem, cresce depois do layout por
+      caminhos que nao passam por render nenhum: a `<img>` do bloco de imagem, que
+      so ganha altura quando o arquivo carrega; o KaTeX, que remede quando a fonte
+      chega; o Tiptap, que escreve no DOM por transacao do editor. A medicao ficava
+      congelada no que existia antes disso: a folha mantinha o piso de uma A4 e o
+      conteudo era desenhado fora do papel, sem regua e sem contagem, e a mesma
+      tela dava geometrias diferentes conforme se chegava nela por carga direta ou
+      pelo `Voltar` do passo Exportar. Observar o proprio conteudo (irmao do
+      observador que ja mede a mesa) faz a geometria ser funcao do que esta
+      renderizado, e nao de quantas vezes o React passou por ali.
+
+      Sem laco: o que a medicao altera e a altura da FOLHA (piso e reguas), nunca
+      a do envelope observado.
     */
-    setPageCount(total);
-    setSheetHeight(total * PAGE_HEIGHT_PX);
-    setPageRules(
-      Array.from({ length: total - 1 }, (_, page) => (page + 1) * PAGE_HEIGHT_PX),
-    );
+    const observer = new ResizeObserver(measure);
+    observer.observe(content);
+    return () => observer.disconnect();
     // `scale` entra nas dependências porque o efeito lê rects já escalados: sem
     // ele a contagem ficaria presa na escala do render anterior.
   }, [paginated, children, scale]);

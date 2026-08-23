@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { act, render, screen } from "@testing-library/react";
 import { PageSheet } from "./PageSheet";
 
 describe("PageSheet", () => {
@@ -458,6 +458,72 @@ describe("PageSheet", () => {
           expect(new Set(rules)).toEqual(new Set(["1122px", "1123px", "2245px", "2246px", "3368px", "3369px"]));
           expect(sheet.style.minHeight).toBe("4492px");
         });
+      });
+    });
+
+    /*
+      Achado 0158: a medição só rodava quando o React re-renderizava o passo
+      (`[paginated, children, scale]`). O conteúdo, porém, cresce DEPOIS do
+      layout por caminhos que não passam por render nenhum: a imagem que carrega,
+      a fonte do KaTeX, uma transação do Tiptap. A folha ficava com o piso de uma
+      A4 e o conteúdo escorria 54px para fora do papel, sem régua nem contagem —
+      a mesma tela dava geometrias diferentes conforme se chegava nela por carga
+      direta ou pelo `Voltar` do passo Exportar.
+    */
+    const withContentObserver = (
+      run: (resize: (height: number) => void) => void,
+      height = 900,
+    ) => {
+      const observers: { cb: () => void; targets: Element[] }[] = [];
+      const original = global.ResizeObserver;
+      let current = height;
+      global.ResizeObserver = class {
+        targets: Element[] = [];
+        constructor(public cb: () => void) {
+          observers.push(this as unknown as { cb: () => void; targets: Element[] });
+        }
+        observe(target: Element) {
+          this.targets.push(target);
+        }
+        unobserve() {}
+        disconnect() {}
+      } as unknown as typeof ResizeObserver;
+      const spy = vi
+        .spyOn(HTMLElement.prototype, "offsetHeight", "get")
+        .mockImplementation(() => current);
+      try {
+        run((next) => {
+          current = next;
+          const content = screen.getByTestId("page-sheet").firstElementChild!;
+          const watcher = observers.find((o) => o.targets.includes(content));
+          expect(watcher).toBeDefined();
+          act(() => watcher!.cb());
+        });
+      } finally {
+        spy.mockRestore();
+        global.ResizeObserver = original;
+      }
+    };
+
+    it("remede a folha quando o conteúdo cresce sem novo render (achado 0158)", () => {
+      withContentObserver((resize) => {
+        render(<PageSheet toolbar={null}><span>x</span></PageSheet>);
+        const sheet = screen.getByTestId("page-sheet");
+        expect(sheet.style.minHeight).toBe("1123px");
+        // A imagem do bloco carregou: o conteúdo passa da área útil da página.
+        resize(1500);
+        expect(sheet.style.minHeight).toBe("2246px");
+        expect(sheet.style.backgroundImage).toContain("1123px");
+        expect(sheet.parentElement!.style.height).toBe("2246px");
+      });
+    });
+
+    it("remede a contagem de folhas da prévia quando o conteúdo cresce (achado 0158)", () => {
+      withContentObserver((resize) => {
+        render(<PageSheet paginated toolbar={null}><span>x</span></PageSheet>);
+        expect(screen.getByTestId("page-count")).toHaveTextContent("1 página A4");
+        resize(2300);
+        expect(screen.getByTestId("page-count")).toHaveTextContent("3 páginas A4");
       });
     });
 
