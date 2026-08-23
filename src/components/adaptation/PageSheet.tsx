@@ -51,12 +51,23 @@ interface PageSheetProps {
 const SHEET_WIDTH_PX = 794;
 
 /**
- * Piso da escala da prévia (achado 0216). Abaixo disso a folha deixa de ser
+ * Piso da escala da PRÉVIA (achado 0216). Abaixo disso a folha deixa de ser
  * conferível: em 390px de viewport a moldura mede ~332px, o fator caía para
  * 0,42 e o corpo de 12pt saía com ~6,7px efetivos. Em 0,75 o mesmo corpo fica
  * com 12px e a folha, quando não cabe, rola na horizontal dentro da mesa.
+ * Ali ninguém digita: trocar tamanho de letra por rolagem é negócio justo.
  */
 const MIN_SCALE = 0.75;
+
+/**
+ * Piso da escala da EDIÇÃO (achado 0235). Na superfície onde se digita, o
+ * mesmo 0,75 desenhava a folha com 595,5px numa mesa de 332px e escondia 44%
+ * de CADA LINHA atrás da rolagem horizontal: editava-se texto que não se via.
+ * Aqui a troca se inverte — corpo menor em troca da linha inteira — e o piso
+ * só existe para a folha não virar miniatura em molduras absurdamente
+ * estreitas (0,4 cobre qualquer viewport de celular; 390px pede ~0,42).
+ */
+const EDIT_MIN_SCALE = 0.4;
 
 export function PageSheet({ toolbar, pageStyle, paginated = false, children }: PageSheetProps) {
   const frameRef = useRef<HTMLDivElement>(null);
@@ -87,22 +98,31 @@ export function PageSheet({ toolbar, pageStyle, paginated = false, children }: P
     as duas juntas reproduziam no Revisar o papel 332 x 1123 que o 0215 tinha
     acabado de eliminar — a folha que existe para ser a referência de página
     mostrava 64% dela cheia onde o PDF sai com 34%.
+
+    Achado 0235: o que NÃO vale nos dois modos é o piso. Ele veio da prévia
+    (0216) e entrou no Revisar de carona no 0234: numa mesa de 332px a folha
+    era desenhada com 595,5px e 44% de cada linha ficava fora do recorte, na
+    única tela em que se digita. O `scale` (e com ele a razão 1,41:1 e a quebra
+    de linha do arquivo) fica; o piso é que passa a ser o de edição.
   */
   useLayoutEffect(() => {
     const frame = frameRef.current;
     const fit = () => {
       // jsdom (e o primeiro layout) devolve 0: sem medida, vale a folha inteira
-      // e nada encolhe. O piso (achado 0216) impede que a folha vire miniatura
-      // ilegível; quem absorve o que não coube é a rolagem horizontal da moldura.
+      // e nada encolhe. O piso impede que a folha vire miniatura ilegível, e é
+      // diferente por superfície (achado 0235): a prévia prefere corpo legível
+      // e empurra o resto para a rolagem horizontal; a edição prefere a linha
+      // inteira na tela, porque ali se lê o que se está digitando.
       const available = frame.clientWidth || SHEET_WIDTH_PX;
-      setScale(Math.min(1, Math.max(MIN_SCALE, available / SHEET_WIDTH_PX)));
+      const floor = paginated ? MIN_SCALE : EDIT_MIN_SCALE;
+      setScale(Math.min(1, Math.max(floor, available / SHEET_WIDTH_PX)));
       setFrameWidth(available);
     };
     fit();
     const observer = new ResizeObserver(fit);
     observer.observe(frame);
     return () => observer.disconnect();
-  }, []);
+  }, [paginated]);
 
   /*
     Medição pós-layout em vez de altura declarada: a quantidade de folhas depende

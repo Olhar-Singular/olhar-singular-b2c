@@ -240,16 +240,20 @@ describe("PageSheet", () => {
           const sheet = screen.getByTestId("page-sheet");
           expect(sheet.className).toContain("w-[794px]");
           expect(sheet.className).not.toContain("max-w-full");
-          expect(sheet.style.transform).toBe("scale(0.75)");
+          // A razão A4 continua vindo do `scale` (e não de largura fluida): o
+          // vão reserva exatamente a folha escalada, 1,41:1 preservado.
+          const factor = Number(/scale\(([\d.]+)\)/.exec(sheet.style.transform)![1]);
+          expect(factor).toBeLessThan(1);
           const slot = sheet.parentElement!;
-          expect(slot.style.width).toBe("595.5px");
-          expect(slot.style.height).toBe("842.25px");
+          expect(Number.parseFloat(slot.style.width)).toBeCloseTo(794 * factor, 3);
+          expect(Number.parseFloat(slot.style.height)).toBeCloseTo(1123 * factor, 3);
         });
       });
     });
 
     it("deixa a folha do Revisar rolar na horizontal quando não cabe (achado 0234)", () => {
-      withClientWidth(332, () => {
+      // Abaixo do piso de edição (0,4) a folha volta a passar da mesa.
+      withClientWidth(200, () => {
         withHeight(900, () => {
           render(<PageSheet toolbar={null}><span>x</span></PageSheet>);
           const frame = screen.getByTestId("page-sheet").parentElement!.parentElement!;
@@ -258,6 +262,34 @@ describe("PageSheet", () => {
           // parada de tabulação do 0222 é só da prévia, que não tem nenhum.
           expect(frame).not.toHaveAttribute("tabindex");
           expect(screen.getByTestId("page-overflow-hint")).toBeInTheDocument();
+        });
+      });
+    });
+
+    /*
+      Achado 0235: o piso 0,75 nasceu para a PRÉVIA (0216), tela onde ninguém
+      digita, e o 0234 levou o `scale` para o Revisar sem reexaminá-lo. Em 390px
+      de viewport a mesa mede 332px e a folha era desenhada com 595,5px: 44% de
+      CADA LINHA ficava fora do recorte, na tela em que se edita o texto.
+    */
+    it("faz a folha do Revisar caber na mesa em tela estreita (achado 0235)", () => {
+      withClientWidth(332, () => {
+        withHeight(900, () => {
+          render(<PageSheet toolbar={null}><span>x</span></PageSheet>);
+          const sheet = screen.getByTestId("page-sheet");
+          const factor = Number(/scale\(([\d.]+)\)/.exec(sheet.style.transform)![1]);
+          expect(794 * factor).toBeLessThanOrEqual(332);
+          // Nada escondido: sem rolagem horizontal e sem o aviso do 0222.
+          expect(screen.queryByTestId("page-overflow-hint")).not.toBeInTheDocument();
+        });
+      });
+    });
+
+    it("mantém o piso legível da prévia, que não é superfície de edição (achado 0235)", () => {
+      withClientWidth(332, () => {
+        withHeight(900, () => {
+          render(<PageSheet paginated toolbar={null}><span>x</span></PageSheet>);
+          expect(screen.getByTestId("page-sheet").style.transform).toBe("scale(0.75)");
         });
       });
     });
