@@ -41,7 +41,7 @@ export function QuestionView({
   // editing sheet and the printed page.
   const enunciadoNode = hasEnunciado ? (
     <p
-      className="text-foreground"
+      className="text-surface-ink"
       style={{ fontSize: "var(--doc-fs-stem, inherit)" }}
       data-testid="question-enunciado"
     >
@@ -56,7 +56,7 @@ export function QuestionView({
           printed its number beside the image's foot. PdfQuestion already
           uses flex-start — this keeps screen and PDF saying the same thing. */}
       <div className="flex items-start gap-2">
-        <span data-testid="question-number" className="shrink-0 font-bold text-foreground">
+        <span data-testid="question-number" className="shrink-0 font-bold text-surface-ink">
           {displayNumber}.
         </span>
         <div className="flex min-w-0 flex-1 flex-col gap-2">
