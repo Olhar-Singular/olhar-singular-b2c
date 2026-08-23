@@ -278,6 +278,20 @@ describe("QuestionNodeView — rail actions", () => {
     expect(rail?.className).toMatch(/\[@media\(hover:none\)\]:opacity-100/);
   });
 
+  it("reserva papel acima do bloco em ponteiro grosso, onde o rail e permanente (achado 0233)", () => {
+    const { props } = makeProps(mc);
+    const { container } = render(<QuestionNodeView {...props} />);
+    const rail = container.querySelector('[data-role="question-rail"]');
+    const wrapper = container.querySelector('[data-testid="question-node"]');
+    // Em (hover:none) o rail nasce visivel (0232) e vive acima do bloco
+    // (-translate-y-full, 0413). O `my-3` do wrapper reserva 12px e o rail mede
+    // 34px: sem reserva propria ele fica desenhado permanentemente sobre o
+    // bloco anterior e apaga texto impresso da folha (achado 0233).
+    expect(rail?.className).toMatch(/\[@media\(hover:none\)\]:opacity-100/);
+    expect(rail?.className).toMatch(/-translate-y-full/);
+    expect(wrapper?.className).toMatch(/\[@media\(hover:none\)\]:mt-10/);
+  });
+
   it("dispatches the move transaction when moving up", () => {
     const tr = { isMove: true };
     buildMoveTransaction.mockReturnValue(tr);

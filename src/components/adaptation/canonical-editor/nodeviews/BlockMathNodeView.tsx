@@ -18,7 +18,7 @@ import { useState } from "react";
 import { Trash2 } from "lucide-react";
 import { NodeViewWrapper, type NodeViewProps } from "@tiptap/react";
 import { Input } from "@/components/ui/input";
-import { FOLHA_BUTTON, FOLHA_RAIL } from "../folhaChrome";
+import { FOLHA_BUTTON, FOLHA_RAIL, FOLHA_RAIL_HOST } from "../folhaChrome";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { latexToHtml } from "./nodeViewUtils";
@@ -32,7 +32,7 @@ export function BlockMathNodeView({ node, updateAttributes, editor, deleteNode }
   const draft = useLatexDraft(latex, (next) => updateAttributes({ latex: next }));
 
   return (
-    <NodeViewWrapper className="group relative my-3" data-testid="blockmath-node" contentEditable={false}>
+    <NodeViewWrapper className={FOLHA_RAIL_HOST} data-testid="blockmath-node" contentEditable={false}>
       {/* Rail de ações: excluir (ver FOLHA_RAIL) */}
       <div
         data-role="blockmath-rail"

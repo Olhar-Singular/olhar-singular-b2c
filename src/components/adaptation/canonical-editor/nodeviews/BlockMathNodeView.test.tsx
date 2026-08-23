@@ -37,6 +37,18 @@ describe("BlockMathNodeView", () => {
     expect(rail?.className).toMatch(/\[@media\(hover:none\)\]:opacity-100/);
   });
 
+  it("ancora o rail acima da formula e reserva papel em ponteiro grosso (achado 0233)", () => {
+    const { props } = makeProps();
+    const { container } = render(<BlockMathNodeView {...props} />);
+    const rail = container.querySelector('[data-role="blockmath-rail"]');
+    const wrapper = container.querySelector('[data-testid="blockmath-node"]');
+    // O rail e uma caixa opaca; em (hover:none) ele e permanente. Ancorado em
+    // top-0 ele tapava a propria formula, e ancorado acima sem reserva taparia
+    // o bloco anterior (achado 0233).
+    expect(rail?.className).toMatch(/-translate-y-full/);
+    expect(wrapper?.className).toMatch(/\[@media\(hover:none\)\]:mt-10/);
+  });
+
   it("renders KaTeX html and enters edit mode on click", () => {
     const { props } = makeProps();
     render(<BlockMathNodeView {...props} />);

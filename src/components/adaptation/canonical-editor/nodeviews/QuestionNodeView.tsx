@@ -25,8 +25,7 @@ import { useEffect, useRef, useState } from "react";
 import { ArrowUp, ArrowDown, ImagePlus, Pencil, RotateCcw, Trash2 } from "lucide-react";
 import { NodeViewWrapper, NodeViewContent, type NodeViewProps } from "@tiptap/react";
 import { Button } from "@/components/ui/button";
-import { cn } from "@/lib/utils";
-import { FOLHA_RAIL } from "../folhaChrome";
+import { FOLHA_RAIL, FOLHA_RAIL_HOST } from "../folhaChrome";
 import ImageManagerModal from "@/components/editor/ImageManagerModal";
 import type { ImageItem } from "@/components/editor/imageManagerUtils";
 import type { QuestionAnswer, RichText } from "@/lib/adaptation/canonical/schema";
@@ -185,12 +184,13 @@ export function QuestionNodeView({ node, updateAttributes, editor, getPos, delet
   const rail = (
     <div
       data-role="question-rail"
-      // `-translate-y-full`: o rail é chrome e vive FORA do fluxo vertical da
-      // folha, no vão que o `my-3` do wrapper já reserva acima do bloco. Assim
-      // ele não cobre a primeira linha do enunciado em telas estreitas (achado
-      // 0205) sem que a questão precise reservar 36px de papel no hover/foco,
-      // que empurrava o texto sob o ponteiro e inflava a folha (achado 0413).
-      className={cn(FOLHA_RAIL, "-translate-y-full")}
+      // O rail é chrome e vive FORA do fluxo vertical da folha, no vão acima do
+      // bloco (`-translate-y-full`, já em FOLHA_RAIL). Assim ele não cobre a
+      // primeira linha do enunciado em telas estreitas (achado 0205) sem que a
+      // questão reserve papel no hover/foco, o que empurrava o texto sob o
+      // ponteiro e inflava a folha (achado 0413). A reserva desse vão em
+      // ponteiro grosso mora no wrapper: FOLHA_RAIL_HOST (achado 0233).
+      className={FOLHA_RAIL}
       contentEditable={false}
     >
       <Button
@@ -228,7 +228,7 @@ export function QuestionNodeView({ node, updateAttributes, editor, getPos, delet
   );
 
   return (
-    <NodeViewWrapper className="group relative my-3" data-testid="question-node" data-question-expanded={String(expanded)}>
+    <NodeViewWrapper className={FOLHA_RAIL_HOST} data-testid="question-node" data-question-expanded={String(expanded)}>
       {expanded ? (
         <QuestionCard
           num={ordinal}

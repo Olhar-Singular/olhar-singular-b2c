@@ -63,9 +63,10 @@ export function QuestionPreview({
 
   return (
     // Este container ancora o rail (`absolute`), mas NÃO reserva papel para ele:
-    // o rail sobe para o vão entre blocos (`-translate-y-full`, em
-    // QuestionNodeView) em vez de cobrir a primeira linha do enunciado em telas
-    // estreitas (achado 0205). Reservar a altura dele com `group-hover:pt-9`
+    // o rail sobe para o vão entre blocos (`-translate-y-full`, em FOLHA_RAIL)
+    // em vez de cobrir a primeira linha do enunciado em telas estreitas (achado
+    // 0205); quem reserva esse vão é o wrapper (FOLHA_RAIL_HOST, achado 0233).
+    // Reservar a altura dele aqui com `group-hover:pt-9`
     // empurrava o texto 36px sob o ponteiro e esticava a folha justamente
     // durante a edição, quando ela precisa medir o que o PDF mede (0102, 0413).
     <div data-testid="question-preview" className="relative">
