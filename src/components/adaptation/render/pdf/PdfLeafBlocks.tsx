@@ -24,6 +24,7 @@ import {
   DEFAULT_IMAGE_WIDTH_PX,
   SCAFFOLDING_PADDING_PT,
   SCAFFOLDING_MARGIN_Y_PT,
+  SCAFFOLDING_RADIUS_PT,
   SCAFFOLDING_STEP_INDENT_PT,
   SCAFFOLDING_BG,
   SCAFFOLDING_BORDER,
@@ -152,6 +153,9 @@ export function PdfScaffolding({
         borderColor: SCAFFOLDING_BORDER,
         padding: SCAFFOLDING_PADDING_PT,
         marginVertical: SCAFFOLDING_MARGIN_Y_PT,
+        // Sem isto o papel imprime a quina viva de uma moldura de tabela onde
+        // as duas telas mostram um cartão de apoio (achado 0161).
+        borderRadius: SCAFFOLDING_RADIUS_PT,
         ...nodeStyleToPdf(block.style),
       }}
     >

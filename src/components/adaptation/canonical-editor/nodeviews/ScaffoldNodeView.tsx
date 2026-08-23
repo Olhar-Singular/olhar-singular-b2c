@@ -16,7 +16,13 @@ import { NodeViewWrapper, type NodeViewProps } from "@tiptap/react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { setStep, addStep, removeStep } from "./scaffoldOps";
-import { DEFAULT_INK, SCAFFOLDING_BG, SCAFFOLDING_BORDER, SCAFFOLDING_LABEL } from "@/components/adaptation/render/pageTokens";
+import {
+  DEFAULT_INK,
+  SCAFFOLDING_BG,
+  SCAFFOLDING_BORDER,
+  SCAFFOLDING_LABEL,
+  SCAFFOLDING_RADIUS_PX,
+} from "@/components/adaptation/render/pageTokens";
 
 export function ScaffoldNodeView({ node, updateAttributes, editor, deleteNode }: NodeViewProps) {
   const items = node.attrs.items as string[];
@@ -24,8 +30,12 @@ export function ScaffoldNodeView({ node, updateAttributes, editor, deleteNode }:
 
   return (
     <NodeViewWrapper
-      className="my-3 rounded-lg border p-3"
-      style={{ backgroundColor: SCAFFOLDING_BG, borderColor: SCAFFOLDING_BORDER }}
+      className="my-3 border p-3"
+      style={{
+        backgroundColor: SCAFFOLDING_BG,
+        borderColor: SCAFFOLDING_BORDER,
+        borderRadius: `${SCAFFOLDING_RADIUS_PX}px`,
+      }}
       data-testid="scaffold-node"
       contentEditable={false}
     >

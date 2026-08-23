@@ -18,6 +18,7 @@ import {
   SCAFFOLDING_BG,
   SCAFFOLDING_BORDER,
   SCAFFOLDING_LABEL,
+  SCAFFOLDING_RADIUS_PX,
   RULE_WIDTH_PX,
 } from "../pageTokens";
 
@@ -27,11 +28,12 @@ export function ScaffoldingView({ block }: { block: ScaffoldingBlock }) {
   return (
     <div
       data-testid="scaffolding"
-      className="rounded-md border text-surface-ink"
+      className="border text-surface-ink"
       style={{
         backgroundColor: SCAFFOLDING_BG,
         borderColor: SCAFFOLDING_BORDER,
         borderWidth: `${RULE_WIDTH_PX}px`,
+        borderRadius: `${SCAFFOLDING_RADIUS_PX}px`,
         padding: `${SCAFFOLDING_PADDING_PX}px`,
         marginTop: `${SCAFFOLDING_MARGIN_Y_PX}px`,
         marginBottom: `${SCAFFOLDING_MARGIN_Y_PX}px`,

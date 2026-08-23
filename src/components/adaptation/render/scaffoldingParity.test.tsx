@@ -28,6 +28,8 @@ import {
   SCAFFOLDING_BG,
   SCAFFOLDING_BORDER,
   SCAFFOLDING_LABEL,
+  SCAFFOLDING_RADIUS_PX,
+  SCAFFOLDING_RADIUS_PT,
 } from "./pageTokens";
 import { ScaffoldingView } from "./blocks/ScaffoldingView";
 import { ScaffoldNodeView } from "../canonical-editor/nodeviews/ScaffoldNodeView";
@@ -154,5 +156,41 @@ describe("andaime — rótulo da caixa nas três superfícies (achado 0155)", ()
   it("usa o mesmo token de rótulo no editor, e não um literal solto", () => {
     render(<ScaffoldNodeView {...nodeViewProps(["Leia duas vezes"])} />);
     expect(screen.getByTestId("scaffold-label")).toHaveTextContent(SCAFFOLDING_LABEL);
+  });
+});
+
+/**
+ * Contrato do RAIO DE CANTO da caixa do andaime (achado 0161).
+ *
+ * O raio era o último atributo da caixa fora da unificação: `rounded-lg` (12px)
+ * na folha do Revisar, `rounded-md` (10px) na prévia do Exportar e nenhum
+ * `borderRadius` no PDF, ou seja, quina viva no papel. Caixa de canto
+ * arredondado lê como cartão de apoio; caixa de canto reto lê como moldura de
+ * tabela. O professor decide o destaque num cartão e o aluno recebe um
+ * retângulo. Quem se move é o papel, pelo mesmo critério do `0124` (medida), do
+ * `0149` (cor) e do `0150` (traço).
+ */
+describe("andaime — paridade do RAIO DE CANTO nas três superfícies (achado 0161)", () => {
+  it("converte o raio para pt pela mesma razão 72/96 dos outros tokens da caixa", () => {
+    expect(SCAFFOLDING_RADIUS_PT).toBeCloseTo(SCAFFOLDING_RADIUS_PX * (72 / 96), 5);
+  });
+
+  it("arredonda a caixa do editor pelo token, e não por uma classe utilitária", () => {
+    render(<ScaffoldNodeView {...nodeViewProps(["Leia duas vezes"])} />);
+    const box = screen.getByTestId("scaffold-node");
+    expect(box.style.borderRadius).toBe(`${SCAFFOLDING_RADIUS_PX}px`);
+    expect(box.className).not.toMatch(/\brounded-/);
+  });
+
+  it("arredonda a caixa da prévia do Exportar pelo mesmo token", () => {
+    render(<ScaffoldingView block={BLOCK} />);
+    const box = screen.getByTestId("scaffolding");
+    expect(box.style.borderRadius).toBe(`${SCAFFOLDING_RADIUS_PX}px`);
+    expect(box.className).not.toMatch(/\brounded-/);
+  });
+
+  it("arredonda a caixa do PDF com o equivalente em pt do mesmo token", () => {
+    const style = boxStyle(PdfScaffolding({ block: BLOCK }) as ReactElement);
+    expect(style.borderRadius).toBe(SCAFFOLDING_RADIUS_PT);
   });
 });

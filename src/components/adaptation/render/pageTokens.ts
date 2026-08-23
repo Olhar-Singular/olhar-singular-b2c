@@ -221,6 +221,25 @@ export const SCAFFOLDING_BORDER = "#E4DFD7";
 export const SCAFFOLDING_LABEL = "Apoio";
 
 /**
+ * Raio do canto da caixa do ANDAIME. Ponto único das TRÊS superfícies, fechando
+ * a família que o `0124` (medida), o `0149` (cor) e o `0150` (traço) abriram.
+ *
+ * O raio era o último atributo da caixa fora da unificação, e em três valores:
+ * `rounded-lg` (12px) na folha do Revisar, `rounded-md` (10px) na prévia do
+ * Exportar e nenhum `borderRadius` no PDF, isto é, quina viva no papel. Uma
+ * caixa de canto arredondado lê como cartão de apoio destacado do corpo; de
+ * canto reto, como moldura de tabela. O professor decide o destaque num cartão
+ * e o aluno recebe um retângulo, justamente no bloco que existe para o aluno
+ * com barreira de leitura achar a instrução (achado 0161).
+ *
+ * Quem se move é o papel, pelo mesmo critério dos achados anteriores da caixa:
+ * é na tela que o professor confere a prova. O valor é o da folha do Revisar
+ * (12px, o `rounded-lg` que era `var(--radius)`), agora literal aqui para não
+ * depender de uma variável de tema do chrome.
+ */
+export const SCAFFOLDING_RADIUS_PX = 12;
+
+/**
  * Família usada quando o documento NÃO traz `pageStyle.fontFamily` — o caso
  * normal, já que nenhuma UI grava a fonte até o professor escolher uma no
  * popover "Formato".
@@ -297,6 +316,7 @@ export const ANSWER_ITEM_GAP_PT = ANSWER_ITEM_GAP_PX / PT_TO_PX;
 export const SCAFFOLDING_PADDING_PT = SCAFFOLDING_PADDING_PX / PT_TO_PX;
 export const SCAFFOLDING_MARGIN_Y_PT = SCAFFOLDING_MARGIN_Y_PX / PT_TO_PX;
 export const SCAFFOLDING_STEP_INDENT_PT = SCAFFOLDING_STEP_INDENT_PX / PT_TO_PX;
+export const SCAFFOLDING_RADIUS_PT = SCAFFOLDING_RADIUS_PX / PT_TO_PX;
 
 /**
  * Tamanho de cada elemento do documento como FRAÇÃO do tamanho base.
