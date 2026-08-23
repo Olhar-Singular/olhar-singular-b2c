@@ -29,13 +29,14 @@ interface PageSheetProps {
   /** Estilo do documento (fonte/tamanho/espaçamento) vindo da Aparência. */
   pageStyle?: PageStyle;
   /**
-   * Liga o modo "impresso": a folha é ESCALADA para caber na mesa e ganha a
-   * contagem de folhas acima dela.
-   * (Crescer em múltiplos exatos de página A4, com a régua da virada, vale nos
-   * dois modos — achados 0329 e 0151.)
+   * Liga o modo "impresso": a folha ganha a contagem de folhas acima dela.
    *
-   * Só a prévia do Exportar usa (achado 0118) — é a tela que promete mostrar o
-   * arquivo. A folha do Revisar continua contínua de propósito: lá se edita
+   * A GEOMETRIA da folha é a mesma nos dois modos: largura travada em A4 com
+   * escala quando a mesa é menor (achados 0215 e 0234), altura em múltiplos
+   * exatos de página com a régua da virada (achados 0329 e 0151).
+   *
+   * Só a prévia do Exportar pagina (achado 0118) — é a tela que promete mostrar
+   * o arquivo. A folha do Revisar continua contínua de propósito: lá se edita
    * texto, e uma quebra rígida no meio da edição atrapalharia mais do que ajuda.
    */
   paginated?: boolean;
@@ -73,15 +74,20 @@ export function PageSheet({ toolbar, pageStyle, paginated = false, children }: P
   const [pageRules, setPageRules] = useState<number[]>([]);
 
   /*
-    Achado 0215: no modo paginado a folha NÃO reflowa. Largura travada em 794px
-    (a do A4) e, quando a tela é mais estreita, a folha inteira encolhe por
-    `transform: scale`. Antes a largura cedia (`max-w-full`) enquanto a altura
-    ficava presa em 1123px, e a prévia mostrava um papel 3,38:1 — nem A4 nem
-    coisa nenhuma. Escalando, a razão 1,41:1, a quebra de linha e a contagem de
-    folhas continuam iguais às do arquivo em qualquer viewport.
+    Achado 0215: a folha NÃO reflowa. Largura travada em 794px (a do A4) e,
+    quando a tela é mais estreita, a folha inteira encolhe por `transform:
+    scale`. Antes a largura cedia (`max-w-full`) enquanto a altura ficava presa
+    em 1123px, e saía um papel 3,38:1 — nem A4 nem coisa nenhuma. Escalando, a
+    razão 1,41:1, a quebra de linha e a proporção de papel cheio continuam
+    iguais às do arquivo em qualquer viewport.
+
+    Achado 0234: isto vale nos DOIS modos. A escala tinha ficado só na prévia
+    enquanto o piso de altura em múltiplos de A4 (0329/0151) valia nos dois, e
+    as duas juntas reproduziam no Revisar o papel 332 x 1123 que o 0215 tinha
+    acabado de eliminar — a folha que existe para ser a referência de página
+    mostrava 64% dela cheia onde o PDF sai com 34%.
   */
   useLayoutEffect(() => {
-    if (!paginated) return;
     const frame = frameRef.current;
     const fit = () => {
       // jsdom (e o primeiro layout) devolve 0: sem medida, vale a folha inteira
@@ -95,7 +101,7 @@ export function PageSheet({ toolbar, pageStyle, paginated = false, children }: P
     const observer = new ResizeObserver(fit);
     observer.observe(frame);
     return () => observer.disconnect();
-  }, [paginated]);
+  }, []);
 
   /*
     Medição pós-layout em vez de altura declarada: a quantidade de folhas depende
@@ -207,7 +213,14 @@ export function PageSheet({ toolbar, pageStyle, paginated = false, children }: P
     permite dar rota de teclado e pista visual apenas quando fazem falta: uma
     parada de tabulação numa moldura que não rola seria ruído.
   */
-  const overflows = paginated && SHEET_WIDTH_PX * scale > frameWidth + 0.5;
+  const overflows = SHEET_WIDTH_PX * scale > frameWidth + 0.5;
+  /*
+    Achado 0234: a parada de tabulação (0222) continua exclusiva da prévia. Lá
+    dentro não há nada focável, então sem ela metade da folha só existiria para
+    quem descobre o gesto; no Revisar a folha é editável — o caret já leva a
+    rolagem, e um tab stop a mais seria só ruído.
+  */
+  const needsKeyboardScroll = overflows && paginated;
 
   const sheet = (
     <div
@@ -219,11 +232,7 @@ export function PageSheet({ toolbar, pageStyle, paginated = false, children }: P
          das classes do Tailwind, e no tema escuro saíam como círculos escuros
          sobre papel branco. Fixar aqui cobre todo controle nativo da folha,
          inclusive os que ainda não existem. */
-      className={
-        paginated
-          ? "w-[794px] origin-top-left bg-surface-paper text-surface-ink rounded-[3px] [color-scheme:light] [accent-color:hsl(var(--sf-accent))]"
-          : "mx-auto w-[794px] max-w-full bg-surface-paper text-surface-ink rounded-[3px] [color-scheme:light] [accent-color:hsl(var(--sf-accent))]"
-      }
+      className="w-[794px] origin-top-left bg-surface-paper text-surface-ink rounded-[3px] [color-scheme:light] [accent-color:hsl(var(--sf-accent))]"
       style={{
         ...pageTokensToCss(resolvePageStyle(pageStyle)),
         boxShadow: "var(--sf-paper-shadow)",
@@ -237,7 +246,7 @@ export function PageSheet({ toolbar, pageStyle, paginated = false, children }: P
         */
         minHeight: `${sheetHeight}px`,
         backgroundImage: pageRulesBackground,
-        ...(paginated ? { transform: `scale(${scale})` } : {}),
+        transform: `scale(${scale})`,
       }}
     >
       {/*
@@ -254,84 +263,81 @@ export function PageSheet({ toolbar, pageStyle, paginated = false, children }: P
     <div className="flex flex-col rounded-md border border-input overflow-clip">
       {toolbar && <div className="sticky top-0 z-10 shrink-0 bg-background">{toolbar}</div>}
       <div
+        data-testid="page-mesa"
         className="flex-1 p-3 sm:p-6 lg:p-10"
         style={{ background: "var(--sf-mesa-gradient)" }}
       >
-        {paginated ? (
-          <>
-            <p
-              data-testid="page-count"
-              className="mx-auto mb-2 text-xs text-muted-foreground text-right"
-              /*
-                Achado 0221: a largura acompanha a folha ATÉ o limite da mesa.
-                Com a escala no piso a folha passa da moldura, e copiar sua
-                largura empurrava o texto (alinhado à direita) para fora do
-                `overflow-clip` da mesa — irrecuperável, porque o contador fica
-                fora do quadro rolável.
-              */
-              style={{ width: `${Math.min(SHEET_WIDTH_PX * scale, frameWidth)}px` }}
-            >
-              {pageCount === 1 ? "1 página A4" : `${pageCount} páginas A4`}
-            </p>
-            {/*
-              A moldura mede a largura disponível; o "vão" interno reserva o
-              tamanho JÁ escalado da folha (que, por estar em `transform`, não
-              ocupa espaço no fluxo) e a centraliza.
+        {paginated && (
+          <p
+            data-testid="page-count"
+            className="mx-auto mb-2 text-xs text-muted-foreground text-right"
+            /*
+              Achado 0221: a largura acompanha a folha ATÉ o limite da mesa.
+              Com a escala no piso a folha passa da moldura, e copiar sua
+              largura empurrava o texto (alinhado à direita) para fora do
+              `overflow-clip` da mesa — irrecuperável, porque o contador fica
+              fora do quadro rolável.
+            */
+            style={{ width: `${Math.min(SHEET_WIDTH_PX * scale, frameWidth)}px` }}
+          >
+            {pageCount === 1 ? "1 página A4" : `${pageCount} páginas A4`}
+          </p>
+        )}
+        {/*
+          A moldura mede a largura disponível; o "vão" interno reserva o
+          tamanho JÁ escalado da folha (que, por estar em `transform`, não
+          ocupa espaço no fluxo) e a centraliza.
 
-              Achado 0216: a centralização é `mx-auto` de bloco, não
-              `flex justify-center`. Com a escala pisada o vão pode ficar MAIOR
-              que a moldura, e o flex centralizado empurraria a borda esquerda
-              da folha para fora do alcance da rolagem; a margem automática
-              colapsa para zero nesse caso e a folha rola inteira.
-            */}
-            <div className="relative">
-              <div
-                ref={frameRef}
-                className="overflow-x-auto focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-                /*
-                  Achado 0222: sem nenhum focável dentro (a prévia é render de
-                  leitura), o Chrome só dá rolagem por seta a um container que
-                  seja ele mesmo focável. Sem isto o Tab pulava da folha direto
-                  para os botões do rodapé e o texto escondido ficava
-                  inalcançável por teclado (WCAG 2.1.1).
-                */
-                tabIndex={overflows ? 0 : undefined}
-                role={overflows ? "region" : undefined}
-                aria-label={overflows ? "Prévia da folha A4" : undefined}
-              >
-                <div
-                  className="mx-auto"
-                  style={{
-                    width: `${SHEET_WIDTH_PX * scale}px`,
-                    height: `${sheetHeight * scale}px`,
-                  }}
-                >
-                  {sheet}
-                </div>
-              </div>
-              {/*
-                Máscara na borda direita: no touch a barra de rolagem é
-                sobreposta e só aparece durante o gesto, então a folha terminava
-                cortada na borda sem nenhuma pista de que continua.
-              */}
-              {overflows && (
-                <div
-                  aria-hidden="true"
-                  className="pointer-events-none absolute inset-y-0 right-0 w-6 bg-gradient-to-l from-black/15 to-transparent"
-                />
-              )}
+          Achado 0216: a centralização é `mx-auto` de bloco, não
+          `flex justify-center`. Com a escala pisada o vão pode ficar MAIOR
+          que a moldura, e o flex centralizado empurraria a borda esquerda
+          da folha para fora do alcance da rolagem; a margem automática
+          colapsa para zero nesse caso e a folha rola inteira.
+        */}
+        <div className="relative">
+          <div
+            ref={frameRef}
+            className="overflow-x-auto focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+            /*
+              Achado 0222: sem nenhum focável dentro (a prévia é render de
+              leitura), o Chrome só dá rolagem por seta a um container que
+              seja ele mesmo focável. Sem isto o Tab pulava da folha direto
+              para os botões do rodapé e o texto escondido ficava
+              inalcançável por teclado (WCAG 2.1.1).
+            */
+            tabIndex={needsKeyboardScroll ? 0 : undefined}
+            role={needsKeyboardScroll ? "region" : undefined}
+            aria-label={needsKeyboardScroll ? "Prévia da folha A4" : undefined}
+          >
+            <div
+              className="mx-auto"
+              style={{
+                width: `${SHEET_WIDTH_PX * scale}px`,
+                height: `${sheetHeight * scale}px`,
+              }}
+            >
+              {sheet}
             </div>
-            {overflows && (
-              <p
-                data-testid="page-overflow-hint"
-                className="mt-2 text-xs text-muted-foreground"
-              >
-                A folha é mais larga que a tela: role na horizontal para ver o resto.
-              </p>
-            )}
-          </>
-        ) : (
-          sheet
+          </div>
+          {/*
+            Máscara na borda direita: no touch a barra de rolagem é
+            sobreposta e só aparece durante o gesto, então a folha terminava
+            cortada na borda sem nenhuma pista de que continua.
+          */}
+          {overflows && (
+            <div
+              aria-hidden="true"
+              className="pointer-events-none absolute inset-y-0 right-0 w-6 bg-gradient-to-l from-black/15 to-transparent"
+            />
+          )}
+        </div>
+        {overflows && (
+          <p
+            data-testid="page-overflow-hint"
+            className="mt-2 text-xs text-muted-foreground"
+          >
+            A folha é mais larga que a tela: role na horizontal para ver o resto.
+          </p>
         )}
       </div>
     </div>

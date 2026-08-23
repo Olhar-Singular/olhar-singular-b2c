@@ -22,7 +22,7 @@ describe("PageSheet", () => {
 
   it("aplica o gradiente da mesa via token §4 (sem hex no componente)", () => {
     render(<PageSheet toolbar={null}><span>x</span></PageSheet>);
-    const mesa = screen.getByTestId("page-sheet").parentElement!;
+    const mesa = screen.getByTestId("page-mesa");
     expect(mesa.getAttribute("style")).toContain("--sf-mesa-gradient");
   });
 
@@ -35,7 +35,7 @@ describe("PageSheet", () => {
 
   it("não cria um segundo eixo de rolagem na mesa (achado 0008)", () => {
     render(<PageSheet toolbar={<div>BARRA</div>}><span>x</span></PageSheet>);
-    const mesa = screen.getByTestId("page-sheet").parentElement!;
+    const mesa = screen.getByTestId("page-mesa");
     // A mesa não pode ter altura chutada nem overflow próprio: com
     // `max-h-[calc(100vh-280px)]` + `overflow-auto` o passo Revisar mostrava
     // duas barras verticais ao mesmo tempo (mesa e página).
@@ -226,12 +226,49 @@ describe("PageSheet", () => {
       });
     });
 
+    /*
+      Achado 0234: a folha do Revisar tinha a altura travada em múltiplos de A4
+      (0329/0151) e a largura ainda fluida (`max-w-full`), então numa mesa de
+      332px ela virava um papel 332 x 1123 (3,38:1) que mentia sobre quanto da
+      página estava cheio. A correção do 0215 (escalar em vez de deixar a largura
+      ceder) passa a valer também fora do modo paginado.
+    */
+    it("escala a folha do Revisar em vez de deixá-la reflowar (achado 0234)", () => {
+      withClientWidth(332, () => {
+        withHeight(900, () => {
+          render(<PageSheet toolbar={null}><span>x</span></PageSheet>);
+          const sheet = screen.getByTestId("page-sheet");
+          expect(sheet.className).toContain("w-[794px]");
+          expect(sheet.className).not.toContain("max-w-full");
+          expect(sheet.style.transform).toBe("scale(0.75)");
+          const slot = sheet.parentElement!;
+          expect(slot.style.width).toBe("595.5px");
+          expect(slot.style.height).toBe("842.25px");
+        });
+      });
+    });
+
+    it("deixa a folha do Revisar rolar na horizontal quando não cabe (achado 0234)", () => {
+      withClientWidth(332, () => {
+        withHeight(900, () => {
+          render(<PageSheet toolbar={null}><span>x</span></PageSheet>);
+          const frame = screen.getByTestId("page-sheet").parentElement!.parentElement!;
+          expect(frame.className).toContain("overflow-x-auto");
+          // O Revisar tem focáveis dentro da folha (o texto é editável): a
+          // parada de tabulação do 0222 é só da prévia, que não tem nenhum.
+          expect(frame).not.toHaveAttribute("tabindex");
+          expect(screen.getByTestId("page-overflow-hint")).toBeInTheDocument();
+        });
+      });
+    });
+
     it("não pagina por padrão (a folha do Revisar continua contínua)", () => {
       render(<PageSheet toolbar={null}><span>x</span></PageSheet>);
       const sheet = screen.getByTestId("page-sheet");
       // Cabendo numa folha não há virada para desenhar (achado 0151).
       expect(sheet.style.backgroundImage).toBe("none");
-      expect(sheet.style.transform).toBe("");
+      // A folha cabe inteira na mesa: escala neutra (achado 0234).
+      expect(sheet.style.transform).toBe("scale(1)");
       expect(screen.queryByTestId("page-count")).toBeNull();
     });
 
@@ -252,8 +289,7 @@ describe("PageSheet", () => {
         const sheet = screen.getByTestId("page-sheet");
         expect(sheet.style.minHeight).toBe("2246px");
         expect(sheet.style.backgroundImage).toContain("1123px");
-        // Continua sem paginar de verdade: nada de escala nem contador.
-        expect(sheet.style.transform).toBe("");
+        // Continua sem paginar de verdade: nenhum contador de folhas.
         expect(screen.queryByTestId("page-count")).toBeNull();
       });
     });
