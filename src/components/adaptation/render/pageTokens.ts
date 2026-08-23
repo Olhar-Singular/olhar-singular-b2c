@@ -217,6 +217,23 @@ const px = (pt: number) => `${Math.round(pt * PT_TO_PX * 100) / 100}px`;
 /** `PAGE_HEIGHT_PT` na unidade da tela (px) — 842pt = 1123px a 96 dpi. */
 export const PAGE_HEIGHT_PX = Math.round(PAGE_HEIGHT_PT * PT_TO_PX);
 
+/** `PAGE_MARGIN_PT` na unidade da tela (px) — o mesmo padding que `pageTokensToCss` aplica na folha. */
+export const PAGE_MARGIN_PX = Math.round(PAGE_MARGIN_PT * PT_TO_PX * 100) / 100;
+
+/**
+ * Área ÚTIL da página A4 na unidade da tela (px): a altura da folha menos as
+ * duas margens. É por ela que se divide a altura do CONTEÚDO para saber quantas
+ * folhas o documento gasta.
+ *
+ * Existe porque a contagem do `PageSheet` dividia o conteúdo pela página inteira
+ * (1123px), contando os 107px de margem como se fossem texto: a folha do Revisar
+ * voltava a terminar no meio de uma página, sem régua de virada, e a prévia
+ * anunciava uma folha a menos do que o arquivo emitia (achado 0153). No PDF o
+ * `<Page>` reserva `PAGE_MARGIN_PT` em cima e embaixo, então o que cabe por
+ * página é isto, não os 842pt cheios.
+ */
+export const PAGE_CONTENT_HEIGHT_PX = PAGE_HEIGHT_PX - 2 * PAGE_MARGIN_PX;
+
 /** `ANSWER_LINE_GAP_PX` na unidade do PDF (pt), pela mesma razão 72/96. */
 export const ANSWER_LINE_GAP_PT = ANSWER_LINE_GAP_PX / PT_TO_PX;
 

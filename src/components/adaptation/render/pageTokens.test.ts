@@ -1,6 +1,8 @@
 import { describe, it, expect } from "vitest";
 import {
   PAGE_MARGIN_PT,
+  PAGE_HEIGHT_PX,
+  PAGE_CONTENT_HEIGHT_PX,
   BASE_FONT_PT,
   BASE_LINE_HEIGHT,
   BASE_BLOCK_SPACING_PX,
@@ -17,6 +19,17 @@ describe("pageTokens", () => {
     expect(BASE_FONT_PT).toBe(12);
     expect(BASE_LINE_HEIGHT).toBe(1.4);
     expect(BASE_BLOCK_SPACING_PX).toBe(16);
+  });
+
+  /*
+    Achado 0153: a área útil é a página menos as DUAS margens — é ela que diz
+    quanto conteúdo cabe por folha. Dividir pelos 1123px cheios contava a margem
+    como texto e a contagem de folhas saía uma a menos que a do PDF.
+  */
+  it("expõe a área útil da página (A4 menos as duas margens) — achado 0153", () => {
+    expect(PAGE_CONTENT_HEIGHT_PX).toBeCloseTo(1016.34, 2);
+    expect(PAGE_CONTENT_HEIGHT_PX).toBeCloseTo(PAGE_HEIGHT_PX - 2 * 53.33, 2);
+    expect(PAGE_CONTENT_HEIGHT_PX).toBeLessThan(PAGE_HEIGHT_PX);
   });
 
   it("pageTokensToPdf devolve o estilo base do <Page> em pt (sem args = defaults atuais)", () => {

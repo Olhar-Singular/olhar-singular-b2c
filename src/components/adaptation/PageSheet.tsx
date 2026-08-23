@@ -11,7 +11,11 @@
  * (paridade com o PDF — não mexer aqui). É só apresentação — não conhece o documento.
  */
 import { useLayoutEffect, useRef, useState, type ReactNode } from "react";
-import { pageTokensToCss, PAGE_HEIGHT_PX } from "./render/pageTokens";
+import {
+  pageTokensToCss,
+  PAGE_HEIGHT_PX,
+  PAGE_CONTENT_HEIGHT_PX,
+} from "./render/pageTokens";
 import { resolvePageStyle } from "./render/pageStyle";
 import type { PageStyle } from "@/lib/adaptation/canonical/schema";
 
@@ -144,7 +148,17 @@ export function PageSheet({ toolbar, pageStyle, paginated = false, children }: P
       // O comprimento do trecho é medido no CONTEÚDO (do corte até o próximo),
       // porque é isso que o leitor vê na tela; só a origem dele é que passa a
       // ser o fim da página anterior.
-      total += Math.max(1, Math.ceil((end - start) / PAGE_HEIGHT_PX));
+      /*
+        Achado 0153: o divisor é a área ÚTIL da página (`PAGE_CONTENT_HEIGHT_PX`),
+        não a A4 inteira. O que se mede aqui é a altura do CONTEÚDO, e o conteúdo
+        vive DENTRO das margens que `pageTokensToCss` (e o `<Page>` do react-pdf)
+        aplicam: dividir por 1123px contava os 107px de margem como texto, uma vez
+        por folha. A folha do Revisar voltava a terminar no meio de uma página sem
+        régua (o 0151 reaberto) e o contador anunciava menos folhas que o arquivo.
+        `PAGE_HEIGHT_PX` continua sendo o passo das réguas e da altura do papel:
+        a virada acontece nos múltiplos de A4 da GEOMETRIA da folha.
+      */
+      total += Math.max(1, Math.ceil((end - start) / PAGE_CONTENT_HEIGHT_PX));
       start = end;
     });
     /*

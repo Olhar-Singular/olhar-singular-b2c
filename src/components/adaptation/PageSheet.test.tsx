@@ -82,7 +82,8 @@ describe("PageSheet", () => {
     */
     it("escala a folha em vez de deixá-la reflowar em tela estreita (achado 0215)", () => {
       withClientWidth(714.6, () => {
-        withHeight(1123, () => {
+        // Conteúdo de uma folha só: o que está em jogo aqui é a escala.
+        withHeight(900, () => {
           render(<PageSheet paginated toolbar={null}><span>x</span></PageSheet>);
           const sheet = screen.getByTestId("page-sheet");
           expect(sheet.className).toContain("w-[794px]");
@@ -104,7 +105,7 @@ describe("PageSheet", () => {
     */
     it("não encolhe a folha abaixo do mínimo legível (achado 0216)", () => {
       withClientWidth(332, () => {
-        withHeight(1123, () => {
+        withHeight(900, () => {
           render(<PageSheet paginated toolbar={null}><span>x</span></PageSheet>);
           const sheet = screen.getByTestId("page-sheet");
           expect(sheet.style.transform).toBe("scale(0.75)");
@@ -207,17 +208,18 @@ describe("PageSheet", () => {
 
     it("conta as páginas na geometria não escalada (achado 0215)", () => {
       withClientWidth(397, () => {
-        withHeight(2246, () => {
+        withHeight(2032, () => {
           withTops(() => {
             render(
               <PageSheet paginated toolbar={null}>
                 <span>questão 1</span>
-                {/* 1123px de conteúdo vistos a 0,75 de escala (o piso do 0216). */}
-                <div className="adaptar-page-break" data-test-top="842.25" />
+                {/* 1016px de conteúdo vistos a 0,75 de escala (o piso do 0216). */}
+                <div className="adaptar-page-break" data-test-top="762" />
                 <span>questão 2</span>
               </PageSheet>,
             );
-            // 2246px de folha = 2 A4 exatos; a quebra cai no fim da 1ª folha.
+            // 2032px = 2 áreas úteis exatas; a quebra cai no fim da 1ª folha.
+            // Medindo o corte na geometria escalada dariam 3 folhas.
             expect(screen.getByTestId("page-count")).toHaveTextContent("2 páginas A4");
           });
         });
@@ -253,6 +255,30 @@ describe("PageSheet", () => {
         // Continua sem paginar de verdade: nada de escala nem contador.
         expect(sheet.style.transform).toBe("");
         expect(screen.queryByTestId("page-count")).toBeNull();
+      });
+    });
+
+    /*
+      Achado 0153: a contagem dividia o conteúdo pela A4 INTEIRA (1123px), mas o
+      conteúdo só ocupa a área útil da página — 1123 menos as duas margens de
+      `PAGE_MARGIN_PT` (53,33px cada) = 1016,34px. Os 107px de margem contados
+      como conteúdo faziam a folha do Revisar terminar no meio da página, sem
+      régua (o 0151 reaberto), e o contador anunciar uma folha a menos que o PDF.
+    */
+    it("conta a folha pela área útil da página, não pela A4 inteira (achado 0153)", () => {
+      withHeight(1070.7, () => {
+        render(<PageSheet toolbar={null}><span>x</span></PageSheet>);
+        const sheet = screen.getByTestId("page-sheet");
+        // 1070,7px cabem na A4 inteira, mas não nos 1016,34px de área útil.
+        expect(sheet.style.minHeight).toBe("2246px");
+        expect(sheet.style.backgroundImage).toContain("1123px");
+      });
+    });
+
+    it("anuncia a folha extra que o PDF emite quando o conteúdo passa da área útil (achado 0153)", () => {
+      withHeight(1070.7, () => {
+        render(<PageSheet paginated toolbar={null}><span>x</span></PageSheet>);
+        expect(screen.getByTestId("page-count")).toHaveTextContent("2 páginas A4");
       });
     });
 
