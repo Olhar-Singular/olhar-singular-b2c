@@ -14,6 +14,7 @@ import { useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import {
   pageTokensToCss,
   PAGE_HEIGHT_PX,
+  PAGE_MARGIN_PX,
   PAGE_CONTENT_HEIGHT_PX,
 } from "./render/pageTokens";
 import { resolvePageStyle } from "./render/pageStyle";
@@ -163,20 +164,35 @@ export function PageSheet({ toolbar, pageStyle, paginated = false, children }: P
           aplicam: dividir por 1123px contava os 107px de margem como texto, uma vez
           por folha. A folha do Revisar voltava a terminar no meio de uma página sem
           régua (o 0151 reaberto) e o contador anunciava menos folhas que o arquivo.
-          `PAGE_HEIGHT_PX` continua sendo o passo das réguas e da altura do papel:
-          a virada acontece nos múltiplos de A4 da GEOMETRIA da folha.
+          Achado 0157: a área útil passou a ser TAMBÉM o passo das réguas e da
+          altura do papel (abaixo), porque o fluxo contínuo desta folha só gasta
+          margem uma vez — contar por uma régua e desenhar por outra era o que
+          fabricava a folha em branco no fim.
         */
         total += Math.max(1, Math.ceil((end - start) / PAGE_CONTENT_HEIGHT_PX));
         start = end;
       });
       /*
-        Achado 0131: a folha é N páginas INTEIRAS, e as viradas caem nos múltiplos
-        de A4. Antes o papel era medido a partir do corte (`corte + folhas *
+        Achado 0131: a folha é N páginas INTEIRAS, e as viradas caem no fim de
+        cada uma. Antes o papel era medido a partir do corte (`corte + folhas *
         1123px`), então a prévia anunciava "2 páginas A4" e desenhava 1,71 folha:
         sumia justamente o pé em branco da página 1 que o PDF tem, e o professor
         lia "2 páginas" sem ver nenhuma página 2. Cada trecho entre quebras começa
         numa página nova (como o `<View break>` do PDF), logo toda origem de trecho
-        é múltipla de `PAGE_HEIGHT_PX` e toda virada também.
+        cai numa virada e toda virada também.
+
+        Achado 0157: mas o fim de cada página, MEDIDO NO FLUXO desta folha, não
+        é o múltiplo de `PAGE_HEIGHT_PX`. A contagem acima é paginada (cada folha
+        recebe só a área útil, porque o `<Page>` do react-pdf reserva
+        `PAGE_MARGIN_PT` em cima e embaixo de CADA página); o desenho aqui é um
+        fluxo contínuo, e `pageTokensToCss` aplica esse padding UMA VEZ SÓ, no
+        topo e no pé da folha inteira. Multiplicar por 1123px somava ao papel
+        106,66px de margem por virada que o fluxo não gasta, e o erro é
+        cumulativo: com 1058px de conteúdo saíam 2246px de papel com a régua em
+        1123px e a segunda A4 inteiramente EM BRANCO, para um documento que o
+        arquivo emite com uma página. As duas contas passam a ser a mesma: o
+        papel são as duas margens do fluxo mais N áreas úteis, e a virada N cai
+        onde a área imprimível da página N acaba.
 
         O conteúdo pós-quebra continua encostado na régua do `PageBreakMark` (que é
         chrome de ~30px, não quebra de fluxo): empurrá-lo até o topo da folha
@@ -184,9 +200,12 @@ export function PageSheet({ toolbar, pageStyle, paginated = false, children }: P
         escopo desta correção.
       */
       setPageCount(total);
-      setSheetHeight(total * PAGE_HEIGHT_PX);
+      setSheetHeight(2 * PAGE_MARGIN_PX + total * PAGE_CONTENT_HEIGHT_PX);
       setPageRules(
-        Array.from({ length: total - 1 }, (_, page) => (page + 1) * PAGE_HEIGHT_PX),
+        Array.from(
+          { length: total - 1 },
+          (_, page) => PAGE_MARGIN_PX + (page + 1) * PAGE_CONTENT_HEIGHT_PX,
+        ),
       );
     };
     measure();
@@ -214,11 +233,13 @@ export function PageSheet({ toolbar, pageStyle, paginated = false, children }: P
   }, [paginated, children, scale]);
 
   /*
-    Régua da virada de página: uma linha no fim de cada folha (achado 0131 — são
-    sempre múltiplos de A4, porque todo trecho entre quebras começa numa página
-    nova). Recortar o fluxo em folhas de verdade (empurrando o conteúdo
-    pós-quebra para o topo da folha seguinte) exigiria unificar
-    editor/prévia/PDF numa única paginação, fora do escopo desta correção.
+    Régua da virada de página: uma linha no fim da área imprimível de cada folha
+    (achado 0131 — todo trecho entre quebras começa numa página nova; achado
+    0157 — no fluxo contínuo desta folha o fim da página N é
+    `PAGE_MARGIN_PX + N x PAGE_CONTENT_HEIGHT_PX`, não o múltiplo de A4).
+    Recortar o fluxo em folhas de verdade (empurrando o conteúdo pós-quebra para
+    o topo da folha seguinte) exigiria unificar editor/prévia/PDF numa única
+    paginação, fora do escopo desta correção.
   */
   const ruleColor = "hsl(var(--sf-line-2))";
   const pageRulesBackground = pageRules.length

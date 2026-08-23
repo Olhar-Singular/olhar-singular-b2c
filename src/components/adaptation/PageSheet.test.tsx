@@ -280,15 +280,16 @@ describe("PageSheet", () => {
       expect(screen.getByTestId("page-sheet").style.minHeight).toBe("1123px");
     });
 
-    it("cresce em múltiplos de A4 e marca a virada também no Revisar (achado 0151)", () => {
+    it("cresce em folhas inteiras e marca a virada também no Revisar (achado 0151)", () => {
       // O piso do 0329 fechou só a metade de baixo: passando de uma página o
       // papel do Revisar crescia num valor qualquer (1,21 folha nos pixels do
       // achado) e não havia nenhuma marca de onde a página 1 termina.
       withHeight(1500, () => {
         render(<PageSheet toolbar={null}><span>x</span></PageSheet>);
         const sheet = screen.getByTestId("page-sheet");
-        expect(sheet.style.minHeight).toBe("2246px");
-        expect(sheet.style.backgroundImage).toContain("1123px");
+        // 2 áreas úteis + as duas margens do fluxo contínuo (achado 0157).
+        expect(sheet.style.minHeight).toBe("2139.34px");
+        expect(sheet.style.backgroundImage).toContain("1069.67px");
         // Continua sem paginar de verdade: nenhum contador de folhas.
         expect(screen.queryByTestId("page-count")).toBeNull();
       });
@@ -306,8 +307,8 @@ describe("PageSheet", () => {
         render(<PageSheet toolbar={null}><span>x</span></PageSheet>);
         const sheet = screen.getByTestId("page-sheet");
         // 1070,7px cabem na A4 inteira, mas não nos 1016,34px de área útil.
-        expect(sheet.style.minHeight).toBe("2246px");
-        expect(sheet.style.backgroundImage).toContain("1123px");
+        expect(sheet.style.minHeight).toBe("2139.34px");
+        expect(sheet.style.backgroundImage).toContain("1069.67px");
       });
     });
 
@@ -318,20 +319,46 @@ describe("PageSheet", () => {
       });
     });
 
+    /*
+      Achado 0157: contagem e desenho usavam dois modelos de página diferentes.
+      A contagem é paginada (cada folha recebe só `PAGE_CONTENT_HEIGHT_PX`,
+      porque o `<Page>` do PDF reserva a margem em cima e embaixo de CADA
+      página); o desenho é fluxo contínuo, e `pageTokensToCss` aplica a margem
+      uma vez só, no topo e no pé da folha inteira. Multiplicar a contagem por
+      `PAGE_HEIGHT_PX` somava 106,66px de papel por virada que o fluxo não
+      gasta: com 1058px de conteúdo o Revisar desenhava 2246px de papel, com a
+      régua em 1123px e a segunda A4 INTEIRAMENTE em branco, para um documento
+      que sai do arquivo com uma página e meia.
+    */
+    it("não desenha folha em branco: papel e régua seguem a área útil (achado 0157)", () => {
+      withHeight(1058, () => {
+        render(<PageSheet toolbar={null}><span>x</span></PageSheet>);
+        const sheet = screen.getByTestId("page-sheet");
+        // 2 folhas de área útil + as DUAS margens do fluxo contínuo, não 2 x 1123.
+        expect(sheet.style.minHeight).toBe("2139.34px");
+        expect(sheet.parentElement!.style.height).toBe("2139.34px");
+        // A virada cai no ponto do FLUXO onde a área imprimível da página 1
+        // acaba (53,33 + 1016,34), e o conteúdo (53,33 + 1058 = 1111,33px)
+        // passa dela: a folha 2 tem tinta.
+        expect(sheet.style.backgroundImage).toContain("1069.67px");
+        expect(sheet.style.backgroundImage).not.toContain("1123px");
+      });
+    });
+
     it("dá altura de página A4 à folha", () => {
       render(<PageSheet paginated toolbar={null}><span>x</span></PageSheet>);
       const sheet = screen.getByTestId("page-sheet");
       expect(sheet.style.minHeight).toBe("1123px");
     });
 
-    it("desenha a régua da virada nos múltiplos de A4 quando não há quebra forçada", () => {
+    it("desenha a régua da virada no fim da área útil quando não há quebra forçada", () => {
       withHeight(1500, () => {
         render(<PageSheet paginated toolbar={null}><span>x</span></PageSheet>);
         const sheet = screen.getByTestId("page-sheet");
         expect(screen.getByTestId("page-count")).toHaveTextContent("2 páginas A4");
-        expect(sheet.style.backgroundImage).toContain("1123px");
+        expect(sheet.style.backgroundImage).toContain("1069.67px");
         // A folha vai até o fim da 2ª página: o branco que sobra fica visível.
-        expect(sheet.style.minHeight).toBe("2246px");
+        expect(sheet.style.minHeight).toBe("2139.34px");
       });
     });
 
@@ -403,11 +430,11 @@ describe("PageSheet", () => {
           // A quebra forçada gera uma virada desenhada (antes do 0123 não saía
           // régua nenhuma); ela cai no fim da página 1, que é onde o papel acaba
           // (achado 0131 — antes era desenhada em cima do corte, em 500px).
-          expect(sheet.style.backgroundImage).toContain("1123px");
+          expect(sheet.style.backgroundImage).toContain("1069.67px");
           expect(sheet.style.backgroundImage).not.toContain("500px");
           // A folha vai até o fim da 2ª página: o branco do fim fica visível.
-          expect(sheet.style.minHeight).toBe("2246px");
-          expect(sheet.parentElement!.style.height).toBe("2246px");
+          expect(sheet.style.minHeight).toBe("2139.34px");
+          expect(sheet.parentElement!.style.height).toBe("2139.34px");
         });
       });
     });
@@ -430,11 +457,11 @@ describe("PageSheet", () => {
           );
           const sheet = screen.getByTestId("page-sheet");
           expect(screen.getByTestId("page-count")).toHaveTextContent("2 páginas A4");
-          // 2 páginas anunciadas => 2 x 1123px de papel, não 796 + 1123.
-          expect(sheet.style.minHeight).toBe("2246px");
-          expect(sheet.parentElement!.style.height).toBe("2246px");
+          // 2 páginas anunciadas => 2 folhas inteiras de papel, não 796 + folha.
+          expect(sheet.style.minHeight).toBe("2139.34px");
+          expect(sheet.parentElement!.style.height).toBe("2139.34px");
           // A virada fica no fim da página 1, onde o papel realmente acaba.
-          expect(sheet.style.backgroundImage).toContain("1123px");
+          expect(sheet.style.backgroundImage).toContain("1069.67px");
           expect(sheet.style.backgroundImage).not.toContain("1919px");
         });
       });
@@ -453,10 +480,20 @@ describe("PageSheet", () => {
           const sheet = screen.getByTestId("page-sheet");
           expect(screen.getByTestId("page-count")).toHaveTextContent("4 páginas A4");
           // trecho 1: 1500px de conteúdo -> 2 folhas; trecho 2 começa no fim da
-          // página 2 e também gasta 2. As três viradas caem nos múltiplos de A4.
-          const rules = sheet.style.backgroundImage.match(/\d+px/g) ?? [];
-          expect(new Set(rules)).toEqual(new Set(["1122px", "1123px", "2245px", "2246px", "3368px", "3369px"]));
-          expect(sheet.style.minHeight).toBe("4492px");
+          // página 2 e também gasta 2. As três viradas caem no fim da área útil
+          // de cada folha (achado 0157).
+          const rules = sheet.style.backgroundImage.match(/[\d.]+px/g) ?? [];
+          expect(new Set(rules)).toEqual(
+            new Set([
+              "1068.67px",
+              "1069.67px",
+              "2085.01px",
+              "2086.01px",
+              "3101.35px",
+              "3102.35px",
+            ]),
+          );
+          expect(sheet.style.minHeight).toBe("4172.02px");
         });
       });
     });
@@ -512,9 +549,9 @@ describe("PageSheet", () => {
         expect(sheet.style.minHeight).toBe("1123px");
         // A imagem do bloco carregou: o conteúdo passa da área útil da página.
         resize(1500);
-        expect(sheet.style.minHeight).toBe("2246px");
-        expect(sheet.style.backgroundImage).toContain("1123px");
-        expect(sheet.parentElement!.style.height).toBe("2246px");
+        expect(sheet.style.minHeight).toBe("2139.34px");
+        expect(sheet.style.backgroundImage).toContain("1069.67px");
+        expect(sheet.parentElement!.style.height).toBe("2139.34px");
       });
     });
 
