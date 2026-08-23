@@ -6,7 +6,9 @@
  * Fundo e borda vêm de `pageTokens` (`SCAFFOLDING_BG` / `SCAFFOLDING_BORDER`):
  * é o mesmo bege que a prévia do Exportar e o PDF pintam (achado 0149). O rótulo
  * também: `SCAFFOLDING_LABEL` é o mesmo texto que as duas superfícies impressas
- * desenham no topo da caixa, na tipografia da folha (achado 0155).
+ * desenham no topo da caixa, na tipografia da folha (achado 0155) e na tinta do
+ * documento (`DEFAULT_INK`) — o rótulo e os ordinais dos passos são IMPRESSOS,
+ * então nenhum dos dois usa token de chrome apagado (achado 0160).
  */
 
 import { Plus, Trash2 } from "lucide-react";
@@ -14,7 +16,7 @@ import { NodeViewWrapper, type NodeViewProps } from "@tiptap/react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { setStep, addStep, removeStep } from "./scaffoldOps";
-import { SCAFFOLDING_BG, SCAFFOLDING_BORDER, SCAFFOLDING_LABEL } from "@/components/adaptation/render/pageTokens";
+import { DEFAULT_INK, SCAFFOLDING_BG, SCAFFOLDING_BORDER, SCAFFOLDING_LABEL } from "@/components/adaptation/render/pageTokens";
 
 export function ScaffoldNodeView({ node, updateAttributes, editor, deleteNode }: NodeViewProps) {
   const items = node.attrs.items as string[];
@@ -30,8 +32,8 @@ export function ScaffoldNodeView({ node, updateAttributes, editor, deleteNode }:
       <div className="mb-2 flex items-center justify-between">
         <p
           data-testid="scaffold-label"
-          className="font-semibold uppercase tracking-wide text-surface-ink-faint"
-          style={{ fontSize: "var(--doc-fs-caption, 0.833em)" }}
+          className="font-semibold uppercase tracking-wide"
+          style={{ fontSize: "var(--doc-fs-caption, 0.833em)", color: DEFAULT_INK }}
         >
           {SCAFFOLDING_LABEL}
         </p>
@@ -51,7 +53,9 @@ export function ScaffoldNodeView({ node, updateAttributes, editor, deleteNode }:
       <div className="flex flex-col gap-1.5">
         {items.map((item, index) => (
           <div key={index} className="flex items-center gap-2">
-            <span className="text-xs text-surface-ink-faint">{index + 1}.</span>
+            <span data-testid={`scaffold-step-ordinal-${index}`} style={{ color: DEFAULT_INK }}>
+              {index + 1}.
+            </span>
             <Input
               value={item}
               disabled={disabled}
