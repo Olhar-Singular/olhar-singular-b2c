@@ -515,3 +515,50 @@ describe("ExportPanel — Copiar leva o cabeçalho (achado 0127)", () => {
     expect(writeText.mock.calls[0][0]).toContain("QUEBRA DE PÁGINA");
   });
 });
+
+// ---------------------------------------------------------------------------
+// 0419 — confirmar o aviso não pode largar o foco no BODY
+// ---------------------------------------------------------------------------
+
+describe("foco depois de confirmar o aviso (0419)", () => {
+  it("devolve o foco ao botão 'Exportar PDF' quando a geração termina", async () => {
+    const onDownload = vi.fn().mockResolvedValue(undefined);
+    render(<ExportPanel document={mathDocument} onDownload={onDownload} />);
+
+    const trigger = screen.getByRole("button", { name: /Exportar PDF/i });
+    trigger.focus();
+    fireEvent.click(trigger);
+    fireEvent.click(await screen.findByRole("button", { name: /Baixar mesmo assim/i }));
+
+    await waitFor(() => expect(onDownload).toHaveBeenCalled());
+    await waitFor(() => expect(globalThis.document.activeElement).toBe(trigger));
+  });
+
+  it("devolve o foco ao botão 'Exportar Word' quando a geração termina", async () => {
+    const onDownloadWord = vi.fn().mockResolvedValue(undefined);
+    render(
+      <ExportPanel document={lossyDocument} onDownload={vi.fn()} onDownloadWord={onDownloadWord} />,
+    );
+
+    const trigger = screen.getByRole("button", { name: /Exportar Word/i });
+    trigger.focus();
+    fireEvent.click(trigger);
+    fireEvent.click(await screen.findByRole("button", { name: /Baixar mesmo assim/i }));
+
+    await waitFor(() => expect(onDownloadWord).toHaveBeenCalled());
+    await waitFor(() => expect(globalThis.document.activeElement).toBe(trigger));
+  });
+
+  it("devolve o foco mesmo quando a geração falha", async () => {
+    const onDownload = vi.fn().mockRejectedValue(new Error("boom"));
+    render(<ExportPanel document={mathDocument} onDownload={onDownload} />);
+
+    const trigger = screen.getByRole("button", { name: /Exportar PDF/i });
+    trigger.focus();
+    fireEvent.click(trigger);
+    fireEvent.click(await screen.findByRole("button", { name: /Baixar mesmo assim/i }));
+
+    await waitFor(() => expect(onDownload).toHaveBeenCalled());
+    await waitFor(() => expect(globalThis.document.activeElement).toBe(trigger));
+  });
+});

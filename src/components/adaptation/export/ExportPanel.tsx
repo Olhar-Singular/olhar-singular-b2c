@@ -13,7 +13,7 @@
  * font select. Pass `pageStyle` in from the parent (StepExportCanonical).
  */
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Copy, FileDown, CalendarDays, FileText } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -84,6 +84,26 @@ export function ExportPanel({
     null,
   );
 
+  /**
+   * 0419 — o Radix devolve o foco ao gatilho quando o diálogo fecha, mas
+   * "Baixar mesmo assim" fecha o aviso e liga `exporting` no MESMO commit: a
+   * restauração cai num botão já `disabled` e o foco vai parar no `<body>`.
+   * Guardamos o gatilho e devolvemos o foco quando a geração termina (é aí que
+   * o botão volta a ser focável).
+   */
+  const pdfTriggerRef = useRef<HTMLButtonElement>(null);
+  const wordTriggerRef = useRef<HTMLButtonElement>(null);
+  const restoreFocusRef = useRef<"pdf" | "word" | null>(null);
+
+  useEffect(() => {
+    const target = restoreFocusRef.current;
+    if (target === null) return;
+    // Ainda gerando: o botão continua desabilitado, focar agora seria no-op.
+    if (target === "pdf" ? exporting : exportingWord) return;
+    restoreFocusRef.current = null;
+    (target === "pdf" ? pdfTriggerRef : wordTriggerRef).current.focus();
+  }, [exporting, exportingWord]);
+
   const setField = (key: keyof DocumentHeader, value: string) =>
     onHeaderChange({ ...header, [key]: value });
 
@@ -149,6 +169,7 @@ export function ExportPanel({
 
   const confirmPending = () => {
     const format = pending?.format;
+    restoreFocusRef.current = format === "pdf" ? "pdf" : "word";
     setPending(null);
     if (format === "pdf") void runPdfExport();
     else void runWordExport();
@@ -215,10 +236,15 @@ export function ExportPanel({
         <Button variant="outline" onClick={handleCopy}>
           <Copy className="mr-1 h-4 w-4" /> Copiar
         </Button>
-        <Button variant="outline" onClick={handleExport} disabled={exporting}>
+        <Button ref={pdfTriggerRef} variant="outline" onClick={handleExport} disabled={exporting}>
           <FileDown className="mr-1 h-4 w-4" /> Exportar PDF
         </Button>
-        <Button variant="outline" onClick={handleExportWord} disabled={exportingWord}>
+        <Button
+          ref={wordTriggerRef}
+          variant="outline"
+          onClick={handleExportWord}
+          disabled={exportingWord}
+        >
           <FileText className="mr-1 h-4 w-4" /> Exportar Word
         </Button>
       </div>
