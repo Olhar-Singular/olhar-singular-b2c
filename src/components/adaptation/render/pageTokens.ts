@@ -201,6 +201,26 @@ export const SCAFFOLDING_BG = "#F5F3F0";
 export const SCAFFOLDING_BORDER = "#E4DFD7";
 
 /**
+ * Rótulo impresso no topo da caixa do ANDAIME. Ponto único das TRÊS superfícies
+ * (folha do Revisar, prévia do Exportar e PDF), fechando a família dos tokens da
+ * caixa que o `0124` (medida) e o `0149` (cor) abriram.
+ *
+ * Antes o rótulo existia uma vez só, como chrome do editor: `ScaffoldingView` e
+ * `PdfScaffolding` desenhavam a lista de passos direto, e o aluno recebia um
+ * retângulo bege sem título. Os outros rótulos da folha (TÍTULO, PARÁGRAFO,
+ * LEGENDA) podem sumir na impressão porque nomeiam elementos que se identificam
+ * sozinhos no papel; a caixa do andaime não — impressa ela é um bege claro com
+ * uma lista dentro, competindo com as alternativas da questão logo acima, e o
+ * rótulo é a ÚNICA coisa que a nomeia. Some justamente para o aluno com barreira
+ * de aprendizagem, que é quem o andaime existe para atender (achado 0155).
+ *
+ * O rótulo é texto do DOCUMENTO, não chrome: as três superfícies o desenham com
+ * a tipografia da folha (o tamanho `caption` de `resolveElementFontSizes`), então
+ * subir o tamanho do texto no popover "Formato" leva o rótulo junto.
+ */
+export const SCAFFOLDING_LABEL = "Apoio";
+
+/**
  * Família usada quando o documento NÃO traz `pageStyle.fontFamily` — o caso
  * normal, já que nenhuma UI grava a fonte até o professor escolher uma no
  * popover "Formato".

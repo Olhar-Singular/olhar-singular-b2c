@@ -43,7 +43,7 @@ function dispatch(
     case "image":
       return <PdfImage block={block} elementSizes={elementSizes} />;
     case "scaffolding":
-      return <PdfScaffolding block={block} />;
+      return <PdfScaffolding block={block} elementSizes={elementSizes} />;
     case "divider":
       return <PdfDivider block={block} />;
     case "question":

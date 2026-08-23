@@ -27,10 +27,12 @@ import {
   SCAFFOLDING_STEP_INDENT_PT,
   SCAFFOLDING_BG,
   SCAFFOLDING_BORDER,
+  SCAFFOLDING_LABEL,
 } from "./pageTokens";
 import { ScaffoldingView } from "./blocks/ScaffoldingView";
 import { ScaffoldNodeView } from "../canonical-editor/nodeviews/ScaffoldNodeView";
 import { PdfScaffolding } from "./pdf/PdfLeafBlocks";
+import { resolveElementFontSizes, resolvePageStyle } from "./pageStyle";
 
 vi.mock("@tiptap/react", () => ({
   NodeViewWrapper: ({ children, ...rest }: { children: ReactNode }) => <div {...rest}>{children}</div>,
@@ -59,7 +61,8 @@ function nodeViewProps(items: string[]): NodeViewProps {
 }
 
 function firstMarkerStyle(node: ReactElement): { width?: number } {
-  const rows = (node.props as { children: ReactElement[] }).children;
+  // children = [rótulo da caixa, linhas dos passos] desde o achado 0155.
+  const [, rows] = (node.props as { children: [ReactElement, ReactElement[]] }).children;
   const cells = (rows[0].props as { children: ReactElement[] }).children;
   return (cells[0].props as { style: { width?: number } }).style;
 }
@@ -117,5 +120,39 @@ describe("andaime — paridade da COR da caixa entre as três superfícies (acha
     const box = screen.getByTestId("scaffold-node");
     expect(box.style.backgroundColor).toBe("rgb(245, 243, 240)");
     expect(box.style.borderColor).toBe("rgb(228, 223, 215)");
+  });
+});
+
+/**
+ * Contrato do RÓTULO da caixa do andaime (achado 0155).
+ *
+ * O rótulo "APOIO" existia uma vez só, como chrome do editor. A prévia do
+ * Exportar e o PDF desenhavam a lista de passos direto, então o aluno recebia um
+ * retângulo bege sem título — e a caixa do andaime, ao contrário de um título ou
+ * de uma legenda, não se identifica sozinha no papel: o rótulo é a ÚNICA coisa
+ * que a nomeia. Agora ele é texto do documento, vindo de um token único, com a
+ * tipografia da folha (`--doc-fs-caption` na tela, `elementSizes.caption` no PDF)
+ * em vez de um `text-xs` fixo do chrome.
+ */
+describe("andaime — rótulo da caixa nas três superfícies (achado 0155)", () => {
+  it("imprime o rótulo na prévia do Exportar, com o tamanho de legenda da folha", () => {
+    render(<ScaffoldingView block={BLOCK} />);
+    const label = screen.getByTestId("scaffolding-label");
+    expect(label).toHaveTextContent(SCAFFOLDING_LABEL);
+    expect(label.style.fontSize).toContain("--doc-fs-caption");
+  });
+
+  it("imprime o mesmo rótulo no PDF, no tamanho de legenda resolvido", () => {
+    const node = PdfScaffolding({ block: BLOCK }) as ReactElement;
+    const label = (node.props as { children: [ReactElement, ReactElement[]] }).children[0];
+    expect((label.props as { children: string }).children).toBe(SCAFFOLDING_LABEL);
+    expect((label.props as { style: { fontSize: number } }).style.fontSize).toBe(
+      resolveElementFontSizes(resolvePageStyle()).caption,
+    );
+  });
+
+  it("usa o mesmo token de rótulo no editor, e não um literal solto", () => {
+    render(<ScaffoldNodeView {...nodeViewProps(["Leia duas vezes"])} />);
+    expect(screen.getByTestId("scaffold-label")).toHaveTextContent(SCAFFOLDING_LABEL);
   });
 });

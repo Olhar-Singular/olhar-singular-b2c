@@ -4,7 +4,9 @@
  * `updateAttributes({ items })`. A delete button in the header removes the block.
  *
  * Fundo e borda vêm de `pageTokens` (`SCAFFOLDING_BG` / `SCAFFOLDING_BORDER`):
- * é o mesmo bege que a prévia do Exportar e o PDF pintam (achado 0149).
+ * é o mesmo bege que a prévia do Exportar e o PDF pintam (achado 0149). O rótulo
+ * também: `SCAFFOLDING_LABEL` é o mesmo texto que as duas superfícies impressas
+ * desenham no topo da caixa, na tipografia da folha (achado 0155).
  */
 
 import { Plus, Trash2 } from "lucide-react";
@@ -12,7 +14,7 @@ import { NodeViewWrapper, type NodeViewProps } from "@tiptap/react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { setStep, addStep, removeStep } from "./scaffoldOps";
-import { SCAFFOLDING_BG, SCAFFOLDING_BORDER } from "../../render/pageTokens";
+import { SCAFFOLDING_BG, SCAFFOLDING_BORDER, SCAFFOLDING_LABEL } from "@/components/adaptation/render/pageTokens";
 
 export function ScaffoldNodeView({ node, updateAttributes, editor, deleteNode }: NodeViewProps) {
   const items = node.attrs.items as string[];
@@ -26,7 +28,13 @@ export function ScaffoldNodeView({ node, updateAttributes, editor, deleteNode }:
       contentEditable={false}
     >
       <div className="mb-2 flex items-center justify-between">
-        <p className="text-xs font-semibold uppercase tracking-wide text-surface-ink-faint">Apoio</p>
+        <p
+          data-testid="scaffold-label"
+          className="font-semibold uppercase tracking-wide text-surface-ink-faint"
+          style={{ fontSize: "var(--doc-fs-caption, 0.833em)" }}
+        >
+          {SCAFFOLDING_LABEL}
+        </p>
         <Button
           type="button"
           variant="ghost"

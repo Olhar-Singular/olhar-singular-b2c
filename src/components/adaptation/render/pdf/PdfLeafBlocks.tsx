@@ -27,6 +27,7 @@ import {
   SCAFFOLDING_STEP_INDENT_PT,
   SCAFFOLDING_BG,
   SCAFFOLDING_BORDER,
+  SCAFFOLDING_LABEL,
   RULE_COLOR,
   RULE_WIDTH_PT,
 } from "../pageTokens";
@@ -136,7 +137,13 @@ export function PdfImage({
   );
 }
 
-export function PdfScaffolding({ block }: { block: ScaffoldingBlock }) {
+export function PdfScaffolding({
+  block,
+  elementSizes = DEFAULT_ELEMENT_SIZES,
+}: {
+  block: ScaffoldingBlock;
+  elementSizes?: ElementFontSizesPt;
+}) {
   return (
     <View
       style={{
@@ -148,6 +155,21 @@ export function PdfScaffolding({ block }: { block: ScaffoldingBlock }) {
         ...nodeStyleToPdf(block.style),
       }}
     >
+      {/* Rótulo da caixa: texto do documento, não chrome do editor. Sem ele a
+          caixa sai do papel como um retângulo bege sem título — e o andaime,
+          diferente de um título ou de uma legenda, não se identifica sozinho no
+          impresso (achado 0155). O tamanho é o de legenda da folha, o mesmo que
+          a prévia lê de `--doc-fs-caption`. */}
+      <Text
+        style={{
+          fontSize: elementSizes.caption,
+          fontWeight: "bold",
+          textTransform: "uppercase",
+          marginBottom: 4,
+        }}
+      >
+        {SCAFFOLDING_LABEL}
+      </Text>
       {block.items.map((item, i) => (
         <View key={i} style={{ flexDirection: "row", marginBottom: 2 }}>
           {/* Coluna de ordinal com a largura do recuo da <ol> da tela: o texto

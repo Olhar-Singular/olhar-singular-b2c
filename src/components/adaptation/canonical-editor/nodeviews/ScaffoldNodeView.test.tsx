@@ -40,9 +40,10 @@ describe("ScaffoldNodeView", () => {
   });
 
   // "Andaime" is the pedagogical jargon for this block; the teacher reading
-  // the sheet needs a word that says what it does. The label is editor chrome
-  // only — ScaffoldingView (screen render and PDF) prints no heading at all,
-  // so the student's exam is unaffected either way.
+  // the sheet needs a word that says what it does. Since 0155 the label is
+  // document text, not editor chrome: ScaffoldingView and PdfScaffolding print
+  // the same SCAFFOLDING_LABEL on top of the box, so the student's exam gets a
+  // named support box instead of an anonymous beige rectangle.
   it("labels the block 'Apoio', not the jargon", () => {
     const { props } = makeProps(["a"]);
     render(<ScaffoldNodeView {...props} />);
