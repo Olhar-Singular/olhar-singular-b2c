@@ -166,6 +166,42 @@ describe("BlockMathNodeView", () => {
     }
   });
 
+  /**
+   * Achado 0420 — o rail é uma caixa opaca ancorada ACIMA do bloco, revelada por
+   * `group-focus-within`. O `autoFocus` do campo de LaTeX acende o rail assim que
+   * o editor abre, então em ponteiro fino a invasão do bloco de cima deixa de ser
+   * um relance de hover e vira o estado estável da edição: a lixeira cobre o fim
+   * do parágrafo anterior e rouba o clique de volta ao texto, apagando a fórmula
+   * sem confirmação. Enquanto o editor está aberto o rail não existe; a exclusão
+   * mora dentro da caixa do editor, ao lado de "Pronto".
+   */
+  it("nao desenha o rail flutuante enquanto o editor esta aberto (achado 0420)", () => {
+    const { props } = makeProps();
+    const { container } = render(<BlockMathNodeView {...props} />);
+    expect(container.querySelector('[data-role="blockmath-rail"]')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByTestId("blockmath-render"));
+
+    expect(container.querySelector('[data-role="blockmath-rail"]')).not.toBeInTheDocument();
+    const del = screen.getByRole("button", { name: "Excluir fórmula" });
+    const card = screen.getByLabelText("Expressão LaTeX").closest("div");
+    expect(card?.parentElement?.contains(del)).toBe(true);
+    // e nada entre a lixeira e o wrapper tira a caixa opaca do fluxo do nó
+    let el: HTMLElement | null = del;
+    while (el && el !== screen.getByTestId("blockmath-node")) {
+      expect(el.className).not.toMatch(/-translate-y-full|(^|\s)absolute(\s|$)/);
+      el = el.parentElement;
+    }
+  });
+
+  it("exclui a formula pelo botao de dentro do editor (achado 0420)", () => {
+    const { props, deleteNode } = makeProps();
+    render(<BlockMathNodeView {...props} />);
+    fireEvent.click(screen.getByTestId("blockmath-render"));
+    fireEvent.click(screen.getByRole("button", { name: "Excluir fórmula" }));
+    expect(deleteNode).toHaveBeenCalledTimes(1);
+  });
+
   it("falls back to the latex as accessible name when there is no alt", () => {
     const { props } = makeProps({ alt: null });
     render(<BlockMathNodeView {...props} />);

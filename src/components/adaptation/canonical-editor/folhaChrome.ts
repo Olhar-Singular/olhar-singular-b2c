@@ -52,5 +52,11 @@ export const FOLHA_RAIL =
  * Por isso a reserva é aplicada só em `(hover: none)`: lá ela é estática (não
  * empurra texto sob o ponteiro, que era o defeito do achado 0413) e lá é o
  * único lugar onde o rail está sempre visível.
+ *
+ * Ressalva do achado 0420: em ponteiro fino a invasão só "some sozinha" enquanto
+ * o rail depender de hover. Um nodeview que abre um editor com `autoFocus` deixa
+ * o rail aceso por `group-focus-within` durante toda a edição — nesse estado ele
+ * não pode ficar no ar sobre o bloco de cima (ver BlockMathNodeView, que esconde
+ * o rail com o editor aberto e leva a exclusão para dentro da caixa do editor).
  */
 export const FOLHA_RAIL_HOST = "group relative my-3 [@media(hover:none)]:mt-10";

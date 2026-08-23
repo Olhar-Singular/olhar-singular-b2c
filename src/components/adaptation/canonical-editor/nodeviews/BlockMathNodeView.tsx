@@ -31,29 +31,36 @@ export function BlockMathNodeView({ node, updateAttributes, editor, deleteNode }
   // An empty latex is unrepresentable — see useLatexDraft.
   const draft = useLatexDraft(latex, (next) => updateAttributes({ latex: next }));
 
+  const open = editing && !disabled;
+
   return (
     <NodeViewWrapper className={FOLHA_RAIL_HOST} data-testid="blockmath-node" contentEditable={false}>
-      {/* Rail de ações: excluir (ver FOLHA_RAIL) */}
-      <div
-        data-role="blockmath-rail"
-        className={FOLHA_RAIL}
-        contentEditable={false}
-      >
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon"
-          className="h-7 w-7 text-destructive"
-          disabled={disabled}
-          onClick={() => deleteNode()}
-          title="Excluir fórmula"
-          aria-label="Excluir fórmula"
+      {/* Rail de ações: excluir (ver FOLHA_RAIL). Some enquanto o editor está
+          aberto — achado 0420: o `autoFocus` do campo de LaTeX acende o rail por
+          `group-focus-within` e a caixa opaca fica invadindo o bloco de cima
+          durante toda a edição. Aberto o editor, a exclusão mora dentro dele. */}
+      {!open && (
+        <div
+          data-role="blockmath-rail"
+          className={FOLHA_RAIL}
+          contentEditable={false}
         >
-          <Trash2 className="h-3.5 w-3.5" />
-        </Button>
-      </div>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="h-7 w-7 text-destructive"
+            disabled={disabled}
+            onClick={() => deleteNode()}
+            title="Excluir fórmula"
+            aria-label="Excluir fórmula"
+          >
+            <Trash2 className="h-3.5 w-3.5" />
+          </Button>
+        </div>
+      )}
 
-      {editing && !disabled ? (
+      {open ? (
         <div className="flex flex-col gap-2 rounded-lg border border-border p-2">
           <Input
             value={draft.value}
@@ -69,9 +76,22 @@ export function BlockMathNodeView({ node, updateAttributes, editor, deleteNode }
             placeholder="Texto alternativo"
             aria-label="Texto alternativo da fórmula"
           />
-          <Button type="button" size="sm" variant="outline" className={cn("self-start", FOLHA_BUTTON)} onClick={() => setEditing(false)}>
-            Pronto
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button type="button" size="sm" variant="outline" className={cn(FOLHA_BUTTON)} onClick={() => setEditing(false)}>
+              Pronto
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="text-destructive"
+              onClick={() => deleteNode()}
+              title="Excluir fórmula"
+              aria-label="Excluir fórmula"
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+            </Button>
+          </div>
         </div>
       ) : (
         <div className="relative">
