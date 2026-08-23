@@ -227,7 +227,8 @@ describe("PageSheet", () => {
     it("não pagina por padrão (a folha do Revisar continua contínua)", () => {
       render(<PageSheet toolbar={null}><span>x</span></PageSheet>);
       const sheet = screen.getByTestId("page-sheet");
-      expect(sheet.style.backgroundImage).toBe("");
+      // Cabendo numa folha não há virada para desenhar (achado 0151).
+      expect(sheet.style.backgroundImage).toBe("none");
       expect(sheet.style.transform).toBe("");
       expect(screen.queryByTestId("page-count")).toBeNull();
     });
@@ -238,6 +239,21 @@ describe("PageSheet", () => {
       // página. A borda inferior é o que responde "isto cabe numa folha?".
       render(<PageSheet toolbar={null}><span>x</span></PageSheet>);
       expect(screen.getByTestId("page-sheet").style.minHeight).toBe("1123px");
+    });
+
+    it("cresce em múltiplos de A4 e marca a virada também no Revisar (achado 0151)", () => {
+      // O piso do 0329 fechou só a metade de baixo: passando de uma página o
+      // papel do Revisar crescia num valor qualquer (1,21 folha nos pixels do
+      // achado) e não havia nenhuma marca de onde a página 1 termina.
+      withHeight(1500, () => {
+        render(<PageSheet toolbar={null}><span>x</span></PageSheet>);
+        const sheet = screen.getByTestId("page-sheet");
+        expect(sheet.style.minHeight).toBe("2246px");
+        expect(sheet.style.backgroundImage).toContain("1123px");
+        // Continua sem paginar de verdade: nada de escala nem contador.
+        expect(sheet.style.transform).toBe("");
+        expect(screen.queryByTestId("page-count")).toBeNull();
+      });
     });
 
     it("dá altura de página A4 à folha", () => {

@@ -25,9 +25,10 @@ interface PageSheetProps {
   /** Estilo do documento (fonte/tamanho/espaçamento) vindo da Aparência. */
   pageStyle?: PageStyle;
   /**
-   * Liga o modo "impresso": a folha cresce em múltiplos EXATOS de página A4,
-   * com uma régua tracejada a cada virada e a contagem de folhas acima dela.
-   * (A altura mínima de uma folha vale nos dois modos — achado 0329.)
+   * Liga o modo "impresso": a folha é ESCALADA para caber na mesa e ganha a
+   * contagem de folhas acima dela.
+   * (Crescer em múltiplos exatos de página A4, com a régua da virada, vale nos
+   * dois modos — achados 0329 e 0151.)
    *
    * Só a prévia do Exportar usa (achado 0118) — é a tela que promete mostrar o
    * arquivo. A folha do Revisar continua contínua de propósito: lá se edita
@@ -100,7 +101,15 @@ export function PageSheet({ toolbar, pageStyle, paginated = false, children }: P
     questão, por exemplo); `setState` com o mesmo valor não re-renderiza, sem laço.
   */
   useLayoutEffect(() => {
-    if (!paginated) return;
+    /*
+      Achado 0151: a medição vale nos DOIS modos. O 0329 tinha dado ao Revisar
+      só um piso fixo de uma folha, então passando de uma página o papel crescia
+      num valor qualquer (1,21 folha nos pixels do achado) e não havia nenhuma
+      marca de onde a página 1 termina. Medindo aqui também no modo contínuo, a
+      folha do Revisar cresce em múltiplos exatos de A4 e ganha a mesma régua.
+      O que continua exclusivo da prévia é o `scale` (que fora do modo paginado
+      vale 1) e o contador de folhas.
+    */
     const sheet = sheetRef.current;
     /*
       Achado 0123: a altura medida é a do CONTEÚDO, nunca a da folha. A folha
@@ -205,28 +214,23 @@ export function PageSheet({ toolbar, pageStyle, paginated = false, children }: P
         ...pageTokensToCss(resolvePageStyle(pageStyle)),
         boxShadow: "var(--sf-paper-shadow)",
         /*
-          Piso de uma folha A4 mesmo fora do modo paginado (achado 0329): sem
-          ele o papel do Revisar tinha só a altura do CONTEÚDO — com pouco
-          texto encolhia a 0,65 de página (razão 1:0,91) e deixava de ter forma
-          de folha, então o professor não via onde a página acaba. `minHeight`
-          é piso, não trava: o fluxo de edição continua contínuo e a folha
-          cresce com o conteúdo, sem a quebra rígida que o comentário do topo
-          deste arquivo rejeita.
+          Altura em múltiplos INTEIROS de A4 nos dois modos (achados 0329 e
+          0151): com pouco texto o papel do Revisar encolhia a 0,65 de página e
+          deixava de ter forma de folha; passando de uma página crescia num
+          valor qualquer (1,21 folha), sem nenhuma marca de virada. `minHeight`
+          é piso, não trava: o fluxo de edição continua contínuo (a régua é
+          decorativa) e a folha nunca termina no meio de uma página.
         */
-        minHeight: `${paginated ? sheetHeight : PAGE_HEIGHT_PX}px`,
-        ...(paginated
-          ? {
-              transform: `scale(${scale})`,
-              backgroundImage: pageRulesBackground,
-            }
-          : {}),
+        minHeight: `${sheetHeight}px`,
+        backgroundImage: pageRulesBackground,
+        ...(paginated ? { transform: `scale(${scale})` } : {}),
       }}
     >
       {/*
         Envelope do conteúdo: dá a altura NATURAL do documento, que a folha (já
         esticada até o fim da última página) não dá mais (achado 0123).
       */}
-      {paginated ? <div ref={contentRef}>{children}</div> : children}
+      <div ref={contentRef}>{children}</div>
     </div>
   );
 
