@@ -16,7 +16,7 @@
  * O discriminante `kind` é exaustivo sobre a união tipada — sem default.
  */
 
-import { View, Text } from "@react-pdf/renderer";
+import { View, Text, Canvas } from "@react-pdf/renderer";
 import type { QuestionAnswer } from "@/lib/adaptation/canonical/schema";
 import { indexToLetter } from "../letters";
 import { PdfRichText } from "./PdfRichText";
@@ -25,6 +25,8 @@ import {
   ANSWER_LINE_COLOR,
   ANSWER_LINE_GAP_PT,
   ANSWER_LINE_WIDTH_PT,
+  ANSWER_LINE_DASH_PT,
+  ANSWER_LINE_DASH_SPACE_PT,
   ANSWER_ITEM_GAP_PT,
 } from "../pageTokens";
 
@@ -38,6 +40,47 @@ const FLEX = { flexGrow: 1, flexShrink: 1 } as const;
 
 // Marcador de verdadeiro/falso para o aluno assinalar — não revela o valor.
 const TF_MARKER = { width: 60, flexShrink: 0 } as const;
+
+/**
+ * Painter mínimo do `Canvas` do @react-pdf (o pacote tipa como `any`): só os
+ * comandos que a pauta usa, encadeáveis como no pdfkit.
+ */
+type AnswerLinePainter = {
+  lineWidth: (width: number) => AnswerLinePainter;
+  strokeColor: (color: string) => AnswerLinePainter;
+  dash: (length: number, options: { space: number }) => AnswerLinePainter;
+  moveTo: (x: number, y: number) => AnswerLinePainter;
+  lineTo: (x: number, y: number) => AnswerLinePainter;
+  stroke: () => AnswerLinePainter;
+};
+
+/**
+ * A pauta da questão aberta é desenhada à mão, não por `borderBottomStyle:
+ * "dashed"`, porque o @react-pdf deriva a cadência do tracejado da espessura da
+ * borda (`ctx.dash(w * 2, { space: w * 1.2 })`). Isso deixava o ritmo sem dono:
+ * quando o achado 0145 unificou a espessura em 0,75pt, o tracejado encolheu
+ * junto e o papel passou a imprimir 56% mais denso que a tela. Com o `Canvas` o
+ * dash vem dos tokens, e mexer na espessura não mexe mais no ritmo (achado 0154).
+ */
+function paintAnswerLine(painter: AnswerLinePainter, availableWidth: number): null {
+  const y = ANSWER_LINE_WIDTH_PT / 2;
+  painter
+    .lineWidth(ANSWER_LINE_WIDTH_PT)
+    .strokeColor(ANSWER_LINE_COLOR)
+    .dash(ANSWER_LINE_DASH_PT, { space: ANSWER_LINE_DASH_SPACE_PT })
+    .moveTo(0, y)
+    .lineTo(availableWidth, y)
+    .stroke();
+  return null;
+}
+
+// Largura e altura explícitas: sem elas o @react-pdf mede o `Canvas` chamando o
+// `paint` com um contexto de medição e a linha colapsa.
+const ANSWER_LINE_STYLE = {
+  width: "100%",
+  height: ANSWER_LINE_WIDTH_PT,
+  marginBottom: ANSWER_LINE_GAP_PT,
+} as const;
 
 /**
  * Default sizes for callers that render an answer standalone. Resolving them
@@ -62,15 +105,7 @@ export function PdfAnswer({
       return (
         <View>
           {Array.from({ length: lines }, (_, i) => (
-            <View
-              key={i}
-              style={{
-                borderBottomWidth: ANSWER_LINE_WIDTH_PT,
-                borderBottomColor: ANSWER_LINE_COLOR,
-                borderBottomStyle: "dashed",
-                marginBottom: ANSWER_LINE_GAP_PT,
-              }}
-            />
+            <Canvas key={i} style={ANSWER_LINE_STYLE} paint={paintAnswerLine} />
           ))}
         </View>
       );

@@ -124,6 +124,27 @@ export const ANSWER_LINE_GAP_PX = 18;
 export const ANSWER_LINE_WIDTH_PX = RULE_WIDTH_PX;
 
 /**
+ * Cadência do tracejado da pauta: comprimento do traço e do vão, em px de tela.
+ * Ponto único das TRÊS superfícies, fechando a família de `ANSWER_LINE_COLOR`
+ * (cor), `ANSWER_LINE_GAP_PX` (passo) e `ANSWER_LINE_WIDTH_PX` (espessura).
+ *
+ * Os valores transcrevem o que o `border-dashed` do Tailwind já desenha nas duas
+ * telas (no Chrome, 3px de traço e 2px de vão para uma borda de 1px), que é a
+ * referência: é na tela que o professor confere a prova.
+ *
+ * Existiam para o papel resolver sozinho: o @react-pdf deriva o dash da borda
+ * (`ctx.dash(w * 2, { space: w * 1.2 })`), então a cadência era FUNÇÃO da
+ * espessura. Quando o achado 0145 baixou a borda de 1pt para 0,75pt, o tracejado
+ * encolheu junto e a divergência com a tela pulou de 17% para 56% — o papel saía
+ * quase pontilhado onde a tela mostrava traços. Com o dash explícito, ajustar a
+ * espessura não mexe mais no ritmo (achado 0154).
+ */
+export const ANSWER_LINE_DASH_PX = 3;
+
+/** Vão entre um traço e o seguinte, par de `ANSWER_LINE_DASH_PX`. */
+export const ANSWER_LINE_DASH_SPACE_PX = 2;
+
+/**
  * Vão entre um item de lista de resposta e o seguinte (alternativas de múltipla
  * escolha). Ponto único das TRÊS superfícies, na mesma família de
  * `ANSWER_LINE_GAP_PX`, que o achado 0111 unificou para a pauta da questão aberta.
@@ -239,6 +260,12 @@ export const ANSWER_LINE_GAP_PT = ANSWER_LINE_GAP_PX / PT_TO_PX;
 
 /** `ANSWER_LINE_WIDTH_PX` na unidade do PDF (pt), pela mesma razão 72/96. */
 export const ANSWER_LINE_WIDTH_PT = ANSWER_LINE_WIDTH_PX / PT_TO_PX;
+
+/** `ANSWER_LINE_DASH_PX` na unidade do PDF (pt), pela mesma razão 72/96. */
+export const ANSWER_LINE_DASH_PT = ANSWER_LINE_DASH_PX / PT_TO_PX;
+
+/** `ANSWER_LINE_DASH_SPACE_PX` na unidade do PDF (pt), pela mesma razão 72/96. */
+export const ANSWER_LINE_DASH_SPACE_PT = ANSWER_LINE_DASH_SPACE_PX / PT_TO_PX;
 
 /** `RULE_WIDTH_PX` na unidade do PDF (pt), pela mesma razão 72/96. */
 export const RULE_WIDTH_PT = RULE_WIDTH_PX / PT_TO_PX;

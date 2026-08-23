@@ -21,6 +21,10 @@ import {
   ANSWER_LINE_GAP_PT,
   ANSWER_LINE_WIDTH_PX,
   ANSWER_LINE_WIDTH_PT,
+  ANSWER_LINE_DASH_PX,
+  ANSWER_LINE_DASH_PT,
+  ANSWER_LINE_DASH_SPACE_PX,
+  ANSWER_LINE_DASH_SPACE_PT,
 } from "./pageTokens";
 import { OpenAnswerView } from "./answers/OpenAnswerView";
 import { PdfAnswer } from "./pdf/PdfAnswer";
@@ -50,32 +54,78 @@ function luminance(hex: string): number {
   return 0.2126 * channels[0] + 0.7152 * channels[1] + 0.0722 * channels[2];
 }
 
-type PdfLineStyle = {
-  borderBottomColor?: string;
-  marginBottom?: number;
-  borderBottomWidth?: number;
-};
 
-/** Varre a árvore do react-pdf atrás do estilo da primeira linha pautada. */
-function findLineStyle(node: unknown): PdfLineStyle | undefined {
+type PaintCall = { method: string; args: unknown[] };
+type Painter = Record<string, (...args: unknown[]) => unknown>;
+
+/** Painter falso: registra a sequência de chamadas do `paint` do `Canvas`. */
+function recordingPainter(calls: PaintCall[]): Painter {
+  const painter: Painter = {};
+  for (const method of [
+    "save",
+    "restore",
+    "lineWidth",
+    "lineCap",
+    "strokeColor",
+    "dash",
+    "undash",
+    "moveTo",
+    "lineTo",
+    "stroke",
+  ]) {
+    painter[method] = (...args: unknown[]) => {
+      calls.push({ method, args });
+      return painter;
+    };
+  }
+  return painter;
+}
+
+type PaintFn = (painter: Painter, width: number, height: number) => unknown;
+
+/** Varre a árvore do react-pdf atrás do `paint` do primeiro `Canvas`. */
+function findPaint(node: unknown): PaintFn | undefined {
   if (!node || typeof node !== "object") return undefined;
   if (Array.isArray(node)) {
     for (const child of node) {
-      const found = findLineStyle(child);
+      const found = findPaint(child);
       if (found) return found;
     }
     return undefined;
   }
   const props = (node as ReactElement).props as
-    | { style?: PdfLineStyle; children?: unknown }
+    | { paint?: PaintFn; children?: unknown }
     | undefined;
   if (!props) return undefined;
-  if (props.style?.borderBottomColor) return props.style;
-  return findLineStyle(props.children);
+  if (typeof props.paint === "function") return props.paint;
+  return findPaint(props.children);
 }
 
-function findBorderColor(node: unknown): string | undefined {
-  return findLineStyle(node)?.borderBottomColor;
+/** Estilo do primeiro `Canvas` da árvore (a pauta do PDF). */
+function findCanvasStyle(node: unknown): { marginBottom?: number } | undefined {
+  if (!node || typeof node !== "object") return undefined;
+  if (Array.isArray(node)) {
+    for (const child of node) {
+      const found = findCanvasStyle(child);
+      if (found) return found;
+    }
+    return undefined;
+  }
+  const props = (node as ReactElement).props as
+    | { paint?: unknown; style?: { marginBottom?: number }; children?: unknown }
+    | undefined;
+  if (!props) return undefined;
+  if (typeof props.paint === "function") return props.style;
+  return findCanvasStyle(props.children);
+}
+
+/** Roda o `paint` da pauta do PDF num painter falso e devolve a sequência. */
+function paintCalls(): PaintCall[] {
+  const calls: PaintCall[] = [];
+  const paint = findPaint(PdfAnswer({ answer: OPEN }));
+  expect(typeof paint).toBe("function");
+  paint?.(recordingPainter(calls), 400, ANSWER_LINE_WIDTH_PT);
+  return calls;
 }
 
 describe("linha de resposta — paridade de cor entre as três superfícies", () => {
@@ -103,7 +153,9 @@ describe("linha de resposta — paridade de cor entre as três superfícies", ()
   });
 
   it("desenha a linha do PDF com ANSWER_LINE_COLOR", () => {
-    expect(findBorderColor(PdfAnswer({ answer: OPEN }))).toBe(ANSWER_LINE_COLOR);
+    expect(paintCalls().find((c) => c.method === "strokeColor")?.args).toEqual([
+      ANSWER_LINE_COLOR,
+    ]);
   });
 });
 
@@ -135,7 +187,7 @@ describe("linha de resposta — paridade de espaçamento entre as três superfí
   });
 
   it("espaça a pauta do PDF pelo equivalente em pt de ANSWER_LINE_GAP_PX", () => {
-    expect(findLineStyle(PdfAnswer({ answer: OPEN }))?.marginBottom).toBe(ANSWER_LINE_GAP_PT);
+    expect(findCanvasStyle(PdfAnswer({ answer: OPEN }))?.marginBottom).toBe(ANSWER_LINE_GAP_PT);
   });
 });
 
@@ -171,6 +223,54 @@ describe("linha de resposta — paridade de espessura entre as três superfície
   });
 
   it("desenha a pauta do PDF pelo equivalente em pt de ANSWER_LINE_WIDTH_PX", () => {
-    expect(findLineStyle(PdfAnswer({ answer: OPEN }))?.borderBottomWidth).toBe(ANSWER_LINE_WIDTH_PT);
+    expect(paintCalls().find((c) => c.method === "lineWidth")?.args).toEqual([
+      ANSWER_LINE_WIDTH_PT,
+    ]);
+  });
+});
+
+/**
+ * Contrato de paridade da CADÊNCIA do tracejado (achado 0154).
+ *
+ * Cor, espessura e passo já eram ponto único (0104/0111/0145/0150), mas o ritmo
+ * do tracejado continuava sendo o que cada motor decidia sozinho: as duas telas
+ * usam o `border-dashed` do Tailwind (no Chrome, 3px de traço / 2px de vão para
+ * uma borda de 1px) e o PDF derivava o dash da espessura
+ * (`ctx.dash(w * 2, { space: w * 1.2 })`). Pior: como a cadência do @react-pdf é
+ * FUNÇÃO da espessura, o 0145 — que baixou a borda de 1pt para 0,75pt — encolheu
+ * o tracejado junto e levou a divergência de 17% para 56%. O papel saía quase
+ * pontilhado onde a tela mostrava traços.
+ *
+ * `ANSWER_LINE_DASH_PX` / `ANSWER_LINE_DASH_SPACE_PX` são o ponto único; o PDF
+ * pinta a pauta com esse dash explícito, para que nenhum ajuste futuro de
+ * espessura volte a mexer no ritmo sem ninguém ver.
+ */
+describe("linha de resposta — paridade da cadência do tracejado", () => {
+  it("converte a cadência para pt pela mesma razão 72/96 usada no resto do PDF", () => {
+    expect(ANSWER_LINE_DASH_PT).toBeCloseTo(ANSWER_LINE_DASH_PX * (72 / 96), 5);
+    expect(ANSWER_LINE_DASH_SPACE_PT).toBeCloseTo(ANSWER_LINE_DASH_SPACE_PX * (72 / 96), 5);
+  });
+
+  it("mantém as duas telas no `border-dashed` que os tokens transcrevem", () => {
+    render(<AnswerPreview answer={OPEN} onChange={() => {}} />);
+    for (const line of screen.getAllByTestId("preview-answer-line")) {
+      expect(line.className).toContain("border-dashed");
+    }
+    render(<OpenAnswerView answer={OPEN} />);
+    for (const line of Array.from(screen.getByTestId("answer-open").children)) {
+      expect((line as HTMLElement).className).toContain("border-dashed");
+    }
+  });
+
+  it("pinta a pauta do PDF com a cadência dos tokens", () => {
+    expect(paintCalls().find((c) => c.method === "dash")?.args).toEqual([
+      ANSWER_LINE_DASH_PT,
+      { space: ANSWER_LINE_DASH_SPACE_PT },
+    ]);
+  });
+
+  it("não deriva a cadência da espessura, como fazia o `borderBottomStyle: dashed`", () => {
+    expect(ANSWER_LINE_DASH_PT).not.toBeCloseTo(ANSWER_LINE_WIDTH_PT * 2, 5);
+    expect(ANSWER_LINE_DASH_SPACE_PT).not.toBeCloseTo(ANSWER_LINE_WIDTH_PT * 1.2, 5);
   });
 });
