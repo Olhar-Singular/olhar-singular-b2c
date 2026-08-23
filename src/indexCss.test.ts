@@ -182,3 +182,110 @@ describe("wizard — contraste do chip de passo concluido", () => {
     }
   });
 });
+
+/**
+ * Contraste da barra lateral de navegacao (achado 0330 da caca autonoma).
+ *
+ * Todo o texto da sidebar e `--primary-foreground` (branco puro) rebaixado por
+ * alfa sobre `.gradient-sidebar`. Como os fundos das pilulas/selos tambem eram
+ * `bg-white/N`, a tinta descia e o fundo subia ao mesmo tempo: o selo do saldo
+ * ficava em 2,87:1 e nem o item ativo alcancava os 4,5:1 da WCAG 1.4.3.
+ *
+ * O par real e sempre "tinta composta" x "fundo composto", medido no stop MAIS
+ * CLARO do gradiente (pior caso do tema).
+ */
+const layoutSource = readFileSync(
+  path.resolve(__dirname, "./components/common/Layout.tsx"),
+  "utf8",
+);
+
+const WHITE: [number, number, number] = [1, 1, 1];
+const BLACK: [number, number, number] = [0, 0, 0];
+
+/** Stops `hsl(...)` do gradiente da sidebar, em canais sRGB 0..1. */
+function sidebarStops(selector: string): [number, number, number][] {
+  const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const match = css.match(new RegExp(`\\n\\s*${escaped}\\s*\\{([^}]*)\\}`));
+  expect(match, `regra CSS nao encontrada: ${selector}`).not.toBeNull();
+  const stops = [...match![1].matchAll(/hsl\(([^)]+)\)/g)].map((m) =>
+    hslTokenToRgb(m[1]),
+  );
+  expect(stops.length, `gradiente sem stops: ${selector}`).toBeGreaterThan(0);
+  return stops;
+}
+
+/** `bg-white/15 hover:bg-black/10` -> superficies compostas sobre `stop`. */
+function surfaces(classes: string, stop: [number, number, number]) {
+  const found = [...classes.matchAll(/(?:^|\s)(?:hover:)?bg-(white|black)\/(\d+)\b/g)];
+  const list = found.map((m) => ({
+    label: `${m[1]}/${m[2]}`,
+    rgb: mix(m[1] === "white" ? WHITE : BLACK, stop, Number(m[2]) / 100),
+  }));
+  return list.length > 0 ? list : [{ label: "gradiente", rgb: stop }];
+}
+
+/** Alfas de `text-primary-foreground[/N]`; vazio = herda do ancestral. */
+function inkAlphas(classes: string): number[] {
+  return [...classes.matchAll(/(?:^|\s)(?:hover:)?text-primary-foreground(?:\/(\d+))?\b/g)]
+    .map((m) => (m[1] ? Number(m[1]) / 100 : 1));
+}
+
+function linkBranches(): { active: string; inactive: string } {
+  const match = layoutSource.match(/isActive\(path\)\s*\?\s*"([^"]+)"\s*:\s*"([^"]+)"/);
+  expect(match, "ramos do linkClass nao encontrados no Layout").not.toBeNull();
+  return { active: match![1], inactive: match![2] };
+}
+
+/** As duas copias (desktop e mobile) do selo de saldo de creditos. */
+function creditBadgeClasses(): string[] {
+  const found = [...layoutSource.matchAll(/className="([^"]*tabular-nums[^"]*)"/g)].map(
+    (m) => m[1],
+  );
+  expect(found.length, "selo do saldo nao encontrado no Layout").toBe(2);
+  return found;
+}
+
+function disclaimerClasses(): string {
+  const match = layoutSource.match(/className="([^"]+)"\s*role="note"/);
+  expect(match, "disclaimer da sidebar nao encontrado no Layout").not.toBeNull();
+  return match![1];
+}
+
+function expectReadable(
+  classes: string,
+  stops: [number, number, number][],
+  inheritedInk: number[],
+  what: string,
+) {
+  const own = inkAlphas(classes);
+  const alphas = own.length > 0 ? own : inheritedInk;
+  expect(alphas.length, `sem tinta conhecida em ${what}`).toBeGreaterThan(0);
+  for (const stop of stops) {
+    for (const surface of surfaces(classes, stop)) {
+      for (const alpha of alphas) {
+        const ink = mix(WHITE, surface.rgb, alpha);
+        expect(
+          ratioRgb(ink, surface.rgb),
+          `${what}: branco/${alpha * 100} sobre ${surface.label}`,
+        ).toBeGreaterThanOrEqual(4.5);
+      }
+    }
+  }
+}
+
+describe("Layout — contraste da barra lateral sobre o gradiente", () => {
+  it.each([
+    [".gradient-sidebar", "tema claro"],
+    [".dark .gradient-sidebar", "tema escuro"],
+  ])("%s (%s) mantem toda a navegacao em 4,5:1", (selector) => {
+    const stops = sidebarStops(selector);
+    const { active, inactive } = linkBranches();
+
+    expectReadable(active, stops, [], "item ativo");
+    expectReadable(inactive, stops, [], "item inativo");
+    for (const badge of creditBadgeClasses()) {
+      expectReadable(badge, stops, inkAlphas(inactive), "selo do saldo");
+    }
+    expectReadable(disclaimerClasses(), stops, [], "disclaimer");
+  });
+});

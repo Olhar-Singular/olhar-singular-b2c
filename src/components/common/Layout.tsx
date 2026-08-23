@@ -45,8 +45,8 @@ export default function Layout({ children }: { children?: React.ReactNode }) {
   const linkClass = (path: string) =>
     `flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-medium transition-colors ${
       isActive(path)
-        ? "bg-white/15 text-primary-foreground"
-        : "text-primary-foreground/70 hover:text-primary-foreground hover:bg-white/10"
+        ? "bg-black/20 text-primary-foreground"
+        : "text-primary-foreground/90 hover:text-primary-foreground hover:bg-black/10"
     }`;
 
   return (
@@ -98,7 +98,7 @@ export default function Layout({ children }: { children?: React.ReactNode }) {
             <Coins className="w-4.5 h-4.5 shrink-0" aria-hidden="true" />
             <span className="flex-1">Créditos</span>
             {profile?.credit_balance != null && (
-              <span className="text-xs font-semibold bg-white/20 rounded px-1.5 py-0.5 tabular-nums">
+              <span className="text-xs font-semibold text-primary-foreground bg-black/20 rounded px-1.5 py-0.5 tabular-nums">
                 {profile.credit_balance}
               </span>
             )}
@@ -111,7 +111,7 @@ export default function Layout({ children }: { children?: React.ReactNode }) {
         </div>
 
         {/* Disclaimer */}
-        <div className="mx-3 mb-4 p-3 rounded-lg bg-white/10 text-[11px] text-primary-foreground/60 leading-relaxed" role="note">
+        <div className="mx-3 mb-4 p-3 rounded-lg bg-black/10 text-[11px] text-primary-foreground/90 leading-relaxed" role="note">
           Ferramenta pedagógica. Não realiza diagnóstico. A decisão final é sempre do profissional.
         </div>
       </aside>
@@ -173,7 +173,7 @@ export default function Layout({ children }: { children?: React.ReactNode }) {
               <Coins className="w-4.5 h-4.5 shrink-0" aria-hidden="true" />
               <span className="flex-1">Créditos</span>
               {profile?.credit_balance != null && (
-                <span className="text-xs font-semibold bg-white/20 rounded px-1.5 py-0.5 tabular-nums">
+                <span className="text-xs font-semibold text-primary-foreground bg-black/20 rounded px-1.5 py-0.5 tabular-nums">
                   {profile.credit_balance}
                 </span>
               )}
