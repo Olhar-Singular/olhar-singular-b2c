@@ -45,6 +45,7 @@ import {
   DOCX_NON_STANDARD_FONTS,
   isFontFamilyToken,
 } from "@/lib/adaptation/canonical/fontFamily";
+import { BASE_FONT_PT, DEFAULT_FONT_FAMILY_TOKEN } from "../render/pageTokens";
 import { indexToLetter } from "../render/letters";
 import { documentHasMath, everyBlock } from "./exportWarnings";
 import { perQuestionBreakFlags } from "../render/perQuestionBreaks";
@@ -313,13 +314,20 @@ export function docxExportWarnings(
  *
  * Lives out here, and not inline in `downloadDocx`, because that function is
  * `v8 ignore`d for its DOM side effects — the mapping would ship with no test.
+ *
+ * Sem `pageStyle` (o caso normal, já que nada grava esse campo até o professor
+ * abrir o popover "Formato"), cai no MESMO default resolvido que a tela e o PDF
+ * usam (`DEFAULT_FONT_FAMILY_TOKEN` / `BASE_FONT_PT`, ou seja Arial 12pt no
+ * Word). Devolver `{}` deixava `<w:rPrDefault/>` vazio e entregava o documento
+ * ao default do Word do leitor (Calibri 11pt/Aptos), a única das três
+ * superfícies sem a tipografia decidida no projeto (achado 0332).
  */
-export function documentRunStyle(pageStyle?: PageStyle): { font?: string; size?: number } {
-  const run: { font?: string; size?: number } = {};
-  if (pageStyle?.fontFamily) run.font = fontFamilyToDocx(pageStyle.fontFamily);
-  // docx measures type size in half-points, so 14pt is 28.
-  if (pageStyle?.fontSize) run.size = Math.round(pageStyle.fontSize * 2);
-  return run;
+export function documentRunStyle(pageStyle?: PageStyle): { font: string; size: number } {
+  return {
+    font: fontFamilyToDocx(pageStyle?.fontFamily ?? DEFAULT_FONT_FAMILY_TOKEN),
+    // docx measures type size in half-points, so 14pt is 28.
+    size: Math.round((pageStyle?.fontSize ?? BASE_FONT_PT) * 2),
+  };
 }
 
 /**

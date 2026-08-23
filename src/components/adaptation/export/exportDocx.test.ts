@@ -655,27 +655,43 @@ describe("docxExportWarnings", () => {
  * verificado sem empacotar um .docx de verdade.
  */
 describe("documentRunStyle", () => {
-  it("sem pageStyle, não impõe estilo nenhum", () => {
-    expect(documentRunStyle()).toEqual({});
-    expect(documentRunStyle({})).toEqual({});
+  /**
+   * Achado 0332: documento sem `pageStyle` (o caso normal, ninguém grava nada
+   * até abrir o popover "Formato") saía com `<w:rPrDefault/>` vazio, e o Word
+   * aplicava o default DELE (Calibri 11pt/Aptos), enquanto o PDF e as telas
+   * imprimiam Arial/Helvetica 12pt. O default resolvido do projeto vale para as
+   * três superfícies.
+   */
+  it("sem pageStyle, cai no mesmo default das outras superfícies (Arial 12pt)", () => {
+    expect(documentRunStyle()).toEqual({ font: "Arial", size: 24 });
+    expect(documentRunStyle({})).toEqual({ font: "Arial", size: 24 });
   });
 
   it("traduz o token de fonte para o nome que o Word entende", () => {
-    expect(documentRunStyle({ fontFamily: "opendyslexic" })).toEqual({ font: "OpenDyslexic" });
-    expect(documentRunStyle({ fontFamily: "serif" })).toEqual({ font: "Times New Roman" });
+    expect(documentRunStyle({ fontFamily: "opendyslexic" })).toEqual({
+      font: "OpenDyslexic",
+      size: 24,
+    });
+    expect(documentRunStyle({ fontFamily: "serif" })).toEqual({
+      font: "Times New Roman",
+      size: 24,
+    });
   });
 
   it("repassa fonte desconhecida sem traduzir (documento legado)", () => {
-    expect(documentRunStyle({ fontFamily: "Comic Sans MS" })).toEqual({ font: "Comic Sans MS" });
+    expect(documentRunStyle({ fontFamily: "Comic Sans MS" })).toEqual({
+      font: "Comic Sans MS",
+      size: 24,
+    });
   });
 
   it("converte o tamanho para meio-pontos, que é a unidade do docx", () => {
-    expect(documentRunStyle({ fontSize: 14 })).toEqual({ size: 28 });
-    expect(documentRunStyle({ fontSize: 10.5 })).toEqual({ size: 21 });
+    expect(documentRunStyle({ fontSize: 14 })).toEqual({ font: "Arial", size: 28 });
+    expect(documentRunStyle({ fontSize: 10.5 })).toEqual({ font: "Arial", size: 21 });
   });
 
   it("arredonda meio-ponto fracionário em vez de truncar", () => {
-    expect(documentRunStyle({ fontSize: 12.3 })).toEqual({ size: 25 });
+    expect(documentRunStyle({ fontSize: 12.3 })).toEqual({ font: "Arial", size: 25 });
   });
 
   it("combina fonte e tamanho", () => {
