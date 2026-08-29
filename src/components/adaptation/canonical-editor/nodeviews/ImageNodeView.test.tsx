@@ -556,4 +556,36 @@ describe("ImageNodeView", () => {
     expect(screen.getByRole("button", { name: "Adicionar legenda" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Recortar do original" })).toBeInTheDocument();
   });
+  /*
+    0172 — o chrome de edição da imagem (barra de alinhar/trocar/excluir, campo
+    de texto alternativo e cabeçalho da legenda) ocupa faixa vertical própria
+    DENTRO do papel e não sai no arquivo. Marcado, a folha do Revisar o desconta
+    da altura medida em vez de contá-lo como papel impresso e desenhar uma A4
+    que o PDF não tem. A legenda em si NÃO é marcada: ela é impressa.
+  */
+  it("marca o chrome de edição para a folha não medi-lo como papel (0172)", () => {
+    const { props } = makeProps({ caption: [{ type: "text", text: "figura 1" }] });
+    const { getByTestId } = render(<ImageNodeView {...props} />);
+    const marcados = getByTestId("image-node").querySelectorAll("[data-folha-chrome]");
+    expect(marcados).toHaveLength(3);
+    expect(
+      screen.getByRole("button", { name: "Trocar ou adicionar imagem" }).closest("[data-folha-chrome]"),
+    ).not.toBeNull();
+    expect(
+      screen.getByRole("textbox", { name: "Texto alternativo" }).closest("[data-folha-chrome]"),
+    ).not.toBeNull();
+    expect(
+      screen.getByRole("button", { name: "Remover legenda" }).closest("[data-folha-chrome]"),
+    ).not.toBeNull();
+    // A legenda é impressa: descontá-la tiraria papel que o arquivo usa.
+    expect(getByTestId("image-caption-text").closest("[data-folha-chrome]")).toBeNull();
+  });
+
+  it("marca o botão de abrir legenda como chrome (0172)", () => {
+    const { props } = makeProps({ caption: null });
+    render(<ImageNodeView {...props} />);
+    expect(
+      screen.getByRole("button", { name: "Adicionar legenda" }).getAttribute("data-folha-chrome"),
+    ).toBe("");
+  });
 });

@@ -59,6 +59,45 @@ interface PageSheetProps {
 const SHEET_WIDTH_PX = 794;
 
 /**
+ * Marcador do chrome de EDIÇÃO desenhado dentro do papel (achado 0172).
+ *
+ * A conta da folha é a mesma nas duas superfícies; o que muda é o que ela mede.
+ * Na prévia o envelope medido é o renderizador de leitura — só o que vai para o
+ * arquivo. No Revisar é o DOM do editor, que desenha DENTRO da folha uma barra
+ * de imagem, um campo de texto alternativo, um cabeçalho de legenda e um
+ * "+ Passo" do andaime, nada disso impresso. A mesma fórmula alimentada por dois
+ * DOMs diferentes não pode concordar: bastavam ~44px de chrome acima da área
+ * útil para o Revisar fabricar uma segunda A4 inteiramente em branco enquanto a
+ * prévia e o PDF diziam "1 página".
+ *
+ * Quem marca é o nodeview (ele é que sabe o que imprime); aqui a folha só
+ * desconta o que está marcado. Marcar SÓ chrome de bloco, que ocupa faixa
+ * vertical própria no fluxo: um botão dentro de uma linha (a lixeira ao lado do
+ * rótulo do andaime) não acrescenta altura nenhuma, e descontá-lo tiraria do
+ * papel a linha impressa que o hospeda.
+ */
+const CHROME_SELECTOR = "[data-folha-chrome]";
+
+/** Valor de `getComputedStyle` em px; ausente (jsdom, `auto`) vale zero. */
+const px = (value: string) => Number.parseFloat(value) || 0;
+
+/**
+ * Altura de fluxo do chrome de edição dentro do envelope medido (achado 0172).
+ *
+ * Caixa de borda mais as margens, que o `offsetHeight` não inclui. Chrome
+ * ANINHADO não entra duas vezes: o pai já contabilizou a faixa inteira, e
+ * descontar o filho de novo encolheria o papel abaixo do que o arquivo tem.
+ */
+const editorChromeHeight = (content: HTMLElement) =>
+  Array.from(content.querySelectorAll<HTMLElement>(CHROME_SELECTOR))
+    // `parentElement` nunca é nulo: todo achado do seletor é descendente de `content`.
+    .filter((el) => el.parentElement!.closest(CHROME_SELECTOR) === null)
+    .reduce((sum, el) => {
+      const style = getComputedStyle(el);
+      return sum + el.offsetHeight + px(style.marginTop) + px(style.marginBottom);
+    }, 0);
+
+/**
  * Piso do AJUSTE, nas duas superfícies (achados 0235 e 0240). O ajuste faz a
  * folha caber na mesa; o piso só existe para ela não virar miniatura em
  * molduras absurdamente estreitas (0,4 cobre qualquer viewport de celular;
@@ -207,7 +246,12 @@ export function PageSheet({
         realimentaria a própria medição a cada layout: mais altura, mais páginas,
         mais altura.
       */
-      const height = content.offsetHeight;
+      /*
+        Achado 0172: o que se conta é PAPEL IMPRESSO, então o chrome que só
+        existe no editor sai da conta (ver CHROME_SELECTOR). Na prévia e no PDF
+        não há nada marcado e a medida é a de sempre.
+      */
+      const height = Math.max(0, content.offsetHeight - editorChromeHeight(content));
       /*
         Achado 0121: a quebra por questão, na prévia, é uma régua decorativa de
         ~30px (`PageBreakMark`), não uma quebra de fluxo. Medir a folha inteira

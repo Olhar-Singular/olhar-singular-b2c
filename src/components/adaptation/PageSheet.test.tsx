@@ -861,6 +861,84 @@ describe("PageSheet", () => {
     });
   });
 
+  /*
+    Achado 0172: a folha do Revisar mede o DOM do EDITOR, e o editor desenha
+    dentro do papel um chrome que nenhuma superfície impressa tem (a barra da
+    imagem, o campo de texto alternativo, o cabeçalho da legenda, o "+ Passo" do
+    andaime). A mesma fórmula alimentada por dois DOMs diferentes não pode
+    concordar: com ~44px de chrome a mais que a área útil, o Revisar desenhava
+    uma segunda A4 INTEIRAMENTE em branco para um documento que a prévia e o PDF
+    emitem com uma página. O chrome marcado não conta como papel impresso.
+  */
+  describe("chrome de edição não conta como papel (achado 0172)", () => {
+    const withHeights = (envelope: number, run: () => void) => {
+      const spy = vi
+        .spyOn(HTMLElement.prototype, "offsetHeight", "get")
+        .mockImplementation(function (this: HTMLElement) {
+          if (this.hasAttribute("data-folha-chrome")) {
+            return Number(this.dataset.testHeight ?? 0);
+          }
+          if ((this.parentElement as HTMLElement | null)?.dataset.testid === "page-sheet") {
+            return envelope;
+          }
+          return 0;
+        });
+      try {
+        run();
+      } finally {
+        spy.mockRestore();
+      }
+    };
+
+    it("desconta o chrome do editor da altura medida", () => {
+      // 1060px de envelope passam da área útil (1016,34px) e valiam 2 folhas;
+      // 100px deles são chrome de edição, que o arquivo não imprime.
+      withHeights(1060, () => {
+        render(
+          <PageSheet toolbar={null}>
+            <span>texto impresso</span>
+            <div data-folha-chrome="" data-test-height="100" />
+          </PageSheet>,
+        );
+        const sheet = screen.getByTestId("page-sheet");
+        expect(sheet.style.minHeight).toBe("1123px");
+        expect(sheet.style.backgroundImage).toBe("none");
+      });
+    });
+
+    it("desconta também as margens do chrome", () => {
+      withHeights(1060, () => {
+        render(
+          <PageSheet toolbar={null}>
+            <span>texto impresso</span>
+            <div
+              data-folha-chrome=""
+              data-test-height="60"
+              style={{ marginTop: "20px", marginBottom: "20px" }}
+            />
+          </PageSheet>,
+        );
+        expect(screen.getByTestId("page-sheet").style.minHeight).toBe("1123px");
+      });
+    });
+
+    it("não desconta duas vezes o chrome aninhado", () => {
+      // 1200px de envelope: mesmo descontando o bloco externo (100px) sobram
+      // 1100px, que ainda passam da área útil — descontar o filho de novo
+      // encolheria a folha para uma página que o arquivo não tem.
+      withHeights(1200, () => {
+        render(
+          <PageSheet toolbar={null}>
+            <div data-folha-chrome="" data-test-height="100">
+              <div data-folha-chrome="" data-test-height="100" />
+            </div>
+          </PageSheet>,
+        );
+        expect(screen.getByTestId("page-sheet").style.minHeight).toBe("2139.34px");
+      });
+    });
+  });
+
   it("reflete o pageStyle na folha (fonte, tamanho e var de espaçamento)", () => {
     render(
       <PageSheet toolbar={null} pageStyle={{ fontFamily: "mono", fontSize: 18, blockSpacing: 24 }}>

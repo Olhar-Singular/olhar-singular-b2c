@@ -92,6 +92,14 @@ export function ScaffoldNodeView({ node, updateAttributes, editor, deleteNode }:
           type="button"
           variant="outline"
           size="sm"
+          /*
+            0172 — "+ Passo" é chrome de edição: ocupa faixa própria no fluxo e
+            não sai no arquivo, então não conta como papel impresso. A lixeira
+            do cabeçalho e a de cada passo ficam SEM marca de propósito: elas
+            dividem a linha com o rótulo e o passo impressos, e descontá-las
+            tiraria do papel a altura da própria linha impressa.
+          */
+          data-folha-chrome=""
           className="self-start gap-1 border-surface-line bg-surface-paper text-surface-ink-soft hover:bg-surface-mesa hover:text-surface-ink"
           disabled={disabled}
           onClick={() => updateAttributes({ items: addStep(items) })}

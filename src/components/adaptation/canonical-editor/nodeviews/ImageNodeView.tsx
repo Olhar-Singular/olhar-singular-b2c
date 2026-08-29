@@ -124,7 +124,12 @@ export function ImageNodeView({ node, updateAttributes, deleteNode, editor, getP
 
         {/* Controls: hidden inside a non-expanded question card, always shown at top-level */}
         <div data-testid="image-controls" className="flex flex-col gap-2">
-          <div className="flex flex-wrap items-center gap-1">
+          {/*
+            0172 — barra de edição da imagem: ocupa faixa própria no fluxo e não
+            é impressa. Sem a marca, a folha do Revisar a media como papel e
+            desenhava folha que o arquivo não tem.
+          */}
+          <div data-folha-chrome="" className="flex flex-wrap items-center gap-1">
             {ALIGNMENTS.map(({ value, Icon, label }) => (
               <Button
                 key={value}
@@ -193,7 +198,8 @@ export function ImageNodeView({ node, updateAttributes, deleteNode, editor, getP
             leitor de tela, para o PDF e para o marcador `[Imagem: alt]` do Word).
             Fica no chrome, não na folha, porque não é impresso.
           */}
-          <div>
+          <div data-folha-chrome="">
+            {/* 0172 — o campo de acessibilidade não vai para o papel. */}
             {/*
               0337 — rótulo decorativo: o nome programático do campo vem do
               `aria-label` abaixo. Como o chrome vive dentro do
@@ -222,6 +228,8 @@ export function ImageNodeView({ node, updateAttributes, deleteNode, editor, getP
               type="button"
               variant="ghost"
               size="sm"
+              /* 0172 — chrome: o botão de abrir a legenda não é impresso. */
+              data-folha-chrome=""
               className="self-start text-xs text-surface-ink-faint hover:bg-surface-mesa hover:text-surface-ink"
               disabled={disabled}
               onClick={() => updateAttributes({ caption: [] })}
@@ -232,7 +240,8 @@ export function ImageNodeView({ node, updateAttributes, deleteNode, editor, getP
             </Button>
           ) : (
             <div>
-              <div className="mb-1 flex items-center justify-between">
+              {/* 0172 — cabeçalho da legenda (rótulo + lixeira): só edição. */}
+              <div data-folha-chrome="" className="mb-1 flex items-center justify-between">
                 {/* 0337 — idem: decoração, fora da árvore de acessibilidade. */}
                 <span aria-hidden="true" className="text-[10.5px] font-semibold uppercase tracking-wide text-surface-ink-faint">Legenda</span>
                 <Button

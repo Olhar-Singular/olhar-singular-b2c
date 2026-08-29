@@ -97,4 +97,18 @@ describe("ScaffoldNodeView — tinta do documento no que é impresso", () => {
     expect(ordinal.className).not.toMatch(/ink-faint/);
     expect(ordinal.className).not.toMatch(/text-xs/);
   });
+  /*
+    0172 — "+ Passo" é chrome: ocupa faixa própria no fluxo do papel e não sai
+    no arquivo, então a folha do Revisar o desconta da altura medida. O rótulo,
+    os ordinais e os passos continuam sem marca: são impressos.
+  */
+  it("marca o '+ Passo' como chrome, e nada do que é impresso (0172)", () => {
+    const { props } = makeProps(["a", "b"]);
+    const { container } = render(<ScaffoldNodeView {...props} />);
+    const marcados = container.querySelectorAll("[data-folha-chrome]");
+    expect(marcados).toHaveLength(1);
+    expect(screen.getByText("Passo").closest("[data-folha-chrome]")).not.toBeNull();
+    expect(screen.getByTestId("scaffold-label").closest("[data-folha-chrome]")).toBeNull();
+    expect(screen.getByTestId("scaffold-step-ordinal-0").closest("[data-folha-chrome]")).toBeNull();
+  });
 });
