@@ -33,6 +33,7 @@ import {
   RULE_COLOR,
   RULE_WIDTH_PT,
   HEADING_PT,
+  pdfTextSize,
 } from "../pageTokens";
 import { resolveElementFontSizes, resolvePageStyle, type ElementFontSizesPt } from "../pageStyle";
 
@@ -58,7 +59,7 @@ export function PdfHeading({ block, blockGap = 12 }: { block: HeadingBlock; bloc
   const marginBottom = nodeMarginBottom ?? blockGap;
   return (
     <View style={{ marginBottom }}>
-      <Text style={{ fontSize: HEADING_SIZE[block.level], fontWeight: "bold", ...textStyle }}>
+      <Text style={{ ...pdfTextSize(HEADING_SIZE[block.level]), fontWeight: "bold", ...textStyle }}>
         <PdfRichText content={block.content} />
       </Text>
     </View>
@@ -148,7 +149,7 @@ export function PdfImage({
         }}
       />
       {block.caption && (
-        <Text style={{ fontSize: elementSizes.caption, color: "#666666", marginTop: 2 }}>
+        <Text style={{ ...pdfTextSize(elementSizes.caption), color: "#666666", marginTop: 2 }}>
           <PdfRichText content={block.caption} />
         </Text>
       )}
@@ -184,7 +185,7 @@ export function PdfScaffolding({
           a prévia lê de `--doc-fs-caption`. */}
       <Text
         style={{
-          fontSize: elementSizes.caption,
+          ...pdfTextSize(elementSizes.caption),
           fontWeight: "bold",
           textTransform: "uppercase",
           marginBottom: 4,

@@ -29,6 +29,7 @@ import {
   ANSWER_LINE_DASH_SPACE_PT,
   ANSWER_ITEM_GAP_PT,
   ALTERNATIVE_MARKER_COLUMN_PT,
+  pdfTextSize,
 } from "../pageTokens";
 
 // O vão entre itens vem de pageTokens para o papel imprimir o mesmo passo que as
@@ -105,7 +106,7 @@ export function PdfAnswer({
 }) {
   // Alternatives / items / cells all read at the "alternative" size, which
   // follows the document font size (see resolveElementFontSizes).
-  const itemStyle = { fontSize: elementSizes.alternative };
+  const itemStyle = pdfTextSize(elementSizes.alternative);
   switch (answer.kind) {
     case "open": {
       const lines = answer.answerLines ?? 3;

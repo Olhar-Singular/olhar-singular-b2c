@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { nodeStyleToPdf, pageBreakBefore } from "./nodeStyleToPdf";
+import { BASE_LINE_HEIGHT } from "../pageTokens";
 
 describe("nodeStyleToPdf", () => {
   it("returns an empty object for undefined style", () => {
@@ -18,6 +19,9 @@ describe("nodeStyleToPdf", () => {
     ).toEqual({
       fontFamily: "Times-Roman",
       fontSize: 10.5,      // 14px → 10.5pt
+      // O corpo próprio vem acompanhado da razão de entrelinha: sem ela o
+      // react-pdf congelaria o 1,4 do <Page> em 16,8pt absolutos (achado 0429).
+      lineHeight: BASE_LINE_HEIGHT,
       textAlign: "center",
       color: "#2563EB",
       marginBottom: 9,     // 12px → 9pt

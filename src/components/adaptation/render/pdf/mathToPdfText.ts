@@ -10,7 +10,7 @@
  * (spec upgrade path). Do NOT pull in html2canvas/puppeteer now.
  */
 
-import { MATH_PDF_FONT_SIZE_PT, PAGE_MARGIN_PT } from "../pageTokens";
+import { MATH_PDF_FONT_SIZE_PT, PAGE_MARGIN_PT, pdfTextSize } from "../pageTokens";
 import { latexLayoutAtom } from "../mathAtom";
 
 /** Largura da folha A4 do `@react-pdf`, em pontos. */
@@ -58,5 +58,5 @@ export function mathToPdfText(latex: string): string {
  */
 export const MATH_PDF_STYLE = {
   fontFamily: "Courier",
-  fontSize: MATH_PDF_FONT_SIZE_PT,
+  ...pdfTextSize(MATH_PDF_FONT_SIZE_PT),
 } as const;

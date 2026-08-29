@@ -23,7 +23,7 @@ import {
 import { PdfBlock } from "./PdfBlock";
 import { questionNumbers } from "../questionNumbering";
 import { perQuestionBreakFlags } from "../perQuestionBreaks";
-import { pageTokensToPdf, RULE_WIDTH_PT } from "../pageTokens";
+import { pageTokensToPdf, pdfTextSize, RULE_WIDTH_PT } from "../pageTokens";
 import { HEADER_SPACING_PT } from "../headerSpacing";
 import { resolvePageStyle, resolveElementFontSizes } from "../pageStyle";
 import { FOOTER_BOTTOM_PT, FOOTER_COLOR, FOOTER_FONT_SIZE_PT, pdfFooterLabel } from "../footerLabel";
@@ -50,10 +50,10 @@ export function PdfHeader({ header }: { header: HeaderSettings }) {
       }}
     >
       {header.title && header.title.trim() !== "" && (
-        <Text style={{ fontSize: 18, fontWeight: "bold", textAlign: "center" }}>{header.title}</Text>
+        <Text style={{ ...pdfTextSize(18), fontWeight: "bold", textAlign: "center" }}>{header.title}</Text>
       )}
       {header.school && header.school.trim() !== "" && (
-        <Text style={{ fontSize: 11, textAlign: "center", marginTop: HEADER_SPACING_PT.schoolTop }}>
+        <Text style={{ ...pdfTextSize(11), textAlign: "center", marginTop: HEADER_SPACING_PT.schoolTop }}>
           {header.school}
         </Text>
       )}
@@ -62,7 +62,7 @@ export function PdfHeader({ header }: { header: HeaderSettings }) {
           flexDirection: "row",
           justifyContent: "space-between",
           marginTop: HEADER_SPACING_PT.metaTop,
-          fontSize: 10,
+          ...pdfTextSize(10),
         }}
       >
         {header.teacher && header.teacher.trim() !== "" ? (

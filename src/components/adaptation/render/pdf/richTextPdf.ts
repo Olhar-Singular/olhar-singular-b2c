@@ -7,6 +7,7 @@
 
 import type { Style } from "@react-pdf/types";
 import { isAllowedColor } from "@/lib/adaptation/canonical/colors";
+import { pdfTextSize } from "../pageTokens";
 
 type Mark = "bold" | "italic" | "underline" | "strike";
 
@@ -20,6 +21,6 @@ export function marksToPdfStyle(marks?: Mark[], color?: string, fontSize?: numbe
   if (marks?.includes("strike")) decorations.push("line-through");
   if (decorations.length > 0) style.textDecoration = decorations.join(" ") as Style["textDecoration"];
   if (color !== undefined && isAllowedColor(color)) style.color = color;
-  if (fontSize !== undefined && fontSize > 0) style.fontSize = fontSize;
+  if (fontSize !== undefined && fontSize > 0) Object.assign(style, pdfTextSize(fontSize));
   return style;
 }

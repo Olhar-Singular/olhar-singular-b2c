@@ -30,6 +30,7 @@ import { PdfAnswer } from "./PdfAnswer";
 import { PdfBlock } from "./PdfBlock";
 import { PdfParagraph } from "./PdfLeafBlocks";
 import { questionNumbers } from "../questionNumbering";
+import { pdfTextSize } from "../pageTokens";
 import { resolveElementFontSizes, resolvePageStyle, type ElementFontSizesPt } from "../pageStyle";
 
 type QuestionBlock = Extract<Block, { type: "question" }>;
@@ -64,7 +65,7 @@ export function PdfQuestion({
   const enunciadoView = (prefix?: typeof numberRun) =>
     hasEnunciado ? (
       <View style={{ marginBottom: 4 }}>
-        <Text style={{ fontSize: elementSizes.stem }}>
+        <Text style={{ ...pdfTextSize(elementSizes.stem) }}>
           {prefix}
           <PdfRichText content={block.enunciado!} />
         </Text>
@@ -111,7 +112,7 @@ export function PdfQuestion({
 
       {block.instruction && (
         <View style={{ marginBottom: 4 }}>
-          <Text style={{ fontStyle: "italic", color: "#555555", fontSize: elementSizes.instruction }}>
+          <Text style={{ fontStyle: "italic", color: "#555555", ...pdfTextSize(elementSizes.instruction) }}>
             <PdfRichText content={block.instruction} />
           </Text>
         </View>

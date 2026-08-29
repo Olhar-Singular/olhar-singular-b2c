@@ -474,6 +474,31 @@ export const MATH_PDF_FONT_SIZE_PT =
  */
 export const DEFAULT_INK = "#22201C";
 
+/**
+ * Estilo de um texto do PDF que declara CORPO PRÓPRIO.
+ *
+ * Existe porque o `@react-pdf` resolve um `lineHeight` numérico contra o
+ * `fontSize` do MESMO nó de estilo e propaga aos filhos o resultado já
+ * congelado em pontos. Enquanto o único nó a declarar os dois foi o `<Page>`
+ * (12 pt x 1,4), todo texto de corpo diferente herdava 16,8 pt ABSOLUTOS: a
+ * fórmula em bloco (16,87 pt) saía com entrelinha 1,0 (linhas coladas), o
+ * título de nível 1 (18 pt) com menos entrelinha do que o próprio corpo da
+ * fonte, e instrução (10,5 pt) e legenda (10 pt) saíam mais espaçadas do que
+ * na folha em que o professor paginou a prova (achado 0429).
+ *
+ * Na tela o token sempre foi uma RAZÃO: `pageTokensToCss` publica
+ * `lineHeight: 1.4` sem unidade e o CSS multiplica pelo `font-size` de cada
+ * elemento. Repetir a razão ao lado de cada corpo é o que faz o papel ler o
+ * token do mesmo jeito.
+ *
+ * Fora deste helper fica só o rodapé: é um `<Text fixed render>` de uma linha
+ * posicionado em absoluto, e o `0120` mostra que o `lineHeight` dele é capaz
+ * de sumir com o rodapé do arquivo.
+ */
+export function pdfTextSize(fontSize: number) {
+  return { fontSize, lineHeight: BASE_LINE_HEIGHT } as const;
+}
+
 /** Estilo base do <Page> do react-pdf (em pt). */
 export function pageTokensToPdf(resolved: ResolvedPageStyle = DEFAULT_RESOLVED) {
   return {
