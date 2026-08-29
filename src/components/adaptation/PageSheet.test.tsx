@@ -625,6 +625,105 @@ describe("PageSheet", () => {
     expect(sheet.className).toContain("[color-scheme:light]");
   });
 
+  /*
+    Achado 0238: em 390px de viewport a mesa mede 332px, o ajuste automático
+    desenha a folha a 0,42 e o corpo de 12pt chega ao olho com ~6,7px — na
+    ÚNICA tela em que se digita. O piso de edição (0235) fez a linha inteira
+    caber, mas escolheu pelo professor: sem nenhuma saída, ele lê 6,7px e mira
+    o cursor entre linhas de 9,4px. A folha continua começando ajustada; o que
+    passa a existir é um zoom explícito para ampliar até um corpo legível.
+  */
+  describe("zoom da folha de edição (achado 0238)", () => {
+    const withClientWidth = (width: number, run: () => void) => {
+      const spy = vi
+        .spyOn(HTMLElement.prototype, "clientWidth", "get")
+        .mockReturnValue(width);
+      try {
+        run();
+      } finally {
+        spy.mockRestore();
+      }
+    };
+
+    const factorOf = () =>
+      Number(/scale\(([\d.]+)\)/.exec(screen.getByTestId("page-sheet").style.transform)![1]);
+
+    it("oferece zoom quando a folha de edição não cabe em tamanho real", () => {
+      withClientWidth(332, () => {
+        render(<PageSheet toolbar={null}><span>x</span></PageSheet>);
+        // Começa ajustada à mesa (0235): nada escondido de saída.
+        expect(factorOf() * 794).toBeLessThanOrEqual(332);
+        expect(screen.getByTestId("page-zoom")).toBeInTheDocument();
+        expect(screen.getByTestId("page-zoom")).toHaveTextContent("42%");
+      });
+    });
+
+    it("amplia a folha até um corpo legível ao comando do professor", () => {
+      withClientWidth(332, () => {
+        render(<PageSheet toolbar={null}><span>x</span></PageSheet>);
+        const zoomIn = screen.getByRole("button", { name: "Aumentar zoom" });
+        act(() => {
+          zoomIn.click();
+          zoomIn.click();
+        });
+        // 0,75 devolve ao corpo de 12pt os 12px que o ajuste automático tirava.
+        expect(factorOf()).toBe(0.75);
+        expect(screen.getByTestId("page-zoom")).toHaveTextContent("75%");
+        // Ampliada, a folha passa da mesa e a pista de rolagem reaparece.
+        expect(screen.getByTestId("page-overflow-hint")).toBeInTheDocument();
+      });
+    });
+
+    it("volta ao ajuste da mesa ao reduzir o zoom", () => {
+      withClientWidth(332, () => {
+        render(<PageSheet toolbar={null}><span>x</span></PageSheet>);
+        const zoomIn = screen.getByRole("button", { name: "Aumentar zoom" });
+        const zoomOut = screen.getByRole("button", { name: "Diminuir zoom" });
+        expect(zoomOut).toBeDisabled();
+        act(() => {
+          zoomIn.click();
+        });
+        expect(factorOf()).toBe(0.5);
+        act(() => {
+          zoomOut.click();
+        });
+        expect(factorOf() * 794).toBeLessThanOrEqual(332);
+        expect(zoomOut).toBeDisabled();
+      });
+    });
+
+    it("para de ampliar no tamanho real do arquivo", () => {
+      withClientWidth(332, () => {
+        render(<PageSheet toolbar={null}><span>x</span></PageSheet>);
+        const zoomIn = screen.getByRole("button", { name: "Aumentar zoom" });
+        act(() => {
+          zoomIn.click();
+          zoomIn.click();
+          zoomIn.click();
+          zoomIn.click();
+          zoomIn.click();
+        });
+        expect(factorOf()).toBe(1);
+        expect(zoomIn).toBeDisabled();
+      });
+    });
+
+    it("não oferece zoom quando a folha já cabe em tamanho real", () => {
+      withClientWidth(1200, () => {
+        render(<PageSheet toolbar={null}><span>x</span></PageSheet>);
+        expect(screen.queryByTestId("page-zoom")).toBeNull();
+      });
+    });
+
+    it("não oferece zoom na prévia, que não é superfície de edição", () => {
+      withClientWidth(332, () => {
+        render(<PageSheet paginated toolbar={null}><span>x</span></PageSheet>);
+        expect(screen.queryByTestId("page-zoom")).toBeNull();
+        expect(screen.getByTestId("page-sheet").style.transform).toBe("scale(0.75)");
+      });
+    });
+  });
+
   it("reflete o pageStyle na folha (fonte, tamanho e var de espaçamento)", () => {
     render(
       <PageSheet toolbar={null} pageStyle={{ fontFamily: "mono", fontSize: 18, blockSpacing: 24 }}>

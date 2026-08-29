@@ -69,12 +69,30 @@ const MIN_SCALE = 0.75;
  */
 const EDIT_MIN_SCALE = 0.4;
 
+/**
+ * Degraus de zoom da EDIÇÃO (achado 0238). O ajuste automático do 0235 fazia a
+ * linha inteira caber, mas em 390px de viewport isso significa 0,42 de escala:
+ * corpo de 12pt com ~6,7px efetivos e entrelinha de 9,4px, na única tela em que
+ * se digita. O piso escolhia pelo professor — ou linha inteira ilegível, ou
+ * corpo legível com 44% da linha escondida. A folha continua ABRINDO ajustada
+ * (nada some de saída) e o zoom é a saída explícita: 0,75 devolve o corpo de
+ * 12pt aos 12px e 1 é o tamanho do arquivo, em troca da rolagem horizontal que
+ * a mesa já oferece e anuncia. Só os degraus MAIORES que o ajuste entram na
+ * escada: um degrau que encolhe a folha além do necessário não serve a
+ * ninguém, e onde a folha já cabe em tamanho real não sobra degrau nenhum — o
+ * controle nem aparece.
+ */
+const ZOOM_STEPS = [0.5, 0.75, 1];
+
 export function PageSheet({ toolbar, pageStyle, paginated = false, children }: PageSheetProps) {
   const frameRef = useRef<HTMLDivElement>(null);
   const sheetRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
   const [pageCount, setPageCount] = useState(1);
-  const [scale, setScale] = useState(1);
+  /** Escala que faz a folha caber na mesa (o "ajustar à tela"). */
+  const [fitScale, setFitScale] = useState(1);
+  /** Degrau de zoom escolhido pelo professor; 0 é o ajuste (achado 0238). */
+  const [zoomIndex, setZoomIndex] = useState(0);
   /**
    * Largura da MESA (a moldura visível), medida junto com a escala. O chrome da
    * prévia se alinha por ela, não pela folha: com a escala no piso a folha fica
@@ -115,7 +133,7 @@ export function PageSheet({ toolbar, pageStyle, paginated = false, children }: P
       // inteira na tela, porque ali se lê o que se está digitando.
       const available = frame.clientWidth || SHEET_WIDTH_PX;
       const floor = paginated ? MIN_SCALE : EDIT_MIN_SCALE;
-      setScale(Math.min(1, Math.max(floor, available / SHEET_WIDTH_PX)));
+      setFitScale(Math.min(1, Math.max(floor, available / SHEET_WIDTH_PX)));
       setFrameWidth(available);
     };
     fit();
@@ -123,6 +141,17 @@ export function PageSheet({ toolbar, pageStyle, paginated = false, children }: P
     observer.observe(frame);
     return () => observer.disconnect();
   }, [paginated]);
+
+  /*
+    Achado 0238: a escada de zoom começa no ajuste e só sobe. Ela é da EDIÇÃO —
+    a prévia não tem zoom porque lá o piso legível (0216) já resolve, e mexer na
+    escala de uma tela que promete mostrar o arquivo desfaria justamente a
+    promessa. Com a folha cabendo em tamanho real não há degrau nenhum acima do
+    ajuste, e o controle nem aparece.
+  */
+  const zoomLadder = [fitScale, ...ZOOM_STEPS.filter((step) => step > fitScale + 0.01)];
+  const canZoom = !paginated && zoomLadder.length > 1;
+  const scale = canZoom ? zoomLadder[Math.min(zoomIndex, zoomLadder.length - 1)] : fitScale;
 
   /*
     Medição pós-layout em vez de altura declarada: a quantidade de folhas depende
@@ -346,6 +375,35 @@ export function PageSheet({ toolbar, pageStyle, paginated = false, children }: P
           >
             {pageCount === 1 ? "1 página A4" : `${pageCount} páginas A4`}
           </p>
+        )}
+        {canZoom && (
+          <div
+            data-testid="page-zoom"
+            className="mx-auto mb-2 flex items-center justify-end gap-1 text-xs text-muted-foreground"
+            style={{ width: `${Math.min(SHEET_WIDTH_PX * scale, frameWidth)}px` }}
+          >
+            <button
+              type="button"
+              aria-label="Diminuir zoom"
+              disabled={zoomIndex === 0}
+              onClick={() => setZoomIndex((step) => Math.max(0, step - 1))}
+              className="h-7 w-7 rounded border border-input bg-background leading-none disabled:opacity-40"
+            >
+              −
+            </button>
+            <span className="w-10 text-center tabular-nums">{Math.round(scale * 100)}%</span>
+            <button
+              type="button"
+              aria-label="Aumentar zoom"
+              disabled={zoomIndex >= zoomLadder.length - 1}
+              onClick={() =>
+                setZoomIndex((step) => Math.min(zoomLadder.length - 1, step + 1))
+              }
+              className="h-7 w-7 rounded border border-input bg-background leading-none disabled:opacity-40"
+            >
+              +
+            </button>
+          </div>
         )}
         {/*
           A moldura mede a largura disponível; o "vão" interno reserva o
