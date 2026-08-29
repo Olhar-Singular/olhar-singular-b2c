@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render, screen, fireEvent, act } from "@testing-library/react";
 import { Node as PMNode } from "@tiptap/pm/model";
 import type { Editor } from "@tiptap/react";
 import { getEditorSchema } from "@/lib/adaptation/tiptap/getEditorSchema";
@@ -22,17 +22,29 @@ const doc: CanonicalDocument = {
 };
 const pmDoc = PMNode.fromJSON(schema, canonicalToProseMirror(doc));
 
-function makeEditor() {
-  const coordsAtPos = vi.fn(() => ({ top: 10, bottom: 12, left: 0, right: 0 }));
+function makeEditor(tops: number[] = [10, 60, 110]) {
+  let call = 0;
+  const coordsAtPos = vi.fn(() => {
+    const top = tops[Math.min(call++, tops.length - 1)];
+    return { top, bottom: top + 2, left: 0, right: 0 };
+  });
   const on = vi.fn();
   const off = vi.fn();
+  const dom = document.createElement("div");
   const editor = {
     state: { doc: pmDoc },
-    view: { coordsAtPos },
+    view: { coordsAtPos, dom },
     on,
     off,
   } as unknown as Editor;
-  return { editor, coordsAtPos, on, off };
+  return { editor, coordsAtPos, on, off, dom };
+}
+
+/** Tops das faixas renderizadas, na ordem do DOM. */
+function zoneTops(): string[] {
+  return screen
+    .getAllByRole("button", { name: "Inserir bloco" })
+    .map((b) => (b.closest("[data-block-gap]") as HTMLElement).style.top);
 }
 
 beforeEach(() => {
@@ -65,6 +77,48 @@ describe("BlockInserter", () => {
     expect(on).toHaveBeenCalledWith("transaction", expect.any(Function));
     unmount();
     expect(off).toHaveBeenCalledWith("transaction", expect.any(Function));
+  });
+
+  /*
+    Achado 0247: NodeView React (question/image/blockMath) e <img> ganham altura
+    depois do layout. Enquanto o bloco mede zero, `coordsAtPos` devolve o mesmo
+    topo para a lacuna de cima e a de baixo (flattenH devolve o rect inalterado
+    quando height == 0), e as faixas nasciam empilhadas no mesmo retângulo — a
+    de baixo inalcançável por ponteiro.
+  */
+  it("nunca empilha duas faixas no mesmo ponto (achado 0247)", () => {
+    // Todas as lacunas medem o mesmo topo: bloco ainda sem altura.
+    const { editor } = makeEditor([120]);
+    render(<BlockInserter editor={editor} />);
+    const tops = zoneTops();
+    expect(new Set(tops).size).toBe(tops.length);
+  });
+
+  it("remede as posições quando o conteúdo do editor muda de tamanho (achado 0247)", () => {
+    const observers: { cb: () => void; targets: Element[] }[] = [];
+    const original = global.ResizeObserver;
+    global.ResizeObserver = class {
+      targets: Element[] = [];
+      constructor(public cb: () => void) {
+        observers.push(this as unknown as { cb: () => void; targets: Element[] });
+      }
+      observe(target: Element) {
+        this.targets.push(target);
+      }
+      unobserve() {}
+      disconnect() {}
+    } as unknown as typeof ResizeObserver;
+    try {
+      const { editor, coordsAtPos, dom } = makeEditor();
+      render(<BlockInserter editor={editor} />);
+      const watcher = observers.find((o) => o.targets.includes(dom));
+      expect(watcher).toBeDefined();
+      const initial = coordsAtPos.mock.calls.length;
+      act(() => watcher!.cb());
+      expect(coordsAtPos.mock.calls.length).toBeGreaterThan(initial);
+    } finally {
+      global.ResizeObserver = original;
+    }
   });
 
   it("recomputes positions on window resize", () => {
