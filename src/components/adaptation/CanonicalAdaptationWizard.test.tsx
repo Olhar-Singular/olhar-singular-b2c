@@ -534,6 +534,33 @@ describe("CanonicalAdaptationWizard", () => {
     }
   });
 
+  // 0165: trocar de passo mantinha a rolagem vertical onde estava. Quem saía do fim
+  // da folha do Revisar caía no Exportar no meio da prévia, com o cabeçalho do passo
+  // e os botões de exportar acima da dobra — sem nenhum sinal de que o passo trocou.
+  it("resets the vertical scroll when the step changes, without touching it on mount", () => {
+    const main = document.createElement("main");
+    main.id = "main-content";
+    document.body.appendChild(main);
+    main.scrollTop = 0;
+    try {
+      renderWithProviders(<CanonicalAdaptationWizard />);
+      // nothing is scrolled just because the wizard mounted
+      expect(window.scrollTo).not.toHaveBeenCalled();
+
+      main.scrollTop = 711;
+      advanceToReview();
+      expect(main.scrollTop).toBe(0);
+      expect(window.scrollTo).toHaveBeenCalledWith(0, 0);
+
+      // and the same on the way back (onPrev / chip)
+      main.scrollTop = 711;
+      fireEvent.click(screen.getByRole("button", { name: /1.*Tipo/i }));
+      expect(main.scrollTop).toBe(0);
+    } finally {
+      main.remove();
+    }
+  });
+
   it("regenerate is confirmed and replaces the document via the generate step", async () => {
     renderWithProviders(<CanonicalAdaptationWizard />);
     advanceToReview();

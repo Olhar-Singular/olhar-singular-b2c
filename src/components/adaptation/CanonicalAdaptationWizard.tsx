@@ -248,10 +248,30 @@ export default function CanonicalAdaptationWizard({ editMode }: Props = {}) {
   // with its left edge cut off before the user had touched anything.
   const stepStripRef = useRef<HTMLDivElement>(null);
   const activeStepRef = useRef<HTMLButtonElement>(null);
+  // 0165: a troca de passo também precisa devolver a rolagem VERTICAL ao topo.
+  // A folha do Revisar é alta; quem clicava em "Exportar" no fim dela caía no
+  // passo 6 na mesma altura, no meio da prévia, com o cabeçalho do passo e os
+  // botões de exportar acima da dobra — a tela não dava nenhum sinal de que o
+  // passo tinha trocado. Zeramos o <main id="main-content"> (o contêiner
+  // overflow-auto do Layout) e a janela, porque dependendo da largura é um ou
+  // outro que de fato rolou. Aqui também nada de scrollIntoView: ele arrastaria
+  // a faixa de chips junto, que é o bug 0231.
+  //
+  // A primeira execução (montagem) é pulada de propósito: em editMode o wizard
+  // já abre em REVIEW_INDEX e zerar ali atropelaria uma posição restaurada.
+  const didMountStep = useRef(false);
   useEffect(() => {
     const strip = stepStripRef.current;
     const chip = activeStepRef.current;
     strip.scrollLeft = Math.max(0, chip.offsetLeft - (strip.clientWidth - chip.offsetWidth) / 2);
+
+    if (!didMountStep.current) {
+      didMountStep.current = true;
+      return;
+    }
+    const main = document.getElementById("main-content");
+    if (main) main.scrollTop = 0;
+    window.scrollTo(0, 0);
   }, [stepIndex]);
 
   const updateData = useCallback((partial: Partial<WizardData>) => {
