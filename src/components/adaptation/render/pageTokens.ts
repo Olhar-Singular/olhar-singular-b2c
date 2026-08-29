@@ -169,6 +169,25 @@ export const ANSWER_LINE_DASH_SPACE_PX = 2;
 export const ANSWER_ITEM_GAP_PX = 8;
 
 /**
+ * Coluna do MARCADOR de alternativa: `ALTERNATIVE_MARKER_COLUMN_PT` é a distância
+ * do x do ordinal ("a)") ao x do texto, e `ALTERNATIVE_MARKER_GAP_PX` é o vão
+ * entre os dois. Ponto único das TRÊS superfícies (achado 0340).
+ *
+ * O achado 0202 unificou só a LARGURA do marcador na tela; o vão continuou
+ * escrito à mão uma vez por superfície e as cópias discordavam — `gap-2.5`
+ * (10px) na folha do Revisar contra `gap-2` (8px) na prévia do Exportar e 22pt
+ * de coluna no PDF. O texto da alternativa começava 1,7pt mais à direita
+ * justamente na tela onde o professor julga a impressão, e sobrava menos largura
+ * útil por linha do que no papel, mudando onde a alternativa longa quebra.
+ *
+ * O valor adotado é o do papel (22pt, o que o PDF já imprimia): a largura em `em`
+ * do marcador da tela é DERIVADA dele menos o vão, então a coluna acompanha o
+ * `pageStyle.fontSize` sem se descolar do PDF na base de 12pt.
+ */
+export const ALTERNATIVE_MARKER_COLUMN_PT = 22;
+export const ALTERNATIVE_MARKER_GAP_PX = 8;
+
+/**
  * Caixa do bloco ANDAIME: recuo interno, respiro vertical e largura da coluna do
  * ordinal ("1.", "2." …). Ponto único das duas superfícies impressas — a prévia
  * do Exportar e o PDF —, na mesma família de `ANSWER_ITEM_GAP_PX` (achado 0313).
@@ -320,6 +339,17 @@ export const RULE_WIDTH_PT = RULE_WIDTH_PX / PT_TO_PX;
 
 /** `ANSWER_ITEM_GAP_PX` na unidade do PDF (pt), pela mesma razão 72/96. */
 export const ANSWER_ITEM_GAP_PT = ANSWER_ITEM_GAP_PX / PT_TO_PX;
+
+/** `ALTERNATIVE_MARKER_GAP_PX` na unidade do PDF (pt), pela mesma razão 72/96. */
+export const ALTERNATIVE_MARKER_GAP_PT = ALTERNATIVE_MARKER_GAP_PX / PT_TO_PX;
+
+/**
+ * Largura do marcador na TELA, em `em` sobre o corpo do documento: a coluna do
+ * papel menos o vão, na base de 12pt. Em `em` para escalar com a fonte da folha.
+ */
+export const ALTERNATIVE_MARKER_WIDTH_EM =
+  Math.round(((ALTERNATIVE_MARKER_COLUMN_PT - ALTERNATIVE_MARKER_GAP_PT) / BASE_FONT_PT) * 1e4) /
+  1e4;
 
 /** Tokens da caixa do andaime na unidade do PDF (pt), pela mesma razão 72/96. */
 export const SCAFFOLDING_PADDING_PT = SCAFFOLDING_PADDING_PX / PT_TO_PX;

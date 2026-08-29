@@ -28,6 +28,7 @@ import {
   ANSWER_LINE_DASH_PT,
   ANSWER_LINE_DASH_SPACE_PT,
   ANSWER_ITEM_GAP_PT,
+  ALTERNATIVE_MARKER_COLUMN_PT,
 } from "../pageTokens";
 
 // O vão entre itens vem de pageTokens para o papel imprimir o mesmo passo que as
@@ -35,7 +36,7 @@ import {
 const ROW = { flexDirection: "row", marginBottom: ANSWER_ITEM_GAP_PT } as const;
 // flexShrink: 0 prevents the marker column from collapsing when the row is
 // tight, which would push marker text over the content column.
-const MARKER = { width: 22, flexShrink: 0 } as const;
+const MARKER = { width: ALTERNATIVE_MARKER_COLUMN_PT, flexShrink: 0 } as const;
 // flexBasis: 0 é obrigatório. Sem ele o Yoga deriva a base medindo o texto
 // contra a largura CHEIA do pai e só depois encolhe a caixa para caber ao
 // lado do marcador: a caixa anda, mas as linhas já foram quebradas na

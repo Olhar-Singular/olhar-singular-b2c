@@ -7,7 +7,7 @@ import type { QuestionAnswer } from "@/lib/adaptation/canonical/schema";
 import { RichTextView } from "../RichTextView";
 import { indexToLetter } from "../letters";
 import { ALTERNATIVE_MARKER_CLASS } from "./markerColumn";
-import { ANSWER_ITEM_GAP_PX } from "../pageTokens";
+import { ANSWER_ITEM_GAP_PX, ALTERNATIVE_MARKER_GAP_PX } from "../pageTokens";
 
 type MultipleChoiceAnswer = Extract<QuestionAnswer, { kind: "multipleChoice" }>;
 
@@ -21,7 +21,8 @@ export function MultipleChoiceView({ answer }: { answer: MultipleChoiceAnswer })
       {answer.alternatives.map((alt, i) => (
         <li
           key={alt.id}
-          className="flex items-start gap-2"
+          className="flex items-start"
+          style={{ columnGap: `${ALTERNATIVE_MARKER_GAP_PX}px` }}
         >
           <span data-testid="alternative-marker" className={ALTERNATIVE_MARKER_CLASS}>
             {indexToLetter(i)})

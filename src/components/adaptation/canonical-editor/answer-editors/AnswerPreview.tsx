@@ -19,6 +19,7 @@ import {
   ANSWER_LINE_GAP_PX,
   ANSWER_LINE_WIDTH_PX,
   ANSWER_ITEM_GAP_PX,
+  ALTERNATIVE_MARKER_GAP_PX,
 } from "@/components/adaptation/render/pageTokens";
 import { RichTextField } from "../RichTextField";
 import {
@@ -64,7 +65,11 @@ export function AnswerPreview({ answer, onChange, disabled = false }: AnswerPrev
           data-testid="answer-preview-multipleChoice"
         >
           {answer.alternatives.map((alt, i) => (
-            <div key={alt.id} className="flex min-w-0 items-start gap-2.5">
+            <div
+              key={alt.id}
+              className="flex min-w-0 items-start"
+              style={{ columnGap: `${ALTERNATIVE_MARKER_GAP_PX}px` }}
+            >
               <span data-testid="preview-alternative-marker" className={ALTERNATIVE_MARKER_CLASS}>
                 {indexToLetter(i)})
               </span>
