@@ -561,6 +561,35 @@ describe("CanonicalAdaptationWizard", () => {
     }
   });
 
+  // 0167: a troca de passo zerava a rolagem mas deixava o foco no <body> — o botão
+  // clicado ("Exportar"/"Voltar") é desmontado junto com o passo antigo. Quem navega
+  // por teclado recomeçava no topo da página (~12 paradas até o passo novo) e o leitor
+  // de tela não anunciava nada. O foco tem que pousar no começo do passo novo.
+  it("moves focus into the new step and announces it, without stealing focus on mount", () => {
+    renderWithProviders(<CanonicalAdaptationWizard />);
+
+    // montagem não rouba o foco de ninguém
+    expect(document.activeElement).toBe(document.body);
+
+    // o contador de passos é região viva: a troca é anunciada mesmo sem foco
+    const counter = screen.getByTestId("step-counter");
+    expect(counter).toHaveAttribute("role", "status");
+    expect(counter).toHaveAttribute("aria-live", "polite");
+
+    advanceToReview();
+
+    const region = screen.getByTestId("step-region");
+    expect(document.activeElement).toBe(region);
+    expect(region).toHaveAttribute("tabindex", "-1");
+    expect(region).toHaveAccessibleName("Revisar");
+    expect(counter).toHaveTextContent("Passo 5 de 6");
+
+    // e no caminho de volta (chip / botão Voltar) também
+    fireEvent.click(screen.getByRole("button", { name: /1.*Tipo/i }));
+    expect(document.activeElement).toBe(screen.getByTestId("step-region"));
+    expect(screen.getByTestId("step-region")).toHaveAccessibleName("Tipo");
+  });
+
   it("regenerate is confirmed and replaces the document via the generate step", async () => {
     renderWithProviders(<CanonicalAdaptationWizard />);
     advanceToReview();
@@ -630,7 +659,10 @@ describe("CanonicalAdaptationWizard", () => {
     renderWithProviders(<CanonicalAdaptationWizard />);
     advanceToReview();
     await waitFor(() => expect(adoptedDraftId()).toBe("srv-1"));
-    expect(await screen.findByRole("status")).toHaveTextContent(/Salvando/i);
+    // o contador de passos também é role="status" (0167), então o indicador de
+    // autosave é identificado pelo próprio texto
+    const status = await screen.findByText(/Salvando/i);
+    expect(status).toHaveAttribute("role", "status");
   });
 
   it("Salvar marks the draft ready, toasts, and stays on page (no navigation)", async () => {

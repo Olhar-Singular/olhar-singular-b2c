@@ -248,6 +248,7 @@ export default function CanonicalAdaptationWizard({ editMode }: Props = {}) {
   // with its left edge cut off before the user had touched anything.
   const stepStripRef = useRef<HTMLDivElement>(null);
   const activeStepRef = useRef<HTMLButtonElement>(null);
+  const stepRegionRef = useRef<HTMLDivElement>(null);
   // 0165: a troca de passo também precisa devolver a rolagem VERTICAL ao topo.
   // A folha do Revisar é alta; quem clicava em "Exportar" no fim dela caía no
   // passo 6 na mesma altura, no meio da prévia, com o cabeçalho do passo e os
@@ -272,6 +273,13 @@ export default function CanonicalAdaptationWizard({ editMode }: Props = {}) {
     const main = document.getElementById("main-content");
     if (main) main.scrollTop = 0;
     window.scrollTo(0, 0);
+    // 0167: zerar a rolagem só resolvia para quem enxerga a tela. O botão clicado
+    // ("Exportar"/"Voltar") é desmontado junto com o passo antigo, então o foco caía
+    // no <body>: o Tab seguinte recomeçava no topo da página (link de pular, logo,
+    // navegação lateral) e o leitor de tela não anunciava nada, porque a rota não
+    // mudou. Pousamos o foco no contêiner do passo novo, que carrega o nome do passo
+    // — o Tab continua de dentro dele e o nome é lido na chegada.
+    stepRegionRef.current?.focus();
   }, [stepIndex]);
 
   const updateData = useCallback((partial: Partial<WizardData>) => {
@@ -605,7 +613,14 @@ export default function CanonicalAdaptationWizard({ editMode }: Props = {}) {
       </div>
 
       <div className="flex items-center justify-between">
-        <p className="text-xs text-muted-foreground">
+        {/* 0167: região viva — anuncia a troca de passo para quem não tem como
+            perceber a mudança de cor do chip. */}
+        <p
+          className="text-xs text-muted-foreground"
+          data-testid="step-counter"
+          role="status"
+          aria-live="polite"
+        >
           Passo {stepIndex + 1} de {STEPS.length}
         </p>
         {/* Autosave status — shown once a draft exists and from the review step on. */}
@@ -647,7 +662,16 @@ export default function CanonicalAdaptationWizard({ editMode }: Props = {}) {
         )}
       </div>
 
-      <div className="min-h-[400px]">{renderStep()}</div>
+      <div
+        ref={stepRegionRef}
+        data-testid="step-region"
+        tabIndex={-1}
+        role="group"
+        aria-label={STEP_LABELS[currentKey]}
+        className="min-h-[400px] outline-none"
+      >
+        {renderStep()}
+      </div>
 
       {navGuard.state === "blocked" && isUploading && (
         <Dialog open onOpenChange={() => navGuard.reset?.()}>
