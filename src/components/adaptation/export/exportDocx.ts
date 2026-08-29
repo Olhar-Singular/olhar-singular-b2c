@@ -6,7 +6,7 @@
  *                         pure canonical→docx mapping, exported for direct unit tests.
  * `docxExportWarnings`  — what will NOT survive the trip to Word (shown BEFORE the
  *                         download, so "Word gerado!" never covers a silent loss).
- * `documentRunStyle`    — pure pageStyle → docx run mapping (font + half-points).
+ * `documentRunStyle`    — pure pageStyle → docx run mapping (font + half-points + ink).
  * `docxContentBlocks`   — pure document + PanelSettings → docx blocks, já com as
  *                         quebras de página (switch do painel e `style.pageBreakBefore`).
  * `downloadDocx`        — side-effecting blob + DOM download (v8 ignore).
@@ -50,6 +50,7 @@ import {
 import {
   BASE_FONT_PT,
   DEFAULT_FONT_FAMILY_TOKEN,
+  DEFAULT_INK,
   SCAFFOLDING_BG,
   SCAFFOLDING_BORDER,
   SCAFFOLDING_LABEL,
@@ -71,11 +72,16 @@ const ANSWER_INDENT = 360;
 /** Question instruction/enunciado size in half-points (10.5pt, as in the PDF). */
 const SUB_SIZE = 21;
 /**
- * Tinta do texto no Word. Preto puro, que é onde o `docDefaults` deixa o corpo
- * (o Word não recebe o `DEFAULT_INK` da tela): o título tem que casar com o
- * resto do documento, não com a paleta do estilo `Heading1` da lib.
+ * Tinta do texto no Word: o MESMO `DEFAULT_INK` das outras três superfícies,
+ * sem o `#` (a unidade do docx é o hex cru). Vale para o título e, via
+ * `documentRunStyle`, para o corpo inteiro: o título tem que casar com o resto
+ * do documento, não com a paleta do estilo `Heading1` da lib.
+ *
+ * Antes era preto puro escrito à mão, e o `docDefaults` saía sem `<w:color>`:
+ * o .docx era a única das quatro saídas fora da tinta que o professor vê
+ * enquanto edita (achado 0166).
  */
-const DOCX_INK = "000000";
+const DOCX_INK = DEFAULT_INK.slice(1);
 /** Caption size in half-points (10pt) — the sheet's `caption` element size. */
 const CAPTION_SIZE = 20;
 
@@ -402,11 +408,18 @@ export function docxExportWarnings(
  * ao default do Word do leitor (Calibri 11pt/Aptos), a única das três
  * superfícies sem a tipografia decidida no projeto (achado 0332).
  */
-export function documentRunStyle(pageStyle?: PageStyle): { font: string; size: number } {
+export function documentRunStyle(pageStyle?: PageStyle): {
+  font: string;
+  size: number;
+  color: string;
+} {
   return {
     font: fontFamilyToDocx(pageStyle?.fontFamily ?? DEFAULT_FONT_FAMILY_TOKEN),
     // docx measures type size in half-points, so 14pt is 28.
     size: Math.round((pageStyle?.fontSize ?? BASE_FONT_PT) * 2),
+    // Sem `color` o `<w:rPrDefault>` saía sem `<w:color>` e o corpo herdava o
+    // preto do Word, contra `DEFAULT_INK` nas outras superfícies (achado 0166).
+    color: DOCX_INK,
   };
 }
 

@@ -11,7 +11,7 @@ import {
   docxExportWarnings,
   documentRunStyle,
 } from "./exportDocx";
-import { HEADING_PT } from "../render/pageTokens";
+import { HEADING_PT, pageTokensToPdf } from "../render/pageTokens";
 import type {
   Block,
   Inline,
@@ -21,6 +21,8 @@ import type {
 
 const id = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, "0")}`;
 const text = (t: string): Inline[] => [{ type: "text", text: t }];
+/** Tinta do documento na forma que o docx aceita (hex cru, sem `#`). */
+const DOCX_INK_HEX = pageTokensToPdf().color.replace("#", "");
 
 describe("docxFileName", () => {
   it("retorna nome padrão quando o cabeçalho não tem título", () => {
@@ -672,18 +674,20 @@ describe("documentRunStyle", () => {
    * três superfícies.
    */
   it("sem pageStyle, cai no mesmo default das outras superfícies (Arial 12pt)", () => {
-    expect(documentRunStyle()).toEqual({ font: "Arial", size: 24 });
-    expect(documentRunStyle({})).toEqual({ font: "Arial", size: 24 });
+    expect(documentRunStyle()).toEqual({ font: "Arial", size: 24, color: DOCX_INK_HEX });
+    expect(documentRunStyle({})).toEqual({ font: "Arial", size: 24, color: DOCX_INK_HEX });
   });
 
   it("traduz o token de fonte para o nome que o Word entende", () => {
     expect(documentRunStyle({ fontFamily: "opendyslexic" })).toEqual({
       font: "OpenDyslexic",
       size: 24,
+      color: DOCX_INK_HEX,
     });
     expect(documentRunStyle({ fontFamily: "serif" })).toEqual({
       font: "Times New Roman",
       size: 24,
+      color: DOCX_INK_HEX,
     });
   });
 
@@ -691,22 +695,36 @@ describe("documentRunStyle", () => {
     expect(documentRunStyle({ fontFamily: "Comic Sans MS" })).toEqual({
       font: "Comic Sans MS",
       size: 24,
+      color: DOCX_INK_HEX,
     });
   });
 
   it("converte o tamanho para meio-pontos, que é a unidade do docx", () => {
-    expect(documentRunStyle({ fontSize: 14 })).toEqual({ font: "Arial", size: 28 });
-    expect(documentRunStyle({ fontSize: 10.5 })).toEqual({ font: "Arial", size: 21 });
+    expect(documentRunStyle({ fontSize: 14 })).toEqual({
+      font: "Arial",
+      size: 28,
+      color: DOCX_INK_HEX,
+    });
+    expect(documentRunStyle({ fontSize: 10.5 })).toEqual({
+      font: "Arial",
+      size: 21,
+      color: DOCX_INK_HEX,
+    });
   });
 
   it("arredonda meio-ponto fracionário em vez de truncar", () => {
-    expect(documentRunStyle({ fontSize: 12.3 })).toEqual({ font: "Arial", size: 25 });
+    expect(documentRunStyle({ fontSize: 12.3 })).toEqual({
+      font: "Arial",
+      size: 25,
+      color: DOCX_INK_HEX,
+    });
   });
 
   it("combina fonte e tamanho", () => {
     expect(documentRunStyle({ fontFamily: "lexend", fontSize: 16 })).toEqual({
       font: "Lexend",
       size: 32,
+      color: DOCX_INK_HEX,
     });
   });
 });
@@ -790,46 +808,74 @@ describe("withPageBreak", () => {
   });
 });
 
+/** Coleta os pares `{rootKey, val}` das propriedades de run do parágrafo. */
+function docxRunProps(node: unknown): Array<{ key: string; val: unknown }> {
+  const found: Array<{ key: string; val: unknown }> = [];
+  const walk = (o: unknown): void => {
+    if (Array.isArray(o)) return o.forEach(walk);
+    if (o === null || typeof o !== "object") return;
+    const n = o as { rootKey?: string; root?: unknown };
+    if (typeof n.rootKey === "string") {
+      // O valor de um nó (`<w:sz w:val="36"/>`) mora num filho `_attr`.
+      const attr = Array.isArray(n.root)
+        ? (n.root.find(
+            (c) => (c as { rootKey?: string }).rootKey === "_attr",
+          ) as { root?: { val?: unknown } } | undefined)
+        : undefined;
+      found.push({ key: n.rootKey, val: attr?.root?.val });
+    }
+    Object.values(o as Record<string, unknown>).forEach(walk);
+  };
+  walk(node);
+  return found;
+}
+
 /**
  * Achado 0164 — o título saía azul (#2E74B5), 16pt e sem negrito no Word,
  * porque o parágrafo delegava tudo ao estilo `Heading1` da lib `docx`. Nas
- * outras três superfícies ele é preto, negrito e no corpo de `HEADING_PT`.
+ * outras três superfícies ele é negrito, no corpo de `HEADING_PT` e na tinta
+ * do documento (`DEFAULT_INK`, desde o achado 0166).
  */
 describe("0164 · título do Word com a tinta, o peso e o corpo das outras superfícies", () => {
-  /** Coleta os pares `{rootKey, val}` das propriedades de run do parágrafo. */
-  function runProps(node: unknown): Array<{ key: string; val: unknown }> {
-    const found: Array<{ key: string; val: unknown }> = [];
-    const walk = (o: unknown): void => {
-      if (Array.isArray(o)) return o.forEach(walk);
-      if (o === null || typeof o !== "object") return;
-      const n = o as { rootKey?: string; root?: unknown };
-      if (typeof n.rootKey === "string") {
-        // O valor de um nó (`<w:sz w:val="36"/>`) mora num filho `_attr`.
-        const attr = Array.isArray(n.root)
-          ? (n.root.find(
-              (c) => (c as { rootKey?: string }).rootKey === "_attr",
-            ) as { root?: { val?: unknown } } | undefined)
-          : undefined;
-        found.push({ key: n.rootKey, val: attr?.root?.val });
-      }
-      Object.values(o as Record<string, unknown>).forEach(walk);
-    };
-    walk(node);
-    return found;
-  }
-
   it.each([
     [1 as const, HEADING_PT[1] * 2],
     [2 as const, HEADING_PT[2] * 2],
     [3 as const, HEADING_PT[3] * 2],
-  ])("heading nível %i sai negrito, preto e em %i meios-pontos", (level, halfPoints) => {
+  ])("heading nível %i sai negrito, na tinta do documento e em %i meios-pontos", (level, halfPoints) => {
     const [paragraph] = blockToDocxParagraphs(
       { id: id(164), type: "heading", level, content: text("Prova") },
       1,
     );
-    const props = runProps(paragraph);
+    const props = docxRunProps(paragraph);
     expect(props.some((p) => p.key === "w:b")).toBe(true);
-    expect(props.some((p) => p.key === "w:color" && p.val === "000000")).toBe(true);
+    expect(props.some((p) => p.key === "w:color" && p.val === DOCX_INK_HEX)).toBe(true);
     expect(props.some((p) => p.key === "w:sz" && p.val === halfPoints)).toBe(true);
+  });
+});
+
+/**
+ * Achado 0166 — o `.docx` era a única das quatro superfícies fora do
+ * `DEFAULT_INK`: o `docDefaults` saía sem `<w:color>` (corpo no preto do Word)
+ * e o título vinha com `#000000` escrito à mão. A asserção é de IGUALDADE com
+ * a tinta que o PDF emite, e não contra o literal `22201C` — um teste contra o
+ * literal deixaria a próxima divergência passar, que é como esta nasceu.
+ */
+describe("0166 · o Word imprime na mesma tinta das outras superfícies", () => {
+  /** A tinta do PDF em hex sem `#`, que é a forma que o docx aceita. */
+  const inkHex = DOCX_INK_HEX;
+
+  it("o docDefaults do documento carrega a tinta das outras superfícies", () => {
+    expect(documentRunStyle().color).toBe(inkHex);
+    expect(documentRunStyle({ fontFamily: "lexend", fontSize: 16 }).color).toBe(inkHex);
+  });
+
+  it("o título casa com o corpo, na tinta do documento", () => {
+    const [paragraph] = blockToDocxParagraphs(
+      { id: id(166), type: "heading", level: 1, content: text("Prova") },
+      1,
+    );
+    const colors = docxRunProps(paragraph).filter((p) => p.key === "w:color");
+    expect(colors.length).toBeGreaterThan(0);
+    colors.forEach((p) => expect(p.val).toBe(inkHex));
   });
 });
