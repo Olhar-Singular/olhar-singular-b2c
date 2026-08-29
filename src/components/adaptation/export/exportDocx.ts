@@ -31,6 +31,8 @@ import {
   HeadingLevel,
   AlignmentType,
   PageBreak,
+  BorderStyle,
+  ShadingType,
 } from "docx";
 import type {
   CanonicalDocument,
@@ -45,7 +47,13 @@ import {
   DOCX_NON_STANDARD_FONTS,
   isFontFamilyToken,
 } from "@/lib/adaptation/canonical/fontFamily";
-import { BASE_FONT_PT, DEFAULT_FONT_FAMILY_TOKEN } from "../render/pageTokens";
+import {
+  BASE_FONT_PT,
+  DEFAULT_FONT_FAMILY_TOKEN,
+  SCAFFOLDING_BG,
+  SCAFFOLDING_BORDER,
+  SCAFFOLDING_LABEL,
+} from "../render/pageTokens";
 import { indexToLetter } from "../render/letters";
 import { documentHasMath, everyBlock } from "./exportWarnings";
 import { perQuestionBreakFlags } from "../render/perQuestionBreaks";
@@ -60,6 +68,29 @@ const MATH_FONT = "Courier New";
 const ANSWER_INDENT = 360;
 /** Question instruction/enunciado size in half-points (10.5pt, as in the PDF). */
 const SUB_SIZE = 21;
+/** Caption size in half-points (10pt) — the sheet's `caption` element size. */
+const CAPTION_SIZE = 20;
+
+/**
+ * Moldura + fundo da caixa do andaime, com os tokens compartilhados das outras
+ * três superfícies (o Word não tem `<View>`: a caixa é a borda de cada
+ * parágrafo do bloco). Sem ela, e sem o rótulo, os passos saíam soltos no corpo
+ * do texto e se disfarçavam das questões numeradas logo abaixo (achado 0163).
+ */
+const SCAFFOLDING_EDGE = {
+  style: BorderStyle.SINGLE,
+  size: 4,
+  color: SCAFFOLDING_BORDER.slice(1),
+} as const;
+const SCAFFOLDING_BOX = {
+  border: {
+    top: SCAFFOLDING_EDGE,
+    bottom: SCAFFOLDING_EDGE,
+    left: SCAFFOLDING_EDGE,
+    right: SCAFFOLDING_EDGE,
+  },
+  shading: { type: ShadingType.CLEAR, fill: SCAFFOLDING_BG.slice(1) },
+} as const;
 
 /** Derive a safe .docx filename from the document header title. */
 export function docxFileName(header: DocumentHeader): string {
@@ -206,10 +237,28 @@ export function blockToDocxParagraphs(block: Block, number: number): DocxBlock[]
     }
 
     case "scaffolding":
-      // Numbered steps, as PdfScaffolding renders them.
-      return block.items.map(
-        (item, i) => new Paragraph({ children: [new TextRun({ text: `${i + 1}. ${item}` })] }),
-      );
+      // Caixa rotulada, como PdfScaffolding a desenha: o rótulo é a única coisa
+      // que nomeia o bloco no impresso (achado 0155) e a moldura é o que separa
+      // os passos do corpo das questões (achado 0163).
+      return [
+        new Paragraph({
+          ...SCAFFOLDING_BOX,
+          children: [
+            new TextRun({
+              text: SCAFFOLDING_LABEL.toUpperCase(),
+              bold: true,
+              size: CAPTION_SIZE,
+            }),
+          ],
+        }),
+        ...block.items.map(
+          (item, i) =>
+            new Paragraph({
+              ...SCAFFOLDING_BOX,
+              children: [new TextRun({ text: `${i + 1}. ${item}` })],
+            }),
+        ),
+      ];
 
     case "divider":
       return [new Paragraph({ children: [new TextRun({ text: "─".repeat(40) })] })];

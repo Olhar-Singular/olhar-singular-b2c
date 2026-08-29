@@ -35,6 +35,7 @@ import { ScaffoldingView } from "./blocks/ScaffoldingView";
 import { ScaffoldNodeView } from "../canonical-editor/nodeviews/ScaffoldNodeView";
 import { PdfScaffolding } from "./pdf/PdfLeafBlocks";
 import { resolveElementFontSizes, resolvePageStyle } from "./pageStyle";
+import { blockToDocxParagraphs } from "../export/exportDocx";
 
 vi.mock("@tiptap/react", () => ({
   NodeViewWrapper: ({ children, ...rest }: { children: ReactNode }) => <div {...rest}>{children}</div>,
@@ -192,5 +193,41 @@ describe("andaime — paridade do RAIO DE CANTO nas três superfícies (achado 0
   it("arredonda a caixa do PDF com o equivalente em pt do mesmo token", () => {
     const style = boxStyle(PdfScaffolding({ block: BLOCK }) as ReactElement);
     expect(style.borderRadius).toBe(SCAFFOLDING_RADIUS_PT);
+  });
+});
+
+/**
+ * Contrato da CAIXA DO ANDAIME no Word (achado 0163).
+ *
+ * O `.docx` era a única das quatro superfícies que entregava o andaime como
+ * lista solta: três parágrafos de texto comum, sem o rótulo, sem moldura e sem
+ * fundo. Pior que perder a decoração — logo abaixo vem a próxima questão
+ * numerada, então os passos `1.` `2.` `3.` se disfarçavam de questões e a
+ * numeração da prova parecia reiniciar no meio da folha. O rótulo é a única
+ * coisa que nomeia o bloco (mesmo argumento do achado 0155), e a moldura é o que
+ * o separa do corpo do texto.
+ */
+describe("andaime — caixa e rótulo também no Word (achado 0163)", () => {
+  const docxJson = () => JSON.stringify(blockToDocxParagraphs(BLOCK, 1));
+
+  it("imprime o rótulo do mesmo token, em caixa alta como nas outras superfícies", () => {
+    expect(docxJson()).toContain(SCAFFOLDING_LABEL.toUpperCase());
+  });
+
+  it("desenha a moldura e o fundo com os mesmos tokens de cor, e não texto solto", () => {
+    const json = docxJson();
+    expect(json).toContain("w:pBdr");
+    expect(json).toContain("w:shd");
+    expect(json).toContain(SCAFFOLDING_BORDER.slice(1));
+    expect(json).toContain(SCAFFOLDING_BG.slice(1));
+  });
+
+  it("mantém os passos numerados dentro da caixa", () => {
+    const paragraphs = blockToDocxParagraphs(BLOCK, 1);
+    // rótulo + um parágrafo por passo
+    expect(paragraphs).toHaveLength(BLOCK.items.length + 1);
+    const json = JSON.stringify(paragraphs);
+    expect(json).toContain("1. Leia duas vezes");
+    expect(json).toContain("2. Grife as palavras-chave");
   });
 });
