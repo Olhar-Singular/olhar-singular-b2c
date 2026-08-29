@@ -273,7 +273,7 @@ describe("QuestionNodeView — rail actions", () => {
     // recebesse foco. O rail fica sempre no fluxo, escondido por opacidade.
     expect(rail?.className).not.toMatch(/(^|\s)hidden(\s|$)/);
     expect(rail?.className).toMatch(/opacity-0/);
-    expect(rail?.className).toMatch(/group-focus-within:opacity-100/);
+    expect(rail?.className).toMatch(/(^|\s)focus-within:opacity-100/);
     // Ponteiro grosso (toque) nao tem hover: o rail fica visivel de saida.
     expect(rail?.className).toMatch(/\[@media\(hover:none\)\]:opacity-100/);
   });
@@ -290,6 +290,27 @@ describe("QuestionNodeView — rail actions", () => {
     expect(rail?.className).toMatch(/\[@media\(hover:none\)\]:opacity-100/);
     expect(rail?.className).toMatch(/-translate-y-full/);
     expect(wrapper?.className).toMatch(/\[@media\(hover:none\)\]:mt-10/);
+  });
+
+  /**
+   * Achado 0336 — o rail e uma caixa OPACA ancorada acima do bloco e o vao em
+   * ponteiro fino e de 12px (`my-3`) contra os 28px do rail: os ~19px que sobram
+   * caem dentro do bloco anterior. Enquanto o rail so acendia no hover a invasao
+   * sumia sozinha, mas os campos internos da questao (instrucao e alternativas)
+   * sao descendentes do wrapper: com `group-focus-within` o rail fica aceso
+   * durante TODA a edicao e o botao destrutivo "Excluir questao" intercepta o
+   * clique da ultima linha do bloco de cima (a legenda da imagem, na cena
+   * semeada). O rail so acende por hover, por foco NELE MESMO (teclado, sem
+   * `group-`) ou em ponteiro grosso, onde a reserva `mt-10` existe.
+   */
+  it("nao acende o rail com o foco num campo interno da questao (achado 0336)", () => {
+    const { props } = makeProps(mc);
+    const { container } = render(<QuestionNodeView {...props} />);
+    const rail = container.querySelector('[data-role="question-rail"]');
+    expect(rail?.className).not.toMatch(/group-focus-within:/);
+    // teclado continua alcancando o rail: foco no proprio rail o revela
+    expect(rail?.className).toMatch(/(^|\s)focus-within:opacity-100/);
+    expect(rail?.className).toMatch(/(^|\s)focus-within:pointer-events-auto/);
   });
 
   it("dispatches the move transaction when moving up", () => {

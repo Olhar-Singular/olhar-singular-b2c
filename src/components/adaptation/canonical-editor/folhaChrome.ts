@@ -29,6 +29,13 @@ export const FOLHA_GHOST =
  * Por isso: sempre no fluxo, escondido só por opacidade, e visível de saída em
  * ponteiro grosso, que não tem hover nenhum (achado 0232).
  *
+ * O foco que revela o rail é o DELE MESMO (`focus-within`, sem `group-`), que é
+ * o que o teclado precisa. `group-focus-within` seria o do bloco inteiro: os
+ * campos internos da questão (instrução, alternativas, legenda) são descendentes
+ * do wrapper, então editá-los deixaria a caixa opaca acesa durante toda a edição,
+ * invadindo o bloco de cima e roubando o clique da última linha dele (achado
+ * 0336, mesma raiz do 0420). Aceso só por hover, o excesso é um relance.
+ *
  * `-translate-y-full`: a caixa é OPACA, então ela não pode ser desenhada sobre
  * o texto do próprio bloco (achado 0205). Ela sobe para o vão acima dele — e o
  * hospedeiro tem de reservar esse vão: ver FOLHA_RAIL_HOST.
@@ -37,7 +44,7 @@ export const FOLHA_RAIL =
   "absolute right-0 top-0 z-10 -translate-y-full flex items-center gap-1 rounded-md border border-surface-line-2 " +
   "bg-surface-paper p-0.5 shadow-sm pointer-events-none opacity-0 transition-opacity " +
   "group-hover:pointer-events-auto group-hover:opacity-100 " +
-  "group-focus-within:pointer-events-auto group-focus-within:opacity-100 " +
+  "focus-within:pointer-events-auto focus-within:opacity-100 " +
   "[@media(hover:none)]:pointer-events-auto [@media(hover:none)]:opacity-100";
 
 /**
@@ -53,10 +60,11 @@ export const FOLHA_RAIL =
  * empurra texto sob o ponteiro, que era o defeito do achado 0413) e lá é o
  * único lugar onde o rail está sempre visível.
  *
- * Ressalva do achado 0420: em ponteiro fino a invasão só "some sozinha" enquanto
- * o rail depender de hover. Um nodeview que abre um editor com `autoFocus` deixa
- * o rail aceso por `group-focus-within` durante toda a edição — nesse estado ele
- * não pode ficar no ar sobre o bloco de cima (ver BlockMathNodeView, que esconde
- * o rail com o editor aberto e leva a exclusão para dentro da caixa do editor).
+ * Ressalva dos achados 0420 e 0336: em ponteiro fino a invasão só "some sozinha"
+ * enquanto o rail depender de hover. Foco em qualquer campo dentro do bloco (o
+ * `autoFocus` do LaTeX, a instrução ou uma alternativa da questão) acendia o rail
+ * pelo tempo todo da edição — por isso FOLHA_RAIL reage a `focus-within` e não a
+ * `group-focus-within` (0336), e o BlockMathNodeView ainda esconde o rail com o
+ * editor aberto, levando a exclusão para dentro da caixa do editor (0420).
  */
 export const FOLHA_RAIL_HOST = "group relative my-3 [@media(hover:none)]:mt-10";

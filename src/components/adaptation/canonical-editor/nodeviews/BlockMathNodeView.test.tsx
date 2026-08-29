@@ -33,7 +33,7 @@ describe("BlockMathNodeView", () => {
     const rail = container.querySelector('[data-role="blockmath-rail"]');
     expect(rail?.className).not.toMatch(/(^|\s)hidden(\s|$)/);
     expect(rail?.className).toMatch(/opacity-0/);
-    expect(rail?.className).toMatch(/group-focus-within:opacity-100/);
+    expect(rail?.className).toMatch(/(^|\s)focus-within:opacity-100/);
     expect(rail?.className).toMatch(/\[@media\(hover:none\)\]:opacity-100/);
   });
 
