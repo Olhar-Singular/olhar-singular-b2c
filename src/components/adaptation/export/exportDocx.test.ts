@@ -11,6 +11,7 @@ import {
   docxExportWarnings,
   documentRunStyle,
 } from "./exportDocx";
+import { HEADING_PT } from "../render/pageTokens";
 import type {
   Block,
   Inline,
@@ -778,5 +779,49 @@ describe("withPageBreak", () => {
       true,
     );
     expect(out[1]).toBe(table);
+  });
+});
+
+/**
+ * Achado 0164 — o título saía azul (#2E74B5), 16pt e sem negrito no Word,
+ * porque o parágrafo delegava tudo ao estilo `Heading1` da lib `docx`. Nas
+ * outras três superfícies ele é preto, negrito e no corpo de `HEADING_PT`.
+ */
+describe("0164 · título do Word com a tinta, o peso e o corpo das outras superfícies", () => {
+  /** Coleta os pares `{rootKey, val}` das propriedades de run do parágrafo. */
+  function runProps(node: unknown): Array<{ key: string; val: unknown }> {
+    const found: Array<{ key: string; val: unknown }> = [];
+    const walk = (o: unknown): void => {
+      if (Array.isArray(o)) return o.forEach(walk);
+      if (o === null || typeof o !== "object") return;
+      const n = o as { rootKey?: string; root?: unknown };
+      if (typeof n.rootKey === "string") {
+        // O valor de um nó (`<w:sz w:val="36"/>`) mora num filho `_attr`.
+        const attr = Array.isArray(n.root)
+          ? (n.root.find(
+              (c) => (c as { rootKey?: string }).rootKey === "_attr",
+            ) as { root?: { val?: unknown } } | undefined)
+          : undefined;
+        found.push({ key: n.rootKey, val: attr?.root?.val });
+      }
+      Object.values(o as Record<string, unknown>).forEach(walk);
+    };
+    walk(node);
+    return found;
+  }
+
+  it.each([
+    [1 as const, HEADING_PT[1] * 2],
+    [2 as const, HEADING_PT[2] * 2],
+    [3 as const, HEADING_PT[3] * 2],
+  ])("heading nível %i sai negrito, preto e em %i meios-pontos", (level, halfPoints) => {
+    const [paragraph] = blockToDocxParagraphs(
+      { id: id(164), type: "heading", level, content: text("Prova") },
+      1,
+    );
+    const props = runProps(paragraph);
+    expect(props.some((p) => p.key === "w:b")).toBe(true);
+    expect(props.some((p) => p.key === "w:color" && p.val === "000000")).toBe(true);
+    expect(props.some((p) => p.key === "w:sz" && p.val === halfPoints)).toBe(true);
   });
 });

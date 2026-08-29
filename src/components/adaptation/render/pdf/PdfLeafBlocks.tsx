@@ -31,6 +31,7 @@ import {
   SCAFFOLDING_LABEL,
   RULE_COLOR,
   RULE_WIDTH_PT,
+  HEADING_PT,
 } from "../pageTokens";
 import { resolveElementFontSizes, resolvePageStyle, type ElementFontSizesPt } from "../pageStyle";
 
@@ -44,7 +45,8 @@ type ScaffoldingBlock = Extract<Block, { type: "scaffolding" }>;
 type DividerBlock = Extract<Block, { type: "divider" }>;
 
 // Screen heading sizes (text-2xl/xl/lg = 24/20/18px) converted px→pt for parity.
-const HEADING_SIZE: Record<1 | 2 | 3, number> = { 1: 18, 2: 15, 3: 13.5 };
+// Vive em pageTokens porque o Word lê o mesmo valor (achado 0164).
+const HEADING_SIZE = HEADING_PT;
 
 export function PdfHeading({ block, blockGap = 12 }: { block: HeadingBlock; blockGap?: number }) {
   // Extract marginBottom from nodeStyleToPdf (spacingAfter) and fall back to blockGap.

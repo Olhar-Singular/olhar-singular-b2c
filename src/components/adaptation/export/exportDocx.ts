@@ -53,6 +53,7 @@ import {
   SCAFFOLDING_BG,
   SCAFFOLDING_BORDER,
   SCAFFOLDING_LABEL,
+  HEADING_PT,
 } from "../render/pageTokens";
 import { indexToLetter } from "../render/letters";
 import { documentHasMath, everyBlock } from "./exportWarnings";
@@ -68,6 +69,12 @@ const MATH_FONT = "Courier New";
 const ANSWER_INDENT = 360;
 /** Question instruction/enunciado size in half-points (10.5pt, as in the PDF). */
 const SUB_SIZE = 21;
+/**
+ * Tinta do texto no Word. Preto puro, que é onde o `docDefaults` deixa o corpo
+ * (o Word não recebe o `DEFAULT_INK` da tela): o título tem que casar com o
+ * resto do documento, não com a paleta do estilo `Heading1` da lib.
+ */
+const DOCX_INK = "000000";
 /** Caption size in half-points (10pt) — the sheet's `caption` element size. */
 const CAPTION_SIZE = 20;
 
@@ -106,7 +113,7 @@ export function docxFileName(header: DocumentHeader): string {
 }
 
 /** Formatting inherited from the surrounding context (table header, instruction). */
-type RunStyle = { bold?: boolean; italics?: boolean; size?: number };
+type RunStyle = { bold?: boolean; italics?: boolean; size?: number; color?: string };
 
 export function richTextToRuns(nodes: Inline[], inherited: RunStyle = {}): TextRun[] {
   return nodes.map((node) => {
@@ -208,7 +215,21 @@ export function blockToDocxParagraphs(block: Block, number: number): DocxBlock[]
           : block.level === 2
             ? HeadingLevel.HEADING_2
             : HeadingLevel.HEADING_3;
-      return [new Paragraph({ heading: level, children: richTextToRuns(block.content) })];
+      // O `heading:` fica (é ele que alimenta o painel de navegação e o sumário
+      // do Word), mas o estilo do run vai explícito: sozinho, o `Heading1` da
+      // lib pinta o título de azul #2E74B5, em 16pt e SEM negrito — a única
+      // linha do documento que perdia o peso, contra preto/negrito/18pt no PDF
+      // e nas duas telas (achado 0164). Run vence styleId.
+      return [
+        new Paragraph({
+          heading: level,
+          children: richTextToRuns(block.content, {
+            bold: true,
+            color: DOCX_INK,
+            size: Math.round(HEADING_PT[block.level] * 2),
+          }),
+        }),
+      ];
     }
 
     case "paragraph":

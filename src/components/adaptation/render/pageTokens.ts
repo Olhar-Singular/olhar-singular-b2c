@@ -26,6 +26,15 @@ export const PAGE_HEIGHT_PT = 842;
 
 /** Tamanho de fonte base, em pontos. */
 export const BASE_FONT_PT = 12;
+
+/**
+ * Corpo do TÍTULO por nível, em pontos (text-2xl/xl/lg da tela = 24/20/18px
+ * convertidos px→pt). Ponto único do PDF (`PdfHeading`) e do Word
+ * (`blockToDocxParagraphs`): sem ele o .docx caía no estilo `Heading1` da lib
+ * `docx` e o título saía em 16pt azul, enquanto o PDF imprimia 18pt preto
+ * (achado 0164).
+ */
+export const HEADING_PT: Record<1 | 2 | 3, number> = { 1: 18, 2: 15, 3: 13.5 };
 /** Entrelinha base (multiplicador). */
 export const BASE_LINE_HEIGHT = 1.4;
 /** Espaçamento default entre blocos top-level, em px (≈ `1rem` do CSS atual). */
