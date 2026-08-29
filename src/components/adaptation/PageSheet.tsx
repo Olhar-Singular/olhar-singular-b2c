@@ -10,7 +10,7 @@
  * (`--sf-*`, plano §4). A tipografia/margem da folha vêm de `pageTokensToCss`
  * (paridade com o PDF — não mexer aqui). É só apresentação — não conhece o documento.
  */
-import { useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { useId, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import {
   pageTokensToCss,
   PAGE_HEIGHT_PX,
@@ -80,6 +80,13 @@ const FIT_MIN_SCALE = 0.4;
 const ZOOM_STEPS = [0.5, 0.75, 1];
 
 export function PageSheet({ toolbar, pageStyle, paginated = false, children }: PageSheetProps) {
+  /*
+    Achado 0241: o percentual do zoom precisa de um id estável para os dois
+    botões o apontarem por `aria-describedby` — a folha pode aparecer mais de
+    uma vez na árvore (edição e prévia), então o id vem do React, não do
+    data-testid.
+  */
+  const zoomValueId = useId();
   const frameRef = useRef<HTMLDivElement>(null);
   const sheetRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
@@ -392,16 +399,31 @@ export function PageSheet({ toolbar, pageStyle, paginated = false, children }: P
             <button
               type="button"
               aria-label="Diminuir zoom"
+              aria-describedby={zoomValueId}
               disabled={zoomIndex === 0}
               onClick={() => setZoomIndex((step) => Math.max(0, step - 1))}
               className="h-7 w-7 rounded border border-input bg-background leading-none disabled:opacity-40"
             >
               −
             </button>
-            <span className="w-10 text-center tabular-nums">{Math.round(scale * 100)}%</span>
+            {/*
+              Achado 0241: o valor é a saída do controle (WCAG SC 4.1.2) e muda
+              sozinho a cada clique (SC 4.1.3). Descrito pelos dois botões, é
+              falado ao focar; com `aria-live` é falado de novo a cada degrau.
+            */}
+            <span
+              id={zoomValueId}
+              data-testid="page-zoom-value"
+              aria-live="polite"
+              aria-atomic="true"
+              className="w-10 text-center tabular-nums"
+            >
+              {Math.round(scale * 100)}%
+            </span>
             <button
               type="button"
               aria-label="Aumentar zoom"
+              aria-describedby={zoomValueId}
               disabled={zoomIndex >= zoomLadder.length - 1}
               onClick={() =>
                 setZoomIndex((step) => Math.min(zoomLadder.length - 1, step + 1))
@@ -461,8 +483,14 @@ export function PageSheet({ toolbar, pageStyle, paginated = false, children }: P
           )}
         </div>
         {overflows && (
+          /*
+            Achado 0241: a pista aparece como resultado direto de um clique no
+            zoom. Sem `role="status"` a folha passava a estar cortada em
+            silêncio para quem não a enxerga.
+          */
           <p
             data-testid="page-overflow-hint"
+            role="status"
             className="mt-2 text-xs text-muted-foreground"
           >
             A folha é mais larga que a tela: role na horizontal para ver o resto.

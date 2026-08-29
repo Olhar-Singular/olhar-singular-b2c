@@ -716,6 +716,37 @@ describe("PageSheet", () => {
       });
     });
 
+    /*
+      Achado 0241: o percentual era um <span> decorativo e a pista de corte um
+      <p> mudo. Quem usa leitor de tela ouvia só "Aumentar zoom, botão", clicava,
+      e nem o novo valor nem o fato de a folha ter passado a mesa eram falados.
+    */
+    it("expõe o percentual aos botões e anuncia cada mudança de degrau (achado 0241)", () => {
+      withClientWidth(332, () => {
+        render(<PageSheet toolbar={null}><span>x</span></PageSheet>);
+        const value = screen.getByTestId("page-zoom-value");
+        expect(value).toHaveAttribute("aria-live", "polite");
+        expect(value).toHaveAttribute("aria-atomic", "true");
+        expect(value.id).not.toBe("");
+        for (const name of ["Diminuir zoom", "Aumentar zoom"]) {
+          expect(screen.getByRole("button", { name })).toHaveAttribute(
+            "aria-describedby",
+            value.id,
+          );
+        }
+      });
+    });
+
+    it("anuncia a folha que passou a estar cortada pelo zoom (achado 0241)", () => {
+      withClientWidth(332, () => {
+        render(<PageSheet toolbar={null}><span>x</span></PageSheet>);
+        act(() => {
+          screen.getByRole("button", { name: "Aumentar zoom" }).click();
+        });
+        expect(screen.getByTestId("page-overflow-hint")).toHaveAttribute("role", "status");
+      });
+    });
+
     it("não oferece zoom quando a folha já cabe em tamanho real", () => {
       withClientWidth(1200, () => {
         render(<PageSheet toolbar={null}><span>x</span></PageSheet>);
