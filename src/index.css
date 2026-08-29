@@ -401,6 +401,18 @@
   border-color: var(--doc-rule-color, #767676);
 }
 
+/* Fórmula na folha: o `.katex` não tem NodeView nosso, então o tamanho vinha da
+   folha de estilo que a própria biblioteca traz (`font-size: 1.21em`), escolhido
+   por ninguém deste produto. Na tela isso desenhava a fórmula 1,12x a tinta do
+   corpo e no PDF ela saía 0,74x: a proporção invertia entre a folha em que o
+   professor confere a prova e o papel que chega ao aluno. O tamanho vem agora do
+   token de página `--doc-fs-math`, publicado por `pageTokensToCss` a partir de
+   `MATH_INK_RATIO` (achado 0424). A dupla classe só sobe a especificidade acima
+   da regra da biblioteca; fora da folha, o fallback mantém o valor do KaTeX. */
+.katex.katex {
+  font-size: var(--doc-fs-math, 1.21em);
+}
+
 /* Keep top-level question cards spaced consistently with the new containers
  * (margin only — the card already has its own border; do NOT double-border). */
 .tiptap:not(.rich-text-field) > [data-type="question"] {

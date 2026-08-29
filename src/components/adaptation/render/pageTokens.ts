@@ -360,6 +360,66 @@ export function resolveElementFontSizes(resolved: ResolvedPageStyle): ElementFon
 }
 
 /**
+ * Altura de CAIXA ALTA (cap height) das famílias que desenham texto do
+ * documento, em em. Existe para converter a razão de tinta da fórmula
+ * (`MATH_INK_RATIO`) no tamanho de fonte de cada superfície.
+ *
+ * Comparar `fontSize` entre famílias diferentes não diz nada: o que o professor
+ * enxerga é a altura da tinta, e ela é o produto do tamanho pela caixa alta da
+ * família. Foi exatamente esse degrau que inverteu a proporção da fórmula entre
+ * a tela e o papel no achado 0424.
+ *
+ * `body` e `mathPdf` são os valores de `CapHeight` dos AFM das famílias base do
+ * PostScript (Helvetica 718, Courier 572); `mathScreen` é a caixa alta efetiva da
+ * KaTeX_Main, derivada da medição do 0424 na folha do Revisar.
+ */
+export const CAP_HEIGHT_EM = {
+  /** Corpo do documento (Helvetica na base, Arial na tela). */
+  body: 0.718,
+  /** Fórmula no PDF (Courier). */
+  mathPdf: 0.572,
+  /** Fórmula na tela (KaTeX_Main). */
+  mathScreen: 0.663,
+} as const;
+
+/**
+ * Quanto a tinta da FÓRMULA mede em relação à tinta do CORPO, na mesma linha.
+ * Ponto único das superfícies — a decisão do produto sobre o peso da matemática
+ * dentro da frase.
+ *
+ * Antes eram duas decisões independentes, e nenhuma delas daqui: na tela valia o
+ * `1.21em` que a folha de estilo do KaTeX traz de fábrica (1,12x de tinta) e no
+ * papel um `fontSize: 11` fixo numa família de caixa alta bem mais baixa que a do
+ * corpo (0,74x). A proporção não só divergia, INVERTIA de lado: o professor
+ * revisava uma linha em que a matemática se destacava e imprimia uma em que ela
+ * encolhia dentro do parágrafo (achado 0424).
+ *
+ * O valor adotado é o que a folha do Revisar já mostrava, porque é nela que o
+ * professor confere a prova; quem se move é o PDF. Baixar para 1 encolheria a
+ * fórmula na tela de todo mundo, o oposto do que um produto de acessibilidade
+ * deve fazer com o elemento mais denso da linha.
+ */
+export const MATH_INK_RATIO = 1.12;
+
+/**
+ * Tamanho da fórmula na TELA, como múltiplo do corpo ao redor (`em`).
+ *
+ * Relativo de propósito: a fórmula dentro de uma instrução ou de uma legenda
+ * acompanha o tamanho daquele contexto, como acompanhava com o `1.21em` do
+ * KaTeX. O que muda é a razão passar a ser nossa e não da biblioteca.
+ */
+export const MATH_FONT_SIZE_EM =
+  (MATH_INK_RATIO * CAP_HEIGHT_EM.body) / CAP_HEIGHT_EM.mathScreen;
+
+/**
+ * Tamanho da fórmula no PDF, em pt: a mesma razão de tinta, compensada pela
+ * caixa alta da Courier. Se a família da fórmula um dia for a do resto do
+ * documento, a compensação some sozinha e sobra só `MATH_INK_RATIO`.
+ */
+export const MATH_PDF_FONT_SIZE_PT =
+  (BASE_FONT_PT * MATH_INK_RATIO * CAP_HEIGHT_EM.body) / CAP_HEIGHT_EM.mathPdf;
+
+/**
  * Tinta do corpo do documento (título, parágrafo, enunciado e alternativas:
  * tudo o que não é o cinza secundário).
  *
@@ -415,5 +475,9 @@ export function pageTokensToCss(resolved: ResolvedPageStyle = DEFAULT_RESOLVED):
     ["--doc-fs-instruction"]: px(efs.instruction),
     ["--doc-fs-alternative"]: px(efs.alternative),
     ["--doc-fs-caption"]: px(efs.caption),
+    /* Tamanho da fórmula (KaTeX). Como a divisória, o `.katex` não tem NodeView
+       nosso — a folha de estilo da biblioteca é que o dimensiona —, então a
+       folha publica o token aqui e `index.css` o aplica (achado 0424). */
+    ["--doc-fs-math"]: `${MATH_FONT_SIZE_EM}em`,
   } as CSSProperties;
 }
