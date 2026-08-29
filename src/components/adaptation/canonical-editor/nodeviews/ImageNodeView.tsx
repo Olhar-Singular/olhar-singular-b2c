@@ -151,8 +151,15 @@ export function ImageNodeView({ node, updateAttributes, deleteNode, editor, getP
               className={cn("gap-1", FOLHA_BUTTON)}
               disabled={disabled}
               onClick={() => setModalOpen(true)}
+              aria-label="Trocar ou adicionar imagem"
             >
-              <ImageIcon className="h-3.5 w-3.5" /> Trocar ou adicionar imagem
+              {/*
+                0339 — o rótulo na face do botão é decoração: o nome
+                programático vem do `aria-label`. Como o chrome vive dentro do
+                `contenteditable`, texto visível aqui entrava no `value` do
+                textbox da folha e era lido como linha impressa da atividade.
+              */}
+              <ImageIcon className="h-3.5 w-3.5" /> <span aria-hidden="true">Trocar ou adicionar imagem</span>
             </Button>
             {canCropFromOriginal && (
               <Button
@@ -162,8 +169,10 @@ export function ImageNodeView({ node, updateAttributes, deleteNode, editor, getP
                 className={cn("gap-1", FOLHA_BUTTON)}
                 disabled={disabled || cropping}
                 onClick={() => setCropOpen(true)}
+                aria-label="Recortar do original"
               >
-                <Crop className="h-3.5 w-3.5" /> Recortar do original
+                {/* 0339 — idem: rótulo decorativo, nome vem do `aria-label`. */}
+                <Crop className="h-3.5 w-3.5" /> <span aria-hidden="true">Recortar do original</span>
               </Button>
             )}
             <Button
@@ -218,7 +227,8 @@ export function ImageNodeView({ node, updateAttributes, deleteNode, editor, getP
               onClick={() => updateAttributes({ caption: [] })}
               aria-label="Adicionar legenda"
             >
-              + Adicionar legenda
+              {/* 0339 — idem: rótulo decorativo, nome vem do `aria-label`. */}
+              <span aria-hidden="true">+ Adicionar legenda</span>
             </Button>
           ) : (
             <div>

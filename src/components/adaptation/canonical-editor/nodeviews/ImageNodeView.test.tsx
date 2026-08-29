@@ -534,4 +534,26 @@ describe("ImageNodeView", () => {
     // os controles continuam nomeados para a tecnologia assistiva
     expect(screen.getByRole("textbox", { name: "Texto alternativo" })).toBeInTheDocument();
   });
+
+  /**
+   * 0339 — resíduo do 0337: os rótulos decorativos saíram da árvore, mas o
+   * texto visível dos botões do chrome ("Trocar ou adicionar imagem",
+   * "+ Adicionar legenda", "Recortar do original") continuava entrando no
+   * `value` do textbox da folha, entre a legenda da figura e o parágrafo. O
+   * nome programático de cada botão vem do `aria-label`; o texto na face do
+   * botão é decoração e fica fora da árvore, sem `aria-hidden` no container
+   * (que esconderia controles focáveis).
+   */
+  it("não vaza o texto dos botões do chrome para o texto acessível", () => {
+    const { props } = makeProps({ caption: null }, true, { file: pdfFile() });
+    const { getByTestId } = render(<ImageNodeView {...props} />);
+    const acessivel = accessibleText(getByTestId("image-node"));
+    expect(acessivel).not.toMatch(/Trocar ou adicionar imagem/i);
+    expect(acessivel).not.toMatch(/Adicionar legenda/i);
+    expect(acessivel).not.toMatch(/Recortar do original/i);
+    // os três continuam alcançáveis pelo nome para a tecnologia assistiva
+    expect(screen.getByRole("button", { name: "Trocar ou adicionar imagem" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Adicionar legenda" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Recortar do original" })).toBeInTheDocument();
+  });
 });
