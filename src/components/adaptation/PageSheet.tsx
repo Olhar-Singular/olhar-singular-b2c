@@ -51,23 +51,18 @@ interface PageSheetProps {
 const SHEET_WIDTH_PX = 794;
 
 /**
- * Piso da escala da PRÉVIA (achado 0216). Abaixo disso a folha deixa de ser
- * conferível: em 390px de viewport a moldura mede ~332px, o fator caía para
- * 0,42 e o corpo de 12pt saía com ~6,7px efetivos. Em 0,75 o mesmo corpo fica
- * com 12px e a folha, quando não cabe, rola na horizontal dentro da mesa.
- * Ali ninguém digita: trocar tamanho de letra por rolagem é negócio justo.
+ * Piso do AJUSTE, nas duas superfícies (achados 0235 e 0240). O ajuste faz a
+ * folha caber na mesa; o piso só existe para ela não virar miniatura em
+ * molduras absurdamente estreitas (0,4 cobre qualquer viewport de celular;
+ * 390px pede ~0,42).
+ *
+ * Ele valia 0,75 na prévia (achado 0216, "a folha não pode abrir ilegível") e
+ * 0,4 na edição (achado 0235, "44% de cada linha não pode ficar fora do
+ * recorte"). Enquanto não havia zoom, cada superfície escolhia pelo professor
+ * um dos dois males. Com a escada (0238) valendo nos dois modos, a escolha
+ * volta a ser dele: abre cabendo e sobe se quiser corpo maior.
  */
-const MIN_SCALE = 0.75;
-
-/**
- * Piso da escala da EDIÇÃO (achado 0235). Na superfície onde se digita, o
- * mesmo 0,75 desenhava a folha com 595,5px numa mesa de 332px e escondia 44%
- * de CADA LINHA atrás da rolagem horizontal: editava-se texto que não se via.
- * Aqui a troca se inverte — corpo menor em troca da linha inteira — e o piso
- * só existe para a folha não virar miniatura em molduras absurdamente
- * estreitas (0,4 cobre qualquer viewport de celular; 390px pede ~0,42).
- */
-const EDIT_MIN_SCALE = 0.4;
+const FIT_MIN_SCALE = 0.4;
 
 /**
  * Degraus de zoom da EDIÇÃO (achado 0238). O ajuste automático do 0235 fazia a
@@ -117,40 +112,52 @@ export function PageSheet({ toolbar, pageStyle, paginated = false, children }: P
     acabado de eliminar — a folha que existe para ser a referência de página
     mostrava 64% dela cheia onde o PDF sai com 34%.
 
-    Achado 0235: o que NÃO vale nos dois modos é o piso. Ele veio da prévia
+    Achado 0235: o que não valia nos dois modos era o PISO. Ele veio da prévia
     (0216) e entrou no Revisar de carona no 0234: numa mesa de 332px a folha
     era desenhada com 595,5px e 44% de cada linha ficava fora do recorte, na
     única tela em que se digita. O `scale` (e com ele a razão 1,41:1 e a quebra
-    de linha do arquivo) fica; o piso é que passa a ser o de edição.
+    de linha do arquivo) fica; o piso é que passou a ser o de edição.
+
+    Achado 0240: e depois passou a ser o de edição nos DOIS modos. A prévia
+    sofria do mesmo mal com o sinal trocado (folha inteira fora da mesa, 283px
+    de rolagem obrigatória) e ganhou junto a escada de zoom do 0238: agora as
+    duas superfícies abrem ajustadas e sobem por escolha do professor.
   */
   useLayoutEffect(() => {
     const frame = frameRef.current;
     const fit = () => {
       // jsdom (e o primeiro layout) devolve 0: sem medida, vale a folha inteira
-      // e nada encolhe. O piso impede que a folha vire miniatura ilegível, e é
-      // diferente por superfície (achado 0235): a prévia prefere corpo legível
-      // e empurra o resto para a rolagem horizontal; a edição prefere a linha
-      // inteira na tela, porque ali se lê o que se está digitando.
+      // e nada encolhe. O piso impede que a folha vire miniatura ilegível e é o
+      // mesmo nas duas superfícies (achado 0240): as duas abrem com a folha
+      // INTEIRA na mesa, e o corpo maior é degrau de zoom, não default imposto.
       const available = frame.clientWidth || SHEET_WIDTH_PX;
-      const floor = paginated ? MIN_SCALE : EDIT_MIN_SCALE;
-      setFitScale(Math.min(1, Math.max(floor, available / SHEET_WIDTH_PX)));
+      setFitScale(Math.min(1, Math.max(FIT_MIN_SCALE, available / SHEET_WIDTH_PX)));
       setFrameWidth(available);
     };
     fit();
     const observer = new ResizeObserver(fit);
     observer.observe(frame);
     return () => observer.disconnect();
-  }, [paginated]);
+    // Sem `paginated`: desde o 0240 o ajuste é o mesmo nas duas superfícies.
+  }, []);
 
   /*
-    Achado 0238: a escada de zoom começa no ajuste e só sobe. Ela é da EDIÇÃO —
-    a prévia não tem zoom porque lá o piso legível (0216) já resolve, e mexer na
-    escala de uma tela que promete mostrar o arquivo desfaria justamente a
-    promessa. Com a folha cabendo em tamanho real não há degrau nenhum acima do
-    ajuste, e o controle nem aparece.
+    Achado 0238: a escada de zoom começa no ajuste e só sobe. Com a folha
+    cabendo em tamanho real não há degrau nenhum acima do ajuste, e o controle
+    nem aparece.
+
+    Achado 0240: a escada vale nas DUAS superfícies. Ela tinha nascido só para a
+    edição, sob o argumento de que na prévia o piso de 0,75 (0216) já resolvia e
+    de que mexer na escala de uma tela que promete mostrar o arquivo desfaria a
+    promessa. O piso resolvia o corpo (12pt em 12px) e não a folha: em 390px ela
+    era desenhada com 595,5px numa mesa de 358px, 283px de rolagem OBRIGATÓRIA,
+    com o enunciado cortado no meio da palavra já em `scrollLeft = 0`. E a
+    promessa não mora na escala: escalar por `transform` preserva quebra de
+    linha, razão 1,41:1 e proporção de papel cheio, que é o que a prévia existe
+    para mostrar. Aqui a escada é o que devolve 0,75 e 1 como ESCOLHA.
   */
   const zoomLadder = [fitScale, ...ZOOM_STEPS.filter((step) => step > fitScale + 0.01)];
-  const canZoom = !paginated && zoomLadder.length > 1;
+  const canZoom = zoomLadder.length > 1;
   const scale = canZoom ? zoomLadder[Math.min(zoomIndex, zoomLadder.length - 1)] : fitScale;
 
   /*

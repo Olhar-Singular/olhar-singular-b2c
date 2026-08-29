@@ -98,27 +98,28 @@ describe("PageSheet", () => {
     });
 
     /*
-      Achado 0216: a escala do 0215 não tinha piso. Em 390px de viewport a
-      moldura mede ~332px, o fator caía para 0,42 e o corpo de 12pt virava ~6,7px
-      na única tela de conferência antes do download. Agora a folha para de
-      encolher no mínimo legível e passa a rolar na horizontal.
+      Achado 0216: a escala do 0215 não tinha piso nenhum, e numa moldura
+      absurdamente estreita a folha virava miniatura. O piso continua (0,4, o
+      mesmo das duas superfícies desde o 0240); o que mudou é que ele não é mais
+      0,75 na prévia — a legibilidade do corpo virou degrau de zoom (0240), e o
+      piso só impede a miniatura.
     */
-    it("não encolhe a folha abaixo do mínimo legível (achado 0216)", () => {
-      withClientWidth(332, () => {
+    it("não encolhe a folha até virar miniatura (achado 0216)", () => {
+      withClientWidth(200, () => {
         withHeight(900, () => {
           render(<PageSheet paginated toolbar={null}><span>x</span></PageSheet>);
           const sheet = screen.getByTestId("page-sheet");
-          expect(sheet.style.transform).toBe("scale(0.75)");
+          expect(sheet.style.transform).toBe("scale(0.4)");
           // O vão reserva a folha no tamanho mínimo, maior que a moldura.
           const slot = sheet.parentElement!;
-          expect(slot.style.width).toBe("595.5px");
-          expect(slot.style.height).toBe("842.25px");
+          expect(Number.parseFloat(slot.style.width)).toBeCloseTo(317.6, 3);
+          expect(Number.parseFloat(slot.style.height)).toBeCloseTo(449.2, 3);
         });
       });
     });
 
     it("deixa a folha rolar na horizontal quando não cabe na moldura (achado 0216)", () => {
-      withClientWidth(332, () => {
+      withClientWidth(200, () => {
         withHeight(1123, () => {
           render(<PageSheet paginated toolbar={null}><span>x</span></PageSheet>);
           const frame = screen.getByTestId("page-sheet").parentElement!.parentElement!;
@@ -139,10 +140,10 @@ describe("PageSheet", () => {
       moldura rolável.
     */
     it("mantém o contador de folhas dentro da mesa quando a escala trava no piso (achado 0221)", () => {
-      withClientWidth(332, () => {
+      withClientWidth(200, () => {
         withHeight(1123, () => {
           render(<PageSheet paginated toolbar={null}><span>x</span></PageSheet>);
-          expect(screen.getByTestId("page-count").style.width).toBe("332px");
+          expect(screen.getByTestId("page-count").style.width).toBe("200px");
         });
       });
     });
@@ -163,7 +164,7 @@ describe("PageSheet", () => {
       de leitura), então metade da folha só existia para quem descobria o gesto.
     */
     it("deixa a moldura rolável alcançável por teclado quando a folha não cabe (achado 0222)", () => {
-      withClientWidth(332, () => {
+      withClientWidth(200, () => {
         withHeight(1123, () => {
           render(<PageSheet paginated toolbar={null}><span>x</span></PageSheet>);
           const frame = screen.getByTestId("page-sheet").parentElement!.parentElement!;
@@ -175,7 +176,7 @@ describe("PageSheet", () => {
     });
 
     it("anuncia por escrito que a folha continua fora da vista (achado 0222)", () => {
-      withClientWidth(332, () => {
+      withClientWidth(200, () => {
         withHeight(1123, () => {
           render(<PageSheet paginated toolbar={null}><span>x</span></PageSheet>);
           // No touch a barra de rolagem é sobreposta e só aparece durante o
@@ -213,8 +214,8 @@ describe("PageSheet", () => {
             render(
               <PageSheet paginated toolbar={null}>
                 <span>questão 1</span>
-                {/* 1016px de conteúdo vistos a 0,75 de escala (o piso do 0216). */}
-                <div className="adaptar-page-break" data-test-top="762" />
+                {/* 1016px de conteúdo vistos a 0,5 de escala (o ajuste em 397px). */}
+                <div className="adaptar-page-break" data-test-top="508" />
                 <span>questão 2</span>
               </PageSheet>,
             );
@@ -285,11 +286,18 @@ describe("PageSheet", () => {
       });
     });
 
-    it("mantém o piso legível da prévia, que não é superfície de edição (achado 0235)", () => {
+    /*
+      Achado 0240: a prévia recebeu o mesmo ajuste da edição. O 0235 tinha
+      mantido nela o piso de 0,75, e era ele que fabricava os 283px de rolagem
+      obrigatória da tela que promete mostrar o arquivo.
+    */
+    it("dá à prévia o mesmo ajuste da edição em tela estreita (achado 0240)", () => {
       withClientWidth(332, () => {
         withHeight(900, () => {
           render(<PageSheet paginated toolbar={null}><span>x</span></PageSheet>);
-          expect(screen.getByTestId("page-sheet").style.transform).toBe("scale(0.75)");
+          const sheet = screen.getByTestId("page-sheet");
+          const factor = Number(/scale\(([\d.]+)\)/.exec(sheet.style.transform)![1]);
+          expect(794 * factor).toBeLessThanOrEqual(332);
         });
       });
     });
@@ -714,12 +722,63 @@ describe("PageSheet", () => {
         expect(screen.queryByTestId("page-zoom")).toBeNull();
       });
     });
+  });
 
-    it("não oferece zoom na prévia, que não é superfície de edição", () => {
+  /*
+    Achado 0240: a prévia do Exportar herdou do 0216 um piso de 0,75 e nenhuma
+    saída. Em 390px de viewport a mesa mede 332px e a folha era desenhada com
+    595,5px: 283px de rolagem horizontal OBRIGATÓRIA, com o enunciado cortado no
+    meio da palavra já na posição inicial, na tela cuja promessa é "é isto que
+    vai sair". A escada do 0238 passa a valer nas duas superfícies: a folha abre
+    ajustada (cabe inteira em qualquer viewport) e quem quiser o corpo maior sobe
+    o zoom, como já acontece no Revisar.
+  */
+  describe("zoom da prévia do Exportar (achado 0240)", () => {
+    const withClientWidth = (width: number, run: () => void) => {
+      const spy = vi
+        .spyOn(HTMLElement.prototype, "clientWidth", "get")
+        .mockReturnValue(width);
+      try {
+        run();
+      } finally {
+        spy.mockRestore();
+      }
+    };
+
+    const factorOf = () =>
+      Number(/scale\(([\d.]+)\)/.exec(screen.getByTestId("page-sheet").style.transform)![1]);
+
+    it("abre a prévia com a folha inteira dentro da mesa em tela estreita", () => {
       withClientWidth(332, () => {
         render(<PageSheet paginated toolbar={null}><span>x</span></PageSheet>);
+        expect(factorOf() * 794).toBeLessThanOrEqual(332);
+        // Sem rolagem obrigatória: nada do arquivo fica fora da vista de saída.
+        expect(screen.queryByTestId("page-overflow-hint")).not.toBeInTheDocument();
+      });
+    });
+
+    it("oferece à prévia a mesma escada de zoom da edição", () => {
+      withClientWidth(332, () => {
+        render(<PageSheet paginated toolbar={null}><span>x</span></PageSheet>);
+        expect(screen.getByTestId("page-zoom")).toBeInTheDocument();
+        expect(screen.getByTestId("page-zoom")).toHaveTextContent("42%");
+        const zoomIn = screen.getByRole("button", { name: "Aumentar zoom" });
+        act(() => {
+          zoomIn.click();
+          zoomIn.click();
+        });
+        // 0,75 (o antigo piso do 0216) vira um degrau escolhido pelo professor.
+        expect(factorOf()).toBe(0.75);
+        // Ampliada por escolha, a rolagem volta a existir — e volta anunciada.
+        expect(screen.getByTestId("page-overflow-hint")).toBeInTheDocument();
+      });
+    });
+
+    it("não oferece zoom à prévia quando a folha já cabe em tamanho real", () => {
+      withClientWidth(1200, () => {
+        render(<PageSheet paginated toolbar={null}><span>x</span></PageSheet>);
         expect(screen.queryByTestId("page-zoom")).toBeNull();
-        expect(screen.getByTestId("page-sheet").style.transform).toBe("scale(0.75)");
+        expect(factorOf()).toBe(1);
       });
     });
   });
