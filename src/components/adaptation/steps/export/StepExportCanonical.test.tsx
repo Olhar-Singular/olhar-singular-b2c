@@ -204,6 +204,27 @@ describe("StepExportCanonical", () => {
       expect(screen.getByTestId("page-count")).toBeInTheDocument();
     });
 
+    /**
+     * Regressão (achado 0242): o PDF imprime um rodapé FIXO em toda página
+     * ("Título · Escola · Página N de M"), e a prévia desenhava o pé da folha em
+     * branco — a mesma divergência do cabeçalho (achado 0109), com o agravante
+     * de o rodapé sair mesmo com o cabeçalho inteiramente vazio, ou seja, em
+     * TODO PDF que o app gera.
+     */
+    it("draws the same page footer the PDF prints, with header content", () => {
+      renderStep({
+        result: { ...result, header: { title: "Prova bimestral", school: "EMEF Teste" } },
+      });
+      expect(screen.getByTestId("preview-footer-1")).toHaveTextContent(
+        "Prova bimestral · EMEF Teste · Página 1 de 1",
+      );
+    });
+
+    it("draws the page footer even with an empty header, exactly like the PDF", () => {
+      renderStep({ result });
+      expect(screen.getByTestId("preview-footer-1")).toHaveTextContent("Página 1 de 1");
+    });
+
     it("renders no header block in the preview when the result has no header", () => {
       renderStep({ result });
       expect(screen.queryByTestId("preview-header")).not.toBeInTheDocument();

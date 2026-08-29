@@ -18,6 +18,7 @@ import {
   PAGE_CONTENT_HEIGHT_PX,
 } from "./render/pageTokens";
 import { resolvePageStyle } from "./render/pageStyle";
+import { FOOTER_BOTTOM_PX } from "./render/footerLabel";
 import type { PageStyle } from "@/lib/adaptation/canonical/schema";
 
 interface PageSheetProps {
@@ -41,6 +42,13 @@ interface PageSheetProps {
    * texto, e uma quebra rígida no meio da edição atrapalharia mais do que ajuda.
    */
   paginated?: boolean;
+  /**
+   * Rodapé de página, desenhado UMA VEZ POR FOLHA contada (achado 0242). A
+   * moldura não conhece o documento: ela só sabe onde cada página termina e
+   * chama de volta com o número da folha e o total, do mesmo jeito que o
+   * `render` do `<Text fixed>` do react-pdf recebe `pageNumber`/`totalPages`.
+   */
+  footer?: (pageNumber: number, totalPages: number) => ReactNode;
   children: ReactNode;
 }
 
@@ -79,7 +87,13 @@ const FIT_MIN_SCALE = 0.4;
  */
 const ZOOM_STEPS = [0.5, 0.75, 1];
 
-export function PageSheet({ toolbar, pageStyle, paginated = false, children }: PageSheetProps) {
+export function PageSheet({
+  toolbar,
+  pageStyle,
+  paginated = false,
+  footer,
+  children,
+}: PageSheetProps) {
   /*
     Achado 0241: o percentual do zoom precisa de um id estável para os dois
     botões o apontarem por `aria-describedby` — a folha pode aparecer mais de
@@ -339,7 +353,7 @@ export function PageSheet({ toolbar, pageStyle, paginated = false, children }: P
          das classes do Tailwind, e no tema escuro saíam como círculos escuros
          sobre papel branco. Fixar aqui cobre todo controle nativo da folha,
          inclusive os que ainda não existem. */
-      className="w-[794px] origin-top-left bg-surface-paper text-surface-ink rounded-[3px] [color-scheme:light] [accent-color:hsl(var(--sf-accent))]"
+      className="relative w-[794px] origin-top-left bg-surface-paper text-surface-ink rounded-[3px] [color-scheme:light] [accent-color:hsl(var(--sf-accent))]"
       style={{
         ...pageTokensToCss(resolvePageStyle(pageStyle)),
         boxShadow: "var(--sf-paper-shadow)",
@@ -361,6 +375,37 @@ export function PageSheet({ toolbar, pageStyle, paginated = false, children }: P
         esticada até o fim da última página) não dá mais (achado 0123).
       */}
       <div ref={contentRef}>{children}</div>
+      {/*
+        Achado 0242: o rodapé do PDF é `fixed`, sai em toda página e mora DENTRO
+        da margem inferior (`FOOTER_BOTTOM_PT` acima da base da folha). Aqui ele
+        é desenhado uma vez por folha CONTADA, na mesma posição relativa: a base
+        da página N deste fluxo é o fim da área útil dela mais a margem, logo o
+        pé fica a `(total - N) x área útil + FOOTER_BOTTOM` do fim do papel — e
+        na última folha isso é exatamente o pé do arquivo.
+
+        Fora do fluxo (`absolute`) pela mesma razão do PDF: o rodapé não pode
+        empurrar o conteúdo nem entrar na medição que decide a paginação. Como
+        esta folha é um fluxo contínuo (as viradas são régua, não corte), o pé
+        das páginas intermediárias cai sobre o texto seguinte; desencostá-lo
+        exigiria recortar o fluxo em folhas de verdade, a mesma unificação
+        editor/prévia/PDF que as réguas acima já deixam fora de escopo.
+      */}
+      {footer &&
+        Array.from({ length: pageCount }, (_, page) => (
+          <div
+            key={page}
+            aria-hidden="true"
+            className="pointer-events-none"
+            style={{
+              position: "absolute",
+              left: 0,
+              right: 0,
+              bottom: `${(pageCount - 1 - page) * PAGE_CONTENT_HEIGHT_PX + FOOTER_BOTTOM_PX}px`,
+            }}
+          >
+            {footer(page + 1, pageCount)}
+          </div>
+        ))}
     </div>
   );
 

@@ -1,6 +1,8 @@
 import { describe, it, expect, vi } from "vitest";
 import { act, render, screen } from "@testing-library/react";
 import { PageSheet } from "./PageSheet";
+import { PAGE_CONTENT_HEIGHT_PX } from "./render/pageTokens";
+import { FOOTER_BOTTOM_PX } from "./render/footerLabel";
 
 describe("PageSheet", () => {
   it("renderiza a barra fixa e a folha com o conteúdo", () => {
@@ -413,6 +415,51 @@ describe("PageSheet", () => {
       withHeight(2300, () => {
         render(<PageSheet paginated toolbar={null}><span>x</span></PageSheet>);
         expect(screen.getByTestId("page-count")).toHaveTextContent("3 páginas A4");
+      });
+    });
+
+    /*
+      Achado 0242: o rodapé do PDF é `fixed` e sai em TODA página; a folha da
+      prévia não desenhava nenhum. A moldura chama de volta uma vez por folha
+      contada, como o `render` do `<Text fixed>` recebe `pageNumber`/`totalPages`.
+    */
+    it("desenha o rodapé uma vez por folha contada", () => {
+      withHeight(2300, () => {
+        render(
+          <PageSheet paginated toolbar={null} footer={(n, total) => <span>{`pé ${n}/${total}`}</span>}>
+            <span>x</span>
+          </PageSheet>,
+        );
+        expect(screen.getByText("pé 1/3")).toBeInTheDocument();
+        expect(screen.getByText("pé 2/3")).toBeInTheDocument();
+        expect(screen.getByText("pé 3/3")).toBeInTheDocument();
+      });
+    });
+
+    it("põe cada rodapé dentro da margem inferior da sua página, como o PDF", () => {
+      withHeight(2300, () => {
+        render(
+          <PageSheet paginated toolbar={null} footer={(n) => <span>{`pé ${n}`}</span>}>
+            <span>x</span>
+          </PageSheet>,
+        );
+        const bottomOf = (n: number) =>
+          parseFloat((screen.getByText(`pé ${n}`).parentElement as HTMLElement).style.bottom);
+        // A base da página N é o fim da área útil dela mais a margem, então o pé
+        // fica a (total - N) áreas úteis + FOOTER_BOTTOM do fim do papel — e na
+        // última folha isso é exatamente o pé do arquivo.
+        expect(bottomOf(3)).toBeCloseTo(FOOTER_BOTTOM_PX, 2);
+        expect(bottomOf(2)).toBeCloseTo(PAGE_CONTENT_HEIGHT_PX + FOOTER_BOTTOM_PX, 2);
+        expect(bottomOf(1)).toBeCloseTo(2 * PAGE_CONTENT_HEIGHT_PX + FOOTER_BOTTOM_PX, 2);
+      });
+    });
+
+    it("não desenha rodapé nenhum quando a moldura não recebe um", () => {
+      withHeight(900, () => {
+        render(<PageSheet paginated toolbar={null}><span>x</span></PageSheet>);
+        // A folha do Revisar (sem `footer`) continua sem pé: lá não há arquivo
+        // para espelhar.
+        expect(screen.getByTestId("page-sheet").textContent).toBe("x");
       });
     });
 

@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/button";
 import { ArrowLeft, RotateCcw, Save, Loader2 } from "lucide-react";
 import { CanonicalRenderer } from "@/components/adaptation/render/CanonicalRenderer";
 import { DocumentHeaderView } from "@/components/adaptation/render/DocumentHeaderView";
+import { DocumentFooterView } from "@/components/adaptation/render/DocumentFooterView";
 import { ExportPanel } from "@/components/adaptation/export/ExportPanel";
 import { PageSheet } from "@/components/adaptation/PageSheet";
 import type { AdaptationResult, DocumentHeader } from "@/lib/adaptation/canonical/schema";
@@ -74,7 +75,23 @@ export function StepExportCanonical({
         quantas folhas ia imprimir (e quanto sobrava na última) depois do
         download (achado 0118).
       */}
-      <PageSheet pageStyle={result.pageStyle} paginated>
+      {/*
+        `footer`: o PDF imprime "Título · Escola · Página N de M" em TODA página
+        (mesmo com o cabeçalho vazio) e a prévia deixava o pé da folha em branco
+        (achado 0242) — a mesma divergência que o `DocumentHeaderView` já tinha
+        fechado no topo. Mesmo texto, pela mesma `pdfFooterLabel`.
+      */}
+      <PageSheet
+        pageStyle={result.pageStyle}
+        paginated
+        footer={(pageNumber, totalPages) => (
+          <DocumentFooterView
+            header={result.header ?? {}}
+            pageNumber={pageNumber}
+            totalPages={totalPages}
+          />
+        )}
+      >
         {/*
           O cabeçalho preenchido acima sai no PDF e no Word; a prévia não o
           mostrava, então o professor só via o bloco (e o título repetido com o
