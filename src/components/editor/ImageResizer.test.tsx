@@ -181,4 +181,16 @@ describe("ImageResizer", () => {
       document.dispatchEvent(new MouseEvent("mouseup", { bubbles: true }));
     });
   });
+
+  /**
+   * 0337 — o indicador `{width}px` é decoração de edição escondida só por
+   * `opacity-0`, e `opacity: 0` NÃO remove da árvore de acessibilidade. Como o
+   * resizer mora dentro do `contenteditable` da folha, "2400px" entrava no
+   * valor acessível do documento e era lido como se fosse conteúdo impresso.
+   */
+  it("mantém o indicador de largura fora da árvore de acessibilidade", () => {
+    render(<ImageResizer src="https://x.png" alt="ilustração" initialWidth={250} onResize={vi.fn()} />);
+    const indicator = screen.getByText("250px");
+    expect(indicator.closest('[aria-hidden="true"]')).not.toBeNull();
+  });
 });

@@ -106,8 +106,16 @@ export default function ImageResizer({ src, alt, initialWidth, onResize }: Props
           <line x1="7" y1="4" x2="4" y2="7" />
         </svg>
       </div>
-      {/* Width indicator on hover */}
-      <div className="absolute -bottom-5 right-0 text-[0.6rem] text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity">
+      {/*
+        Width indicator on hover. 0337 — decoração de edição: `opacity-0` não
+        remove da árvore de acessibilidade, e como o resizer vive dentro do
+        `contenteditable` da folha o "2400px" era lido como conteúdo do
+        documento. Fica explicitamente fora da árvore.
+      */}
+      <div
+        aria-hidden="true"
+        className="absolute -bottom-5 right-0 text-[0.6rem] text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity"
+      >
         {width}px
       </div>
     </div>

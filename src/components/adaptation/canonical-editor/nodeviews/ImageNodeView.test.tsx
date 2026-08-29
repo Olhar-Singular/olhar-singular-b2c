@@ -118,6 +118,18 @@ function renderImage(attrs: Record<string, unknown> = {}, editable = true) {
   return render(<ImageNodeView {...props} />);
 }
 
+
+/**
+ * Texto que a tecnologia assistiva colhe do subtree, ignorando o que está
+ * marcado como decorativo (`aria-hidden="true"`). `opacity-0` e afins não
+ * removem da árvore, então olhar só `textContent` não distingue os dois casos.
+ */
+function accessibleText(root: HTMLElement): string {
+  const clone = root.cloneNode(true) as HTMLElement;
+  clone.querySelectorAll('[aria-hidden="true"]').forEach((n) => n.remove());
+  return clone.textContent ?? "";
+}
+
 describe("ImageNodeView", () => {
   it("container da imagem é flat (sem borda de card)", () => {
     const { getByTestId } = renderImage();
@@ -505,5 +517,21 @@ describe("ImageNodeView", () => {
       await waitFor(() => expect(toastErrorMock).toHaveBeenCalled());
       expect(updateAttributes).not.toHaveBeenCalledWith(expect.objectContaining({ src: expect.anything() }));
     });
+  });
+
+  /**
+   * 0337 — o chrome de edição da imagem mora dentro do `contenteditable` da
+   * folha, então tudo que ele expõe na árvore de acessibilidade entra no
+   * `value` do textbox do documento. Os rótulos decorativos "TEXTO ALTERNATIVO"
+   * e "LEGENDA" eram lidos como se fossem conteúdo impresso, entre o parágrafo
+   * de abertura e a legenda da figura, embora não saiam nem na prévia nem no
+   * PDF. O nome programático dos controles vem do `aria-label`, então o texto
+   * visível é pura decoração e deve ficar fora da árvore.
+   */
+  it("não vaza os rótulos decorativos do chrome para o texto acessível", () => {
+    const { getByTestId } = renderImage({ caption: [{ type: "text", text: "Figura 1" }] });
+    expect(accessibleText(getByTestId("image-node"))).not.toMatch(/Texto alternativo|Legenda/i);
+    // os controles continuam nomeados para a tecnologia assistiva
+    expect(screen.getByRole("textbox", { name: "Texto alternativo" })).toBeInTheDocument();
   });
 });

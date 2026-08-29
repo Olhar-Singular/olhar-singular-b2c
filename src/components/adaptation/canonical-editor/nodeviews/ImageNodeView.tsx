@@ -185,7 +185,16 @@ export function ImageNodeView({ node, updateAttributes, deleteNode, editor, getP
             Fica no chrome, não na folha, porque não é impresso.
           */}
           <div>
-            <span className="mb-1 block text-[10.5px] font-semibold uppercase tracking-wide text-surface-ink-faint">
+            {/*
+              0337 — rótulo decorativo: o nome programático do campo vem do
+              `aria-label` abaixo. Como o chrome vive dentro do
+              `contenteditable`, deixar o texto na árvore fazia "TEXTO
+              ALTERNATIVO" ser lido como conteúdo impresso da folha.
+            */}
+            <span
+              aria-hidden="true"
+              className="mb-1 block text-[10.5px] font-semibold uppercase tracking-wide text-surface-ink-faint"
+            >
               Texto alternativo
             </span>
             <Input
@@ -214,7 +223,8 @@ export function ImageNodeView({ node, updateAttributes, deleteNode, editor, getP
           ) : (
             <div>
               <div className="mb-1 flex items-center justify-between">
-                <span className="text-[10.5px] font-semibold uppercase tracking-wide text-surface-ink-faint">Legenda</span>
+                {/* 0337 — idem: decoração, fora da árvore de acessibilidade. */}
+                <span aria-hidden="true" className="text-[10.5px] font-semibold uppercase tracking-wide text-surface-ink-faint">Legenda</span>
                 <Button
                   type="button"
                   variant="ghost"
