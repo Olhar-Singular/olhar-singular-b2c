@@ -36,7 +36,13 @@ const ROW = { flexDirection: "row", marginBottom: ANSWER_ITEM_GAP_PT } as const;
 // flexShrink: 0 prevents the marker column from collapsing when the row is
 // tight, which would push marker text over the content column.
 const MARKER = { width: 22, flexShrink: 0 } as const;
-const FLEX = { flexGrow: 1, flexShrink: 1 } as const;
+// flexBasis: 0 é obrigatório. Sem ele o Yoga deriva a base medindo o texto
+// contra a largura CHEIA do pai e só depois encolhe a caixa para caber ao
+// lado do marcador: a caixa anda, mas as linhas já foram quebradas na
+// medida larga e saem pela margem direita (com o marcador de 60pt do V/F,
+// para fora do papel). Com base 0 o Yoga distribui o espaço que sobra
+// depois do marcador — o mesmo que PdfQuestion faz com `flex: 1` (0162).
+const FLEX = { flexGrow: 1, flexShrink: 1, flexBasis: 0 } as const;
 
 // Marcador de verdadeiro/falso para o aluno assinalar — não revela o valor.
 const TF_MARKER = { width: 60, flexShrink: 0 } as const;
