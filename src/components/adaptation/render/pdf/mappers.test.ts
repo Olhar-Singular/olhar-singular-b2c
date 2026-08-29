@@ -431,18 +431,19 @@ describe("PdfScaffolding", () => {
 });
 
 describe("PdfMath", () => {
-  it("renders the latex source in a centered inner Text inside a View wrapper", () => {
+  it("renders the latex source in a Text inside a centered View wrapper", () => {
     const block: Extract<Block, { type: "blockMath" }> = {
       id: id(1),
       type: "blockMath",
       latex: "E=mc^2",
     };
     const el = PdfMath({ block }) as ReactElement;
-    // The outer element is now a <View> (block spacing); textAlign lives on the
-    // inner <Text> child.
+    // The outer element is a <View> (block spacing + box centering, 0432);
+    // the inner <Text> keeps its lines in one column (0431).
     expect(el.type).toBe(View);
+    expect((el.props as { style: { alignItems?: string } }).style.alignItems).toBe("center");
     const innerText = (el.props as { children: ReactElement }).children;
-    expect((innerText.props.style as { textAlign: string }).textAlign).toBe("center");
+    expect((innerText.props.style as { textAlign: string }).textAlign).toBe("left");
     expect(textOf(el)).toContain("E=mc^2");
   });
 

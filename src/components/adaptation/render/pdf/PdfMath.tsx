@@ -8,22 +8,32 @@
  *
  * `blockGap` (in pt) is the doc-level default inter-block gap resolved from
  * pageStyle. A per-block `style.spacingAfter` overrides it.
+ *
+ * Alinhamento: as duas telas centram SEMPRE o bloco, então o papel centra a
+ * CAIXA da fórmula (`alignItems` no wrapper) em vez de centrar o texto. Centrar
+ * o texto não servia: o `@react-pdf` centra cada LINHA do `<Text>`, e a fórmula
+ * que quebra sairia em metades com recuos diferentes (achado 0431). Com a caixa
+ * centrada e o texto à esquerda dentro dela, o bloco fica no meio da coluna como
+ * na tela e as continuações começam todas na mesma coluna (achado 0432). Um
+ * `style.align` explícito do nó vence, como vence na tela pelo style inline.
  */
 
 import { View, Text } from "@react-pdf/renderer";
 import type { Block } from "@/lib/adaptation/canonical/schema";
 import { nodeStyleToPdf } from "./nodeStyleToPdf";
-import { mathToPdfText, mathBlockTextAlign, MATH_PDF_STYLE } from "./mathToPdfText";
+import { mathToPdfText, MATH_PDF_STYLE } from "./mathToPdfText";
 
 type BlockMathBlock = Extract<Block, { type: "blockMath" }>;
 
 export function PdfMath({ block, blockGap = 12 }: { block: BlockMathBlock; blockGap?: number }) {
   const nodeStyle = nodeStyleToPdf(block.style);
-  const { marginBottom: nodeMarginBottom, ...textStyle } = nodeStyle;
+  const { marginBottom: nodeMarginBottom, textAlign: nodeTextAlign, ...textStyle } = nodeStyle;
   const marginBottom = nodeMarginBottom ?? blockGap;
   return (
-    <View style={{ marginVertical: marginBottom }}>
-      <Text style={{ ...MATH_PDF_STYLE, textAlign: mathBlockTextAlign(block.latex), ...textStyle }}>
+    <View
+      style={{ marginVertical: marginBottom, ...(nodeTextAlign ? {} : { alignItems: "center" }) }}
+    >
+      <Text style={{ ...MATH_PDF_STYLE, textAlign: nodeTextAlign ?? "left", ...textStyle }}>
         {mathToPdfText(block.latex)}
       </Text>
     </View>

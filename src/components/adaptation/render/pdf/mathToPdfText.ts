@@ -79,19 +79,3 @@ export const MATH_PDF_INLINE_STYLE = {
   ...MATH_PDF_STYLE,
   lineHeight: MATH_PDF_INLINE_LINE_HEIGHT,
 } as const;
-
-/**
- * Alinhamento horizontal do `<Text>` da fórmula em BLOCO.
- *
- * `textAlign: "center"` no `@react-pdf` centra CADA linha do `<Text>`, não o
- * parágrafo. Enquanto a fórmula cabe numa linha só, centrar a linha e centrar o
- * bloco são a mesma coisa. Acima de `MATH_PDF_MAX_ATOM_CHARS` ela volta
- * quebrável (achado 0427) e o textkit a parte: aí o centro por linha desenha as
- * duas metades em recuos diferentes (x 44,58 e x 130,62), cada uma centrada por
- * si, enquanto a folha do Revisar mostra uma caixa única (achado 0431). Nesse
- * caso a fórmula passa a alinhar à esquerda, e as continuações começam na mesma
- * coluna — um objeto só, como um trecho de código dobrado.
- */
-export function mathBlockTextAlign(latex: string): "center" | "left" {
-  return latex.length > MATH_PDF_MAX_ATOM_CHARS ? "left" : "center";
-}
