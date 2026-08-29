@@ -188,6 +188,7 @@ export function AppearancePopover({ value, onChange }: Props) {
       </PopoverTrigger>
       <PopoverContent
         align="end"
+        aria-label="Formato"
         className="w-72 border-surface-chrome-line bg-surface-chrome text-surface-ink"
       >
         <AppearanceControls value={value} onChange={onChange} />

@@ -184,4 +184,11 @@ describe("AppearancePopover", () => {
     const dialog = screen.getByRole("dialog");
     expect(within(dialog).getByLabelText("Fonte")).toBeInTheDocument();
   });
+
+  it("dá nome acessível ao painel, igual ao rótulo do gatilho", () => {
+    const onChange = vi.fn();
+    render(<AppearancePopover value={value} onChange={onChange} />);
+    fireEvent.click(screen.getByRole("button", { name: /formato/i }));
+    expect(screen.getByRole("dialog", { name: "Formato" })).toBeInTheDocument();
+  });
 });

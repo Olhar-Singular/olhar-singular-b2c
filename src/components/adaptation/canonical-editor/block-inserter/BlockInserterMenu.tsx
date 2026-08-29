@@ -49,6 +49,7 @@ export function BlockInserterMenu({ gap, onPick }: Props) {
       </PopoverTrigger>
       <PopoverContent
         align="center"
+        aria-label="Inserir bloco"
         className="w-72 space-y-3 border-surface-chrome-line bg-surface-chrome"
       >
         {INSERTER_SECTIONS.map((section) => {

@@ -20,6 +20,11 @@ describe("BlockInserterMenu", () => {
     expect(screen.getByText("Texto e mídia")).toBeInTheDocument();
   });
 
+  it("names the menu dialog after the trigger", () => {
+    open(followingGap);
+    expect(screen.getByRole("dialog", { name: "Inserir bloco" })).toBeInTheDocument();
+  });
+
   it("picks a question type and reports the chosen item", () => {
     const onPick = open(followingGap);
     fireEvent.click(screen.getByRole("button", { name: "Múltipla escolha" }));
