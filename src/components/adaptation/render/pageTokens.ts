@@ -459,6 +459,26 @@ export const MATH_PDF_FONT_SIZE_PT =
   (BASE_FONT_PT * MATH_INK_RATIO * CAP_HEIGHT_EM.body) / CAP_HEIGHT_EM.mathPdf;
 
 /**
+ * Razão de entrelinha do run de fórmula INLINE no PDF.
+ *
+ * A compensação de caixa alta da Courier existe para a TINTA (`0424`): ela
+ * infla o `fontSize` da fórmula bem acima do corpo. Como o textkit do
+ * `@react-pdf` dimensiona a linha pelo run mais alto, declarar a razão cheia ao
+ * lado desse corpo inflado (`0429`) fazia o parágrafo INTEIRO avançar
+ * 16,87 x 1,4 = 23,62 pt, contra 17,89 pt na folha do Revisar: +32% de avanço
+ * só nas linhas com matemática, e a prova paginada na tela quebrava no papel
+ * (achado 0430).
+ *
+ * Na tela a caixa KaTeX é `inline-block` e herda o line-height do PARÁGRAFO: a
+ * fórmula estica a linha só pelo tanto que ela própria mede. Esta razão é o que
+ * reproduz isso no papel — o produto `fontSize x lineHeight` do run volta a ser
+ * o avanço do corpo do documento. A fórmula em BLOCO fica de fora: lá a linha é
+ * da própria fórmula e a razão cheia é o certo.
+ */
+export const MATH_PDF_INLINE_LINE_HEIGHT =
+  (BASE_FONT_PT * BASE_LINE_HEIGHT) / MATH_PDF_FONT_SIZE_PT;
+
+/**
  * Tinta do corpo do documento (título, parágrafo, enunciado e alternativas:
  * tudo o que não é o cinza secundário).
  *

@@ -17,7 +17,7 @@
 import { describe, it, expect } from "vitest";
 import { isValidElement, type ReactElement } from "react";
 import { AdaptationPdf } from "./AdaptationPdf";
-import { BASE_LINE_HEIGHT } from "../pageTokens";
+import { BASE_FONT_PT, BASE_LINE_HEIGHT } from "../pageTokens";
 import { renderDocument } from "../__fixtures__/renderDocument";
 import type { PanelSettings } from "@/components/adaptation/export/panelSettings";
 
@@ -68,12 +68,25 @@ function sizedStyles(node: unknown, out: Styleish[] = []): Styleish[] {
   return out;
 }
 
+/**
+ * O run inline de fórmula é a única exceção deliberada (achado 0430): ele
+ * carrega o corpo inflado da compensação de caixa alta da Courier, e como o
+ * textkit dimensiona a linha pelo run mais alto, repetir a razão cheia ali
+ * esticaria o parágrafo INTEIRO. Lá o contrato é o produto, não a razão: o
+ * avanço tem que ser o do corpo do documento.
+ */
+function avancaComoOCorpo(s: Styleish): boolean {
+  return Math.abs((s.fontSize ?? 0) * (s.lineHeight ?? 0) - BASE_FONT_PT * BASE_LINE_HEIGHT) < 1e-9;
+}
+
 describe("entrelinha do PDF (achado 0429)", () => {
   it("declara a razão junto de todo corpo próprio, para o valor não congelar no <Page>", () => {
     const styles = sizedStyles(AdaptationPdf({ document: renderDocument, settings }));
 
     expect(styles.length).toBeGreaterThan(0);
-    const semRazao = styles.filter((s) => s.lineHeight !== BASE_LINE_HEIGHT);
+    const semRazao = styles.filter(
+      (s) => s.lineHeight !== BASE_LINE_HEIGHT && !avancaComoOCorpo(s),
+    );
     expect(semRazao).toEqual([]);
   });
 });

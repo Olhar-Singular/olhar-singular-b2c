@@ -7,7 +7,7 @@
 
 import { Text } from "@react-pdf/renderer";
 import type { RichText } from "@/lib/adaptation/canonical/schema";
-import { mathToPdfText, MATH_PDF_STYLE } from "./mathToPdfText";
+import { mathToPdfText, MATH_PDF_INLINE_STYLE } from "./mathToPdfText";
 import { marksToPdfStyle } from "./richTextPdf";
 
 export function PdfRichText({ content }: { content: RichText }) {
@@ -16,7 +16,7 @@ export function PdfRichText({ content }: { content: RichText }) {
       {content.map((run, i) => {
         if (run.type === "inlineMath") {
           return (
-            <Text key={i} style={MATH_PDF_STYLE}>
+            <Text key={i} style={MATH_PDF_INLINE_STYLE}>
               {mathToPdfText(run.latex)}
             </Text>
           );

@@ -10,7 +10,12 @@
  * (spec upgrade path). Do NOT pull in html2canvas/puppeteer now.
  */
 
-import { MATH_PDF_FONT_SIZE_PT, PAGE_MARGIN_PT, pdfTextSize } from "../pageTokens";
+import {
+  MATH_PDF_FONT_SIZE_PT,
+  MATH_PDF_INLINE_LINE_HEIGHT,
+  PAGE_MARGIN_PT,
+  pdfTextSize,
+} from "../pageTokens";
 import { latexLayoutAtom } from "../mathAtom";
 
 /** Largura da folha A4 do `@react-pdf`, em pontos. */
@@ -59,4 +64,18 @@ export function mathToPdfText(latex: string): string {
 export const MATH_PDF_STYLE = {
   fontFamily: "Courier",
   ...pdfTextSize(MATH_PDF_FONT_SIZE_PT),
+} as const;
+
+/**
+ * Estilo do run de fórmula INLINE, dentro de uma linha de texto do corpo.
+ *
+ * Mesma tinta do bloco (`MATH_PDF_FONT_SIZE_PT`, achado 0424), mas o avanço da
+ * linha é o do CORPO: o textkit dimensiona a linha pelo run mais alto, e com a
+ * razão cheia ao lado do corpo inflado da Courier o parágrafo inteiro avançava
+ * 23,62 pt no papel contra 17,89 pt na folha do Revisar (achado 0430). A caixa
+ * da fórmula é um átomo dentro da linha, não um segundo corpo de texto.
+ */
+export const MATH_PDF_INLINE_STYLE = {
+  ...MATH_PDF_STYLE,
+  lineHeight: MATH_PDF_INLINE_LINE_HEIGHT,
 } as const;
