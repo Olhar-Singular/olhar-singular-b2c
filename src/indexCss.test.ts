@@ -307,3 +307,59 @@ describe("index.css — vao entre paragrafos do stem da questao", () => {
     );
   });
 });
+
+/**
+ * Filete do bloco de topo (achado 0341).
+ *
+ * O filete lateral e o unico sinal de "isto e um bloco de topo" na folha do
+ * Revisar, e e ele que justifica o recuo horizontal que todo titulo e paragrafo
+ * paga. Desenhado como `border-left` numa caixa com `border-radius: 0.5rem`, o
+ * raio curvava as duas pontas do unico traco: num bloco de uma linha (22,4 px)
+ * sobravam ~6 px de traco reto, e ainda a 1,37:1 sobre o papel branco (a WCAG
+ * 2.2 pede 3:1 em objeto grafico, 1.4.11). No `h1` a cor era `transparent`: o
+ * titulo pagava o recuo inteiro e nao recebia marca nenhuma.
+ *
+ * O filete vive agora num `::after` absoluto de altura total, imune ao raio, e
+ * vale para os quatro tipos que a regra cobre.
+ */
+const TOP_BLOCK_TAGS = ["h1", "h2", "h3", "p"] as const;
+const railSelector = (tag: string) =>
+  `.tiptap:not(.rich-text-field) > ${tag}::after`;
+
+describe("index.css — filete do bloco de topo", () => {
+  it("desenha o filete fora do border-radius, de ponta a ponta", () => {
+    const base = ruleBody(".tiptap:not(.rich-text-field) > p");
+    expect(base, "filete como border-left e cortado pelo border-radius").not.toMatch(
+      /border-left/,
+    );
+
+    const rail = ruleBody(railSelector("p"));
+    expect(rail).toMatch(/position:\s*absolute/);
+    expect(rail).toMatch(/left:\s*0/);
+    expect(rail).toMatch(/top:\s*0/);
+    expect(rail).toMatch(/bottom:\s*0/);
+    expect(rail).toMatch(/width:\s*\dpx/);
+  });
+
+  it.each(TOP_BLOCK_TAGS)("marca o bloco de topo <%s> com o filete", (tag) => {
+    expect(
+      css.includes(`${railSelector(tag)},`) || css.includes(`${railSelector(tag)} {`),
+      `sem filete para <${tag}>`,
+    ).toBe(true);
+    expect(
+      ruleBody(`.tiptap:not(.rich-text-field) > ${tag}`, false),
+    ).not.toMatch(/border-left/);
+  });
+
+  it("mantem o filete em 3:1 sobre o papel branco (WCAG 1.4.11)", () => {
+    const rail = ruleBody(railSelector("p"));
+    const match = rail.match(
+      /background-color:\s*hsl\(var\(--([a-z0-9-]+)\)(?:\s*\/\s*([\d.]+))?\)/,
+    );
+    expect(match, `cor do filete nao reconhecida: ${rail}`).not.toBeNull();
+
+    const alpha = match![2] ? Number(match![2]) : 1;
+    const ink = mix(hslTokenToRgb(token(":root", match![1])), WHITE, alpha);
+    expect(ratioRgb(ink, WHITE)).toBeGreaterThanOrEqual(3);
+  });
+});

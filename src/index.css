@@ -326,8 +326,38 @@
      PDF, que não tem esse espaço (achado 0102). Só o recuo horizontal do
      filete permanece. */
   padding: 0 1rem;
-  border-left: 2px solid hsl(var(--muted-foreground) / 0.25);
   border-radius: 0.5rem;
+}
+
+/* O filete que marca o bloco de topo (achado 0341). Vive num ::after absoluto,
+ * e nao num `border-left`: o `border-radius: 0.5rem` acima curva as duas pontas
+ * do unico traco da caixa, e num bloco de uma linha (22,4 px) sobrava menos de
+ * um terco em traco reto: um arco de ~6 px, nao um filete. A tinta vem de
+ * `--sf-ink-soft`, token da folha (light-only, como o papel), a 0,75 => 3,4:1
+ * sobre o branco: acima dos 3:1 que a WCAG 2.2 pede em objeto grafico (1.4.11).
+ * O antigo `hsl(var(--muted-foreground) / 0.25)` dava 1,37:1. */
+.tiptap:not(.rich-text-field) > h1::after,
+.tiptap:not(.rich-text-field) > h2::after,
+.tiptap:not(.rich-text-field) > h3::after,
+.tiptap:not(.rich-text-field) > p::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  border-radius: 1px;
+  background-color: hsl(var(--sf-ink-soft) / 0.75);
+  pointer-events: none;
+}
+
+/* O filete do bloco de topo tem especificidade maior que `.adaptar-current-block
+ * ::after` (a barra de destaque do bloco em edicao), entao o destaque precisa ser
+ * reafirmado aqui para nao ser apagado pelo filete cinza. */
+.tiptap:not(.rich-text-field) > .adaptar-current-block::after {
+  top: 0.25rem;
+  bottom: 0.25rem;
+  background-color: hsl(var(--primary) / 0.8);
 }
 
 /*
@@ -383,23 +413,27 @@
 .tiptap:not(.rich-text-field) > h1 {
   font-size: 1.5rem;
   font-weight: 700;
-  border-left-color: transparent;
 }
 .tiptap:not(.rich-text-field) > h2,
 .tiptap:not(.rich-text-field) > h3 {
   font-size: 1.2rem;
   font-weight: 700;
   color: hsl(var(--primary));
-  border-left-width: 3px;
-  border-left-color: hsl(var(--primary));
   background-color: hsl(var(--primary) / 0.06);
+}
+.tiptap:not(.rich-text-field) > h2::after,
+.tiptap:not(.rich-text-field) > h3::after {
+  width: 3px;
+  background-color: hsl(var(--primary));
 }
 
 /* The empty-editor placeholder paragraph keeps no container/label — the
  * higher-specificity placeholder rule above already restores its ::before. */
 .tiptap:not(.rich-text-field) > p.is-editor-empty:first-child {
   padding: 0;
-  border-left: 0;
+}
+.tiptap:not(.rich-text-field) > p.is-editor-empty:first-child::after {
+  display: none;
 }
 
 /* Divisória do editor: o `<hr>` do nó `divider` não tem NodeView (o schema
