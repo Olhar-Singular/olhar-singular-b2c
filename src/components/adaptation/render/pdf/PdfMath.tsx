@@ -13,7 +13,7 @@
 import { View, Text } from "@react-pdf/renderer";
 import type { Block } from "@/lib/adaptation/canonical/schema";
 import { nodeStyleToPdf } from "./nodeStyleToPdf";
-import { mathToPdfText, MATH_PDF_STYLE } from "./mathToPdfText";
+import { mathToPdfText, mathBlockTextAlign, MATH_PDF_STYLE } from "./mathToPdfText";
 
 type BlockMathBlock = Extract<Block, { type: "blockMath" }>;
 
@@ -23,7 +23,7 @@ export function PdfMath({ block, blockGap = 12 }: { block: BlockMathBlock; block
   const marginBottom = nodeMarginBottom ?? blockGap;
   return (
     <View style={{ marginVertical: marginBottom }}>
-      <Text style={{ ...MATH_PDF_STYLE, textAlign: "center", ...textStyle }}>
+      <Text style={{ ...MATH_PDF_STYLE, textAlign: mathBlockTextAlign(block.latex), ...textStyle }}>
         {mathToPdfText(block.latex)}
       </Text>
     </View>
