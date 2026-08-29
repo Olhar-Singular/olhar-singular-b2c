@@ -134,7 +134,7 @@ export function ExportPanel({
   };
 
   const handleExport = async () => {
-    const warnings = pdfExportWarnings(document);
+    const warnings = pdfExportWarnings(document, pageStyle);
     if (warnings.length > 0) {
       setPending({ format: "pdf", warnings });
       return;

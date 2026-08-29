@@ -8,7 +8,16 @@
  * tipografada pelo KaTeX e o arquivo entrega `a^2 + b^2 = c^2`.
  */
 
-import type { Block, CanonicalDocument, RichText } from "@/lib/adaptation/canonical/schema";
+import {
+  fontFamilyToPdf,
+  pdfFamilyLacksItalic,
+} from "@/lib/adaptation/canonical/fontFamily";
+import type {
+  Block,
+  CanonicalDocument,
+  PageStyle,
+  RichText,
+} from "@/lib/adaptation/canonical/schema";
 
 /** Walk every block, including question stems (which nest). */
 export function everyBlock(blocks: Block[]): Block[] {
@@ -94,7 +103,25 @@ export function documentHasMath(document: CanonicalDocument): boolean {
  * PDF não tipografa math (rasterizar KaTeX é o caminho previsto no TODO de
  * `mathToPdfText`), o professor precisa saber disso antes de imprimir.
  */
-export function pdfExportWarnings(document: CanonicalDocument): string[] {
-  if (!documentHasMath(document)) return [];
-  return ["As fórmulas saem como texto LaTeX, sem formatação matemática."];
+export function pdfExportWarnings(
+  document: CanonicalDocument,
+  pageStyle?: PageStyle,
+): string[] {
+  const warnings: string[] = [];
+
+  if (documentHasMath(document)) {
+    warnings.push("As fórmulas saem como texto LaTeX, sem formatação matemática.");
+  }
+
+  // A folha mostra o itálico porque o navegador sintetiza a inclinação; o PDF
+  // não tem essa saída, então a ênfase sai reta e indistinguível do corpo.
+  const family = pageStyle?.fontFamily;
+  if (family && pdfFamilyLacksItalic(family)) {
+    warnings.push(
+      `A fonte ${fontFamilyToPdf(family)} não tem versão itálica: no PDF os trechos em ` +
+        "itálico (inclusive as instruções das questões) saem retos.",
+    );
+  }
+
+  return warnings;
 }

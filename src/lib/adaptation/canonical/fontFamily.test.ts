@@ -8,6 +8,8 @@ import {
   fontFamilyToPdf,
   fontFamilyToDocx,
   DOCX_NON_STANDARD_FONTS,
+  PDF_FONTS_WITHOUT_ITALIC,
+  pdfFamilyLacksItalic,
 } from "./fontFamily";
 
 describe("fontFamily tokens", () => {
@@ -118,5 +120,21 @@ describe("fontFamilyToDocx", () => {
     expect([...DOCX_NON_STANDARD_FONTS].sort()).toEqual(
       ["atkinson", "lexend", "opendyslexic"].sort(),
     );
+  });
+});
+
+describe("pdfFamilyLacksItalic", () => {
+  it("Lexend é a única família sem face itálica embutida no PDF", () => {
+    expect(PDF_FONTS_WITHOUT_ITALIC).toEqual(["lexend"]);
+  });
+
+  it.each([
+    ["lexend", true],
+    ["atkinson", false],
+    ["opendyslexic", false],
+    ["sans", false],
+    ["Comic Sans", false],
+  ])("%s → %s", (value, lacks) => {
+    expect(pdfFamilyLacksItalic(value as string)).toBe(lacks);
   });
 });

@@ -155,3 +155,20 @@ export const DOCX_NON_STANDARD_FONTS: FontFamilyToken[] = [
 export function fontFamilyToDocx(value: string): string {
   return isFontFamilyToken(value) ? DOCX_FAMILIES[value] : value;
 }
+
+/**
+ * Tokens whose family ships NO italic face, so the PDF prints emphasis upright.
+ *
+ * `registerFonts.ts` maps the missing italic variants to the upright files on
+ * purpose (an unregistered variant would reject the whole export with "Could
+ * not resolve font"). The screen does not make the same trade — the browser
+ * synthesizes an oblique — so the preview shows an emphasis the file will not
+ * have. `pdfExportWarnings` says that out loud before the download instead of
+ * letting the document degrade in silence.
+ */
+export const PDF_FONTS_WITHOUT_ITALIC: FontFamilyToken[] = ["lexend"];
+
+/** True when the PDF cannot render italic for this token's family. */
+export function pdfFamilyLacksItalic(value: string): boolean {
+  return isFontFamilyToken(value) && PDF_FONTS_WITHOUT_ITALIC.includes(value);
+}

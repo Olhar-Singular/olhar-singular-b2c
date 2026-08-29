@@ -162,13 +162,27 @@ describe("ExportPanel", () => {
 
   it("passes pageStyle from props to onDownload", async () => {
     const onDownload = vi.fn<(d: CanonicalDocument, s: PanelSettings, ps?: PageStyle) => Promise<void>>().mockResolvedValue(undefined);
-    const pageStyle: PageStyle = { fontFamily: "lexend", fontSize: 14 };
+    // Atkinson embute a face itálica: nada a avisar, o download é direto.
+    const pageStyle: PageStyle = { fontFamily: "atkinson", fontSize: 14 };
     render(<ExportPanel document={document} onDownload={onDownload} pageStyle={pageStyle} />);
 
     fireEvent.click(screen.getByRole("button", { name: /Exportar PDF/i }));
     await waitFor(() => expect(onDownload).toHaveBeenCalled());
     const [, , ps] = onDownload.mock.calls[0];
     expect(ps).toBe(pageStyle);
+  });
+
+  it("avisa antes do PDF que o Lexend não tem itálico (achado 0169)", async () => {
+    const onDownload = vi.fn().mockResolvedValue(undefined);
+    const pageStyle: PageStyle = { fontFamily: "lexend", fontSize: 14 };
+    render(<ExportPanel document={document} onDownload={onDownload} pageStyle={pageStyle} />);
+
+    fireEvent.click(screen.getByRole("button", { name: /Exportar PDF/i }));
+    expect(await screen.findByText(/não tem versão itálica/i)).toBeInTheDocument();
+    expect(onDownload).not.toHaveBeenCalled();
+
+    fireEvent.click(await screen.findByRole("button", { name: /Baixar mesmo assim/i }));
+    await waitFor(() => expect(onDownload).toHaveBeenCalled());
   });
 
   it("shows an error toast when the export fails", async () => {

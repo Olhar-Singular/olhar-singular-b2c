@@ -43,4 +43,39 @@ describe("pdfExportWarnings", () => {
     );
     expect(warnings).toHaveLength(1);
   });
+
+  it("avisa que o itálico sai reto quando a fonte não tem face itálica (Lexend)", () => {
+    const warnings = pdfExportWarnings(
+      doc([{ id: id(1), type: "paragraph", content: [{ type: "text", text: "olá" }] }]),
+      { fontFamily: "lexend" },
+    );
+    expect(warnings).toHaveLength(1);
+    expect(warnings[0]).toMatch(/itálico/i);
+    expect(warnings[0]).toMatch(/Lexend/);
+  });
+
+  it("fonte com face itálica embutida não gera aviso", () => {
+    expect(
+      pdfExportWarnings(
+        doc([{ id: id(1), type: "paragraph", content: [{ type: "text", text: "olá" }] }]),
+        { fontFamily: "atkinson" },
+      ),
+    ).toEqual([]);
+  });
+
+  it("fonte desconhecida (valor legado) não gera aviso de itálico", () => {
+    expect(
+      pdfExportWarnings(
+        doc([{ id: id(1), type: "paragraph", content: [{ type: "text", text: "olá" }] }]),
+        { fontFamily: "Comic Sans" },
+      ),
+    ).toEqual([]);
+  });
+
+  it("acumula o aviso de fórmula e o de itálico", () => {
+    const warnings = pdfExportWarnings(doc([{ id: id(1), type: "blockMath", latex: "a^2" }]), {
+      fontFamily: "lexend",
+    });
+    expect(warnings).toHaveLength(2);
+  });
 });
