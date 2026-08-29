@@ -55,6 +55,8 @@ import {
   SCAFFOLDING_BORDER,
   SCAFFOLDING_LABEL,
   HEADING_PT,
+  RULE_COLOR,
+  RULE_WIDTH_PT,
 } from "../render/pageTokens";
 import { indexToLetter } from "../render/letters";
 import { documentHasMath, everyBlock } from "./exportWarnings";
@@ -104,6 +106,21 @@ const SCAFFOLDING_BOX = {
     right: SCAFFOLDING_EDGE,
   },
   shading: { type: ShadingType.CLEAR, fill: SCAFFOLDING_BG.slice(1) },
+} as const;
+
+/**
+ * A régua do divisor: borda inferior de um parágrafo vazio, com os tokens de
+ * página das outras superfícies (`RULE_COLOR`/`RULE_WIDTH_PT`). A unidade da
+ * borda no OOXML é o oitavo de ponto, daí o `* 8`.
+ */
+const DIVIDER_RULE = {
+  border: {
+    bottom: {
+      style: BorderStyle.SINGLE,
+      size: Math.round(RULE_WIDTH_PT * 8),
+      color: RULE_COLOR.slice(1),
+    },
+  },
 } as const;
 
 /** Derive a safe .docx filename from the document header title. */
@@ -289,7 +306,13 @@ export function blockToDocxParagraphs(block: Block, number: number): DocxBlock[]
       ];
 
     case "divider":
-      return [new Paragraph({ children: [new TextRun({ text: "─".repeat(40) })] })];
+      // Régua de verdade, não texto: `w:pBdr` é a mesma primitiva que a caixa do
+      // andaime já usa aqui. Antes saíam 40 U+2500 num parágrafo sem `w:pPr` —
+      // largura refém do avanço do glifo (curta e alinhada à esquerda, onde as
+      // outras três superfícies varrem a coluna inteira), texto editável e
+      // reflowável, dependente de a fonte ter o glifo, e lido pelo leitor de
+      // tela (achado 0168).
+      return [new Paragraph({ ...DIVIDER_RULE, children: [] })];
 
     case "question": {
       const label = block.customNumber ?? String(number);

@@ -11,7 +11,7 @@ import {
   docxExportWarnings,
   documentRunStyle,
 } from "./exportDocx";
-import { HEADING_PT, pageTokensToPdf } from "../render/pageTokens";
+import { HEADING_PT, RULE_COLOR, RULE_WIDTH_PT, pageTokensToPdf } from "../render/pageTokens";
 import type {
   Block,
   Inline,
@@ -440,6 +440,58 @@ function sampleBlock(type: Block["type"]): Block {
       };
   }
 }
+
+/**
+ * Atributos de uma das bordas (`w:pBdr` → `w:top`/`w:bottom`/…) de um parágrafo
+ * docx, na forma `{ style, color, size }`.
+ */
+function paragraphBorder(node: unknown, side: string): Record<string, unknown> | undefined {
+  let found: Record<string, unknown> | undefined;
+  const attrs = (o: unknown): Record<string, unknown> | undefined => {
+    const kids = (o as { root?: unknown[] }).root ?? [];
+    for (const k of kids) {
+      const n = k as { rootKey?: string; root?: Record<string, { key: string; value?: unknown }> };
+      if (n.rootKey !== "_attr" || !n.root) continue;
+      return Object.fromEntries(
+        Object.entries(n.root)
+          .filter(([, v]) => v?.value !== undefined)
+          .map(([k2, v]) => [k2, v.value]),
+      );
+    }
+    return undefined;
+  };
+  const walk = (o: unknown): void => {
+    if (Array.isArray(o)) return o.forEach(walk);
+    if (o === null || typeof o !== "object") return;
+    const n = o as { rootKey?: string; root?: unknown[] };
+    if (n.rootKey === "w:pBdr" && Array.isArray(n.root)) {
+      for (const edge of n.root) {
+        if ((edge as { rootKey?: string }).rootKey === side) found ??= attrs(edge);
+      }
+    }
+    Object.values(o as Record<string, unknown>).forEach(walk);
+  };
+  walk(node);
+  return found;
+}
+
+describe("divider no .docx (achado 0168)", () => {
+  const divider = () => blockToDocxParagraphs({ id: id(200), type: "divider" }, 1)[0];
+
+  it("não emite caracteres de desenho de caixa como texto", () => {
+    // Antes saíam 40 U+2500: texto editável, reflowável, lido pelo leitor de
+    // tela e dependente do glifo existir na fonte escolhida.
+    expect(docxText(divider())).toBe("");
+  });
+
+  it("desenha a régua como borda do parágrafo, com a cor e a espessura do token de página", () => {
+    expect(paragraphBorder(divider(), "w:bottom")).toEqual({
+      style: "single",
+      color: RULE_COLOR.slice(1),
+      size: Math.round(RULE_WIDTH_PT * 8),
+    });
+  });
+});
 
 describe("B15 · paridade docx", () => {
   it.each(BLOCK_TYPES)("bloco %s produz conteúdo no docx", (type) => {
