@@ -118,7 +118,7 @@ describe("AdaptationPdf", () => {
   it("renders inline and block math as their LaTeX source (v1)", () => {
     const { text } = collect(AdaptationPdf({ document: renderDocument }));
     expect(text).toContain("\\frac{a}{b}"); // inline math
-    expect(text).toContain("x^2 + y^2 = z^2"); // block math
+    expect(text).toContain("x^2\u00a0+\u00a0y^2\u00a0=\u00a0z^2"); // block math (átomo, 0425)
   });
 
   it("aplica os tokens de página compartilhados no <Page>", () => {

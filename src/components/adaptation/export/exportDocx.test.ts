@@ -217,17 +217,17 @@ const q = (answer: Block extends never ? never : QuestionAnswer, extra: Partial<
   }) as Block;
 
 describe("B15 · conteúdo que precisa chegar ao Word", () => {
-  it("inlineMath vira texto (LaTeX) em vez de sumir", () => {
+  it("inlineMath vira texto (LaTeX) em vez de sumir, com espaços inquebráveis (0425)", () => {
     const runs = richTextToRuns([
       { type: "text", text: "vale " },
       { type: "inlineMath", latex: "x^2 + 1" },
     ]);
-    expect(docxText(runs)).toContain("x^2 + 1");
+    expect(docxText(runs)).toContain("x^2\u00a0+\u00a01");
   });
 
-  it("blockMath emite a fórmula", () => {
-    expect(blockText({ id: id(20), type: "blockMath", latex: "\\frac{1}{2}" })).toContain(
-      "\\frac{1}{2}",
+  it("blockMath emite a fórmula sem espaço quebrável (0425)", () => {
+    expect(blockText({ id: id(20), type: "blockMath", latex: "\\frac{1}{2} = 0.5" })).toContain(
+      "\\frac{1}{2}\u00a0=\u00a00.5",
     );
   });
 

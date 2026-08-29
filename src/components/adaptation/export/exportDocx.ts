@@ -58,6 +58,7 @@ import {
 import { indexToLetter } from "../render/letters";
 import { documentHasMath, everyBlock } from "./exportWarnings";
 import { perQuestionBreakFlags } from "../render/perQuestionBreaks";
+import { latexLayoutAtom } from "../render/mathAtom";
 import { DEFAULT_PANEL_SETTINGS, type PanelSettings } from "./panelSettings";
 
 /** A docx section child. Tables are blocks too, not paragraphs. */
@@ -121,7 +122,7 @@ export function richTextToRuns(nodes: Inline[], inherited: RunStyle = {}): TextR
       // Word has no KaTeX. Emitting the LaTeX source keeps the content visible
       // (the PDF makes the same pragmatic projection); dropping it was silent
       // data loss in the middle of a sentence.
-      return new TextRun({ ...inherited, text: node.latex, font: MATH_FONT });
+      return new TextRun({ ...inherited, text: latexLayoutAtom(node.latex), font: MATH_FONT });
     }
     return new TextRun({
       ...inherited,
@@ -239,7 +240,7 @@ export function blockToDocxParagraphs(block: Block, number: number): DocxBlock[]
       return [
         new Paragraph({
           alignment: AlignmentType.CENTER,
-          children: [new TextRun({ text: block.latex, font: MATH_FONT })],
+          children: [new TextRun({ text: latexLayoutAtom(block.latex), font: MATH_FONT })],
         }),
       ];
 

@@ -11,10 +11,17 @@
  */
 
 import { MATH_PDF_FONT_SIZE_PT } from "../pageTokens";
+import { latexLayoutAtom } from "../mathAtom";
 
-/** Return the LaTeX source to display for a math node in the PDF. */
+/**
+ * Return the LaTeX source to display for a math node in the PDF.
+ *
+ * Os espaços saem inquebráveis (`latexLayoutAtom`): sem isso o textkit trata
+ * cada espaço do LaTeX como ponto de quebra e parte a fórmula no meio, ao
+ * contrário da caixa KaTeX da tela (achado 0425).
+ */
 export function mathToPdfText(latex: string): string {
-  return latex;
+  return latexLayoutAtom(latex);
 }
 
 /**

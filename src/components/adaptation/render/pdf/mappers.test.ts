@@ -6,6 +6,7 @@ import { PdfAnswer } from "./PdfAnswer";
 import { PdfQuestion } from "./PdfQuestion";
 import { PdfHeading, PdfParagraph, PdfImage, PdfScaffolding } from "./PdfLeafBlocks";
 import { PdfMath } from "./PdfMath";
+import { PdfRichText } from "./PdfRichText";
 import type { Block, QuestionAnswer } from "@/lib/adaptation/canonical/schema";
 import {
   resolvePageStyle,
@@ -413,6 +414,31 @@ describe("PdfMath", () => {
     const innerText = (el.props as { children: ReactElement }).children;
     expect((innerText.props.style as { textAlign: string }).textAlign).toBe("center");
     expect(textOf(el)).toContain("E=mc^2");
+  });
+
+  it("mantém a fórmula em bloco como um átomo de layout (0425)", () => {
+    const block: Extract<Block, { type: "blockMath" }> = {
+      id: id(2),
+      type: "blockMath",
+      latex: "\\int_0^1 x\\,dx = \\frac{1}{2}",
+    };
+    expect(textOf(PdfMath({ block }))).not.toContain(" ");
+  });
+});
+
+describe("PdfRichText — fórmula inline é um átomo de layout (0425)", () => {
+  it("emite o LaTeX inline sem espaço quebrável, sem tocar no texto ao redor", () => {
+    const txt = textOf(
+      PdfRichText({
+        content: [
+          { type: "text", text: "ela e equivalente a " },
+          { type: "inlineMath", latex: "(x+1)^2 = 0" },
+          { type: "text", text: " no conjunto dos reais." },
+        ],
+      }),
+    );
+    expect(txt).toContain("(x+1)^2\u00a0=\u00a00");
+    expect(txt).toContain("ela e equivalente a ");
   });
 });
 
