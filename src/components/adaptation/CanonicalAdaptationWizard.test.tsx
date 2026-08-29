@@ -590,6 +590,29 @@ describe("CanonicalAdaptationWizard", () => {
     expect(screen.getByTestId("step-region")).toHaveAccessibleName("Tipo");
   });
 
+  // 0245: o foco do 0167 desfazia a rolagem do 0165. focus() sem preventScroll pede ao
+  // navegador que traga a região do passo para a vista — ela começa 176 px abaixo do topo
+  // do documento, então em 390 px a página voltava a rolar até o máximo e a faixa de
+  // passos inteira sumia debaixo do cabeçalho fixo (lg:hidden, fixed top-0).
+  it("focuses the new step without letting the browser scroll it into view", () => {
+    const options: (FocusOptions | undefined)[] = [];
+    const originalFocus = window.HTMLElement.prototype.focus;
+    window.HTMLElement.prototype.focus = function (this: HTMLElement, opts?: FocusOptions) {
+      if (this.dataset.testid === "step-region") options.push(opts);
+      return originalFocus.call(this, opts);
+    };
+    try {
+      renderWithProviders(<CanonicalAdaptationWizard />);
+      advanceToReview();
+
+      expect(document.activeElement).toBe(screen.getByTestId("step-region"));
+      expect(options).not.toHaveLength(0);
+      for (const opts of options) expect(opts).toEqual({ preventScroll: true });
+    } finally {
+      window.HTMLElement.prototype.focus = originalFocus;
+    }
+  });
+
   it("regenerate is confirmed and replaces the document via the generate step", async () => {
     renderWithProviders(<CanonicalAdaptationWizard />);
     advanceToReview();

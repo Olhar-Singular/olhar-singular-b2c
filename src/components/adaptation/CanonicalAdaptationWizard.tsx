@@ -279,7 +279,10 @@ export default function CanonicalAdaptationWizard({ editMode }: Props = {}) {
     // navegação lateral) e o leitor de tela não anunciava nada, porque a rota não
     // mudou. Pousamos o foco no contêiner do passo novo, que carrega o nome do passo
     // — o Tab continua de dentro dele e o nome é lido na chegada.
-    stepRegionRef.current?.focus();
+    // 0245: com preventScroll, senão o foco desfaz o scrollTo(0, 0) logo acima — o
+    // navegador traria a região do passo para a vista (ela nasce ~176 px abaixo do topo)
+    // e em telas estreitas a faixa de passos acabava debaixo do cabeçalho fixo.
+    stepRegionRef.current?.focus({ preventScroll: true });
   }, [stepIndex]);
 
   const updateData = useCallback((partial: Partial<WizardData>) => {
