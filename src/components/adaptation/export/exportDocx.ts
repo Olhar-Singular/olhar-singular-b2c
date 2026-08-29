@@ -333,12 +333,21 @@ export function headerParagraphs(header: DocumentHeader): Paragraph[] {
     ["Data", header.date ?? ""],
   ].filter(([, v]) => v) as [string, string][];
 
-  return lines.map(
-    ([label, value]) =>
-      new Paragraph({
-        children: [new TextRun({ text: `${label}: `, bold: true }), new TextRun({ text: value })],
-      }),
-  );
+  if (lines.length === 0) return [];
+
+  return [
+    ...lines.map(
+      ([label, value]) =>
+        new Paragraph({
+          children: [new TextRun({ text: `${label}: `, bold: true }), new TextRun({ text: value })],
+        }),
+    ),
+    // O separador entre cabeçalho e conteúdo sai JUNTO com o cabeçalho: emitido
+    // solto na seção, ele sobrevivia ao cabeçalho vazio (o estado padrão do
+    // Passo 6) e o .docx abria com uma linha em branco no topo, enquanto o PDF e
+    // a prévia começam colados na margem superior (achado 0426).
+    new Paragraph({ children: [] }),
+  ];
 }
 
 /**
@@ -457,7 +466,7 @@ export async function downloadDocx(
     styles: { default: { document: { run: documentRunStyle(pageStyle) } } },
     sections: [
       {
-        children: [...headerParagraphs(header), new Paragraph({ children: [] }), ...contentParagraphs],
+        children: [...headerParagraphs(header), ...contentParagraphs],
       },
     ],
   });

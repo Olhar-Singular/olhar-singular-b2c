@@ -166,14 +166,22 @@ describe("blockToDocxParagraphs", () => {
 });
 
 describe("headerParagraphs", () => {
-  it("um parágrafo por campo preenchido", () => {
-    expect(
-      headerParagraphs({ title: "T", school: "E", teacher: "P", date: "D" }),
-    ).toHaveLength(4);
+  it("um parágrafo por campo preenchido, mais o separador", () => {
+    expect(headerParagraphs({ title: "T", school: "E", teacher: "P", date: "D" })).toHaveLength(5);
   });
 
-  it("cabeçalho vazio → nenhum parágrafo", () => {
+  // Achado 0426: o separador entre cabeçalho e conteúdo era emitido SEMPRE, então
+  // com os campos em branco (o estado padrão do Passo 6) o .docx abria com um
+  // parágrafo vazio no topo — o PDF e a prévia começam colados na margem.
+  it("cabeçalho vazio → nenhum parágrafo, nem o separador", () => {
     expect(headerParagraphs({})).toHaveLength(0);
+  });
+
+  it("o separador é o último parágrafo e não tem texto", () => {
+    const paragraphs = headerParagraphs({ title: "T" });
+    expect(paragraphs).toHaveLength(2);
+    expect(docxText(paragraphs[0])).toBe("Título: T");
+    expect(docxText(paragraphs[1])).toBe("");
   });
 });
 
