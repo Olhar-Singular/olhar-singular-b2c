@@ -289,3 +289,21 @@ describe("Layout — contraste da barra lateral sobre o gradiente", () => {
     expectReadable(disclaimerClasses(), stops, [], "disclaimer");
   });
 });
+
+/**
+ * Vao entre paragrafos do MESMO enunciado (achado 0171).
+ *
+ * A regra de espacamento de bloco usa o combinador `>`, de proposito: ela so
+ * alcanca os blocos de topo do editor. O preflight do Tailwind zera a margem de
+ * `<p>`, entao dois paragrafos dentro do stem de uma questao ficavam COLADOS na
+ * folha do Revisar (0 px) enquanto a previa abria 8 px e o PDF 12 pt. A folha
+ * existe para antecipar o impresso: precisa do mesmo vao interno das outras
+ * duas superficies.
+ */
+describe("index.css — vao entre paragrafos do stem da questao", () => {
+  it("separa paragrafos irmaos dentro do stem com o vao interno da questao", () => {
+    expect(ruleBody(".tiptap .question-stem p + p")).toMatch(
+      /margin-top:\s*0\.5rem/,
+    );
+  });
+});

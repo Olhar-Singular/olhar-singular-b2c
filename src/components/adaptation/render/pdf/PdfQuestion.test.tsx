@@ -131,3 +131,73 @@ describe("PdfQuestion — o número divide a linha do enunciado", () => {
     expect(textOf(host)).not.toContain("depois da figura");
   });
 });
+
+/**
+ * Vao entre paragrafos do MESMO enunciado (achado 0171).
+ *
+ * Os blocos do stem caiam no `blockGap` padrao do `PdfBlock` (12 pt), que e a
+ * junta entre blocos de TOPO do documento. Dentro da questao o vao e outro: as
+ * duas telas usam 8 px entre os irmaos do stem. Sem repassar nada, o papel
+ * imprimia o dobro do respiro da previa entre dois paragrafos do mesmo
+ * enunciado.
+ */
+function viewsWithMargin(node: unknown, found: ReactElement[] = []): ReactElement[] {
+  if (node === null || node === undefined || typeof node === "boolean") return found;
+  if (Array.isArray(node)) {
+    node.forEach((c) => viewsWithMargin(c, found));
+    return found;
+  }
+  if (isValidElement(node)) {
+    const el = node as ReactElement;
+    if (typeof el.type === "function" && el.type !== (Text as unknown)) {
+      viewsWithMargin((el.type as (p: unknown) => unknown)(el.props), found);
+      return found;
+    }
+    const style = (el.props as { style?: { marginBottom?: number } }).style;
+    if (style && typeof style.marginBottom === "number") found.push(el);
+    viewsWithMargin((el.props as { children?: unknown }).children, found);
+  }
+  return found;
+}
+
+/** marginBottom do container MAIS INTERNO que envolve o texto informado. */
+const gapAfter = (node: unknown, text: string): number | undefined => {
+  const hosts = viewsWithMargin(node).filter((v) => textOf(v).includes(text));
+  const host = hosts[hosts.length - 1];
+  return (host?.props as { style?: { marginBottom?: number } } | undefined)?.style?.marginBottom;
+};
+
+describe("PdfQuestion — vao entre paragrafos do stem", () => {
+  const twoParagraphs: Extract<Block, { type: "question" }> = {
+    id: id(1),
+    type: "question",
+    stem: [
+      { id: id(2), type: "paragraph", content: rt("Leia o termo abaixo e responda:") },
+      { id: id(3), type: "paragraph", content: rt("antidisestabelecimentarianismo") },
+    ],
+    answer: { kind: "open" },
+  };
+
+  it("usa o vao interno da questao (6 pt = 8 px) entre o 1o e o 2o paragrafo", () => {
+    const tree = PdfQuestion({ block: twoParagraphs, number: 1 });
+    expect(gapAfter(tree, "Leia o termo abaixo e responda:")).toBe(6);
+  });
+
+  it("usa o mesmo vao interno depois do ultimo bloco do stem", () => {
+    const tree = PdfQuestion({ block: twoParagraphs, number: 1 });
+    expect(gapAfter(tree, "antidisestabelecimentarianismo")).toBe(6);
+  });
+
+  it("mantem o vao interno quando o stem nao abre com texto", () => {
+    const block: Extract<Block, { type: "question" }> = {
+      id: id(1),
+      type: "question",
+      stem: [
+        { id: id(2), type: "image", src: "data:image/png;base64,AAA" },
+        { id: id(3), type: "paragraph", content: rt("depois da figura") },
+      ],
+      answer: { kind: "open" },
+    };
+    expect(gapAfter(PdfQuestion({ block, number: 1 }), "depois da figura")).toBe(6);
+  });
+});

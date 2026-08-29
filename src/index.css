@@ -330,6 +330,17 @@
   border-radius: 0.5rem;
 }
 
+/*
+ * Vao entre paragrafos IRMAOS dentro do stem de uma questao (achado 0171).
+ * A regra acima usa o combinador `>` e nao alcanca o conteudo aninhado; como o
+ * preflight do Tailwind zera a margem de <p>, dois paragrafos do mesmo
+ * enunciado ficavam colados na folha. 0.5rem = 8px, o mesmo vao interno que a
+ * previa do Exportar (`space-y-2`) e o PDF (6pt) usam.
+ */
+.tiptap .question-stem p + p {
+  margin-top: 0.5rem;
+}
+
 /* Discrete type label, pure CSS — no JS, so the coverage gate is unaffected.
    Fica ACIMA do bloco (top negativo), dentro da margem que já separa um bloco
    do outro, para não empurrar o texto impresso. */

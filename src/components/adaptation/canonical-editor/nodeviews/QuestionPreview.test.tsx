@@ -306,3 +306,10 @@ describe("QuestionPreview", () => {
     expect(screen.getByTestId("question-ordinal")).toHaveTextContent("");
   });
 });
+
+describe("QuestionPreview — vao interno do stem (achado 0171)", () => {
+  it("marca o host do stem com a classe que o CSS usa para separar paragrafos", () => {
+    setup();
+    expect(screen.getByTestId("stem-slot").parentElement).toHaveClass("question-stem");
+  });
+});

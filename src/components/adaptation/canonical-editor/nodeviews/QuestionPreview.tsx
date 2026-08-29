@@ -82,7 +82,12 @@ export function QuestionPreview({
         </span>
         <div className="flex min-w-0 flex-1 flex-col gap-2">
           {enunciadoPosition === "above" && enunciadoNode}
-          <div style={{ fontSize: "var(--doc-fs-stem, inherit)" }}>
+          {/* `question-stem` e o gancho da regra de index.css que separa dois
+              paragrafos IRMAOS do mesmo enunciado. A regra de espacamento de
+              bloco usa `>` (so blocos de topo) e o preflight do Tailwind zera a
+              margem de <p>, entao o stem saia com vao ZERO enquanto a previa e
+              o PDF abriam respiro (achado 0171). */}
+          <div className="question-stem" style={{ fontSize: "var(--doc-fs-stem, inherit)" }}>
             {stem}
           </div>
           {enunciadoPosition === "below" && enunciadoNode}

@@ -45,6 +45,15 @@ type QuestionBlock = Extract<Block, { type: "question" }>;
  */
 const DEFAULT_ELEMENT_SIZES = resolveElementFontSizes(resolvePageStyle());
 
+/**
+ * Vao INTERNO da questao, em pt (achado 0171). Os blocos do stem caiam no
+ * `blockGap` padrao do `PdfBlock` (12pt), que e a junta entre blocos de TOPO do
+ * documento: dois paragrafos do mesmo enunciado saiam com o dobro do respiro da
+ * previa. 6pt = 8px, o mesmo que as duas telas usam entre irmaos do stem
+ * (`space-y-2` no QuestionView, `p + p` do `.question-stem` na folha).
+ */
+const QUESTION_INNER_GAP_PT = 6;
+
 export function PdfQuestion({
   block,
   number,
@@ -84,14 +93,20 @@ export function PdfQuestion({
     !enunciadoLeads && leadingStem?.type === "paragraph" && !pageBreakBefore(leadingStem.style);
 
   const stemBlocks = block.stem.map((child, i) => (
-    <PdfBlock key={child.id} block={child} number={stemNumbers[i]} elementSizes={elementSizes} />
+    <PdfBlock
+      key={child.id}
+      block={child}
+      number={stemNumbers[i]}
+      blockGap={QUESTION_INNER_GAP_PT}
+      elementSizes={elementSizes}
+    />
   ));
 
   const body =
     enunciadoLeads || paragraphLeads ? (
       <View>
         {enunciadoLeads ? enunciadoView(numberRun) : null}
-        {paragraphLeads ? <PdfParagraph block={leadingStem} numberPrefix={numberRun} /> : null}
+        {paragraphLeads ? <PdfParagraph block={leadingStem} blockGap={QUESTION_INNER_GAP_PT} numberPrefix={numberRun} /> : null}
         {paragraphLeads ? stemBlocks.slice(1) : stemBlocks}
         {position === "below" && enunciadoView()}
       </View>
