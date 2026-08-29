@@ -188,6 +188,31 @@ export const ALTERNATIVE_MARKER_COLUMN_PT = 22;
 export const ALTERNATIVE_MARKER_GAP_PX = 8;
 
 /**
+ * Coluna do NÚMERO da questão: distância do x do rótulo ("1.") ao x do
+ * enunciado, e o vão entre os dois (achado 0175).
+ *
+ * As duas telas nunca escreveram essa coluna: ela CAI do `flex` — um `<span>`
+ * `shrink-0` com o rótulo mais o `gap-2` (8px), e o stem inteiro como irmão
+ * `flex-1`. Toda linha de continuação e todo bloco seguinte do enunciado ficam
+ * alinhados sob a primeira palavra. No PDF, desde que o `0428` costurou o
+ * número como run do próprio texto, essa coluna simplesmente não existia: a
+ * segunda linha voltava para a margem, no mesmo x do número.
+ *
+ * Como o papel não pode medir a caixa do rótulo (o `@react-pdf` não expõe as
+ * métricas da fonte em tempo de composição), a coluna é DERIVADA: largura do
+ * rótulo em `em` — as larguras do AFM da Helvetica-Bold, dígito 556 e ponto 278
+ * — vezes o corpo, mais o mesmo vão de 8px das telas. Na base de 12pt dá
+ * 16,008pt, que é o que as telas medem (16,01pt). Por ser em `em`, a coluna
+ * acompanha o "Tamanho do texto" do popover Formato, e por somar caractere a
+ * caractere ela cresce no rótulo de dois dígitos como o `shrink-0` cresce.
+ */
+export const QUESTION_NUMBER_GAP_PX = 8;
+
+/** Largura em `em` de cada caractere do rótulo (AFM da Helvetica-Bold). */
+const QUESTION_NUMBER_PERIOD_EM = 0.278;
+const QUESTION_NUMBER_DIGIT_EM = 0.556;
+
+/**
  * Caixa do bloco ANDAIME: recuo interno, respiro vertical e largura da coluna do
  * ordinal ("1.", "2." …). Ponto único das duas superfícies impressas — a prévia
  * do Exportar e o PDF —, na mesma família de `ANSWER_ITEM_GAP_PX` (achado 0313).
@@ -342,6 +367,21 @@ export const ANSWER_ITEM_GAP_PT = ANSWER_ITEM_GAP_PX / PT_TO_PX;
 
 /** `ALTERNATIVE_MARKER_GAP_PX` na unidade do PDF (pt), pela mesma razão 72/96. */
 export const ALTERNATIVE_MARKER_GAP_PT = ALTERNATIVE_MARKER_GAP_PX / PT_TO_PX;
+
+/** `QUESTION_NUMBER_GAP_PX` na unidade do PDF (pt), pela mesma razão 72/96. */
+export const QUESTION_NUMBER_GAP_PT = QUESTION_NUMBER_GAP_PX / PT_TO_PX;
+
+/**
+ * Largura da coluna do número da questão, em pt, para o rótulo e o corpo dados.
+ * Ver `QUESTION_NUMBER_GAP_PX` para o porquê de ser derivada e não constante.
+ */
+export function questionNumberColumnPt(label: string, fontSizePt: number = BASE_FONT_PT): number {
+  const widthEm = Array.from(`${label}.`).reduce(
+    (acc, char) => acc + (char === "." ? QUESTION_NUMBER_PERIOD_EM : QUESTION_NUMBER_DIGIT_EM),
+    0,
+  );
+  return Math.round((widthEm * fontSizePt + QUESTION_NUMBER_GAP_PT) * 1e4) / 1e4;
+}
 
 /**
  * Largura do marcador na TELA, em `em` sobre o corpo do documento: a coluna do

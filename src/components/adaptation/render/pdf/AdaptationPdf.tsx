@@ -129,10 +129,23 @@ export function AdaptationPdf({ document, settings = DEFAULT_PANEL_SETTINGS, pag
             const forceBreak = settings.pageBreakPerQuestion && breaks[i];
             return forceBreak ? (
               <View key={block.id} break>
-                <PdfBlock block={block} number={numbers[i]} blockGap={blockGap} elementSizes={elementSizes} />
+                <PdfBlock
+                  block={block}
+                  number={numbers[i]}
+                  blockGap={blockGap}
+                  elementSizes={elementSizes}
+                  baseFontSize={resolved.fontSize}
+                />
               </View>
             ) : (
-              <PdfBlock key={block.id} block={block} number={numbers[i]} blockGap={blockGap} elementSizes={elementSizes} />
+              <PdfBlock
+                key={block.id}
+                block={block}
+                number={numbers[i]}
+                blockGap={blockGap}
+                elementSizes={elementSizes}
+                baseFontSize={resolved.fontSize}
+              />
             );
           });
         })()}

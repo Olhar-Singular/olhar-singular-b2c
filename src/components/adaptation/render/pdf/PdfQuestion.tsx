@@ -22,6 +22,7 @@
  * da figura (mesma razão declarada em QuestionView.tsx).
  */
 
+import type { ReactNode } from "react";
 import { View, Text } from "@react-pdf/renderer";
 import type { Block } from "@/lib/adaptation/canonical/schema";
 import { nodeStyleToPdf, pageBreakBefore } from "./nodeStyleToPdf";
@@ -30,7 +31,7 @@ import { PdfAnswer } from "./PdfAnswer";
 import { PdfBlock } from "./PdfBlock";
 import { PdfParagraph } from "./PdfLeafBlocks";
 import { questionNumbers } from "../questionNumbering";
-import { pdfTextSize } from "../pageTokens";
+import { BASE_FONT_PT, pdfTextSize, questionNumberColumnPt } from "../pageTokens";
 import { resolveElementFontSizes, resolvePageStyle, type ElementFontSizesPt } from "../pageStyle";
 
 type QuestionBlock = Extract<Block, { type: "question" }>;
@@ -58,20 +59,20 @@ export function PdfQuestion({
   block,
   number,
   elementSizes = DEFAULT_ELEMENT_SIZES,
+  baseFontSize = BASE_FONT_PT,
 }: {
   block: QuestionBlock;
   number: number;
   elementSizes?: ElementFontSizesPt;
+  /** Corpo do documento (pt), de onde a coluna do número é derivada. */
+  baseFontSize?: number;
 }) {
   const stemNumbers = questionNumbers(block.stem);
   const position = block.enunciadoPosition ?? "below";
   const hasEnunciado = block.enunciado != null && block.enunciado.length > 0;
   const displayNumber = block.customNumber ?? number.toString();
 
-  /** O rótulo, como run de texto: entra na linha, não ao lado dela. */
-  const numberRun = <Text style={{ fontWeight: "bold" }}>{`${displayNumber}. `}</Text>;
-
-  const enunciadoView = (prefix?: typeof numberRun) =>
+  const enunciadoView = (prefix?: ReactNode) =>
     hasEnunciado ? (
       <View style={{ marginBottom: 4 }}>
         <Text style={{ ...pdfTextSize(elementSizes.stem) }}>
@@ -92,6 +93,30 @@ export function PdfQuestion({
   const paragraphLeads =
     !enunciadoLeads && leadingStem?.type === "paragraph" && !pageBreakBefore(leadingStem.style);
 
+  /**
+   * A COLUNA do stem (achado 0175). O run do número entra na linha do texto
+   * (0428) e o recuo pendurado devolve a coluna que as telas desenham com
+   * `flex` + `shrink-0`: o bloco inteiro recua `paddingLeft`, e a PRIMEIRA
+   * linha volta à margem com um `textIndent` negativo do mesmo tamanho: o
+   * número imprime na margem e todo o resto do enunciado (linhas de
+   * continuação e blocos seguintes) fica na coluna. O `textIndent` mora no run
+   * do número, não no <Text> que o contém, porque o `@react-pdf` lê o recuo do
+   * PRIMEIRO run do parágrafo e não herda essa propriedade.
+   *
+   * A coluna é medida no corpo de quem hospeda o rótulo: o enunciado tem
+   * tamanho próprio (`elementSizes.stem`), o parágrafo do stem herda o corpo do
+   * documento.
+   */
+  const numberColumn = questionNumberColumnPt(
+    displayNumber,
+    enunciadoLeads ? elementSizes.stem : baseFontSize,
+  );
+
+  /** O rótulo, como run de texto: entra na linha, não ao lado dela. */
+  const numberRun = (
+    <Text style={{ fontWeight: "bold", textIndent: -numberColumn }}>{`${displayNumber}. `}</Text>
+  );
+
   const stemBlocks = block.stem.map((child, i) => (
     <PdfBlock
       key={child.id}
@@ -104,7 +129,7 @@ export function PdfQuestion({
 
   const body =
     enunciadoLeads || paragraphLeads ? (
-      <View>
+      <View style={{ paddingLeft: numberColumn }}>
         {enunciadoLeads ? enunciadoView(numberRun) : null}
         {paragraphLeads ? <PdfParagraph block={leadingStem} blockGap={QUESTION_INNER_GAP_PT} numberPrefix={numberRun} /> : null}
         {paragraphLeads ? stemBlocks.slice(1) : stemBlocks}
