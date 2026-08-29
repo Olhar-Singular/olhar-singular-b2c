@@ -43,6 +43,41 @@ function textOf(node: unknown): string {
   return t.join("");
 }
 
+/**
+ * Todos os <Text> da árvore, de fora para dentro, com componentes de função já
+ * expandidos. Navegar por índice não serve mais para o número da questão: ele
+ * deixou de ser coluna irmã e passou a ser run do <Text> do próprio enunciado
+ * (achado 0428).
+ */
+function textNodes(node: unknown, found: ReactElement[] = []): ReactElement[] {
+  if (node === null || node === undefined || typeof node === "boolean") return found;
+  if (Array.isArray(node)) {
+    node.forEach((c) => textNodes(c, found));
+    return found;
+  }
+  if (isValidElement(node)) {
+    const el = node as ReactElement;
+    if (el.type === (Text as unknown)) {
+      found.push(el);
+      textNodes((el.props as { children?: unknown }).children, found);
+      return found;
+    }
+    if (typeof el.type === "function") {
+      textNodes((el.type as (p: unknown) => unknown)(el.props), found);
+      return found;
+    }
+    textNodes((el.props as { children?: unknown }).children, found);
+  }
+  return found;
+}
+
+/** O <Text> mais externo cujo texto plano contém `needle`. */
+function textWith(node: unknown, needle: string): ReactElement {
+  const hit = textNodes(node).find((t) => textOf(t).includes(needle));
+  if (!hit) throw new Error(`nenhum <Text> com "${needle}"`);
+  return hit;
+}
+
 describe("PdfAnswer", () => {
   it("letters alternatives a)/b) without revealing the correct answer", () => {
     const answer: QuestionAnswer = {
@@ -243,8 +278,7 @@ describe("PdfQuestion — auto number header", () => {
       answer: { kind: "open" },
     };
     const el = PdfQuestion({ block, number: 1 }) as ReactElement;
-    const row = (el.props.children as ReactElement[])[0];
-    const numberText = (row.props.children as ReactElement[])[0];
+    const numberText = textNodes(el).filter((t) => textOf(t).trim() === "1.").pop() as ReactElement;
     const style = numberText.props.style as { fontWeight?: string; color?: string };
     expect(style.fontWeight).toBe("bold");
     expect(style.color).toBeUndefined();
@@ -274,11 +308,7 @@ describe("PdfQuestion — auto number header", () => {
       answer: { kind: "open" },
     };
     const el = PdfQuestion({ block, number: 1, elementSizes }) as ReactElement;
-    const row = (el.props.children as ReactElement[])[0];
-    const innerView = (row.props.children as ReactElement[])[1];
-    // position "above" → enunciado View is the first child of the inner column
-    const enunciadoView = (innerView.props.children as unknown[])[0] as ReactElement;
-    const enunciadoText = (enunciadoView.props as { children: ReactElement }).children;
+    const enunciadoText = textWith(el, "contexto");
     return (enunciadoText.props.style as { fontSize?: number }).fontSize;
   }
 

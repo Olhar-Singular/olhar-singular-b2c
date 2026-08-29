@@ -15,6 +15,7 @@
  * do NOT use blockGap — but spacingAfter still overrides via nodeStyleToPdf spread.
  */
 
+import type { ReactNode } from "react";
 import { View, Text, Image } from "@react-pdf/renderer";
 import type { Block } from "@/lib/adaptation/canonical/schema";
 import { nodeStyleToPdf } from "./nodeStyleToPdf";
@@ -64,13 +65,28 @@ export function PdfHeading({ block, blockGap = 12 }: { block: HeadingBlock; bloc
   );
 }
 
-export function PdfParagraph({ block, blockGap = 12 }: { block: ParagraphBlock; blockGap?: number }) {
+/**
+ * `numberPrefix` é um run opcional emitido ANTES do conteúdo, dentro do mesmo
+ * <Text>. Serve ao número da questão que abre com parágrafo: no mesmo <Text>
+ * ele divide a linha de base do enunciado em vez de flutuar numa coluna irmã de
+ * altura própria (achado 0428).
+ */
+export function PdfParagraph({
+  block,
+  blockGap = 12,
+  numberPrefix,
+}: {
+  block: ParagraphBlock;
+  blockGap?: number;
+  numberPrefix?: ReactNode;
+}) {
   const nodeStyle = nodeStyleToPdf(block.style);
   const { marginBottom: nodeMarginBottom, ...textStyle } = nodeStyle;
   const marginBottom = nodeMarginBottom ?? blockGap;
   return (
     <View style={{ marginBottom }}>
       <Text style={textStyle}>
+        {numberPrefix}
         <PdfRichText content={block.content} />
       </Text>
     </View>

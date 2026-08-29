@@ -3,19 +3,32 @@
  * it is computed from the question's position among the document's question
  * blocks and passed in via `number` (the PDF block walker mirrors the screen
  * renderer's counter). If `block.customNumber` is set it takes precedence.
- * The number is rendered inline (flex row) with the stem content so the PDF
- * layout mirrors the printed question format. Renders the recursive stem blocks
- * (via the shared PdfBlock dispatcher), an optional instruction, and the typed
- * answer via PdfAnswer. The authored answer `kind` and correct-answer flags are
+ * The number is rendered inline with the stem content so the PDF layout mirrors
+ * the printed question format. Renders the recursive stem blocks (via the
+ * shared PdfBlock dispatcher), an optional instruction, and the typed answer
+ * via PdfAnswer. The authored answer `kind` and correct-answer flags are
  * authoritative — no heuristic re-derivation.
+ *
+ * ONDE O NÚMERO MORA (achado 0428): quando o conteúdo que abre a questão é
+ * TEXTO, o número é um run do próprio <Text> desse texto — mesma caixa de
+ * texto, logo mesma linha de base, sem depender de altura de linha nenhuma.
+ * Como coluna irmã num `flex-direction: row` com `alignItems: "flex-start"` ele
+ * só ficava alinhado por coincidência: bastava uma fórmula inline (Courier, bem
+ * maior que o corpo) engordar a primeira linha do enunciado para o "1." subir
+ * 4,38pt acima do texto que numera, em toda questão de uma prova de matemática.
+ * A coluna irmã continua quando a questão abre com bloco NÃO textual (imagem,
+ * fórmula em bloco, andaime) — é o caso que motivou o `flex-start`, porque a
+ * linha de base de uma imagem é a borda de baixo dela e o número sairia ao pé
+ * da figura (mesma razão declarada em QuestionView.tsx).
  */
 
 import { View, Text } from "@react-pdf/renderer";
 import type { Block } from "@/lib/adaptation/canonical/schema";
-import { nodeStyleToPdf } from "./nodeStyleToPdf";
+import { nodeStyleToPdf, pageBreakBefore } from "./nodeStyleToPdf";
 import { PdfRichText } from "./PdfRichText";
 import { PdfAnswer } from "./PdfAnswer";
 import { PdfBlock } from "./PdfBlock";
+import { PdfParagraph } from "./PdfLeafBlocks";
 import { questionNumbers } from "../questionNumbering";
 import { resolveElementFontSizes, resolvePageStyle, type ElementFontSizesPt } from "../pageStyle";
 
@@ -45,26 +58,56 @@ export function PdfQuestion({
   const hasEnunciado = block.enunciado != null && block.enunciado.length > 0;
   const displayNumber = block.customNumber ?? number.toString();
 
-  const enunciadoView = hasEnunciado ? (
-    <View style={{ marginBottom: 4 }}>
-      <Text style={{ fontSize: elementSizes.stem }}>
-        <PdfRichText content={block.enunciado!} />
-      </Text>
-    </View>
-  ) : null;
+  /** O rótulo, como run de texto: entra na linha, não ao lado dela. */
+  const numberRun = <Text style={{ fontWeight: "bold" }}>{`${displayNumber}. `}</Text>;
 
-  return (
-    <View style={{ flexDirection: "column", marginBottom: 8, ...nodeStyleToPdf(block.style) }}>
+  const enunciadoView = (prefix?: typeof numberRun) =>
+    hasEnunciado ? (
+      <View style={{ marginBottom: 4 }}>
+        <Text style={{ fontSize: elementSizes.stem }}>
+          {prefix}
+          <PdfRichText content={block.enunciado!} />
+        </Text>
+      </View>
+    ) : null;
+
+  const leadingStem = block.stem[0];
+  /**
+   * O número só entra na linha do texto se a questão REALMENTE abre com texto:
+   * o enunciado acima do stem, ou um parágrafo como primeiro bloco do stem (e
+   * que não peça quebra de página antes, senão o rótulo iria para a página
+   * anterior junto com a coluna).
+   */
+  const enunciadoLeads = position === "above" && hasEnunciado;
+  const paragraphLeads =
+    !enunciadoLeads && leadingStem?.type === "paragraph" && !pageBreakBefore(leadingStem.style);
+
+  const stemBlocks = block.stem.map((child, i) => (
+    <PdfBlock key={child.id} block={child} number={stemNumbers[i]} elementSizes={elementSizes} />
+  ));
+
+  const body =
+    enunciadoLeads || paragraphLeads ? (
+      <View>
+        {enunciadoLeads ? enunciadoView(numberRun) : null}
+        {paragraphLeads ? <PdfParagraph block={leadingStem} numberPrefix={numberRun} /> : null}
+        {paragraphLeads ? stemBlocks.slice(1) : stemBlocks}
+        {position === "below" && enunciadoView()}
+      </View>
+    ) : (
       <View style={{ flexDirection: "row", alignItems: "flex-start" }}>
         <Text style={{ fontWeight: "bold", marginRight: 6 }}>{displayNumber}.</Text>
         <View style={{ flex: 1 }}>
-          {position === "above" && enunciadoView}
-          {block.stem.map((child, i) => (
-            <PdfBlock key={child.id} block={child} number={stemNumbers[i]} elementSizes={elementSizes} />
-          ))}
-          {position === "below" && enunciadoView}
+          {position === "above" && enunciadoView()}
+          {stemBlocks}
+          {position === "below" && enunciadoView()}
         </View>
       </View>
+    );
+
+  return (
+    <View style={{ flexDirection: "column", marginBottom: 8, ...nodeStyleToPdf(block.style) }}>
+      {body}
 
       {block.instruction && (
         <View style={{ marginBottom: 4 }}>
