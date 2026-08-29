@@ -190,9 +190,11 @@ export function QuestionNodeView({ node, updateAttributes, editor, getPos, delet
       // questão reserve papel no hover/foco, o que empurrava o texto sob o
       // ponteiro e inflava a folha (achado 0413). A reserva desse vão em
       // ponteiro grosso mora no wrapper: FOLHA_RAIL_HOST (achado 0233).
-      // Em ponteiro fino o vão não cabe no rail, então ele só acende por hover
-      // (relance) e nunca por foco nos campos internos da questão, que duraria
-      // toda a edição e roubaria o clique do bloco de cima (achado 0336).
+      // Em ponteiro fino o vão não cabe no rail, então ele nunca acende por foco
+      // nos campos internos da questão, que duraria toda a edição e roubaria o
+      // clique do bloco de cima (achado 0336). Por hover é um relance; por foco
+      // NO PRÓPRIO rail (teclado, achado 0232) não há relance nenhum, e aí o
+      // wrapper reserva o vão enquanto durar o foco (achado 0338).
       className={FOLHA_RAIL}
       contentEditable={false}
     >

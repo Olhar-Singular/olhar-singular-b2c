@@ -313,6 +313,29 @@ describe("QuestionNodeView — rail actions", () => {
     expect(rail?.className).toMatch(/(^|\s)focus-within:pointer-events-auto/);
   });
 
+  /**
+   * Achado 0338 — o `focus-within` do proprio rail (exigido pelo 0232 para o
+   * teclado) acende a MESMA caixa opaca no vao de 12px, entao tabular ate o
+   * rail em ponteiro fino desenha-o sobre a ultima linha do bloco de cima e o
+   * mantem la pelas 4 paradas de tabulacao. Quem chega por teclado nao tem
+   * hover: a invasao nao "some sozinha". A reserva de papel tem de existir
+   * tambem nesse estado — e so nele, porque em repouso a folha precisa medir o
+   * mesmo que o impresso (0102/0113) e reservar no hover empurraria texto sob o
+   * ponteiro (0413).
+   */
+  it("reserva papel quando o rail esta aceso por foco de teclado (achado 0338)", () => {
+    const { props } = makeProps(mc);
+    const { container } = render(<QuestionNodeView {...props} />);
+    const rail = container.querySelector('[data-role="question-rail"]');
+    const wrapper = container.querySelector('[data-testid="question-node"]');
+    // o rail carrega o marcador que o hospedeiro observa
+    expect(rail?.className).toMatch(/(^|\s)folha-rail(\s|$)/);
+    // e o hospedeiro reserva o vao enquanto o foco estiver DENTRO do rail
+    expect(wrapper?.className).toMatch(/has-\[\.folha-rail:focus-within\]:mt-10/);
+    // sem reservar em repouso: `my-3` continua sendo a medida do impresso
+    expect(wrapper?.className).toMatch(/(^|\s)my-3(\s|$)/);
+  });
+
   it("dispatches the move transaction when moving up", () => {
     const tr = { isMove: true };
     buildMoveTransaction.mockReturnValue(tr);
