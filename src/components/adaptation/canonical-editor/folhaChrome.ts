@@ -83,3 +83,20 @@ export const FOLHA_RAIL =
  */
 export const FOLHA_RAIL_HOST =
   "group relative my-3 has-[.folha-rail:focus-within]:mt-10 [@media(hover:none)]:mt-10";
+
+/**
+ * Campo de texto (`<Input>` shadcn) que vive SOBRE a folha.
+ *
+ * Mesmo motivo do FOLHA_BUTTON, e o `RichTextField` já registrou o defeito:
+ * o padrão do shadcn é `border-input bg-background placeholder:text-muted-foreground`,
+ * tokens do app. No tema claro o fundo fica a 1,09:1 contra o papel (o campo
+ * some, e só o rótulo denuncia que ele existe); no tema escuro vira uma laje
+ * verde-petróleo escura no meio do conteúdo impresso, porque o papel não
+ * inverte junto (achado 0342).
+ *
+ * A borda é `--sf-ink-soft` e não `--sf-line-2`: o limite de um componente de
+ * interface precisa de 3:1 contra o papel (WCAG 2.2 AA, 1.4.11), e a linha da
+ * folha (1,3:1) serve para separar texto, não para desenhar um campo.
+ */
+export const FOLHA_INPUT =
+  "border-surface-ink-soft bg-surface-paper text-surface-ink placeholder:text-surface-ink-soft";

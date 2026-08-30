@@ -77,7 +77,9 @@ export default function ImageResizer({ src, alt, initialWidth, onResize }: Props
   return (
     <div
       ref={containerRef}
-      className="relative inline-block group my-1.5 hover:outline hover:outline-1 hover:outline-offset-2 hover:outline-border focus-within:outline focus-within:outline-1 focus-within:outline-offset-2 focus-within:outline-border"
+      /* 0342 — o contorno, a alça e o selo são chrome sobre a folha, que é
+         papel e não segue o tema do app: paleta `--sf-*` (surface-*). */
+      className="relative inline-block group my-1.5 hover:outline hover:outline-1 hover:outline-offset-2 hover:outline-surface-ink-faint focus-within:outline focus-within:outline-1 focus-within:outline-offset-2 focus-within:outline-surface-ink-faint"
       style={{ width }}
     >
       {/*
@@ -91,7 +93,7 @@ export default function ImageResizer({ src, alt, initialWidth, onResize }: Props
       {/* Resize handle - bottom right corner */}
       <div
         onMouseDown={handleMouseDown}
-        className="absolute bottom-0 right-0 w-4 h-4 bg-primary/80 rounded-tl-md cursor-se-resize opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center"
+        className="absolute bottom-0 right-0 w-4 h-4 bg-surface-accent/80 rounded-tl-md cursor-se-resize opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center"
         title="Arraste para redimensionar"
       >
         <svg
@@ -114,7 +116,7 @@ export default function ImageResizer({ src, alt, initialWidth, onResize }: Props
       */}
       <div
         aria-hidden="true"
-        className="absolute -bottom-5 right-0 text-[0.6rem] text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity"
+        className="absolute -bottom-5 right-0 text-[0.6rem] text-surface-ink-soft opacity-0 group-hover:opacity-100 transition-opacity"
       >
         {width}px
       </div>

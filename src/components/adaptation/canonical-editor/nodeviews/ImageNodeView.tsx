@@ -2,7 +2,7 @@ import { useState } from "react";
 import { AlignLeft, AlignCenter, AlignRight, Crop, ImageIcon, Trash2 } from "lucide-react";
 import { NodeViewWrapper, type NodeViewProps } from "@tiptap/react";
 import { toast } from "sonner";
-import { FOLHA_BUTTON, FOLHA_GHOST } from "../folhaChrome";
+import { FOLHA_BUTTON, FOLHA_GHOST, FOLHA_INPUT } from "../folhaChrome";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import ImageResizer from "@/components/editor/ImageResizer";
@@ -217,7 +217,10 @@ export function ImageNodeView({ node, updateAttributes, deleteNode, editor, getP
               disabled={disabled}
               aria-label="Texto alternativo"
               placeholder="Descreva a imagem para quem não a enxerga…"
-              className="h-8 text-xs"
+              /* 0342 — o `<Input>` cru pinta `border-input bg-background`: some
+                 no papel (1,09:1) no tema claro e vira laje escura no tema
+                 escuro. Chrome sobre a folha usa a paleta da folha. */
+              className={cn("h-8 text-xs", FOLHA_INPUT)}
               onChange={(e) => updateAttributes({ alt: e.target.value })}
             />
           </div>
@@ -250,7 +253,10 @@ export function ImageNodeView({ node, updateAttributes, deleteNode, editor, getP
                   size="icon"
                   // 24x24 é o alvo mínimo do WCAG 2.5.8; o ícone continua 12px,
                   // o ganho vem do padding, sem engordar o chrome da folha.
-                  className="h-6 w-6 text-muted-foreground hover:text-destructive"
+                  // 0342 — a tinta é a da folha (FOLHA_GHOST), não a do app:
+                  // `text-muted-foreground` cai para ~2,3:1 no tema escuro
+                  // sobre um papel que continua branco.
+                  className={cn("h-6 w-6", FOLHA_GHOST, "hover:text-destructive")}
                   disabled={disabled}
                   onClick={() => updateAttributes({ caption: null })}
                   aria-label="Remover legenda"

@@ -588,4 +588,31 @@ describe("ImageNodeView", () => {
       screen.getByRole("button", { name: "Adicionar legenda" }).getAttribute("data-folha-chrome"),
     ).toBe("");
   });
+
+  /**
+   * 0342 — o campo de texto alternativo e a lixeira da legenda são chrome
+   * desenhado SOBRE a folha, que é papel e é sempre clara. Vinham com os
+   * tokens do app (`border-input` + `bg-background` do `<Input>` shadcn, e
+   * `text-muted-foreground` na lixeira): 1,09:1 de fundo contra o papel no
+   * tema claro e uma laje verde-petróleo escura no tema escuro, no meio do
+   * conteúdo impresso. A paleta da folha é a `--sf-*` (surface-*).
+   */
+  it("pinta o campo de texto alternativo com a paleta da folha (0342)", () => {
+    const { props } = makeProps({});
+    render(<ImageNodeView {...props} />);
+    const input = screen.getByRole("textbox", { name: "Texto alternativo" });
+    expect(input.className).toContain("bg-surface-paper");
+    expect(input.className).toContain("text-surface-ink");
+    // Borda >= 3:1 contra o papel (WCAG 2.2 AA, 1.4.11): `--sf-ink-soft`.
+    expect(input.className).toContain("border-surface-ink-soft");
+    expect(input.className).not.toMatch(/(^|\s)(border-input|bg-background)(\s|$)/);
+    expect(input.className).not.toMatch(/placeholder:text-muted-foreground/);
+  });
+
+  it("pinta a lixeira da legenda com a tinta da folha (0342)", () => {
+    renderImage({ caption: [{ type: "text", text: "cap" }] });
+    const btn = screen.getByRole("button", { name: "Remover legenda" });
+    expect(btn.className).toContain("text-surface-ink-soft");
+    expect(btn.className).not.toMatch(/(^|\s)text-muted-foreground(\s|$)/);
+  });
 });

@@ -193,4 +193,26 @@ describe("ImageResizer", () => {
     const indicator = screen.getByText("250px");
     expect(indicator.closest('[aria-hidden="true"]')).not.toBeNull();
   });
+
+  /**
+   * 0342 — o chrome do resizer (moldura de hover/foco, alça e selo de largura)
+   * é desenhado sobre a folha, que é papel e não segue o tema do app. Vinha com
+   * `outline-border`, `bg-primary/80` e `text-muted-foreground`: tokens do app,
+   * que invertem no tema escuro sobre um papel que continua branco.
+   */
+  it("pinta o chrome do resizer com a paleta da folha (0342)", () => {
+    render(<ImageResizer src="https://x.png" alt="ilustração" initialWidth={250} onResize={vi.fn()} />);
+    const wrapper = screen.getByRole("img").parentElement as HTMLElement;
+    expect(wrapper.className).toContain("hover:outline-surface-ink-faint");
+    expect(wrapper.className).toContain("focus-within:outline-surface-ink-faint");
+    expect(wrapper.className).not.toMatch(/outline-border/);
+
+    const handle = screen.getByTitle("Arraste para redimensionar");
+    expect(handle.className).toContain("bg-surface-accent/80");
+    expect(handle.className).not.toMatch(/bg-primary/);
+
+    const indicator = screen.getByText("250px");
+    expect(indicator.className).toContain("text-surface-ink-soft");
+    expect(indicator.className).not.toMatch(/text-muted-foreground/);
+  });
 });
