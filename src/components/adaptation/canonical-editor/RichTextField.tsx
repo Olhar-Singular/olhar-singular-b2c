@@ -7,11 +7,8 @@
  * value is `RichText`. Replaces the plain `<Input>`s that flattened bold /
  * italic / color / inline-math into plain text.
  *
- * Extensions are a MINIMAL inline-only set (Document restricted to exactly one
- * paragraph, Paragraph, Text, the four inline marks, TextStyle+AllowlistedColor,
- * and the canonical InlineMath atom). NO block nodes — so the field can never
- * produce a heading/list/divider that the single-paragraph RichText model can't
- * hold.
+ * A lista de extensões (conjunto mínimo inline-only, mais o `History` próprio do
+ * campo) vive em `richTextFieldExtensions.ts`, com o porquê de cada peça.
  *
  * The color extension is `AllowlistedColor`, NOT the raw `@tiptap/extension-color`:
  * this field edits `answer.*`, `caption`, `enunciado` and `instruction`, i.e.
@@ -33,35 +30,13 @@
  */
 
 import { useRef } from "react";
-import { useEditor, EditorContent, BubbleMenu, ReactNodeViewRenderer } from "@tiptap/react";
+import { useEditor, EditorContent, BubbleMenu } from "@tiptap/react";
 import { SelectionBubble } from "./SelectionBubble";
-import Document from "@tiptap/extension-document";
-import Paragraph from "@tiptap/extension-paragraph";
-import Text from "@tiptap/extension-text";
-import Bold from "@tiptap/extension-bold";
-import Italic from "@tiptap/extension-italic";
-import Underline from "@tiptap/extension-underline";
-import Strike from "@tiptap/extension-strike";
-import TextStyle from "@tiptap/extension-text-style";
-import { FontSize } from "@/lib/tiptap/fontSizeExtension";
 import { cn } from "@/lib/utils";
 import type { RichText } from "@/lib/adaptation/canonical/schema";
-import { AllowlistedColor, InlineMathNode } from "@/lib/adaptation/tiptap/schema";
 import { type PMNode } from "@/lib/adaptation/tiptap/fromCanonical";
-import { InlineMathNodeView } from "./nodeviews/InlineMathNodeView";
 import { docFromRichText, richTextFromDoc, richTextEqual } from "./richTextFieldMapping";
-
-/** Build the InlineMath node with its React NodeView bound (so math renders). */
-function buildInlineMathExtension() {
-  const renderer = ReactNodeViewRenderer(InlineMathNodeView);
-  // The `addNodeView` callback is invoked by Tiptap when wiring the real editor;
-  // it is unreachable under jsdom because `@tiptap/react` is mocked in tests.
-  /* v8 ignore next */
-  return InlineMathNode.extend({ addNodeView: () => renderer });
-}
-
-/** Single-paragraph Document — content is exactly one paragraph, no blocks. */
-const SingleParagraphDocument = Document.extend({ content: "paragraph" });
+import { buildRichTextFieldExtensions } from "./richTextFieldExtensions";
 
 interface RichTextFieldProps {
   value: RichText;
@@ -100,19 +75,7 @@ export function RichTextField({
   const lastValueRef = useRef<RichText>(value);
 
   const editor = useEditor({
-    extensions: [
-      SingleParagraphDocument,
-      Paragraph,
-      Text,
-      Bold,
-      Italic,
-      Underline,
-      Strike,
-      TextStyle,
-      AllowlistedColor,
-      FontSize,
-      buildInlineMathExtension(),
-    ],
+    extensions: buildRichTextFieldExtensions(),
     content: initialContentRef.current,
     editable: !disabled && !readOnly,
     onUpdate: ({ editor }) => {
