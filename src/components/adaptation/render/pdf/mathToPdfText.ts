@@ -53,6 +53,35 @@ export function mathToPdfText(latex: string): string {
 }
 
 /**
+ * Quebra o LaTeX do bloco nas linhas que cabem na coluna útil.
+ *
+ * Existe porque `alignItems: "center"` só centra uma caixa que ENCOLHE ao
+ * conteúdo: quando o `<Text>` é mais largo que a coluna, o Yoga clampa a caixa
+ * na coluna inteira, o textkit quebra dentro dela e as linhas nascem na margem
+ * esquerda — a fórmula longa saía em x = 40 pt no papel enquanto as duas telas
+ * a centravam (achado 0433). Decidindo a quebra aqui, cada linha vira um
+ * `<Text>` que cabe, a caixa que as agrupa mede a linha mais larga e volta a
+ * ter o que centrar.
+ *
+ * A quebra prefere o último espaço que cabe (o LaTeX segue legível nos dois
+ * pedaços) e só corta no seco quando não há espaço nenhum. Dentro de cada linha
+ * os espaços saem inquebráveis, para que o textkit não quebre de novo.
+ */
+export function mathBlockLines(latex: string): string[] {
+  const lines: string[] = [];
+  let rest = latex.trim();
+  while (rest.length > MATH_PDF_MAX_ATOM_CHARS) {
+    const head = rest.slice(0, MATH_PDF_MAX_ATOM_CHARS + 1);
+    const space = head.search(/\s\S*$/);
+    const cut = space > 0 ? space : MATH_PDF_MAX_ATOM_CHARS;
+    lines.push(rest.slice(0, cut));
+    rest = rest.slice(space > 0 ? cut + 1 : cut);
+  }
+  lines.push(rest);
+  return lines.map((line) => latexLayoutAtom(line, MATH_PDF_MAX_ATOM_CHARS));
+}
+
+/**
  * Shared monospace style for math LaTeX text in the PDF.
  *
  * O tamanho não é escolhido aqui: vem de `MATH_PDF_FONT_SIZE_PT`, a razão de

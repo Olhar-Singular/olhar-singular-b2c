@@ -1,5 +1,10 @@
 import { describe, it, expect } from "vitest";
-import { mathToPdfText, MATH_PDF_STYLE, MATH_PDF_MAX_ATOM_CHARS } from "./mathToPdfText";
+import {
+  mathToPdfText,
+  mathBlockLines,
+  MATH_PDF_STYLE,
+  MATH_PDF_MAX_ATOM_CHARS,
+} from "./mathToPdfText";
 
 describe("mathToPdfText", () => {
   it("returns the LaTeX source verbatim (v1 projection)", () => {
@@ -43,5 +48,30 @@ describe("mathToPdfText — fórmula maior que a coluna (achado 0427)", () => {
     for (const chunk of mathToPdfText(BLOCO).split(" ")) {
       expect(chunk.length).toBeLessThanOrEqual(MATH_PDF_MAX_ATOM_CHARS);
     }
+  });
+});
+
+describe("mathBlockLines — a fórmula em bloco quebra onde a coluna manda (achado 0433)", () => {
+  const BLOCO =
+    "\\int_{0}^{1} \\frac{x^2 + 1}{\\sqrt{x^3 + 2x}}\\,dx = \\sum_{n=1}^{\\infty} \\frac{1}{n^2}";
+
+  it("devolve uma linha só quando a fórmula cabe, com os espaços inquebráveis", () => {
+    expect(mathBlockLines("(x+1)^2 = 0")).toEqual(["(x+1)^2 = 0"]);
+  });
+
+  it("quebra a fórmula longa em linhas que cabem na coluna", () => {
+    const lines = mathBlockLines(BLOCO);
+    expect(lines.length).toBeGreaterThan(1);
+    for (const line of lines) expect(line.length).toBeLessThanOrEqual(MATH_PDF_MAX_ATOM_CHARS);
+  });
+
+  it("quebra no último espaço que cabe, sem perder caractere", () => {
+    expect(mathBlockLines(BLOCO).join(" ").replace(/\s+/g, " ")).toBe(BLOCO.replace(/\s+/g, " "));
+  });
+
+  it("corta no seco quando não há espaço nenhum onde quebrar", () => {
+    const semEspaco = "x".repeat(MATH_PDF_MAX_ATOM_CHARS + 5);
+    const lines = mathBlockLines(semEspaco);
+    expect(lines).toEqual(["x".repeat(MATH_PDF_MAX_ATOM_CHARS), "x".repeat(5)]);
   });
 });

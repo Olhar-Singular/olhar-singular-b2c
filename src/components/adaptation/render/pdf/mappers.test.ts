@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { isValidElement, type ReactElement } from "react";
+import { Children, isValidElement, type ReactElement, type ReactNode } from "react";
 import { View, Text, Image } from "@react-pdf/renderer";
 import { PdfBlock } from "./PdfBlock";
 import { PdfAnswer } from "./PdfAnswer";
@@ -438,12 +438,15 @@ describe("PdfMath", () => {
       latex: "E=mc^2",
     };
     const el = PdfMath({ block }) as ReactElement;
-    // The outer element is a <View> (block spacing + box centering, 0432);
-    // the inner <Text> keeps its lines in one column (0431).
+    // The outer element is a <View> (block spacing + box centering, 0432/0433);
+    // inside it a box holds one <Text> per line, all in one column (0431).
     expect(el.type).toBe(View);
     expect((el.props as { style: { alignItems?: string } }).style.alignItems).toBe("center");
-    const innerText = (el.props as { children: ReactElement }).children;
-    expect((innerText.props.style as { textAlign: string }).textAlign).toBe("left");
+    const box = (el.props as { children: ReactElement }).children;
+    expect(box.type).toBe(View);
+    const lines = Children.toArray((box.props as { children: ReactNode }).children) as ReactElement[];
+    expect(lines).toHaveLength(1);
+    expect((lines[0].props.style as { textAlign: string }).textAlign).toBe("left");
     expect(textOf(el)).toContain("E=mc^2");
   });
 
