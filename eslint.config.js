@@ -6,7 +6,10 @@ import tseslint from "typescript-eslint";
 import localRules from "./eslint-local-rules/no-sync-effect.js";
 
 export default tseslint.config(
-  { ignores: ["dist", "coverage", "supabase/functions", "eslint-local-rules", "src/integrations/supabase/types.ts"] },
+  // `.claude/` guarda os scripts de workflow do agente, não código do app: eles
+  // rodam num contexto async próprio (top-level `return`), que o parser do ESLint
+  // rejeita — e o erro derrubava o job de Lint do CI antes de os testes rodarem.
+  { ignores: ["dist", "coverage", "supabase/functions", "eslint-local-rules", ".claude", "src/integrations/supabase/types.ts"] },
   {
     extends: [js.configs.recommended, ...tseslint.configs.recommended],
     files: ["**/*.{ts,tsx}"],
