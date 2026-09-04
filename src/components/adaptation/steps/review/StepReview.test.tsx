@@ -604,6 +604,21 @@ describe("StepReview", () => {
       expect(screen.getByLabelText("Pasta")).toHaveTextContent("Sem pasta");
     });
 
+    it("deixa as outras teclas passarem no campo de nova pasta", async () => {
+      // Só o Escape é interceptado (e tem `stopPropagation`). Qualquer outra
+      // tecla precisa seguir para o campo, senão não daria para digitar o nome
+      // — nem usar Enter/Tab para sair dele.
+      setup({ folders: FOLDERS, onNewFolderChange: vi.fn() });
+      fireEvent.click(screen.getByLabelText("Pasta"));
+      await waitFor(() => screen.getByRole("option", { name: /Nova pasta/i }));
+      fireEvent.click(screen.getByRole("option", { name: /Nova pasta/i }));
+      const field = await screen.findByLabelText("Nome da nova pasta");
+      fireEvent.keyDown(field, { key: "a" });
+      fireEvent.keyDown(field, { key: "Enter" });
+      // O campo continua aberto: nenhuma dessas teclas cancela o modo.
+      expect(screen.getByLabelText("Nome da nova pasta")).toBeInTheDocument();
+    });
+
     it("does not break on Escape without a new-folder handler", async () => {
       setup({ folders: FOLDERS });
       fireEvent.click(screen.getByLabelText("Pasta"));

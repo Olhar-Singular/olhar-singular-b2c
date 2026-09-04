@@ -298,6 +298,28 @@ describe("PdfQuestion — a coluna do enunciado (0175)", () => {
     expect(questionNumberColumnPt("10")).toBeGreaterThan(questionNumberColumnPt("1"));
   });
 
+  it("não imprime enunciado nenhum quando a posição é 'above' mas ele está vazio", () => {
+    // `enunciadoPosition` sobrevive no documento canônico mesmo depois de o
+    // enunciado ser apagado. Sem enunciado o número não tem texto com que
+    // dividir a linha, então a questão cai na coluna irmã — e o ramo "above"
+    // dessa via não pode ressuscitar um enunciado que não existe.
+    const block: Extract<Block, { type: "question" }> = {
+      id: id(1),
+      type: "question",
+      stem: [
+        { id: id(2), type: "image", src: "data:image/png;base64,AAA" },
+        { id: id(3), type: "paragraph", content: rt("só a figura numera") },
+      ],
+      enunciadoPosition: "above",
+      answer: { kind: "open" },
+    };
+    const tree = PdfQuestion({ block, number: 4 });
+    // Coluna irmã: o rótulo não vira run com recuo pendurado.
+    expect(textIndentOf(tree, "4.")).toBeUndefined();
+    expect(textOf(tree)).toContain("só a figura numera");
+    expect(numberHost(tree, "4.")).toBeDefined();
+  });
+
   it("mantém a coluna irmã (sem recuo pendurado) quando o stem abre com imagem", () => {
     const block: Extract<Block, { type: "question" }> = {
       id: id(1),
