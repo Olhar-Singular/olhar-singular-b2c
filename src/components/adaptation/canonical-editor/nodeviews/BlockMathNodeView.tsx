@@ -21,10 +21,10 @@ import { Input } from "@/components/ui/input";
 import { FOLHA_BUTTON, FOLHA_RAIL, FOLHA_RAIL_HOST } from "../folhaChrome";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
-import { latexToHtml } from "./nodeViewUtils";
+import { deleteNodeAndRefocus, latexToHtml } from "./nodeViewUtils";
 import { useLatexDraft } from "./useLatexDraft";
 
-export function BlockMathNodeView({ node, updateAttributes, editor, deleteNode }: NodeViewProps) {
+export function BlockMathNodeView({ node, updateAttributes, editor, deleteNode, getPos }: NodeViewProps) {
   const [editing, setEditing] = useState(false);
   const { latex, alt } = node.attrs as { latex: string; alt: string | null };
   const disabled = !editor.isEditable;
@@ -52,7 +52,7 @@ export function BlockMathNodeView({ node, updateAttributes, editor, deleteNode }
             size="icon"
             className="h-7 w-7 text-destructive"
             disabled={disabled}
-            onClick={() => deleteNode()}
+            onClick={() => deleteNodeAndRefocus(deleteNode, editor, getPos)}
             title="Excluir fórmula"
             aria-label="Excluir fórmula"
           >
@@ -94,7 +94,7 @@ export function BlockMathNodeView({ node, updateAttributes, editor, deleteNode }
               variant="ghost"
               size="sm"
               className="text-destructive"
-              onClick={() => deleteNode()}
+              onClick={() => deleteNodeAndRefocus(deleteNode, editor, getPos)}
               title="Excluir fórmula"
               aria-label="Excluir fórmula"
             >

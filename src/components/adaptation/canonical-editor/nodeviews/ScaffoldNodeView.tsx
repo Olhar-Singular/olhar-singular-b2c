@@ -23,8 +23,9 @@ import {
   SCAFFOLDING_LABEL,
   SCAFFOLDING_RADIUS_PX,
 } from "@/components/adaptation/render/pageTokens";
+import { deleteNodeAndRefocus } from "./nodeViewUtils";
 
-export function ScaffoldNodeView({ node, updateAttributes, editor, deleteNode }: NodeViewProps) {
+export function ScaffoldNodeView({ node, updateAttributes, editor, deleteNode, getPos }: NodeViewProps) {
   const items = node.attrs.items as string[];
   const disabled = !editor.isEditable;
 
@@ -53,7 +54,7 @@ export function ScaffoldNodeView({ node, updateAttributes, editor, deleteNode }:
           size="icon"
           className="h-6 w-6 text-destructive hover:bg-surface-paper/60"
           disabled={disabled}
-          onClick={() => deleteNode()}
+          onClick={() => deleteNodeAndRefocus(deleteNode, editor, getPos)}
           title="Excluir apoio"
           aria-label="Excluir apoio"
         >

@@ -284,3 +284,32 @@ describe("BlockMathNodeView", () => {
     expect(screen.queryByTestId("blockmath-alt-stale")).not.toBeInTheDocument();
   });
 });
+
+// Achado 0253: as duas superfícies que apagam a fórmula (rail e editor aberto)
+// desmontam o próprio botão; sem refoco o navegador larga o foco no <body>.
+describe("BlockMathNodeView — foco depois de excluir (achado 0253)", () => {
+  function withFocus() {
+    const { props, deleteNode } = makeProps();
+    const focus = vi.fn();
+    (props.editor as unknown as { commands: unknown; state: unknown }).commands = { focus };
+    (props.editor as unknown as { state: unknown }).state = { doc: { content: { size: 50 } } };
+    (props as unknown as { getPos: () => number }).getPos = () => 9;
+    return { props, deleteNode, focus };
+  }
+
+  it("devolve o foco à folha ao excluir pelo rail", () => {
+    const { props, focus } = withFocus();
+    render(<BlockMathNodeView {...props} />);
+    fireEvent.click(screen.getAllByRole("button", { name: "Excluir fórmula" })[0]);
+    expect(focus).toHaveBeenCalledWith(9);
+  });
+
+  it("devolve o foco à folha ao excluir de dentro do editor aberto", () => {
+    const { props, focus } = withFocus();
+    render(<BlockMathNodeView {...props} />);
+    fireEvent.click(screen.getByTestId("blockmath-render"));
+    const botoes = screen.getAllByRole("button", { name: "Excluir fórmula" });
+    fireEvent.click(botoes[botoes.length - 1]);
+    expect(focus).toHaveBeenCalledWith(9);
+  });
+});

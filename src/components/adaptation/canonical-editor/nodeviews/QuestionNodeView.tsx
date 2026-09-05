@@ -40,7 +40,7 @@ import ImageManagerModal from "@/components/editor/ImageManagerModal";
 import type { ImageItem } from "@/components/editor/imageManagerUtils";
 import type { QuestionAnswer, RichText } from "@/lib/adaptation/canonical/schema";
 import { newId } from "@/lib/adaptation/canonical/ids";
-import { questionOrdinal } from "./nodeViewUtils";
+import { deleteNodeAndRefocus, questionOrdinal } from "./nodeViewUtils";
 import { canMoveUp, canMoveDown, type MoveDirection } from "./blockMove";
 import { buildMoveTransaction, buildStemImagesTransaction } from "./blockTransactions";
 import { useQuestionCard } from "./questionCardState";
@@ -291,7 +291,7 @@ export function QuestionNodeView({ node, updateAttributes, editor, getPos, delet
           <AlertDialogFooter>
             <AlertDialogCancel>Cancelar</AlertDialogCancel>
             <AlertDialogAction
-              onClick={() => deleteNode()}
+              onClick={() => deleteNodeAndRefocus(deleteNode, editor, getPos)}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
               Excluir

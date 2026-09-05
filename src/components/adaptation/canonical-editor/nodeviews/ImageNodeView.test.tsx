@@ -633,3 +633,17 @@ describe("ImageNodeView — gatilho de foco da modal de imagens (0349)", () => {
     );
   });
 });
+
+// Achado 0253: excluir a imagem desmonta o rail que hospeda o botão; sem
+// refoco o foco cai no <body> e o teclado volta ao topo do documento.
+describe("ImageNodeView — foco depois de excluir (achado 0253)", () => {
+  it("devolve o foco à folha na posição da imagem apagada", () => {
+    const { props } = makeProps();
+    const focus = vi.fn();
+    (props.editor as unknown as { commands: unknown }).commands = { focus };
+    (props.editor as unknown as { state: unknown }).state = { doc: { content: { size: 50 } } };
+    render(<ImageNodeView {...props} />);
+    fireEvent.click(screen.getByRole("button", { name: "Excluir imagem" }));
+    expect(focus).toHaveBeenCalledWith(7);
+  });
+});

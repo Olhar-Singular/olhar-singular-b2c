@@ -16,6 +16,7 @@ import type { UploadedExamOptions } from "../uploadedExamExtension";
 import { uploadImageDataUrl } from "@/lib/utils/imageUpload";
 import { RichTextField } from "../RichTextField";
 import { cn } from "@/lib/utils";
+import { deleteNodeAndRefocus } from "./nodeViewUtils";
 
 const ALIGNMENTS = [
   { value: "left", Icon: AlignLeft, label: "Alinhar à esquerda" },
@@ -191,7 +192,7 @@ export function ImageNodeView({ node, updateAttributes, deleteNode, editor, getP
               size="sm"
               className="gap-1 text-destructive hover:bg-surface-mesa hover:text-destructive"
               disabled={disabled}
-              onClick={() => deleteNode()}
+              onClick={() => deleteNodeAndRefocus(deleteNode, editor, getPos)}
               aria-label="Excluir imagem"
             >
               <Trash2 className="h-3.5 w-3.5" />

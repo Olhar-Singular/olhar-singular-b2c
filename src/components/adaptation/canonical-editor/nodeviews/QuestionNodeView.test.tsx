@@ -525,6 +525,20 @@ describe("QuestionNodeView — rail actions", () => {
     expect(deleteNode).toHaveBeenCalledTimes(1);
   });
 
+  // Achado 0253: o botão que apaga mora dentro do nó que a exclusão desmonta —
+  // sem devolver o foco, ele sai do DOM e o navegador larga o foco no <body>:
+  // Tab recomeça do topo (WCAG 2.4.3) e o Ctrl+Z nem chega ao ProseMirror.
+  it("devolve o foco à folha depois de excluir a questão (achado 0253)", () => {
+    const { props } = makeProps(mc);
+    const focus = vi.fn();
+    (props.editor as unknown as { commands: unknown }).commands = { focus };
+    (props.editor.state as unknown as { doc: { content: { size: number } } }).doc.content = { size: 200 };
+    render(<QuestionNodeView {...props} />);
+    fireEvent.click(screen.getByLabelText("Excluir questão"));
+    fireEvent.click(screen.getByRole("button", { name: "Excluir" }));
+    expect(focus).toHaveBeenCalledWith(100); // a posição do nó apagado, não o <body>
+  });
+
   it("mantém a questão quando a confirmação é cancelada (achado 0252)", () => {
     const { props, deleteNode } = makeProps(mc);
     render(<QuestionNodeView {...props} />);

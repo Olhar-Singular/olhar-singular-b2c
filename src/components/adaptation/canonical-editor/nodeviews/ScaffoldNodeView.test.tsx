@@ -59,6 +59,19 @@ describe("ScaffoldNodeView", () => {
     expect(deleteNode).toHaveBeenCalledTimes(1);
   });
 
+  // Achado 0253: o botão sai do DOM junto com o nó; sem devolver o foco à
+  // folha, o navegador o larga no <body> e o teclado perde a posição.
+  it("devolve o foco à folha depois de excluir o apoio (achado 0253)", () => {
+    const { props } = makeProps(["a"]);
+    const focus = vi.fn();
+    (props.editor as unknown as { commands: unknown; state: unknown }).commands = { focus };
+    (props.editor as unknown as { state: unknown }).state = { doc: { content: { size: 50 } } };
+    (props as unknown as { getPos: () => number }).getPos = () => 12;
+    render(<ScaffoldNodeView {...props} />);
+    fireEvent.click(screen.getByRole("button", { name: "Excluir apoio" }));
+    expect(focus).toHaveBeenCalledWith(12);
+  });
+
   it("disables the delete button when not editable", () => {
     const { props } = makeProps(["a"], false);
     render(<ScaffoldNodeView {...props} />);

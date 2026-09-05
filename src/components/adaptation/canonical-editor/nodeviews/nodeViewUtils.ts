@@ -44,3 +44,43 @@ export function latexToHtml(latex: string): string {
 export function inlineLatexToHtml(latex: string): string {
   return renderLatexToHtml(latex, false);
 }
+
+/**
+ * Minimal structural view of the Tiptap editor needed to put the caret back on
+ * the sheet after a node is removed. Kept structural (not `Editor`) so the
+ * helper stays unit-testable without booting ProseMirror.
+ */
+export interface RefocusEditor {
+  commands?: { focus?: (position?: number) => unknown };
+  state?: { doc?: { content?: { size?: number } } };
+}
+
+/**
+ * Delete a node AND give the focus a predictable home (achado 0253).
+ *
+ * Every delete button lives inside the very nodeview the deletion unmounts:
+ * once `deleteNode()` runs, the focused `<button>` leaves the DOM and the
+ * browser drops focus on `<body>`. From there `Tab` restarts at the top of the
+ * page (WCAG 2.4.3 Focus Order) and `Ctrl+Z` never reaches ProseMirror, so the
+ * shortcut that would undo the deletion is out of reach.
+ *
+ * The position is read BEFORE the deletion (afterwards the node is gone) and
+ * clamped to the already-shrunk document, which is exactly the spot the next
+ * sibling now occupies. With no usable position we still focus the sheet.
+ */
+export function deleteNodeAndRefocus(
+  deleteNode: () => void,
+  editor: RefocusEditor,
+  getPos?: () => number | undefined,
+): void {
+  const posBefore = typeof getPos === "function" ? getPos() : undefined;
+  deleteNode();
+  const focus = editor?.commands?.focus;
+  if (typeof focus !== "function") return;
+  const size = editor?.state?.doc?.content?.size;
+  if (typeof posBefore === "number" && Number.isFinite(posBefore) && typeof size === "number") {
+    focus.call(editor.commands, Math.max(0, Math.min(posBefore, size)));
+    return;
+  }
+  focus.call(editor.commands);
+}
