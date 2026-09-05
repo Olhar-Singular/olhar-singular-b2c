@@ -8,6 +8,10 @@ import {
   type RefocusEditor,
 } from "./nodeViewUtils";
 import { renderLatexToHtml } from "@/lib/domain/latexRenderer";
+import { Node as PMNode } from "@tiptap/pm/model";
+import { getEditorSchema } from "@/lib/adaptation/tiptap/getEditorSchema";
+import { canonicalToProseMirror } from "@/lib/adaptation/tiptap/fromCanonical";
+import type { CanonicalDocument } from "@/lib/adaptation/canonical/schema";
 
 describe("questionOrdinal", () => {
   /** Build a fake doc from a list of [typeName, pos] node descriptors. */
@@ -124,5 +128,52 @@ describe("deleteNodeAndRefocus", () => {
     const deleteNode = vi.fn();
     expect(() => deleteNodeAndRefocus(deleteNode, {} as RefocusEditor, () => 3)).not.toThrow();
     expect(deleteNode).toHaveBeenCalledTimes(1);
+  });
+});
+
+// Achado 0352: `focus(pos)` do Tiptap SEMPRE cria uma TextSelection na posicao
+// crua. A posicao de um nodeview e uma fronteira entre blocos, e o ProseMirror
+// rejeita TextSelection ali ("TextSelection endpoint not pointing into a node
+// with inline content (doc)"). O teste roda contra um documento ProseMirror
+// REAL, montado com o schema canonico: com editor falso a posicao invalida
+// nunca e resolvida e o defeito passa batido.
+describe("deleteNodeAndRefocus — documento ProseMirror real (achado 0352)", () => {
+  const schema = getEditorSchema();
+  const uid0352 = (n: number): string =>
+    `00000000-0000-4000-8000-${String(n).padStart(12, "0")}`;
+
+  /** Doc ja ENCOLHIDO (o no apagado nao esta mais la), como o helper o ve. */
+  const docOfBlocks = (blocks: CanonicalDocument["blocks"]): PMNode =>
+    PMNode.fromJSON(schema, canonicalToProseMirror({ schemaVersion: 1, blocks }));
+
+  const para = (n: number): CanonicalDocument["blocks"][number] => ({
+    id: uid0352(n),
+    type: "paragraph",
+    content: [{ type: "text", text: `p${n}` }],
+  });
+
+  const focusedOn = (doc: PMNode, posBefore: number): number | undefined => {
+    const spy = vi.fn();
+    const editor = { commands: { focus: spy }, state: { doc } } as unknown as RefocusEditor;
+    deleteNodeAndRefocus(vi.fn(), editor, () => posBefore);
+    expect(spy).toHaveBeenCalledTimes(1);
+    return spy.mock.calls[0][0] as number | undefined;
+  };
+
+  it("poe o cursor dentro de conteudo inline, nunca na fronteira de bloco", () => {
+    // [p1, imagem, p2] com a imagem ja apagada -> [p1, p2].
+    const doc = docOfBlocks([para(1), para(2)]);
+    const posDaImagem = doc.child(0).nodeSize; // fronteira entre p1 e p2
+    const pos = focusedOn(doc, posDaImagem);
+    expect(typeof pos).toBe("number");
+    expect(doc.resolve(pos as number).parent.inlineContent).toBe(true);
+  });
+
+  it("foca a folha sem posicao quando o documento nao tem posicao de texto", () => {
+    // Sem nenhum bloco de texto, o ProseMirror nao devolve TextSelection
+    // nenhuma: focar a folha sem posicao preserva a selecao que ele mesmo
+    // escolheu ao aplicar a exclusao.
+    const doc = docOfBlocks([{ id: uid0352(9), type: "divider" }]);
+    expect(focusedOn(doc, 0)).toBeUndefined();
   });
 });

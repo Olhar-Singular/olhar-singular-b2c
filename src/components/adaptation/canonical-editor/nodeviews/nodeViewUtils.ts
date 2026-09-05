@@ -3,6 +3,9 @@
  * so the React Fast-Refresh lint rule stays happy and the logic stays unit-testable.
  */
 
+import type { ResolvedPos } from "@tiptap/pm/model";
+import { TextSelection } from "@tiptap/pm/state";
+
 import { renderLatexToHtml } from "@/lib/domain/latexRenderer";
 
 /**
@@ -52,7 +55,12 @@ export function inlineLatexToHtml(latex: string): string {
  */
 export interface RefocusEditor {
   commands?: { focus?: (position?: number) => unknown };
-  state?: { doc?: { content?: { size?: number } } };
+  state?: {
+    doc?: {
+      content?: { size?: number };
+      resolve?: (pos: number) => ResolvedPos;
+    };
+  };
 }
 
 /**
@@ -67,6 +75,16 @@ export interface RefocusEditor {
  * The position is read BEFORE the deletion (afterwards the node is gone) and
  * clamped to the already-shrunk document, which is exactly the spot the next
  * sibling now occupies. With no usable position we still focus the sheet.
+ *
+ * That raw position is a boundary BETWEEN blocks, never a point inside inline
+ * content, and `focus(pos)` always turns a number into a `TextSelection` — so
+ * handing it over unchanged makes ProseMirror warn ("TextSelection endpoint not
+ * pointing into a node with inline content") and leaves the caret in a state the
+ * library does not support (achado 0352). We therefore ask ProseMirror for the
+ * nearest valid TEXT position (`TextSelection.between`, searching forward first)
+ * and focus that instead. When the document has no text position at all the
+ * fallback is a plain focus, which keeps the selection ProseMirror itself picked
+ * while applying the deletion.
  */
 export function deleteNodeAndRefocus(
   deleteNode: () => void,
@@ -77,10 +95,21 @@ export function deleteNodeAndRefocus(
   deleteNode();
   const focus = editor?.commands?.focus;
   if (typeof focus !== "function") return;
-  const size = editor?.state?.doc?.content?.size;
+  const doc = editor?.state?.doc;
+  const size = doc?.content?.size;
   if (typeof posBefore === "number" && Number.isFinite(posBefore) && typeof size === "number") {
-    focus.call(editor.commands, Math.max(0, Math.min(posBefore, size)));
-    return;
+    const clamped = Math.max(0, Math.min(posBefore, size));
+    const resolve = doc?.resolve;
+    if (typeof resolve !== "function") {
+      focus.call(editor.commands, clamped);
+      return;
+    }
+    const $pos = resolve.call(doc, clamped);
+    const near = TextSelection.between($pos, $pos, 1);
+    if (near instanceof TextSelection) {
+      focus.call(editor.commands, near.from);
+      return;
+    }
   }
   focus.call(editor.commands);
 }
