@@ -157,6 +157,13 @@ describe("SelectionBubble", () => {
       render(<SelectionBubble editor={makeEditor()} />);
       expect(screen.getByRole("toolbar").className).toMatch(/(^|\s)flex-wrap(\s|$)/);
     });
+
+    // Caça 0181: em desktop a quebra em duas fileiras dobrava a área de papel
+    // coberta pela barra — a partir de `sm` ela volta a caber numa fileira só.
+    it("volta a uma fileira única a partir de telas largas", () => {
+      render(<SelectionBubble editor={makeEditor()} />);
+      expect(screen.getByRole("toolbar").className).toMatch(/(^|\s)sm:flex-nowrap(\s|$)/);
+    });
   });
 
   // --- Fonte por seleção (A+ / A-) ---

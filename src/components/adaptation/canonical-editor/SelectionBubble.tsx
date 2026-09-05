@@ -116,7 +116,7 @@ export function SelectionBubble({ editor }: Props) {
       onKeyDown={handleKeyDown}
       // `flex-wrap` + largura máxima: com as amostras em 28 px a barra passa a não
       // caber em 390 — ela quebra em duas linhas em vez de encolher os alvos.
-      className="flex max-w-[calc(100vw-2rem)] flex-wrap items-center gap-0.5 rounded-md border border-surface-line-2 bg-surface-paper p-1 shadow-md"
+      className="flex max-w-[calc(100vw-2rem)] flex-wrap sm:max-w-none sm:flex-nowrap items-center gap-0.5 rounded-md border border-surface-line-2 bg-surface-paper p-1 shadow-md"
     >
       {MARKS.map(({ name, label, Icon, toggle }, index) => (
         <Button

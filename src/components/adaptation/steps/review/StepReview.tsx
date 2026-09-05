@@ -14,6 +14,7 @@ import { AppearancePopover } from "./AppearancePopover";
 import { MetadataDrawer } from "./MetadataDrawer";
 import { OriginalExamDialog } from "./OriginalExamDialog";
 import { SelectionBubble } from "@/components/adaptation/canonical-editor/SelectionBubble";
+import { SELECTION_BUBBLE_TIPPY_OPTIONS } from "@/components/adaptation/canonical-editor/selectionBubbleTippy";
 import { resolvePageStyle } from "@/components/adaptation/render/pageStyle";
 import { SUBJECTS } from "@/lib/utils/constants";
 import {
@@ -412,12 +413,12 @@ export function StepReview({
           {/* Bubble de seleção (plano §6.2): aparece só com seleção não-vazia no
               editor principal — editores aninhados (RichTextField) são instâncias
               separadas, então o bubble não os atinge.
-              `appendTo: "parent"` mantém o popover adjacente à referência na ordem
-              do DOM (caça 0208); sem isso o tippy o joga no fim do <body> e a barra
-              fica a ~15 elementos focáveis do editor. */}
+              As opções de posicionamento (ancoragem no pai, abertura abaixo da
+              seleção, fileira única) vivem em `selectionBubbleTippy.ts` — caças
+              0208 e 0181. */}
           <BubbleMenu
             editor={editor}
-            tippyOptions={{ duration: 100, appendTo: "parent" }}
+            tippyOptions={SELECTION_BUBBLE_TIPPY_OPTIONS}
             shouldShow={({ state }) => isTextSelection(state.selection) && !state.selection.empty}
           >
             <SelectionBubble editor={editor} />

@@ -32,6 +32,7 @@
 import { useEffect, useRef } from "react";
 import { useEditor, EditorContent, BubbleMenu } from "@tiptap/react";
 import { SelectionBubble } from "./SelectionBubble";
+import { SELECTION_BUBBLE_TIPPY_OPTIONS } from "./selectionBubbleTippy";
 import { cn } from "@/lib/utils";
 import type { RichText } from "@/lib/adaptation/canonical/schema";
 import { type PMNode } from "@/lib/adaptation/tiptap/fromCanonical";
@@ -156,7 +157,7 @@ export function RichTextField({
       )}
     >
       {!disabled && !readOnly && !noBubble && (
-        <BubbleMenu editor={editor} tippyOptions={{ duration: 100, appendTo: "parent" }}>
+        <BubbleMenu editor={editor} tippyOptions={SELECTION_BUBBLE_TIPPY_OPTIONS}>
           <SelectionBubble editor={editor} />
         </BubbleMenu>
       )}

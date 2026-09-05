@@ -177,6 +177,25 @@ describe("StepReview", () => {
       expect(capturedTippyOptions).toEqual(expect.objectContaining({ appendTo: "parent" }));
     });
 
+    /**
+     * Regressão (caça 0181): a barra nascia com o `placement: "top"` padrão do
+     * tippy e com o `maxWidth` de 350px — cobria o `<h1>` inteiro e, quebrada em
+     * duas fileiras, também a linha acima da seleção.
+     */
+    it("abre abaixo da seleção e em fileira única, para não cobrir o texto impresso", () => {
+      setup();
+      expect(capturedTippyOptions).toEqual(
+        expect.objectContaining({ placement: "bottom-start", maxWidth: "none" }),
+      );
+      const modifiers =
+        (capturedTippyOptions?.popperOptions as
+          | { modifiers?: Array<{ name: string; options?: { fallbackPlacements?: string[] } }> }
+          | undefined)?.modifiers ?? [];
+      expect(modifiers.find((m) => m.name === "flip")?.options?.fallbackPlacements).toEqual([
+        "top-start",
+      ]);
+    });
+
     it("Alt+F10 no editor leva o foco para o primeiro controle da barra", () => {
       setup();
       const first = screen.getByRole("button", { name: "Negrito" });
