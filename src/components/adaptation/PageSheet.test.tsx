@@ -953,24 +953,23 @@ describe("PageSheet", () => {
 
     it("desconta o chrome do editor da altura medida", () => {
       // 1060px de envelope passam da área útil (1016,34px) e valiam 2 folhas;
-      // 100px deles são chrome de edição, que o arquivo não imprime.
+      // 100px deles são chrome de edição, que o arquivo não imprime — a
+      // CONTAGEM fala do arquivo (a geometria do papel é o achado 0183).
       withHeights(1060, () => {
         render(
-          <PageSheet toolbar={null}>
+          <PageSheet paginated toolbar={null}>
             <span>texto impresso</span>
             <div data-folha-chrome="" data-test-height="100" />
           </PageSheet>,
         );
-        const sheet = screen.getByTestId("page-sheet");
-        expect(sheet.style.minHeight).toBe("1123px");
-        expect(sheet.style.backgroundImage).toBe("none");
+        expect(screen.getByTestId("page-count").textContent).toBe("1 página A4");
       });
     });
 
     it("desconta também as margens do chrome", () => {
       withHeights(1060, () => {
         render(
-          <PageSheet toolbar={null}>
+          <PageSheet paginated toolbar={null}>
             <span>texto impresso</span>
             <div
               data-folha-chrome=""
@@ -979,7 +978,7 @@ describe("PageSheet", () => {
             />
           </PageSheet>,
         );
-        expect(screen.getByTestId("page-sheet").style.minHeight).toBe("1123px");
+        expect(screen.getByTestId("page-count").textContent).toBe("1 página A4");
       });
     });
 
@@ -996,6 +995,69 @@ describe("PageSheet", () => {
           </PageSheet>,
         );
         expect(screen.getByTestId("page-sheet").style.minHeight).toBe("2139.34px");
+      });
+    });
+  });
+
+  /*
+    Achado 0183: o 0172 acertou em tirar o chrome do editor da CONTAGEM de
+    folhas (senão o Revisar fabricava uma segunda A4 em branco para um documento
+    que o arquivo emite com uma página), mas a GEOMETRIA da folha continuou
+    sendo função só do que é impresso. O chrome, porém, é DESENHADO no fluxo:
+    com 1060px de envelope, 100px deles chrome, o papel ficava no piso de uma A4
+    (1123px) e a última linha era desenhada 43px DENTRO da margem inferior, a
+    10px da borda do papel, sem nenhuma régua avisando que ali já passou da área
+    imprimível. O papel tem que caber o que está desenhado; o contador é que
+    continua contando só o que imprime.
+  */
+  describe("o papel cabe o que está desenhado, chrome incluído (achado 0183)", () => {
+    const withHeights = (envelope: number, run: () => void) => {
+      const spy = vi
+        .spyOn(HTMLElement.prototype, "offsetHeight", "get")
+        .mockImplementation(function (this: HTMLElement) {
+          if (this.hasAttribute("data-folha-chrome")) {
+            return Number(this.dataset.testHeight ?? 0);
+          }
+          if ((this.parentElement as HTMLElement | null)?.dataset.testid === "page-sheet") {
+            return envelope;
+          }
+          return 0;
+        });
+      try {
+        run();
+      } finally {
+        spy.mockRestore();
+      }
+    };
+
+    it("cresce para a folha seguinte quando o chrome faz o fluxo passar da área útil", () => {
+      // 1060px desenhados passam da área útil (1016,34px): o excedente não pode
+      // ser desenhado dentro da margem de baixo da folha 1.
+      withHeights(1060, () => {
+        render(
+          <PageSheet toolbar={null}>
+            <span>texto impresso</span>
+            <div data-folha-chrome="" data-test-height="100" />
+          </PageSheet>,
+        );
+        const sheet = screen.getByTestId("page-sheet");
+        expect(sheet.style.minHeight).toBe("2139.34px");
+        // E a virada ganha régua, como em qualquer folha com mais de uma página.
+        expect(sheet.style.backgroundImage).toContain(
+          `${PAGE_CONTENT_HEIGHT_PX + 53.33}px`,
+        );
+      });
+    });
+
+    it("mas continua contando só o papel impresso", () => {
+      withHeights(1060, () => {
+        render(
+          <PageSheet paginated toolbar={null}>
+            <span>texto impresso</span>
+            <div data-folha-chrome="" data-test-height="100" />
+          </PageSheet>,
+        );
+        expect(screen.getByTestId("page-count").textContent).toBe("1 página A4");
       });
     });
   });

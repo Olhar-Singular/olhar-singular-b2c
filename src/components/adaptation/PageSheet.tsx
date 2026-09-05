@@ -155,6 +155,12 @@ export function PageSheet({
    */
   const [frameWidth, setFrameWidth] = useState(SHEET_WIDTH_PX);
   const [sheetHeight, setSheetHeight] = useState(PAGE_HEIGHT_PX);
+  /**
+   * Folhas que o PAPEL precisa ter para caber o que está DESENHADO (achado
+   * 0183). É `pageCount` na prévia e no PDF (lá nada é desenhado sem ser
+   * impresso) e pode ser maior no Revisar, onde o chrome de edição ocupa fluxo.
+   */
+  const [drawnPageCount, setDrawnPageCount] = useState(1);
   /** Posição (px, geometria não escalada) de cada virada de página na folha. */
   const [pageRules, setPageRules] = useState<number[]>([]);
 
@@ -251,7 +257,7 @@ export function PageSheet({
         existe no editor sai da conta (ver CHROME_SELECTOR). Na prévia e no PDF
         não há nada marcado e a medida é a de sempre.
       */
-      const height = Math.max(0, content.offsetHeight - editorChromeHeight(content));
+      const printedHeight = Math.max(0, content.offsetHeight - editorChromeHeight(content));
       /*
         Achado 0121: a quebra por questão, na prévia, é uma régua decorativa de
         ~30px (`PageBreakMark`), não uma quebra de fluxo. Medir a folha inteira
@@ -271,28 +277,46 @@ export function PageSheet({
       const cuts = Array.from(sheet.querySelectorAll(".adaptar-page-break")).map(
         (mark) => (mark.getBoundingClientRect().top - sheetTop) / scale,
       );
-      const ends = [...cuts, height];
-      let start = 0;
-      let total = 0;
-      ends.forEach((end) => {
-        // O comprimento do trecho é medido no CONTEÚDO (do corte até o próximo),
-        // porque é isso que o leitor vê na tela; só a origem dele é que passa a
-        // ser o fim da página anterior.
-        /*
-          Achado 0153: o divisor é a área ÚTIL da página (`PAGE_CONTENT_HEIGHT_PX`),
-          não a A4 inteira. O que se mede aqui é a altura do CONTEÚDO, e o conteúdo
-          vive DENTRO das margens que `pageTokensToCss` (e o `<Page>` do react-pdf)
-          aplicam: dividir por 1123px contava os 107px de margem como texto, uma vez
-          por folha. A folha do Revisar voltava a terminar no meio de uma página sem
-          régua (o 0151 reaberto) e o contador anunciava menos folhas que o arquivo.
-          Achado 0157: a área útil passou a ser TAMBÉM o passo das réguas e da
-          altura do papel (abaixo), porque o fluxo contínuo desta folha só gasta
-          margem uma vez — contar por uma régua e desenhar por outra era o que
-          fabricava a folha em branco no fim.
-        */
-        total += Math.max(1, Math.ceil((end - start) / PAGE_CONTENT_HEIGHT_PX));
-        start = end;
-      });
+      /*
+        Achado 0183: a mesma dobradura serve às duas alturas. O 0172 tirou o
+        chrome do editor da CONTAGEM, e estava certo — o contador fala do
+        arquivo. Mas a GEOMETRIA da folha continuou sendo função só do impresso,
+        e o chrome é desenhado no fluxo: com ~330px dele o Revisar via ~730px de
+        conteúdo, ficava no piso de uma A4 e desenhava a última linha 43px
+        DENTRO da margem inferior, a 10px da borda do papel, sem régua nenhuma
+        avisando que ali já tinha passado da área imprimível — enquanto o PDF do
+        mesmo documento parava 272px antes do pé. O papel tem que caber o que
+        está desenhado; o contador é que conta só o que imprime.
+      */
+      const sheetsFor = (height: number) => {
+        const ends = [...cuts, height];
+        let start = 0;
+        let total = 0;
+        ends.forEach((end) => {
+          // O comprimento do trecho é medido no CONTEÚDO (do corte até o próximo),
+          // porque é isso que o leitor vê na tela; só a origem dele é que passa a
+          // ser o fim da página anterior.
+          /*
+            Achado 0153: o divisor é a área ÚTIL da página (`PAGE_CONTENT_HEIGHT_PX`),
+            não a A4 inteira. O que se mede aqui é a altura do CONTEÚDO, e o conteúdo
+            vive DENTRO das margens que `pageTokensToCss` (e o `<Page>` do react-pdf)
+            aplicam: dividir por 1123px contava os 107px de margem como texto, uma vez
+            por folha. A folha do Revisar voltava a terminar no meio de uma página sem
+            régua (o 0151 reaberto) e o contador anunciava menos folhas que o arquivo.
+            Achado 0157: a área útil passou a ser TAMBÉM o passo das réguas e da
+            altura do papel (abaixo), porque o fluxo contínuo desta folha só gasta
+            margem uma vez — contar por uma régua e desenhar por outra era o que
+            fabricava a folha em branco no fim.
+          */
+          total += Math.max(1, Math.ceil((end - start) / PAGE_CONTENT_HEIGHT_PX));
+          start = end;
+        });
+        return total;
+      };
+      const total = sheetsFor(printedHeight);
+      // Nunca menos folhas que o arquivo: o papel só cresce, nunca encolhe
+      // abaixo do que é impresso.
+      const drawnTotal = Math.max(total, sheetsFor(content.offsetHeight));
       /*
         Achado 0131: a folha é N páginas INTEIRAS, e as viradas caem no fim de
         cada uma. Antes o papel era medido a partir do corte (`corte + folhas *
@@ -321,10 +345,11 @@ export function PageSheet({
         escopo desta correção.
       */
       setPageCount(total);
-      setSheetHeight(2 * PAGE_MARGIN_PX + total * PAGE_CONTENT_HEIGHT_PX);
+      setDrawnPageCount(drawnTotal);
+      setSheetHeight(2 * PAGE_MARGIN_PX + drawnTotal * PAGE_CONTENT_HEIGHT_PX);
       setPageRules(
         Array.from(
-          { length: total - 1 },
+          { length: drawnTotal - 1 },
           (_, page) => PAGE_MARGIN_PX + (page + 1) * PAGE_CONTENT_HEIGHT_PX,
         ),
       );
@@ -444,7 +469,9 @@ export function PageSheet({
               position: "absolute",
               left: 0,
               right: 0,
-              bottom: `${(pageCount - 1 - page) * PAGE_CONTENT_HEIGHT_PX + FOOTER_BOTTOM_PX}px`,
+              // A base é a do PAPEL (achado 0183): na prévia e no PDF ele tem
+              // exatamente `pageCount` folhas, e no Revisar pode ter mais.
+              bottom: `${(drawnPageCount - 1 - page) * PAGE_CONTENT_HEIGHT_PX + FOOTER_BOTTOM_PX}px`,
             }}
           >
             {footer(page + 1, pageCount)}
