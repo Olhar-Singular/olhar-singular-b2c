@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render, screen, fireEvent, within } from "@testing-library/react";
 import type { NodeViewProps } from "@tiptap/react";
 import type { QuestionAnswer, RichText } from "@/lib/adaptation/canonical/schema";
 import type { ImageItem } from "@/components/editor/imageManagerUtils";
@@ -503,11 +503,35 @@ describe("QuestionNodeView — rail actions", () => {
     expect(screen.queryByTestId("image-modal")).not.toBeInTheDocument();
   });
 
-  it("deletes the question via deleteNode", () => {
+  // Achado 0252: excluir uma questão apaga enunciado, instrução e todas as
+  // alternativas de uma vez, e o autosave grava a perda no Postgres logo em
+  // seguida — não há desfazer alcançável na folha. O clique no lixo abre a
+  // confirmação (mesmo padrão de AdaptacoesPage) em vez de apagar na hora.
+  it("não apaga a questão no clique: abre a confirmação antes (achado 0252)", () => {
     const { props, deleteNode } = makeProps(mc);
     render(<QuestionNodeView {...props} />);
     fireEvent.click(screen.getByLabelText("Excluir questão"));
+    expect(deleteNode).not.toHaveBeenCalled();
+    const dialog = screen.getByRole("alertdialog");
+    expect(within(dialog).getByText("Excluir questão?")).toBeInTheDocument();
+    expect(within(dialog).getByText(/não pode ser desfeita/i)).toBeInTheDocument();
+  });
+
+  it("deletes the question via deleteNode after confirming (achado 0252)", () => {
+    const { props, deleteNode } = makeProps(mc);
+    render(<QuestionNodeView {...props} />);
+    fireEvent.click(screen.getByLabelText("Excluir questão"));
+    fireEvent.click(screen.getByRole("button", { name: "Excluir" }));
     expect(deleteNode).toHaveBeenCalledTimes(1);
+  });
+
+  it("mantém a questão quando a confirmação é cancelada (achado 0252)", () => {
+    const { props, deleteNode } = makeProps(mc);
+    render(<QuestionNodeView {...props} />);
+    fireEvent.click(screen.getByLabelText("Excluir questão"));
+    fireEvent.click(screen.getByRole("button", { name: "Cancelar" }));
+    expect(deleteNode).not.toHaveBeenCalled();
+    expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
   });
 
   it("restores the question to the original-doc snapshot via Restaurar", () => {
@@ -544,6 +568,7 @@ describe("QuestionNodeView — rail actions", () => {
     expect(screen.queryByLabelText("Mover questão para baixo")).not.toBeInTheDocument();
     expect(screen.getByLabelText("Adicionar imagem à questão")).toBeDisabled();
     fireEvent.click(screen.getByLabelText("Excluir questão"));
+    fireEvent.click(screen.getByRole("button", { name: "Excluir" }));
     expect(props.deleteNode).toHaveBeenCalledTimes(1);
     expect(dispatch).not.toHaveBeenCalled();
   });

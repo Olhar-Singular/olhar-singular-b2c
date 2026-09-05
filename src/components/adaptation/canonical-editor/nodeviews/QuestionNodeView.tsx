@@ -25,6 +25,16 @@ import { useEffect, useRef, useState } from "react";
 import { ArrowUp, ArrowDown, ImagePlus, Pencil, RotateCcw, Trash2 } from "lucide-react";
 import { NodeViewWrapper, NodeViewContent, type NodeViewProps } from "@tiptap/react";
 import { Button } from "@/components/ui/button";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { FOLHA_RAIL, FOLHA_RAIL_HOST } from "../folhaChrome";
 import ImageManagerModal from "@/components/editor/ImageManagerModal";
 import type { ImageItem } from "@/components/editor/imageManagerUtils";
@@ -57,6 +67,11 @@ function findTopLevelPosById(
 
 export function QuestionNodeView({ node, updateAttributes, editor, getPos, deleteNode }: NodeViewProps) {
   const [modalOpen, setModalOpen] = useState(false);
+  // Achado 0252: excluir uma questão apaga enunciado, instrução e todas as
+  // alternativas de uma vez, e o autosave grava a perda em seguida — não há
+  // desfazer alcançável na folha. O lixo abre esta confirmação (mesmo padrão
+  // de AdaptacoesPage) em vez de apagar no clique.
+  const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
   const answer = node.attrs.answer as QuestionAnswer;
   const instruction = node.attrs.instruction as RichText | null;
   const enunciado = node.attrs.enunciado as RichText | null;
@@ -226,7 +241,7 @@ export function QuestionNodeView({ node, updateAttributes, editor, getPos, delet
       <Button type="button" variant="ghost" size="icon" className="h-7 w-7" disabled={disabled} onClick={handleReset} title="Restaurar questão ao original" aria-label="Restaurar questão ao original">
         <RotateCcw className="h-3.5 w-3.5" />
       </Button>
-      <Button type="button" variant="ghost" size="icon" className="h-7 w-7 text-destructive" disabled={disabled} onClick={() => deleteNode()} title="Excluir questão" aria-label="Excluir questão">
+      <Button type="button" variant="ghost" size="icon" className="h-7 w-7 text-destructive" disabled={disabled} onClick={() => setConfirmDeleteOpen(true)} title="Excluir questão" aria-label="Excluir questão">
         <Trash2 className="h-3.5 w-3.5" />
       </Button>
     </div>
@@ -264,6 +279,26 @@ export function QuestionNodeView({ node, updateAttributes, editor, getPos, delet
       )}
 
       <ImageManagerModal open={modalOpen} onClose={() => setModalOpen(false)} onConfirm={handlePick} />
+
+      <AlertDialog open={confirmDeleteOpen} onOpenChange={setConfirmDeleteOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Excluir questão?</AlertDialogTitle>
+            <AlertDialogDescription>
+              O enunciado, a instrução e todas as alternativas serão apagados. Esta ação não pode ser desfeita.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => deleteNode()}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Excluir
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </NodeViewWrapper>
   );
 }
