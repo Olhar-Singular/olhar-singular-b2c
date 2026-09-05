@@ -332,7 +332,7 @@ export function ImageNodeView({ node, updateAttributes, deleteNode, editor, getP
             <AlertDialogCancel>Cancelar</AlertDialogCancel>
             <AlertDialogAction
               onClick={() => deleteNodeAndRefocus(deleteNode, editor, getPos)}
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              className="bg-destructive-surface text-destructive-foreground hover:bg-destructive-surface-hover"
             >
               Excluir
             </AlertDialogAction>

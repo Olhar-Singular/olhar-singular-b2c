@@ -536,3 +536,69 @@ describe("index.css — vao de bloco quando o bloco extremo e um nodeview", () =
     expect(ruleBody(`${wrapper}:last-child`)).not.toMatch(/margin-top/);
   });
 });
+
+/**
+ * Contraste do rotulo do botao destrutivo de confirmacao (achado 0355).
+ *
+ * `--destructive` foi calibrado como fundo/icone (grafico nao textual, 3:1).
+ * Quando ele e o FUNDO de um botao que carrega rotulo de texto — o `Excluir`
+ * dos alert dialogs, `text-sm font-medium`, 14 px — o par volta a ser regido
+ * pela WCAG 1.4.3 e media 4,37:1. No hover era pior: `bg-destructive/90`
+ * compunha o vermelho com o papel do dialogo e caia para 3,87:1, ou seja o
+ * estado com o cursor sobre o botao que apaga o trabalho era o menos legivel.
+ *
+ * O teste mede o par real de cada call site (fundo composto sobre a superficie
+ * do dialogo x tinta), em repouso e no hover, nos dois temas.
+ */
+const DESTRUCTIVE_ACTIONS: [string, string][] = [
+  ["excluir imagem", "./components/adaptation/canonical-editor/nodeviews/ImageNodeView.tsx"],
+  ["excluir questao", "./components/adaptation/canonical-editor/nodeviews/QuestionNodeView.tsx"],
+  ["regerar adaptacao", "./components/adaptation/CanonicalAdaptationWizard.tsx"],
+  ["excluir adaptacao e pasta", "./pages/AdaptacoesPage.tsx"],
+];
+
+/** Todo `className` do arquivo que pinta um fundo destrutivo com rotulo. */
+function destructiveActionClasses(source: string): string[] {
+  return [...source.matchAll(/className="([^"]*\bbg-destructive[a-z0-9-]*(?:\/\d+)?[^"]*)"/g)]
+    .map((m) => m[1])
+    .filter((classes) => /\btext-destructive-foreground\b/.test(classes));
+}
+
+/** `bg-x hover:bg-y/90` -> [["repouso", "x", 1], ["hover", "y", 0.9]] */
+function buttonBackgrounds(classes: string): [string, string, number][] {
+  const found = [
+    ...classes.matchAll(/(?:^|\s)(hover:)?bg-([a-z0-9-]+?)(?:\/(\d+))?(?=\s|$)/g),
+  ];
+  expect(found.length, `nenhum fundo no botao: ${classes}`).toBeGreaterThan(0);
+  return found.map((m) => [
+    m[1] ? "hover" : "repouso",
+    m[2],
+    m[3] ? Number(m[3]) / 100 : 1,
+  ]);
+}
+
+describe("contraste do botao destrutivo de confirmacao (WCAG 1.4.3)", () => {
+  it.each(DESTRUCTIVE_ACTIONS)(
+    "%s: rotulo a 4,5:1 em repouso e no hover, nos dois temas",
+    (what, file) => {
+      const sites = destructiveActionClasses(readSource(file));
+      expect(sites.length, `nenhum botao destrutivo em ${what}`).toBeGreaterThan(0);
+
+      for (const classes of sites) {
+        const inkToken = classes.match(/\btext-(destructive-foreground)\b/)![1];
+        for (const theme of [":root", ".dark"]) {
+          // O AlertDialogContent do shadcn pinta `bg-background`.
+          const surface = hslTokenToRgb(token(theme, "background"));
+          const ink = hslTokenToRgb(token(theme, inkToken));
+          for (const [state, bgToken, alpha] of buttonBackgrounds(classes)) {
+            const bg = mix(hslTokenToRgb(token(theme, bgToken)), surface, alpha);
+            expect(
+              ratioRgb(ink, bg),
+              `${what} (${state}): --${inkToken} sobre --${bgToken}/${alpha} em ${theme}`,
+            ).toBeGreaterThanOrEqual(4.5);
+          }
+        }
+      }
+    },
+  );
+});

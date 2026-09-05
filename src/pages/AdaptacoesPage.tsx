@@ -335,7 +335,7 @@ export default function AdaptacoesPage() {
             <AlertDialogCancel>Cancelar</AlertDialogCancel>
             <AlertDialogAction
               onClick={handleDelete}
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              className="bg-destructive-surface text-destructive-foreground hover:bg-destructive-surface-hover"
             >
               Excluir
             </AlertDialogAction>
@@ -357,7 +357,7 @@ export default function AdaptacoesPage() {
             <AlertDialogCancel>Cancelar</AlertDialogCancel>
             <AlertDialogAction
               onClick={handleDeleteFolder}
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              className="bg-destructive-surface text-destructive-foreground hover:bg-destructive-surface-hover"
             >
               Excluir pasta
             </AlertDialogAction>

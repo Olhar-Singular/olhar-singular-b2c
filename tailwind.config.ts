@@ -35,6 +35,8 @@ export default {
           DEFAULT: "hsl(var(--destructive))",
           foreground: "hsl(var(--destructive-foreground))",
           strong: "hsl(var(--destructive-strong))",
+          surface: "hsl(var(--destructive-surface))",
+          "surface-hover": "hsl(var(--destructive-surface-hover))",
         },
         muted: {
           DEFAULT: "hsl(var(--muted))",

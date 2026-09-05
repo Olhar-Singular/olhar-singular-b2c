@@ -761,7 +761,7 @@ export default function CanonicalAdaptationWizard({ editMode }: Props = {}) {
             <AlertDialogCancel>Cancelar</AlertDialogCancel>
             <AlertDialogAction
               onClick={() => void confirmRegenerateNow()}
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              className="bg-destructive-surface text-destructive-foreground hover:bg-destructive-surface-hover"
             >
               Regerar
             </AlertDialogAction>

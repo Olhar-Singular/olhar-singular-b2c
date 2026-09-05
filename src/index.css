@@ -114,6 +114,13 @@
        sobre o --background do app, abaixo do minimo da WCAG 1.4.3. Achado 0441.
        Mesmo matiz, so a luminosidade menor. */
     --destructive-strong: 0 72% 44%;
+    /* Fundo do botao destrutivo de confirmacao (o `Excluir` dos alert dialogs).
+       O token puro em `bg-destructive` da 4,37:1 com o branco do rotulo, e o
+       antigo `hover:bg-destructive/90` clareava o vermelho contra o papel do
+       dialogo e caia para 3,87:1 — texto de 14 px pede 4,5:1 (WCAG 1.4.3).
+       Mesmo matiz, luminosidade menor, e o hover ESCURECE. Achado 0355. */
+    --destructive-surface: 0 72% 44%;
+    --destructive-surface-hover: 0 72% 38%;
 
     --border: 195 12% 87%;
     --input: 195 12% 87%;
@@ -204,6 +211,10 @@
     /* Aqui a tinta de texto sobe em vez de descer: o chrome do tema escuro e
        que e o fundo. >= 4,5:1 sobre --background e --card. Achado 0441. */
     --destructive-strong: 0 75% 78%;
+    /* Fundo do botao destrutivo: no tema escuro o vermelho ja cumpre 4,5:1 com
+       o rotulo branco, so o hover precisa escurecer em vez de clarear (0355). */
+    --destructive-surface: 0 55% 48%;
+    --destructive-surface-hover: 0 55% 42%;
     --border: 195 15% 33%;
     /* Brighter than --border: this also lights up the outline Button variant's
        border (shares --input with Input/Select/Textarea per shadcn's outline

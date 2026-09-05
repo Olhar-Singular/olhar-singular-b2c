@@ -330,7 +330,7 @@ export function QuestionNodeView({ node, updateAttributes, editor, getPos, delet
                 deletedRef.current = true;
                 deleteNodeAndRefocus(deleteNode, editor, getPos);
               }}
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              className="bg-destructive-surface text-destructive-foreground hover:bg-destructive-surface-hover"
             >
               Excluir
             </AlertDialogAction>
