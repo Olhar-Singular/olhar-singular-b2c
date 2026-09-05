@@ -1030,9 +1030,11 @@ describe("PageSheet", () => {
       }
     };
 
-    it("cresce para a folha seguinte quando o chrome faz o fluxo passar da área útil", () => {
+    it("cresce o excedente quando o chrome faz o fluxo passar da área útil", () => {
       // 1060px desenhados passam da área útil (1016,34px): o excedente não pode
-      // ser desenhado dentro da margem de baixo da folha 1.
+      // ser desenhado dentro da margem de baixo da folha 1 — o papel cresce até
+      // caber os 1060px (mais as duas margens do fluxo). Sem inventar folha:
+      // o impresso continua cabendo numa só (achado 0184).
       withHeights(1060, () => {
         render(
           <PageSheet toolbar={null}>
@@ -1041,11 +1043,8 @@ describe("PageSheet", () => {
           </PageSheet>,
         );
         const sheet = screen.getByTestId("page-sheet");
-        expect(sheet.style.minHeight).toBe("2139.34px");
-        // E a virada ganha régua, como em qualquer folha com mais de uma página.
-        expect(sheet.style.backgroundImage).toContain(
-          `${PAGE_CONTENT_HEIGHT_PX + 53.33}px`,
-        );
+        expect(sheet.style.minHeight).toBe("1166.66px");
+        expect(sheet.style.backgroundImage).toBe("none");
       });
     });
 
@@ -1057,6 +1056,69 @@ describe("PageSheet", () => {
             <div data-folha-chrome="" data-test-height="100" />
           </PageSheet>,
         );
+        expect(screen.getByTestId("page-count").textContent).toBe("1 página A4");
+      });
+    });
+  });
+
+  /*
+    Achado 0184: a correção do 0183 passou a alimentar a GEOMETRIA do papel com
+    a altura do DESENHADO (chrome incluído), então um documento cujo impresso
+    cabe numa folha voltava a ganhar uma segunda A4 inteira em branco no
+    Revisar, com régua de virada e tudo — enquanto a prévia anunciava "1 página
+    A4" e o PDF saía com `Pages: 1`. Quem responde pela PAGINAÇÃO (régua,
+    contagem, quantidade de folhas) é o impresso; o desenhado só pode esticar o
+    excedente do papel, para nada ficar fora do branco.
+  */
+  describe("o chrome estica o papel mas não inventa folha (achado 0184)", () => {
+    const withHeights = (envelope: number, run: () => void) => {
+      const spy = vi
+        .spyOn(HTMLElement.prototype, "offsetHeight", "get")
+        .mockImplementation(function (this: HTMLElement) {
+          if (this.hasAttribute("data-folha-chrome")) {
+            return Number(this.dataset.testHeight ?? 0);
+          }
+          if ((this.parentElement as HTMLElement | null)?.dataset.testid === "page-sheet") {
+            return envelope;
+          }
+          return 0;
+        });
+      try {
+        run();
+      } finally {
+        spy.mockRestore();
+      }
+    };
+
+    // 1300px desenhados, 330px deles chrome de edição: o impresso (970px) cabe
+    // na área útil (1016,34px), exatamente o que o contador e o PDF dizem.
+    const renderFolha = (paginated: boolean) =>
+      render(
+        <PageSheet paginated={paginated} toolbar={null}>
+          <span>texto impresso</span>
+          <div data-folha-chrome="" data-test-height="330" />
+        </PageSheet>,
+      );
+
+    it("não desenha régua de virada que o arquivo não tem", () => {
+      withHeights(1300, () => {
+        renderFolha(false);
+        expect(screen.getByTestId("page-sheet").style.backgroundImage).toBe("none");
+      });
+    });
+
+    it("estica o papel só o excedente desenhado, sem uma A4 a mais", () => {
+      withHeights(1300, () => {
+        renderFolha(false);
+        // Duas margens do fluxo + o desenhado, e não duas áreas úteis inteiras:
+        // o papel acaba onde o desenho acaba.
+        expect(screen.getByTestId("page-sheet").style.minHeight).toBe("1406.66px");
+      });
+    });
+
+    it("continua contando a folha do arquivo", () => {
+      withHeights(1300, () => {
+        renderFolha(true);
         expect(screen.getByTestId("page-count").textContent).toBe("1 página A4");
       });
     });

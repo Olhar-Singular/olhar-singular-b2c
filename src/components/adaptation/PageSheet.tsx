@@ -156,11 +156,12 @@ export function PageSheet({
   const [frameWidth, setFrameWidth] = useState(SHEET_WIDTH_PX);
   const [sheetHeight, setSheetHeight] = useState(PAGE_HEIGHT_PX);
   /**
-   * Folhas que o PAPEL precisa ter para caber o que está DESENHADO (achado
-   * 0183). É `pageCount` na prévia e no PDF (lá nada é desenhado sem ser
-   * impresso) e pode ser maior no Revisar, onde o chrome de edição ocupa fluxo.
+   * Quanto o papel se estica ALÉM das folhas contadas para caber o que está
+   * DESENHADO (achado 0183: o chrome de edição ocupa fluxo). É 0 na prévia e no
+   * PDF (lá nada é desenhado sem ser impresso) e, no Revisar, um excedente em
+   * px — nunca uma folha a mais (achado 0184).
    */
-  const [drawnPageCount, setDrawnPageCount] = useState(1);
+  const [drawnExcess, setDrawnExcess] = useState(0);
   /** Posição (px, geometria não escalada) de cada virada de página na folha. */
   const [pageRules, setPageRules] = useState<number[]>([]);
 
@@ -286,7 +287,8 @@ export function PageSheet({
         DENTRO da margem inferior, a 10px da borda do papel, sem régua nenhuma
         avisando que ali já tinha passado da área imprimível — enquanto o PDF do
         mesmo documento parava 272px antes do pé. O papel tem que caber o que
-        está desenhado; o contador é que conta só o que imprime.
+        está desenhado; o contador é que conta só o que imprime. (O papel cresce
+        o EXCEDENTE desenhado, não uma folha inteira — achado 0184, abaixo.)
       */
       const sheetsFor = (height: number) => {
         const ends = [...cuts, height];
@@ -314,9 +316,18 @@ export function PageSheet({
         return total;
       };
       const total = sheetsFor(printedHeight);
-      // Nunca menos folhas que o arquivo: o papel só cresce, nunca encolhe
-      // abaixo do que é impresso.
-      const drawnTotal = Math.max(total, sheetsFor(content.offsetHeight));
+      /*
+        Achado 0184: o excedente desenhado estica o papel, mas NÃO vira folha. A
+        primeira versão do 0183 media a geometria com `sheetsFor(offsetHeight)`,
+        e aí 330px de chrome bastavam para o Revisar desenhar uma segunda A4
+        inteira (com régua de virada e 1.025px de branco no pé) para um
+        documento que a prévia anuncia com 1 página e o PDF emite com 1. Quem
+        responde pela PAGINAÇÃO — contagem, réguas, número de folhas — é o
+        impresso; o desenhado só compra o papel que falta para nada ficar fora
+        do branco. Quando o chrome sair do fluxo (ficha 0113) o excedente vira 0
+        sozinho e as duas contas voltam a coincidir.
+      */
+      const drawnExcessPx = Math.max(0, content.offsetHeight - total * PAGE_CONTENT_HEIGHT_PX);
       /*
         Achado 0131: a folha é N páginas INTEIRAS, e as viradas caem no fim de
         cada uma. Antes o papel era medido a partir do corte (`corte + folhas *
@@ -345,11 +356,13 @@ export function PageSheet({
         escopo desta correção.
       */
       setPageCount(total);
-      setDrawnPageCount(drawnTotal);
-      setSheetHeight(2 * PAGE_MARGIN_PX + drawnTotal * PAGE_CONTENT_HEIGHT_PX);
+      setDrawnExcess(drawnExcessPx);
+      setSheetHeight(
+        2 * PAGE_MARGIN_PX + Math.max(total * PAGE_CONTENT_HEIGHT_PX, content.offsetHeight),
+      );
       setPageRules(
         Array.from(
-          { length: drawnTotal - 1 },
+          { length: total - 1 },
           (_, page) => PAGE_MARGIN_PX + (page + 1) * PAGE_CONTENT_HEIGHT_PX,
         ),
       );
@@ -469,9 +482,10 @@ export function PageSheet({
               position: "absolute",
               left: 0,
               right: 0,
-              // A base é a do PAPEL (achado 0183): na prévia e no PDF ele tem
-              // exatamente `pageCount` folhas, e no Revisar pode ter mais.
-              bottom: `${(drawnPageCount - 1 - page) * PAGE_CONTENT_HEIGHT_PX + FOOTER_BOTTOM_PX}px`,
+              // A base é a do PAPEL: na prévia e no PDF ele tem exatamente
+              // `pageCount` folhas (excedente 0) e no Revisar pode estar
+              // esticado pelo chrome, que empurra o pé junto (achados 0183/0184).
+              bottom: `${drawnExcess + (pageCount - 1 - page) * PAGE_CONTENT_HEIGHT_PX + FOOTER_BOTTOM_PX}px`,
             }}
           >
             {footer(page + 1, pageCount)}
