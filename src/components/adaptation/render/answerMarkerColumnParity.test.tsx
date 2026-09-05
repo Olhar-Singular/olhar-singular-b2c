@@ -25,7 +25,9 @@ import {
   ALTERNATIVE_MARKER_GAP_PX,
   ALTERNATIVE_MARKER_GAP_PT,
   ALTERNATIVE_MARKER_WIDTH_EM,
+  alternativeMarkerColumnPt,
 } from "./pageTokens";
+import { resolveElementFontSizes, resolvePageStyle } from "./pageStyle";
 import { ALTERNATIVE_MARKER_CLASS } from "./answers/markerColumn";
 import { MultipleChoiceView } from "./answers/MultipleChoiceView";
 import { PdfAnswer } from "./pdf/PdfAnswer";
@@ -78,9 +80,38 @@ describe("coluna do marcador de alternativa — paridade entre as três superfí
     expect(row?.style.columnGap).toBe(`${ALTERNATIVE_MARKER_GAP_PX}px`);
   });
 
-  it("imprime a coluna do marcador do PDF com ALTERNATIVE_MARKER_COLUMN_PT", () => {
-    expect(firstMarkerStyle(PdfAnswer({ answer: MC }) as ReactElement).width).toBe(
+  it("imprime a coluna do marcador do PDF com ALTERNATIVE_MARKER_COLUMN_PT na base", () => {
+    expect(firstMarkerStyle(PdfAnswer({ answer: MC }) as ReactElement).width).toBeCloseTo(
       ALTERNATIVE_MARKER_COLUMN_PT,
+      2,
+    );
+    expect(alternativeMarkerColumnPt()).toBeCloseTo(ALTERNATIVE_MARKER_COLUMN_PT, 2);
+  });
+
+  /**
+   * Achado 0182: a coluna do marcador do PDF era uma constante em pt calibrada
+   * na base de 12pt, enquanto o glifo do marcador escala com o corpo da folha.
+   * Acima de ~24px com a OpenDyslexic o "a)" não cabia na caixa e o `)` caía
+   * numa linha própria — no papel, um caractere que o professor nunca escreveu.
+   *
+   * `"a)"` mede 1,2270em na `public/fonts/OpenDyslexic-Regular.ttf` do repo (a
+   * família mais larga do popover Formato); a coluna precisa comportar o glifo
+   * em qualquer tamanho, não só na base.
+   */
+  const OPENDYSLEXIC_MARKER_EM = 1.227;
+
+  it("mantém a coluna do marcador do PDF maior que o glifo no teto do popover Formato", () => {
+    const sizes = resolveElementFontSizes(resolvePageStyle({ fontSize: 21 }));
+    const width = firstMarkerStyle(
+      PdfAnswer({ answer: MC, elementSizes: sizes }) as ReactElement,
+    ).width;
+    expect(width).toBeGreaterThan(OPENDYSLEXIC_MARKER_EM * sizes.alternative);
+  });
+
+  it("deriva a coluna do marcador do PDF do corpo, como a tela faz em em", () => {
+    expect(alternativeMarkerColumnPt(21)).toBeCloseTo(
+      ALTERNATIVE_MARKER_WIDTH_EM * 21 + ALTERNATIVE_MARKER_GAP_PT,
+      4,
     );
   });
 });

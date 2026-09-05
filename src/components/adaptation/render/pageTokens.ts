@@ -391,6 +391,30 @@ export const ALTERNATIVE_MARKER_WIDTH_EM =
   Math.round(((ALTERNATIVE_MARKER_COLUMN_PT - ALTERNATIVE_MARKER_GAP_PT) / BASE_FONT_PT) * 1e4) /
   1e4;
 
+/**
+ * Largura da coluna do marcador de alternativa no PDF, em pt, para o corpo dado.
+ *
+ * DERIVADA do corpo, como `questionNumberColumnPt` já faz para o número da
+ * questão (achado 0175), e pela mesma razão: o glifo do marcador escala com o
+ * "Tamanho do texto" do popover Formato, a caixa não escalava. Ela era a
+ * constante `ALTERNATIVE_MARKER_COLUMN_PT`, calibrada na base de 12pt, com
+ * `flexShrink: 0` — então acima de ~24px com a OpenDyslexic (onde `"a)"` mede
+ * 1,227em) o texto do marcador é que cedia: a letra colava no texto da
+ * alternativa e o `)` caía sozinho na linha de baixo. O professor lia no papel
+ * um caractere que nunca escreveu, e só na combinação fonte de acessibilidade +
+ * texto grande, que é a que o produto existe para servir (achado 0182).
+ *
+ * A fórmula é a mesma da tela — `ALTERNATIVE_MARKER_WIDTH_EM` do corpo mais o
+ * vão fixo de `ALTERNATIVE_MARKER_GAP_PX` —, então a paridade das três
+ * superfícies do 0340 vale em TODO tamanho, e não só na base (onde continua
+ * dando os mesmos 22pt).
+ */
+export function alternativeMarkerColumnPt(fontSizePt: number = BASE_FONT_PT): number {
+  return (
+    Math.round((ALTERNATIVE_MARKER_WIDTH_EM * fontSizePt + ALTERNATIVE_MARKER_GAP_PT) * 1e4) / 1e4
+  );
+}
+
 /** Tokens da caixa do andaime na unidade do PDF (pt), pela mesma razão 72/96. */
 export const SCAFFOLDING_PADDING_PT = SCAFFOLDING_PADDING_PX / PT_TO_PX;
 export const SCAFFOLDING_MARGIN_Y_PT = SCAFFOLDING_MARGIN_Y_PX / PT_TO_PX;

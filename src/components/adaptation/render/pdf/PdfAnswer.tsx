@@ -28,7 +28,7 @@ import {
   ANSWER_LINE_DASH_PT,
   ANSWER_LINE_DASH_SPACE_PT,
   ANSWER_ITEM_GAP_PT,
-  ALTERNATIVE_MARKER_COLUMN_PT,
+  alternativeMarkerColumnPt,
   pdfTextSize,
 } from "../pageTokens";
 
@@ -36,8 +36,15 @@ import {
 // duas telas mostram (achado 0313).
 const ROW = { flexDirection: "row", marginBottom: ANSWER_ITEM_GAP_PT } as const;
 // flexShrink: 0 prevents the marker column from collapsing when the row is
-// tight, which would push marker text over the content column.
-const MARKER = { width: ALTERNATIVE_MARKER_COLUMN_PT, flexShrink: 0 } as const;
+// tight, which would push marker text over the content column. A largura vem
+// do corpo do item (achado 0182): com a coluna fixa em pt e o glifo escalando
+// com o popover Formato, era o TEXTO do marcador que quebrava dentro da caixa.
+const markerStyle = (fontSizePt: number) =>
+  ({
+    ...pdfTextSize(fontSizePt),
+    width: alternativeMarkerColumnPt(fontSizePt),
+    flexShrink: 0,
+  }) as const;
 // flexBasis: 0 é obrigatório. Sem ele o Yoga deriva a base medindo o texto
 // contra a largura CHEIA do pai e só depois encolhe a caixa para caber ao
 // lado do marcador: a caixa anda, mas as linhas já foram quebradas na
@@ -107,6 +114,7 @@ export function PdfAnswer({
   // Alternatives / items / cells all read at the "alternative" size, which
   // follows the document font size (see resolveElementFontSizes).
   const itemStyle = pdfTextSize(elementSizes.alternative);
+  const MARKER = markerStyle(elementSizes.alternative);
   switch (answer.kind) {
     case "open": {
       const lines = answer.answerLines ?? 3;
