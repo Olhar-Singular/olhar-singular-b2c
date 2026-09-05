@@ -158,6 +158,9 @@ export function StepReview({
 }: Props) {
   const titleHintId = useId();
   const [aboutOpen, setAboutOpen] = useState(false);
+  // 0349 — a gaveta não tem `SheetTrigger` (é controlada), então o gatilho para
+  // onde o foco volta no fechamento tem que ser entregue à mão.
+  const aboutTriggerRef = useRef<HTMLButtonElement>(null);
   const surfaceRef = useRef<HTMLDivElement>(null);
   const [originalOpen, setOriginalOpen] = useState(false);
   // Local: whether the "Nova pasta…" field is open. The NAME goes up so the
@@ -394,6 +397,7 @@ export function StepReview({
             </Button>
           )}
           <Button
+            ref={aboutTriggerRef}
             size="sm"
             variant="ghost"
             onClick={() => setAboutOpen(true)}
@@ -410,6 +414,7 @@ export function StepReview({
       <MetadataDrawer
         open={aboutOpen}
         onOpenChange={setAboutOpen}
+        restoreFocusRef={aboutTriggerRef}
         strategies={metadata.strategiesApplied}
         tips={metadata.implementationTips}
         justification={metadata.pedagogicalJustification}

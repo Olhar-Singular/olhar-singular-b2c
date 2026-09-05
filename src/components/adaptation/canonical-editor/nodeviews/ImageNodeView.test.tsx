@@ -53,10 +53,12 @@ vi.mock("@/components/editor/ImageResizer", () => ({
 
 let modalOnConfirm: ((images: ImageItem[]) => void) | undefined;
 let modalOnClose: (() => void) | undefined;
+let modalRestoreFocusRef: { current: HTMLElement | null } | undefined;
 vi.mock("@/components/editor/ImageManagerModal", () => ({
-  default: ({ open, onConfirm, onClose }: { open: boolean; onConfirm: (images: ImageItem[]) => void; onClose: () => void }) => {
+  default: ({ open, onConfirm, onClose, restoreFocusRef }: { open: boolean; onConfirm: (images: ImageItem[]) => void; onClose: () => void; restoreFocusRef?: { current: HTMLElement | null } }) => {
     modalOnConfirm = onConfirm;
     modalOnClose = onClose;
+    modalRestoreFocusRef = restoreFocusRef;
     return open ? <button data-testid="image-modal" onClick={onClose}>modal</button> : null;
   },
 }));
@@ -614,5 +616,20 @@ describe("ImageNodeView", () => {
     const btn = screen.getByRole("button", { name: "Remover legenda" });
     expect(btn.className).toContain("text-surface-ink-soft");
     expect(btn.className).not.toMatch(/(^|\s)text-muted-foreground(\s|$)/);
+  });
+});
+
+describe("ImageNodeView — gatilho de foco da modal de imagens (0349)", () => {
+  /**
+   * O botão vive dentro do NodeViewWrapper `contentEditable={false}`, e o
+   * ProseMirror seleciona o nó no `mousedown` em vez de focá-lo. O gatilho tem que
+   * ir explícito para a modal, senão o foco cai no `<body>` ao fechar.
+   */
+  it("entrega o botão que abriu a modal como gatilho de foco", () => {
+    renderImage();
+    fireEvent.click(screen.getByRole("button", { name: "Trocar ou adicionar imagem" }));
+    expect(modalRestoreFocusRef?.current).toBe(
+      screen.getByRole("button", { name: "Trocar ou adicionar imagem" }),
+    );
   });
 });

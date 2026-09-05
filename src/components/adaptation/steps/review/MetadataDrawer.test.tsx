@@ -1,5 +1,6 @@
+import React from "react";
 import { describe, it, expect, vi } from "vitest";
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { MetadataDrawer } from "./MetadataDrawer";
 
 const META = {
@@ -73,5 +74,47 @@ describe("MetadataDrawer", () => {
     // O Sheet (shadcn) injeta um botão de fechar com rótulo sr-only "Close".
     fireEvent.click(screen.getByRole("button", { name: "Close" }));
     expect(onOpenChange).toHaveBeenCalledWith(false);
+  });
+});
+
+/**
+ * 0349 — gaveta controlada não tem `SheetTrigger`, então o Radix restaura o foco
+ * no `previouslyFocusedElement` (que pode ser o `<body>`). O gatilho é entregue
+ * por `restoreFocusRef` e devolvido no `onCloseAutoFocus`.
+ */
+describe("MetadataDrawer — devolução de foco ao gatilho (0349)", () => {
+  function Harness({ withRef }: { withRef: boolean }) {
+    const triggerRef = React.useRef<HTMLButtonElement>(null);
+    const [open, setOpen] = React.useState(true);
+    return (
+      <>
+        <button ref={triggerRef} onClick={() => setOpen(true)}>
+          Sobre
+        </button>
+        <MetadataDrawer
+          open={open}
+          onOpenChange={setOpen}
+          restoreFocusRef={withRef ? triggerRef : undefined}
+          strategies={META.strategies}
+          tips={META.tips}
+          justification={META.justification}
+        />
+      </>
+    );
+  }
+
+  it("devolve o foco ao gatilho ao fechar", async () => {
+    render(<Harness withRef />);
+    fireEvent.click(screen.getByRole("button", { name: "Close" }));
+    await waitFor(() =>
+      expect(document.activeElement).toBe(screen.getByRole("button", { name: "Sobre" })),
+    );
+  });
+
+  it("sem gatilho informado, deixa o Radix cuidar do foco", async () => {
+    render(<Harness withRef={false} />);
+    fireEvent.click(screen.getByRole("button", { name: "Close" }));
+    await waitFor(() => expect(screen.queryByText("Dicas de aplicação")).not.toBeInTheDocument());
+    expect(document.activeElement).not.toBe(screen.getByRole("button", { name: "Sobre" }));
   });
 });

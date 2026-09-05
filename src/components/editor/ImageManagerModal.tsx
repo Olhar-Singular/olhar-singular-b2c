@@ -1,4 +1,5 @@
 import { useState, useCallback, useRef, useEffect } from "react";
+import type { RefObject } from "react";
 import {
   Dialog,
   DialogContent,
@@ -24,6 +25,13 @@ type Props = {
   open: boolean;
   onClose: () => void;
   onConfirm: (images: ImageItem[]) => void;
+  /**
+   * 0349 — o diálogo é aberto por estado, sem `DialogTrigger`. Sem isso o Radix
+   * devolve o foco ao `previouslyFocusedElement`, que no editor é o `<body>`:
+   * o gatilho mora dentro de um nodeview não-editável do ProseMirror e nunca
+   * chega a receber foco de DOM no clique.
+   */
+  restoreFocusRef?: RefObject<HTMLElement>;
 };
 
 const MAX_DIMENSION = 800;
@@ -66,7 +74,7 @@ function resizeImage(file: File): Promise<string> {
   });
 }
 
-export default function ImageManagerModal({ open, onClose, onConfirm }: Props) {
+export default function ImageManagerModal({ open, onClose, onConfirm, restoreFocusRef }: Props) {
   const [images, setImages] = useState<ImageItem[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const dropZoneRef = useRef<HTMLDivElement>(null);
@@ -176,7 +184,15 @@ export default function ImageManagerModal({ open, onClose, onConfirm }: Props) {
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-w-lg max-h-[85vh] flex flex-col">
+      <DialogContent
+        className="max-w-lg max-h-[85vh] flex flex-col"
+        onCloseAutoFocus={(event) => {
+          const trigger = restoreFocusRef?.current;
+          if (!trigger) return;
+          event.preventDefault();
+          trigger.focus();
+        }}
+      >
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <ImageIcon className="w-5 h-5 text-violet-600" />

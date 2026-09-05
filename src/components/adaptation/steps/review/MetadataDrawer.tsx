@@ -6,6 +6,7 @@
  * Os dados vêm de `adaptation_result` (irmãos do `document`); a gaveta nunca
  * escreve nada — não toca o documento canônico, então não afeta o round-trip.
  */
+import type { RefObject } from "react";
 import { Info } from "lucide-react";
 import {
   Sheet,
@@ -18,6 +19,13 @@ import {
 type Props = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  /**
+   * 0349 — a gaveta é aberta por estado, sem `SheetTrigger`, então o Radix não
+   * tem `triggerRef` e restaura o foco no `previouslyFocusedElement` (na prática,
+   * o `<body>`). Quem abre entrega aqui o controle que deve voltar a receber o
+   * foco no fechamento (WCAG 2.4.3).
+   */
+  restoreFocusRef?: RefObject<HTMLElement>;
   strategies: string[];
   tips: string[];
   justification: string;
@@ -32,11 +40,24 @@ function SectionTitle({ children }: { children: string }) {
   );
 }
 
-export function MetadataDrawer({ open, onOpenChange, strategies, tips, justification }: Props) {
+export function MetadataDrawer({
+  open,
+  onOpenChange,
+  restoreFocusRef,
+  strategies,
+  tips,
+  justification,
+}: Props) {
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent
         side="right"
+        onCloseAutoFocus={(event) => {
+          const trigger = restoreFocusRef?.current;
+          if (!trigger) return;
+          event.preventDefault();
+          trigger.focus();
+        }}
         className="w-[400px] max-w-[92vw] overflow-y-auto border-surface-chrome-line bg-surface-chrome sm:max-w-[400px]"
       >
         <SheetHeader>

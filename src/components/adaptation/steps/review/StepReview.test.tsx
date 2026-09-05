@@ -322,6 +322,16 @@ describe("StepReview", () => {
     expect(screen.getByText("Reduz a carga de produção textual.")).toBeInTheDocument();
   });
 
+  // 0349 — a gaveta é controlada por estado (sem `SheetTrigger`), então quem
+  // guarda o gatilho é o StepReview.
+  it("devolve o foco ao botão 'Sobre esta adaptação' ao fechar a gaveta", async () => {
+    setup();
+    const trigger = screen.getByRole("button", { name: "Sobre esta adaptação" });
+    fireEvent.click(trigger);
+    fireEvent.click(screen.getByRole("button", { name: "Close" }));
+    await waitFor(() => expect(trigger).toHaveFocus());
+  });
+
   it("abre Formato e emite pageStyle ao alterar o tamanho do texto", () => {
     const onPageStyleChange = vi.fn();
     setup({ onPageStyleChange });

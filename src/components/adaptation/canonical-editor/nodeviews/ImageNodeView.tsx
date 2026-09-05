@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { AlignLeft, AlignCenter, AlignRight, Crop, ImageIcon, Trash2 } from "lucide-react";
 import { NodeViewWrapper, type NodeViewProps } from "@tiptap/react";
 import { toast } from "sonner";
@@ -32,6 +32,10 @@ const CAPTION_ALIGN: Record<string, "left" | "center" | "right"> = {
 
 export function ImageNodeView({ node, updateAttributes, deleteNode, editor, getPos }: NodeViewProps) {
   const [modalOpen, setModalOpen] = useState(false);
+  // 0349 — o gatilho vive dentro do NodeViewWrapper `contentEditable={false}`:
+  // o ProseMirror seleciona o nó no `mousedown` (com `preventDefault`), então o
+  // botão nunca recebe foco de DOM e o Radix não teria a quem devolver ao fechar.
+  const imageButtonRef = useRef<HTMLButtonElement>(null);
   const [cropOpen, setCropOpen] = useState(false);
   const [cropping, setCropping] = useState(false);
   const { src, alt, width, alignment, caption } = node.attrs as {
@@ -150,6 +154,7 @@ export function ImageNodeView({ node, updateAttributes, deleteNode, editor, getP
               </Button>
             ))}
             <Button
+              ref={imageButtonRef}
               type="button"
               variant="outline"
               size="sm"
@@ -291,7 +296,12 @@ export function ImageNodeView({ node, updateAttributes, deleteNode, editor, getP
           )}
         </div>
       </div>
-      <ImageManagerModal open={modalOpen} onClose={() => setModalOpen(false)} onConfirm={handlePick} />
+      <ImageManagerModal
+        open={modalOpen}
+        onClose={() => setModalOpen(false)}
+        onConfirm={handlePick}
+        restoreFocusRef={imageButtonRef}
+      />
       {canCropFromOriginal && (
         <PdfPreviewModal
           open={cropOpen}

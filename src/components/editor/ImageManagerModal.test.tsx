@@ -1,3 +1,4 @@
+import React from "react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
@@ -540,5 +541,49 @@ describe("ImageManagerModal", () => {
       fireEvent.keyDown(dropzone, { key: "a" });
       expect(clickSpy).not.toHaveBeenCalled();
     });
+  });
+});
+
+/**
+ * 0349 — o diálogo é aberto por estado (sem `DialogTrigger`), e o gatilho vive
+ * dentro do `contenteditable` do ProseMirror, que nem chega a focá-lo no clique.
+ * Sem `restoreFocusRef` o foco cai no `<body>` ao fechar.
+ */
+describe("ImageManagerModal — devolução de foco ao gatilho (0349)", () => {
+  function Harness({ withRef }: { withRef: boolean }) {
+    const triggerRef = React.useRef<HTMLButtonElement>(null);
+    const [open, setOpen] = React.useState(true);
+    return (
+      <>
+        <button ref={triggerRef} onClick={() => setOpen(true)}>
+          Trocar ou adicionar imagem
+        </button>
+        <ImageManagerModal
+          open={open}
+          onClose={() => setOpen(false)}
+          onConfirm={vi.fn()}
+          restoreFocusRef={withRef ? triggerRef : undefined}
+        />
+      </>
+    );
+  }
+
+  it("devolve o foco ao gatilho ao fechar com Escape", async () => {
+    render(<Harness withRef />);
+    fireEvent.keyDown(screen.getByRole("dialog"), { key: "Escape" });
+    await waitFor(() =>
+      expect(document.activeElement).toBe(
+        screen.getByRole("button", { name: "Trocar ou adicionar imagem" }),
+      ),
+    );
+  });
+
+  it("sem gatilho informado, deixa o Radix cuidar do foco", async () => {
+    render(<Harness withRef={false} />);
+    fireEvent.keyDown(screen.getByRole("dialog"), { key: "Escape" });
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    expect(document.activeElement).not.toBe(
+      screen.getByRole("button", { name: "Trocar ou adicionar imagem" }),
+    );
   });
 });
