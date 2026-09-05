@@ -629,7 +629,7 @@ export default function CanonicalAdaptationWizard({ editMode }: Props = {}) {
         {/* Autosave status — shown once a draft exists and from the review step on. */}
         {captureFailure !== null ? (
           <p
-            className="text-xs font-medium text-destructive"
+            className="text-xs font-medium text-destructive-strong"
             role="status"
             aria-live="polite"
             data-testid="capture-failure"

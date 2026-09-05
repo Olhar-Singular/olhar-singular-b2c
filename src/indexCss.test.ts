@@ -363,3 +363,93 @@ describe("index.css — filete do bloco de topo", () => {
     expect(ratioRgb(ink, WHITE)).toBeGreaterThanOrEqual(3);
   });
 });
+
+/**
+ * Contraste da tinta de erro em texto pequeno (achado 0441).
+ *
+ * `--destructive` (0 72% 55%) foi calibrado como cor de FUNDO/ícone: como tinta
+ * de texto ele chega a 4,37:1 sobre o papel branco da folha e 4,02:1 sobre o
+ * `--background` do app — abaixo dos 4,5:1 que a WCAG 1.4.3 exige de texto
+ * menor que 18,66 px. O aviso "Descrição desatualizada" dos nodeviews de
+ * fórmula (12 px) é o único texto que denuncia a perda do `alt`, e era o item
+ * de menor contraste do editor.
+ *
+ * O teste mede a razão do token que a fonte realmente usa, não a string da
+ * classe: trocar o token de volta por um claro demais reprova de novo.
+ */
+const SIZE_UTILITIES = new Set([
+  "xs", "sm", "base", "lg", "xl", "2xl", "3xl",
+  "left", "right", "center", "justify", "start", "end",
+]);
+
+/** `text-surface-danger` -> token CSS `--sf-danger`; `text-foo` -> `--foo`. */
+function cssTokenName(utility: string): string {
+  return utility.startsWith("surface-")
+    ? `sf-${utility.slice("surface-".length)}`
+    : utility;
+}
+
+/** Tinta (`text-*`) declarada na primeira ocorrência de `anchor` na fonte. */
+function inkTokenAt(source: string, anchor: RegExp, what: string): string {
+  const at = source.search(anchor);
+  expect(at, `âncora não encontrada em ${what}`).toBeGreaterThanOrEqual(0);
+  const window = source.slice(Math.max(0, at - 240), at + 240);
+  const inks = [...window.matchAll(/\btext-([a-z0-9-]+)\b/g)]
+    .map((m) => m[1])
+    .filter((name) => !SIZE_UTILITIES.has(name));
+  expect(inks.length, `nenhuma tinta encontrada em ${what}`).toBeGreaterThan(0);
+  return cssTokenName(inks[0]);
+}
+
+function readSource(relative: string): string {
+  return readFileSync(path.resolve(__dirname, relative), "utf8");
+}
+
+describe("contraste da tinta de erro em texto pequeno (WCAG 1.4.3)", () => {
+  it.each([
+    [
+      "aviso de alt desatualizado da fórmula inline",
+      "./components/adaptation/canonical-editor/nodeviews/InlineMathNodeView.tsx",
+      /data-testid="inlinemath-alt-stale"/,
+    ],
+    [
+      "aviso de alt desatualizado da fórmula em bloco",
+      "./components/adaptation/canonical-editor/nodeviews/BlockMathNodeView.tsx",
+      /data-testid="blockmath-alt-stale"/,
+    ],
+  ])("%s atinge 4,5:1 sobre o papel da folha", (what, file, anchor) => {
+    const ink = inkTokenAt(readSource(file), anchor, what);
+    // A folha é branca nos dois temas (os --sf-* não são sobrescritos no .dark),
+    // então o par certo é sempre a tinta de :root contra --sf-paper.
+    const ratio = contrastRatio(token(":root", ink), token(":root", "sf-paper"));
+    expect(ratio, `${what} (--${ink} sobre o papel)`).toBeGreaterThanOrEqual(4.5);
+  });
+
+  it.each([
+    [
+      "aviso de autosave interrompido",
+      "./components/adaptation/CanonicalAdaptationWizard.tsx",
+      /data-testid="capture-failure"/,
+    ],
+    [
+      "erro do passo Barreiras",
+      "./components/adaptation/steps/barriers/StepBarrierSelection.tsx",
+      /<p role="alert"/,
+    ],
+    [
+      "erro do passo Atividade",
+      "./components/adaptation/steps/activity-input/StepActivityInput.tsx",
+      /<p role="alert"/,
+    ],
+  ])("%s atinge 4,5:1 sobre o chrome do app nos dois temas", (what, file, anchor) => {
+    const ink = inkTokenAt(readSource(file), anchor, what);
+    for (const theme of [":root", ".dark"]) {
+      for (const surface of ["background", "card"]) {
+        expect(
+          contrastRatio(token(theme, ink), token(theme, surface)),
+          `${what}: --${ink} sobre --${surface} em ${theme}`,
+        ).toBeGreaterThanOrEqual(4.5);
+      }
+    }
+  });
+});

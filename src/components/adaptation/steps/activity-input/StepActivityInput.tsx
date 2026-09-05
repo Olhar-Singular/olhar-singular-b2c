@@ -274,12 +274,12 @@ export function StepActivityInput({ data, updateData, onNext, onPrev }: Props) {
           />
           <p
             data-testid="activity-char-count"
-            className={`text-xs ${overLimit ? "text-destructive font-medium" : "text-muted-foreground"}`}
+            className={`text-xs ${overLimit ? "text-destructive-strong font-medium" : "text-muted-foreground"}`}
           >
             {activityLength.toLocaleString("pt-BR")} / {MAX_ACTIVITY_CHARS.toLocaleString("pt-BR")} caracteres
           </p>
           {error && (
-            <p role="alert" className="text-sm text-destructive">{error}</p>
+            <p role="alert" className="text-sm text-destructive-strong">{error}</p>
           )}
         </div>
       )}
@@ -354,7 +354,7 @@ export function StepActivityInput({ data, updateData, onNext, onPrev }: Props) {
           )}
 
           {error && (
-            <p role="alert" className="text-sm text-destructive">{error}</p>
+            <p role="alert" className="text-sm text-destructive-strong">{error}</p>
           )}
         </div>
       )}
@@ -408,7 +408,7 @@ export function StepActivityInput({ data, updateData, onNext, onPrev }: Props) {
                 <Loader2 className="w-6 h-6 animate-spin text-primary" />
               </div>
             ) : bankError ? (
-              <p role="alert" className="text-sm text-destructive py-8 text-center">
+              <p role="alert" className="text-sm text-destructive-strong py-8 text-center">
                 Erro ao carregar o banco de questões. Tente novamente.
               </p>
             ) : bankQuestions.length === 0 ? (

@@ -34,6 +34,7 @@ export default {
         destructive: {
           DEFAULT: "hsl(var(--destructive))",
           foreground: "hsl(var(--destructive-foreground))",
+          strong: "hsl(var(--destructive-strong))",
         },
         muted: {
           DEFAULT: "hsl(var(--muted))",
@@ -76,6 +77,7 @@ export default {
           "accent-soft": "hsl(var(--sf-accent-soft))",
           "accent-ink": "hsl(var(--sf-accent-ink))",
           correct: "hsl(var(--sf-correct))",
+          danger: "hsl(var(--sf-danger))",
           chrome: "hsl(var(--sf-chrome))",
           "chrome-line": "hsl(var(--sf-chrome-line))",
         },

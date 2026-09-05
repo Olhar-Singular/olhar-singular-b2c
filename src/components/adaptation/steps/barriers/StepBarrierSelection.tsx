@@ -162,7 +162,7 @@ export function StepBarrierSelection({ data, updateData, onNext, onPrev }: Props
       )}
 
       {error && (
-        <p role="alert" className="text-sm text-destructive">{error}</p>
+        <p role="alert" className="text-sm text-destructive-strong">{error}</p>
       )}
 
       {hasBarriers && (

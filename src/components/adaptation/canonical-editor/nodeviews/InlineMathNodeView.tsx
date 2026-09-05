@@ -78,7 +78,7 @@ export function InlineMathNodeView({ node, updateAttributes, editor, selected }:
           {/* Achado 0436: zerar o alt em silêncio trocaria uma mentira por um
               buraco — o professor vê que a descrição ficou para trás. */}
           {draft.altStale && (
-            <span role="status" data-testid="inlinemath-alt-stale" className="text-xs text-destructive">
+            <span role="status" data-testid="inlinemath-alt-stale" className="text-xs text-surface-danger">
               Descrição desatualizada
             </span>
           )}

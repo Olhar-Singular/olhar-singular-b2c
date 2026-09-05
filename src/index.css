@@ -108,6 +108,12 @@
 
     --destructive: 0 72% 55%;
     --destructive-foreground: 0 0% 100%;
+    /* Variante escura de --destructive para TEXTO. O token puro foi calibrado
+       como fundo/borda/icone (grafico nao textual, minimo 3:1); como tinta de
+       texto pequeno ele chega a 4,37:1 sobre o papel branco da folha e 4,02:1
+       sobre o --background do app, abaixo do minimo da WCAG 1.4.3. Achado 0441.
+       Mesmo matiz, so a luminosidade menor. */
+    --destructive-strong: 0 72% 44%;
 
     --border: 195 12% 87%;
     --input: 195 12% 87%;
@@ -146,6 +152,10 @@
     --sf-accent-soft: 216 56% 95%;
     --sf-accent-ink: 216 60% 33%;
     --sf-correct: 147 46% 34%;
+    /* Tinta de erro DA FOLHA. O papel e branco nos dois temas (os --sf-* nao
+       sao sobrescritos no .dark), entao o aviso de descricao desatualizada das
+       formulas nao pode depender do --destructive-strong do tema. Achado 0441. */
+    --sf-danger: 0 72% 44%;
     --sf-chrome: 45 33% 98%;
     --sf-chrome-line: 37 20% 87%;
     /* Tinta secundária sobre a MESA (não sobre o papel): a mesa é ~7% mais
@@ -191,6 +201,9 @@
     --accent-foreground: 195 30% 15%;
     --destructive: 0 55% 52%;
     --destructive-foreground: 0 0% 100%;
+    /* Aqui a tinta de texto sobe em vez de descer: o chrome do tema escuro e
+       que e o fundo. >= 4,5:1 sobre --background e --card. Achado 0441. */
+    --destructive-strong: 0 75% 78%;
     --border: 195 15% 33%;
     /* Brighter than --border: this also lights up the outline Button variant's
        border (shares --input with Input/Select/Textarea per shadcn's outline

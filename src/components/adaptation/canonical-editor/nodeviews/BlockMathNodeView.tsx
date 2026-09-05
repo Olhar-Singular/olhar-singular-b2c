@@ -85,7 +85,7 @@ export function BlockMathNodeView({ node, updateAttributes, editor, deleteNode, 
           {/* Achado 0436: o alt caiu junto com a fórmula que ele descrevia; o
               professor precisa ver isso, não descobrir depois. */}
           {draft.altStale && (
-            <span role="status" data-testid="blockmath-alt-stale" className="text-xs text-destructive">
+            <span role="status" data-testid="blockmath-alt-stale" className="text-xs text-surface-danger">
               Descrição desatualizada: reescreva o texto alternativo.
             </span>
           )}
