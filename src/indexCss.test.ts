@@ -453,3 +453,50 @@ describe("contraste da tinta de erro em texto pequeno (WCAG 1.4.3)", () => {
     }
   });
 });
+
+/**
+ * Vao de bloco no topo e no pe da folha (achado 0186).
+ *
+ * `--doc-block-spacing` e vao ENTRE blocos: e assim que as duas superficies
+ * impressas o gastam (a previa com `space-y-*`, isto e `> * + *`; o PDF so com
+ * `marginBottom`). No editor a regra dava `margin: X 0` a todo bloco de topo,
+ * inclusive ao primeiro e ao ultimo — e a margem nao colapsa para fora porque a
+ * folha aplica padding acima do conteudo. Resultado: o titulo nascia 16 px
+ * abaixo da margem impressa de 40 pt e o papel do Revisar carregava dois vaos
+ * de bloco (32 px) que o PDF nao tem.
+ */
+describe("index.css — vao de bloco no primeiro e no ultimo bloco de topo", () => {
+  it.each(TOP_BLOCK_TAGS)(
+    "zera o vao acima do <%s> quando ele e o primeiro bloco",
+    (tag) => {
+      const selector = `.tiptap:not(.rich-text-field) > ${tag}:first-child`;
+      expect(
+        css.includes(`${selector},`) || css.includes(`${selector} {`),
+        `sem reset de margin-top para o primeiro <${tag}>`,
+      ).toBe(true);
+    },
+  );
+
+  it.each(TOP_BLOCK_TAGS)(
+    "zera o vao abaixo do <%s> quando ele e o ultimo bloco",
+    (tag) => {
+      const selector = `.tiptap:not(.rich-text-field) > ${tag}:last-child`;
+      expect(
+        css.includes(`${selector},`) || css.includes(`${selector} {`),
+        `sem reset de margin-bottom para o ultimo <${tag}>`,
+      ).toBe(true);
+    },
+  );
+
+  it("os resets zeram so a margem da ponta, e depois da regra base", () => {
+    expect(
+      ruleBody(".tiptap:not(.rich-text-field) > p:first-child"),
+    ).toMatch(/margin-top:\s*0\s*;/);
+    expect(
+      ruleBody(".tiptap:not(.rich-text-field) > p:last-child"),
+    ).toMatch(/margin-bottom:\s*0\s*;/);
+    expect(css.indexOf(".tiptap:not(.rich-text-field) > h1:first-child")).toBeGreaterThan(
+      css.indexOf(".tiptap:not(.rich-text-field) > h1,"),
+    );
+  });
+});

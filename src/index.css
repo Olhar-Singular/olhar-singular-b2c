@@ -340,6 +340,27 @@
   border-radius: 0.5rem;
 }
 
+/* O "Espaçamento entre blocos" é vão ENTRE blocos, não margem extra do
+ * documento (achado 0186). As duas superfícies impressas gastam o vão assim: a
+ * prévia com `space-y-*` (`> * + *`) e o PDF só com `marginBottom`. Sem estes
+ * resets a margem do primeiro bloco não colapsa para fora (a folha aplica
+ * padding acima do conteúdo, de `pageTokensToCss`): o título nascia 16 px
+ * abaixo da margem impressa de 40 pt e a folha do Revisar carregava dois vãos
+ * de bloco a mais que o PDF, um no topo e um no pé. */
+.tiptap:not(.rich-text-field) > h1:first-child,
+.tiptap:not(.rich-text-field) > h2:first-child,
+.tiptap:not(.rich-text-field) > h3:first-child,
+.tiptap:not(.rich-text-field) > p:first-child {
+  margin-top: 0;
+}
+
+.tiptap:not(.rich-text-field) > h1:last-child,
+.tiptap:not(.rich-text-field) > h2:last-child,
+.tiptap:not(.rich-text-field) > h3:last-child,
+.tiptap:not(.rich-text-field) > p:last-child {
+  margin-bottom: 0;
+}
+
 /* O filete que marca o bloco de topo (achado 0341). Vive num ::after absoluto,
  * e nao num `border-left`: o `border-radius: 0.5rem` acima curva as duas pontas
  * do unico traco da caixa, e num bloco de uma linha (22,4 px) sobrava menos de
