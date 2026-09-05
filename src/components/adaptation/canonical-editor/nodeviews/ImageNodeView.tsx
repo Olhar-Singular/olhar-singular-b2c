@@ -320,7 +320,12 @@ export function ImageNodeView({ node, updateAttributes, deleteNode, editor, getP
           <AlertDialogHeader>
             <AlertDialogTitle>Excluir imagem?</AlertDialogTitle>
             <AlertDialogDescription>
-              A figura, o texto alternativo e a legenda serão apagados.
+              {/* Achado 0353: o diálogo da questão ensina o Ctrl+Z desde o 0255 e este
+                  ficou só enumerando a perda, porque foi copiado do QuestionNodeView
+                  minutos antes daquela correção. O desfazer alcança os dois igualmente:
+                  deleteNodeAndRefocus devolve o cursor à folha (0253) e o histórico do
+                  StarterKit desfaz a exclusão inteira. */}
+              A figura, o texto alternativo e a legenda serão apagados. Dá para desfazer logo em seguida com Ctrl+Z (Cmd+Z no Mac).
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

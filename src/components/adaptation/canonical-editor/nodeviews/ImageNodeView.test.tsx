@@ -156,6 +156,17 @@ describe("ImageNodeView", () => {
     expect(within(dialog).getByText(/texto alternativo e a legenda/i)).toBeInTheDocument();
   });
 
+  // Achado 0353: o diálogo da questão ensina o Ctrl+Z (achado 0255) e o da imagem
+  // não, mesmo o desfazer alcançando os dois pelo mesmo caminho (deleteNodeAndRefocus
+  // devolve o cursor à folha e o histórico do StarterKit desfaz a exclusão).
+  it("a confirmação avisa que dá para desfazer com Ctrl+Z (achado 0353)", () => {
+    const { props } = makeProps();
+    render(<ImageNodeView {...props} />);
+    fireEvent.click(screen.getByRole("button", { name: "Excluir imagem" }));
+    const dialog = screen.getByRole("alertdialog");
+    expect(within(dialog).getByText(/desfazer logo em seguida com Ctrl\+Z/i)).toBeInTheDocument();
+  });
+
   it("clicar 'Excluir imagem' e confirmar chama deleteNode (achado 0351)", () => {
     const { props, deleteNode } = makeProps();
     render(<ImageNodeView {...props} />);
