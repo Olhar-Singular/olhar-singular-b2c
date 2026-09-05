@@ -312,7 +312,12 @@ export function QuestionNodeView({ node, updateAttributes, editor, getPos, delet
           <AlertDialogHeader>
             <AlertDialogTitle>Excluir questão?</AlertDialogTitle>
             <AlertDialogDescription>
-              O enunciado, a instrução e todas as alternativas serão apagados. Esta ação não pode ser desfeita.
+              {/* Achado 0255: o texto original dizia "não pode ser desfeita", e era
+                  verdade até o 0253 devolver o foco à folha depois de excluir. Com o
+                  cursor de volta no ProseMirror, o histórico do StarterKit desfaz a
+                  exclusão inteira — a frase antiga escondia a saída de quem apagou
+                  por engano. */}
+              O enunciado, a instrução e todas as alternativas serão apagados. Dá para desfazer logo em seguida com Ctrl+Z (Cmd+Z no Mac).
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

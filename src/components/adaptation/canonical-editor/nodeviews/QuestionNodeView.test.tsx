@@ -516,7 +516,20 @@ describe("QuestionNodeView — rail actions", () => {
     expect(deleteNode).not.toHaveBeenCalled();
     const dialog = screen.getByRole("alertdialog");
     expect(within(dialog).getByText("Excluir questão?")).toBeInTheDocument();
-    expect(within(dialog).getByText(/não pode ser desfeita/i)).toBeInTheDocument();
+    expect(within(dialog).getByText(/serão apagados/i)).toBeInTheDocument();
+  });
+
+  // Achado 0255: o 0253 devolveu o foco à folha depois de excluir, e com isso o
+  // Ctrl+Z do histórico do StarterKit passou a restaurar a questão inteira. A
+  // descrição do diálogo continuava prometendo o contrário ("não pode ser
+  // desfeita"), justamente a mentira cara: quem apagou por engano nem tenta.
+  it("não afirma que a exclusão é irreversível e aponta o desfazer (achado 0255)", () => {
+    const { props } = makeProps(mc);
+    render(<QuestionNodeView {...props} />);
+    fireEvent.click(screen.getByLabelText("Excluir questão"));
+    const dialog = screen.getByRole("alertdialog");
+    expect(within(dialog).queryByText(/não pode ser desfeita/i)).not.toBeInTheDocument();
+    expect(within(dialog).getByText(/desfazer/i)).toBeInTheDocument();
   });
 
   it("deletes the question via deleteNode after confirming (achado 0252)", () => {
