@@ -53,6 +53,16 @@ describe("MetadataDrawer", () => {
     expect(screen.getByText(META.justification)).toBeInTheDocument();
   });
 
+  it("expõe uma descrição acessível no diálogo (aria-describedby)", () => {
+    setup();
+    const dialog = screen.getByRole("dialog");
+    const describedBy = dialog.getAttribute("aria-describedby");
+    expect(describedBy).toBeTruthy();
+    const description = document.getElementById(describedBy as string);
+    expect(description).not.toBeNull();
+    expect(description?.textContent?.trim().length).toBeGreaterThan(0);
+  });
+
   it("não renderiza o conteúdo quando fechada", () => {
     setup({ open: false });
     expect(screen.queryByText("Sobre esta adaptação")).not.toBeInTheDocument();

@@ -10,6 +10,7 @@ import { Info } from "lucide-react";
 import {
   Sheet,
   SheetContent,
+  SheetDescription,
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
@@ -43,6 +44,10 @@ export function MetadataDrawer({ open, onOpenChange, strategies, tips, justifica
             <Info className="h-4 w-4 text-surface-ink-soft" />
             Sobre esta adaptação
           </SheetTitle>
+          <SheetDescription className="text-left text-surface-ink-soft">
+            Resumo pedagógico somente leitura desta adaptação: estratégias aplicadas,
+            dicas de aplicação e justificativa.
+          </SheetDescription>
         </SheetHeader>
 
         <div className="mt-6 flex flex-col gap-6">
