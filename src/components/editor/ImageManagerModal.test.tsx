@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import ImageManagerModal from "./ImageManagerModal";
 
 beforeEach(() => {
@@ -496,5 +497,48 @@ describe("ImageManagerModal", () => {
     expect(toDataURL).toHaveBeenCalledWith("image/jpeg", 0.85);
     expect(fillRect).toHaveBeenCalledWith(0, 0, 100, 100);
     expect(fill).toBe("#ffffff");
+  });
+  // 0348 — a caixa tracejada era um <div> sem role/tabindex, com todo o
+  // comportamento no onClick: o teclado nunca chegava ao seletor de arquivos.
+  describe("0348 — a área de soltar é operável por teclado", () => {
+    it("expõe a caixa como controle focável com nome acessível", () => {
+      render(<ImageManagerModal open onClose={vi.fn()} onConfirm={vi.fn()} />);
+      const dropzone = screen.getByRole("button", { name: /escolher imagens/i });
+      expect(dropzone).toHaveAttribute("tabindex", "0");
+    });
+
+    it("alcança a caixa via Tab a partir da abertura do diálogo", async () => {
+      const user = userEvent.setup();
+      render(<ImageManagerModal open onClose={vi.fn()} onConfirm={vi.fn()} />);
+      const dropzone = screen.getByRole("button", { name: /escolher imagens/i });
+
+      for (let i = 0; i < 8 && document.activeElement !== dropzone; i++) {
+        await user.tab();
+      }
+      expect(document.activeElement).toBe(dropzone);
+    });
+
+    it("abre o seletor de arquivos com Enter e com Espaço", () => {
+      render(<ImageManagerModal open onClose={vi.fn()} onConfirm={vi.fn()} />);
+      const fileInput = document.querySelector('input[type="file"]') as HTMLInputElement;
+      const clickSpy = vi.spyOn(fileInput, "click").mockImplementation(() => {});
+      const dropzone = screen.getByRole("button", { name: /escolher imagens/i });
+
+      fireEvent.keyDown(dropzone, { key: "Enter" });
+      expect(clickSpy).toHaveBeenCalledTimes(1);
+
+      fireEvent.keyDown(dropzone, { key: " " });
+      expect(clickSpy).toHaveBeenCalledTimes(2);
+    });
+
+    it("ignora outras teclas na caixa", () => {
+      render(<ImageManagerModal open onClose={vi.fn()} onConfirm={vi.fn()} />);
+      const fileInput = document.querySelector('input[type="file"]') as HTMLInputElement;
+      const clickSpy = vi.spyOn(fileInput, "click").mockImplementation(() => {});
+      const dropzone = screen.getByRole("button", { name: /escolher imagens/i });
+
+      fireEvent.keyDown(dropzone, { key: "a" });
+      expect(clickSpy).not.toHaveBeenCalled();
+    });
   });
 });

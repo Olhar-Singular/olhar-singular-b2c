@@ -151,6 +151,22 @@ export default function ImageManagerModal({ open, onClose, onConfirm }: Props) {
     );
   }, []);
 
+  const openFilePicker = useCallback(() => {
+    fileInputRef.current?.click();
+  }, []);
+
+  // A caixa tracejada é a afordância principal do diálogo. Como <div role="button">
+  // ela não recebe o clique nativo do Enter/Espaço, então o teclado é ligado à mão.
+  const handleDropZoneKeyDown = useCallback(
+    (e: React.KeyboardEvent) => {
+      if (e.key === "Enter" || e.key === " ") {
+        e.preventDefault();
+        openFilePicker();
+      }
+    },
+    [openFilePicker]
+  );
+
   const handleConfirm = useCallback(() => {
     /* v8 ignore next -- the Inserir button is disabled when images.length === 0,
      * so the else branch (images empty) is structurally unreachable via UI. */
@@ -174,11 +190,15 @@ export default function ImageManagerModal({ open, onClose, onConfirm }: Props) {
         <div className="flex flex-col gap-3 flex-1 min-h-0">
           <div
             ref={dropZoneRef}
+            role="button"
+            tabIndex={0}
+            aria-label="Escolher imagens do computador"
             onDrop={handleDrop}
             onDragOver={handleDragOver}
             onDragLeave={handleDragLeave}
-            onClick={() => fileInputRef.current?.click()}
-            className={`border-2 border-dashed rounded-lg p-6 text-center cursor-pointer transition-colors ${
+            onClick={openFilePicker}
+            onKeyDown={handleDropZoneKeyDown}
+            className={`border-2 border-dashed rounded-lg p-6 text-center cursor-pointer transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500 focus-visible:ring-offset-2 ${
               dragging
                 ? "border-violet-400 bg-violet-50"
                 : "border-zinc-300 hover:border-violet-300 hover:bg-violet-50/50"
