@@ -27,6 +27,21 @@ import { Button } from "@/components/ui/button";
 import { inlineLatexToHtml } from "./nodeViewUtils";
 import { useLatexDraft } from "./useLatexDraft";
 
+/**
+ * Marca visual de "descrição desatualizada" na fórmula inline (achado 0437).
+ *
+ * A primeira tentativa (achado 0436) foi `underline decoration-wavy` no
+ * `<button>`. O CSS entrava e o computado confirmava, mas nenhum pixel era
+ * pintado: pela CSS Text Decoration nível 3 a decoração de um ancestral NÃO
+ * atravessa caixa inline-level atômica, e o único filho do gatilho é o HTML do
+ * KaTeX, cujo `.katex .base` é `inline-block`. Fundo não sofre essa regra (ele
+ * pinta sob o descendente), então o ondulado vem de um `background-image` de
+ * gradiente repetido ancorado na base do gatilho (regra em `index.css`), que
+ * também não ocupa caixa: a folha continua compondo linha a linha igual ao
+ * impresso (achado 0406).
+ */
+export const ALT_STALE_MARK_CLASS = "inlinemath-alt-stale";
+
 export function InlineMathNodeView({ node, updateAttributes, editor }: NodeViewProps) {
   const [editing, setEditing] = useState(false);
   const { latex, alt } = node.attrs as { latex: string; alt: string | null };
@@ -71,9 +86,9 @@ export function InlineMathNodeView({ node, updateAttributes, editor }: NodeViewP
           type="button"
           className={cn(
             "-mx-0.5 rounded px-0.5 align-middle hover:bg-accent",
-            // Sublinhado ondulado: sinaliza a descrição desatualizada sem ocupar
-            // caixa (paridade de composição com o impresso, achado 0406).
-            draft.altStale && "underline decoration-destructive decoration-wavy"
+            // Aviso de descrição desatualizada: tinta DO PRÓPRIO gatilho, não
+            // decoração herdada (achado 0437) — ver ALT_STALE_MARK_CLASS.
+            draft.altStale && ALT_STALE_MARK_CLASS
           )}
           disabled={disabled}
           onClick={() => setEditing(true)}

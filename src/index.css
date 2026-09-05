@@ -510,3 +510,22 @@
  * Top-level images (not inside a question) always show their controls. */
 [data-testid="question-node"] [data-testid="image-controls"] { display: none; }
 [data-question-expanded="true"] [data-testid="image-controls"] { display: flex; flex-direction: column; gap: 0.5rem; }
+
+/* Fórmula inline cuja descrição acessível ficou para trás (achado 0437). O
+   sublinhado ondulado do achado 0436 era `text-decoration` no gatilho e nunca
+   foi desenhado: a decoração de um ancestral não atravessa o `inline-block` do
+   `.katex .base`. Fundo atravessa: o ondulado é pintado como gradiente repetido
+   ancorado na base do gatilho, sem ocupar caixa (paridade com o impresso,
+   achado 0406). */
+.inlinemath-alt-stale {
+  background-image: repeating-linear-gradient(
+    135deg,
+    hsl(var(--destructive)) 0,
+    hsl(var(--destructive)) 1px,
+    transparent 1px,
+    transparent 2px
+  );
+  background-repeat: repeat-x;
+  background-size: 4px 3px;
+  background-position: left calc(100% - 1px);
+}

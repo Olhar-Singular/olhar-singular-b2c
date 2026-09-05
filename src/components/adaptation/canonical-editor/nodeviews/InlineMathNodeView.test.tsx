@@ -1,7 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 import type { NodeViewProps } from "@tiptap/react";
-import { InlineMathNodeView } from "./InlineMathNodeView";
+import { readFileSync } from "node:fs";
+import { InlineMathNodeView, ALT_STALE_MARK_CLASS } from "./InlineMathNodeView";
 
 vi.mock("@tiptap/react", () => ({
   NodeViewWrapper: ({ children, ...rest }: { children: React.ReactNode }) => (
@@ -236,6 +237,36 @@ describe("InlineMathNodeView", () => {
     expect(screen.getByTestId("inlinemath-math").getAttribute("aria-label")).not.toContain(
       "x ao quadrado",
     );
+  });
+
+  /**
+   * Achado 0437: o aviso do 0436 era `text-decoration` no `<button>`, e a
+   * decoração de um ancestral não atravessa caixa inline-level atômica: o único
+   * filho do gatilho é o KaTeX, cujo `.katex .base` é `inline-block`. O CSS
+   * existia, o computado confirmava, e nenhum pixel era pintado. O sinal tem que
+   * ser uma tinta própria do gatilho (fundo), que pinta sob o descendente.
+   */
+  it("marca a fórmula desatualizada com tinta que atravessa o inline-block do KaTeX", () => {
+    const { props } = makeProps({ latex: "x^2", alt: "x ao quadrado" });
+    render(<InlineMathNodeView {...props} />);
+    fireEvent.click(screen.getByTestId("inlinemath-render"));
+    fireEvent.change(screen.getByLabelText("Expressão LaTeX inline"), {
+      target: { value: "y^3" },
+    });
+    fireEvent.click(screen.getByText("Pronto"));
+
+    const trigger = screen.getByTestId("inlinemath-render");
+    expect(trigger).toHaveClass(ALT_STALE_MARK_CLASS);
+    // Falharia de novo se o aviso voltasse a ser decoração herdada pelo KaTeX.
+    expect(trigger.className).not.toMatch(/\bunderline\b|\bdecoration-/);
+  });
+
+  /** Achado 0437: classe que não pinta nada é o próprio bug: a regra existe. */
+  it("publica na folha a regra que pinta a marca de descrição desatualizada", () => {
+    const css = readFileSync("src/index.css", "utf-8");
+    const rule = css.slice(css.indexOf(`.${ALT_STALE_MARK_CLASS}`));
+    expect(css).toContain(`.${ALT_STALE_MARK_CLASS}`);
+    expect(rule.slice(0, rule.indexOf("}"))).toContain("background-image");
   });
 
   /** Achado 0436 — reescrita a descrição, o aviso sai: ela volta a valer. */
