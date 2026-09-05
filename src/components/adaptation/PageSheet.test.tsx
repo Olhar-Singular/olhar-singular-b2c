@@ -862,6 +862,67 @@ describe("PageSheet", () => {
   });
 
   /*
+    Achado 0249: o controle de zoom é desenhado SOBRE a mesa (`--sf-mesa-gradient`),
+    mas vinha com os tokens do app (`text-muted-foreground` no container, e
+    `border-input` + `bg-background` nos dois botões), calibrados para o
+    `--background` claro da página. Sobre a mesa isso dava 3,56:1 no valor
+    (3,25:1 na borda escura do gradiente), 4,23:1 nos glifos e 1,03:1 na moldura
+    do botão — abaixo de SC 1.4.3 (4,5:1) e de SC 1.4.11 (3:1). É justamente o
+    controle que o 0238 criou como a ÚNICA saída para a folha que abre a 42%.
+    A superfície tem paleta própria: a `--sf-*` (surface-*).
+  */
+  describe("contraste do controle de zoom sobre a mesa (achado 0249)", () => {
+    const withClientWidth = (width: number, run: () => void) => {
+      const spy = vi
+        .spyOn(HTMLElement.prototype, "clientWidth", "get")
+        .mockReturnValue(width);
+      try {
+        run();
+      } finally {
+        spy.mockRestore();
+      }
+    };
+
+    it.each([
+      ["edição", false],
+      ["prévia do Exportar", true],
+    ])("pinta o valor do zoom com a tinta da mesa (%s)", (_nome, paginated) => {
+      withClientWidth(332, () => {
+        render(
+          <PageSheet paginated={paginated} toolbar={null}>
+            <span>x</span>
+          </PageSheet>,
+        );
+        const zoom = screen.getByTestId("page-zoom");
+        // >= 4,5:1 contra os dois extremos do gradiente da mesa.
+        expect(zoom.className).toContain("text-surface-mesa-ink");
+        expect(zoom.className).not.toMatch(/(^|\s)text-muted-foreground(\s|$)/);
+      });
+    });
+
+    it.each([
+      ["edição", false],
+      ["prévia do Exportar", true],
+    ])("dá aos botões moldura e papel da folha (%s)", (_nome, paginated) => {
+      withClientWidth(332, () => {
+        render(
+          <PageSheet paginated={paginated} toolbar={null}>
+            <span>x</span>
+          </PageSheet>,
+        );
+        for (const name of ["Diminuir zoom", "Aumentar zoom"]) {
+          const botao = screen.getByRole("button", { name });
+          // Moldura >= 3:1 contra a mesa (SC 1.4.11): `--sf-ink-soft`.
+          expect(botao.className).toContain("border-surface-ink-soft");
+          expect(botao.className).toContain("bg-surface-paper");
+          expect(botao.className).toContain("text-surface-mesa-ink");
+          expect(botao.className).not.toMatch(/(^|\s)(border-input|bg-background)(\s|$)/);
+        }
+      });
+    });
+  });
+
+  /*
     Achado 0172: a folha do Revisar mede o DOM do EDITOR, e o editor desenha
     dentro do papel um chrome que nenhuma superfície impressa tem (a barra da
     imagem, o campo de texto alternativo, o cabeçalho da legenda, o "+ Passo" do

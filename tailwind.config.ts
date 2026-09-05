@@ -65,6 +65,7 @@ export default {
         surface: {
           mesa: "hsl(var(--sf-mesa))",
           "mesa-2": "hsl(var(--sf-mesa-2))",
+          "mesa-ink": "hsl(var(--sf-mesa-ink))",
           paper: "hsl(var(--sf-paper))",
           ink: "hsl(var(--sf-ink))",
           "ink-soft": "hsl(var(--sf-ink-soft))",

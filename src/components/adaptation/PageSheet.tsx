@@ -482,7 +482,12 @@ export function PageSheet({
         {canZoom && (
           <div
             data-testid="page-zoom"
-            className="mx-auto mb-2 flex items-center justify-end gap-1 text-xs text-muted-foreground"
+            /*
+              Achado 0249: o controle é desenhado sobre a MESA, não sobre o
+              `--background` do app — daí a tinta da superfície da folha
+              (`--sf-mesa-ink`), e não `--muted-foreground` (3,56:1 ali).
+            */
+            className="mx-auto mb-2 flex items-center justify-end gap-1 text-xs text-surface-mesa-ink"
             style={{ width: `${Math.min(SHEET_WIDTH_PX * scale, frameWidth)}px` }}
           >
             <button
@@ -491,7 +496,7 @@ export function PageSheet({
               aria-describedby={zoomValueId}
               disabled={zoomIndex === 0}
               onClick={() => setZoomIndex((step) => Math.max(0, step - 1))}
-              className="h-7 w-7 rounded border border-input bg-background leading-none disabled:opacity-40"
+              className="h-7 w-7 rounded border border-surface-ink-soft bg-surface-paper text-surface-mesa-ink leading-none disabled:opacity-40"
             >
               −
             </button>
@@ -517,7 +522,7 @@ export function PageSheet({
               onClick={() =>
                 setZoomIndex((step) => Math.min(zoomLadder.length - 1, step + 1))
               }
-              className="h-7 w-7 rounded border border-input bg-background leading-none disabled:opacity-40"
+              className="h-7 w-7 rounded border border-surface-ink-soft bg-surface-paper text-surface-mesa-ink leading-none disabled:opacity-40"
             >
               +
             </button>
