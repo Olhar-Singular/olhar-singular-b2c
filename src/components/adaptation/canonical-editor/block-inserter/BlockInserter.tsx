@@ -6,8 +6,13 @@
  * menu (`BlockInserterMenu`). Positions come from `editor.view.coordsAtPos`,
  * measured relative to the overlay layer itself, so the affordances track the
  * blocks without being part of the document. The layer is `pointer-events-none`
- * and absolutely positioned — it never shifts the sheet layout nor intercepts
- * typing; only the thin zones opt back into pointer events. Positions recompute
+ * and absolutely positioned: it never shifts the sheet layout nor intercepts
+ * typing. A faixa da lacuna atravessa a coluna inteira e fica centrada no topo
+ * do bloco seguinte, portanto cobre a primeira linha dele; por isso ela também
+ * é `pointer-events-none` e SÓ o alvo do "+" (o `<span>` do meio) reativa o
+ * ponteiro (achado 0180) — antes a faixa engolia o clique no texto e o que se
+ * digitava sumia. O hover continua funcionando: `:hover` no botão propaga para o
+ * `group` e revela as linhas. Positions recompute
  * on every editor transaction, on scroll/resize e quando o DOM do editor muda de
  * tamanho sem transação (`ResizeObserver`, achado 0247); duas faixas nunca
  * dividem o mesmo retângulo.
@@ -93,11 +98,11 @@ export function BlockInserter({ editor }: { editor: Editor }) {
         <div
           key={gap.index}
           data-block-gap={gap.index}
-          className="group pointer-events-auto absolute inset-x-0 flex h-4 -translate-y-1/2 items-center gap-1"
+          className="group pointer-events-none absolute inset-x-0 flex h-4 -translate-y-1/2 items-center gap-1"
           style={{ top }}
         >
           <span className="h-px flex-1 bg-surface-accent opacity-0 transition-opacity group-hover:opacity-40" />
-          <span className="opacity-0 transition-opacity focus-within:opacity-100 group-hover:opacity-100">
+          <span className="pointer-events-auto opacity-0 transition-opacity focus-within:opacity-100 group-hover:opacity-100">
             <BlockInserterMenu gap={gap} onPick={(item) => handlePick(gap, item)} />
           </span>
           <span className="h-px flex-1 bg-surface-accent opacity-0 transition-opacity group-hover:opacity-40" />

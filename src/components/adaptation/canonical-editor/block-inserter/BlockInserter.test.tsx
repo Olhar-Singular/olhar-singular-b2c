@@ -121,6 +121,26 @@ describe("BlockInserter", () => {
     }
   });
 
+  /*
+    Achado 0180: a faixa da lacuna ocupa a largura inteira da coluna de texto e
+    fica centrada no topo do bloco seguinte, ou seja, por cima da primeira linha
+    dele. Sendo `pointer-events-auto`, ela engolia o clique do professor (o foco
+    caía no wrapper do passo e o que se digitava sumia). Só o alvo estreito do
+    "+" pode capturar ponteiro; o resto da faixa é decoração.
+  */
+  it("não captura o clique na largura da faixa, só no alvo do + (achado 0180)", () => {
+    const { editor } = makeEditor();
+    render(<BlockInserter editor={editor} />);
+    const trigger = screen.getAllByRole("button", { name: "Inserir bloco" })[0];
+    const zone = trigger.closest("[data-block-gap]") as HTMLElement;
+    expect(zone.className).toContain("pointer-events-none");
+    expect(zone.className).not.toContain("pointer-events-auto");
+    for (const line of Array.from(zone.querySelectorAll("span.flex-1"))) {
+      expect(line.className).not.toContain("pointer-events-auto");
+    }
+    expect((trigger.parentElement as HTMLElement).className).toContain("pointer-events-auto");
+  });
+
   it("recomputes positions on window resize", () => {
     const { editor, coordsAtPos } = makeEditor();
     render(<BlockInserter editor={editor} />);
