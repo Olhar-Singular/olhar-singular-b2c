@@ -196,6 +196,11 @@ export function QuestionNodeView({ node, updateAttributes, editor, getPos, delet
   const onAnswerChange = (next: QuestionAnswer) => updateAttributes({ answer: next });
   const onInstructionChange = (next: RichText | null) => updateAttributes({ instruction: next });
 
+  const imageButtonRef = useRef<HTMLButtonElement>(null);
+  const deleteButtonRef = useRef<HTMLButtonElement>(null);
+  // Marca a saída "confirmou a exclusão" para o onCloseAutoFocus do diálogo.
+  const deletedRef = useRef(false);
+
   const rail = (
     <div
       data-role="question-rail"
@@ -235,13 +240,13 @@ export function QuestionNodeView({ node, updateAttributes, editor, getPos, delet
           <ArrowDown className="h-3.5 w-3.5" />
         </Button>
       )}
-      <Button type="button" variant="ghost" size="icon" className="h-7 w-7" disabled={disabled || pos === null} onClick={() => setModalOpen(true)} title="Adicionar imagem à questão" aria-label="Adicionar imagem à questão">
+      <Button ref={imageButtonRef} type="button" variant="ghost" size="icon" className="h-7 w-7" disabled={disabled || pos === null} onClick={() => setModalOpen(true)} title="Adicionar imagem à questão" aria-label="Adicionar imagem à questão">
         <ImagePlus className="h-3.5 w-3.5" />
       </Button>
       <Button type="button" variant="ghost" size="icon" className="h-7 w-7" disabled={disabled} onClick={handleReset} title="Restaurar questão ao original" aria-label="Restaurar questão ao original">
         <RotateCcw className="h-3.5 w-3.5" />
       </Button>
-      <Button type="button" variant="ghost" size="icon" className="h-7 w-7 text-destructive" disabled={disabled} onClick={() => setConfirmDeleteOpen(true)} title="Excluir questão" aria-label="Excluir questão">
+      <Button ref={deleteButtonRef} type="button" variant="ghost" size="icon" className="h-7 w-7 text-destructive" disabled={disabled} onClick={() => setConfirmDeleteOpen(true)} title="Excluir questão" aria-label="Excluir questão">
         <Trash2 className="h-3.5 w-3.5" />
       </Button>
     </div>
@@ -278,10 +283,32 @@ export function QuestionNodeView({ node, updateAttributes, editor, getPos, delet
         />
       )}
 
-      <ImageManagerModal open={modalOpen} onClose={() => setModalOpen(false)} onConfirm={handlePick} />
+      <ImageManagerModal
+        open={modalOpen}
+        onClose={() => setModalOpen(false)}
+        onConfirm={handlePick}
+        restoreFocusRef={imageButtonRef}
+      />
 
       <AlertDialog open={confirmDeleteOpen} onOpenChange={setConfirmDeleteOpen}>
-        <AlertDialogContent>
+        <AlertDialogContent
+          // Achado 0254: o diálogo é aberto por estado, sem AlertDialogTrigger, e
+          // o botão que o abre mora no rail `contentEditable={false}` — o
+          // ProseMirror faz preventDefault no mousedown do nodeview não editável,
+          // então o botão nunca recebe foco de DOM e o Radix não tem
+          // `previouslyFocusedElement` para restaurar: o foco cairia no <body>.
+          // Devolvemos à mão. Confirmar é o caso oposto: quem manda no foco ali é
+          // o `deleteNodeAndRefocus` (achado 0253), que já levou o cursor para a
+          // folha — o Radix não pode roubá-lo de volta para um rail que sumiu.
+          onCloseAutoFocus={(event) => {
+            event.preventDefault();
+            if (deletedRef.current) {
+              deletedRef.current = false;
+              return;
+            }
+            deleteButtonRef.current?.focus();
+          }}
+        >
           <AlertDialogHeader>
             <AlertDialogTitle>Excluir questão?</AlertDialogTitle>
             <AlertDialogDescription>
@@ -291,7 +318,10 @@ export function QuestionNodeView({ node, updateAttributes, editor, getPos, delet
           <AlertDialogFooter>
             <AlertDialogCancel>Cancelar</AlertDialogCancel>
             <AlertDialogAction
-              onClick={() => deleteNodeAndRefocus(deleteNode, editor, getPos)}
+              onClick={() => {
+                deletedRef.current = true;
+                deleteNodeAndRefocus(deleteNode, editor, getPos);
+              }}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
               Excluir

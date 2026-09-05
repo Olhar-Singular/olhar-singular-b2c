@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent, within } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor, within } from "@testing-library/react";
 import type { NodeViewProps } from "@tiptap/react";
 import type { QuestionAnswer, RichText } from "@/lib/adaptation/canonical/schema";
 import type { ImageItem } from "@/components/editor/imageManagerUtils";
@@ -11,9 +11,11 @@ vi.mock("@tiptap/react", () => ({
 }));
 
 let modalOnConfirm: ((images: ImageItem[]) => void) | undefined;
+let modalRestoreFocusRef: { current: HTMLElement | null } | undefined;
 vi.mock("@/components/editor/ImageManagerModal", () => ({
-  default: ({ open, onConfirm, onClose }: { open: boolean; onConfirm: (images: ImageItem[]) => void; onClose: () => void }) => {
+  default: ({ open, onConfirm, onClose, restoreFocusRef }: { open: boolean; onConfirm: (images: ImageItem[]) => void; onClose: () => void; restoreFocusRef?: { current: HTMLElement | null } }) => {
     modalOnConfirm = onConfirm;
+    modalRestoreFocusRef = restoreFocusRef;
     return open ? <button data-testid="image-modal" onClick={onClose}>modal</button> : null;
   },
 }));
@@ -752,5 +754,57 @@ describe("QuestionNodeView — all 8 answer kinds render in preview and card", (
     // card: opens with the structural AnswerEditor for this kind
     fireEvent.click(screen.getByLabelText("Editar questão"));
     expect(screen.getByTestId(`answer-${kind}`)).toBeInTheDocument();
+  });
+});
+
+// Achado 0254: o botão que abre a confirmação vive no rail `contentEditable=false`
+// do NodeView, e o ProseMirror faz preventDefault no mousedown desse rail — o
+// botão nunca recebe foco de DOM, então o Radix não tem `previouslyFocusedElement`
+// para restaurar e larga o foco no <body> ao sair sem excluir. Quem desistiu perde
+// a posição na folha e o próximo Tab recomeça do topo (WCAG 2.4.3).
+describe("QuestionNodeView — foco ao sair da confirmação sem excluir (achado 0254)", () => {
+  it("devolve o foco ao botão Excluir questão quando o diálogo fecha por Escape", async () => {
+    const { props } = makeProps(mc);
+    render(<QuestionNodeView {...props} />);
+    fireEvent.click(screen.getByLabelText("Excluir questão"));
+    fireEvent.keyDown(screen.getByRole("alertdialog"), { key: "Escape" });
+    await waitFor(() =>
+      expect(document.activeElement).toBe(screen.getByLabelText("Excluir questão")),
+    );
+  });
+
+  it("devolve o foco ao botão Excluir questão quando o diálogo fecha por Cancelar", async () => {
+    const { props } = makeProps(mc);
+    render(<QuestionNodeView {...props} />);
+    fireEvent.click(screen.getByLabelText("Excluir questão"));
+    fireEvent.click(screen.getByRole("button", { name: "Cancelar" }));
+    await waitFor(() =>
+      expect(document.activeElement).toBe(screen.getByLabelText("Excluir questão")),
+    );
+  });
+
+  // Não regredir o 0253: confirmando, o foco é da folha (deleteNodeAndRefocus) —
+  // o handler de restauração não pode roubá-lo de volta para o rail que sumiu.
+  it("não rouba o foco da folha quando a saída é confirmar a exclusão", async () => {
+    const { props } = makeProps(mc);
+    const focus = vi.fn();
+    (props.editor as unknown as { commands: unknown }).commands = { focus };
+    (props.editor.state as unknown as { doc: { content: { size: number } } }).doc.content = { size: 200 };
+    render(<QuestionNodeView {...props} />);
+    fireEvent.click(screen.getByLabelText("Excluir questão"));
+    fireEvent.click(screen.getByRole("button", { name: "Excluir" }));
+    expect(focus).toHaveBeenCalledWith(100);
+    await waitFor(() => expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument());
+    expect(document.activeElement).not.toBe(screen.getByLabelText("Excluir questão"));
+  });
+
+  // Segundo call site do mesmo defeito: o 0349 deu a prop `restoreFocusRef` à
+  // ImageManagerModal e ligou só o call site do ImageNodeView; o rail da questão
+  // ficou de fora e cai no mesmo <body> ao fechar "Adicionar Imagens".
+  it("entrega o botão de imagem do rail como gatilho de foco da ImageManagerModal", () => {
+    const { props } = makeProps(mc);
+    render(<QuestionNodeView {...props} />);
+    fireEvent.click(screen.getByLabelText("Adicionar imagem à questão"));
+    expect(modalRestoreFocusRef?.current).toBe(screen.getByLabelText("Adicionar imagem à questão"));
   });
 });
