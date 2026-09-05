@@ -5,6 +5,16 @@ import { toast } from "sonner";
 import { FOLHA_BUTTON, FOLHA_GHOST, FOLHA_INPUT, FOLHA_SELECTED } from "../folhaChrome";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import ImageResizer from "@/components/editor/ImageResizer";
 import ImageManagerModal from "@/components/editor/ImageManagerModal";
 import PdfPreviewModal from "@/components/forms/PdfPreviewModal";
@@ -38,6 +48,10 @@ export function ImageNodeView({ node, updateAttributes, deleteNode, editor, getP
   // botão nunca recebe foco de DOM e o Radix não teria a quem devolver ao fechar.
   const imageButtonRef = useRef<HTMLButtonElement>(null);
   const [cropOpen, setCropOpen] = useState(false);
+  // 0351 — a exclusão leva três dados de uma vez (figura, texto alternativo e
+  // legenda) e o autosave grava a perda em seguida. Mesma barreira que "Excluir
+  // questão" ganhou no achado 0252: o clique só abre a confirmação.
+  const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
   const [cropping, setCropping] = useState(false);
   const { src, alt, width, alignment, caption } = node.attrs as {
     src: string;
@@ -196,7 +210,7 @@ export function ImageNodeView({ node, updateAttributes, deleteNode, editor, getP
               size="sm"
               className="gap-1 text-destructive hover:bg-surface-mesa hover:text-destructive"
               disabled={disabled}
-              onClick={() => deleteNodeAndRefocus(deleteNode, editor, getPos)}
+              onClick={() => setConfirmDeleteOpen(true)}
               aria-label="Excluir imagem"
             >
               <Trash2 className="h-3.5 w-3.5" />
@@ -301,6 +315,25 @@ export function ImageNodeView({ node, updateAttributes, deleteNode, editor, getP
           )}
         </div>
       </div>
+      <AlertDialog open={confirmDeleteOpen} onOpenChange={setConfirmDeleteOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Excluir imagem?</AlertDialogTitle>
+            <AlertDialogDescription>
+              A figura, o texto alternativo e a legenda serão apagados.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => deleteNodeAndRefocus(deleteNode, editor, getPos)}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Excluir
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
       <ImageManagerModal
         open={modalOpen}
         onClose={() => setModalOpen(false)}

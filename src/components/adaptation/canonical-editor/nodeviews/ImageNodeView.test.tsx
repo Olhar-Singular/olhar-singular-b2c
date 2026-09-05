@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor, within } from "@testing-library/react";
 import type { NodeViewProps } from "@tiptap/react";
 import type { ImageItem } from "@/components/editor/imageManagerUtils";
 import { ImageNodeView } from "./ImageNodeView";
@@ -143,11 +143,34 @@ describe("ImageNodeView", () => {
     expect(screen.getByRole("button", { name: "Excluir imagem" })).toBeInTheDocument();
   });
 
-  it("clicar 'Excluir imagem' chama deleteNode", () => {
+  // Achado 0351: um clique apagava a figura, o texto alternativo e a legenda de
+  // uma vez, e o autosave gravava a perda em seguida — enquanto "Excluir
+  // questão" na mesma folha já confirmava (achado 0252). Mesma barreira aqui.
+  it("não apaga a imagem no clique: abre a confirmação antes (achado 0351)", () => {
     const { props, deleteNode } = makeProps();
     render(<ImageNodeView {...props} />);
     fireEvent.click(screen.getByRole("button", { name: "Excluir imagem" }));
+    expect(deleteNode).not.toHaveBeenCalled();
+    const dialog = screen.getByRole("alertdialog");
+    expect(within(dialog).getByText("Excluir imagem?")).toBeInTheDocument();
+    expect(within(dialog).getByText(/texto alternativo e a legenda/i)).toBeInTheDocument();
+  });
+
+  it("clicar 'Excluir imagem' e confirmar chama deleteNode (achado 0351)", () => {
+    const { props, deleteNode } = makeProps();
+    render(<ImageNodeView {...props} />);
+    fireEvent.click(screen.getByRole("button", { name: "Excluir imagem" }));
+    fireEvent.click(screen.getByRole("button", { name: "Excluir" }));
     expect(deleteNode).toHaveBeenCalledOnce();
+  });
+
+  it("mantém a imagem quando a confirmação é cancelada (achado 0351)", () => {
+    const { props, deleteNode } = makeProps();
+    render(<ImageNodeView {...props} />);
+    fireEvent.click(screen.getByRole("button", { name: "Excluir imagem" }));
+    fireEvent.click(screen.getByRole("button", { name: "Cancelar" }));
+    expect(deleteNode).not.toHaveBeenCalled();
+    expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
   });
 
   it("botão 'Excluir imagem' fica desabilitado quando não editável", () => {
@@ -644,6 +667,7 @@ describe("ImageNodeView — foco depois de excluir (achado 0253)", () => {
     (props.editor as unknown as { state: unknown }).state = { doc: { content: { size: 50 } } };
     render(<ImageNodeView {...props} />);
     fireEvent.click(screen.getByRole("button", { name: "Excluir imagem" }));
+    fireEvent.click(screen.getByRole("button", { name: "Excluir" }));
     expect(focus).toHaveBeenCalledWith(7);
   });
 });
