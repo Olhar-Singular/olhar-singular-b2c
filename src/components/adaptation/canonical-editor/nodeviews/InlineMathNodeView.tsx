@@ -31,8 +31,9 @@ export function InlineMathNodeView({ node, updateAttributes, editor }: NodeViewP
   const [editing, setEditing] = useState(false);
   const { latex, alt } = node.attrs as { latex: string; alt: string | null };
   const disabled = !editor.isEditable;
-  // An empty latex is unrepresentable — see useLatexDraft.
-  const draft = useLatexDraft(latex, (next) => updateAttributes({ latex: next }));
+  // Latex vazio é irrepresentável e o alt não sobrevive à troca da fórmula
+  // (achado 0436) — ver useLatexDraft.
+  const draft = useLatexDraft(latex, alt, updateAttributes);
 
   return (
     <NodeViewWrapper as="span" className="inline-flex items-center" data-testid="inlinemath-node" contentEditable={false}>
@@ -49,11 +50,18 @@ export function InlineMathNodeView({ node, updateAttributes, editor }: NodeViewP
           />
           <Input
             value={alt ?? ""}
-            className="h-6 w-32 px-1 py-0 text-sm"
-            onChange={(e) => updateAttributes({ alt: e.target.value || null })}
+            className={cn("h-6 w-32 px-1 py-0 text-sm", draft.altStale && "border-destructive")}
+            onChange={(e) => draft.onAltChange(e.target.value)}
             placeholder="Texto alternativo"
             aria-label="Texto alternativo da fórmula inline"
           />
+          {/* Achado 0436: zerar o alt em silêncio trocaria uma mentira por um
+              buraco — o professor vê que a descrição ficou para trás. */}
+          {draft.altStale && (
+            <span role="status" data-testid="inlinemath-alt-stale" className="text-xs text-destructive">
+              Descrição desatualizada
+            </span>
+          )}
           <Button type="button" size="sm" variant="outline" className={cn("h-6 px-1.5 text-xs", FOLHA_BUTTON)} onClick={() => setEditing(false)}>
             Pronto
           </Button>
@@ -61,16 +69,26 @@ export function InlineMathNodeView({ node, updateAttributes, editor }: NodeViewP
       ) : (
         <button
           type="button"
-          className="-mx-0.5 rounded px-0.5 align-middle hover:bg-accent"
+          className={cn(
+            "-mx-0.5 rounded px-0.5 align-middle hover:bg-accent",
+            // Sublinhado ondulado: sinaliza a descrição desatualizada sem ocupar
+            // caixa (paridade de composição com o impresso, achado 0406).
+            draft.altStale && "underline decoration-destructive decoration-wavy"
+          )}
           disabled={disabled}
           onClick={() => setEditing(true)}
-          title="Editar fórmula"
-          aria-label={`Editar fórmula: ${alt ?? latex}`}
+          title={draft.altStale ? "Editar fórmula — descrição desatualizada" : "Editar fórmula"}
+          aria-label={
+            draft.altStale
+              ? `Editar fórmula: ${draft.accessibleName} (descrição desatualizada)`
+              : `Editar fórmula: ${draft.accessibleName}`
+          }
+          data-alt-stale={draft.altStale ? "true" : undefined}
           data-testid="inlinemath-render"
         >
           <span
             role="math"
-            aria-label={alt ?? latex}
+            aria-label={draft.accessibleName}
             data-testid="inlinemath-math"
             dangerouslySetInnerHTML={{ __html: inlineLatexToHtml(latex) }}
           />

@@ -28,8 +28,9 @@ export function BlockMathNodeView({ node, updateAttributes, editor, deleteNode }
   const [editing, setEditing] = useState(false);
   const { latex, alt } = node.attrs as { latex: string; alt: string | null };
   const disabled = !editor.isEditable;
-  // An empty latex is unrepresentable — see useLatexDraft.
-  const draft = useLatexDraft(latex, (next) => updateAttributes({ latex: next }));
+  // Latex vazio é irrepresentável e o alt não sobrevive à troca da fórmula
+  // (achado 0436) — ver useLatexDraft.
+  const draft = useLatexDraft(latex, alt, updateAttributes);
 
   const open = editing && !disabled;
 
@@ -72,10 +73,18 @@ export function BlockMathNodeView({ node, updateAttributes, editor, deleteNode }
           />
           <Input
             value={alt ?? ""}
-            onChange={(e) => updateAttributes({ alt: e.target.value || null })}
+            className={cn(draft.altStale && "border-destructive")}
+            onChange={(e) => draft.onAltChange(e.target.value)}
             placeholder="Texto alternativo"
             aria-label="Texto alternativo da fórmula"
           />
+          {/* Achado 0436: o alt caiu junto com a fórmula que ele descrevia; o
+              professor precisa ver isso, não descobrir depois. */}
+          {draft.altStale && (
+            <span role="status" data-testid="blockmath-alt-stale" className="text-xs text-destructive">
+              Descrição desatualizada: reescreva o texto alternativo.
+            </span>
+          )}
           <div className="flex items-center gap-2">
             <Button type="button" size="sm" variant="outline" className={cn(FOLHA_BUTTON)} onClick={() => setEditing(false)}>
               Pronto
@@ -97,7 +106,7 @@ export function BlockMathNodeView({ node, updateAttributes, editor, deleteNode }
         <div className="relative">
           <span
             role="math"
-            aria-label={alt ?? latex}
+            aria-label={draft.accessibleName}
             data-testid="blockmath-math"
             className="block text-center"
             dangerouslySetInnerHTML={{ __html: latexToHtml(latex) }}
@@ -112,11 +121,20 @@ export function BlockMathNodeView({ node, updateAttributes, editor, deleteNode }
               fluxo. */}
           <button
             type="button"
-            className="absolute -inset-2 rounded-lg hover:outline hover:outline-1 hover:outline-border"
+            className={cn(
+              "absolute -inset-2 rounded-lg hover:outline hover:outline-1 hover:outline-border",
+              // Outline não entra no fluxo vertical da folha (achado 0405).
+              draft.altStale && "outline outline-1 outline-destructive"
+            )}
             disabled={disabled}
             onClick={() => setEditing(true)}
-            title="Editar fórmula"
-            aria-label={`Editar fórmula: ${alt ?? latex}`}
+            title={draft.altStale ? "Editar fórmula — descrição desatualizada" : "Editar fórmula"}
+            aria-label={
+              draft.altStale
+                ? `Editar fórmula: ${draft.accessibleName} (descrição desatualizada)`
+                : `Editar fórmula: ${draft.accessibleName}`
+            }
+            data-alt-stale={draft.altStale ? "true" : undefined}
             data-testid="blockmath-render"
           />
         </div>

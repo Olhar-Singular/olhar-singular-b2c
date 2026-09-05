@@ -174,4 +174,97 @@ describe("InlineMathNodeView", () => {
     fireEvent.change(alt, { target: { value: "" } });
     expect(updateAttributes).toHaveBeenCalledWith({ alt: null });
   });
+  /**
+   * Achado 0436 — trocar a `Expressão LaTeX` não tocava no `alt`, e o `alt` é o
+   * nome acessível da fórmula: a folha passava a mostrar uma fórmula enquanto o
+   * leitor de tela continuava anunciando a anterior, sem nenhum sinal de que as
+   * duas divergiram. Vale a regra que a correção do 0317 escreveu para a imagem:
+   * o conteúdo novo não herda o que descrevia o antigo.
+   */
+  it("descarta o alt que descrevia a fórmula substituída", () => {
+    const { props, updateAttributes } = makeProps({
+      latex: "x^2 + 2x + 1 = 0",
+      alt: "x ao quadrado mais 2x mais 1 igual a zero",
+    });
+    render(<InlineMathNodeView {...props} />);
+    fireEvent.click(screen.getByTestId("inlinemath-render"));
+
+    fireEvent.change(screen.getByLabelText("Expressão LaTeX inline"), {
+      target: { value: "y^3 = 8" },
+    });
+
+    expect(updateAttributes).toHaveBeenCalledWith({ latex: "y^3 = 8", alt: null });
+  });
+
+  /** Achado 0436 — o caso do LaTeX inválido é o mesmo defeito, só visível a olho nu. */
+  it("descarta o alt também quando o LaTeX novo é inválido", () => {
+    const { props, updateAttributes } = makeProps({
+      latex: "x^2 + 2x + 1 = 0",
+      alt: "x ao quadrado mais 2x mais 1 igual a zero",
+    });
+    render(<InlineMathNodeView {...props} />);
+    fireEvent.click(screen.getByTestId("inlinemath-render"));
+
+    fireEvent.change(screen.getByLabelText("Expressão LaTeX inline"), {
+      target: { value: "\\frac{1}{ \\unknowncmd{x" },
+    });
+
+    expect(updateAttributes).toHaveBeenCalledWith({
+      latex: "\\frac{1}{ \\unknowncmd{x",
+      alt: null,
+    });
+  });
+
+  /**
+   * Achado 0436 — zerar o alt em silêncio trocaria uma mentira por um buraco: o
+   * professor precisa ver, na folha, que a descrição ficou para trás.
+   */
+  it("para de anunciar o alt antigo e avisa que a descrição ficou desatualizada", () => {
+    const { props } = makeProps({ latex: "x^2", alt: "x ao quadrado" });
+    render(<InlineMathNodeView {...props} />);
+    fireEvent.click(screen.getByTestId("inlinemath-render"));
+    fireEvent.change(screen.getByLabelText("Expressão LaTeX inline"), {
+      target: { value: "y^3" },
+    });
+
+    expect(screen.getByTestId("inlinemath-alt-stale")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByText("Pronto"));
+    const trigger = screen.getByTestId("inlinemath-render");
+    expect(trigger.getAttribute("aria-label")).not.toContain("x ao quadrado");
+    expect(trigger).toHaveAttribute("data-alt-stale", "true");
+    expect(screen.getByTestId("inlinemath-math").getAttribute("aria-label")).not.toContain(
+      "x ao quadrado",
+    );
+  });
+
+  /** Achado 0436 — reescrita a descrição, o aviso sai: ela volta a valer. */
+  it("tira o aviso quando o professor reescreve a descrição", () => {
+    const { props, updateAttributes } = makeProps({ latex: "x^2", alt: "x ao quadrado" });
+    render(<InlineMathNodeView {...props} />);
+    fireEvent.click(screen.getByTestId("inlinemath-render"));
+    fireEvent.change(screen.getByLabelText("Expressão LaTeX inline"), {
+      target: { value: "y^3" },
+    });
+    fireEvent.change(screen.getByLabelText("Texto alternativo da fórmula inline"), {
+      target: { value: "y ao cubo" },
+    });
+
+    expect(updateAttributes).toHaveBeenCalledWith({ alt: "y ao cubo" });
+    expect(screen.queryByTestId("inlinemath-alt-stale")).not.toBeInTheDocument();
+  });
+
+  /** Achado 0436 — o alt só cai quando a fórmula muda de verdade. */
+  it("mantém o alt quando o LaTeX commitado é o mesmo de antes", () => {
+    const { props, updateAttributes } = makeProps({ latex: "x^2", alt: "x ao quadrado" });
+    render(<InlineMathNodeView {...props} />);
+    fireEvent.click(screen.getByTestId("inlinemath-render"));
+    const input = screen.getByLabelText("Expressão LaTeX inline");
+
+    fireEvent.change(input, { target: { value: "" } });
+    fireEvent.change(input, { target: { value: "x^2" } });
+
+    expect(updateAttributes).toHaveBeenCalledWith({ latex: "x^2" });
+    expect(screen.queryByTestId("inlinemath-alt-stale")).not.toBeInTheDocument();
+  });
 });

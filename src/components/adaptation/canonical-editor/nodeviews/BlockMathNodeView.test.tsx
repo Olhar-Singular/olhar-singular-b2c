@@ -63,7 +63,8 @@ describe("BlockMathNodeView", () => {
     fireEvent.click(screen.getByTestId("blockmath-render"));
     fireEvent.change(screen.getByLabelText("Expressão LaTeX"), { target: { value: "y" } });
     fireEvent.change(screen.getByLabelText("Texto alternativo da fórmula"), { target: { value: "" } });
-    expect(updateAttributes).toHaveBeenCalledWith({ latex: "y" });
+    // O alt cai junto com a fórmula que ele descrevia (achado 0436).
+    expect(updateAttributes).toHaveBeenCalledWith({ latex: "y", alt: null });
     expect(updateAttributes).toHaveBeenCalledWith({ alt: null });
     fireEvent.click(screen.getByText("Pronto"));
     expect(screen.getByTestId("blockmath-render")).toBeInTheDocument();
@@ -210,5 +211,76 @@ describe("BlockMathNodeView", () => {
       "aria-label",
       "Editar fórmula: x^2",
     );
+  });
+  /** Achado 0436 — ver o teste irmão em InlineMathNodeView.test.tsx. */
+  it("descarta o alt que descrevia a fórmula substituída", () => {
+    const { props, updateAttributes } = makeProps({
+      latex: "x^2 + 2x + 1 = 0",
+      alt: "x ao quadrado mais 2x mais 1 igual a zero",
+    });
+    render(<BlockMathNodeView {...props} />);
+    fireEvent.click(screen.getByTestId("blockmath-render"));
+
+    fireEvent.change(screen.getByLabelText("Expressão LaTeX"), { target: { value: "y^3 = 8" } });
+
+    expect(updateAttributes).toHaveBeenCalledWith({ latex: "y^3 = 8", alt: null });
+  });
+
+  it("descarta o alt também quando o LaTeX novo é inválido (achado 0436)", () => {
+    const { props, updateAttributes } = makeProps({ latex: "x^2", alt: "x ao quadrado" });
+    render(<BlockMathNodeView {...props} />);
+    fireEvent.click(screen.getByTestId("blockmath-render"));
+
+    fireEvent.change(screen.getByLabelText("Expressão LaTeX"), {
+      target: { value: "\\frac{1}{ \\unknowncmd{x" },
+    });
+
+    expect(updateAttributes).toHaveBeenCalledWith({
+      latex: "\\frac{1}{ \\unknowncmd{x",
+      alt: null,
+    });
+  });
+
+  it("para de anunciar o alt antigo e avisa que a descrição ficou desatualizada (achado 0436)", () => {
+    const { props } = makeProps({ latex: "x^2", alt: "x ao quadrado" });
+    render(<BlockMathNodeView {...props} />);
+    fireEvent.click(screen.getByTestId("blockmath-render"));
+    fireEvent.change(screen.getByLabelText("Expressão LaTeX"), { target: { value: "y^3" } });
+
+    expect(screen.getByTestId("blockmath-alt-stale")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByText("Pronto"));
+    const trigger = screen.getByTestId("blockmath-render");
+    expect(trigger.getAttribute("aria-label")).not.toContain("x ao quadrado");
+    expect(trigger).toHaveAttribute("data-alt-stale", "true");
+    expect(screen.getByTestId("blockmath-math").getAttribute("aria-label")).not.toContain(
+      "x ao quadrado",
+    );
+  });
+
+  it("tira o aviso quando o professor reescreve a descrição (achado 0436)", () => {
+    const { props, updateAttributes } = makeProps({ latex: "x^2", alt: "x ao quadrado" });
+    render(<BlockMathNodeView {...props} />);
+    fireEvent.click(screen.getByTestId("blockmath-render"));
+    fireEvent.change(screen.getByLabelText("Expressão LaTeX"), { target: { value: "y^3" } });
+    fireEvent.change(screen.getByLabelText("Texto alternativo da fórmula"), {
+      target: { value: "y ao cubo" },
+    });
+
+    expect(updateAttributes).toHaveBeenCalledWith({ alt: "y ao cubo" });
+    expect(screen.queryByTestId("blockmath-alt-stale")).not.toBeInTheDocument();
+  });
+
+  it("mantém o alt quando o LaTeX commitado é o mesmo de antes (achado 0436)", () => {
+    const { props, updateAttributes } = makeProps({ latex: "x^2", alt: "x ao quadrado" });
+    render(<BlockMathNodeView {...props} />);
+    fireEvent.click(screen.getByTestId("blockmath-render"));
+    const input = screen.getByLabelText("Expressão LaTeX");
+
+    fireEvent.change(input, { target: { value: "" } });
+    fireEvent.change(input, { target: { value: "x^2" } });
+
+    expect(updateAttributes).toHaveBeenCalledWith({ latex: "x^2" });
+    expect(screen.queryByTestId("blockmath-alt-stale")).not.toBeInTheDocument();
   });
 });
