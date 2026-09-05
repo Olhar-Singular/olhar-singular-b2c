@@ -500,3 +500,39 @@ describe("index.css — vao de bloco no primeiro e no ultimo bloco de topo", () 
     );
   });
 });
+
+/**
+ * Vao de bloco no topo e no pe quando o bloco extremo e um NODEVIEW (achado 0187).
+ *
+ * O reset do 0186 so alcanca `> h1, > h2, > h3, > p`. Questao, imagem, andaime e
+ * formula em bloco sao NodeViews e carregam o vao numa classe propria
+ * (`my-3`, de FOLHA_RAIL_HOST / ImageNodeView / ScaffoldNodeView), fora do
+ * alcance daquele reset. Numa prova adaptada — que termina numa questao — a folha
+ * do Revisar ficava com 12 px de papel a mais no pe que a previa e o PDF, e pior:
+ * a margem colapsa para fora do `contentRef` (que nao tem padding nem borda), de
+ * modo que `content.offsetHeight` nao a enxerga e o PageSheet calcula a
+ * paginacao com uma altura menor que a desenhada.
+ *
+ * O wrapper de todo NodeView React do Tiptap carrega `data-node-view-wrapper`.
+ */
+describe("index.css — vao de bloco quando o bloco extremo e um nodeview", () => {
+  const wrapper = ".tiptap:not(.rich-text-field) > [data-node-view-wrapper]";
+
+  it("zera o vao acima do nodeview quando ele e o primeiro bloco", () => {
+    expect(
+      ruleBody(`${wrapper}:first-child`),
+    ).toMatch(/margin-top:\s*0\s*;/);
+  });
+
+  it("zera o vao abaixo do nodeview quando ele e o ultimo bloco", () => {
+    expect(
+      ruleBody(`${wrapper}:last-child`),
+    ).toMatch(/margin-bottom:\s*0\s*;/);
+  });
+
+  it("nao mexe no vao ENTRE blocos (o `my-3` do rail continua de pe)", () => {
+    const body = ruleBody(`${wrapper}:first-child`);
+    expect(body).not.toMatch(/margin-bottom/);
+    expect(ruleBody(`${wrapper}:last-child`)).not.toMatch(/margin-top/);
+  });
+});

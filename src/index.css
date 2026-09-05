@@ -361,6 +361,25 @@
   margin-bottom: 0;
 }
 
+/* O mesmo vão de ponta, quando o bloco extremo é um NODEVIEW (achado 0187).
+ * Questão, imagem, andaime e fórmula em bloco não são `h1..p`: são NodeViews do
+ * Tiptap e gastam o vão numa classe própria (`my-3`, de FOLHA_RAIL_HOST /
+ * ImageNodeView / ScaffoldNodeView), fora do alcance do reset acima. Numa prova
+ * adaptada — que termina numa questão — sobravam 12 px de papel no pé que a
+ * prévia e o PDF não têm. Pior: o `contentRef` não tem padding nem borda, então
+ * essa margem colapsa para FORA do envelope medido e o `PageSheet` pagina com
+ * uma altura menor que a desenhada.
+ * Só a margem da ponta é zerada: o `my-3` continua sendo o vão ENTRE blocos e o
+ * rail depende dele (0233/0338/0413). Estas regras vivem fora de `@layer`, logo
+ * vencem as utilitárias do Tailwind sem `!important`. */
+.tiptap:not(.rich-text-field) > [data-node-view-wrapper]:first-child {
+  margin-top: 0;
+}
+
+.tiptap:not(.rich-text-field) > [data-node-view-wrapper]:last-child {
+  margin-bottom: 0;
+}
+
 /* O filete que marca o bloco de topo (achado 0341). Vive num ::after absoluto,
  * e nao num `border-left`: o `border-radius: 0.5rem` acima curva as duas pontas
  * do unico traco da caixa, e num bloco de uma linha (22,4 px) sobrava menos de
