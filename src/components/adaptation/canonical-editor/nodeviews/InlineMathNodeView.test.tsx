@@ -299,3 +299,19 @@ describe("InlineMathNodeView", () => {
     expect(screen.queryByTestId("inlinemath-alt-stale")).not.toBeInTheDocument();
   });
 });
+
+// Achado 0350: os quatro átomos são `atom: true, selectable: true` — o clique
+// cria uma NodeSelection que o Backspace apaga inteira, e até então nada disso
+// aparecia na folha (a única regra de seleção do CSS mirava uma classe morta).
+describe("InlineMathNodeView — seleção do átomo (achado 0350)", () => {
+  it("pinta o anel da folha quando o nó está selecionado", () => {
+    const { props } = makeProps();
+    const { container, rerender } = render(<InlineMathNodeView {...props} />);
+    expect(container.querySelector('[data-testid="inlinemath-node"]')!.className).not.toMatch(/ring-2/);
+
+    rerender(<InlineMathNodeView {...props} selected />);
+    const wrapper = container.querySelector('[data-testid="inlinemath-node"]')!;
+    expect(wrapper.className).toMatch(/ring-2/);
+    expect(wrapper.className).toMatch(/ring-surface-accent/);
+  });
+});

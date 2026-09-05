@@ -50,3 +50,48 @@ describe("CanonicalEditor — real DOM mount (sem mock de @tiptap/react)", () =>
     });
   });
 });
+
+/**
+ * Achado 0350 — selecionar um átomo na folha não pintava nada.
+ *
+ * A única regra de seleção do projeto mirava `.tiptap img.editor-image`, classe
+ * que nenhum elemento carrega desde que a imagem virou NodeView React: o
+ * `ProseMirror-selectednode` era carimbado no wrapper e ninguém o lia. Com o
+ * `@tiptap/react` mockado (como nos testes de nodeview) isso passa despercebido,
+ * porque a `NodeSelection` real nunca acontece — daí o teste viver aqui, no
+ * mount de DOM real.
+ */
+describe("CanonicalEditor — seleção de nó atômico (achado 0350)", () => {
+  it("pinta o átomo selecionado na folha", async () => {
+    let editor: ReturnType<typeof useCanonicalEditor>["editor"] = null;
+    function Host() {
+      const bag = useCanonicalEditor({ value: richDocument, onChange: () => {} });
+      editor = bag.editor;
+      return <EditorContent editor={bag.editor} />;
+    }
+
+    const { container } = render(<Host />);
+
+    await waitFor(() => {
+      expect(container.querySelector('[data-testid="image-node"]')).toBeTruthy();
+    });
+
+    const image = container.querySelector('[data-testid="image-node"]') as HTMLElement;
+    expect(image.className).not.toMatch(/ring-2/);
+
+    let imagePos = -1;
+    editor!.state.doc.descendants((node, pos) => {
+      if (node.type.name === "image" && imagePos === -1) imagePos = pos;
+      return true;
+    });
+    expect(imagePos).toBeGreaterThanOrEqual(0);
+
+    editor!.commands.setNodeSelection(imagePos);
+
+    await waitFor(() => {
+      const wrapper = container.querySelector('[data-testid="image-node"]') as HTMLElement;
+      expect(wrapper.className).toMatch(/ring-2/);
+      expect(wrapper.className).toMatch(/ring-surface-accent/);
+    });
+  });
+});

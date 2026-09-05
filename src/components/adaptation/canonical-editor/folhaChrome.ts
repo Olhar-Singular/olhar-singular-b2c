@@ -100,3 +100,25 @@ export const FOLHA_RAIL_HOST =
  */
 export const FOLHA_INPUT =
   "border-surface-ink-soft bg-surface-paper text-surface-ink placeholder:text-surface-ink-soft";
+
+/**
+ * Estado de seleção de um nó atômico da folha (imagem, apoio, fórmula).
+ *
+ * Os quatro átomos do schema são `atom: true, selectable: true`: um clique cria
+ * uma `NodeSelection` e o `Backspace` apaga o nó inteiro. Até o achado 0350 nada
+ * disso aparecia — a única regra de seleção do projeto mirava
+ * `.tiptap img.editor-image`, classe que nenhum elemento carrega desde que a
+ * imagem virou NodeView React, então o `ProseMirror-selectednode` carimbado no
+ * wrapper não pintava nada e a folha ficava byte a byte idêntica antes e depois
+ * do clique.
+ *
+ * A tinta sai da paleta `--sf-*` e não de `--primary`: o anel vive SOBRE o
+ * papel, que não segue o tema do app (achado 0342). O `ring-offset` é da cor do
+ * papel para o anel não colar no conteúdo impresso do próprio bloco.
+ *
+ * Aplicado pela prop `selected` do `NodeViewProps` (é o tiptap que a mantém),
+ * não por CSS de classe: assim o estado é do componente e os testes de nodeview
+ * o alcançam.
+ */
+export const FOLHA_SELECTED =
+  "ring-2 ring-surface-accent ring-offset-2 ring-offset-surface-paper rounded-sm";

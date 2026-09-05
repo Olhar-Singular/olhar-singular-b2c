@@ -2,7 +2,7 @@ import { useRef, useState } from "react";
 import { AlignLeft, AlignCenter, AlignRight, Crop, ImageIcon, Trash2 } from "lucide-react";
 import { NodeViewWrapper, type NodeViewProps } from "@tiptap/react";
 import { toast } from "sonner";
-import { FOLHA_BUTTON, FOLHA_GHOST, FOLHA_INPUT } from "../folhaChrome";
+import { FOLHA_BUTTON, FOLHA_GHOST, FOLHA_INPUT, FOLHA_SELECTED } from "../folhaChrome";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import ImageResizer from "@/components/editor/ImageResizer";
@@ -31,7 +31,7 @@ const CAPTION_ALIGN: Record<string, "left" | "center" | "right"> = {
   right: "right",
 };
 
-export function ImageNodeView({ node, updateAttributes, deleteNode, editor, getPos }: NodeViewProps) {
+export function ImageNodeView({ node, updateAttributes, deleteNode, editor, getPos, selected }: NodeViewProps) {
   const [modalOpen, setModalOpen] = useState(false);
   // 0349 — o gatilho vive dentro do NodeViewWrapper `contentEditable={false}`:
   // o ProseMirror seleciona o nó no `mousedown` (com `preventDefault`), então o
@@ -113,7 +113,11 @@ export function ImageNodeView({ node, updateAttributes, deleteNode, editor, getP
   };
 
   return (
-    <NodeViewWrapper className="my-3 space-y-2" data-testid="image-node" contentEditable={false}>
+    <NodeViewWrapper
+      className={cn("my-3 space-y-2", selected && FOLHA_SELECTED)}
+      data-testid="image-node"
+      contentEditable={false}
+    >
       <div className="flex flex-col gap-2">
         <div
           data-testid="image-align-container"

@@ -24,14 +24,16 @@ import {
   SCAFFOLDING_RADIUS_PX,
 } from "@/components/adaptation/render/pageTokens";
 import { deleteNodeAndRefocus } from "./nodeViewUtils";
+import { FOLHA_SELECTED } from "../folhaChrome";
+import { cn } from "@/lib/utils";
 
-export function ScaffoldNodeView({ node, updateAttributes, editor, deleteNode, getPos }: NodeViewProps) {
+export function ScaffoldNodeView({ node, updateAttributes, editor, deleteNode, getPos, selected }: NodeViewProps) {
   const items = node.attrs.items as string[];
   const disabled = !editor.isEditable;
 
   return (
     <NodeViewWrapper
-      className="my-3 border p-3"
+      className={cn("my-3 border p-3", selected && FOLHA_SELECTED)}
       style={{
         backgroundColor: SCAFFOLDING_BG,
         borderColor: SCAFFOLDING_BORDER,

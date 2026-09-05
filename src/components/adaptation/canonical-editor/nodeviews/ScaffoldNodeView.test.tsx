@@ -125,3 +125,19 @@ describe("ScaffoldNodeView — tinta do documento no que é impresso", () => {
     expect(screen.getByTestId("scaffold-step-ordinal-0").closest("[data-folha-chrome]")).toBeNull();
   });
 });
+
+// Achado 0350: os quatro átomos são `atom: true, selectable: true` — o clique
+// cria uma NodeSelection que o Backspace apaga inteira, e até então nada disso
+// aparecia na folha (a única regra de seleção do CSS mirava uma classe morta).
+describe("ScaffoldNodeView — seleção do átomo (achado 0350)", () => {
+  it("pinta o anel da folha quando o nó está selecionado", () => {
+    const { props } = makeProps(["a"]);
+    const { container, rerender } = render(<ScaffoldNodeView {...props} />);
+    expect(container.querySelector('[data-testid="scaffold-node"]')!.className).not.toMatch(/ring-2/);
+
+    rerender(<ScaffoldNodeView {...props} selected />);
+    const wrapper = container.querySelector('[data-testid="scaffold-node"]')!;
+    expect(wrapper.className).toMatch(/ring-2/);
+    expect(wrapper.className).toMatch(/ring-surface-accent/);
+  });
+});

@@ -18,13 +18,13 @@ import { useState } from "react";
 import { Trash2 } from "lucide-react";
 import { NodeViewWrapper, type NodeViewProps } from "@tiptap/react";
 import { Input } from "@/components/ui/input";
-import { FOLHA_BUTTON, FOLHA_RAIL, FOLHA_RAIL_HOST } from "../folhaChrome";
+import { FOLHA_BUTTON, FOLHA_RAIL, FOLHA_RAIL_HOST, FOLHA_SELECTED } from "../folhaChrome";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { deleteNodeAndRefocus, latexToHtml } from "./nodeViewUtils";
 import { useLatexDraft } from "./useLatexDraft";
 
-export function BlockMathNodeView({ node, updateAttributes, editor, deleteNode, getPos }: NodeViewProps) {
+export function BlockMathNodeView({ node, updateAttributes, editor, deleteNode, getPos, selected }: NodeViewProps) {
   const [editing, setEditing] = useState(false);
   const { latex, alt } = node.attrs as { latex: string; alt: string | null };
   const disabled = !editor.isEditable;
@@ -35,7 +35,11 @@ export function BlockMathNodeView({ node, updateAttributes, editor, deleteNode, 
   const open = editing && !disabled;
 
   return (
-    <NodeViewWrapper className={FOLHA_RAIL_HOST} data-testid="blockmath-node" contentEditable={false}>
+    <NodeViewWrapper
+      className={cn(FOLHA_RAIL_HOST, selected && FOLHA_SELECTED)}
+      data-testid="blockmath-node"
+      contentEditable={false}
+    >
       {/* Rail de ações: excluir (ver FOLHA_RAIL). Some enquanto o editor está
           aberto — achado 0420: o `autoFocus` do campo de LaTeX acende o rail por
           `group-focus-within` e a caixa opaca fica invadindo o bloco de cima

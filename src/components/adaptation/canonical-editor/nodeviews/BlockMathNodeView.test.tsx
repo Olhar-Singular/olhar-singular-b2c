@@ -313,3 +313,19 @@ describe("BlockMathNodeView — foco depois de excluir (achado 0253)", () => {
     expect(focus).toHaveBeenCalledWith(9);
   });
 });
+
+// Achado 0350: os quatro átomos são `atom: true, selectable: true` — o clique
+// cria uma NodeSelection que o Backspace apaga inteira, e até então nada disso
+// aparecia na folha (a única regra de seleção do CSS mirava uma classe morta).
+describe("BlockMathNodeView — seleção do átomo (achado 0350)", () => {
+  it("pinta o anel da folha quando o nó está selecionado", () => {
+    const { props } = makeProps();
+    const { container, rerender } = render(<BlockMathNodeView {...props} />);
+    expect(container.querySelector('[data-testid="blockmath-node"]')!.className).not.toMatch(/ring-2/);
+
+    rerender(<BlockMathNodeView {...props} selected />);
+    const wrapper = container.querySelector('[data-testid="blockmath-node"]')!;
+    expect(wrapper.className).toMatch(/ring-2/);
+    expect(wrapper.className).toMatch(/ring-surface-accent/);
+  });
+});

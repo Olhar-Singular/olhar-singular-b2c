@@ -292,22 +292,15 @@
   outline: none;
 }
 
-.tiptap img.editor-image {
-  display: block;
-  max-width: 100%;
-  height: auto;
-  margin: 0.5rem auto;
-  cursor: pointer;
-  position: relative;
-  border-radius: 0.5rem;
-  border: 2px solid transparent;
-  transition: border-color 0.15s;
-}
-
-.tiptap img.editor-image.ProseMirror-selectednode {
-  border-color: hsl(var(--primary));
-  outline: 2px solid hsl(var(--primary) / 0.3);
-}
+/*
+ * Achado 0350: aqui viviam `.tiptap img.editor-image` e a sua variante
+ * `.ProseMirror-selectednode` — regras mortas desde que a imagem virou NodeView
+ * React (`ImageResizer` renderiza `<img className="w-full">`, nenhum TSX aplica
+ * `editor-image`). Além de não pintar seleção nenhuma, o bloco enganava quem
+ * lesse o CSS procurando o `max-width` da imagem no editor. O estado de seleção
+ * dos átomos agora é do componente: prop `selected` do NodeViewProps +
+ * `FOLHA_SELECTED` (canonical-editor/folhaChrome.ts).
+ */
 
 /*
  * "Tudo dentro de blocos": every DIRECT top-level block of the editor reads as a

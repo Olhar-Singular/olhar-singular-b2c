@@ -21,7 +21,7 @@
 import { useState } from "react";
 import { NodeViewWrapper, type NodeViewProps } from "@tiptap/react";
 import { Input } from "@/components/ui/input";
-import { FOLHA_BUTTON } from "../folhaChrome";
+import { FOLHA_BUTTON, FOLHA_SELECTED } from "../folhaChrome";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { inlineLatexToHtml } from "./nodeViewUtils";
@@ -42,7 +42,7 @@ import { useLatexDraft } from "./useLatexDraft";
  */
 export const ALT_STALE_MARK_CLASS = "inlinemath-alt-stale";
 
-export function InlineMathNodeView({ node, updateAttributes, editor }: NodeViewProps) {
+export function InlineMathNodeView({ node, updateAttributes, editor, selected }: NodeViewProps) {
   const [editing, setEditing] = useState(false);
   const { latex, alt } = node.attrs as { latex: string; alt: string | null };
   const disabled = !editor.isEditable;
@@ -51,7 +51,12 @@ export function InlineMathNodeView({ node, updateAttributes, editor }: NodeViewP
   const draft = useLatexDraft(latex, alt, updateAttributes);
 
   return (
-    <NodeViewWrapper as="span" className="inline-flex items-center" data-testid="inlinemath-node" contentEditable={false}>
+    <NodeViewWrapper
+      as="span"
+      className={cn("inline-flex items-center", selected && FOLHA_SELECTED)}
+      data-testid="inlinemath-node"
+      contentEditable={false}
+    >
       {editing && !disabled ? (
         <span className="inline-flex items-center gap-1 rounded border border-border px-1 align-middle">
           <Input
