@@ -320,7 +320,10 @@ export function QuestionNodeView({ node, updateAttributes, editor, getPos, delet
               O enunciado, a instrução e todas as alternativas serão apagados. Dá para desfazer logo em seguida com Ctrl+Z (Cmd+Z no Mac).
             </AlertDialogDescription>
           </AlertDialogHeader>
-          <AlertDialogFooter>
+          {/* Achado 0258: o rodapé padrão empilha em flex-col-reverse abaixo de
+              640px e pintava o botão destrutivo acima do Cancelar, contra a ordem
+              de DOM (que é a do Tab). flex-col devolve a mesma ordem às três. */}
+          <AlertDialogFooter className="flex-col">
             <AlertDialogCancel>Cancelar</AlertDialogCancel>
             <AlertDialogAction
               onClick={() => {

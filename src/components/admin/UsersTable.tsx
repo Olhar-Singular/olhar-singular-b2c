@@ -133,7 +133,7 @@ export function UsersTable({
                 {userDisplayName(confirmUser)} não poderá mais acessar a plataforma até ser reativado.
               </AlertDialogDescription>
             </AlertDialogHeader>
-            <AlertDialogFooter>
+            <AlertDialogFooter className="flex-col">
               <AlertDialogCancel>Cancelar</AlertDialogCancel>
               <AlertDialogAction
                 onClick={() => {

@@ -292,7 +292,7 @@ export function StepGenerate({ data, onResult, onNext, onPrev, onLoadingChange, 
                 as {MAX_QUESTIONS} primeiras serão adaptadas. Continuar?
               </AlertDialogDescription>
             </AlertDialogHeader>
-            <AlertDialogFooter>
+            <AlertDialogFooter className="flex-col">
               <AlertDialogCancel onClick={cancelTruncate}>Cancelar</AlertDialogCancel>
               <AlertDialogAction onClick={confirmTruncate}>Continuar</AlertDialogAction>
             </AlertDialogFooter>

@@ -742,7 +742,7 @@ export default function CanonicalAdaptationWizard({ editMode }: Props = {}) {
               Encontramos edições que não chegaram a ser salvas. Deseja recuperá-las? Caso contrário, elas serão descartadas.
             </AlertDialogDescription>
           </AlertDialogHeader>
-          <AlertDialogFooter>
+          <AlertDialogFooter className="flex-col">
             <AlertDialogCancel onClick={dismissRestore}>Descartar</AlertDialogCancel>
             <AlertDialogAction onClick={confirmRestore}>Recuperar</AlertDialogAction>
           </AlertDialogFooter>
@@ -757,7 +757,7 @@ export default function CanonicalAdaptationWizard({ editMode }: Props = {}) {
               A adaptação atual será substituída por uma nova. As edições serão perdidas.
             </AlertDialogDescription>
           </AlertDialogHeader>
-          <AlertDialogFooter>
+          <AlertDialogFooter className="flex-col">
             <AlertDialogCancel>Cancelar</AlertDialogCancel>
             <AlertDialogAction
               onClick={() => void confirmRegenerateNow()}

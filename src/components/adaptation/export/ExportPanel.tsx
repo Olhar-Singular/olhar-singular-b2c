@@ -288,7 +288,7 @@ export function ExportPanel({
               </div>
             </AlertDialogDescription>
           </AlertDialogHeader>
-          <AlertDialogFooter>
+          <AlertDialogFooter className="flex-col">
             <AlertDialogCancel>Cancelar</AlertDialogCancel>
             <AlertDialogAction onClick={confirmPending}>Baixar mesmo assim</AlertDialogAction>
           </AlertDialogFooter>

@@ -532,6 +532,21 @@ describe("QuestionNodeView — rail actions", () => {
     expect(within(dialog).getByText(/desfazer/i)).toBeInTheDocument();
   });
 
+  // Achado 0258: o rodapé padrão do AlertDialog empilha em `flex-col-reverse`
+  // abaixo de 640px, então o botão destrutivo era pintado ACIMA do Cancelar
+  // enquanto o Tab continuava chegando primeiro no Cancelar (ordem de DOM).
+  // Ordem de leitura, de toque e de tabulação têm de coincidir (WCAG 1.3.2/2.4.3).
+  it("empilha o rodapé na ordem de DOM em tela estreita (achado 0258)", () => {
+    const { props } = makeProps(mc);
+    render(<QuestionNodeView {...props} />);
+    fireEvent.click(screen.getByLabelText("Excluir questão"));
+    const dialog = screen.getByRole("alertdialog");
+    const footer = within(dialog).getByRole("button", { name: "Cancelar" })
+      .parentElement as HTMLElement;
+    expect(footer.className).not.toContain("flex-col-reverse");
+    expect(footer.className).toContain("flex-col");
+  });
+
   it("deletes the question via deleteNode after confirming (achado 0252)", () => {
     const { props, deleteNode } = makeProps(mc);
     render(<QuestionNodeView {...props} />);

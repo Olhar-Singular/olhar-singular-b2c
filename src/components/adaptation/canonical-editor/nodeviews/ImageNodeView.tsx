@@ -328,7 +328,7 @@ export function ImageNodeView({ node, updateAttributes, deleteNode, editor, getP
               A figura, o texto alternativo e a legenda serão apagados. Dá para desfazer logo em seguida com Ctrl+Z (Cmd+Z no Mac).
             </AlertDialogDescription>
           </AlertDialogHeader>
-          <AlertDialogFooter>
+          <AlertDialogFooter className="flex-col">
             <AlertDialogCancel>Cancelar</AlertDialogCancel>
             <AlertDialogAction
               onClick={() => deleteNodeAndRefocus(deleteNode, editor, getPos)}

@@ -204,7 +204,7 @@ export default function BarrierProfilesPage() {
               Esta ação não pode ser desfeita. Adaptações vinculadas não serão apagadas.
             </AlertDialogDescription>
           </AlertDialogHeader>
-          <AlertDialogFooter>
+          <AlertDialogFooter className="flex-col">
             <AlertDialogCancel>Cancelar</AlertDialogCancel>
             <AlertDialogAction onClick={handleDelete} disabled={remove.isPending}>
               Confirmar

@@ -331,7 +331,7 @@ export default function AdaptacoesPage() {
             <AlertDialogTitle>Excluir adaptação?</AlertDialogTitle>
             <AlertDialogDescription>Esta ação não pode ser desfeita.</AlertDialogDescription>
           </AlertDialogHeader>
-          <AlertDialogFooter>
+          <AlertDialogFooter className="flex-col">
             <AlertDialogCancel>Cancelar</AlertDialogCancel>
             <AlertDialogAction
               onClick={handleDelete}
@@ -353,7 +353,7 @@ export default function AdaptacoesPage() {
               As adaptações que estão nela NÃO serão excluídas — elas voltam para Sem pasta.
             </AlertDialogDescription>
           </AlertDialogHeader>
-          <AlertDialogFooter>
+          <AlertDialogFooter className="flex-col">
             <AlertDialogCancel>Cancelar</AlertDialogCancel>
             <AlertDialogAction
               onClick={handleDeleteFolder}
