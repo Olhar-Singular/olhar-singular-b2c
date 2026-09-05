@@ -29,7 +29,7 @@
  * unchanged: the field always emits canonical `RichText`.
  */
 
-import { useRef } from "react";
+import { useEffect, useRef } from "react";
 import { useEditor, EditorContent, BubbleMenu } from "@tiptap/react";
 import { SelectionBubble } from "./SelectionBubble";
 import { cn } from "@/lib/utils";
@@ -119,6 +119,27 @@ export function RichTextField({
       },
     },
   });
+
+  // Ressincroniza com o valor de FORA (achado 0179).
+  //
+  // O texto editado aqui mora num atributo do nó da questão, no editor da folha.
+  // Esse atributo pode mudar sem passar por este campo: o `Ctrl+Z` da folha
+  // desfaz a transação de `updateAttributes` que a edição do campo gerou e
+  // restaura o texto antigo. Sem re-semear, o ProseMirror aninhado segue
+  // desenhando o documento que ele mesmo montou e a folha do Revisar passa a
+  // divergir, em silêncio, do que é salvo e exportado.
+  //
+  // O guard é `lastValueRef`: durante a digitação o valor que volta é o que o
+  // campo acabou de emitir, então nada é re-semeado (re-semear a cada tecla
+  // mataria o cursor e o histórico próprio do campo). `setContent` roda com
+  // `emitUpdate = false` — a mudança veio de fora, devolvê-la por `onChange`
+  // fecharia o laço.
+  useEffect(() => {
+    if (!editor) return;
+    if (richTextEqual(value, lastValueRef.current)) return;
+    lastValueRef.current = value;
+    editor.commands.setContent(docFromRichText(value), false);
+  }, [editor, value]);
 
   if (!editor) return null;
 
