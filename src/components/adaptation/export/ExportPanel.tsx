@@ -19,6 +19,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { TITLE_FIELD_HINT, TITLE_FIELD_LABEL } from "@/components/adaptation/titleField";
 import { Switch } from "@/components/ui/switch";
 import type { CanonicalDocument, DocumentHeader, PageStyle } from "@/lib/adaptation/canonical/schema";
 import { documentToPlainText } from "@/lib/adaptation/canonical/plainText";
@@ -178,14 +179,25 @@ export function ExportPanel({
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        {/*
+          Achado 0250: este é o MESMO `header.title` do campo do passo Revisar —
+          preenchê-lo aqui renomeava a adaptação na lista (o autosave copia o
+          header para a coluna `title`) sem nenhum aviso. Rótulo compartilhado
+          com o Revisar (`titleField.ts`) e a frase auxiliar visível logo abaixo,
+          que aqui há espaço para mostrar.
+        */}
         <div className="space-y-1">
-          <Label htmlFor="pdf-title">Título</Label>
+          <Label htmlFor="pdf-title">{TITLE_FIELD_LABEL}</Label>
           <Input
             id="pdf-title"
+            aria-describedby="pdf-title-hint"
             maxLength={120}
             value={header.title ?? ""}
             onChange={(e) => setField("title", e.target.value)}
           />
+          <p id="pdf-title-hint" className="text-xs text-muted-foreground">
+            {TITLE_FIELD_HINT}
+          </p>
         </div>
         <div className="space-y-1">
           <Label htmlFor="pdf-school">Escola</Label>

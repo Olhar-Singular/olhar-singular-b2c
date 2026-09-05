@@ -2,6 +2,7 @@ import { useState } from "react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { ExportPanel } from "./ExportPanel";
+import { TITLE_FIELD_HINT, TITLE_FIELD_LABEL } from "@/components/adaptation/titleField";
 import type { CanonicalDocument, DocumentHeader, PageStyle } from "@/lib/adaptation/canonical/schema";
 import type { PanelSettings } from "./panelSettings";
 
@@ -51,6 +52,19 @@ function Harness({
 }
 
 describe("ExportPanel", () => {
+
+  // Achado 0250: este campo é o MESMO `header.title` que o "Nome da adaptação"
+  // do passo Revisar. Enquanto os rótulos divergiam, preencher aqui renomeava a
+  // adaptação na lista sem aviso. Mesmo rótulo nos dois passos + texto auxiliar
+  // visível dizendo onde o valor aparece.
+  it("usa o rótulo único do título e avisa que o valor também nomeia a adaptação", () => {
+    render(<Harness onDownload={vi.fn().mockResolvedValue(undefined)} />);
+    const field = screen.getByLabelText(TITLE_FIELD_LABEL);
+    const hintId = field.getAttribute("aria-describedby");
+    expect(hintId).toBeTruthy();
+    expect(globalThis.document.getElementById(hintId!)).toHaveTextContent(TITLE_FIELD_HINT);
+    expect(screen.getByText(TITLE_FIELD_HINT)).toBeInTheDocument();
+  });
   it("copies the plain-text projection", async () => {
     const writeText = vi.fn().mockResolvedValue(undefined);
     Object.assign(navigator, { clipboard: { writeText } });
@@ -75,7 +89,7 @@ describe("ExportPanel", () => {
     const { toast } = await import("sonner");
     render(<Harness onDownload={onDownload} />);
 
-    fireEvent.change(screen.getByLabelText("Título"), { target: { value: "Minha Prova" } });
+    fireEvent.change(screen.getByLabelText(TITLE_FIELD_LABEL), { target: { value: "Minha Prova" } });
     fireEvent.change(screen.getByLabelText("Escola"), { target: { value: "Escola X" } });
     fireEvent.change(screen.getByLabelText("Professor(a)"), { target: { value: "Ana" } });
     fireEvent.change(screen.getByLabelText("Data"), { target: { value: "2026-06-04" } });
@@ -122,7 +136,7 @@ describe("ExportPanel", () => {
   it("is safe to use without an onHeaderChange handler (a field change does not throw)", () => {
     render(<ExportPanel document={document} onDownload={vi.fn()} />);
     expect(() =>
-      fireEvent.change(screen.getByLabelText("Título"), { target: { value: "x" } }),
+      fireEvent.change(screen.getByLabelText(TITLE_FIELD_LABEL), { target: { value: "x" } }),
     ).not.toThrow();
   });
 
@@ -135,7 +149,7 @@ describe("ExportPanel", () => {
         onDownload={vi.fn()}
       />,
     );
-    expect((screen.getByLabelText("Título") as HTMLInputElement).value).toBe("Pré-preenchido");
+    expect((screen.getByLabelText(TITLE_FIELD_LABEL) as HTMLInputElement).value).toBe("Pré-preenchido");
     expect((screen.getByLabelText("Escola") as HTMLInputElement).value).toBe("Escola Y");
     expect((screen.getByLabelText("Professor(a)") as HTMLInputElement).value).toBe("Bia");
     expect((screen.getByLabelText("Data") as HTMLInputElement).value).toBe("2026-01-15");
@@ -151,7 +165,7 @@ describe("ExportPanel", () => {
         onDownload={vi.fn()}
       />,
     );
-    fireEvent.change(screen.getByLabelText("Título"), { target: { value: "Novo Título" } });
+    fireEvent.change(screen.getByLabelText(TITLE_FIELD_LABEL), { target: { value: "Novo Título" } });
     expect(onHeaderChange).toHaveBeenCalledWith({ school: "Escola Y", title: "Novo Título" });
   });
 
@@ -244,7 +258,7 @@ describe("ExportPanel", () => {
 
   it("title input enforces maxLength of 120 characters", () => {
     render(<ExportPanel document={document} onDownload={vi.fn()} />);
-    const titleInput = screen.getByLabelText("Título") as HTMLInputElement;
+    const titleInput = screen.getByLabelText(TITLE_FIELD_LABEL) as HTMLInputElement;
     expect(titleInput.maxLength).toBe(120);
   });
 
@@ -491,7 +505,7 @@ describe("ExportPanel — Copiar leva o cabeçalho (achado 0127)", () => {
     Object.assign(navigator, { clipboard: { writeText } });
     render(<Harness onDownload={vi.fn()} />);
 
-    fireEvent.change(screen.getByLabelText("Título"), { target: { value: "Minha Prova" } });
+    fireEvent.change(screen.getByLabelText(TITLE_FIELD_LABEL), { target: { value: "Minha Prova" } });
     fireEvent.change(screen.getByLabelText("Escola"), { target: { value: "Escola X" } });
     fireEvent.change(screen.getByLabelText("Professor(a)"), { target: { value: "Ana" } });
     fireEvent.change(screen.getByLabelText("Data"), { target: { value: "2026-06-04" } });

@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from "react";
+import { useId, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ArrowLeft, ArrowRight, FileText, Info, RefreshCw, Save } from "lucide-react";
@@ -10,6 +10,7 @@ import { PageBreakMarker } from "@/components/adaptation/canonical-editor/page-b
 import { OriginalDocExtension } from "@/components/adaptation/canonical-editor/originalDocExtension";
 import { UploadedExamExtension } from "@/components/adaptation/canonical-editor/uploadedExamExtension";
 import { PageSheet } from "@/components/adaptation/PageSheet";
+import { TITLE_FIELD_HINT, TITLE_FIELD_LABEL } from "@/components/adaptation/titleField";
 import { AppearancePopover } from "./AppearancePopover";
 import { MetadataDrawer } from "./MetadataDrawer";
 import { OriginalExamDialog } from "./OriginalExamDialog";
@@ -155,6 +156,7 @@ export function StepReview({
   onSave,
   originalExam = null,
 }: Props) {
+  const titleHintId = useId();
   const [aboutOpen, setAboutOpen] = useState(false);
   const surfaceRef = useRef<HTMLDivElement>(null);
   const [originalOpen, setOriginalOpen] = useState(false);
@@ -254,15 +256,28 @@ export function StepReview({
           baixo dos selects opacos (achado 0227).
         */}
         <div className="flex min-w-0 basis-full items-center gap-2 sm:flex-1 sm:basis-0">
+          {/*
+            Achado 0250: este campo escreve no MESMO `header.title` que o campo
+            "Título" do passo Exportar — nomear aqui também imprime o título na
+            folha do aluno. O rótulo veio para `titleField.ts` para que os dois
+            passos digam a mesma coisa, e a frase auxiliar (tooltip + descrição
+            acessível, sem ocupar linha no chrome, que já estoura em 390 px)
+            conta os dois efeitos.
+          */}
           <input
             type="text"
-            aria-label="Nome da adaptação"
+            aria-label={TITLE_FIELD_LABEL}
+            aria-describedby={titleHintId}
+            title={TITLE_FIELD_HINT}
             value={title}
             onChange={(e) => onTitleChange?.(e.target.value)}
             placeholder={documentTitle(document)}
             maxLength={120}
             className="min-w-0 flex-1 truncate rounded border border-surface-chrome-line bg-surface-paper px-2 py-1 text-base font-semibold text-surface-ink placeholder:font-semibold placeholder:text-surface-ink-soft"
           />
+          <span id={titleHintId} className="sr-only">
+            {TITLE_FIELD_HINT}
+          </span>
           {title.trim() === "" && (
             <span className="shrink-0 rounded border border-surface-chrome-line bg-surface-mesa px-1.5 py-0.5 text-xs font-medium text-surface-ink">
               Sem nome

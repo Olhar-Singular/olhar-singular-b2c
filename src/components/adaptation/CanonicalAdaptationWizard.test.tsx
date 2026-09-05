@@ -3,6 +3,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, within, waitFor, act } from "@testing-library/react";
 import { renderWithProviders } from "@/test/helpers";
 import CanonicalAdaptationWizard from "./CanonicalAdaptationWizard";
+import { TITLE_FIELD_LABEL } from "@/components/adaptation/titleField";
 import type { AdaptationResult, CanonicalDocument } from "@/lib/adaptation/canonical/schema";
 import { validateDocument } from "@/lib/adaptation/canonical/validate";
 import * as repo from "@/lib/adaptation/persistence/adaptationsRepo";
@@ -441,13 +442,13 @@ describe("CanonicalAdaptationWizard", () => {
 
     // Type a title in the real ExportPanel — it is controlled by the wizard, so
     // it only reflects (and persists) if the change is lifted into result.header.
-    fireEvent.change(screen.getByLabelText("Título"), { target: { value: "Prova Final" } });
-    expect((screen.getByLabelText("Título") as HTMLInputElement).value).toBe("Prova Final");
+    fireEvent.change(screen.getByLabelText(TITLE_FIELD_LABEL), { target: { value: "Prova Final" } });
+    expect((screen.getByLabelText(TITLE_FIELD_LABEL) as HTMLInputElement).value).toBe("Prova Final");
 
     // It survives a round-trip to review and back (single source of truth).
     fireEvent.click(screen.getByRole("button", { name: /Voltar/i }));
     fireEvent.click(screen.getByRole("button", { name: /Avançar para exportação/i }));
-    expect((screen.getByLabelText("Título") as HTMLInputElement).value).toBe("Prova Final");
+    expect((screen.getByLabelText(TITLE_FIELD_LABEL) as HTMLInputElement).value).toBe("Prova Final");
   });
 
   it("the step indicator navigates back to a visited step", () => {

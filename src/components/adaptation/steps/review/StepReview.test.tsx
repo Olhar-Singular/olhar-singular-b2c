@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, waitFor, within } from "@testing-library/react";
 import { StepReview } from "./StepReview";
+import { TITLE_FIELD_HINT, TITLE_FIELD_LABEL } from "@/components/adaptation/titleField";
 import { PageBreakMarker } from "@/components/adaptation/canonical-editor/page-break/pageBreakDecoration";
 import { OriginalDocExtension } from "@/components/adaptation/canonical-editor/originalDocExtension";
 import type { CanonicalDocument } from "@/lib/adaptation/canonical/schema";
@@ -145,7 +146,7 @@ describe("StepReview", () => {
     setup();
     // The derived heading is the name field's PLACEHOLDER now: it is what an
     // unnamed adaptation shows, without being stored as a chosen name.
-    expect(screen.getByLabelText("Nome da adaptação")).toHaveAttribute(
+    expect(screen.getByLabelText(TITLE_FIELD_LABEL)).toHaveAttribute(
       "placeholder",
       "Prova Adaptada",
     );
@@ -243,7 +244,7 @@ describe("StepReview", () => {
         blocks: [{ id: id(1), type: "paragraph", content: [{ type: "text", text: "x" }] }],
       },
     });
-    expect(screen.getByLabelText("Nome da adaptação")).toHaveAttribute(
+    expect(screen.getByLabelText(TITLE_FIELD_LABEL)).toHaveAttribute(
       "placeholder",
       "Atividade adaptada",
     );
@@ -258,7 +259,7 @@ describe("StepReview", () => {
         ],
       },
     });
-    expect(screen.getByLabelText("Nome da adaptação")).toHaveAttribute(
+    expect(screen.getByLabelText(TITLE_FIELD_LABEL)).toHaveAttribute(
       "placeholder",
       "Atividade adaptada",
     );
@@ -360,16 +361,29 @@ describe("StepReview", () => {
   // "1) QUESTÃO 1\nNa tirinha, o humor está n". Naming belongs where the
   // teacher is already looking at the sheet.
   describe("nome da adaptação", () => {
+
+    // Achado 0250: "Nome da adaptação" (aqui) e "Título" (Exportar) escrevem no
+    // MESMO `header.title` — digitar num deles renomeava a adaptação na lista ou
+    // imprimia um cabeçalho na folha do aluno sem nenhum aviso. Um campo só, um
+    // rótulo só, e a explicação dos dois efeitos junto do campo.
+    it("rotula o campo como o título único e explica os dois efeitos", () => {
+      setup({ title: "" });
+      const field = screen.getByLabelText(TITLE_FIELD_LABEL);
+      expect(field).toHaveAttribute("title", TITLE_FIELD_HINT);
+      const hintId = field.getAttribute("aria-describedby");
+      expect(hintId).toBeTruthy();
+      expect(globalThis.document.getElementById(hintId!)).toHaveTextContent(TITLE_FIELD_HINT);
+    });
     it("shows the given name in the editable field", () => {
       setup({ title: "Prova de Geografia — 6º ano" });
-      expect(screen.getByLabelText("Nome da adaptação")).toHaveValue(
+      expect(screen.getByLabelText(TITLE_FIELD_LABEL)).toHaveValue(
         "Prova de Geografia — 6º ano",
       );
     });
 
     it("falls back to the document heading as a placeholder, without storing it", () => {
       setup({ title: "" });
-      const field = screen.getByLabelText("Nome da adaptação");
+      const field = screen.getByLabelText(TITLE_FIELD_LABEL);
       expect(field).toHaveValue("");
       expect(field).toHaveAttribute("placeholder", "Prova Adaptada");
     });
@@ -377,7 +391,7 @@ describe("StepReview", () => {
     it("emits the typed name", () => {
       const onTitleChange = vi.fn();
       setup({ title: "", onTitleChange });
-      fireEvent.change(screen.getByLabelText("Nome da adaptação"), {
+      fireEvent.change(screen.getByLabelText(TITLE_FIELD_LABEL), {
         target: { value: "Recuperação de Geografia" },
       });
       expect(onTitleChange).toHaveBeenCalledWith("Recuperação de Geografia");
@@ -386,7 +400,7 @@ describe("StepReview", () => {
     it("does not break when no handler is wired", () => {
       setup({ title: "" });
       expect(() =>
-        fireEvent.change(screen.getByLabelText("Nome da adaptação"), { target: { value: "x" } }),
+        fireEvent.change(screen.getByLabelText(TITLE_FIELD_LABEL), { target: { value: "x" } }),
       ).not.toThrow();
     });
 
@@ -396,7 +410,7 @@ describe("StepReview", () => {
     // para que trocar o token de volta quebre aqui.
     it("desenha o nome derivado com contraste mínimo de 4,5:1 sobre o chrome", () => {
       setup({ title: "" });
-      const field = screen.getByLabelText("Nome da adaptação");
+      const field = screen.getByLabelText(TITLE_FIELD_LABEL);
       const token = /placeholder:text-surface-(ink[\w-]*)/.exec(field.className)?.[1];
       expect(token).toBeDefined();
       expect(contrast(readToken(`--sf-${token}`), readToken("--sf-chrome"))).toBeGreaterThanOrEqual(
@@ -423,7 +437,7 @@ describe("StepReview", () => {
     // duas linhas abaixo de `sm`, com o nome ocupando a linha inteira.
     it("dá a linha inteira ao nome em telas estreitas (0227)", () => {
       setup({ title: "" });
-      const nameGroup = screen.getByLabelText("Nome da adaptação").parentElement!;
+      const nameGroup = screen.getByLabelText(TITLE_FIELD_LABEL).parentElement!;
       const bar = nameGroup.parentElement!;
       expect(bar.className).toMatch(/(?:^|\s)flex-wrap(?:\s|$)/);
       expect(nameGroup.className).toMatch(/(?:^|\s)basis-full(?:\s|$)/);
@@ -438,7 +452,7 @@ describe("StepReview", () => {
     // sem sobrar nenhum indicador de foco (WCAG 2.2 AA 2.4.7).
     it("desenha o campo do nome como campo, com contorno e fundo próprios (0228)", () => {
       setup({ title: "" });
-      const field = screen.getByLabelText("Nome da adaptação");
+      const field = screen.getByLabelText(TITLE_FIELD_LABEL);
       expect(field.className).not.toMatch(/(?:^|\s)border-0(?:\s|$)/);
       expect(field.className).not.toMatch(/(?:^|\s)bg-transparent(?:\s|$)/);
       expect(field.className).toMatch(/(?:^|\s)border(?:\s|$)/);
@@ -448,14 +462,14 @@ describe("StepReview", () => {
 
     it("não anula o anel de foco global do campo do nome (0228)", () => {
       setup({ title: "" });
-      const field = screen.getByLabelText("Nome da adaptação");
+      const field = screen.getByLabelText(TITLE_FIELD_LABEL);
       expect(field.className).not.toMatch(/(?:^|\s)outline-none(?:\s|$)/);
       expect(field.className).not.toMatch(/(?:^|\s)focus:ring-0(?:\s|$)/);
     });
 
     it("mantém o selo 'Sem nome' na mesma linha do campo, sem transbordar (0227)", () => {
       setup({ title: "" });
-      const nameGroup = screen.getByLabelText("Nome da adaptação").parentElement!;
+      const nameGroup = screen.getByLabelText(TITLE_FIELD_LABEL).parentElement!;
       expect(screen.getByText("Sem nome").parentElement).toBe(nameGroup);
       // O grupo dos controles não pode mais empurrar o nome para fora: ele
       // quebra dentro da própria linha em vez de exigir a largura toda.
