@@ -14,7 +14,7 @@ export interface PurchaseRpcClient {
   rpc(
     fn: "approve_purchase_and_grant" | "reject_pending_purchase",
     args: Record<string, unknown>,
-  ): Promise<{ data: CreditRpcResult | null; error: unknown }>;
+  ): PromiseLike<{ data: CreditRpcResult | null; error: unknown }>;
 }
 
 interface ApprovePayload extends CreditRpcResult {

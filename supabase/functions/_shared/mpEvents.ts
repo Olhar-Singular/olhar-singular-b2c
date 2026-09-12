@@ -1,7 +1,7 @@
 // Pure decision logic for the Mercado Pago webhook, isolated from the HTTP
-// handler so it can be unit-tested without Deno or a live MP call. Mirrors
-// stripeEvents.ts: the webhook grants credit only for a confirmed payment and
-// closes out the purchase when the payment terminally fails.
+// handler so it can be unit-tested without Deno or a live MP call. The webhook
+// grants credit only for a confirmed payment and closes out the purchase when
+// the payment terminally fails.
 
 export interface MpPurchaseRef {
   purchaseId: string;

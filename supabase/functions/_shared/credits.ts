@@ -18,7 +18,7 @@ export interface CreditRpcResult {
 /** Raised when a money RPC fails, so the failure cannot be silently ignored. */
 export class CreditRpcError extends Error {
   /** The raw supabase-js error (or failure payload) behind this failure. */
-  cause: unknown;
+  override cause: unknown;
 
   constructor(label: string, cause: unknown) {
     super(`${label} failed: ${describeCause(cause)}`);
@@ -45,7 +45,8 @@ function describeCause(cause: unknown): string {
  */
 export async function runCreditRpc(
   label: string,
-  invoke: () => Promise<{ data: CreditRpcResult | null; error: unknown }>,
+  // PromiseLike, not Promise: supabase-js rpc() returns a thenable builder.
+  invoke: () => PromiseLike<{ data: CreditRpcResult | null; error: unknown }>,
 ): Promise<CreditRpcResult | null> {
   const { data, error } = await invoke();
   if (error) throw new CreditRpcError(label, error);
