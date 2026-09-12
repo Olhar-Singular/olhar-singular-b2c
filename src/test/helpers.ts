@@ -47,6 +47,7 @@ export interface MockAuthState {
   user?: { id: string; email?: string } | null;
   profile?: Record<string, unknown> | null;
   loading?: boolean;
+  profileLoading?: boolean;
   signOut?: ReturnType<typeof vi.fn>;
   refreshProfile?: ReturnType<typeof vi.fn>;
 }
@@ -57,6 +58,7 @@ export function buildAuthState(overrides: MockAuthState = {}) {
     user: overrides.user ?? null,
     profile: overrides.profile ?? null,
     loading: overrides.loading ?? false,
+    profileLoading: overrides.profileLoading ?? false,
     signOut: overrides.signOut ?? vi.fn(),
     refreshProfile: overrides.refreshProfile ?? vi.fn(),
   };
