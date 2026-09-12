@@ -625,6 +625,15 @@ export type Database = {
         Args: { p_payment_id: string; p_purchase_id: string }
         Returns: Json
       }
+      consume_credits: {
+        Args: {
+          p_amount: number
+          p_ref_id?: string
+          p_type: string
+          p_user_id: string
+        }
+        Returns: Json
+      }
       deduct_credits: {
         Args: {
           p_amount: number
@@ -647,6 +656,15 @@ export type Database = {
       }
       open_adapt_reservation: {
         Args: { p_amount: number; p_request_id: string; p_user_id: string }
+        Returns: Json
+      }
+      open_credit_reservation: {
+        Args: {
+          p_amount: number
+          p_kind: string
+          p_request_id: string
+          p_user_id: string
+        }
         Returns: Json
       }
       reconcile_stale_credit_reservations: {
