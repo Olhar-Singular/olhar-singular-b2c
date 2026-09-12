@@ -766,6 +766,17 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      activate_subscription: {
+        Args: {
+          p_card_brand: string
+          p_card_last_four: string
+          p_mp_preapproval_id: string
+          p_mp_status: string
+          p_next_payment_date: string
+          p_subscription_id: string
+        }
+        Returns: Json
+      }
       admin_cost_series: {
         Args: { p_buckets: number; p_granularity: string }
         Returns: {
@@ -801,8 +812,26 @@ export type Database = {
           user_id: string
         }[]
       }
+      apply_plan_quota: {
+        Args: {
+          p_period_end: string
+          p_period_start: string
+          p_quota: number
+          p_subscription: string
+          p_user_id: string
+        }
+        Returns: undefined
+      }
       approve_purchase_and_grant: {
         Args: { p_payment_id: string; p_purchase_id: string }
+        Returns: Json
+      }
+      cancel_subscription_local: {
+        Args: { p_cancelled_at: string; p_subscription_id: string }
+        Returns: Json
+      }
+      clawback_subscription: {
+        Args: { p_subscription_id: string }
         Returns: Json
       }
       consume_credits: {
@@ -834,6 +863,10 @@ export type Database = {
         }
         Returns: Json
       }
+      mark_subscription_past_due: {
+        Args: { p_subscription_id: string }
+        Returns: Json
+      }
       migrate_legacy_access: { Args: never; Returns: Json }
       open_adapt_reservation: {
         Args: { p_amount: number; p_request_id: string; p_user_id: string }
@@ -860,9 +893,22 @@ export type Database = {
         }
         Returns: Json
       }
+      renew_subscription: {
+        Args: { p_invoice: Json; p_subscription_id: string }
+        Returns: Json
+      }
       reverse_credit_reservation: { Args: { p_id: string }; Returns: Json }
       settle_credit_reservation: { Args: { p_id: string }; Returns: Json }
       start_trial_for: { Args: { p_user_id: string }; Returns: boolean }
+      sync_subscription_status: {
+        Args: {
+          p_mp_preapproval_id: string
+          p_mp_status: string
+          p_next_payment_date: string
+          p_subscription_id: string
+        }
+        Returns: Json
+      }
     }
     Enums: {
       [_ in never]: never
