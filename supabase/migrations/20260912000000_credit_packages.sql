@@ -45,9 +45,18 @@ ALTER TABLE public.credit_packages ENABLE ROW LEVEL SECURITY;
 -- Public catalogue: the landing page reads it without a session. admin_only rows
 -- are only for super-admins (profiles.is_super_admin is re-verified server-side
 -- by the checkouts as well; this policy is what keeps the card off the UI).
-CREATE POLICY "Anyone can view active credit_packages"
+--
+-- Two policies on purpose: a policy expression runs with the caller's
+-- privileges, and anon must never need to read public.profiles just to list
+-- the catalogue. Only the authenticated policy consults profiles.
+CREATE POLICY "Anon can view public credit_packages"
   ON public.credit_packages FOR SELECT
-  TO anon, authenticated
+  TO anon
+  USING (active AND NOT admin_only);
+
+CREATE POLICY "Users can view credit_packages for their role"
+  ON public.credit_packages FOR SELECT
+  TO authenticated
   USING (
     active
     AND (
