@@ -13,7 +13,7 @@
 -- turn the invite acceptance into a 500).
 -- =============================================================================
 BEGIN;
-SELECT plan(21);
+SELECT plan(24);
 
 -- ── The clock does not start before the e-mail is confirmed ─────────────────
 INSERT INTO auth.users (id, email, raw_user_meta_data) VALUES

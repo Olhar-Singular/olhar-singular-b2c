@@ -609,8 +609,16 @@ export type Database = {
           total_usd: number
         }[]
       }
+      admin_extend_trial: {
+        Args: { p_days: number; p_user_id: string }
+        Returns: Json
+      }
       admin_grant_credits: {
         Args: { p_amount: number; p_user_id: string }
+        Returns: Json
+      }
+      admin_set_access_kind: {
+        Args: { p_kind: string; p_user_id: string }
         Returns: Json
       }
       admin_user_spending: {
@@ -681,6 +689,7 @@ export type Database = {
       }
       reverse_credit_reservation: { Args: { p_id: string }; Returns: Json }
       settle_credit_reservation: { Args: { p_id: string }; Returns: Json }
+      start_trial_for: { Args: { p_user_id: string }; Returns: boolean }
     }
     Enums: {
       [_ in never]: never

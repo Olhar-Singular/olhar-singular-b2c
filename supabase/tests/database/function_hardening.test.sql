@@ -22,7 +22,7 @@
 -- (handle_new_user) and both money guards would silently stop running.
 -- =============================================================================
 BEGIN;
-SELECT plan(11);
+SELECT plan(15);
 
 -- ── Fixture (superuser: empty JWT claims ⇒ guard triggers allow the write) ────
 INSERT INTO auth.users (id, email) VALUES
@@ -103,6 +103,21 @@ SELECT throws_ok(
   'prevent_super_admin_self_escalation still fires for a role without EXECUTE');
 
 RESET role;
+
+-- The trial trigger functions follow the same rule: the trigger fires for
+-- supabase_auth_admin regardless, so no client role needs EXECUTE.
+SELECT ok(
+  NOT has_function_privilege('anon', 'public.start_trial_on_confirm()', 'EXECUTE'),
+  'anon cannot EXECUTE start_trial_on_confirm()');
+SELECT ok(
+  NOT has_function_privilege('authenticated', 'public.start_trial_on_confirm()', 'EXECUTE'),
+  'authenticated cannot EXECUTE start_trial_on_confirm()');
+SELECT ok(
+  NOT has_function_privilege('anon', 'public.start_trial_for(uuid)', 'EXECUTE'),
+  'anon cannot EXECUTE start_trial_for()');
+SELECT ok(
+  NOT has_function_privilege('authenticated', 'public.start_trial_for(uuid)', 'EXECUTE'),
+  'authenticated cannot EXECUTE start_trial_for()');
 
 SELECT * FROM finish();
 ROLLBACK;
