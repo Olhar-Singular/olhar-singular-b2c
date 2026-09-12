@@ -1,70 +1,72 @@
 import { describe, it, expect } from "vitest";
-import { ALLOWED_PACKAGES, TEST_PACKAGE, findPackage } from "./creditPackages";
+import { selectPackage, toCreditPackage, type CreditPackageRow } from "./creditPackages";
 
-describe("ALLOWED_PACKAGES", () => {
-  it("exposes the three credit packages with their BRL prices", () => {
-    expect(ALLOWED_PACKAGES).toEqual([
-      { credits: 30, amountBrl: 9.9 },
-      { credits: 120, amountBrl: 29.9 },
-      { credits: 300, amountBrl: 59.9 },
-    ]);
+const ROWS: CreditPackageRow[] = [
+  { id: "pkg-basic", credits: 30, price_brl: 9.9, label: "Básico", active: true, admin_only: false },
+  // PostgREST serializes numeric columns as strings; the mapper must cope.
+  { id: "pkg-pro", credits: 120, price_brl: "29.90", label: "Profissional", active: true, admin_only: false },
+  { id: "pkg-max", credits: 300, price_brl: 59.9, label: "Avançado", active: true, admin_only: false },
+  { id: "pkg-old", credits: 999, price_brl: 999, label: "Descontinuado", active: false, admin_only: false },
+  { id: "pkg-test", credits: 1, price_brl: 1, label: "Teste (admin)", active: true, admin_only: true },
+];
+
+describe("toCreditPackage", () => {
+  it("maps a table row to the package shape the checkouts use", () => {
+    expect(toCreditPackage(ROWS[0])).toEqual({
+      id: "pkg-basic",
+      credits: 30,
+      amountBrl: 9.9,
+      label: "Básico",
+      adminOnly: false,
+    });
+  });
+
+  it("parses a numeric price that arrived as a string", () => {
+    expect(toCreditPackage(ROWS[1]).amountBrl).toBe(29.9);
   });
 });
 
-describe("findPackage", () => {
-  it("returns the package when credits and amount match", () => {
-    expect(findPackage(120, 29.9)).toEqual({ credits: 120, amountBrl: 29.9 });
+describe("selectPackage", () => {
+  it("returns the active public package with the given id", () => {
+    expect(selectPackage(ROWS, "pkg-pro")).toEqual({
+      id: "pkg-pro",
+      credits: 120,
+      amountBrl: 29.9,
+      label: "Profissional",
+      adminOnly: false,
+    });
   });
 
-  it("matches every allowed package", () => {
-    expect(findPackage(30, 9.9)).toEqual({ credits: 30, amountBrl: 9.9 });
-    expect(findPackage(300, 59.9)).toEqual({ credits: 300, amountBrl: 59.9 });
+  it("returns null for an unknown id", () => {
+    expect(selectPackage(ROWS, "pkg-nope")).toBeNull();
   });
 
-  it("tolerates floating-point drift under one cent", () => {
-    expect(findPackage(30, 9.901)).toEqual({ credits: 30, amountBrl: 9.9 });
+  it("returns null when the id is not a string", () => {
+    expect(selectPackage(ROWS, 42)).toBeNull();
+    expect(selectPackage(ROWS, undefined)).toBeNull();
+    expect(selectPackage(ROWS, null)).toBeNull();
   });
 
-  it("returns null when the credits amount is unknown", () => {
-    expect(findPackage(999, 9.9)).toBeNull();
+  it("never sells an inactive package, even by id", () => {
+    expect(selectPackage(ROWS, "pkg-old")).toBeNull();
   });
 
-  it("returns null when the price does not match the credits", () => {
-    expect(findPackage(30, 59.9)).toBeNull();
+  it("hides the admin-only smoke package from regular buyers", () => {
+    expect(selectPackage(ROWS, "pkg-test")).toBeNull();
+    expect(selectPackage(ROWS, "pkg-test", { allowAdminOnly: false })).toBeNull();
   });
 
-  it("returns null when amountBrl is undefined", () => {
-    expect(findPackage(30, undefined)).toBeNull();
+  it("sells the admin-only smoke package to a super-admin", () => {
+    expect(selectPackage(ROWS, "pkg-test", { allowAdminOnly: true })).toEqual({
+      id: "pkg-test",
+      credits: 1,
+      amountBrl: 1,
+      label: "Teste (admin)",
+      adminOnly: true,
+    });
   });
 
-  it("returns null when credits is undefined", () => {
-    expect(findPackage(undefined, 9.9)).toBeNull();
-  });
-});
-
-describe("TEST_PACKAGE (super-admin only)", () => {
-  it("is 1 credit for R$1.00 and stays out of ALLOWED_PACKAGES", () => {
-    expect(TEST_PACKAGE).toEqual({ credits: 1, amountBrl: 1.0 });
-    expect(ALLOWED_PACKAGES).not.toContainEqual(TEST_PACKAGE);
-  });
-
-  it("is rejected by findPackage without options", () => {
-    expect(findPackage(1, 1.0)).toBeNull();
-  });
-
-  it("is rejected by findPackage when allowTest is false", () => {
-    expect(findPackage(1, 1.0, { allowTest: false })).toBeNull();
-  });
-
-  it("matches when allowTest is true", () => {
-    expect(findPackage(1, 1.0, { allowTest: true })).toEqual(TEST_PACKAGE);
-  });
-
-  it("tolerates floating-point drift under one cent when allowed", () => {
-    expect(findPackage(1, 1.001, { allowTest: true })).toEqual(TEST_PACKAGE);
-  });
-
-  it("keeps matching the regular packages when allowTest is true", () => {
-    expect(findPackage(120, 29.9, { allowTest: true })).toEqual({ credits: 120, amountBrl: 29.9 });
+  it("keeps selling regular packages to a super-admin", () => {
+    expect(selectPackage(ROWS, "pkg-basic", { allowAdminOnly: true })?.credits).toBe(30);
   });
 });

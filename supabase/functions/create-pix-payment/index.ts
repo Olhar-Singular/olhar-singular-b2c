@@ -1,6 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { findPackage } from "../_shared/creditPackages.ts";
+import { selectPackage, type CreditPackageRow } from "../_shared/creditPackages.ts";
 import { buildPixPaymentBody, extractPixQr } from "../_shared/mpPixPayment.ts";
 
 const corsHeaders = {
@@ -43,23 +43,31 @@ serve(async (req) => {
     }
 
     const body = await req.json();
-    const { credits, amountBrl } = body as { credits?: number; amountBrl?: number };
+    const { packageId } = body as { packageId?: unknown };
 
-    // The R$1 TEST_PACKAGE is only purchasable by super-admins; owner-based RLS
-    // lets the user client read its own profile.
-    const { data: profile } = await userClient
-      .from("profiles")
-      .select("is_super_admin")
-      .eq("id", user.id)
-      .maybeSingle();
+    // The package (and therefore the price) comes from the table, never from the
+    // request. The admin_only smoke package is sold only to super-admins;
+    // owner-based RLS lets the user client read its own profile.
+    const admin = createClient(supabaseUrl, serviceKey);
+    const [{ data: profile }, { data: rows, error: rowsError }] = await Promise.all([
+      userClient.from("profiles").select("is_super_admin").eq("id", user.id).maybeSingle(),
+      typeof packageId === "string"
+        ? admin.from("credit_packages").select("*").eq("id", packageId)
+        : Promise.resolve({ data: [], error: null }),
+    ]);
+    if (rowsError) {
+      console.error("create-pix-payment: read credit_packages:", rowsError);
+      return json({ error: "Erro ao carregar o pacote." }, 500);
+    }
 
-    const pkg = findPackage(credits, amountBrl, { allowTest: profile?.is_super_admin === true });
+    const pkg = selectPackage((rows ?? []) as CreditPackageRow[], packageId, {
+      allowAdminOnly: profile?.is_super_admin === true,
+    });
     if (!pkg) {
       return json({ error: "Pacote inválido." }, 400);
     }
 
     // Insert pending purchase record via service_role (RLS blocks authenticated inserts)
-    const admin = createClient(supabaseUrl, serviceKey);
     const { data: purchase, error: insertError } = await admin
       .from("credit_purchases")
       .insert({
