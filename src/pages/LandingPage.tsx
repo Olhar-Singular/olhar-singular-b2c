@@ -1,3 +1,4 @@
+import { Link } from "react-router-dom";
 import { ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import LandingHeader from "@/components/landing/LandingHeader";
@@ -25,14 +26,14 @@ export default function LandingPage() {
             Comece a adaptar hoje
           </h2>
           <p className="text-primary-foreground/80 mb-8">
-            Planos mensais a partir de R$ 19,90. Cancele quando quiser.
+            Planos mensais a partir de R$ 19,90 por mês. Cancele quando quiser.
           </p>
-          <a href="#precos">
+          <Link to="/assinar">
             <Button size="lg" className="bg-white text-primary hover:bg-white/90 font-semibold gap-2">
-              Ver planos
+              Assinar agora
               <ArrowRight className="w-4 h-4" aria-hidden="true" />
             </Button>
-          </a>
+          </Link>
         </div>
       </section>
 

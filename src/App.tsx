@@ -14,6 +14,7 @@ import DashboardPage from "@/pages/DashboardPage";
 import BarrierProfilesPage from "@/pages/BarrierProfilesPage";
 import CreditsPage from "@/pages/CreditsPage";
 import SetPasswordPage from "@/pages/SetPasswordPage";
+import LegalPage from "@/pages/LegalPage";
 import { SubscribeRoute } from "@/components/common/SubscribeRoute";
 import AdaptarPage from "@/pages/AdaptarPage";
 import MyAdaptationsPage from "@/pages/MyAdaptationsPage";
@@ -52,6 +53,9 @@ function buildRouter() {
         { path: "/redefinir-senha", element: <ResetPasswordPage /> },
         // Pay first: anonymous visitors get the public shell, users the app layout.
         { path: "/assinar", element: <SubscribeRoute /> },
+        { path: "/termos", element: <LegalPage /> },
+        { path: "/privacidade", element: <LegalPage /> },
+        { path: "/reembolso", element: <LegalPage /> },
         // First access of an account born from a payment; outside the Layout on purpose.
         {
           path: "/definir-senha",

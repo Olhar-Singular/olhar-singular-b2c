@@ -19,6 +19,22 @@ const FAQ = [
     a: "Os créditos do plano renovam todo mês: o saldo do mês é substituído pela cota do plano na renovação. Os créditos extras, comprados avulsos, não expiram.",
   },
   {
+    q: "Como funciona a assinatura?",
+    a: "Você escolhe um plano mensal e paga no cartão de crédito, em 1x. Todo mês, na mesma data, a cobrança se repete e seus créditos do plano são renovados. Precisa de mais créditos num mês? Compre créditos extras avulsos, por Pix ou cartão, que não expiram.",
+  },
+  {
+    q: "Posso cancelar quando quiser?",
+    a: "Sim, em Créditos, com um clique. Você não é mais cobrado e continua usando os créditos do plano até o fim do período já pago. Os extras continuam com você.",
+  },
+  {
+    q: "Como troco de plano?",
+    a: "Cancele o plano atual e assine o novo. Os créditos do plano novo substituem os do antigo, então o melhor momento é perto da renovação.",
+  },
+  {
+    q: "E se eu me arrepender?",
+    a: "Você tem 7 dias a partir da primeira cobrança para pedir reembolso integral, desde que os créditos não tenham sido usados. Veja a política de reembolso no rodapé. Uma pequena cobrança de validação do cartão pode aparecer e é estornada automaticamente pela operadora.",
+  },
+  {
     q: "A ferramenta substitui o professor?",
     a: "Nunca. Você é sempre o decisor final. Pode ajustar, ignorar ou complementar qualquer sugestão da IA.",
   },

@@ -18,6 +18,7 @@ vi.mock("@/pages/BarrierProfilesPage", () => ({ default: () => <div data-testid=
 vi.mock("@/pages/CreditsPage", () => ({ default: () => <div data-testid="credits-page" /> }));
 vi.mock("@/components/common/SubscribeRoute", () => ({ SubscribeRoute: () => <div data-testid="subscribe-route" /> }));
 vi.mock("@/pages/SetPasswordPage", () => ({ default: () => <div data-testid="set-password-page" /> }));
+vi.mock("@/pages/LegalPage", () => ({ default: () => <div data-testid="legal-page" /> }));
 vi.mock("@/pages/AdaptarPage", () => ({ default: () => <div data-testid="adaptar-page" /> }));
 vi.mock("@/pages/EditAdaptationPage", () => ({ default: () => <div data-testid="edit-adaptation-page" /> }));
 vi.mock("@/pages/ChatPage", () => ({ default: () => <div data-testid="chat-page" /> }));
@@ -56,6 +57,15 @@ describe("App", () => {
     render(<App />);
     await waitFor(() => expect(screen.getByTestId("subscribe-route")).toBeInTheDocument());
     expect(screen.queryByTestId("layout-stub")).toBeNull();
+  });
+
+  it("renders the legal pages publicly", async () => {
+    for (const path of ["/termos", "/privacidade", "/reembolso"]) {
+      window.history.pushState({}, "", path);
+      const { unmount } = render(<App />);
+      await waitFor(() => expect(screen.getByTestId("legal-page")).toBeInTheDocument());
+      unmount();
+    }
   });
 
   it("renders the first-access password page on protected /definir-senha, outside the layout", async () => {

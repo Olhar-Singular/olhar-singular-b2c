@@ -63,3 +63,10 @@ devolve contagens `{ by_email_1h, by_ip_1h, rejected_10m }`. pgTAP `checkout_att
 
 `dominio-orientador`, `edge-fn-writer`, `environment.md`, `.env.example` (`CHECKOUT_HASH_SECRET`),
 `make lint`, coverage 100%, `make test-db`, `make fn-check`.
+
+## Estado (2026-09-12)
+
+Tasks 1 a 6 concluídas. Commits: `b510d7c` (checkout_attempts), `ab352f0` (guarda +
+provisionamento), `53c4b00` (subscribe público + set-initial-password), `6406e8a` (achados da
+revisão), `f1d5007` (cliente) e o commit da LP/legal/SEO/convite. Pendente: validação no browser
+com `make fn-serve-mp-test` (cartões de teste do MP) e o smoke real em produção (runbook).

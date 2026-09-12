@@ -18,13 +18,18 @@ Allow: /
 
 User-agent: *
 Allow: /
-Disallow: /dashboard/
-Disallow: /admin/
-Disallow: /profile
+Disallow: /dashboard
+Disallow: /admin
+Disallow: /adaptar
+Disallow: /adaptacoes
+Disallow: /historico
+Disallow: /perfis-barreira
 Disallow: /chat
-Disallow: /create
-Disallow: /my-adaptations
-Disallow: /reset-password
+Disallow: /banco-questoes
+Disallow: /creditos
+Disallow: /definir-senha
+Disallow: /redefinir-senha
+Disallow: /esqueci-senha
 
 # Bloquear crawlers de IA
 User-agent: GPTBot
@@ -39,4 +44,4 @@ Disallow: /
 User-agent: anthropic-ai
 Disallow: /
 
-Sitemap: https://olharsingular.com.br/sitemap.xml
+Sitemap: https://professor.olharsingular.com/sitemap.xml

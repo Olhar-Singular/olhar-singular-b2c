@@ -38,3 +38,13 @@ describe("FaqSection", () => {
     expect(button).toHaveAttribute("aria-expanded", "false");
   });
 });
+
+describe("FaqSection (subscription)", () => {
+  it("answers how the subscription, cancelling, plan change and refund work", () => {
+    renderWithProviders(<FaqSection />);
+    expect(screen.getByRole("button", { name: /Como funciona a assinatura/ })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Posso cancelar quando quiser/ })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Como troco de plano/ })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /E se eu me arrepender/ })).toBeInTheDocument();
+  });
+});

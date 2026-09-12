@@ -51,7 +51,7 @@ export function GrantCreditsButton({ user, onGrant, disabled = false }: GrantCre
           <DialogHeader>
             <DialogTitle>Adicionar créditos</DialogTitle>
             <DialogDescription>
-              Créditos gratuitos para {userDisplayName(user)}. Não entram nos custos da plataforma.
+              Créditos extras concedidos a {userDisplayName(user)}, sem cobrança. Não entram nos custos da plataforma.
             </DialogDescription>
           </DialogHeader>
 

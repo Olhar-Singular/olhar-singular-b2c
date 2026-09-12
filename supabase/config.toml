@@ -50,6 +50,13 @@ content_path = "./supabase/templates/confirmation.html"
 subject = "Redefinir sua senha - Olhar Singular"
 content_path = "./supabase/templates/recovery.html"
 
+# Convite criado pelo admin (auth.admin.inviteUserByEmail em admin-create-user).
+# O link cai em /redefinir-senha?convite=1, que vira "Crie sua senha" e mantém a
+# sessão. Em produção, aplicar via Dashboard (Auth → Email Templates → Invite user).
+[auth.email.template.invite]
+subject = "Seu convite para o Olhar Singular"
+content_path = "./supabase/templates/invite.html"
+
 # O webhook é chamado pelo Mercado Pago sem JWT do Supabase. Sem isto o gateway
 # rejeita a chamada com 401 antes da função rodar.
 [functions.mp-webhook]

@@ -39,6 +39,9 @@ supabase/functions/
 │   ├── subscribeInput.ts # parseSubscribeInput / parseUpdateCardInput / parseCancelInput
 │   ├── subscriptionActions.ts # runCancelSubscription / runUpdateSubscriptionCard / handleSubscriptionWebhook (deps injetadas)
 │   ├── subscriptionActionDeps.ts # wiring Supabase+MP dos deps acima (compartilhado por cancel e update-card)
+│   ├── checkoutGuard.ts # normalizeEmail, hashIdentifier (HMAC), clientIp, decideCheckoutAccess (429/503), isValidCpf/extractCpf
+│   ├── accountProvision.ts # parseAccountInput + runAnonymousCheckout (rate limit, createUser, runSubscribe, CPF/termos, magic link só com pagamento)
+│   ├── setInitialPassword.ts # parsePasswordInput + runSetInitialPassword (senha, flag, revoga outras sessões)
 │   ├── mpSignature.ts   # validateMpSignature() — HMAC do header x-signature
 │   └── sanitize.ts      # sanitize() — limpa strings antes de salvar
 └── <nome-da-function>/
