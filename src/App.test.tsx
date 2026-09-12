@@ -16,6 +16,7 @@ vi.mock("@/pages/LandingPage", () => ({ default: () => <div data-testid="landing
 vi.mock("@/pages/DashboardPage", () => ({ default: () => <div data-testid="dashboard-page" /> }));
 vi.mock("@/pages/BarrierProfilesPage", () => ({ default: () => <div data-testid="profiles-page" /> }));
 vi.mock("@/pages/CreditsPage", () => ({ default: () => <div data-testid="credits-page" /> }));
+vi.mock("@/pages/SubscribePage", () => ({ default: () => <div data-testid="subscribe-page" /> }));
 vi.mock("@/pages/AdaptarPage", () => ({ default: () => <div data-testid="adaptar-page" /> }));
 vi.mock("@/pages/EditAdaptationPage", () => ({ default: () => <div data-testid="edit-adaptation-page" /> }));
 vi.mock("@/pages/ChatPage", () => ({ default: () => <div data-testid="chat-page" /> }));
@@ -47,6 +48,13 @@ describe("App", () => {
     window.history.pushState({}, "", "/dashboard");
     render(<App />);
     await waitFor(() => expect(screen.getByTestId("layout-stub")).toBeInTheDocument());
+  });
+
+  it("renders the layout stub on protected /assinar route", async () => {
+    window.history.pushState({}, "", "/assinar?plano=profissional");
+    render(<App />);
+    await waitFor(() => expect(screen.getByTestId("layout-stub")).toBeInTheDocument());
+    expect(screen.queryByTestId("auth-page")).toBeNull();
   });
 
   it("renders the layout stub on protected /admin route", async () => {

@@ -14,6 +14,17 @@ vi.mock("react-router-dom", async (orig) => {
 vi.mock("@/hooks/useAuth", () => ({ useAuth: vi.fn() }));
 import { useAuth } from "@/hooks/useAuth";
 
+const { mockUseSubscription } = vi.hoisted(() => ({ mockUseSubscription: vi.fn() }));
+vi.mock("@/hooks/useSubscription", async (orig) => {
+  const actual = await orig<typeof import("@/hooks/useSubscription")>();
+  return { ...actual, useSubscription: mockUseSubscription };
+});
+
+const LEGACY_PROFILE = {
+  access_kind: "legacy", plan_credits: 0, plan_period_end: null, credit_balance: 12,
+  trial_started_at: null, must_set_password: false,
+};
+
 function setAuth(over: Record<string, unknown> = {}) {
   vi.mocked(useAuth).mockReturnValue(buildAuthState(over) as never);
 }
@@ -21,6 +32,7 @@ function setAuth(over: Record<string, unknown> = {}) {
 beforeEach(() => {
   navigateSpy.mockReset();
   vi.clearAllMocks();
+  mockUseSubscription.mockReturnValue({ data: null });
 });
 
 describe("Layout", () => {
@@ -189,5 +201,48 @@ describe("Layout", () => {
     fireEvent.click(screen.getByRole("button", { name: /Abrir menu/i }));
     const creditLinks = screen.getAllByRole("link", { name: /Crédit/i });
     expect(creditLinks.some((l) => l.getAttribute("aria-current") === "page")).toBe(true);
+  });
+});
+
+describe("Layout (Assinar nav item)", () => {
+  it("offers Assinar to a paying account without a live subscription", () => {
+    setAuth({ profile: LEGACY_PROFILE });
+    renderWithProviders(<Layout />, { route: "/dashboard" });
+    const links = screen.getAllByRole("link", { name: /^Assinar$/ });
+    expect(links.length).toBeGreaterThan(0);
+    links.forEach((l) => expect(l).toHaveAttribute("href", "/assinar"));
+  });
+
+  it("hides Assinar for a live subscriber and for courtesy accounts", () => {
+    setAuth({ profile: { ...LEGACY_PROFILE, access_kind: "subscriber" } });
+    mockUseSubscription.mockReturnValue({ data: { status: "authorized" } });
+    const { unmount } = renderWithProviders(<Layout />, { route: "/dashboard" });
+    expect(screen.queryByRole("link", { name: /^Assinar$/ })).toBeNull();
+    unmount();
+
+    setAuth({ profile: { ...LEGACY_PROFILE, access_kind: "exempt" } });
+    mockUseSubscription.mockReturnValue({ data: null });
+    renderWithProviders(<Layout />, { route: "/dashboard" });
+    expect(screen.queryByRole("link", { name: /^Assinar$/ })).toBeNull();
+  });
+
+  it("waits for the subscription query before offering Assinar", () => {
+    setAuth({ profile: LEGACY_PROFILE });
+    mockUseSubscription.mockReturnValue({ data: undefined });
+    renderWithProviders(<Layout />, { route: "/dashboard" });
+    expect(screen.queryByRole("link", { name: /^Assinar$/ })).toBeNull();
+  });
+
+  it("marks Assinar as the current page and shows it in the mobile menu too", () => {
+    setAuth({ profile: LEGACY_PROFILE });
+    renderWithProviders(<Layout />, { route: "/assinar" });
+    fireEvent.click(screen.getByRole("button", { name: /abrir menu/i }));
+    const links = screen.getAllByRole("link", { name: /^Assinar$/ });
+    expect(links.length).toBe(2);
+    links.forEach((l) => expect(l).toHaveAttribute("aria-current", "page"));
+
+    // Tapping the mobile item closes the drawer.
+    fireEvent.click(links[1]);
+    expect(screen.getAllByRole("link", { name: /^Assinar$/ }).length).toBe(1);
   });
 });

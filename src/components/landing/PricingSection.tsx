@@ -3,14 +3,19 @@ import { CheckCircle2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { SUPPORT_EMAIL } from "@/lib/constants";
+import { usePlans } from "@/hooks/useSubscription";
+import { adaptationsRange, formatBrl, publicPlans } from "@/lib/domain/subscriptionUi";
 
-const PACKAGES = [
-  { label: "Básico",        credits: 30,  price: "R$ 9,90",  perCredit: "3 a 6 adaptações",   highlight: false },
-  { label: "Profissional",  credits: 120, price: "R$ 29,90", perCredit: "10 a 24 adaptações", highlight: true  },
-  { label: "Avançado",      credits: 300, price: "R$ 59,90", perCredit: "25 a 60 adaptações", highlight: false },
+const EXTRAS = [
+  { credits: 30,  price: "R$ 9,90" },
+  { credits: 120, price: "R$ 29,90" },
+  { credits: 300, price: "R$ 59,90" },
 ];
 
 export default function PricingSection() {
+  const { data } = usePlans();
+  const plans = publicPlans(data);
+
   return (
     <section id="precos" className="py-16 lg:py-24 bg-background">
       <div className="max-w-5xl mx-auto px-4">
@@ -46,57 +51,65 @@ export default function PricingSection() {
             </a>
           </div>
 
-          {/* Paid packages */}
-          {PACKAGES.map((pkg) => (
+          {/* Monthly plans */}
+          {plans.map((plan) => (
             <div
-              key={pkg.credits}
+              key={plan.id}
               className={`rounded-xl border p-6 flex flex-col ${
-                pkg.highlight
+                plan.highlight
                   ? "bg-primary text-primary-foreground border-primary shadow-glow"
                   : "bg-card border-border shadow-card"
               }`}
             >
               <div className="flex items-center justify-between mb-1">
-                <p className={`text-xs font-semibold uppercase tracking-wide ${pkg.highlight ? "text-primary-foreground/70" : "text-muted-foreground"}`}>
-                  {pkg.label}
+                <p className={`text-xs font-semibold uppercase tracking-wide ${plan.highlight ? "text-primary-foreground/70" : "text-muted-foreground"}`}>
+                  {plan.name}
                 </p>
-                {pkg.highlight && <Badge className="text-xs bg-white text-primary">Popular</Badge>}
+                {plan.highlight && <Badge className="text-xs bg-white text-primary">Popular</Badge>}
               </div>
-              <p className={`text-2xl font-extrabold mb-1 ${pkg.highlight ? "text-primary-foreground" : "text-foreground"}`}>
-                {pkg.price}
+              <p className={`text-2xl font-extrabold mb-1 ${plan.highlight ? "text-primary-foreground" : "text-foreground"}`}>
+                {formatBrl(plan.priceBrl)}
+                <span className={`text-sm font-medium ${plan.highlight ? "text-primary-foreground/70" : "text-muted-foreground"}`}>/mês</span>
               </p>
-              <p className={`text-sm mb-4 ${pkg.highlight ? "text-primary-foreground/70" : "text-muted-foreground"}`}>
-                {pkg.credits} créditos · {pkg.perCredit}
+              <p className={`text-sm mb-4 ${plan.highlight ? "text-primary-foreground/70" : "text-muted-foreground"}`}>
+                {plan.monthlyCredits} créditos por mês · {adaptationsRange(plan.monthlyCredits)}
               </p>
-              <ul className={`space-y-2 text-sm flex-1 mb-6 ${pkg.highlight ? "text-primary-foreground/90" : "text-foreground"}`}>
+              <ul className={`space-y-2 text-sm flex-1 mb-6 ${plan.highlight ? "text-primary-foreground/90" : "text-foreground"}`}>
                 <li className="flex items-center gap-2">
                   <CheckCircle2 className="w-4 h-4 shrink-0" aria-hidden="true" />
-                  Créditos extras não expiram
+                  Créditos renovados todo mês
                 </li>
                 <li className="flex items-center gap-2">
                   <CheckCircle2 className="w-4 h-4 shrink-0" aria-hidden="true" />
-                  PIX ou cartão de crédito
+                  Cartão de crédito, cancele quando quiser
                 </li>
                 <li className="flex items-center gap-2">
                   <CheckCircle2 className="w-4 h-4 shrink-0" aria-hidden="true" />
                   Acesso imediato
                 </li>
               </ul>
-              <Link to="/auth">
+              <Link to={`/assinar?plano=${plan.slug}`}>
                 <Button
-                  className={`w-full ${pkg.highlight ? "bg-white text-primary hover:bg-white/90" : ""}`}
-                  variant={pkg.highlight ? "default" : "outline"}
+                  className={`w-full ${plan.highlight ? "bg-white text-primary hover:bg-white/90" : ""}`}
+                  variant={plan.highlight ? "default" : "outline"}
                 >
-                  Comprar
+                  Assinar
                 </Button>
               </Link>
             </div>
           ))}
         </div>
 
-        <p className="text-xs text-muted-foreground text-center mt-6">
-          Pix ou cartão via Mercado Pago. Créditos extras não expiram.
+        <p className="text-sm text-muted-foreground text-center mt-8">
+          Precisa de mais num mês? Créditos extras avulsos, por Pix ou cartão, que não expiram:{" "}
+          {EXTRAS.map((e, i) => (
+            <span key={e.credits}>
+              <span className="font-medium text-foreground">{e.credits} por {e.price}</span>
+              {i < EXTRAS.length - 1 ? " · " : "."}
+            </span>
+          ))}
         </p>
+        <p className="text-xs text-muted-foreground text-center mt-2">Pagamentos via Mercado Pago.</p>
       </div>
     </section>
   );

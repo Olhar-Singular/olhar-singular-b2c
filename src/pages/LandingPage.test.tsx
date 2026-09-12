@@ -1,7 +1,10 @@
 import { screen } from "@testing-library/react";
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import LandingPage from "./LandingPage";
 import { renderWithProviders } from "@/test/helpers";
+
+// The pricing grid falls back to the seeded catalogue while the query is loading.
+vi.mock("@/hooks/useSubscription", () => ({ usePlans: () => ({ data: undefined, isLoading: true }) }));
 
 function renderLanding() {
   return renderWithProviders(<LandingPage />);
@@ -24,11 +27,12 @@ describe("LandingPage", () => {
     expect(screen.queryByRole("link", { name: /criar conta/i })).toBeNull();
   });
 
-  it("renders the three paid packages with prices", () => {
+  it("renders the three monthly plans with prices", () => {
     renderLanding();
-    expect(screen.getByText(/R\$\s*9,90/)).toBeInTheDocument();
-    expect(screen.getByText(/R\$\s*29,90/)).toBeInTheDocument();
-    expect(screen.getByText(/R\$\s*59,90/)).toBeInTheDocument();
+    // 19,90 also appears in the closing CTA, 59,90 also as an extra package.
+    expect(screen.getAllByText(/R\$\s*19,90/).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/R\$\s*59,90/).length).toBeGreaterThan(0);
+    expect(screen.getByText(/R\$\s*99,90/)).toBeInTheDocument();
   });
 
   it("never promises free signup credits or credits that never expire", () => {

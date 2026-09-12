@@ -13,6 +13,7 @@ import AdminPage from "@/pages/AdminPage";
 import DashboardPage from "@/pages/DashboardPage";
 import BarrierProfilesPage from "@/pages/BarrierProfilesPage";
 import CreditsPage from "@/pages/CreditsPage";
+import SubscribePage from "@/pages/SubscribePage";
 import AdaptarPage from "@/pages/AdaptarPage";
 import MyAdaptationsPage from "@/pages/MyAdaptationsPage";
 import EditAdaptationPage from "@/pages/EditAdaptationPage";
@@ -64,6 +65,8 @@ function buildRouter() {
             { path: "/adaptacoes", element: <AdaptacoesPage /> },
             { path: "/banco-questoes", element: <QuestionBankPage /> },
             { path: "/creditos", element: <CreditsPage /> },
+            // Protected in this phase: the anonymous "pay first" funnel comes later.
+            { path: "/assinar", element: <SubscribePage /> },
             {
               path: "/admin",
               element: (

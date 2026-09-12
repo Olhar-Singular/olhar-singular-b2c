@@ -8,7 +8,9 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import PixPaymentDialog from "@/components/credits/PixPaymentDialog";
 import CardPaymentDialog from "@/components/credits/CardPaymentDialog";
+import SubscriptionCard from "@/components/credits/SubscriptionCard";
 import { useAccess } from "@/hooks/useAccess";
+import { useSubscription } from "@/hooks/useSubscription";
 import { useTransactionHistory, useCreatePixPayment, usePackages } from "@/hooks/useCredits";
 import type { CreditPackageView, PixPayment } from "@/hooks/useCredits";
 
@@ -38,6 +40,7 @@ function formatBrl(value: number) {
 
 export default function CreditsPage() {
   const access = useAccess();
+  const { data: subscription } = useSubscription();
   const { data: transactions = [], isLoading } = useTransactionHistory();
   // The catalogue comes from credit_packages; RLS already hides inactive rows
   // and shows the admin-only R$1 smoke package only to super-admins.
@@ -94,9 +97,12 @@ export default function CreditsPage() {
         </CardContent>
       </Card>
 
+      {/* Subscription (hidden for courtesy accounts and while loading) */}
+      <SubscriptionCard subscription={subscription} access={access} />
+
       {/* Packages */}
       <section className="space-y-4">
-        <h2 className="font-semibold text-foreground">Comprar créditos</h2>
+        <h2 className="font-semibold text-foreground">Comprar créditos extras</h2>
 
         {loadingPackages && (
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4" data-testid="packages-loading">

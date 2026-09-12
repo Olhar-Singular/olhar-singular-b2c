@@ -1,9 +1,33 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest";
 import { screen } from "@testing-library/react";
 import PricingSection from "./PricingSection";
+import { DEFAULT_PLANS, adaptationsRange, publicPlans } from "@/lib/domain/subscriptionUi";
 import { renderWithProviders } from "@/test/helpers";
 
+const { mockUsePlans } = vi.hoisted(() => ({ mockUsePlans: vi.fn() }));
+vi.mock("@/hooks/useSubscription", () => ({ usePlans: mockUsePlans }));
+
+describe("PricingSection helpers", () => {
+  it("estimates adaptations from the 5 to 12 credit cost", () => {
+    expect(adaptationsRange(60)).toBe("5 a 12 adaptações por mês");
+    expect(adaptationsRange(240)).toBe("20 a 48 adaptações por mês");
+    expect(adaptationsRange(500)).toBe("41 a 100 adaptações por mês");
+  });
+
+  it("falls back to the seeded catalogue and hides admin-only plans", () => {
+    expect(publicPlans(undefined)).toBe(DEFAULT_PLANS);
+    expect(publicPlans([])).toBe(DEFAULT_PLANS);
+    const smoke = { ...DEFAULT_PLANS[0], id: "t", slug: "teste-admin", adminOnly: true };
+    expect(publicPlans([smoke])).toBe(DEFAULT_PLANS);
+    expect(publicPlans([DEFAULT_PLANS[1], smoke])).toEqual([DEFAULT_PLANS[1]]);
+  });
+});
+
 describe("PricingSection", () => {
+  beforeEach(() => {
+    mockUsePlans.mockReturnValue({ data: undefined, isLoading: true });
+  });
+
   it("renders the section heading", () => {
     renderWithProviders(<PricingSection />);
     expect(screen.getByRole("heading", { name: /Planos e preços/i })).toBeInTheDocument();
@@ -21,29 +45,45 @@ describe("PricingSection", () => {
     expect(screen.queryByText(/nunca expiram/i)).toBeNull();
   });
 
-  it("renders all three paid packages with prices", () => {
+  it("renders the three monthly plans with prices even before the catalogue loads", () => {
     renderWithProviders(<PricingSection />);
-    expect(screen.getByText(/R\$\s*9,90/)).toBeInTheDocument();
-    expect(screen.getByText(/R\$\s*29,90/)).toBeInTheDocument();
-    expect(screen.getByText(/R\$\s*59,90/)).toBeInTheDocument();
+    expect(screen.getByText(/R\$\s*19,90/)).toBeInTheDocument();
+    expect(screen.getByText(/R\$\s*99,90/)).toBeInTheDocument();
+    // 59,90 is also the price of the 300-credit extra package.
+    expect(screen.getAllByText(/R\$\s*59,90/).length).toBe(2);
+    expect(screen.getByText(/240 créditos por mês/)).toBeInTheDocument();
   });
 
-  it("shows adaptation estimates consistent with the real 5–12 credit cost", () => {
+  it("renders the catalogue from the database when it arrives", () => {
+    mockUsePlans.mockReturnValue({
+      data: [{ id: "x", slug: "unico", name: "Único", priceBrl: 42, monthlyCredits: 120, highlight: false, adminOnly: false }],
+      isLoading: false,
+    });
     renderWithProviders(<PricingSection />);
-    // 30 credits ÷ (5–12 per adaptation) ≈ 3–6, not the legacy ~10 (which assumed 3/each)
-    expect(screen.getByText(/3 a 6 adaptações/i)).toBeInTheDocument();
-    expect(screen.queryByText(/~10 adaptações/i)).not.toBeInTheDocument();
+    expect(screen.getByText(/R\$\s*42,00/)).toBeInTheDocument();
+    expect(screen.queryByText(/R\$\s*19,90/)).toBeNull();
+    expect(screen.getByRole("link", { name: /Assinar/ })).toHaveAttribute("href", "/assinar?plano=unico");
   });
 
-  it("flags the highlighted (Profissional) package as Popular", () => {
+  it("flags the highlighted (Profissional) plan as Popular", () => {
     renderWithProviders(<PricingSection />);
     expect(screen.getByText(/Popular/i)).toBeInTheDocument();
   });
 
-  it("each Comprar CTA links to /auth", () => {
+  it("each Assinar CTA links to /assinar with the plan slug", () => {
     renderWithProviders(<PricingSection />);
-    const links = screen.getAllByRole("link", { name: /Comprar/i });
-    expect(links.length).toBe(3);
-    links.forEach((l) => expect(l).toHaveAttribute("href", "/auth"));
+    const links = screen.getAllByRole("link", { name: /Assinar/i });
+    expect(links.map((l) => l.getAttribute("href"))).toEqual([
+      "/assinar?plano=basico",
+      "/assinar?plano=profissional",
+      "/assinar?plano=avancado",
+    ]);
+  });
+
+  it("mentions the extra packages as one-off top-ups", () => {
+    renderWithProviders(<PricingSection />);
+    expect(screen.getByText(/30 por R\$ 9,90/)).toBeInTheDocument();
+    expect(screen.getByText(/300 por R\$ 59,90/)).toBeInTheDocument();
+    expect(screen.getByText(/Pix ou cartão, que não expiram/)).toBeInTheDocument();
   });
 });

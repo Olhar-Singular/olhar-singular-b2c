@@ -42,7 +42,11 @@ const PACKAGES = [
 
 const TEST_PACKAGE = { id: "pkg-test", credits: 1, amountBrl: 1, label: "Teste (admin)", highlight: false, adminOnly: true };
 
-const { mockPixPayment, cardDialogProps } = vi.hoisted(() => ({ mockPixPayment: vi.fn(), cardDialogProps: vi.fn() }));
+const { mockPixPayment, cardDialogProps, subscriptionCardProps } = vi.hoisted(() => ({
+  mockPixPayment: vi.fn(),
+  cardDialogProps: vi.fn(),
+  subscriptionCardProps: vi.fn(),
+}));
 
 const PIX_PAYMENT = {
   qrCode: "00020126580014br.gov.bcb.pix0136abc",
@@ -55,6 +59,17 @@ vi.mock("@/hooks/useCredits", () => ({
   usePackages: vi.fn(() => ({ data: PACKAGES, isLoading: false })),
   useCreatePixPayment: vi.fn(() => ({ mutateAsync: mockPixPayment, isPending: false })),
   usePurchaseStatus: vi.fn(() => ({ data: { status: "pending" } })),
+}));
+
+// The subscription card has its own suite; here only the wiring matters.
+vi.mock("@/hooks/useSubscription", () => ({
+  useSubscription: vi.fn(() => ({ data: { id: "sub-1", status: "authorized" } })),
+}));
+vi.mock("@/components/credits/SubscriptionCard", () => ({
+  default: (props: { subscription: unknown; access: unknown }) => {
+    subscriptionCardProps(props);
+    return <div data-testid="subscription-card" />;
+  },
 }));
 
 // The card dialog has its own suite; here only the wiring matters.
@@ -285,5 +300,19 @@ describe("CreditsPage", () => {
     renderPage();
     expect(screen.getByText(/via Mercado Pago/i)).toBeInTheDocument();
     expect(screen.queryByText(/stripe/i)).toBeNull();
+  });
+});
+
+describe("CreditsPage (subscription section)", () => {
+  it("renders the subscription card above the extras with the loaded subscription and access", () => {
+    renderWithProviders(<CreditsPage />);
+    expect(screen.getByTestId("subscription-card")).toBeInTheDocument();
+    expect(subscriptionCardProps).toHaveBeenCalledWith(
+      expect.objectContaining({
+        subscription: { id: "sub-1", status: "authorized" },
+        access: expect.objectContaining({ kind: "legacy", extraCredits: 9 }),
+      }),
+    );
+    expect(screen.getByRole("heading", { name: "Comprar créditos extras" })).toBeInTheDocument();
   });
 });
