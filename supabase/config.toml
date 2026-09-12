@@ -54,3 +54,8 @@ content_path = "./supabase/templates/recovery.html"
 # rejeita a chamada com 401 antes da função rodar.
 [functions.mp-webhook]
 verify_jwt = false
+
+# /assinar funciona sem sessão (a conta nasce do pagamento): o gateway não pode
+# exigir JWT. A função trata a Authorization como opcional e faz o rate limit.
+[functions.subscribe]
+verify_jwt = false
