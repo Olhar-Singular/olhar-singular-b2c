@@ -130,6 +130,33 @@ export type Database = {
           },
         ]
       }
+      admin_actions: {
+        Row: {
+          action: string
+          actor_id: string
+          created_at: string
+          id: string
+          payload: Json
+          target_user_id: string | null
+        }
+        Insert: {
+          action: string
+          actor_id: string
+          created_at?: string
+          id?: string
+          payload?: Json
+          target_user_id?: string | null
+        }
+        Update: {
+          action?: string
+          actor_id?: string
+          created_at?: string
+          id?: string
+          payload?: Json
+          target_user_id?: string | null
+        }
+        Relationships: []
+      }
       ai_model_pricing: {
         Row: {
           created_at: string
@@ -886,6 +913,15 @@ export type Database = {
           p_user_id: string
         }
         Returns: Json
+      }
+      log_admin_action: {
+        Args: {
+          p_action: string
+          p_actor_id: string
+          p_payload: Json
+          p_target_id: string
+        }
+        Returns: string
       }
       mark_subscription_past_due: {
         Args: { p_subscription_id: string }
