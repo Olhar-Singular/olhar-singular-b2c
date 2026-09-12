@@ -37,6 +37,8 @@ make gen-types           # Gerar tipos TypeScript do schema local
 make gen-types-remote    # Gerar tipos do schema remoto
 make fn-deploy-all       # Deploy de todas as edge functions
 make fn-serve            # Servir funções localmente
+make fn-serve-mp-test    # Servir funções com as credenciais de TESTE do Mercado Pago (bloco STAGING)
+make fn-check            # Type-check das functions com Deno (imagem oficial via Docker)
 make test-db             # pgTAP (RPC/RLS) — exige Docker
 make verify-adaptar      # Sobe o ambiente real do fluxo "Adaptar" (Supabase+reset+seed+
                          #   .env.local+functions serve+dev no container) → localhost:3000

@@ -14,7 +14,8 @@ Você é o revisor de segurança de migrations Supabase deste projeto. Sua únic
 - **RLS obrigatório**: todas as tabelas em `public.` devem ter Row Level Security ativa
 - **Convenção**: SQL em snake_case, usa `public.` como schema padrão
 - **Roles**: `authenticated`, `anon`, além das policies específicas
-- **Helper comum**: `public.is_super_admin(user_id)` — RPC usada em várias policies
+- **Super admin**: coluna `profiles.is_super_admin` (NÃO existe RPC `is_super_admin` neste repo; uma migration que a chame quebra no `db push`). Policy: `EXISTS (SELECT 1 FROM public.profiles p WHERE p.id = auth.uid() AND p.is_super_admin)`, só `TO authenticated`.
+- **Privilégios de tabela explícitos** (`20260622000000`): tabela nova precisa de `GRANT` para os roles que a leem e `REVOKE` das escritas que só `service_role` faz.
 
 ## Escopo da revisão
 
@@ -48,7 +49,8 @@ Pra cada arquivo `.sql` novo, verifique:
 - [ ] Há pelo menos uma policy por operação esperada (`select`, `insert`, `update`, `delete`)?
 - [ ] Policies de `select` têm condição baseada em `auth.uid()` ou role — nunca `true` sem justificativa
 - [ ] Policies de `update`/`delete` restringem ao dono ou a role autorizada
-- [ ] Se existir policy de super admin, usa `public.is_super_admin(auth.uid())`?
+- [ ] Se existir policy de super admin, usa o `EXISTS` em `profiles.is_super_admin` (nunca a RPC inexistente `is_super_admin`) e é `TO authenticated`?
+- [ ] Tabela nova tem `GRANT` explícito para quem lê e `REVOKE` das escritas que só `service_role` faz?
 
 #### 2.3 Cascatas e FKs
 

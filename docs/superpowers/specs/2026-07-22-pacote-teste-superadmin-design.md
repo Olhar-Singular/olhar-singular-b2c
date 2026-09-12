@@ -1,5 +1,8 @@
 # Pacote de teste R$1 exclusivo do super-admin — Design
 
+> **Superado em 2026-09-12:** a Stripe foi removida; cartão passa a ser Mercado Pago inline e os pacotes vivem na tabela `credit_packages`. Ver `2026-09-11-pagamentos-assinatura-mp-design.md`.
+
+
 **Data:** 2026-07-22 · **Status:** aprovado (conversa) · **Escopo:** fluxo Créditos (Stripe)
 
 ## Objetivo

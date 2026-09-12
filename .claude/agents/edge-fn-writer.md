@@ -25,8 +25,11 @@ supabase/functions/
 │   ├── adminAuth.ts     # checagem de super-admin
 │   ├── admin{Dashboard,GrantCredits,UserStatus}.ts  # core das functions admin
 │   ├── adapt{ActivityCore,ationPrompt}.ts  # core do adapt-activity
-│   ├── stripeEvents.ts  # parsing de webhooks Stripe (grant + falha async do Pix)
-│   ├── stripeCheckoutParams.ts # payload do Checkout Stripe (cartão)
+│   ├── creditPackages.ts # selectPackage(rows, id, { allowAdminOnly }) sobre linhas de credit_packages
+│   ├── purchaseGrant.ts # approvePurchaseAndGrant / rejectPendingPurchase → RPCs atômicas (webhook + cartão)
+│   ├── mpCardPayment.ts # body do POST /v1/payments (cartão via Brick), interpretação e maskPayer p/ logs
+│   ├── mpStatusDetail.ts # status_detail do MP → mensagem pt-BR
+│   ├── cardPaymentInput.ts # validação do body { packageId, card } do create-card-payment
 │   ├── mpPixPayment.ts  # body do POST /v1/payments (Pix) + extração do QR — Checkout Transparente
 │   ├── mpEvents.ts      # parsing do webhook Mercado Pago (grant/reject por status do pagamento)
 │   ├── mpSignature.ts   # validateMpSignature() — HMAC do header x-signature
@@ -148,16 +151,14 @@ Leia `_shared/credits.ts` pra ver `ChargeDeps`/`ChargeOutcome` atuais. O cliente
 
 ### 6. Se a function é admin-only
 
-Chame `is_super_admin(user.id)` via RPC antes de seguir:
+**Não existe RPC `is_super_admin` neste repo** (é herança do B2B). O flag é a coluna `profiles.is_super_admin` e o padrão é o helper testado `authorizeSuperAdmin` de `_shared/adminAuth.ts`, com o client service_role:
 
 ```typescript
-const { data: isSuperAdmin } = await supabase.rpc("is_super_admin", { user_id: user.id });
-if (!isSuperAdmin) {
-  return new Response(JSON.stringify({ error: "Forbidden" }), {
-    status: 403,
-    headers: { ...corsHeaders, "Content-Type": "application/json" },
-  });
-}
+import { authorizeSuperAdmin } from "../_shared/adminAuth.ts";
+
+const auth = await authorizeSuperAdmin(supabase, req.headers.get("Authorization"));
+if (!auth.ok) return json({ error: auth.error }, auth.status); // 401 / 403 / 500
+// auth.userId é o super-admin autenticado
 ```
 
 ## Fluxo obrigatório ao começar
@@ -186,7 +187,7 @@ if (!isSuperAdmin) {
 ## Resposta ao thread principal
 
 1. Caminho do arquivo criado (ou modificado)
-2. Lista de secrets/env vars que a function precisa (`SUPABASE_URL`, `SUPABASE_ANON_KEY`/`SUPABASE_SERVICE_ROLE_KEY`, `AI_API_KEY`, `STRIPE_*` conforme o caso — runtime local injeta os `SUPABASE_*`; demais vêm do `.env` raiz via `make fn-serve`)
+2. Lista de secrets/env vars que a function precisa (`SUPABASE_URL`, `SUPABASE_ANON_KEY`/`SUPABASE_SERVICE_ROLE_KEY`, `AI_API_KEY`, `ACCESS_TOKEN_MP_PROD`/`VERIFY_TOKEN_MP_PROD` conforme o caso — runtime local injeta os `SUPABASE_*`; demais vêm do `.env` raiz via `make fn-serve`)
 3. Comando pra deploy local: `make fn-serve` ou `supabase functions serve <nome>`
 4. Comando pra deploy remoto: `supabase functions deploy <nome>` ou `make fn-deploy-all`
 5. Action type escolhido (pra grep de duplicação)

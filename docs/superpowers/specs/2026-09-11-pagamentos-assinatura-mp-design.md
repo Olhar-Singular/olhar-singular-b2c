@@ -202,8 +202,12 @@ público (máx. 5 tentativas por e-mail e 10 por IP em 1h). `service_role` only,
   de contrato; `extract-questions` perde a pré-checagem de `free_extraction_used`.
 - **`open_adapt_reservation`**: sem free-first; chama `consume_credits`; grava
   `plan_charged/extra_charged`; `mode` ∈ `charged | exempt`.
-- **`reverse_credit_reservation`**: devolve `plan_charged` ao balde do plano se
-  `plan_period_end > now()`, senão aos extras; `extra_charged` aos extras. Ledger `refund` por balde.
+- **`reverse_credit_reservation`**: a reserva guarda `period_end_at_open`; `plan_charged` volta
+  ao plano só se `profiles.plan_period_end = period_end_at_open` e `> now()` (mesmo ciclo ainda
+  ativo); se o ciclo mudou ou expirou, a parcela do plano é **descartada** (ledger `refund` com
+  delta 0 e nota), nunca convertida em extra. `extra_charged` volta aos extras. Também usada por
+  `extract-questions`, que migra para o modelo de reserva (o estorno via `grant_credits 'refund'`
+  converteria crédito do plano em extra e creditaria usuário isento).
 - **`grant_credits`**: inalterada (extras). **`admin_grant_credits`**: inalterada (extras).
 - **`activate_subscription(p_user_id, p_subscription_id, p_period_end)`** e
   **`renew_subscription(p_subscription_id, p_invoice_id, p_period_end)`**: `access_kind =
@@ -211,14 +215,31 @@ público (máx. 5 tentativas por e-mail e 10 por IP em 1h). `service_role` only,
   p_period_end`, `subscriptions.status = 'authorized'`, ledger `plan_reset` (se sobrou) +
   `plan_grant`. `renew_*` insere em `subscription_invoices` primeiro; conflito de pk → retorna
   `already_processed` sem tocar saldo.
-- **`mark_subscription_past_due(p_subscription_id)`** e **`cancel_subscription_local(...)`**:
-  só mudam status; créditos do ciclo ficam até `plan_period_end` (expiração é **lazy**, por
-  comparação de data em `consume_credits` e no cliente). Sem dependência de pg_cron.
-- **`start_trial_on_confirm()`** (trigger `AFTER UPDATE OF email_confirmed_at ON auth.users` e
-  também dentro de `handle_new_user` quando o INSERT já vem confirmado): se
-  `access_kind = 'trial'` e `plan_period_end IS NULL` → `plan_credits = 50`,
-  `plan_period_end = now() + interval '7 days'`, ledger `trial_grant`. Função revogada de
-  `anon/authenticated` (padrão da migration 20260816) e coberta em `function_hardening.test.sql`.
+- **Primeira parcela vs. renovação** (achado da revisão): `activate_subscription` grava
+  `current_period_start` e um invoice sintético `activation`. Quando a 1ª `authorized_payment`
+  aprovada chega (até ~1h depois), `renew_subscription` **não** reseta: só espelha
+  `mp_payment_id` e marca `first_payment_confirmed`. Reset + `plan_grant` acontecem apenas quando
+  `debit_date >= current_period_end` (ciclo novo). `subscription_invoices` é um **espelho com
+  status** (upsert por id; `granted_at`), e o crédito só entra na transição `granted_at IS NULL
+  → now()` com `payment.status = 'approved'`: o mesmo id passa por `recycling` e depois
+  `approved` sem perder a concessão. Tudo com `FOR UPDATE` no perfil.
+- **`clawback_subscription(p_subscription_id)`**: 1ª parcela rejeitada (nenhum invoice aprovado)
+  → `plan_credits = 0`, `plan_period_end = now()`, ledger `clawback`, status `rejected`. Fecha o
+  vetor "cartão passa na autorização e nunca paga".
+- **`mark_subscription_past_due(p_subscription_id)`** (renovação falhou): só muda status; como
+  `plan_period_end` já passou, o balde do plano fica indisponível pela regra lazy de
+  `consume_credits` (sem reset até pagar). **`cancel_subscription_local(...)`**: status
+  `cancelled`, créditos do ciclo até `plan_period_end`. Sem dependência de pg_cron.
+- **`start_trial_on_confirm()`**: trigger `AFTER UPDATE OF email_confirmed_at ON auth.users FOR
+  EACH ROW WHEN (OLD.email_confirmed_at IS NULL AND NEW.email_confirmed_at IS NOT NULL)`, corpo
+  com `EXCEPTION WHEN OTHERS THEN RAISE WARNING; RETURN NEW` (erro aqui viraria 500 no GoTrue e
+  travaria o aceite do convite). `handle_new_user` lê `raw_user_meta_data->>'access_kind'`
+  (aceita só `trial`/`exempt`; default `subscriber`), então o `admin-create-user` passa
+  `data: { full_name, access_kind }` no convite e o ramo "INSERT já confirmado" é real. Se
+  `access_kind = 'trial'` e `trial_started_at IS NULL` → `plan_credits = 50`, `plan_period_end =
+  now() + 7 days`, `trial_started_at = now()`, ledger `trial_grant`. Função revogada de
+  `anon/authenticated` (padrão 20260816) e coberta em `function_hardening.test.sql`.
+  `admin_extend_trial` recusa enquanto `trial_started_at IS NULL`.
 - **`admin_extend_trial(p_user_id, p_days)`**: só `access_kind = 'trial'`; `plan_period_end =
   greatest(now(), coalesce(plan_period_end, now())) + p_days`; presets 7/14/30; teto de 90 dias
   acumulados desde a criação.
@@ -253,18 +274,42 @@ edge `subscribe` (verify_jwt = false; aceita Authorization opcional)
                          transaction_amount: price, currency_id: 'BRL' },
        back_url: `${APP_URL}/creditos`, status: 'authorized' }
      header X-Idempotency-Key = subscription.id
-     ├─ 2xx e status 'authorized' → update subscriptions (mp id, mp_status, next_payment_date)
+     ├─ 2xx e status 'authorized' → update subscriptions (mp id, mp_status, next_payment_date,
+     │     card_brand = payment_method_id, card_last_four do additionalData do Brick)
      │     → RPC activate_subscription(period_end = next_payment_date ?? now()+1 month)
      │     → analytics server: subscription_started
-     └─ erro/recusa → subscriptions.status = 'rejected' + status_detail; usuário fica (decisão 14)
-  6. se o usuário foi criado agora: auth.admin.generateLink({ type: 'magiclink', email })
-     → devolve properties.hashed_token
-  7. resposta { status: 'authorized' | 'rejected', message, subscription_id, session_token_hash? }
+     ├─ 2xx e status 'pending' (validação assíncrona do cartão) → subscriptions.status = 'pending';
+     │     o webhook subscription_preapproval ativa quando virar 'authorized'
+     └─ HTTP não-2xx OU 2xx com outro status → subscriptions.status = 'rejected' + status_detail;
+           a conta criada em 3b FICA (decisão 14), mas sem sessão (ver 6)
+  6. sessão só com pagamento: se o usuário foi criado agora E o preapproval voltou 'authorized'
+     ou 'pending' → auth.admin.generateLink({ type: 'magiclink', email }) → devolve
+     properties.hashed_token. No caminho 'rejected' NENHUM token é devolvido: entregar sessão a
+     quem só provou ter um token de cartão qualquer permitiria registrar a conta de um e-mail
+     alheio e ficar com o refresh token dela (achado da revisão). O cliente então chama
+     supabase.auth.signInWithOtp({ email }) e o link de acesso vai POR E-MAIL (prova de posse);
+     dentro do app a pessoa tenta outro cartão em /assinar (ramo 3a).
+  7. resposta { status: 'authorized' | 'pending' | 'rejected', message, subscription_id,
+     account_created: boolean, session_token_hash? }
 cliente
-  ├─ session_token_hash → supabase.auth.verifyOtp({ token_hash, type: 'magiclink' }) → sessão
+  ├─ session_token_hash → supabase.auth.verifyOtp({ token_hash, type: 'magiclink' }) → sessão,
+  │     consumido na hora e nunca guardado em estado/sessionStorage
   ├─ 'authorized' → navigate('/definir-senha') (ProtectedRoute força enquanto must_set_password)
-  └─ 'rejected'   → mesmo caminho, com banner "pagamento recusado, tente outro cartão" em /creditos
+  ├─ 'pending'    → mesmo caminho, faixa "confirmando seu cartão" até o webhook ativar
+  └─ 'rejected'   → account_created ? signInWithOtp + tela "conta criada, confira seu e-mail para
+                    entrar e tentar outro cartão" : mensagem do MP + Brick novo (usuário logado)
 ```
+
+Regras adicionais do `subscribe`: `Authorization` presente mas que não é um JWT de usuário
+válido (a publishable key vai sempre no header) cai no ramo anônimo, nunca em 401; usuário já
+com assinatura viva → 409 `already_subscribed`; `access_kind = 'exempt'` → 409 `exempt_user`;
+`access_kind` NÃO é escrito no passo 3c (só `activate_subscription` promove a `subscriber`);
+`cpf` e `terms_accepted_at`/`terms_version` gravados só após `authorized`/`pending`; uma linha
+`pending` com mais de 15 minutos é marcada `rejected` (`status_detail 'abandoned'`) antes de
+uma nova tentativa, e o índice único de "assinatura viva" cobre só `authorized`, `past_due` e
+`paused`. Erro de rede/timeout no POST nunca é repetido às cegas: consulta
+`GET /preapproval/search?external_reference=<id>` antes de decidir (o MP não documenta
+idempotência para esse endpoint).
 
 Regras: nunca ecoar o body na resposta nem em logs; `payer` mascarado em qualquer `console.error`;
 senha aleatória nunca sai do servidor; token do Brick é de uso único (recusa exige novo submit).
@@ -333,8 +378,12 @@ qualquer rota para ela, exceto sair).
 | trial | `plan_period_end > now` | `planCredits` + `extraCredits`; banner "X dias de teste" |
 | trial | expirado | só `extraCredits`; se 0 → `paywalled` |
 | subscriber | assinatura `authorized` e `plan_period_end > now` | `planCredits` + `extraCredits` |
-| subscriber | `past_due` | idem (créditos congelados, sem reset); banner "pagamento pendente" |
-| subscriber | `cancelled`/`rejected`/sem assinatura | plano até `plan_period_end`, depois só extras |
+| subscriber | `pending` (cartão em validação) | plano já liberado (ativação otimista); faixa "confirmando seu cartão" |
+| subscriber | `past_due` (renovação falhou) | balde do plano **indisponível** (o período venceu); só `extraCredits`; faixa "pagamento pendente, atualize o cartão" com CTA trocar cartão |
+| subscriber | `rejected` na 1ª parcela | `clawback`: balde do plano zerado; só extras; faixa "pagamento recusado" com CTA assinar de novo |
+| subscriber | `paused` (pausada no painel do MP) | como `past_due` |
+| subscriber | `cancelled` | plano até `plan_period_end` ("seu plano vale até dd/mm"), depois só extras |
+| subscriber | sem assinatura viva | só extras; se 0 → `paywalled` |
 | legacy | sem assinatura | só `extraCredits`; se 0 → `paywalled` |
 
 `paywalled` = total disponível 0 e não isento. O servidor aplica a mesma regra dentro de
@@ -381,8 +430,11 @@ Super-admin **não** tem bypass automático: usa Cortesia se quiser.
   `connect-src` + `https://api.mercadopago.com https://api.mercadolibre.com
   https://*.mercadopago.com https://www.google-analytics.com https://analytics.google.com
   https://www.googletagmanager.com https://www.facebook.com`; `frame-src` + `https://*.mercadopago.com
-  https://*.mercadolibre.com https://www.googletagmanager.com`; `img-src` já aceita `https:`.
-  Validação obrigatória num Preview do Vercel com o Network tab antes de mesclar.
+  https://*.mercadolibre.com https://www.googletagmanager.com`; `style-src` e `font-src` +
+  `https://http2.mlstatic.com` (o Brick carrega CSS e fontes de lá); `img-src` já aceita
+  `https:`. **GTM não carrega em `/assinar` nem em `/definir-senha`**: uma tag Custom HTML no
+  container rodaria na mesma origem que recebe `session_token_hash`, e-mail, CPF e o token do
+  cartão. Validação obrigatória num Preview do Vercel com o Network tab antes de mesclar.
 
 ### 4.6 Admin
 
@@ -479,18 +531,30 @@ CAPI (`event_name`, `event_id`, `user_data` com e-mail SHA-256, `custom_data` co
 
 ## 7. Fases de implementação (cada uma = commits próprios na branch `redesign/assinatura-mp`)
 
+Cada fase deixa a suíte verde e o produto coerente ("estado ao final" entre parênteses).
+
 1. **Cartão inline MP + remoção da Stripe** (extras via `create-card-payment`, Brick, CreditsPage,
-   `credit_packages`, CSP, Makefile, config.toml, docs vivas).
-2. **Dois baldes + trial + isenção + migração de dados** (schema, RPCs, pgTAP, `access.ts`,
-   Layout/paywall, `adapt`/`extract`/`chat`, admin read-only, fim do signup na UI).
-3. **Assinatura** (`plans`, `subscriptions`, `subscribe` logado, `mp-webhook` com tópicos,
-   `cancel-subscription`, `update-subscription-card`, CreditsPage "Sua assinatura").
-4. **Funil da LP** (`/assinar` anônimo com criação de conta e magic link, `/definir-senha`,
-   `AuthPage` só login, copy da LP, páginas legais, SEO).
-5. **Admin** (criar usuário Trial/Cortesia, estender trial, cancelar, abas, filtros,
-   `admin_actions`).
-6. **Analytics** (GTM/dataLayer, Consent Mode, atribuição, eventos server-side).
-7. **Fechamento** (docs vivas, `.env.example`, runbook, memória do projeto).
+   `credit_packages`, RPC atômica de aprovação, CSP, Makefile, config.toml, docs vivas). *Estado:
+   produto igual ao de hoje, só com outro trilho de cartão.* **Concluída em 2026-09-12.**
+2. **Dois baldes + trial + isenção + migração de dados + endurecimento** (schema, RPCs com
+   `FOR UPDATE`, `extract-questions` no modelo de reserva, pgTAP, `access.ts`, Layout/paywall com
+   CTA para `/creditos`, `adapt`/`chat`, admin read-only + "Alterar acesso", `AuthPage` só login,
+   `config.toml` `enable_signup = false`, DROP das policies INSERT/DELETE de `profiles` e INSERT de
+   `credit_transactions`, limpeza da copy "grátis" dentro do app). *Estado: quem existe continua
+   usando; ninguém novo entra sem admin.*
+3. **Assinatura** (`plans`, `subscriptions`, `subscription_invoices`, `subscribe` logado,
+   `mp-webhook` com tópicos, `cancel-subscription`, `update-subscription-card`,
+   `reconcile_pending_subscriptions`, CreditsPage "Sua assinatura", `/assinar` redirecionando
+   para `/creditos` quando anônimo). *Estado: usuário logado assina e renova.*
+4. **Funil da LP** (`/assinar` anônimo com criação de conta e magic link só com pagamento,
+   `/definir-senha`, `set-initial-password` com revogação das outras sessões, copy da LP, páginas
+   legais, SEO, `invite.html`). *Estado: visitante paga e entra.*
+5. **Admin** (criar usuário Trial/Cortesia por convite, estender trial, cancelar, alterar e-mail,
+   abas, filtros, `admin_actions`).
+6. **Analytics** (GTM em runtime fora do checkout, Consent Mode, atribuição pós-consentimento,
+   eventos server-side condicionados ao consentimento).
+7. **Fechamento** (docs vivas, `.env.example`, runbook, typecheck real, `fn-check` bloqueante,
+   memória do projeto).
 
 ## 8. Riscos e pendências
 
@@ -502,5 +566,115 @@ CAPI (`event_name`, `event_id`, `user_data` com e-mail SHA-256, `custom_data` co
 - Textos legais e IDs de analytics (GTM, GA4, Meta) ainda não existem: código nasce em modo
   rascunho/no-op e não bloqueia a implementação, mas bloqueia ir a produção.
 - Pix recorrente ("Pix Automático") depende de habilitação na conta MP; fora desta rodada.
-- Primeira cobrança assíncrona: se a 1ª parcela falhar, o usuário já usou créditos do plano por
-  até ~1h; aceito (webhook zera o balde e marca `past_due`).
+- Primeira cobrança assíncrona: se a 1ª parcela falhar, o usuário já pode ter usado créditos do
+  plano por até ~1h; aceito. O webhook faz `clawback` (zera o balde, status `rejected`).
+- `make fn-check` (Deno) encontrou 15 erros pré-existentes (schema Zod compartilhado sob strict,
+  casts de RPC para `Promise`, tipo do client em `authorizeSuperAdmin`, `gapTokenGuard`).
+  Corrigir na Fase 7 antes de tornar o alvo bloqueante.
+- `npm run typecheck` não checa nada (tsconfig raiz `files: []`) e um `tsc -p tsconfig.app.json`
+  real reporta 247 erros, quase todos em testes. Fase 7: `tsconfig.typecheck.json` só para
+  `src/**` sem testes, e o script passa a rodá-lo.
+
+## 9. Ajustes da revisão adversarial (2026-09-12)
+
+Três revisores independentes (dinheiro/segurança, APIs do MP e do Supabase, produto/testabilidade)
+leram este spec contra o código. O que mudou no design está incorporado nas seções acima; abaixo,
+o registro achado → decisão para o que não cabia num parágrafo.
+
+**Segurança e dinheiro**
+
+- `profiles` tem policies de INSERT e DELETE para o dono (initial_schema) e os guards são só
+  BEFORE UPDATE: um usuário podia apagar e reinserir o próprio perfil com `credit_balance`,
+  `access_kind = 'exempt'` e `is_super_admin = true`. **Fase 2 remove as duas policies e revoga
+  INSERT/DELETE de `anon, authenticated` em `profiles`** (a linha nasce só por `handle_new_user`),
+  com `throws_ok` em `credit_paywall_guard.test.sql`. Mesmo tratamento para o INSERT de
+  `credit_transactions` (ledger só por RPC).
+- Aprovação de compra + grant viraram **uma RPC** (`approve_purchase_and_grant`), já entregue na
+  Fase 1; `reject_pending_purchase` é o par.
+- Endpoint público `subscribe`: e-mail normalizado (minúsculas; em gmail, sem pontos e sem `+tag`)
+  e hasheado com HMAC (`CHECKOUT_HASH_SECRET`); IP = primeiro item de `x-forwarded-for`; disjuntor
+  global (mais de 20 recusas em 10 min → 503 para anônimos por 30 min); purga de
+  `checkout_attempts` com mais de 24h dentro da própria função; `MP_DEVICE_SESSION_ID` do SDK
+  enviado ao antifraude quando disponível. Turnstile fica como plano B se houver abuso.
+- `set-initial-password` e o fluxo de recuperação revogam as demais sessões
+  (`auth.admin.signOut(jwt, 'others')`) depois de trocar a senha.
+- CPF: é o **do titular do cartão** (rótulo na UI); gravado em `profiles.cpf` só se `NULL` e só
+  pelo `subscribe`; `subscription_invoices.raw` sem `payer`/`card`; `admin_actions.payload` sem
+  e-mail nem CPF; dígitos verificadores validados no servidor.
+- Aceite dos Termos: `profiles.terms_accepted_at` e `terms_version`, gravados pelo `subscribe` e
+  pelo `create-card-payment` na 1ª compra (registro contratual, distinto do consentimento de
+  analytics).
+- `mpEvents`: `external_reference` validado como UUID antes da consulta (evita 500 e tempestade de
+  retries) e pagamento recorrente (`metadata.preapproval_id`) ignorado com log.
+- Ações admin com `userId` no body exigem `authorizeSuperAdmin`; `cancel-subscription` e
+  `update-subscription-card` resolvem a assinatura pelo `auth.uid()` do chamador, nunca pelo body.
+
+**Mercado Pago**
+
+- `statement_descriptor` não existe no `/preapproval`: o nome na fatura da assinatura vem da
+  configuração da conta (runbook, passo 1). Decisão 23 vale integralmente só para os extras.
+- Cartão salvo: `card_last_four` vem do 2º argumento do `onSubmit` do Brick (`additionalData`),
+  `card_brand` do `payment_method_id` do preapproval.
+- O Brick pré-preenchido com e-mail **esconde** o campo: montar só depois do passo "confira seu
+  e-mail" e remontar com `key={email}`; `payer_email` no servidor é sempre o da conta.
+- Sandbox: Bricks não suportam contas de teste como comprador; a validação local usa credenciais
+  do vendedor de teste + cartões de teste (titular `APRO`/`OTHE`, CPF 12345678909); o funil
+  anônimo com e-mail real só se prova no smoke de R$1 em produção. `processed` no
+  `authorized_payment` **não** significa pago: renovar só com `payment.status = 'approved'`.
+- Recusa na criação do preapproval pode vir como HTTP não-2xx ou 2xx com outro status; ambos →
+  `rejected`. A FAQ menciona a cobrança de validação devolvida.
+
+**Supabase Auth e cliente**
+
+- `AuthContext` ganha `profileLoading` e adia `fetchProfile` (`setTimeout(0)`) dentro do
+  `onAuthStateChange`; `ProtectedRoute` devolve `null` enquanto carrega e só então força
+  `/definir-senha` (fora do `Layout`, com `AuthLayout` e botão Sair); `set-initial-password` →
+  `refreshProfile()` antes de navegar.
+- Convite do admin: `supabase/templates/invite.html` + `[auth.email.template.invite]`;
+  `redirectTo` `.../redefinir-senha?convite=1` (na allowlist de produção, runbook);
+  `ResetPasswordPage` troca a copy para "Crie sua senha" e mantém a sessão indo ao `/dashboard`.
+- Migração: os super-admins de produção ficam `exempt`; a ação admin **Alterar acesso**
+  (legacy/trial/exempt) e **Alterar e-mail** entram no escopo da Fase 5.
+
+**Produto e copy**
+
+- Trial que assina (decisão 5) e assinante que cancela e assina de novo (decisão 21) veem na
+  `/assinar` o aviso "você ainda tem N créditos até dd/mm; ao assinar agora eles serão
+  substituídos". Sem soma (decisão 4).
+- `/assinar` sem `plano` (ou slug inválido) mostra o seletor com Profissional pré-selecionado.
+- Compensação (decisão 6): +12 extras se `free_adaptation_used = false` e +5 se
+  `free_extraction_used = false`.
+- Limpeza de copy dentro do app (Fase 2): `StepBarrierSelection` "Grátis (primeira adaptação)",
+  `QuestionBankPage` "Extração gratuita disponível", `DashboardPage` "Comprar", `LandingFooter`
+  "Criar conta", `MyAdaptationsPage`/`AdaptacoesPage` "Gratuita", `TYPE_LABELS` com os tipos
+  novos, ramo `signup` de `parseAuthError`, `confirmation.html` órfão, `robots.txt`. Um teste de
+  guarda faz grep em `src/**/*.tsx` por `grátis|gratuit|nunca expiram|sem cartão|Stripe`.
+- Host público único: `https://professor.olharsingular.com` em canonical, `og:url`, sitemap,
+  `robots.txt` e `APP_URL` (decisão 27 satisfeita; o domínio raiz redireciona).
+- a11y por componente novo: faixa do `Layout` `role="status"`; paywall `role="alert"` com foco;
+  `ConsentBanner` `role="dialog"` + `aria-labelledby`, sem trap de foco; iframe do Brick com
+  título; `/definir-senha` foca o `h1` ao montar.
+
+**Analytics**
+
+- GTM injetado em runtime por `src/lib/analytics/gtm.ts` só quando `VITE_GTM_ID` existe (nada de
+  `%VITE_GTM_ID%` no `index.html`) e nunca em `/assinar` ou `/definir-senha`.
+- Consentimento manda também no servidor: `sendAnalyticsEvents()` recebe `attribution.consent`;
+  `user_data` (e-mail hash) só para o Meta com `ad_user_data = granted`; GA4 MP sem `client_id`
+  quando `analytics_storage = denied`; `_ga/_fbp/_fbc` capturados só após o aceite; `utm_*`,
+  `gclid`, `referrer` sempre. Nada de e-mail/CPF no `dataLayer`.
+
+**Testabilidade**
+
+- Fluxos das functions críticas em módulos puros com dependências injetadas
+  (`_shared/subscribeFlow.ts` `runSubscribe(input, deps)`, `_shared/mpWebhookRouter.ts`), no
+  padrão de `credits.ts`/`adminAuth.ts`; `index.ts` só monta `deps`.
+- pgTAP a reescrever na Fase 2: `credit_reservations.test.sql` (sem `free`, com
+  `plan_charged/extra_charged`), `deduct_credits.test.sql` (guards preservados no wrapper),
+  `signup_credits.test.sql` (default 0), `credit_paywall_guard` (+5 colunas, +INSERT/DELETE);
+  `free_adaptation_claim.test.sql` é apagado.
+- Contratos (4.10) a fixar no plano de cada fase: hooks (`usePlans` `['plans']`,
+  `useSubscription` `['subscription', userId]`, `useSubscribe`, `useCancelSubscription`,
+  `useUpdateSubscriptionCard`), invalidações (`refreshProfile()`, `['credit_transactions']`,
+  `['subscription']`), respostas das functions, e `computeAccess()` →
+  `{ kind, planCredits, extraCredits, total, paywalled, periodEnd, daysLeft, subscriptionStatus }`.
