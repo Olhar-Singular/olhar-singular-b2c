@@ -280,6 +280,30 @@ export type Database = {
         }
         Relationships: []
       }
+      checkout_attempts: {
+        Row: {
+          created_at: string
+          email_hash: string
+          id: string
+          ip_hash: string
+          outcome: string
+        }
+        Insert: {
+          created_at?: string
+          email_hash: string
+          id?: string
+          ip_hash: string
+          outcome: string
+        }
+        Update: {
+          created_at?: string
+          email_hash?: string
+          id?: string
+          ip_hash?: string
+          outcome?: string
+        }
+        Relationships: []
+      }
       credit_packages: {
         Row: {
           active: boolean
@@ -883,6 +907,10 @@ export type Database = {
       }
       reconcile_stale_credit_reservations: {
         Args: { p_older_than?: string }
+        Returns: Json
+      }
+      record_checkout_attempt: {
+        Args: { p_email_hash: string; p_ip_hash: string; p_outcome: string }
         Returns: Json
       }
       reject_pending_purchase: {
