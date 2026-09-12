@@ -36,6 +36,7 @@ function deps(overrides: Partial<SubscribeDeps> = {}) {
     })),
     searchPreapprovalByRef: vi.fn(async () => null),
     activate: vi.fn(async () => ({ success: true })),
+    cancelPreapproval: vi.fn(async () => undefined),
     reject: vi.fn(async () => undefined),
     markPending: vi.fn(async () => undefined),
     log: vi.fn(),
@@ -148,6 +149,42 @@ describe("runSubscribe", () => {
     const d = deps({ findLiveSubscription: vi.fn(async () => ({ id: "sub-old", status: "authorized" })) });
     expect(await runSubscribe(input(), d)).toEqual({ ok: false, error: "already_subscribed", httpStatus: 409 });
     expect(d.insertSubscription).not.toHaveBeenCalled();
+  });
+
+  // A double click (or a card MP is still validating) must not open a second
+  // preapproval: stale rows are expired first, a fresh pending one blocks.
+  it("refuses a second attempt while a fresh pending one is in flight", async () => {
+    const order: string[] = [];
+    const d = deps({
+      expireStalePending: vi.fn(async () => { order.push("expire"); }),
+      findLiveSubscription: vi.fn(async () => { order.push("find"); return { id: "sub-p", status: "pending" }; }),
+    });
+    expect(await runSubscribe(input(), d)).toEqual({ ok: false, error: "attempt_in_progress", httpStatus: 409 });
+    expect(order).toEqual(["expire", "find"]);
+    expect(d.postPreapproval).not.toHaveBeenCalled();
+  });
+
+  it("cancels the preapproval at MP and rejects the row when activation is refused (race lost)", async () => {
+    const d = deps({ activate: vi.fn(async () => ({ success: false, error: "duplicate_live_subscription" })) });
+    const result = await runSubscribe(input(), d);
+    expect(d.cancelPreapproval).toHaveBeenCalledWith("pre-1");
+    expect(d.reject).toHaveBeenCalledWith({ subscriptionId: "sub-1", detail: "duplicate_live_subscription" });
+    expect(result).toEqual({ ok: true, status: "rejected", subscriptionId: "sub-1", detail: "duplicate_live_subscription" });
+  });
+
+  it("still rejects the row when the orphan preapproval cannot be cancelled, and logs it", async () => {
+    const d = deps({
+      activate: vi.fn(async () => ({ success: false })),
+      cancelPreapproval: vi.fn(async () => { throw new Error("MP down"); }),
+    });
+    const result = await runSubscribe(input(), d);
+    expect(result).toMatchObject({ status: "rejected", detail: "activation_failed" });
+    expect(d.log).toHaveBeenCalledWith(expect.stringMatching(/could not cancel/), "pre-1", expect.any(Error));
+  });
+
+  it("treats a null activation result as success (RPC returned no body)", async () => {
+    const d = deps({ activate: vi.fn(async () => null) });
+    expect(await runSubscribe(input(), d)).toMatchObject({ status: "authorized" });
   });
 
   it("refuses an unknown profile", async () => {

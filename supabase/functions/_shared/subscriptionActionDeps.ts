@@ -10,7 +10,7 @@ export interface SubscriptionAdminClient {
   from(table: string): {
     select(columns: string): {
       eq(column: string, value: string): {
-        in(column: string, values: string[]): { maybeSingle(): PromiseLike<{ data: unknown }> };
+        in(column: string, values: string[]): { maybeSingle(): PromiseLike<{ data: unknown; error?: { message: string } | null }> };
       };
     };
     update(values: Record<string, unknown>): {
@@ -29,12 +29,15 @@ export function buildSubscriptionActionDeps(
   const mpHeaders = { Authorization: `Bearer ${mpAccessToken}`, "Content-Type": "application/json" };
   return {
     findLiveSubscription: async (userId) => {
-      const { data } = await admin
+      const { data, error } = await admin
         .from("subscriptions")
         .select("id, mp_preapproval_id, status")
         .eq("user_id", userId)
         .in("status", ["authorized", "past_due", "paused"])
         .maybeSingle();
+      // A read failure must not read as "no subscription" (404) while the
+      // card keeps being charged: fail the request so the user retries.
+      if (error) throw new Error(`subscriptions lookup failed: ${error.message}`);
       return data as Awaited<ReturnType<SubscriptionActionDeps["findLiveSubscription"]>>;
     },
     putPreapproval: async (preapprovalId, body) => {

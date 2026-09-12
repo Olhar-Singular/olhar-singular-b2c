@@ -15,6 +15,7 @@ function subscribeDeps(preapproval: Record<string, unknown> = { id: "pre-1", sta
     postPreapproval: vi.fn(async () => ({ ok: true, status: 201, json: preapproval })),
     searchPreapprovalByRef: vi.fn(async () => null),
     activate: vi.fn(async () => ({ success: true })),
+    cancelPreapproval: vi.fn(async () => undefined),
     markPending: vi.fn(async () => undefined),
     reject: vi.fn(async () => undefined),
     log: vi.fn(),

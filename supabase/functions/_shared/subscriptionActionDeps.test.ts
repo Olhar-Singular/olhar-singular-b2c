@@ -1,8 +1,8 @@
 import { describe, it, expect, vi } from "vitest";
 import { buildSubscriptionActionDeps, type SubscriptionAdminClient } from "./subscriptionActionDeps";
 
-function fakeAdmin(overrides: { row?: unknown; rpc?: { data: unknown; error: { message: string } | null }; updateError?: { message: string } | null } = {}) {
-  const maybeSingle = vi.fn(async () => ({ data: overrides.row ?? null }));
+function fakeAdmin(overrides: { row?: unknown; rpc?: { data: unknown; error: { message: string } | null }; updateError?: { message: string } | null; selectError?: { message: string } } = {}) {
+  const maybeSingle = vi.fn(async () => ({ data: overrides.row ?? null, error: overrides.selectError ?? null }));
   const inFn = vi.fn(() => ({ maybeSingle }));
   const selectEq = vi.fn(() => ({ in: inFn }));
   const select = vi.fn(() => ({ eq: selectEq }));
@@ -30,6 +30,12 @@ describe("buildSubscriptionActionDeps", () => {
     expect(a.select).toHaveBeenCalledWith("id, mp_preapproval_id, status");
     expect(a.selectEq).toHaveBeenCalledWith("user_id", "u1");
     expect(a.inFn).toHaveBeenCalledWith("status", ["authorized", "past_due", "paused"]);
+  });
+
+  it("fails loudly when the subscription lookup errors (never a silent 'no subscription')", async () => {
+    const a = fakeAdmin({ selectError: { message: "timeout" } });
+    const deps = buildSubscriptionActionDeps(a.client, "tok", fakeFetch(200, {}), NOW);
+    await expect(deps.findLiveSubscription("u1")).rejects.toThrow("subscriptions lookup failed: timeout");
   });
 
   it("PUTs the preapproval with the bearer token and returns the parsed body", async () => {

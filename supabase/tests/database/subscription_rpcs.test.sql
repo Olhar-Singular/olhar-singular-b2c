@@ -12,7 +12,7 @@
 -- marks past_due and touches no balance (the period already ran out).
 -- =============================================================================
 BEGIN;
-SELECT plan(35);
+SELECT plan(39);
 
 INSERT INTO auth.users (id, email) VALUES
   ('a1111111-1111-1111-1111-111111111111', 'trial@test.com'),
@@ -211,6 +211,27 @@ SELECT is(
 SELECT is(
   (SELECT public.sync_subscription_status('b0000000-0000-0000-0000-000000000003'::uuid, 'pre-3', 'paused', NULL) ->> 'result'),
   'paused', 'sync: paused is mirrored');
+
+-- ── a second attempt racing a live subscription (hardening migration) ──────
+-- fresh@test.com holds b...3 (paused = live). A delayed activation of another
+-- pending row must not blow up with unique_violation: it closes that attempt.
+INSERT INTO public.subscriptions (id, user_id, plan_id, status, payer_email)
+SELECT 'b0000000-0000-0000-0000-000000000004', 'a2222222-2222-2222-2222-222222222222', id, 'pending', 'fresh@test.com'
+  FROM public.plans WHERE slug = 'basico';
+SELECT is(
+  public.activate_subscription('b0000000-0000-0000-0000-000000000004'::uuid, 'pre-4', 'authorized',
+     now() + interval '1 month', 'visa', '9999'),
+  '{"success": false, "error": "duplicate_live_subscription"}'::jsonb,
+  'activate: a second live subscription is refused, not raised');
+SELECT results_eq(
+  $$ SELECT status, status_detail, mp_preapproval_id FROM public.subscriptions
+      WHERE id = 'b0000000-0000-0000-0000-000000000004' $$,
+  $$ VALUES ('rejected'::text, 'duplicate_live_subscription'::text, 'pre-4'::text) $$,
+  'activate: the duplicate attempt is closed with its preapproval id kept for the cancel');
+SELECT is(
+  (SELECT plan_credits FROM public.profiles WHERE id = 'a2222222-2222-2222-2222-222222222222'),
+  60, 'activate: the duplicate did not touch the plan bucket');
+SELECT has_index('public', 'subscriptions', 'subscriptions_plan_id_idx', 'index on subscriptions.plan_id');
 
 RESET role;
 

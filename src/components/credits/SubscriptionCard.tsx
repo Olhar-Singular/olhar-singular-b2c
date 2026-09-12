@@ -107,13 +107,16 @@ export default function SubscriptionCard({ subscription, access }: Props) {
   const status = STATUS_LABELS[sub.status];
   const card = formatCard(sub.cardBrand, sub.cardLastFour);
 
+  // Rejecting hands the failure back to the Brick, which re-enables its
+  // button for another try (the hook already toasted the reason).
   async function handleNewCard(formData: CardFormDataView) {
     setCardError(null);
     try {
       await updateCard.mutateAsync({ card: formData, cardLastFour: null });
       setChangingCard(false);
-    } catch {
-      // The hook already toasted; keep the dialog open for another try.
+    } catch (e) {
+      setCardError(e instanceof Error ? e.message : "O cartão não foi aceito. Tente outro cartão.");
+      throw e;
     }
   }
 

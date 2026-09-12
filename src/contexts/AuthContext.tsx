@@ -28,11 +28,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   async function fetchProfile(userId: string) {
     setProfileLoading(true);
     try {
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from("profiles")
         .select("*")
         .eq("id", userId)
         .single();
+      // A transient failure keeps the profile we had: wiping it would collapse
+      // the access state (paywall, banners) right after a payment.
+      if (error) {
+        console.error("AuthContext: profile fetch failed", error.message);
+        return;
+      }
       setProfile(data);
     } finally {
       setProfileLoading(false);

@@ -35,6 +35,7 @@ export interface PreapprovalHttp {
 export interface SubscribeDeps {
   loadPlan(slug: string): Promise<PlanRow | null>;
   loadProfile(userId: string): Promise<{ access_kind: string; is_super_admin: boolean } | null>;
+  /** Live rows (authorized/past_due/paused) AND fresh pending attempts. */
   findLiveSubscription(userId: string): Promise<{ id: string; status: string } | null>;
   /** Closes pending rows older than the grace window so a fresh attempt is possible. */
   expireStalePending(userId: string): Promise<void>;
@@ -54,7 +55,9 @@ export interface SubscribeDeps {
     nextPaymentDate: string | null;
     cardBrand: string | null;
     cardLastFour: string | null;
-  }): Promise<unknown>;
+  }): Promise<{ success?: boolean; error?: string } | null | undefined>;
+  /** PUT /preapproval/{id} { status: 'cancelled' }; best effort, used when the row could not be activated. */
+  cancelPreapproval(preapprovalId: string): Promise<void>;
   markPending(input: { subscriptionId: string; preapprovalId: string; mpStatus: string }): Promise<void>;
   reject(input: { subscriptionId: string; detail: string }): Promise<void>;
   log(message: string, ...args: unknown[]): void;
@@ -63,7 +66,7 @@ export interface SubscribeDeps {
 export type SubscribeResult =
   | { ok: true; status: "authorized" | "pending"; subscriptionId: string }
   | { ok: true; status: "rejected"; subscriptionId: string; detail: string }
-  | { ok: false; error: "invalid_plan" | "exempt_user" | "already_subscribed" | "profile_not_found"; httpStatus: number };
+  | { ok: false; error: "invalid_plan" | "exempt_user" | "already_subscribed" | "attempt_in_progress" | "profile_not_found"; httpStatus: number };
 
 function toPlanLike(row: PlanRow): PlanLike {
   return {
@@ -89,11 +92,16 @@ export async function runSubscribe(input: SubscribeInput, deps: SubscribeDeps): 
   }
   const plan = toPlanLike(planRow);
 
-  if (await deps.findLiveSubscription(input.userId)) {
-    return { ok: false, error: "already_subscribed", httpStatus: 409 };
-  }
-
+  // Stale pending rows go first, so what findLiveSubscription returns is
+  // either a live subscription or an attempt still in flight (double click,
+  // or a card MP is still validating): both block a new POST /preapproval.
   await deps.expireStalePending(input.userId);
+  const existing = await deps.findLiveSubscription(input.userId);
+  if (existing) {
+    return existing.status === "pending"
+      ? { ok: false, error: "attempt_in_progress", httpStatus: 409 }
+      : { ok: false, error: "already_subscribed", httpStatus: 409 };
+  }
 
   const subscriptionId = await deps.insertSubscription({
     userId: input.userId,
@@ -129,7 +137,7 @@ export async function runSubscribe(input: SubscribeInput, deps: SubscribeDeps): 
   const outcome = interpretPreapproval(response as Record<string, unknown>);
 
   if (httpOk && outcome.status === "authorized" && outcome.preapprovalId) {
-    await deps.activate({
+    const activation = await deps.activate({
       subscriptionId,
       preapprovalId: outcome.preapprovalId,
       // interpretPreapproval only reports "authorized" when MP said so.
@@ -138,6 +146,20 @@ export async function runSubscribe(input: SubscribeInput, deps: SubscribeDeps): 
       cardBrand: outcome.cardBrand,
       cardLastFour: input.cardLastFour ?? null,
     });
+    if (activation && activation.success === false) {
+      // The row could not go live (another live subscription won the race):
+      // MP already holds an authorized preapproval, so cancel it there before
+      // telling the user; the RPC has already marked the row rejected.
+      const detail = activation.error ?? "activation_failed";
+      deps.log("subscribe: activation refused, cancelling preapproval", subscriptionId, detail);
+      try {
+        await deps.cancelPreapproval(outcome.preapprovalId);
+      } catch (e) {
+        deps.log("subscribe: could not cancel the orphan preapproval", outcome.preapprovalId, e);
+      }
+      await deps.reject({ subscriptionId, detail });
+      return { ok: true, status: "rejected", subscriptionId, detail };
+    }
     return { ok: true, status: "authorized", subscriptionId };
   }
 

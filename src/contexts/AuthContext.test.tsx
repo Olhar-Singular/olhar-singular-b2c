@@ -208,6 +208,41 @@ describe("AuthContext", () => {
     expect(supabase.from).not.toHaveBeenCalled();
   });
 
+  it("keeps the previous profile and logs when a refresh fails", async () => {
+    const { supabase } = await import("@/integrations/supabase/client");
+    vi.mocked(supabase.auth.getSession).mockResolvedValue({
+      data: { session: mockSession as never },
+    });
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    const fromMock = vi.mocked(supabase.from);
+    fromMock.mockReturnValueOnce({
+      select: vi.fn().mockReturnThis(),
+      eq: vi.fn().mockReturnThis(),
+      single: vi.fn().mockResolvedValue({ data: mockProfile, error: null }),
+    } as never);
+    fromMock.mockReturnValue({
+      select: vi.fn().mockReturnThis(),
+      eq: vi.fn().mockReturnThis(),
+      single: vi.fn().mockResolvedValue({ data: null, error: { message: "timeout" } }),
+    } as never);
+
+    render(
+      <AuthProvider>
+        <TestConsumer />
+      </AuthProvider>
+    );
+    await waitFor(() => expect(screen.getByTestId("credits")).toHaveTextContent("10"));
+
+    await act(async () => {
+      screen.getByText("refresh").click();
+    });
+
+    expect(screen.getByTestId("credits")).toHaveTextContent("10");
+    expect(consoleError).toHaveBeenCalledWith("AuthContext: profile fetch failed", "timeout");
+    consoleError.mockRestore();
+  });
+
   it("refreshProfile re-fetches and updates profile state", async () => {
     const { supabase } = await import("@/integrations/supabase/client");
     vi.mocked(supabase.auth.getSession).mockResolvedValue({

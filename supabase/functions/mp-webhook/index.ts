@@ -58,7 +58,10 @@ serve(async (req) => {
         fetchPreapproval: (id) => fetchJson(`/preapproval/${encodeURIComponent(id)}`),
         fetchAuthorizedPayment: (id) => fetchJson(`/authorized_payments/${encodeURIComponent(id)}`),
         findSubscriptionByPreapproval: async (preapprovalId) => {
-          const { data } = await admin.from("subscriptions").select("id").eq("mp_preapproval_id", preapprovalId).maybeSingle();
+          const { data, error } = await admin.from("subscriptions").select("id").eq("mp_preapproval_id", preapprovalId).maybeSingle();
+          // A read failure must not be acknowledged as "unknown subscription"
+          // (200): throwing yields a 500 and MP retries the notification.
+          if (error) throw new Error(`subscriptions lookup failed: ${error.message}`);
           return data;
         },
         syncStatus: async (input) => {

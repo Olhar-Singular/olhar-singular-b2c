@@ -33,6 +33,7 @@ const FLOW_ERRORS: Record<string, string> = {
   invalid_plan: "Plano inválido.",
   exempt_user: "Sua conta tem cortesia: não há o que assinar.",
   already_subscribed: "Você já tem uma assinatura ativa.",
+  attempt_in_progress: "Já existe uma tentativa em andamento. Aguarde alguns minutos antes de tentar de novo.",
   profile_not_found: "Perfil não encontrado.",
   account_required: "Informe nome e e-mail para criar sua conta.",
   rate_limited: "Muitas tentativas. Aguarde alguns minutos e tente de novo.",
@@ -103,7 +104,9 @@ serve(async (req) => {
           .from("subscriptions")
           .select("id, status")
           .eq("user_id", userId)
-          .in("status", ["authorized", "past_due", "paused"])
+          .in("status", ["authorized", "past_due", "paused", "pending"])
+          .order("created_at", { ascending: false })
+          .limit(1)
           .maybeSingle();
         // A read failure must never look like "no subscription": that would
         // open a second live preapproval for the same card.
@@ -165,6 +168,14 @@ serve(async (req) => {
         });
         if (error) throw new Error(`activate_subscription failed: ${error.message}`);
         return data;
+      },
+      cancelPreapproval: async (preapprovalId) => {
+        const resp = await fetch(`https://api.mercadopago.com/preapproval/${encodeURIComponent(preapprovalId)}`, {
+          method: "PUT",
+          headers: mpHeaders,
+          body: JSON.stringify({ status: "cancelled" }),
+        });
+        if (!resp.ok) throw new Error(`preapproval cancel failed: ${resp.status}`);
       },
       markPending: async ({ subscriptionId, preapprovalId, mpStatus }) => {
         const { error } = await admin

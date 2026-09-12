@@ -20,7 +20,7 @@ vi.mock("@/components/payments/MpCardBrick", () => ({
     brickProps(props);
     return (
       <div data-testid="card-brick">
-        <button type="button" onClick={() => props.onSubmit(CARD)}>Salvar cartão</button>
+        <button type="button" onClick={() => props.onSubmit(CARD).then(() => brickProps("resolved"), () => brickProps("rejected"))}>Salvar cartão</button>
         <button type="button" onClick={() => props.onError?.("brick quebrou")}>Erro do Brick</button>
       </div>
     );
@@ -186,6 +186,7 @@ describe("SubscriptionCard", () => {
     await user.click(screen.getByRole("button", { name: "Salvar cartão" }));
     expect(mockUpdateCard).toHaveBeenCalledWith({ card: CARD, cardLastFour: null });
     await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    expect(brickProps).toHaveBeenCalledWith("resolved");
   });
 
   it("keeps the card dialog open when the new card is refused and shows Brick errors", async () => {
@@ -196,6 +197,9 @@ describe("SubscriptionCard", () => {
     await user.click(screen.getByRole("button", { name: "Salvar cartão" }));
     await waitFor(() => expect(mockUpdateCard).toHaveBeenCalled());
     expect(screen.getByRole("dialog")).toBeInTheDocument();
+    // The Brick contract: a rejected promise re-enables its button.
+    await waitFor(() => expect(brickProps).toHaveBeenCalledWith("rejected"));
+    expect(screen.getByRole("alert")).toHaveTextContent("recusado");
 
     await user.click(screen.getByRole("button", { name: "Erro do Brick" }));
     expect(screen.getByRole("alert")).toHaveTextContent("brick quebrou");
@@ -205,6 +209,15 @@ describe("SubscriptionCard", () => {
     await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
     await user.click(screen.getByRole("button", { name: /Trocar cartão/ }));
     expect(screen.queryByRole("alert")).toBeNull();
+  });
+
+  it("shows a generic message when the failure is not an Error", async () => {
+    const user = userEvent.setup();
+    mockUpdateCard.mockRejectedValueOnce("boom");
+    renderCard(sub());
+    await user.click(screen.getByRole("button", { name: /Trocar cartão/ }));
+    await user.click(screen.getByRole("button", { name: "Salvar cartão" }));
+    await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent(/não foi aceito/));
   });
 
   it("uses a placeholder amount and no payer when the plan or e-mail is unknown", async () => {

@@ -2,6 +2,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { selectPackage, type CreditPackageRow } from "../_shared/creditPackages.ts";
 import { buildPixPaymentBody, extractPixQr } from "../_shared/mpPixPayment.ts";
+import { maskPayer } from "../_shared/mpCardPayment.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -111,14 +112,20 @@ serve(async (req) => {
     const qr = payment ? extractPixQr(payment) : null;
 
     if (!qr) {
-      if (!mpResp.ok) console.error("MP payments error:", mpResp.status, await mpResp.text());
-      else console.error("MP payment without Pix QR:", payment?.id, payment?.status);
+      if (!mpResp.ok) {
+        // MP echoes submitted fields in validation errors; never log the payer raw.
+        const errorBody = await mpResp.json().catch(() => ({}));
+        console.error("MP payments error:", mpResp.status, maskPayer(errorBody));
+      } else {
+        console.error("MP payment without Pix QR:", payment?.id, payment?.status);
+      }
       // Close the row out so a failed attempt does not linger as payable.
-      await admin
+      const { error: closeError } = await admin
         .from("credit_purchases")
         .update({ status: "cancelled" })
         .eq("id", purchase.id)
         .eq("status", "pending");
+      if (closeError) console.error("create-pix-payment: could not close the failed purchase", purchase.id, closeError.message);
       return json({ error: "Erro ao gerar o Pix. Tente novamente." }, 502);
     }
 
