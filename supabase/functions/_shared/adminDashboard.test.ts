@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import {
+  maskCpf,
   isUserActive,
   shapeSeries,
   mergeUserRows,
@@ -68,8 +69,15 @@ describe("mergeUserRows", () => {
     { id: "u3" },
   ];
   const profiles: ProfileLite[] = [
-    { id: "u1", full_name: "Alice", credit_balance: 42, is_super_admin: true },
-    { id: "u2", full_name: "Bob", credit_balance: 0, is_super_admin: false },
+    {
+      id: "u1", full_name: "Alice", credit_balance: 42, is_super_admin: true,
+      access_kind: "exempt", plan_credits: 0, plan_period_end: null, trial_started_at: null, cpf: "12345678909",
+    },
+    {
+      id: "u2", full_name: "Bob", credit_balance: 0, is_super_admin: false,
+      access_kind: "trial", plan_credits: 50, plan_period_end: "2026-06-06T00:00:00Z",
+      trial_started_at: "2026-05-30T00:00:00Z", cpf: null,
+    },
   ];
   const spending: SpendingLite[] = [
     { user_id: "u1", total_usd: "0.0123" },
@@ -84,11 +92,27 @@ describe("mergeUserRows", () => {
       email: "a@x.com",
       full_name: "Alice",
       credit_balance: 42,
+      plan_credits: 0,
+      plan_period_end: null,
+      access_kind: "exempt",
+      trial_started_at: null,
+      cpf_masked: "***.***.***-09",
       total_usd: 0.0123,
       last_sign_in_at: "2026-05-30T00:00:00Z",
       created_at: "2026-01-01T00:00:00Z",
       is_active: true,
       is_super_admin: true,
+    });
+  });
+
+  it("carries the trial bucket and period through", () => {
+    const rows = mergeUserRows(authUsers, profiles, spending, NOW);
+    expect(rows[1]).toMatchObject({
+      access_kind: "trial",
+      plan_credits: 50,
+      plan_period_end: "2026-06-06T00:00:00Z",
+      trial_started_at: "2026-05-30T00:00:00Z",
+      cpf_masked: null,
     });
   });
 
@@ -104,12 +128,24 @@ describe("mergeUserRows", () => {
       email: null,
       full_name: null,
       credit_balance: 0,
+      plan_credits: 0,
+      plan_period_end: null,
+      access_kind: "subscriber",
+      trial_started_at: null,
+      cpf_masked: null,
       total_usd: 0,
       last_sign_in_at: null,
       created_at: null,
       is_active: true,
       is_super_admin: false,
     });
+  });
+
+  it("masks the CPF to its last two digits and tolerates malformed values", () => {
+    expect(maskCpf("12345678909")).toBe("***.***.***-09");
+    expect(maskCpf("")).toBeNull();
+    expect(maskCpf(null)).toBeNull();
+    expect(maskCpf("12")).toBe("***.***.***-12");
   });
 
   it("returns an empty array when there are no users", () => {

@@ -14,35 +14,46 @@ import {
  * mocks, because only the real database can prove atomicity and idempotency.
  */
 describe("interpretReservation", () => {
-  it("reads the free-first outcome", () => {
-    expect(interpretReservation({ success: true, mode: "free", credits_charged: 0 })).toEqual({
-      status: "free",
+  // Courtesy accounts: the reservation exists (idempotency) but nothing moved.
+  it("reads the exempt outcome", () => {
+    expect(interpretReservation({ success: true, mode: "exempt", credits_charged: 0 })).toEqual({
+      status: "exempt",
       creditsCharged: 0,
     });
   });
 
-  it("reads a charged outcome with the new balance", () => {
+  it("reads a charged outcome with the bucket split and the new balance", () => {
     expect(
       interpretReservation({
         success: true,
         mode: "charged",
         credits_charged: 12,
+        plan_charged: 5,
+        extra_charged: 7,
         new_balance: 88,
       }),
-    ).toEqual({ status: "charged", creditsCharged: 12, newBalance: 88 });
+    ).toEqual({ status: "charged", creditsCharged: 12, planCharged: 5, extraCharged: 7, newBalance: 88 });
   });
 
-  it("defaults a missing new_balance to 0", () => {
+  it("defaults a missing new_balance to 0 and a missing split to extras", () => {
     expect(
       interpretReservation({ success: true, mode: "charged", credits_charged: 12 }),
-    ).toEqual({ status: "charged", creditsCharged: 12, newBalance: 0 });
+    ).toEqual({ status: "charged", creditsCharged: 12, planCharged: 0, extraCharged: 12, newBalance: 0 });
   });
 
   it("defaults a missing credits_charged to 0", () => {
     expect(interpretReservation({ success: true, mode: "charged", new_balance: 5 })).toEqual({
       status: "charged",
       creditsCharged: 0,
+      planCharged: 0,
+      extraCharged: 0,
       newBalance: 5,
+    });
+  });
+
+  it("treats the retired 'free' mode as an error rather than a free pass", () => {
+    expect(interpretReservation({ success: true, mode: "free", credits_charged: 0 })).toEqual({
+      status: "error",
     });
   });
 
@@ -53,16 +64,20 @@ describe("interpretReservation", () => {
     });
   });
 
-  it("surfaces insufficient credits with the echoed balance", () => {
+  it("surfaces insufficient credits with the echoed balances", () => {
     expect(
-      interpretReservation({ success: false, error: "insufficient_credits", balance: 3 }),
-    ).toEqual({ status: "insufficient", balance: 3 });
+      interpretReservation({
+        success: false, error: "insufficient_credits", balance: 3, plan_balance: 1, extra_balance: 2,
+      }),
+    ).toEqual({ status: "insufficient", balance: 3, planBalance: 1, extraBalance: 2 });
   });
 
-  it("tolerates insufficient credits without a balance", () => {
+  it("tolerates insufficient credits without balances", () => {
     expect(interpretReservation({ success: false, error: "insufficient_credits" })).toEqual({
       status: "insufficient",
       balance: null,
+      planBalance: null,
+      extraBalance: null,
     });
   });
 
@@ -82,10 +97,19 @@ describe("interpretReservation", () => {
 });
 
 describe("reservationErrorResponse", () => {
-  it("maps insufficient credits to 402 with the balance and cost", () => {
-    expect(reservationErrorResponse({ status: "insufficient", balance: 3 }, 12)).toEqual({
+  it("maps insufficient credits to 402 with the balances and cost", () => {
+    expect(
+      reservationErrorResponse({ status: "insufficient", balance: 3, planBalance: 1, extraBalance: 2 }, 12),
+    ).toEqual({
       status: 402,
-      body: { error: "Créditos insuficientes.", balance: 3, required: 12 },
+      body: {
+        error: "Créditos insuficientes.",
+        reason: "insufficient_credits",
+        balance: 3,
+        plan_balance: 1,
+        extra_balance: 2,
+        required: 12,
+      },
     });
   });
 
@@ -103,10 +127,13 @@ describe("reservationErrorResponse", () => {
     });
   });
 
-  it("returns null for free and charged so the caller proceeds", () => {
-    expect(reservationErrorResponse({ status: "free", creditsCharged: 0 }, 12)).toBeNull();
+  it("returns null for exempt and charged so the caller proceeds", () => {
+    expect(reservationErrorResponse({ status: "exempt", creditsCharged: 0 }, 12)).toBeNull();
     expect(
-      reservationErrorResponse({ status: "charged", creditsCharged: 12, newBalance: 88 }, 12),
+      reservationErrorResponse(
+        { status: "charged", creditsCharged: 12, planCharged: 5, extraCharged: 7, newBalance: 88 },
+        12,
+      ),
     ).toBeNull();
   });
 });

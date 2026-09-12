@@ -79,10 +79,10 @@ serve(async (req) => {
       page += 1;
     }
 
-    // Profiles (name, credit balance, admin flag).
+    // Profiles (name, both credit buckets, access state, admin flag, masked CPF).
     const { data: profilesData, error: profilesError } = await supabase
       .from("profiles")
-      .select("id, full_name, credit_balance, is_super_admin");
+      .select("id, full_name, credit_balance, plan_credits, plan_period_end, access_kind, trial_started_at, cpf, is_super_admin");
     if (profilesError) {
       console.error("admin-dashboard profiles error:", profilesError);
       return json({ error: "internal_error" }, 500);

@@ -14,6 +14,11 @@ export interface ProfileLite {
   full_name?: string | null;
   credit_balance?: number | null;
   is_super_admin?: boolean | null;
+  access_kind?: string | null;
+  plan_credits?: number | null;
+  plan_period_end?: string | null;
+  trial_started_at?: string | null;
+  cpf?: string | null;
 }
 
 export interface SpendingLite {
@@ -30,12 +35,26 @@ export interface AdminUserRow {
   id: string;
   email: string | null;
   full_name: string | null;
+  /** Extras bucket (never expires). */
   credit_balance: number;
+  /** Plan / trial bucket, valid until plan_period_end. */
+  plan_credits: number;
+  plan_period_end: string | null;
+  access_kind: string;
+  trial_started_at: string | null;
+  /** LGPD: the admin sees only the last two digits. */
+  cpf_masked: string | null;
   total_usd: number;
   last_sign_in_at: string | null;
   created_at: string | null;
   is_active: boolean;
   is_super_admin: boolean;
+}
+
+/** Masks a CPF to its last two digits; null when absent. */
+export function maskCpf(cpf: string | null | undefined): string | null {
+  if (!cpf) return null;
+  return `***.***.***-${cpf.slice(-2)}`;
 }
 
 /** A user is active unless they are banned until a still-future timestamp. */
@@ -68,6 +87,11 @@ export function mergeUserRows(
       email: u.email ?? null,
       full_name: profile?.full_name ?? null,
       credit_balance: profile?.credit_balance ?? 0,
+      plan_credits: profile?.plan_credits ?? 0,
+      plan_period_end: profile?.plan_period_end ?? null,
+      access_kind: profile?.access_kind ?? "subscriber",
+      trial_started_at: profile?.trial_started_at ?? null,
+      cpf_masked: maskCpf(profile?.cpf),
       total_usd: spendById.get(u.id) ?? 0,
       last_sign_in_at: u.last_sign_in_at ?? null,
       created_at: u.created_at ?? null,

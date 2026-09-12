@@ -24,18 +24,48 @@ describe("chargeCredits", () => {
     const outcome = await chargeCredits({
       cost: 8,
       claimFree: () => Promise.resolve(false),
-      deduct: () => Promise.resolve({ data: { success: true, new_balance: 42 }, error: null }),
+      deduct: () =>
+        Promise.resolve({
+          data: { success: true, mode: "charged", plan_charged: 5, extra_charged: 3, new_balance: 42 },
+          error: null,
+        }),
     });
-    expect(outcome).toEqual({ status: "charged", creditsCharged: 8, newBalance: 42 });
+    expect(outcome).toEqual({
+      status: "charged",
+      creditsCharged: 8,
+      planCharged: 5,
+      extraCharged: 3,
+      newBalance: 42,
+    });
   });
 
-  it("defaults newBalance to 0 when the RPC omits it", async () => {
+  it("defaults newBalance to 0 and the bucket split to extras when the RPC omits them", async () => {
     const outcome = await chargeCredits({
       cost: 5,
       claimFree: () => Promise.resolve(false),
       deduct: () => Promise.resolve({ data: {}, error: null }),
     });
-    expect(outcome).toEqual({ status: "charged", creditsCharged: 5, newBalance: 0 });
+    expect(outcome).toEqual({
+      status: "charged",
+      creditsCharged: 5,
+      planCharged: 0,
+      extraCharged: 5,
+      newBalance: 0,
+    });
+  });
+
+  // Courtesy accounts: consume_credits answers mode 'exempt' and moves nothing.
+  it("returns 'exempt' with nothing charged when the RPC says the account is exempt", async () => {
+    const outcome = await chargeCredits({
+      cost: 8,
+      claimFree: () => Promise.resolve(false),
+      deduct: () =>
+        Promise.resolve({
+          data: { success: true, mode: "exempt", plan_charged: 0, extra_charged: 0, new_balance: 0 },
+          error: null,
+        }),
+    });
+    expect(outcome).toEqual({ status: "exempt", creditsCharged: 0 });
   });
 
   it("returns 'error' (reason rpc, with cause) when the RPC call itself errors", async () => {
@@ -48,23 +78,26 @@ describe("chargeCredits", () => {
     expect(outcome).toEqual({ status: "error", reason: "rpc", cause });
   });
 
-  it("returns 'insufficient' with the echoed balance", async () => {
+  it("returns 'insufficient' with the echoed balances", async () => {
     const outcome = await chargeCredits({
       cost: 12,
       claimFree: () => Promise.resolve(false),
       deduct: () =>
-        Promise.resolve({ data: { success: false, error: "insufficient_credits", balance: 3 }, error: null }),
+        Promise.resolve({
+          data: { success: false, error: "insufficient_credits", balance: 3, plan_balance: 1, extra_balance: 2 },
+          error: null,
+        }),
     });
-    expect(outcome).toEqual({ status: "insufficient", balance: 3 });
+    expect(outcome).toEqual({ status: "insufficient", balance: 3, planBalance: 1, extraBalance: 2 });
   });
 
-  it("returns 'insufficient' with null balance when the RPC omits it", async () => {
+  it("returns 'insufficient' with null balances when the RPC omits them", async () => {
     const outcome = await chargeCredits({
       cost: 12,
       claimFree: () => Promise.resolve(false),
       deduct: () => Promise.resolve({ data: { success: false, error: "insufficient_credits" }, error: null }),
     });
-    expect(outcome).toEqual({ status: "insufficient", balance: null });
+    expect(outcome).toEqual({ status: "insufficient", balance: null, planBalance: null, extraBalance: null });
   });
 
   it("returns 'error' (reason failure) for any other unsuccessful RPC result", async () => {
@@ -78,11 +111,18 @@ describe("chargeCredits", () => {
 });
 
 describe("chargeErrorResponse", () => {
-  it("maps 'insufficient' to a 402 with balance and required cost", () => {
-    const res = chargeErrorResponse({ status: "insufficient", balance: 3 }, 8);
+  it("maps 'insufficient' to a 402 with the balances and required cost", () => {
+    const res = chargeErrorResponse({ status: "insufficient", balance: 3, planBalance: 1, extraBalance: 2 }, 8);
     expect(res).toEqual({
       status: 402,
-      body: { error: "Créditos insuficientes.", balance: 3, required: 8 },
+      body: {
+        error: "Créditos insuficientes.",
+        reason: "insufficient_credits",
+        balance: 3,
+        plan_balance: 1,
+        extra_balance: 2,
+        required: 8,
+      },
     });
   });
 
@@ -102,8 +142,18 @@ describe("chargeErrorResponse", () => {
   });
 
   it("returns null for 'charged' so the caller proceeds", () => {
-    const outcome: ChargeOutcome = { status: "charged", creditsCharged: 8, newBalance: 42 };
+    const outcome: ChargeOutcome = {
+      status: "charged",
+      creditsCharged: 8,
+      planCharged: 0,
+      extraCharged: 8,
+      newBalance: 42,
+    };
     expect(chargeErrorResponse(outcome, 8)).toBeNull();
+  });
+
+  it("returns null for 'exempt' so the caller proceeds", () => {
+    expect(chargeErrorResponse({ status: "exempt", creditsCharged: 0 }, 8)).toBeNull();
   });
 });
 

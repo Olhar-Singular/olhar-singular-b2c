@@ -92,7 +92,7 @@ serve(async (req) => {
     // ─── Reserve + charge (one transaction, crash-safe) ─────────────────────────
     // The reservation row is what makes a charge recoverable: if this isolate
     // dies before it can refund, the row stays `open` and the reconciliation job
-    // gives the credits (or the free slot) back. Its id is the idempotency key.
+    // gives the credits back (to the bucket they came from). Its id is the idempotency key.
     const requestId = resolveRequestId(body.request_id, () => crypto.randomUUID());
     if (!requestId.ok) {
       return new Response(JSON.stringify({ error: "request_id inválido." }), {
@@ -130,12 +130,12 @@ serve(async (req) => {
       });
     }
 
-    const isFirstFree = charge.status === "free";
+    // Courtesy accounts (mode "exempt") reserve for idempotency but pay nothing.
     const creditsCharged = charge.status === "charged" ? charge.creditsCharged : 0;
     // ─── End reserve + charge ───────────────────────────────────────────────────
 
-    // CREDIT INVARIANT: from this point on the user has paid — either in credits
-    // or with their one free adaptation. ANY exit other than a fully validated
+    // CREDIT INVARIANT: from this point on the user has paid (plan bucket first,
+    // extras after; nothing when exempt). ANY exit other than a fully validated
     // success MUST give that back, and the ONLY exit that keeps the money is the
     // one that settles the reservation right before returning the document.
     //
@@ -375,7 +375,6 @@ serve(async (req) => {
               model_used: modelName,
               tokens_used: totalTokens,
               credits_charged: creditsCharged,
-              is_first_free: isFirstFree,
               disclaimer: "Ferramenta pedagógica. Não realiza diagnóstico. A decisão final é sempre do profissional.",
             }),
             { headers: { ...corsHeaders, "Content-Type": "application/json" } },

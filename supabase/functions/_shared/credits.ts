@@ -7,11 +7,17 @@
 // identical across every function that consumes credits.
 // =============================================================================
 
-/** Shape of the jsonb returned by the deduct_credits / grant_credits RPCs. */
+/** Shape of the jsonb returned by the credit RPCs (consume/deduct/grant/reserve). */
 export interface CreditRpcResult {
   success?: boolean;
   error?: string;
+  /** "charged" | "exempt" (consume_credits and the reservation RPCs). */
+  mode?: string;
   balance?: number;
+  plan_balance?: number;
+  extra_balance?: number;
+  plan_charged?: number;
+  extra_charged?: number;
   new_balance?: number;
 }
 
@@ -56,9 +62,23 @@ export async function runCreditRpc(
 
 /** Outcome of an attempt to charge a user for an action. */
 export type ChargeOutcome =
+  /** Legacy free-first slot (no caller uses it anymore; kept for the type). */
   | { status: "free"; creditsCharged: 0 }
-  | { status: "charged"; creditsCharged: number; newBalance: number }
-  | { status: "insufficient"; balance: number | null }
+  /** Courtesy account: the RPC recorded usage but moved nothing. */
+  | { status: "exempt"; creditsCharged: 0 }
+  | {
+      status: "charged";
+      creditsCharged: number;
+      planCharged: number;
+      extraCharged: number;
+      newBalance: number;
+    }
+  | {
+      status: "insufficient";
+      balance: number | null;
+      planBalance: number | null;
+      extraBalance: number | null;
+    }
   // `reason` lets callers with bespoke messages distinguish an RPC transport
   // error from a logical failure; `cause` carries the raw error for logging.
   | { status: "error"; reason: "rpc" | "failure"; cause?: unknown };
@@ -90,13 +110,25 @@ export async function chargeCredits(deps: ChargeDeps): Promise<ChargeOutcome> {
   }
   if (data?.success === false) {
     if (data.error === "insufficient_credits") {
-      return { status: "insufficient", balance: data.balance ?? null };
+      return {
+        status: "insufficient",
+        balance: data.balance ?? null,
+        planBalance: data.plan_balance ?? null,
+        extraBalance: data.extra_balance ?? null,
+      };
     }
     return { status: "error", reason: "failure" };
   }
+  if (data?.mode === "exempt") {
+    return { status: "exempt", creditsCharged: 0 };
+  }
+  // A payload without the split (older RPC) means everything came from extras.
+  const planCharged = data?.plan_charged ?? 0;
   return {
     status: "charged",
     creditsCharged: deps.cost,
+    planCharged,
+    extraCharged: data?.extra_charged ?? deps.cost - planCharged,
     newBalance: data?.new_balance ?? 0,
   };
 }
@@ -112,7 +144,14 @@ export function chargeErrorResponse(
   if (outcome.status === "insufficient") {
     return {
       status: 402,
-      body: { error: "Créditos insuficientes.", balance: outcome.balance, required: cost },
+      body: {
+        error: "Créditos insuficientes.",
+        reason: "insufficient_credits",
+        balance: outcome.balance,
+        plan_balance: outcome.planBalance,
+        extra_balance: outcome.extraBalance,
+        required: cost,
+      },
     };
   }
   if (outcome.status === "error") {
