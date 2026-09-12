@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Link, useNavigate, useSearchParams } from "react-router-dom";
+import { Link, Navigate, useNavigate, useSearchParams } from "react-router-dom";
 import { Eye, EyeOff } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
@@ -10,9 +10,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
 // Login only. There is no public signup anymore: accounts are born either by
-// the paid checkout (subscription) or by an admin invite (trial / courtesy).
-// The old ?signup=1 deep link is still honoured with an explanation, since it
-// lives in e-mails and bookmarks out there.
+// the paid checkout (/assinar) or by an admin invite (trial / courtesy). The
+// old ?signup=1 deep link (e-mails, bookmarks) lands on the checkout.
 export default function AuthPage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -47,17 +46,10 @@ export default function AuthPage() {
     }
   }
 
+  if (cameForSignup) return <Navigate to="/assinar" replace />;
+
   return (
     <AuthLayout title="Entrar" description="Acesse sua conta para continuar">
-      {cameForSignup && (
-        <p
-          role="status"
-          className="mb-4 rounded-md bg-primary/10 px-3 py-2 text-sm text-foreground"
-        >
-          O cadastro é feito pela assinatura ou por convite. Se você já recebeu um convite,
-          use o link do e-mail; se já tem conta, entre abaixo.
-        </p>
-      )}
 
       {error && (
         <div
@@ -117,8 +109,8 @@ export default function AuthPage() {
 
       <p className="mt-4 text-center text-sm text-muted-foreground">
         Ainda não tem conta?{" "}
-        <Link to="/" className="text-primary font-medium hover:underline">
-          Conheça os planos
+        <Link to="/assinar" className="text-primary font-medium hover:underline">
+          Assine um plano
         </Link>
       </p>
     </AuthLayout>

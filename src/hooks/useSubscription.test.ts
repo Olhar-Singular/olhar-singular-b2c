@@ -11,6 +11,7 @@ import {
   useSubscribe,
   useCancelSubscription,
   useUpdateSubscriptionCard,
+  useSetInitialPassword,
 } from "./useSubscription";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -34,8 +35,10 @@ function wrapper({ children }: { children: React.ReactNode }) {
   return createElement(QueryClientProvider, { client: qc }, children);
 }
 
+// price_brl arrives as a string on some PostgREST paths although the generated
+// type says number; the cast models the runtime shape on purpose.
 const PLAN_ROW = {
-  id: "pl-pro", slug: "profissional", name: "Profissional", price_brl: "59.90", monthly_credits: 240,
+  id: "pl-pro", slug: "profissional", name: "Profissional", price_brl: "59.90" as unknown as number, monthly_credits: 240,
   highlight: true, admin_only: false, sort_order: 2, active: true, created_at: "", updated_at: "",
 };
 
@@ -198,6 +201,43 @@ describe("useSubscribe", () => {
       try { await result.current.mutateAsync({ planSlug: "profissional", card: CARD }); } catch { /* expected */ }
     });
     expect(toast.error).toHaveBeenCalledWith("Você já tem uma assinatura ativa.");
+    expect(mockRefreshProfile).not.toHaveBeenCalled();
+  });
+});
+
+describe("useSubscribe (anonymous funnel)", () => {
+  it("forwards the account block and returns the session token hash untouched", async () => {
+    mockInvoke.mockResolvedValue({ data: { status: "authorized", subscriptionId: "sub-1", accountCreated: true, sessionTokenHash: "h" }, error: null });
+    const { result } = renderHook(() => useSubscribe(), { wrapper });
+    const account = { fullName: "Ana", email: "a@b.c", termsVersion: "2026-09" };
+    let out: unknown;
+    await act(async () => {
+      out = await result.current.mutateAsync({ planSlug: "basico", card: CARD, account });
+    });
+    expect(mockInvoke).toHaveBeenCalledWith("subscribe", { body: { planSlug: "basico", card: CARD, account } });
+    expect(out).toMatchObject({ accountCreated: true, sessionTokenHash: "h" });
+  });
+});
+
+describe("useSetInitialPassword", () => {
+  it("invokes set-initial-password and refreshes the profile", async () => {
+    mockInvoke.mockResolvedValue({ data: { ok: true }, error: null });
+    const { result } = renderHook(() => useSetInitialPassword(), { wrapper });
+    await act(async () => {
+      await result.current.mutateAsync({ password: "secret1" });
+    });
+    expect(mockInvoke).toHaveBeenCalledWith("set-initial-password", { body: { password: "secret1" } });
+    expect(mockRefreshProfile).toHaveBeenCalled();
+  });
+
+  it("toasts on failure and leaves the profile alone", async () => {
+    const { toast } = await import("sonner");
+    mockInvoke.mockResolvedValue({ data: null, error: new Error("falha") });
+    const { result } = renderHook(() => useSetInitialPassword(), { wrapper });
+    await act(async () => {
+      try { await result.current.mutateAsync({ password: "secret1" }); } catch { /* expected */ }
+    });
+    expect(toast.error).toHaveBeenCalled();
     expect(mockRefreshProfile).not.toHaveBeenCalled();
   });
 });

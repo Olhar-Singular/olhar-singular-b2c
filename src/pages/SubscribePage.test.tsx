@@ -6,12 +6,24 @@ import SubscribePage from "./SubscribePage";
 import { pickInitialPlan, replacementNotice } from "@/lib/domain/subscriptionUi";
 import type { Access } from "@/lib/domain/access";
 
-const { mockSubscribe, brickProps, mockUsePlans, mockUseSubscription } = vi.hoisted(() => ({
+const { mockSubscribe, brickProps, mockUsePlans, mockUseSubscription, mockVerifyOtp, mockSignInWithOtp, navigateSpy } = vi.hoisted(() => ({
   mockSubscribe: vi.fn(),
   brickProps: vi.fn(),
   mockUsePlans: vi.fn(),
   mockUseSubscription: vi.fn(),
+  mockVerifyOtp: vi.fn(),
+  mockSignInWithOtp: vi.fn(),
+  navigateSpy: vi.fn(),
 }));
+
+vi.mock("@/integrations/supabase/client", () => ({
+  supabase: { auth: { verifyOtp: mockVerifyOtp, signInWithOtp: mockSignInWithOtp } },
+}));
+
+vi.mock("react-router-dom", async (orig) => {
+  const actual = await orig<typeof import("react-router-dom")>();
+  return { ...actual, useNavigate: () => navigateSpy };
+});
 
 const CARD = { token: "tok_1", payment_method_id: "master" };
 
@@ -20,7 +32,7 @@ vi.mock("@/components/payments/MpCardBrick", () => ({
     brickProps(props);
     return (
       <div data-testid="card-brick">
-        <button type="button" onClick={() => props.onSubmit(CARD)}>Assinar agora</button>
+        <button type="button" onClick={() => props.onSubmit(CARD).then(() => brickProps("resolved"), () => brickProps("rejected"))}>Assinar agora</button>
         <button type="button" onClick={() => props.onError?.("brick quebrou")}>Erro do Brick</button>
       </div>
     );
@@ -50,7 +62,22 @@ const TRIAL = { ...LEGACY, access_kind: "trial", plan_credits: 42, plan_period_e
 
 async function setProfile(profile: Record<string, unknown> | null) {
   const auth = await import("@/hooks/useAuth");
-  vi.mocked(auth.useAuth).mockReturnValue(buildAuthState({ user: { id: "u1", email: "a@b.c" }, profile }) as never);
+  vi.mocked(auth.useAuth).mockReturnValue(
+    buildAuthState({ session: { access_token: "t" }, user: { id: "u1", email: "a@b.c" }, profile }) as never,
+  );
+}
+
+async function setAnonymous() {
+  const auth = await import("@/hooks/useAuth");
+  vi.mocked(auth.useAuth).mockReturnValue(buildAuthState({ session: null, user: null, profile: null }) as never);
+}
+
+async function fillAccount(user: ReturnType<typeof userEvent.setup>, email = "nova@example.com") {
+  await user.type(screen.getByLabelText("Nome completo"), "Nova Pessoa");
+  await user.type(screen.getByLabelText("E-mail"), email);
+  await user.type(screen.getByLabelText("Confirme o e-mail"), email);
+  await user.click(screen.getByRole("checkbox"));
+  await user.click(screen.getByRole("button", { name: /Continuar para o pagamento/ }));
 }
 
 function renderPage(route = "/assinar") {
@@ -158,13 +185,20 @@ describe("SubscribePage", () => {
     await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent(/não foi aceito para a assinatura/));
   });
 
-  it("stays on the form when the hook throws a business refusal (already toasted)", async () => {
+  it("stays on the form and rejects the Brick promise on a business refusal (already toasted)", async () => {
     const user = userEvent.setup();
     mockSubscribe.mockRejectedValue(new Error("Você já tem uma assinatura ativa."));
     renderPage();
     await user.click(screen.getByRole("button", { name: "Assinar agora" }));
-    await waitFor(() => expect(mockSubscribe).toHaveBeenCalled());
+    await waitFor(() => expect(brickProps).toHaveBeenCalledWith("rejected"));
     expect(screen.getByTestId("card-brick")).toBeInTheDocument();
+  });
+
+  it("resolves the Brick promise once the backend answered", async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await user.click(screen.getByRole("button", { name: "Assinar agora" }));
+    await waitFor(() => expect(brickProps).toHaveBeenCalledWith("resolved"));
   });
 
   it("surfaces Brick errors above the form", async () => {
@@ -220,8 +254,124 @@ describe("SubscribePage", () => {
 
   it("renders the form without a payer e-mail when the user has none", async () => {
     const auth = await import("@/hooks/useAuth");
-    vi.mocked(auth.useAuth).mockReturnValue(buildAuthState({ user: { id: "u1" }, profile: LEGACY }) as never);
+    vi.mocked(auth.useAuth).mockReturnValue(buildAuthState({ session: { access_token: "t" }, user: { id: "u1" }, profile: LEGACY }) as never);
     renderPage();
     expect(brickProps).toHaveBeenCalledWith(expect.objectContaining({ payerEmail: undefined }));
+  });
+});
+
+describe("SubscribePage (anonymous funnel)", () => {
+  beforeEach(async () => {
+    vi.clearAllMocks();
+    mockUsePlans.mockReturnValue({ data: PLANS, isLoading: false });
+    mockUseSubscription.mockReturnValue({ data: undefined });
+    mockVerifyOtp.mockResolvedValue({ error: null });
+    mockSignInWithOtp.mockResolvedValue({ error: null });
+    await setAnonymous();
+  });
+
+  it("asks who is buying before showing the card, then mounts the Brick with that e-mail", async () => {
+    const user = userEvent.setup();
+    renderPage("/assinar?plano=basico");
+    expect(screen.getByText("Quem vai usar a plataforma")).toBeInTheDocument();
+    expect(screen.queryByTestId("card-brick")).toBeNull();
+    expect(screen.queryByRole("radiogroup")).toBeNull();
+
+    await fillAccount(user);
+    expect(screen.getByText(/Conta para/)).toHaveTextContent("Nova Pessoa");
+    expect(screen.getByRole("radio", { name: /Básico/ })).toHaveAttribute("aria-checked", "true");
+    expect(brickProps).toHaveBeenCalledWith(expect.objectContaining({ amount: 19.9, payerEmail: "nova@example.com" }));
+  });
+
+  it("lets the buyer go back and fix the account", async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await fillAccount(user);
+    await user.click(screen.getByRole("button", { name: "Corrigir" }));
+    expect(screen.getByLabelText("Nome completo")).toHaveValue("Nova Pessoa");
+    expect(screen.queryByTestId("card-brick")).toBeNull();
+  });
+
+  it("sends the account with the terms version, opens the session from the token and goes to /definir-senha", async () => {
+    const user = userEvent.setup();
+    mockSubscribe.mockResolvedValue({ status: "authorized", subscriptionId: "sub-1", accountCreated: true, sessionTokenHash: "tok-hash" });
+    renderPage();
+    await fillAccount(user);
+    await user.click(screen.getByRole("button", { name: "Assinar agora" }));
+
+    await waitFor(() => expect(navigateSpy).toHaveBeenCalledWith("/definir-senha", { replace: true }));
+    expect(mockSubscribe).toHaveBeenCalledWith({
+      planSlug: "profissional",
+      card: CARD,
+      account: { fullName: "Nova Pessoa", email: "nova@example.com", termsVersion: "2026-09" },
+    });
+    expect(mockVerifyOtp).toHaveBeenCalledWith({ token_hash: "tok-hash", type: "magiclink" });
+    expect(mockSignInWithOtp).not.toHaveBeenCalled();
+  });
+
+  it("on a refused card with a new account, sends the login link by e-mail and explains", async () => {
+    const user = userEvent.setup();
+    mockSubscribe.mockResolvedValue({ status: "rejected", subscriptionId: "sub-1", accountCreated: true, message: "Recusado." });
+    renderPage();
+    await fillAccount(user);
+    await user.click(screen.getByRole("button", { name: "Assinar agora" }));
+
+    await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent("Recusado."));
+    expect(mockSignInWithOtp).toHaveBeenCalledWith({ email: "nova@example.com" });
+    expect(screen.getByText(/Enviamos um link de acesso/)).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /tela de entrada/ })).toHaveAttribute("href", "/auth");
+    expect(navigateSpy).not.toHaveBeenCalled();
+    expect(screen.queryByTestId("card-brick")).toBeNull();
+  });
+
+  it("tells the buyer to use the password reset when the login e-mail could not be sent", async () => {
+    const user = userEvent.setup();
+    mockSubscribe.mockResolvedValue({ status: "rejected", subscriptionId: "sub-1", accountCreated: true });
+    mockSignInWithOtp.mockResolvedValue({ error: { message: "smtp" } });
+    renderPage();
+    await fillAccount(user);
+    await user.click(screen.getByRole("button", { name: "Assinar agora" }));
+    await waitFor(() => expect(screen.getByText(/Esqueci minha senha/)).toBeInTheDocument());
+  });
+
+  it("falls back to the e-mail link when the token cannot open a session", async () => {
+    const user = userEvent.setup();
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
+    mockSubscribe.mockResolvedValue({ status: "authorized", subscriptionId: "sub-1", accountCreated: true, sessionTokenHash: "bad" });
+    mockVerifyOtp.mockResolvedValue({ error: { message: "expired" } });
+    renderPage();
+    await fillAccount(user);
+    await user.click(screen.getByRole("button", { name: "Assinar agora" }));
+
+    await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent(/Pagamento aceito!/));
+    expect(mockSignInWithOtp).toHaveBeenCalledWith({ email: "nova@example.com" });
+    expect(navigateSpy).not.toHaveBeenCalled();
+    consoleError.mockRestore();
+  });
+
+  it("falls back to the e-mail link when the server created the account but sent no token", async () => {
+    const user = userEvent.setup();
+    mockSubscribe.mockResolvedValue({ status: "pending", subscriptionId: "sub-1", accountCreated: true });
+    renderPage();
+    await fillAccount(user);
+    await user.click(screen.getByRole("button", { name: "Assinar agora" }));
+    await waitFor(() => expect(mockSignInWithOtp).toHaveBeenCalledWith({ email: "nova@example.com" }));
+    expect(screen.getByRole("status")).toHaveTextContent(/Pagamento aceito!/);
+  });
+
+  it("shows the plain refusal when the account already existed (no new account)", async () => {
+    const user = userEvent.setup();
+    mockSubscribe.mockResolvedValue({ status: "rejected", subscriptionId: "sub-1", accountCreated: false, message: "Recusado." });
+    renderPage();
+    await fillAccount(user);
+    await user.click(screen.getByRole("button", { name: "Assinar agora" }));
+    await waitFor(() => expect(screen.getByRole("button", { name: "Tentar com outro cartão" })).toBeInTheDocument());
+    expect(mockSignInWithOtp).not.toHaveBeenCalled();
+  });
+
+  it("does not show the 'already subscribed' screen to an anonymous visitor even if a query leaks data", async () => {
+    mockUseSubscription.mockReturnValue({ data: { id: "x", status: "authorized" } });
+    renderPage();
+    expect(screen.getByText("Quem vai usar a plataforma")).toBeInTheDocument();
   });
 });

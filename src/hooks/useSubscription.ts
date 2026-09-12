@@ -133,6 +133,25 @@ export interface SubscribeResult {
   subscriptionId: string;
   statusDetail?: string;
   message?: string;
+  /** True when the checkout created the account (anonymous funnel). */
+  accountCreated?: boolean;
+  /** Magic-link token hash, present only for a new account whose card was accepted. */
+  sessionTokenHash?: string;
+}
+
+/** Account block of the anonymous checkout. */
+export interface SubscribeAccountInput {
+  fullName: string;
+  email: string;
+  termsVersion: string;
+}
+
+export interface SubscribeInput {
+  planSlug: string;
+  card: CardFormDataView;
+  cardLastFour?: string | null;
+  account?: SubscribeAccountInput;
+  attribution?: Record<string, unknown>;
 }
 
 // Every subscription mutation moves plan credits and the subscription row on
@@ -150,17 +169,36 @@ function useSubscriptionRefresh() {
 const SUBSCRIBE_FALLBACK = "Não foi possível concluir a assinatura. Tente novamente.";
 
 // A declined card comes back as status "rejected" with a pt-BR message, not as
-// an error; business refusals (exempt, already subscribed) are errors.
+// an error; business refusals (exempt, already subscribed, email_exists, rate
+// limit) are errors. Anonymous callers pass `account`; the page consumes the
+// sessionTokenHash right away (verifyOtp) and never stores it.
 export function useSubscribe() {
   const refresh = useSubscriptionRefresh();
   return useMutation({
-    mutationFn: async (input: { planSlug: string; card: CardFormDataView; cardLastFour?: string | null }) => {
+    mutationFn: async (input: SubscribeInput) => {
       const { data, error } = await supabase.functions.invoke("subscribe", { body: input });
       if (error) throw new Error(await parseInvokeError(error, SUBSCRIBE_FALLBACK));
       return data as SubscribeResult;
     },
     onSuccess: refresh,
     onError: (err: Error) => toast.error(parseEdgeFnError(err, SUBSCRIBE_FALLBACK)),
+  });
+}
+
+const PASSWORD_FALLBACK = "Não foi possível definir a senha. Tente de novo.";
+
+// First access of an account born from a payment. The server clears
+// must_set_password; refreshProfile lets ProtectedRoute release the user.
+export function useSetInitialPassword() {
+  const { refreshProfile } = useAuth();
+  return useMutation({
+    mutationFn: async (input: { password: string }) => {
+      const { data, error } = await supabase.functions.invoke("set-initial-password", { body: input });
+      if (error) throw new Error(await parseInvokeError(error, PASSWORD_FALLBACK));
+      return data as { ok: true };
+    },
+    onSuccess: () => refreshProfile(),
+    onError: (err: Error) => toast.error(parseEdgeFnError(err, PASSWORD_FALLBACK)),
   });
 }
 

@@ -1,37 +1,47 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link, useSearchParams } from "react-router-dom";
-import { CheckCircle2, Loader2, Sparkles, XCircle } from "lucide-react";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
+import { CheckCircle2, Loader2, Mail, Sparkles, XCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import MpCardBrick from "@/components/payments/MpCardBrick";
+import AccountStep, { type AccountDraft } from "@/components/subscribe/AccountStep";
+import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useAccess } from "@/hooks/useAccess";
 import type { CardFormDataView } from "@/hooks/useCredits";
 import { isLiveSubscription, usePlans, useSubscribe, useSubscription, type PlanView } from "@/hooks/useSubscription";
-import { formatBrl, pickInitialPlan, replacementNotice } from "@/lib/domain/subscriptionUi";
+import { formatBrl, pickInitialPlan, replacementNotice, TERMS_VERSION } from "@/lib/domain/subscriptionUi";
 
 type Stage =
   | { kind: "form"; error?: string }
   | { kind: "authorized"; plan: PlanView }
   | { kind: "pending" }
-  | { kind: "rejected"; message: string };
+  | { kind: "rejected"; message: string }
+  /** Anonymous funnel: the account exists but the card was refused; login goes by e-mail. */
+  | { kind: "rejected_new_account"; message: string; email: string; mailSent: boolean };
 
 const GENERIC_REJECTION = "O cartão não foi aceito para a assinatura. Tente outro cartão.";
 
-// Subscribe a LOGGED-IN user: choose a plan, tokenize the card in the Brick,
-// and let the subscribe function activate it on the spot. Anonymous checkout
-// (pay first, then account) is a later phase; this page is protected.
+// Choose a plan, tokenize the card in the Brick, and let the subscribe function
+// activate it on the spot. Logged in: only the card. Anonymous (pay first):
+// name + e-mail + terms, the account is born from the payment, the session
+// arrives as a one-shot magic-link token and the user lands on /definir-senha.
 export default function SubscribePage() {
-  const { user } = useAuth();
+  const { user, session } = useAuth();
   const access = useAccess();
+  const navigate = useNavigate();
   const [params] = useSearchParams();
   const { data: plans = [], isLoading: loadingPlans } = usePlans();
   const { data: subscription } = useSubscription();
   const subscribe = useSubscribe();
   const [selectedSlug, setSelectedSlug] = useState<string | null>(null);
   const [stage, setStage] = useState<Stage>({ kind: "form" });
+  const anonymous = !session;
+  const [account, setAccount] = useState<AccountDraft | null>(null);
+  // Kept when the buyer goes back to fix a typo, so the form is not empty again.
+  const [draft, setDraft] = useState<AccountDraft | null>(null);
   // Forces a fresh Brick after a rejection: the previous token was single-use.
   const [attempt, setAttempt] = useState(0);
 
@@ -48,16 +58,62 @@ export default function SubscribePage() {
   }, [selected, selectedSlug]);
 
   const notice = replacementNotice(access);
+  const payerEmail = anonymous ? account?.email : user?.email ?? undefined;
 
-  async function handleSubmit(plan: PlanView, card: CardFormDataView) {
-    try {
-      const result = await subscribe.mutateAsync({ planSlug: plan.slug, card });
-      if (result.status === "authorized") setStage({ kind: "authorized", plan });
-      else if (result.status === "pending") setStage({ kind: "pending" });
-      else setStage({ kind: "rejected", message: result.message ?? GENERIC_REJECTION });
-    } catch {
-      // Business refusal already toasted by the hook; let the Brick re-enable.
+  // The session token is consumed right here and never stored: verifyOtp turns
+  // it into a real session, then the first-access password screen takes over.
+  async function openSession(tokenHash: string): Promise<boolean> {
+    const { error } = await supabase.auth.verifyOtp({ token_hash: tokenHash, type: "magiclink" });
+    if (error) {
+      console.error("SubscribePage: verifyOtp failed", error.message);
+      return false;
     }
+    return true;
+  }
+
+  // A rejected promise hands the failure back to the Brick, which re-enables
+  // its button (business refusals were already toasted by the hook).
+  async function handleSubmit(plan: PlanView, card: CardFormDataView) {
+    const result = await subscribe.mutateAsync({
+      planSlug: plan.slug,
+      card,
+      ...(anonymous && account ? { account: { ...account, termsVersion: TERMS_VERSION } } : {}),
+    });
+
+    if (result.status === "rejected") {
+      const message = result.message ?? GENERIC_REJECTION;
+      if (result.accountCreated && account) {
+        // Decision 14: the account stays; decision from the review: no session
+        // without a payment, so the login link goes by e-mail (proof of ownership).
+        const { error } = await supabase.auth.signInWithOtp({ email: account.email });
+        setStage({ kind: "rejected_new_account", message, email: account.email, mailSent: !error });
+      } else {
+        setStage({ kind: "rejected", message });
+      }
+      return;
+    }
+
+    if (result.sessionTokenHash && (await openSession(result.sessionTokenHash))) {
+      navigate("/definir-senha", { replace: true });
+      return;
+    }
+    if (result.accountCreated) {
+      // Paid, account created, but no session could be opened: log in by
+      // e-mail. accountCreated only happens in the anonymous flow, so the
+      // account block is always present here.
+      const email = account!.email;
+      const { error } = await supabase.auth.signInWithOtp({ email });
+      setStage({
+        kind: "rejected_new_account",
+        message: "Pagamento aceito! Não conseguimos abrir sua sessão automaticamente.",
+        email,
+        mailSent: !error,
+      });
+      return;
+    }
+
+    if (result.status === "authorized") setStage({ kind: "authorized", plan });
+    else setStage({ kind: "pending" });
   }
 
   function retry() {
@@ -79,7 +135,7 @@ export default function SubscribePage() {
     );
   }
 
-  if (isLiveSubscription(subscription) && stage.kind === "form") {
+  if (!anonymous && isLiveSubscription(subscription) && stage.kind === "form") {
     return (
       <div className="mx-auto max-w-2xl px-4 py-8 space-y-4">
         <h1 className="text-2xl font-bold text-foreground">Assinar um plano</h1>
@@ -152,7 +208,58 @@ export default function SubscribePage() {
         </Card>
       )}
 
-      {stage.kind === "form" && (
+      {stage.kind === "rejected_new_account" && (
+        <Card className="border-border">
+          <CardContent className="p-6 space-y-3">
+            <p role="status" aria-live="polite" className="flex items-center gap-2 text-sm text-destructive">
+              <XCircle className="w-4 h-4 shrink-0" aria-hidden="true" />
+              {stage.message}
+            </p>
+            <p className="flex items-start gap-2 text-sm text-muted-foreground">
+              <Mail className="w-4 h-4 shrink-0 mt-0.5" aria-hidden="true" />
+              <span>
+                Sua conta foi criada com o e-mail <strong className="text-foreground">{stage.email}</strong>.{" "}
+                {stage.mailSent
+                  ? "Enviamos um link de acesso para ele: entre por lá e tente outro cartão em Créditos."
+                  : 'Não conseguimos enviar o link de acesso agora. Use "Esqueci minha senha" na tela de entrada para entrar e tentar outro cartão.'}
+              </span>
+            </p>
+            <Link to="/auth">
+              <Button variant="outline">Ir para a tela de entrada</Button>
+            </Link>
+          </CardContent>
+        </Card>
+      )}
+
+      {stage.kind === "form" && anonymous && !account && (
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base">Quem vai usar a plataforma</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <AccountStep
+              initial={draft ?? undefined}
+              onConfirm={(confirmed) => {
+                setDraft(confirmed);
+                setAccount(confirmed);
+              }}
+            />
+          </CardContent>
+        </Card>
+      )}
+
+      {stage.kind === "form" && anonymous && account && (
+        <p className="text-sm text-muted-foreground flex flex-wrap items-center gap-x-2">
+          <span>
+            Conta para <strong className="text-foreground">{account.fullName}</strong> ({account.email}).
+          </span>
+          <button type="button" className="underline" onClick={() => setAccount(null)}>
+            Corrigir
+          </button>
+        </p>
+      )}
+
+      {stage.kind === "form" && (!anonymous || account) && (
         <>
           <section className="space-y-4" aria-labelledby="plans-heading">
             <h2 id="plans-heading" className="font-semibold text-foreground">Escolha o plano</h2>
@@ -221,9 +328,9 @@ export default function SubscribePage() {
                   </p>
                 )}
                 <MpCardBrick
-                  key={`${selected.id}-${attempt}`}
+                  key={`${selected.id}-${attempt}-${payerEmail ?? ""}`}
                   amount={selected.priceBrl}
-                  payerEmail={user?.email ?? undefined}
+                  payerEmail={payerEmail}
                   onSubmit={(card) => handleSubmit(selected, card)}
                   onError={(message) => setStage({ kind: "form", error: message })}
                 />

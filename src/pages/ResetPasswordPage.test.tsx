@@ -30,9 +30,9 @@ vi.mock("react-router-dom", async (importOriginal) => {
   return { ...actual, useNavigate: () => mockNavigate };
 });
 
-function renderPage() {
+function renderPage(route = "/redefinir-senha") {
   return render(
-    <MemoryRouter>
+    <MemoryRouter initialEntries={[route]}>
       <ResetPasswordPage />
     </MemoryRouter>,
   );
@@ -152,6 +152,20 @@ describe("ResetPasswordPage", () => {
     expect(supabase.auth.signOut).toHaveBeenCalled();
     expect(toast.success).toHaveBeenCalledWith("Senha redefinida! Entre com a nova senha.");
     expect(mockNavigate).toHaveBeenCalledWith("/auth", { replace: true });
+  });
+
+  // Admin invite: the same page creates the first password and keeps the session.
+  it("with ?convite=1 says 'create', keeps the session and goes to the dashboard", async () => {
+    vi.mocked(supabase.auth.getSession).mockResolvedValue({ data: { session: SESSION } } as never);
+    renderPage("/redefinir-senha?convite=1");
+    await act(async () => {});
+    expect(screen.getByRole("heading", { name: "Crie sua senha" })).toBeInTheDocument();
+
+    await fillAndSubmit("novaSenha1");
+    expect(supabase.auth.updateUser).toHaveBeenCalledWith({ password: "novaSenha1" });
+    expect(supabase.auth.signOut).not.toHaveBeenCalled();
+    expect(toast.success).toHaveBeenCalledWith("Senha criada! Bem-vindo à plataforma.");
+    expect(mockNavigate).toHaveBeenCalledWith("/dashboard", { replace: true });
   });
 
   it("surfaces the mapped error when the new password repeats the old one", async () => {

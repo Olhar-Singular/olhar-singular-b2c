@@ -1,7 +1,7 @@
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { MemoryRouter } from "react-router-dom";
+import { MemoryRouter, Route, Routes } from "react-router-dom";
 import AuthPage from "./AuthPage";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
@@ -30,7 +30,10 @@ vi.mock("@/hooks/useAuth", () => ({
 function renderAuthPage(route = "/auth") {
   return render(
     <MemoryRouter initialEntries={[route]}>
-      <AuthPage />
+      <Routes>
+        <Route path="/auth" element={<AuthPage />} />
+        <Route path="/assinar" element={<div>página de assinatura</div>} />
+      </Routes>
     </MemoryRouter>,
   );
 }
@@ -59,15 +62,15 @@ describe("AuthPage (login only)", () => {
   });
 
   // The old public-signup deep link still lives in e-mails and bookmarks.
-  it("explains how accounts are created when ?signup=1 is set", () => {
+  it("sends ?signup=1 to the checkout", () => {
     renderAuthPage("/auth?signup=1");
-    expect(screen.getByRole("status")).toHaveTextContent(/assinatura ou por convite/i);
-    expect(screen.getByRole("heading", { name: /^entrar$/i })).toBeInTheDocument();
+    expect(screen.getByText("página de assinatura")).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: /^entrar$/i })).toBeNull();
   });
 
-  it("does not show the signup notice by default", () => {
+  it("points people without an account to the checkout", () => {
     renderAuthPage();
-    expect(screen.queryByRole("status")).toBeNull();
+    expect(screen.getByRole("link", { name: /Assine um plano/ })).toHaveAttribute("href", "/assinar");
   });
 
   it("signs in and navigates to the dashboard", async () => {
@@ -152,10 +155,9 @@ describe("AuthPage (login only)", () => {
     expect(input).toHaveAttribute("type", "password");
   });
 
-  it("links to the forgot-password page and to the plans", () => {
+  it("links to the forgot-password page", () => {
     renderAuthPage();
     expect(screen.getByRole("link", { name: /esqueci minha senha/i })).toHaveAttribute("href", "/esqueci-senha");
-    expect(screen.getByRole("link", { name: /conheça os planos/i })).toHaveAttribute("href", "/");
   });
 
   it("marks the fields for the browser password manager", () => {

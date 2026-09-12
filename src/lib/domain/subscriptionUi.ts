@@ -67,3 +67,34 @@ export function isRecentRejection(subscription: SubscriptionView | null | undefi
   if (!subscription || subscription.status !== "rejected" || !subscription.createdAt) return false;
   return now.getTime() - subscription.createdAt.getTime() < REJECTED_WINDOW_MS;
 }
+
+// Version of the Terms of Use the checkout records on the profile. Bump when
+// the legal text changes; the pages under /termos show the same value.
+export const TERMS_VERSION = "2026-09";
+
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+
+export type AccountFormError = "name" | "email" | "email_mismatch" | "terms";
+
+// Validation of the account step of the anonymous checkout; mirrors the server
+// (parseAccountInput) so the user is stopped before the card is tokenized.
+export function validateAccountForm(form: {
+  fullName: string;
+  email: string;
+  emailConfirmation: string;
+  acceptedTerms: boolean;
+}): AccountFormError | null {
+  if (form.fullName.trim().length < 2) return "name";
+  const email = form.email.trim().toLowerCase();
+  if (!EMAIL_RE.test(email)) return "email";
+  if (email !== form.emailConfirmation.trim().toLowerCase()) return "email_mismatch";
+  if (!form.acceptedTerms) return "terms";
+  return null;
+}
+
+export const ACCOUNT_FORM_MESSAGES: Record<AccountFormError, string> = {
+  name: "Informe seu nome completo.",
+  email: "Informe um e-mail válido.",
+  email_mismatch: "Os e-mails não coincidem. Confira antes de continuar: é por ele que você entra na plataforma.",
+  terms: "É preciso aceitar os Termos de Uso e a Política de Privacidade.",
+};

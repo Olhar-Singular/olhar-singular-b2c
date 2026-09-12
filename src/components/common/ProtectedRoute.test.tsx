@@ -10,13 +10,19 @@ vi.mock("@/hooks/useAuth", () => ({
 
 import { useAuth } from "@/hooks/useAuth";
 
-function setup({ session = null, loading = false }: { session?: unknown; loading?: boolean }) {
+function setup({
+  session = null,
+  loading = false,
+  profile = null,
+  profileLoading = false,
+  route = "/dashboard",
+}: { session?: unknown; loading?: boolean; profile?: unknown; profileLoading?: boolean; route?: string }) {
   vi.mocked(useAuth).mockReturnValue(
-    buildAuthState({ session, loading }) as never,
+    buildAuthState({ session, loading, profile, profileLoading }) as never,
   );
 
   return render(
-    <MemoryRouter initialEntries={["/dashboard"]}>
+    <MemoryRouter initialEntries={[route]}>
       <Routes>
         <Route path="/auth" element={<div>página de login</div>} />
         <Route
@@ -27,10 +33,20 @@ function setup({ session = null, loading = false }: { session?: unknown; loading
             </ProtectedRoute>
           }
         />
+        <Route
+          path="/definir-senha"
+          element={
+            <ProtectedRoute>
+              <div data-testid="set-password">defina sua senha</div>
+            </ProtectedRoute>
+          }
+        />
       </Routes>
     </MemoryRouter>,
   );
 }
+
+const SESSION = { user: { id: "123" }, access_token: "tok" };
 
 describe("ProtectedRoute", () => {
   it("renders children when session is valid", () => {
@@ -56,5 +72,38 @@ describe("ProtectedRoute", () => {
     setup({ session: { user: { id: "1" } }, loading: true });
     expect(screen.queryByTestId("protected-content")).not.toBeInTheDocument();
     expect(screen.queryByText("página de login")).not.toBeInTheDocument();
+  });
+
+  describe("first-access password", () => {
+    it("waits for the profile before deciding", () => {
+      const { container } = setup({ session: SESSION, profile: null, profileLoading: true });
+      expect(container.firstChild).toBeNull();
+    });
+
+    it("renders the route when the profile has no pending password", () => {
+      setup({ session: SESSION, profile: { must_set_password: false } });
+      expect(screen.getByTestId("protected-content")).toBeInTheDocument();
+    });
+
+    it("sends every protected route to /definir-senha while the flag is on", () => {
+      setup({ session: SESSION, profile: { must_set_password: true } });
+      expect(screen.getByTestId("set-password")).toBeInTheDocument();
+      expect(screen.queryByTestId("protected-content")).toBeNull();
+    });
+
+    it("lets /definir-senha render while the flag is on", () => {
+      setup({ session: SESSION, profile: { must_set_password: true }, route: "/definir-senha" });
+      expect(screen.getByTestId("set-password")).toBeInTheDocument();
+    });
+
+    it("bounces /definir-senha to the dashboard once the password is set", () => {
+      setup({ session: SESSION, profile: { must_set_password: false }, route: "/definir-senha" });
+      expect(screen.getByTestId("protected-content")).toBeInTheDocument();
+    });
+
+    it("renders when the profile is missing and not loading (legacy sessions)", () => {
+      setup({ session: SESSION, profile: null, profileLoading: false });
+      expect(screen.getByTestId("protected-content")).toBeInTheDocument();
+    });
   });
 });

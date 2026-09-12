@@ -13,7 +13,8 @@ import AdminPage from "@/pages/AdminPage";
 import DashboardPage from "@/pages/DashboardPage";
 import BarrierProfilesPage from "@/pages/BarrierProfilesPage";
 import CreditsPage from "@/pages/CreditsPage";
-import SubscribePage from "@/pages/SubscribePage";
+import SetPasswordPage from "@/pages/SetPasswordPage";
+import { SubscribeRoute } from "@/components/common/SubscribeRoute";
 import AdaptarPage from "@/pages/AdaptarPage";
 import MyAdaptationsPage from "@/pages/MyAdaptationsPage";
 import EditAdaptationPage from "@/pages/EditAdaptationPage";
@@ -49,6 +50,17 @@ function buildRouter() {
         { path: "/esqueci-senha", element: <ForgotPasswordPage /> },
         // Public by design: it is the redirect target of the recovery email link.
         { path: "/redefinir-senha", element: <ResetPasswordPage /> },
+        // Pay first: anonymous visitors get the public shell, users the app layout.
+        { path: "/assinar", element: <SubscribeRoute /> },
+        // First access of an account born from a payment; outside the Layout on purpose.
+        {
+          path: "/definir-senha",
+          element: (
+            <ProtectedRoute>
+              <SetPasswordPage />
+            </ProtectedRoute>
+          ),
+        },
         {
           element: (
             <ProtectedRoute>
@@ -65,8 +77,6 @@ function buildRouter() {
             { path: "/adaptacoes", element: <AdaptacoesPage /> },
             { path: "/banco-questoes", element: <QuestionBankPage /> },
             { path: "/creditos", element: <CreditsPage /> },
-            // Protected in this phase: the anonymous "pay first" funnel comes later.
-            { path: "/assinar", element: <SubscribePage /> },
             {
               path: "/admin",
               element: (
