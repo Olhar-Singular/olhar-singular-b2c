@@ -31,9 +31,10 @@ vi.mock("@/hooks/useAdminDashboard", () => ({
   useAdminDashboard: vi.fn(),
   useSetUserStatus: vi.fn(),
   useGrantCredits: vi.fn(),
+  useSetAccess: vi.fn(),
 }));
 
-import { useAdminDashboard, useSetUserStatus, useGrantCredits } from "@/hooks/useAdminDashboard";
+import { useAdminDashboard, useSetUserStatus, useGrantCredits, useSetAccess } from "@/hooks/useAdminDashboard";
 
 const dashboard = {
   metrics: { total_usd: 7, today_usd: 1, month_usd: 3, daily: [], monthly: [] },
@@ -52,11 +53,14 @@ function mockDashboard(over: Record<string, unknown>) {
 
 let mutate: ReturnType<typeof vi.fn>;
 let grantMutate: ReturnType<typeof vi.fn>;
+let setAccessMutate: ReturnType<typeof vi.fn>;
 beforeEach(() => {
   mutate = vi.fn();
   grantMutate = vi.fn();
+  setAccessMutate = vi.fn();
   vi.mocked(useSetUserStatus).mockReturnValue({ mutate, isPending: false } as never);
   vi.mocked(useGrantCredits).mockReturnValue({ mutate: grantMutate, isPending: false } as never);
+  vi.mocked(useSetAccess).mockReturnValue({ mutate: setAccessMutate, isPending: false } as never);
 });
 
 describe("AdminPage", () => {

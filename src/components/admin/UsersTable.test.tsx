@@ -1,5 +1,6 @@
 import { render, screen, fireEvent, within } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import userEvent from "@testing-library/user-event";
 import { UsersTable } from "./UsersTable";
 import type { AdminUser } from "@/types/admin";
 
@@ -9,6 +10,11 @@ const users: AdminUser[] = [
     email: "alice@x.com",
     full_name: "Alice",
     credit_balance: 42,
+    plan_credits: 10,
+    plan_period_end: "2099-01-01T00:00:00Z",
+    access_kind: "subscriber",
+    trial_started_at: null,
+    cpf_masked: "***.***.***-09",
     total_usd: 5,
     last_sign_in_at: "2026-05-30T12:00:00Z",
     created_at: null,
@@ -20,6 +26,11 @@ const users: AdminUser[] = [
     email: "bob@x.com",
     full_name: "Bob",
     credit_balance: 0,
+    plan_credits: 0,
+    plan_period_end: null,
+    access_kind: "legacy",
+    trial_started_at: null,
+    cpf_masked: null,
     total_usd: 10,
     last_sign_in_at: null,
     created_at: null,
@@ -31,6 +42,11 @@ const users: AdminUser[] = [
     email: null,
     full_name: null,
     credit_balance: 1,
+    plan_credits: 0,
+    plan_period_end: null,
+    access_kind: "exempt",
+    trial_started_at: null,
+    cpf_masked: null,
     total_usd: 0,
     last_sign_in_at: null,
     created_at: null,
@@ -64,7 +80,8 @@ describe("UsersTable", () => {
     expect(screen.getByText("$10.00")).toBeInTheDocument();
     expect(screen.getByText("$5.00")).toBeInTheDocument();
     expect(screen.getByText("$0.00")).toBeInTheDocument();
-    expect(screen.getByText("Inativo")).toBeInTheDocument();
+    // Bob is banned: the Status badge and the access badge both read "Inativo".
+    expect(screen.getAllByText("Inativo").length).toBeGreaterThanOrEqual(1);
     expect(screen.getAllByText("Ativo").length).toBe(2);
     // u3 has null name and email -> "—" placeholders
     expect(screen.getAllByText("—").length).toBeGreaterThanOrEqual(2);
@@ -141,5 +158,39 @@ describe("UsersTable", () => {
     fireEvent.click(screen.getByRole("button", { name: /Adicionar créditos para Bob/ }));
     fireEvent.click(screen.getByRole("button", { name: "Adicionar" }));
     expect(onGrantCredits).toHaveBeenCalledWith({ userId: "u2", amount: 10 });
+  });
+
+  it("shows the access state, the active plan bucket and the masked CPF", () => {
+    render(<UsersTable users={users} onToggleStatus={onToggleStatus} onGrantCredits={onGrantCredits} now={new Date("2026-09-12T12:00:00Z")} />);
+    expect(screen.getByTestId("access-u1")).toHaveTextContent("Assinante");
+    expect(screen.getByTestId("access-u2")).toHaveTextContent("Inativo");
+    expect(screen.getByTestId("access-u3")).toHaveTextContent("Cortesia");
+    expect(screen.getByText(/até 01\/01\/2099/)).toBeInTheDocument();
+    expect(screen.getByText(/CPF \*\*\*\.\*\*\*\.\*\*\*-09/)).toBeInTheDocument();
+  });
+
+  it("filters by access state", () => {
+    render(<UsersTable users={users} onToggleStatus={onToggleStatus} onGrantCredits={onGrantCredits} now={new Date("2026-09-12T12:00:00Z")} />);
+    fireEvent.change(screen.getByLabelText(/filtrar por estado/i), { target: { value: "exempt" } });
+    const rows = bodyRows();
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).not.toHaveTextContent("Alice");
+    fireEvent.change(screen.getByLabelText(/filtrar por estado/i), { target: { value: "all" } });
+    expect(bodyRows()).toHaveLength(3);
+  });
+
+  it("disables the access menu for super-admins and while a change is in flight", () => {
+    render(<UsersTable users={users} onToggleStatus={onToggleStatus} onGrantCredits={onGrantCredits} isSettingAccess />);
+    screen.getAllByRole("button", { name: /alterar acesso de/i }).forEach((b) => expect(b).toBeDisabled());
+  });
+
+  it("forwards access changes from the row menu", async () => {
+    const ue = userEvent.setup();
+    const onSetAccess = vi.fn();
+    render(<UsersTable users={users} onToggleStatus={onToggleStatus} onGrantCredits={onGrantCredits} onSetAccess={onSetAccess} />);
+    await ue.click(screen.getByRole("button", { name: /alterar acesso de alice/i }));
+    await ue.click(await screen.findByRole("menuitem", { name: /legado/i }));
+    await ue.click(await screen.findByRole("button", { name: /confirmar/i }));
+    expect(onSetAccess).toHaveBeenCalledWith({ userId: "u1", kind: "legacy" });
   });
 });

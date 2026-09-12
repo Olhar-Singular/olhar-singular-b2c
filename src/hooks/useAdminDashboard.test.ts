@@ -2,7 +2,7 @@ import { renderHook, waitFor, act } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { createElement } from "react";
-import { useAdminDashboard, useSetUserStatus, useGrantCredits } from "./useAdminDashboard";
+import { useAdminDashboard, useSetUserStatus, useGrantCredits, useSetAccess } from "./useAdminDashboard";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { MSG_NETWORK } from "@/lib/utils/errors";
@@ -164,5 +164,71 @@ describe("useGrantCredits", () => {
     });
 
     expect(toast.error).toHaveBeenCalledWith(MSG_NETWORK);
+  });
+});
+
+describe("useSetAccess", () => {
+  it("invokes admin-set-access with a kind change, invalidates and toasts", async () => {
+    mockInvoke.mockResolvedValue({ data: { success: true }, error: null });
+    const { qc, wrapper } = makeWrapper();
+    const invalidateSpy = vi.spyOn(qc, "invalidateQueries");
+
+    const { result } = renderHook(() => useSetAccess(), { wrapper });
+    await act(async () => {
+      await result.current.mutateAsync({ userId: "u1", kind: "exempt" });
+    });
+
+    expect(mockInvoke).toHaveBeenCalledWith("admin-set-access", { body: { userId: "u1", kind: "exempt" } });
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ["admin", "dashboard"] });
+    expect(toast.success).toHaveBeenCalledWith("Acesso atualizado.");
+  });
+
+  it("toasts the number of days on a trial extension", async () => {
+    mockInvoke.mockResolvedValue({ data: { success: true }, error: null });
+    const { wrapper } = makeWrapper();
+
+    const { result } = renderHook(() => useSetAccess(), { wrapper });
+    await act(async () => {
+      await result.current.mutateAsync({ userId: "u1", extendDays: 14 });
+    });
+
+    expect(toast.success).toHaveBeenCalledWith("Teste estendido em 14 dias.");
+  });
+
+  it("translates the function's error codes to pt-BR", async () => {
+    mockInvoke.mockResolvedValue({
+      data: null,
+      error: Object.assign(new Error("Edge Function returned a non-2xx status code"), {
+        context: { json: () => Promise.resolve({ error: "trial_limit_reached" }) },
+      }),
+    });
+    const { wrapper } = makeWrapper();
+
+    const { result } = renderHook(() => useSetAccess(), { wrapper });
+    await act(async () => {
+      try {
+        await result.current.mutateAsync({ userId: "u1", extendDays: 30 });
+      } catch {
+        /* expected */
+      }
+    });
+
+    expect(toast.error).toHaveBeenCalledWith("O período de teste não pode passar de 90 dias no total.");
+  });
+
+  it("passes an unknown error message through", async () => {
+    mockInvoke.mockResolvedValue({ data: null, error: new Error("falhou") });
+    const { wrapper } = makeWrapper();
+
+    const { result } = renderHook(() => useSetAccess(), { wrapper });
+    await act(async () => {
+      try {
+        await result.current.mutateAsync({ userId: "u1", kind: "legacy" });
+      } catch {
+        /* expected */
+      }
+    });
+
+    expect(toast.error).toHaveBeenCalledWith("falhou");
   });
 });
