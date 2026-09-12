@@ -585,6 +585,10 @@ export type Database = {
           user_id: string
         }[]
       }
+      approve_purchase_and_grant: {
+        Args: { p_payment_id: string; p_purchase_id: string }
+        Returns: Json
+      }
       deduct_credits: {
         Args: {
           p_amount: number
@@ -611,6 +615,14 @@ export type Database = {
       }
       reconcile_stale_credit_reservations: {
         Args: { p_older_than?: string }
+        Returns: Json
+      }
+      reject_pending_purchase: {
+        Args: {
+          p_payment_id: string
+          p_purchase_id: string
+          p_status_detail: string
+        }
         Returns: Json
       }
       reverse_credit_reservation: { Args: { p_id: string }; Returns: Json }

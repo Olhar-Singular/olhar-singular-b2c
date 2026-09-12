@@ -6,6 +6,7 @@ import {
   parsePaymentNotification,
 } from "../_shared/mpEvents.ts";
 import { validateMpSignature } from "../_shared/mpSignature.ts";
+import { approvePurchaseAndGrant, rejectPendingPurchase } from "../_shared/purchaseGrant.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -27,7 +28,7 @@ serve(async (req) => {
   try {
     const supabaseUrl   = Deno.env.get("SUPABASE_URL")!;
     const serviceKey    = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-    // Same production credential the Pix payment was created with; the older
+    // Same production credential the payment was created with; the older
     // ACCESS_TOKEN_MP cannot read those payments back.
     const mpToken       = Deno.env.get("ACCESS_TOKEN_MP_PROD")!;
     const webhookSecret = Deno.env.get("VERIFY_TOKEN_MP_PROD") ?? "";
@@ -77,63 +78,34 @@ serve(async (req) => {
 
     const grant = extractApprovedGrant(payment);
     if (!grant) {
-      // Declined or expired Pix closes out the pending purchase. Scoped to
-      // 'pending' so an already-approved purchase can never be downgraded.
+      // Declined or expired payment closes out the pending purchase (never an
+      // approved one: the RPC is scoped to 'pending') and keeps MP's reason.
       const failure = extractRejectedPurchase(payment);
       if (failure) {
-        const { error: rejectError } = await admin
-          .from("credit_purchases")
-          .update({ status: "rejected", payment_id: paymentId })
-          .eq("id", failure.purchaseId)
-          .eq("status", "pending");
-        if (rejectError) {
-          console.error("mp-webhook: reject credit_purchases:", rejectError);
-          return json({ error: "Erro interno." }, 500);
-        }
+        await rejectPendingPurchase(admin, {
+          purchaseId: failure.purchaseId,
+          paymentId,
+          statusDetail: typeof payment.status_detail === "string" ? payment.status_detail : null,
+        });
       }
       // Still pending (in_process/pending) or unknown: acknowledge, wait for the next ping.
       return json({ received: true });
     }
 
-    // Atomically mark purchase as approved; skip if already processed (idempotency)
-    const { data: updated, error: updateError } = await admin
-      .from("credit_purchases")
-      .update({ status: "approved", payment_id: paymentId })
-      .eq("id", grant.purchaseId)
-      .eq("status", "pending")
-      .select("user_id, credits_granted")
-      .maybeSingle();
+    // Claim + grant happen in one database transaction, so a crash here can
+    // never leave the purchase approved without its credits, and a replay (or
+    // the synchronous card checkout racing us) can never grant twice.
+    const result = await approvePurchaseAndGrant(admin, {
+      purchaseId: grant.purchaseId,
+      paymentId,
+    });
 
-    if (updateError) {
-      console.error("mp-webhook: update credit_purchases:", updateError);
-      return json({ error: "Erro interno." }, 500);
-    }
-
-    if (!updated) {
-      // Already processed (or unknown purchase) — safe to acknowledge
+    if (!result.granted) {
+      // Already processed (or unknown purchase): safe to acknowledge.
       return json({ received: true });
     }
 
-    // Grant credits atomically via RPC
-    const { data: grantResult, error: grantError } = await admin.rpc("grant_credits", {
-      p_user_id:    updated.user_id,
-      p_amount:     updated.credits_granted,
-      p_type:       "purchase",
-      p_payment_id: paymentId,
-      p_ref_id:     grant.purchaseId,
-    });
-
-    if (grantError) {
-      console.error("mp-webhook: grant_credits error:", grantError);
-      return json({ error: "Erro ao conceder créditos." }, 500);
-    }
-
-    if (grantResult?.success === false) {
-      console.error("mp-webhook: grant_credits failed:", grantResult);
-      return json({ error: "Falha ao conceder créditos." }, 500);
-    }
-
-    return json({ received: true, credits_granted: updated.credits_granted });
+    return json({ received: true, credits_granted: result.credits });
   } catch (e) {
     console.error("mp-webhook error:", e);
     return json({ error: e instanceof Error ? e.message : "Erro desconhecido." }, 500);
