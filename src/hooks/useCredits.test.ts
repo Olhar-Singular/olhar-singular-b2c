@@ -4,11 +4,13 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { createElement } from "react";
 import {
   useTransactionHistory,
-  useCreateStripeCheckout,
+  usePackages,
+  toPackageView,
   useCreatePixPayment,
-  usePixPurchaseStatus,
-  pixPollInterval,
-  PIX_POLL_INTERVAL_MS,
+  useCreateCardPayment,
+  usePurchaseStatus,
+  purchasePollInterval,
+  PURCHASE_POLL_INTERVAL_MS,
 } from "./useCredits";
 import { supabase } from "@/integrations/supabase/client";
 import { MSG_NETWORK } from "@/lib/utils/errors";
@@ -51,6 +53,8 @@ function wrapper({ children }: { children: React.ReactNode }) {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
   return createElement(QueryClientProvider, { client: qc }, children);
 }
+
+const CARD = { token: "tok", payment_method_id: "visa", payer: { email: "a@b.c" } };
 
 describe("useTransactionHistory", () => {
   beforeEach(() => vi.clearAllMocks());
@@ -125,75 +129,64 @@ describe("useTransactionHistory", () => {
   });
 });
 
-describe("useCreateStripeCheckout", () => {
-  const mockInvoke = supabase.functions.invoke as ReturnType<typeof vi.fn>;
+describe("usePackages", () => {
+  beforeEach(() => vi.clearAllMocks());
 
-  beforeEach(() => {
-    vi.clearAllMocks();
-    delete (window as { location?: unknown }).location;
-    (window as { location: unknown }).location = { href: "" };
+  const rows = [
+    { id: "p1", credits: 30, price_brl: 9.9, label: "Básico", highlight: false, admin_only: false, sort_order: 1 },
+    { id: "p2", credits: 120, price_brl: "29.90", label: "Profissional", highlight: true, admin_only: false, sort_order: 2 },
+  ];
+
+  it("reads the catalogue ordered by sort_order and normalizes the price", async () => {
+    const chain = {
+      select: vi.fn().mockReturnThis(),
+      order: vi.fn().mockResolvedValue({ data: rows, error: null }),
+    };
+    vi.mocked(supabase.from).mockReturnValue(chain as never);
+
+    const { result } = renderHook(() => usePackages(), { wrapper });
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+
+    expect(supabase.from).toHaveBeenCalledWith("credit_packages");
+    expect(chain.order).toHaveBeenCalledWith("sort_order", { ascending: true });
+    expect(result.current.data).toEqual([
+      { id: "p1", credits: 30, amountBrl: 9.9, label: "Básico", highlight: false, adminOnly: false },
+      { id: "p2", credits: 120, amountBrl: 29.9, label: "Profissional", highlight: true, adminOnly: false },
+    ]);
   });
 
-  it("invokes create-stripe-checkout with credits and amountBrl", async () => {
-    mockInvoke.mockResolvedValue({ data: { url: "https://stripe.test/checkout" }, error: null });
+  it("returns an empty list when the catalogue is empty", async () => {
+    const chain = {
+      select: vi.fn().mockReturnThis(),
+      order: vi.fn().mockResolvedValue({ data: null, error: null }),
+    };
+    vi.mocked(supabase.from).mockReturnValue(chain as never);
 
-    const { result } = renderHook(() => useCreateStripeCheckout(), { wrapper });
-    await act(async () => {
-      await result.current.mutateAsync({ credits: 120, amountBrl: 29.9 });
-    });
-
-    expect(mockInvoke).toHaveBeenCalledWith("create-stripe-checkout", {
-      body: { credits: 120, amountBrl: 29.9 },
-    });
+    const { result } = renderHook(() => usePackages(), { wrapper });
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(result.current.data).toEqual([]);
   });
 
-  // Both rails go through the same function; only the method field differs.
-  it("forwards the Pix payment method to the same edge function", async () => {
-    mockInvoke.mockResolvedValue({ data: { url: "https://stripe.test/pix" }, error: null });
+  it("propagates a read error", async () => {
+    const chain = {
+      select: vi.fn().mockReturnThis(),
+      order: vi.fn().mockResolvedValue({ data: null, error: { message: "boom" } }),
+    };
+    vi.mocked(supabase.from).mockReturnValue(chain as never);
 
-    const { result } = renderHook(() => useCreateStripeCheckout(), { wrapper });
-    await act(async () => {
-      await result.current.mutateAsync({ credits: 30, amountBrl: 9.9, method: "pix" });
-    });
-
-    expect(mockInvoke).toHaveBeenCalledWith("create-stripe-checkout", {
-      body: { credits: 30, amountBrl: 9.9, method: "pix" },
-    });
+    const { result } = renderHook(() => usePackages(), { wrapper });
+    await waitFor(() => expect(result.current.isError).toBe(true));
   });
 
-  it("redirects to the Stripe url on success", async () => {
-    mockInvoke.mockResolvedValue({ data: { url: "https://stripe.test/checkout" }, error: null });
-
-    const { result } = renderHook(() => useCreateStripeCheckout(), { wrapper });
-    await act(async () => {
-      await result.current.mutateAsync({ credits: 120, amountBrl: 29.9 });
+  it("toPackageView maps a row", () => {
+    expect(toPackageView(rows[1] as never)).toEqual({
+      id: "p2",
+      credits: 120,
+      amountBrl: 29.9,
+      label: "Profissional",
+      highlight: true,
+      adminOnly: false,
     });
-
-    expect(window.location.href).toBe("https://stripe.test/checkout");
-  });
-
-  it("calls toast.error when invoke returns error", async () => {
-    const { toast } = await import("sonner");
-    mockInvoke.mockResolvedValue({ data: null, error: new Error("falha no servidor") });
-
-    const { result } = renderHook(() => useCreateStripeCheckout(), { wrapper });
-    await act(async () => {
-      try { await result.current.mutateAsync({ credits: 120, amountBrl: 29.9 }); } catch { /* expected */ }
-    });
-
-    expect(toast.error).toHaveBeenCalled();
-  });
-
-  it("maps a raw network rejection to the friendly connection message", async () => {
-    const { toast } = await import("sonner");
-    mockInvoke.mockRejectedValue(new TypeError("Failed to fetch"));
-
-    const { result } = renderHook(() => useCreateStripeCheckout(), { wrapper });
-    await act(async () => {
-      try { await result.current.mutateAsync({ credits: 120, amountBrl: 29.9 }); } catch { /* expected */ }
-    });
-
-    expect(toast.error).toHaveBeenCalledWith(MSG_NETWORK);
   });
 });
 
@@ -213,16 +206,16 @@ describe("useCreatePixPayment (Pix inline, Checkout Transparente)", () => {
     (window as { location: unknown }).location = { href: "" };
   });
 
-  it("invokes create-pix-payment with the package", async () => {
+  it("invokes create-pix-payment with the package id", async () => {
     mockInvoke.mockResolvedValue({ data: qrPayload, error: null });
 
     const { result } = renderHook(() => useCreatePixPayment(), { wrapper });
     await act(async () => {
-      await result.current.mutateAsync({ credits: 30, amountBrl: 9.9 });
+      await result.current.mutateAsync({ packageId: "p1" });
     });
 
     expect(mockInvoke).toHaveBeenCalledWith("create-pix-payment", {
-      body: { credits: 30, amountBrl: 9.9 },
+      body: { packageId: "p1" },
     });
   });
 
@@ -232,7 +225,7 @@ describe("useCreatePixPayment (Pix inline, Checkout Transparente)", () => {
     const { result } = renderHook(() => useCreatePixPayment(), { wrapper });
     let returned: unknown;
     await act(async () => {
-      returned = await result.current.mutateAsync({ credits: 30, amountBrl: 9.9 });
+      returned = await result.current.mutateAsync({ packageId: "p1" });
     });
 
     expect(returned).toEqual(qrPayload);
@@ -244,7 +237,7 @@ describe("useCreatePixPayment (Pix inline, Checkout Transparente)", () => {
 
     const { result } = renderHook(() => useCreatePixPayment(), { wrapper });
     await act(async () => {
-      await result.current.mutateAsync({ credits: 30, amountBrl: 9.9 });
+      await result.current.mutateAsync({ packageId: "p1" });
     });
 
     expect(window.location.href).toBe("");
@@ -256,7 +249,7 @@ describe("useCreatePixPayment (Pix inline, Checkout Transparente)", () => {
 
     const { result } = renderHook(() => useCreatePixPayment(), { wrapper });
     await act(async () => {
-      try { await result.current.mutateAsync({ credits: 30, amountBrl: 9.9 }); } catch { /* expected */ }
+      try { await result.current.mutateAsync({ packageId: "p1" }); } catch { /* expected */ }
     });
 
     expect(toast.error).toHaveBeenCalled();
@@ -268,34 +261,110 @@ describe("useCreatePixPayment (Pix inline, Checkout Transparente)", () => {
 
     const { result } = renderHook(() => useCreatePixPayment(), { wrapper });
     await act(async () => {
-      try { await result.current.mutateAsync({ credits: 30, amountBrl: 9.9 }); } catch { /* expected */ }
+      try { await result.current.mutateAsync({ packageId: "p1" }); } catch { /* expected */ }
     });
 
     expect(toast.error).toHaveBeenCalledWith(MSG_NETWORK);
   });
 });
 
-describe("pixPollInterval", () => {
-  it("keeps polling every 3s while the payment is pending", () => {
-    expect(PIX_POLL_INTERVAL_MS).toBe(3000);
-    expect(pixPollInterval("pending")).toBe(PIX_POLL_INTERVAL_MS);
+describe("useCreateCardPayment (card inline via Mercado Pago)", () => {
+  const mockInvoke = supabase.functions.invoke as ReturnType<typeof vi.fn>;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    delete (window as { location?: unknown }).location;
+    (window as { location: unknown }).location = { href: "" };
   });
 
-  it("keeps polling when the purchase row has not been read yet", () => {
-    expect(pixPollInterval(undefined)).toBe(PIX_POLL_INTERVAL_MS);
+  it("invokes create-card-payment with the package id and the Brick formData", async () => {
+    mockInvoke.mockResolvedValue({
+      data: { status: "approved", purchaseId: "purchase-1", creditsGranted: 30 },
+      error: null,
+    });
+
+    const { result } = renderHook(() => useCreateCardPayment(), { wrapper });
+    let returned: unknown;
+    await act(async () => {
+      returned = await result.current.mutateAsync({ packageId: "p1", card: CARD });
+    });
+
+    expect(mockInvoke).toHaveBeenCalledWith("create-card-payment", {
+      body: { packageId: "p1", card: CARD },
+    });
+    expect(returned).toEqual({ status: "approved", purchaseId: "purchase-1", creditsGranted: 30 });
+    expect(window.location.href).toBe("");
   });
 
-  it("stops polling once the payment is approved", () => {
-    expect(pixPollInterval("approved")).toBe(false);
+  // A declined card is a result the dialog renders, not a mutation error.
+  it("resolves with the rejection instead of throwing", async () => {
+    const { toast } = await import("sonner");
+    mockInvoke.mockResolvedValue({
+      data: {
+        status: "rejected",
+        purchaseId: "purchase-1",
+        statusDetail: "cc_rejected_insufficient_amount",
+        message: "O cartão não tem limite.",
+      },
+      error: null,
+    });
+
+    const { result } = renderHook(() => useCreateCardPayment(), { wrapper });
+    let returned: { status: string } | undefined;
+    await act(async () => {
+      returned = await result.current.mutateAsync({ packageId: "p1", card: CARD });
+    });
+
+    expect(returned?.status).toBe("rejected");
+    expect(toast.error).not.toHaveBeenCalled();
   });
 
-  it("stops polling once the payment terminally failed", () => {
-    expect(pixPollInterval("rejected")).toBe(false);
-    expect(pixPollInterval("cancelled")).toBe(false);
+  it("calls toast.error when invoke returns error", async () => {
+    const { toast } = await import("sonner");
+    mockInvoke.mockResolvedValue({ data: null, error: new Error("falha no servidor") });
+
+    const { result } = renderHook(() => useCreateCardPayment(), { wrapper });
+    await act(async () => {
+      try { await result.current.mutateAsync({ packageId: "p1", card: CARD }); } catch { /* expected */ }
+    });
+
+    expect(toast.error).toHaveBeenCalled();
+  });
+
+  it("maps a raw network rejection to the friendly connection message", async () => {
+    const { toast } = await import("sonner");
+    mockInvoke.mockRejectedValue(new TypeError("Failed to fetch"));
+
+    const { result } = renderHook(() => useCreateCardPayment(), { wrapper });
+    await act(async () => {
+      try { await result.current.mutateAsync({ packageId: "p1", card: CARD }); } catch { /* expected */ }
+    });
+
+    expect(toast.error).toHaveBeenCalledWith(MSG_NETWORK);
   });
 });
 
-describe("usePixPurchaseStatus", () => {
+describe("purchasePollInterval", () => {
+  it("keeps polling every 3s while the payment is pending", () => {
+    expect(PURCHASE_POLL_INTERVAL_MS).toBe(3000);
+    expect(purchasePollInterval("pending")).toBe(PURCHASE_POLL_INTERVAL_MS);
+  });
+
+  it("keeps polling when the purchase row has not been read yet", () => {
+    expect(purchasePollInterval(undefined)).toBe(PURCHASE_POLL_INTERVAL_MS);
+  });
+
+  it("stops polling once the payment is approved", () => {
+    expect(purchasePollInterval("approved")).toBe(false);
+  });
+
+  it("stops polling once the payment terminally failed", () => {
+    expect(purchasePollInterval("rejected")).toBe(false);
+    expect(purchasePollInterval("cancelled")).toBe(false);
+  });
+});
+
+describe("usePurchaseStatus", () => {
   beforeEach(() => vi.clearAllMocks());
 
   function chainReturning(result: { data: unknown; error: unknown }) {
@@ -310,7 +379,7 @@ describe("usePixPurchaseStatus", () => {
     const chain = chainReturning({ data: { status: "pending" }, error: null });
     vi.mocked(supabase.from).mockReturnValue(chain as never);
 
-    const { result } = renderHook(() => usePixPurchaseStatus("purchase-1"), { wrapper });
+    const { result } = renderHook(() => usePurchaseStatus("purchase-1"), { wrapper });
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
 
     expect(supabase.from).toHaveBeenCalledWith("credit_purchases");
@@ -322,12 +391,12 @@ describe("usePixPurchaseStatus", () => {
     const chain = chainReturning({ data: { status: "approved" }, error: null });
     vi.mocked(supabase.from).mockReturnValue(chain as never);
 
-    const { result } = renderHook(() => usePixPurchaseStatus("purchase-1"), { wrapper });
+    const { result } = renderHook(() => usePurchaseStatus("purchase-1"), { wrapper });
     await waitFor(() => expect(result.current.data?.status).toBe("approved"));
   });
 
   it("does not query while there is no purchase to watch", () => {
-    const { result } = renderHook(() => usePixPurchaseStatus(null), { wrapper });
+    const { result } = renderHook(() => usePurchaseStatus(null), { wrapper });
     expect(supabase.from).not.toHaveBeenCalled();
     expect(result.current.fetchStatus).toBe("idle");
   });
@@ -336,7 +405,7 @@ describe("usePixPurchaseStatus", () => {
     const chain = chainReturning({ data: null, error: { message: "boom" } });
     vi.mocked(supabase.from).mockReturnValue(chain as never);
 
-    const { result } = renderHook(() => usePixPurchaseStatus("purchase-1"), { wrapper });
+    const { result } = renderHook(() => usePurchaseStatus("purchase-1"), { wrapper });
     await waitFor(() => expect(result.current.isError).toBe(true));
     expect((result.current.error as { message: string }).message).toBe("boom");
   });
