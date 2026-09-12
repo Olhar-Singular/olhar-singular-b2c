@@ -19,14 +19,29 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { userDisplayName } from "@/lib/utils/adminFormat";
-import type { AdminUser, SetAccessInput } from "@/types/admin";
+import type { AdminUser, ChangeEmailInput, SetAccessInput } from "@/types/admin";
 
 interface AccessMenuProps {
   user: AdminUser;
   onSetAccess: (input: SetAccessInput) => void;
+  onChangeEmail?: (input: ChangeEmailInput) => void;
+  onCancelSubscription?: (input: { userId: string }) => void;
   disabled?: boolean;
 }
+
+const LIVE_SUBSCRIPTION = ["authorized", "past_due", "paused"];
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 
 const KIND_LABELS = {
   trial: "Período de teste (7 dias, 50 créditos)",
@@ -39,9 +54,37 @@ const EXTEND_PRESETS = [7, 14, 30] as const;
 // Support actions on one account: change how it gets in (trial / courtesy /
 // legacy) or give a running trial more days. Kind changes are confirmed
 // because they move the user across the paywall; extensions are one click.
-export function AccessMenu({ user, onSetAccess, disabled = false }: AccessMenuProps) {
+export function AccessMenu({
+  user,
+  onSetAccess,
+  onChangeEmail = () => {},
+  onCancelSubscription = () => {},
+  disabled = false,
+}: AccessMenuProps) {
   const [pendingKind, setPendingKind] = useState<keyof typeof KIND_LABELS | null>(null);
+  const [emailOpen, setEmailOpen] = useState(false);
+  const [newEmail, setNewEmail] = useState("");
+  const [emailError, setEmailError] = useState<string | null>(null);
+  const [confirmCancel, setConfirmCancel] = useState(false);
   const canExtend = user.access_kind === "trial" && user.trial_started_at !== null;
+  const hasLiveSubscription = !!user.subscription && LIVE_SUBSCRIPTION.includes(user.subscription.status);
+
+  function submitEmail(e: React.FormEvent) {
+    e.preventDefault();
+    const email = newEmail.trim().toLowerCase();
+    if (!EMAIL_RE.test(email)) {
+      setEmailError("Informe um e-mail válido.");
+      return;
+    }
+    if (email === (user.email ?? "").toLowerCase()) {
+      setEmailError("É o mesmo e-mail atual.");
+      return;
+    }
+    onChangeEmail({ userId: user.id, email });
+    setEmailOpen(false);
+    setNewEmail("");
+    setEmailError(null);
+  }
 
   return (
     <>
@@ -79,8 +122,60 @@ export function AccessMenu({ user, onSetAccess, disabled = false }: AccessMenuPr
               +{days} dias
             </DropdownMenuItem>
           ))}
+          <DropdownMenuSeparator />
+          <DropdownMenuLabel>Conta</DropdownMenuLabel>
+          <DropdownMenuItem onSelect={() => setEmailOpen(true)}>Alterar e-mail</DropdownMenuItem>
+          <DropdownMenuItem disabled={!hasLiveSubscription} onSelect={() => setConfirmCancel(true)}>
+            Cancelar assinatura
+          </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
+
+      <Dialog open={emailOpen} onOpenChange={(open) => { setEmailOpen(open); setEmailError(null); }}>
+        <DialogContent className="sm:max-w-md">
+          <form onSubmit={submitEmail} className="space-y-4" noValidate>
+            <DialogHeader>
+              <DialogTitle>Alterar e-mail</DialogTitle>
+              <DialogDescription>
+                {userDisplayName(user)} passa a entrar com o novo e-mail, já confirmado. Use para corrigir um erro de digitação no checkout.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-1.5">
+              <Label htmlFor={`new-email-${user.id}`}>Novo e-mail</Label>
+              <Input
+                id={`new-email-${user.id}`}
+                type="email"
+                value={newEmail}
+                onChange={(e) => setNewEmail(e.target.value)}
+                placeholder={user.email ?? "novo@exemplo.com"}
+              />
+              {emailError && (
+                <p role="alert" className="text-sm text-destructive">
+                  {emailError}
+                </p>
+              )}
+            </div>
+            <DialogFooter>
+              <Button type="submit">Salvar e-mail</Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      <AlertDialog open={confirmCancel} onOpenChange={setConfirmCancel}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Cancelar a assinatura?</AlertDialogTitle>
+            <AlertDialogDescription>
+              A cobrança mensal de {userDisplayName(user)} para no Mercado Pago. Os créditos do período já pago continuam até o fim.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Manter</AlertDialogCancel>
+            <AlertDialogAction onClick={() => onCancelSubscription({ userId: user.id })}>Cancelar assinatura</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {pendingKind && (
         <AlertDialog open onOpenChange={() => setPendingKind(null)}>

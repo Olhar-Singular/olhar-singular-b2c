@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { adminAccessState, adminPlanCredits, formatPeriodEnd, ACCESS_STATE_LABELS } from "./adminAccess";
+import { formatSubscription, adminAccessState, adminPlanCredits, formatPeriodEnd, ACCESS_STATE_LABELS } from "./adminAccess";
 import type { AdminUser } from "@/types/admin";
 
 const NOW = new Date("2026-09-12T12:00:00Z");
@@ -70,5 +70,28 @@ describe("adminPlanCredits / formatPeriodEnd", () => {
     expect(formatPeriodEnd(user({ plan_period_end: "2026-09-20T12:00:00Z" }), NOW)).toBe("até 20/09/2026");
     expect(formatPeriodEnd(user({ plan_period_end: "2026-09-01T00:00:00Z" }), NOW)).toBeNull();
     expect(formatPeriodEnd(user(), NOW)).toBeNull();
+  });
+});
+
+describe("subscriptions in the admin table", () => {
+  const sub = (overrides: Partial<NonNullable<AdminUser["subscription"]>> = {}) => ({
+    status: "authorized", plan_name: "Profissional", price_brl: 59.9,
+    next_payment_date: "2026-10-12T12:00:00Z", current_period_end: null, mp_preapproval_id: "p",
+    ...overrides,
+  });
+
+  it("a subscriber with a failed renewal reads Inadimplente, whatever the credits", () => {
+    expect(adminAccessState(user({ access_kind: "subscriber", plan_credits: 100, plan_period_end: "2099-01-01T00:00:00Z", subscription: sub({ status: "past_due" }) }), NOW)).toBe("past_due");
+    expect(adminAccessState(user({ access_kind: "legacy", credit_balance: 3, subscription: sub({ status: "past_due" }) }), NOW)).toBe("legacy");
+    expect(adminAccessState(user({ access_kind: "subscriber", plan_credits: 100, plan_period_end: "2099-01-01T00:00:00Z", subscription: sub() }), NOW)).toBe("subscriber");
+    expect(ACCESS_STATE_LABELS.past_due).toBe("Inadimplente");
+  });
+
+  it("formats plan, status and next charge", () => {
+    expect(formatSubscription(user({ subscription: sub() }))).toEqual({ label: "Profissional · Ativa", detail: "próx. 12/10/2026" });
+    expect(formatSubscription(user({ subscription: sub({ status: "cancelled" }) }))).toEqual({ label: "Profissional · Cancelada", detail: null });
+    expect(formatSubscription(user({ subscription: sub({ plan_name: null, status: "weird", next_payment_date: "garbage" }) }))).toEqual({ label: "weird", detail: null });
+    expect(formatSubscription(user({ subscription: sub({ next_payment_date: null }) }))).toEqual({ label: "Profissional · Ativa", detail: null });
+    expect(formatSubscription(user())).toBeNull();
   });
 });

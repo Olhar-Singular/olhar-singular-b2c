@@ -17,6 +17,23 @@ export interface AdminMetrics {
 
 export type AdminAccessKind = "subscriber" | "trial" | "exempt" | "legacy";
 
+/** The user's live subscription, or the most recent attempt. */
+export interface AdminSubscription {
+  status: string;
+  plan_name: string | null;
+  price_brl: number;
+  next_payment_date: string | null;
+  current_period_end: string | null;
+  mp_preapproval_id: string | null;
+}
+
+export interface AdminSubscriptionSummary {
+  by_status: Record<string, number>;
+  /** Estimated MRR: sum of the plan prices of authorized subscriptions. */
+  mrr_brl: number;
+  live: number;
+}
+
 export interface AdminUser {
   id: string;
   email: string | null;
@@ -35,11 +52,13 @@ export interface AdminUser {
   created_at: string | null;
   is_active: boolean;
   is_super_admin: boolean;
+  subscription?: AdminSubscription | null;
 }
 
 export interface AdminDashboardData {
   metrics: AdminMetrics;
   users: AdminUser[];
+  subscriptions?: AdminSubscriptionSummary;
 }
 
 export type AdminUserAction = "ban" | "unban";
@@ -52,6 +71,18 @@ export interface SetUserStatusInput {
 export interface GrantCreditsInput {
   userId: string;
   amount: number;
+}
+
+/** Invite a new account: Trial (7 days, 50 credits on acceptance) or Cortesia (exempt). */
+export interface CreateUserInput {
+  email: string;
+  fullName: string;
+  mode: "trial" | "exempt";
+}
+
+export interface ChangeEmailInput {
+  userId: string;
+  email: string;
 }
 
 /** Change a user's access kind (never 'subscriber') or extend a running trial. */

@@ -19,17 +19,20 @@ import {
   adminAccessState,
   adminPlanCredits,
   formatPeriodEnd,
+  formatSubscription,
   type AdminAccessState,
 } from "@/lib/utils/adminAccess";
 import { GrantCreditsButton } from "@/components/admin/GrantCreditsButton";
 import { AccessMenu } from "@/components/admin/AccessMenu";
-import type { AdminUser, SetUserStatusInput, GrantCreditsInput, SetAccessInput } from "@/types/admin";
+import type { AdminUser, SetUserStatusInput, GrantCreditsInput, SetAccessInput, ChangeEmailInput } from "@/types/admin";
 
 interface UsersTableProps {
   users: AdminUser[];
   onToggleStatus: (input: SetUserStatusInput) => void;
   onGrantCredits: (input: GrantCreditsInput) => void;
   onSetAccess?: (input: SetAccessInput) => void;
+  onChangeEmail?: (input: ChangeEmailInput) => void;
+  onCancelSubscription?: (input: { userId: string }) => void;
   isUpdating?: boolean;
   isGranting?: boolean;
   isSettingAccess?: boolean;
@@ -41,6 +44,7 @@ type StateFilter = "all" | AdminAccessState;
 
 const STATE_BADGE: Record<AdminAccessState, "default" | "secondary" | "destructive" | "outline"> = {
   subscriber: "default",
+  past_due: "destructive",
   trial: "secondary",
   trial_expired: "outline",
   exempt: "secondary",
@@ -54,6 +58,8 @@ export function UsersTable({
   onToggleStatus,
   onGrantCredits,
   onSetAccess = () => {},
+  onChangeEmail = () => {},
+  onCancelSubscription = () => {},
   isUpdating = false,
   isGranting = false,
   isSettingAccess = false,
@@ -118,6 +124,7 @@ export function UsersTable({
               <th scope="col" className="px-3 py-2 font-medium">Nome</th>
               <th scope="col" className="px-3 py-2 font-medium">E-mail</th>
               <th scope="col" className="px-3 py-2 font-medium">Acesso</th>
+              <th scope="col" className="px-3 py-2 font-medium">Assinatura</th>
               <th scope="col" className="px-3 py-2 font-medium">Último acesso</th>
               <th scope="col" className="px-3 py-2 text-right font-medium">Plano</th>
               <th scope="col" className="px-3 py-2 text-right font-medium">Extras</th>
@@ -129,7 +136,7 @@ export function UsersTable({
           <tbody>
             {visible.length === 0 ? (
               <tr>
-                <td colSpan={9} className="px-3 py-8 text-center text-muted-foreground">
+                <td colSpan={10} className="px-3 py-8 text-center text-muted-foreground">
                   Nenhum usuário encontrado.
                 </td>
               </tr>
@@ -137,6 +144,7 @@ export function UsersTable({
               visible.map((user) => {
                 const state = adminAccessState(user, now);
                 const periodEnd = formatPeriodEnd(user, now);
+                const subscription = formatSubscription(user);
                 return (
                 <tr key={user.id} className="border-b last:border-0">
                   <td className="px-3 py-2">
@@ -157,10 +165,22 @@ export function UsersTable({
                       <AccessMenu
                         user={user}
                         onSetAccess={onSetAccess}
+                        onChangeEmail={onChangeEmail}
+                        onCancelSubscription={onCancelSubscription}
                         disabled={user.is_super_admin || isSettingAccess}
                       />
                     </div>
                     {periodEnd && <span className="block text-xs text-muted-foreground">{periodEnd}</span>}
+                  </td>
+                  <td className="px-3 py-2 text-muted-foreground" data-testid={`subscription-${user.id}`}>
+                    {subscription ? (
+                      <>
+                        <span className="text-foreground">{subscription.label}</span>
+                        {subscription.detail && <span className="block text-xs">{subscription.detail}</span>}
+                      </>
+                    ) : (
+                      "—"
+                    )}
                   </td>
                   <td className="px-3 py-2 text-muted-foreground">{formatLastAccess(user.last_sign_in_at)}</td>
                   <td className="px-3 py-2 text-right tabular-nums">{adminPlanCredits(user, now)}</td>

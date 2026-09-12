@@ -26,13 +26,17 @@ function user(overrides: Partial<AdminUser> = {}): AdminUser {
 
 describe("AccessMenu", () => {
   let onSetAccess: ReturnType<typeof vi.fn>;
+  let onChangeEmail: ReturnType<typeof vi.fn>;
+  let onCancelSubscription: ReturnType<typeof vi.fn>;
   beforeEach(() => {
     onSetAccess = vi.fn();
+    onChangeEmail = vi.fn();
+    onCancelSubscription = vi.fn();
   });
 
   async function open(u = user()) {
     const ue = userEvent.setup();
-    render(<AccessMenu user={u} onSetAccess={onSetAccess} />);
+    render(<AccessMenu user={u} onSetAccess={onSetAccess} onChangeEmail={onChangeEmail} onCancelSubscription={onCancelSubscription} />);
     await ue.click(screen.getByRole("button", { name: /alterar acesso de ana/i }));
     await screen.findByRole("menu");
     return ue;
@@ -79,5 +83,87 @@ describe("AccessMenu", () => {
   it("can be disabled while a mutation is in flight", () => {
     render(<AccessMenu user={user()} onSetAccess={onSetAccess} disabled />);
     expect(screen.getByRole("button", { name: /alterar acesso de ana/i })).toBeDisabled();
+  });
+
+  describe("account actions", () => {
+    it("changes the e-mail after validation", async () => {
+      const ue = await open();
+      await ue.click(screen.getByRole("menuitem", { name: /alterar e-mail/i }));
+      const dialog = await screen.findByRole("dialog");
+      expect(dialog).toHaveTextContent(/corrigir um erro de digitação/);
+
+      await ue.click(screen.getByRole("button", { name: /salvar e-mail/i }));
+      expect(screen.getByRole("alert")).toHaveTextContent(/e-mail válido/);
+
+      await ue.type(screen.getByLabelText(/novo e-mail/i), "Ana@X.com");
+      await ue.click(screen.getByRole("button", { name: /salvar e-mail/i }));
+      expect(screen.getByRole("alert")).toHaveTextContent(/mesmo e-mail/);
+
+      await ue.clear(screen.getByLabelText(/novo e-mail/i));
+      await ue.type(screen.getByLabelText(/novo e-mail/i), " Nova@X.com ");
+      await ue.click(screen.getByRole("button", { name: /salvar e-mail/i }));
+      expect(onChangeEmail).toHaveBeenCalledWith({ userId: "u1", email: "nova@x.com" });
+      await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    });
+
+    it("clears the validation error when the dialog closes", async () => {
+      const ue = await open(user({ email: null }));
+      await ue.click(screen.getByRole("menuitem", { name: /alterar e-mail/i }));
+      await screen.findByRole("dialog");
+      await ue.type(screen.getByLabelText(/novo e-mail/i), "ok@x.com");
+      await ue.clear(screen.getByLabelText(/novo e-mail/i));
+      await ue.click(screen.getByRole("button", { name: /salvar e-mail/i }));
+      expect(screen.getByRole("alert")).toBeInTheDocument();
+      // With no current e-mail the "same e-mail" check never trips.
+      await ue.type(screen.getByLabelText(/novo e-mail/i), "ok@x.com");
+      await ue.click(screen.getByRole("button", { name: /salvar e-mail/i }));
+      expect(onChangeEmail).toHaveBeenCalledWith({ userId: "u1", email: "ok@x.com" });
+      await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+      await ue.click(screen.getByRole("button", { name: /alterar acesso de ana/i }));
+      await screen.findByRole("menu");
+      await ue.click(screen.getByRole("menuitem", { name: /alterar e-mail/i }));
+      await screen.findByRole("dialog");
+      await ue.click(screen.getByRole("button", { name: /salvar e-mail/i }));
+      expect(screen.getByRole("alert")).toBeInTheDocument();
+      await ue.keyboard("{Escape}");
+      await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    });
+
+    it("offers to cancel a live subscription only, after confirmation", async () => {
+      const ue = await open(user({ subscription: { status: "authorized", plan_name: "Pro", price_brl: 59.9, next_payment_date: null, current_period_end: null, mp_preapproval_id: "p" } }));
+      await ue.click(screen.getByRole("menuitem", { name: /cancelar assinatura/i }));
+      expect(await screen.findByRole("alertdialog")).toHaveTextContent(/cobrança mensal de Ana para/);
+      await ue.click(screen.getByRole("button", { name: /^manter$/i }));
+      expect(onCancelSubscription).not.toHaveBeenCalled();
+
+      await ue.click(screen.getByRole("button", { name: /alterar acesso de ana/i }));
+      await screen.findByRole("menu");
+      await ue.click(screen.getByRole("menuitem", { name: /cancelar assinatura/i }));
+      await screen.findByRole("alertdialog");
+      await ue.click(screen.getByRole("button", { name: /^cancelar assinatura$/i }));
+      expect(onCancelSubscription).toHaveBeenCalledWith({ userId: "u1" });
+    });
+
+    it("disables the cancel item without a live subscription", async () => {
+      await open(user({ subscription: { status: "cancelled", plan_name: null, price_brl: 0, next_payment_date: null, current_period_end: null, mp_preapproval_id: null } }));
+      expect(screen.getByRole("menuitem", { name: /cancelar assinatura/i })).toHaveAttribute("aria-disabled", "true");
+    });
+
+    it("works without the optional handlers", async () => {
+      const ue = userEvent.setup();
+      render(<AccessMenu user={user({ subscription: { status: "paused", plan_name: null, price_brl: 0, next_payment_date: null, current_period_end: null, mp_preapproval_id: "p" } })} onSetAccess={onSetAccess} />);
+      await ue.click(screen.getByRole("button", { name: /alterar acesso de ana/i }));
+      await screen.findByRole("menu");
+      await ue.click(screen.getByRole("menuitem", { name: /cancelar assinatura/i }));
+      await screen.findByRole("alertdialog");
+      await ue.click(screen.getByRole("button", { name: /^cancelar assinatura$/i }));
+      await ue.click(screen.getByRole("button", { name: /alterar acesso de ana/i }));
+      await screen.findByRole("menu");
+      await ue.click(screen.getByRole("menuitem", { name: /alterar e-mail/i }));
+      await screen.findByRole("dialog");
+      await ue.type(screen.getByLabelText(/novo e-mail/i), "x@y.zz");
+      await ue.click(screen.getByRole("button", { name: /salvar e-mail/i }));
+      await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    });
   });
 });

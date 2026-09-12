@@ -193,6 +193,20 @@ describe("UsersTable", () => {
     expect(screen.getByTestId("access-u1")).toBeInTheDocument();
   });
 
+  it("tolerates missing e-mail and cancel handlers (default no-ops)", async () => {
+    const ue = userEvent.setup();
+    const withSub = [{ ...users[0], subscription: { status: "paused", plan_name: null, price_brl: 0, next_payment_date: null, current_period_end: null, mp_preapproval_id: "p" } }];
+    render(<UsersTable users={withSub} onToggleStatus={onToggleStatus} onGrantCredits={onGrantCredits} />);
+    await ue.click(screen.getByRole("button", { name: /alterar acesso de alice/i }));
+    await ue.click(await screen.findByRole("menuitem", { name: /cancelar assinatura/i }));
+    await ue.click(await screen.findByRole("button", { name: /^cancelar assinatura$/i }));
+    await ue.click(screen.getByRole("button", { name: /alterar acesso de alice/i }));
+    await ue.click(await screen.findByRole("menuitem", { name: /alterar e-mail/i }));
+    await ue.type(await screen.findByLabelText(/novo e-mail/i), "x@y.zz");
+    await ue.click(screen.getByRole("button", { name: /salvar e-mail/i }));
+    expect(screen.getByTestId("subscription-u1")).toHaveTextContent("Pausada");
+  });
+
   it("forwards access changes from the row menu", async () => {
     const ue = userEvent.setup();
     const onSetAccess = vi.fn();
@@ -201,5 +215,26 @@ describe("UsersTable", () => {
     await ue.click(await screen.findByRole("menuitem", { name: /legado/i }));
     await ue.click(await screen.findByRole("button", { name: /confirmar/i }));
     expect(onSetAccess).toHaveBeenCalledWith({ userId: "u1", kind: "legacy" });
+  });
+
+  it("shows the subscription column and forwards e-mail and cancel actions", async () => {
+    const ue = userEvent.setup();
+    const onChangeEmail = vi.fn();
+    const onCancelSubscription = vi.fn();
+    const withSub = [{
+      ...users[0],
+      subscription: { status: "authorized", plan_name: "Profissional", price_brl: 59.9, next_payment_date: "2026-10-12T12:00:00Z", current_period_end: null, mp_preapproval_id: "p" },
+    }, users[1]];
+    render(
+      <UsersTable users={withSub} onToggleStatus={onToggleStatus} onGrantCredits={onGrantCredits} onChangeEmail={onChangeEmail} onCancelSubscription={onCancelSubscription} />,
+    );
+    expect(screen.getByTestId("subscription-u1")).toHaveTextContent("Profissional · Ativa");
+    expect(screen.getByTestId("subscription-u1")).toHaveTextContent("próx. 12/10/2026");
+    expect(screen.getByTestId("subscription-u2")).toHaveTextContent("—");
+
+    await ue.click(screen.getByRole("button", { name: /alterar acesso de alice/i }));
+    await ue.click(await screen.findByRole("menuitem", { name: /cancelar assinatura/i }));
+    await ue.click(await screen.findByRole("button", { name: /^cancelar assinatura$/i }));
+    expect(onCancelSubscription).toHaveBeenCalledWith({ userId: "u1" });
   });
 });

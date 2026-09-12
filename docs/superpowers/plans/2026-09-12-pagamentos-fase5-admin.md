@@ -49,3 +49,9 @@ created_at)`, RPC `log_admin_action(actor, target, action, payload)`. pgTAP `adm
 
 `dominio-orientador` (Admin), `edge-fn-writer` (árvore), `rls-policy-writer` se aplicável;
 `make lint`, coverage 100%, `make test-db`, `make fn-check`; `make gen-types`.
+
+## Estado (2026-09-12)
+
+Tasks 1 a 4 concluídas: `7c9e48a` (admin_actions), `882097f` (functions + auditoria + dashboard)
+e o commit do cliente (CreateUserDialog, AccessMenu com e-mail e cancelamento, coluna Assinatura,
+SubscriptionStats, abas). Pendente: validação no browser.
