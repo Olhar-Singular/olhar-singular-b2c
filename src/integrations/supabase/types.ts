@@ -365,9 +365,12 @@ export type Database = {
         Row: {
           created_at: string
           credits_charged: number
+          extra_charged: number
           free_claimed: boolean
           id: string
           kind: string
+          period_end_at_open: string | null
+          plan_charged: number
           reversed_at: string | null
           settled_at: string | null
           state: string
@@ -376,9 +379,12 @@ export type Database = {
         Insert: {
           created_at?: string
           credits_charged?: number
+          extra_charged?: number
           free_claimed?: boolean
           id: string
           kind: string
+          period_end_at_open?: string | null
+          plan_charged?: number
           reversed_at?: string | null
           settled_at?: string | null
           state?: string
@@ -387,9 +393,12 @@ export type Database = {
         Update: {
           created_at?: string
           credits_charged?: number
+          extra_charged?: number
           free_claimed?: boolean
           id?: string
           kind?: string
+          period_end_at_open?: string | null
+          plan_charged?: number
           reversed_at?: string | null
           settled_at?: string | null
           state?: string
@@ -399,6 +408,7 @@ export type Database = {
       }
       credit_transactions: {
         Row: {
+          bucket: string
           created_at: string
           delta: number
           id: string
@@ -408,6 +418,7 @@ export type Database = {
           user_id: string | null
         }
         Insert: {
+          bucket?: string
           created_at?: string
           delta: number
           id?: string
@@ -417,6 +428,7 @@ export type Database = {
           user_id?: string | null
         }
         Update: {
+          bucket?: string
           created_at?: string
           delta?: number
           id?: string
@@ -465,6 +477,8 @@ export type Database = {
       }
       profiles: {
         Row: {
+          access_kind: string
+          cpf: string | null
           created_at: string
           credit_balance: number
           free_adaptation_used: boolean
@@ -472,9 +486,17 @@ export type Database = {
           full_name: string | null
           id: string
           is_super_admin: boolean
+          must_set_password: boolean
+          plan_credits: number
+          plan_period_end: string | null
+          terms_accepted_at: string | null
+          terms_version: string | null
+          trial_started_at: string | null
           updated_at: string
         }
         Insert: {
+          access_kind?: string
+          cpf?: string | null
           created_at?: string
           credit_balance?: number
           free_adaptation_used?: boolean
@@ -482,9 +504,17 @@ export type Database = {
           full_name?: string | null
           id: string
           is_super_admin?: boolean
+          must_set_password?: boolean
+          plan_credits?: number
+          plan_period_end?: string | null
+          terms_accepted_at?: string | null
+          terms_version?: string | null
+          trial_started_at?: string | null
           updated_at?: string
         }
         Update: {
+          access_kind?: string
+          cpf?: string | null
           created_at?: string
           credit_balance?: number
           free_adaptation_used?: boolean
@@ -492,6 +522,12 @@ export type Database = {
           full_name?: string | null
           id?: string
           is_super_admin?: boolean
+          must_set_password?: boolean
+          plan_credits?: number
+          plan_period_end?: string | null
+          terms_accepted_at?: string | null
+          terms_version?: string | null
+          trial_started_at?: string | null
           updated_at?: string
         }
         Relationships: []

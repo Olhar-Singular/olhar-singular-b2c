@@ -65,14 +65,14 @@ SELECT throws_ok(
   '42501', NULL,
   'credit_transactions cannot be deleted (immutable ledger)');
 
--- INSERT policy WITH CHECK (auth.uid() = user_id): A may insert its own row...
-WITH i AS (
-  INSERT INTO public.credit_transactions (user_id, delta, type)
-  VALUES ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 1, 'adapt') RETURNING 1)
-SELECT is((SELECT count(*)::int FROM i),
-  1, 'A can insert a ledger row for themselves');
+-- The ledger is written only by the money RPCs (service_role). A user could
+-- otherwise forge "plan_grant"/"purchase" rows in their own statement.
+SELECT throws_ok(
+  $$ INSERT INTO public.credit_transactions (user_id, delta, type)
+     VALUES ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 1, 'adapt') $$,
+  '42501', NULL,
+  'A cannot insert a ledger row, not even for themselves');
 
--- ...but not a row attributed to another user (RLS WITH CHECK → error 42501).
 SELECT throws_ok(
   $$ INSERT INTO public.credit_transactions (user_id, delta, type)
      VALUES ('bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb', 1, 'adapt') $$,
@@ -91,12 +91,12 @@ SELECT is(
      WHERE id IN ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
                   'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb')),
   2, 'service_role sees both test profiles (RLS bypassed)');
--- 3 rows: the 2 signup_bonus fixtures + the row A inserted for itself above.
+-- 2 rows: the 2 fixtures (A can no longer insert its own ledger row).
 SELECT is(
   (SELECT count(*)::int FROM public.credit_transactions
      WHERE user_id IN ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
                        'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb')),
-  3, 'service_role sees all test ledger rows (RLS bypassed)');
+  2, 'service_role sees all test ledger rows (RLS bypassed)');
 RESET role;
 
 SELECT * FROM finish();
