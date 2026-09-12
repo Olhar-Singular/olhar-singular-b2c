@@ -32,13 +32,13 @@ describe("parsePaymentNotification", () => {
 describe("extractApprovedGrant", () => {
   it("returns the purchase id for an approved payment", () => {
     expect(
-      extractApprovedGrant({ status: "approved", external_reference: "purchase-1" }),
-    ).toEqual({ purchaseId: "purchase-1" });
+      extractApprovedGrant({ status: "approved", external_reference: "6f1d2c3b-4a5e-4f60-8b7c-9d0e1f2a3b4c" }),
+    ).toEqual({ purchaseId: "6f1d2c3b-4a5e-4f60-8b7c-9d0e1f2a3b4c" });
   });
 
   it("returns null while the Pix is still pending", () => {
     expect(
-      extractApprovedGrant({ status: "pending", external_reference: "purchase-1" }),
+      extractApprovedGrant({ status: "pending", external_reference: "6f1d2c3b-4a5e-4f60-8b7c-9d0e1f2a3b4c" }),
     ).toBeNull();
   });
 
@@ -51,14 +51,14 @@ describe("extractApprovedGrant", () => {
 describe("extractRejectedPurchase", () => {
   it("closes out a rejected payment", () => {
     expect(
-      extractRejectedPurchase({ status: "rejected", external_reference: "purchase-1" }),
-    ).toEqual({ purchaseId: "purchase-1" });
+      extractRejectedPurchase({ status: "rejected", external_reference: "6f1d2c3b-4a5e-4f60-8b7c-9d0e1f2a3b4c" }),
+    ).toEqual({ purchaseId: "6f1d2c3b-4a5e-4f60-8b7c-9d0e1f2a3b4c" });
   });
 
   it("closes out a cancelled payment (expired Pix)", () => {
     expect(
-      extractRejectedPurchase({ status: "cancelled", external_reference: "purchase-1" }),
-    ).toEqual({ purchaseId: "purchase-1" });
+      extractRejectedPurchase({ status: "cancelled", external_reference: "6f1d2c3b-4a5e-4f60-8b7c-9d0e1f2a3b4c" }),
+    ).toEqual({ purchaseId: "6f1d2c3b-4a5e-4f60-8b7c-9d0e1f2a3b4c" });
   });
 
   it("does not treat approved or pending as a failure", () => {
@@ -72,5 +72,18 @@ describe("extractRejectedPurchase", () => {
 
   it("returns null when the payment has no status at all", () => {
     expect(extractRejectedPurchase({ external_reference: "p1" })).toBeNull();
+  });
+});
+
+describe("external_reference must be a credit_purchases uuid", () => {
+  it("ignores approved payments whose reference is not a uuid (other products, manual tests)", () => {
+    expect(extractApprovedGrant({ status: "approved", external_reference: "ext_ref_1234" })).toBeNull();
+    expect(extractRejectedPurchase({ status: "rejected", external_reference: "ORDER-77" })).toBeNull();
+  });
+
+  it("normalizes the uuid to lower case", () => {
+    expect(
+      extractApprovedGrant({ status: "approved", external_reference: "6F1D2C3B-4A5E-4F60-8B7C-9D0E1F2A3B4C" }),
+    ).toEqual({ purchaseId: "6f1d2c3b-4a5e-4f60-8b7c-9d0e1f2a3b4c" });
   });
 });
