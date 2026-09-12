@@ -7,7 +7,7 @@ import PixPaymentDialog from "./PixPaymentDialog";
 const mockRefreshProfile = vi.fn();
 
 vi.mock("@/hooks/useCredits", () => ({
-  usePixPurchaseStatus: vi.fn(() => ({ data: { status: "pending" } })),
+  usePurchaseStatus: vi.fn(() => ({ data: { status: "pending" } })),
 }));
 
 vi.mock("@/hooks/useAuth", () => ({
@@ -33,7 +33,7 @@ function stubClipboard(writeText: ReturnType<typeof vi.fn>) {
 
 async function setStatus(status: string) {
   const m = await import("@/hooks/useCredits");
-  vi.mocked(m.usePixPurchaseStatus).mockReturnValue({ data: { status } } as never);
+  vi.mocked(m.usePurchaseStatus).mockReturnValue({ data: { status } } as never);
 }
 
 function renderDialog(payment: typeof PAYMENT | null = PAYMENT, queryClient = createTestQueryClient()) {
@@ -47,7 +47,7 @@ describe("PixPaymentDialog", () => {
   beforeEach(async () => {
     vi.clearAllMocks();
     const m = await import("@/hooks/useCredits");
-    vi.mocked(m.usePixPurchaseStatus).mockReturnValue({ data: { status: "pending" } } as never);
+    vi.mocked(m.usePurchaseStatus).mockReturnValue({ data: { status: "pending" } } as never);
     const auth = await import("@/hooks/useAuth");
     vi.mocked(auth.useAuth).mockReturnValue(
       buildAuthState({ refreshProfile: mockRefreshProfile }) as never,
@@ -102,13 +102,13 @@ describe("PixPaymentDialog", () => {
   it("watches the purchase row created for this payment", async () => {
     const m = await import("@/hooks/useCredits");
     renderDialog();
-    expect(m.usePixPurchaseStatus).toHaveBeenCalledWith("purchase-1");
+    expect(m.usePurchaseStatus).toHaveBeenCalledWith("purchase-1");
   });
 
   it("stops watching once the dialog has no payment", async () => {
     const m = await import("@/hooks/useCredits");
     renderDialog(null);
-    expect(m.usePixPurchaseStatus).toHaveBeenCalledWith(null);
+    expect(m.usePurchaseStatus).toHaveBeenCalledWith(null);
   });
 
   it("announces the confirmation when the webhook approves the payment", async () => {
@@ -164,7 +164,7 @@ describe("PixPaymentDialog", () => {
 
   it("survives a purchase row that has not been read yet", async () => {
     const m = await import("@/hooks/useCredits");
-    vi.mocked(m.usePixPurchaseStatus).mockReturnValue({ data: null } as never);
+    vi.mocked(m.usePurchaseStatus).mockReturnValue({ data: null } as never);
     renderDialog();
     expect(screen.getByText(/aguardando pagamento/i)).toBeInTheDocument();
   });

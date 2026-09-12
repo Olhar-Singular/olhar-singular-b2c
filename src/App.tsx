@@ -13,7 +13,6 @@ import AdminPage from "@/pages/AdminPage";
 import DashboardPage from "@/pages/DashboardPage";
 import BarrierProfilesPage from "@/pages/BarrierProfilesPage";
 import CreditsPage from "@/pages/CreditsPage";
-import CreditsSuccessPage from "@/pages/CreditsSuccessPage";
 import AdaptarPage from "@/pages/AdaptarPage";
 import MyAdaptationsPage from "@/pages/MyAdaptationsPage";
 import EditAdaptationPage from "@/pages/EditAdaptationPage";
@@ -73,7 +72,6 @@ function buildRouter() {
                 </SuperAdminRoute>
               ),
             },
-            { path: "/creditos/sucesso", element: <CreditsSuccessPage /> },
           ],
         },
       ],

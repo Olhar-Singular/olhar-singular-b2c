@@ -55,12 +55,6 @@ describe("App", () => {
     await waitFor(() => expect(screen.getByTestId("layout-stub")).toBeInTheDocument());
   });
 
-  it("renders payment confirmed copy on /creditos/sucesso", async () => {
-    window.history.pushState({}, "", "/creditos/sucesso");
-    render(<App />);
-    await waitFor(() => expect(screen.getByTestId("layout-stub")).toBeInTheDocument());
-  });
-
   it("renders the forgot-password page on /esqueci-senha, outside the protected layout", async () => {
     window.history.pushState({}, "", "/esqueci-senha");
     render(<App />);

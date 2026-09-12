@@ -11,7 +11,7 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/useAuth";
-import { usePixPurchaseStatus } from "@/hooks/useCredits";
+import { usePurchaseStatus } from "@/hooks/useCredits";
 import type { PixPayment } from "@/hooks/useCredits";
 
 interface Props {
@@ -27,7 +27,7 @@ export default function PixPaymentDialog({ payment, onOpenChange }: Props) {
   const { refreshProfile } = useAuth();
   const queryClient = useQueryClient();
   const purchaseId = payment?.purchaseId ?? null;
-  const { data } = usePixPurchaseStatus(purchaseId);
+  const { data } = usePurchaseStatus(purchaseId);
   const status = data?.status ?? "pending";
 
   // Credit lands on the server; the client only has to catch up once. Keyed by

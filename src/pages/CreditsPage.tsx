@@ -5,21 +5,12 @@ import { Coins, TrendingUp, TrendingDown, CreditCard, QrCode } from "lucide-reac
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Skeleton } from "@/components/ui/skeleton";
 import PixPaymentDialog from "@/components/credits/PixPaymentDialog";
+import CardPaymentDialog from "@/components/credits/CardPaymentDialog";
 import { useAuth } from "@/hooks/useAuth";
-import { useTransactionHistory, useCreateStripeCheckout, useCreatePixPayment } from "@/hooks/useCredits";
-import type { PixPayment } from "@/hooks/useCredits";
-
-const PACKAGES = [
-  { credits: 30, amountBrl: 9.9, label: "Básico" },
-  { credits: 120, amountBrl: 29.9, label: "Profissional", highlight: true },
-  { credits: 300, amountBrl: 59.9, label: "Avançado" },
-] as const;
-
-// Real-payment smoke test, shown only to super-admins and accepted by the Stripe
-// checkout only for them (creditPackages.TEST_PACKAGE). R$1 clears the R$0,50
-// Pix minimum, so it smoke-tests both rails.
-const TEST_PACKAGE = { credits: 1, amountBrl: 1.0, label: "Teste (admin)" } as const;
+import { useTransactionHistory, useCreatePixPayment, usePackages } from "@/hooks/useCredits";
+import type { CreditPackageView, PixPayment } from "@/hooks/useCredits";
 
 const TYPE_LABELS: Record<string, string> = {
   signup_bonus: "Bônus de cadastro",
@@ -29,6 +20,7 @@ const TYPE_LABELS: Record<string, string> = {
   regenerate: "Regeneração de questão",
   chat: "Chat com IA",
   refund: "Reembolso",
+  admin_grant: "Crédito concedido",
 };
 
 function formatBrl(value: number) {
@@ -38,16 +30,19 @@ function formatBrl(value: number) {
 export default function CreditsPage() {
   const { profile } = useAuth();
   const { data: transactions = [], isLoading } = useTransactionHistory();
-  const stripeCheckout = useCreateStripeCheckout();
+  // The catalogue comes from credit_packages; RLS already hides inactive rows
+  // and shows the admin-only R$1 smoke package only to super-admins.
+  const { data: packages = [], isLoading: loadingPackages } = usePackages();
   const pixPayment = useCreatePixPayment();
-  const buying = stripeCheckout.isPending || pixPayment.isPending;
   const [pix, setPix] = useState<PixPayment | null>(null);
+  const [cardPkg, setCardPkg] = useState<CreditPackageView | null>(null);
+  const buying = pixPayment.isPending;
 
   // Checkout Transparente: the QR code is rendered here, so a failed create must
   // leave the dialog closed instead of opening it empty (the hook already toasts).
-  async function startPix(credits: number, amountBrl: number) {
+  async function startPix(packageId: string) {
     try {
-      setPix(await pixPayment.mutateAsync({ credits, amountBrl }));
+      setPix(await pixPayment.mutateAsync({ packageId }));
     } catch {
       setPix(null);
     }
@@ -76,111 +71,81 @@ export default function CreditsPage() {
       {/* Packages */}
       <section className="space-y-4">
         <h2 className="font-semibold text-foreground">Comprar créditos</h2>
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          {PACKAGES.map((pkg) => (
-            <Card
-              key={pkg.credits}
-              className={`transition-shadow hover:shadow-card-hover ${
-                pkg.highlight ? "border-primary shadow-glow" : "border-border"
-              }`}
-            >
-              <CardHeader className="pb-2">
-                <div className="flex items-center justify-between">
-                  <CardTitle className="text-base">{pkg.label}</CardTitle>
-                  {pkg.highlight && (
-                    <Badge className="text-xs">Popular</Badge>
-                  )}
-                </div>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                <p className="text-2xl font-bold tabular-nums">
-                  {pkg.credits} créditos
-                </p>
-                <p className="text-muted-foreground text-sm font-medium">
-                  {formatBrl(pkg.amountBrl)}
-                </p>
-                <div className="space-y-2">
-                  <Button
-                    className="w-full gap-1.5"
-                    variant={pkg.highlight ? "default" : "outline"}
-                    disabled={buying}
-                    onClick={() =>
-                      stripeCheckout.mutateAsync({
-                        credits: pkg.credits,
-                        amountBrl: pkg.amountBrl,
-                        method: "card",
-                      })
-                    }
-                  >
-                    <CreditCard className="w-3.5 h-3.5" />
-                    Cartão de crédito
-                  </Button>
-                  <Button
-                    className="w-full gap-1.5"
-                    variant="ghost"
-                    disabled={buying}
-                    onClick={() => startPix(pkg.credits, pkg.amountBrl)}
-                  >
-                    <QrCode className="w-3.5 h-3.5" />
-                    Pix
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
-          {profile?.is_super_admin && (
-            <Card className="border-dashed border-border transition-shadow hover:shadow-card-hover">
-              <CardHeader className="pb-2">
-                <div className="flex items-center justify-between">
-                  <CardTitle className="text-base">{TEST_PACKAGE.label}</CardTitle>
-                  <Badge variant="outline" className="text-xs">
-                    Só admins
-                  </Badge>
-                </div>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                <p className="text-2xl font-bold tabular-nums">{TEST_PACKAGE.credits} crédito</p>
-                <p className="text-muted-foreground text-sm font-medium">
-                  {formatBrl(TEST_PACKAGE.amountBrl)}
-                </p>
-                <div className="space-y-2">
-                  <Button
-                    className="w-full gap-1.5"
-                    variant="outline"
-                    disabled={buying}
-                    onClick={() =>
-                      stripeCheckout.mutateAsync({
-                        credits: TEST_PACKAGE.credits,
-                        amountBrl: TEST_PACKAGE.amountBrl,
-                        method: "card",
-                      })
-                    }
-                  >
-                    <CreditCard className="w-3.5 h-3.5" />
-                    Cartão de crédito
-                  </Button>
-                  <Button
-                    className="w-full gap-1.5"
-                    variant="ghost"
-                    disabled={buying}
-                    onClick={() => startPix(TEST_PACKAGE.credits, TEST_PACKAGE.amountBrl)}
-                  >
-                    <QrCode className="w-3.5 h-3.5" />
-                    Pix
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-          )}
-        </div>
+
+        {loadingPackages && (
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4" data-testid="packages-loading">
+            <Skeleton className="h-52" />
+            <Skeleton className="h-52" />
+            <Skeleton className="h-52" />
+          </div>
+        )}
+
+        {!loadingPackages && packages.length === 0 && (
+          <p className="text-sm text-muted-foreground text-center py-6">
+            Nenhum pacote disponível no momento.
+          </p>
+        )}
+
+        {packages.length > 0 && (
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            {packages.map((pkg) => (
+              <Card
+                key={pkg.id}
+                className={`transition-shadow hover:shadow-card-hover ${
+                  pkg.highlight ? "border-primary shadow-glow" : pkg.adminOnly ? "border-dashed border-border" : "border-border"
+                }`}
+              >
+                <CardHeader className="pb-2">
+                  <div className="flex items-center justify-between">
+                    <CardTitle className="text-base">{pkg.label}</CardTitle>
+                    {pkg.highlight && <Badge className="text-xs">Popular</Badge>}
+                    {pkg.adminOnly && (
+                      <Badge variant="outline" className="text-xs">
+                        Só admins
+                      </Badge>
+                    )}
+                  </div>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  <p className="text-2xl font-bold tabular-nums">
+                    {pkg.credits} {pkg.credits === 1 ? "crédito" : "créditos"}
+                  </p>
+                  <p className="text-muted-foreground text-sm font-medium">{formatBrl(pkg.amountBrl)}</p>
+                  <div className="space-y-2">
+                    <Button
+                      className="w-full gap-1.5"
+                      variant={pkg.highlight ? "default" : "outline"}
+                      disabled={buying}
+                      onClick={() => setCardPkg(pkg)}
+                    >
+                      <CreditCard className="w-3.5 h-3.5" aria-hidden="true" />
+                      Cartão de crédito
+                    </Button>
+                    <Button
+                      className="w-full gap-1.5"
+                      variant="ghost"
+                      disabled={buying}
+                      onClick={() => startPix(pkg.id)}
+                    >
+                      <QrCode className="w-3.5 h-3.5" aria-hidden="true" />
+                      Pix
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        )}
+
         <p className="text-xs text-muted-foreground text-center">
-          Cartão via Stripe, Pix via Mercado Pago. Créditos nunca expiram.
+          Pix ou cartão via Mercado Pago, sem sair desta página. Créditos nunca expiram.
         </p>
       </section>
 
-      {/* The dialog is controlled and has no trigger, so every onOpenChange it
-          fires is a close gesture (Esc, overlay, X). */}
+      {/* Both dialogs are controlled and have no trigger, so every onOpenChange
+          they fire is a close gesture (Esc, overlay, X). */}
       <PixPaymentDialog payment={pix} onOpenChange={() => setPix(null)} />
+      <CardPaymentDialog pkg={cardPkg} onOpenChange={() => setCardPkg(null)} />
 
       {/* Transaction history */}
       <section className="space-y-4">

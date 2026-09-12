@@ -23,10 +23,26 @@ const mockTransactions = [
     payment_id: null,
     created_at: "2026-04-19T10:00:00Z",
   },
+  {
+    id: "t3",
+    user_id: "u1",
+    delta: 5,
+    type: "mystery_type",
+    ref_id: null,
+    payment_id: null,
+    created_at: "2026-04-18T10:00:00Z",
+  },
 ];
 
-const mockStripeCheckout = vi.fn();
-const mockPixPayment = vi.fn();
+const PACKAGES = [
+  { id: "pkg-basic", credits: 30, amountBrl: 9.9, label: "Básico", highlight: false, adminOnly: false },
+  { id: "pkg-pro", credits: 120, amountBrl: 29.9, label: "Profissional", highlight: true, adminOnly: false },
+  { id: "pkg-max", credits: 300, amountBrl: 59.9, label: "Avançado", highlight: false, adminOnly: false },
+];
+
+const TEST_PACKAGE = { id: "pkg-test", credits: 1, amountBrl: 1, label: "Teste (admin)", highlight: false, adminOnly: true };
+
+const { mockPixPayment, cardDialogProps } = vi.hoisted(() => ({ mockPixPayment: vi.fn(), cardDialogProps: vi.fn() }));
 
 const PIX_PAYMENT = {
   qrCode: "00020126580014br.gov.bcb.pix0136abc",
@@ -36,19 +52,39 @@ const PIX_PAYMENT = {
 
 vi.mock("@/hooks/useCredits", () => ({
   useTransactionHistory: vi.fn(() => ({ data: mockTransactions, isLoading: false })),
-  useCreateStripeCheckout: vi.fn(() => ({ mutateAsync: mockStripeCheckout, isPending: false })),
+  usePackages: vi.fn(() => ({ data: PACKAGES, isLoading: false })),
   useCreatePixPayment: vi.fn(() => ({ mutateAsync: mockPixPayment, isPending: false })),
-  usePixPurchaseStatus: vi.fn(() => ({ data: { status: "pending" } })),
+  usePurchaseStatus: vi.fn(() => ({ data: { status: "pending" } })),
+}));
+
+// The card dialog has its own suite; here only the wiring matters.
+vi.mock("@/components/credits/CardPaymentDialog", () => ({
+  default: (props: { pkg: { label: string } | null; onOpenChange: (open: boolean) => void }) => {
+    cardDialogProps(props);
+    return props.pkg ? (
+      <div role="dialog" aria-label="card-dialog">
+        Cartão: {props.pkg.label}
+        <button type="button" onClick={() => props.onOpenChange(false)}>
+          fechar cartão
+        </button>
+      </div>
+    ) : null;
+  },
 }));
 
 vi.mock("@/hooks/useAuth", () => ({
   useAuth: vi.fn(() => ({
-    profile: { credit_balance: 9, free_adaptation_used: false },
+    profile: { credit_balance: 9 },
   })),
 }));
 
 function renderPage() {
   return renderWithProviders(<CreditsPage />);
+}
+
+async function setPackages(data: typeof PACKAGES | undefined, isLoading = false) {
+  const m = await import("@/hooks/useCredits");
+  vi.mocked(m.usePackages).mockReturnValue({ data, isLoading } as never);
 }
 
 describe("CreditsPage", () => {
@@ -59,15 +95,12 @@ describe("CreditsPage", () => {
       data: mockTransactions,
       isLoading: false,
     } as never);
-    vi.mocked(m.useCreateStripeCheckout).mockReturnValue({
-      mutateAsync: mockStripeCheckout,
-      isPending: false,
-    } as never);
     vi.mocked(m.useCreatePixPayment).mockReturnValue({
       mutateAsync: mockPixPayment,
       isPending: false,
     } as never);
-    vi.mocked(m.usePixPurchaseStatus).mockReturnValue({ data: { status: "pending" } } as never);
+    vi.mocked(m.usePurchaseStatus).mockReturnValue({ data: { status: "pending" } } as never);
+    await setPackages(PACKAGES);
     mockPixPayment.mockResolvedValue(PIX_PAYMENT);
     const auth = await import("@/hooks/useAuth");
     vi.mocked(auth.useAuth).mockReturnValue({
@@ -80,32 +113,66 @@ describe("CreditsPage", () => {
     expect(screen.getByText(/^9$/)).toBeInTheDocument();
   });
 
-  it("renders all three purchase packages", () => {
+  it("renders a placeholder when the profile has not loaded", async () => {
+    const auth = await import("@/hooks/useAuth");
+    vi.mocked(auth.useAuth).mockReturnValue({ profile: null } as never);
+    renderPage();
+    expect(screen.getByText("—")).toBeInTheDocument();
+  });
+
+  it("renders the packages from the catalogue with their prices", () => {
     renderPage();
     expect(screen.getByText(/30 créditos/i)).toBeInTheDocument();
     expect(screen.getByText(/120 créditos/i)).toBeInTheDocument();
     expect(screen.getByText(/300 créditos/i)).toBeInTheDocument();
-  });
-
-  it("renders package prices", () => {
-    renderPage();
     expect(screen.getByText(/R\$\s*9[,.]90/i)).toBeInTheDocument();
     expect(screen.getByText(/R\$\s*29[,.]90/i)).toBeInTheDocument();
     expect(screen.getByText(/R\$\s*59[,.]90/i)).toBeInTheDocument();
+    expect(screen.getByText("Popular")).toBeInTheDocument();
   });
 
-  it("renders transaction history", () => {
+  it("shows skeletons while the catalogue loads", async () => {
+    await setPackages(undefined, true);
     renderPage();
-    // signup bonus +10
+    expect(screen.getByTestId("packages-loading")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /cartão de crédito/i })).toBeNull();
+  });
+
+  it("explains when the catalogue is empty", async () => {
+    await setPackages([]);
+    renderPage();
+    expect(screen.getByText(/nenhum pacote disponível/i)).toBeInTheDocument();
+  });
+
+  // RLS decides who sees the admin-only smoke package; the page just renders what it gets.
+  it("renders the admin-only smoke package with its badge when the catalogue includes it", async () => {
+    await setPackages([...PACKAGES, TEST_PACKAGE]);
+    renderPage();
+    expect(screen.getByText(/teste \(admin\)/i)).toBeInTheDocument();
+    expect(screen.getByText(/^1 crédito$/i)).toBeInTheDocument();
+    expect(screen.getByText("Só admins")).toBeInTheDocument();
+    expect(screen.getAllByRole("button", { name: /cartão de crédito/i })).toHaveLength(4);
+  });
+
+  it("renders transaction history with labels and a raw fallback", () => {
+    renderPage();
     expect(screen.getByText(/\+10/)).toBeInTheDocument();
-    // adapt debit -1
     expect(screen.getByText(/-1/)).toBeInTheDocument();
-  });
-
-  it("renders transaction type labels", () => {
-    renderPage();
     expect(screen.getByText(/adaptação/i)).toBeInTheDocument();
     expect(screen.getByText(/bônus/i)).toBeInTheDocument();
+    expect(screen.getByText("mystery_type")).toBeInTheDocument();
+  });
+
+  it("shows the loading and empty states of the history", async () => {
+    const m = await import("@/hooks/useCredits");
+    vi.mocked(m.useTransactionHistory).mockReturnValue({ data: undefined, isLoading: true } as never);
+    const { unmount } = renderPage();
+    expect(screen.getByText(/carregando/i)).toBeInTheDocument();
+    unmount();
+
+    vi.mocked(m.useTransactionHistory).mockReturnValue({ data: [], isLoading: false } as never);
+    renderPage();
+    expect(screen.getByText(/nenhuma movimentação/i)).toBeInTheDocument();
   });
 
   it("renders a credit-card and a Pix button for every package", () => {
@@ -114,24 +181,22 @@ describe("CreditsPage", () => {
     expect(screen.getAllByRole("button", { name: /^pix$/i })).toHaveLength(3);
   });
 
-  it("calls the Stripe checkout with the correct package on credit-card click", async () => {
+  it("opens the inline card dialog for the clicked package and closes it on request", async () => {
     const user = userEvent.setup();
-    mockStripeCheckout.mockResolvedValue({ url: "https://stripe.com/checkout" });
     renderPage();
 
-    const cardButtons = screen.getAllByRole("button", { name: /cartão de crédito/i });
-    await user.click(cardButtons[0]);
+    expect(screen.queryByRole("dialog")).toBeNull();
+    await user.click(screen.getAllByRole("button", { name: /cartão de crédito/i })[1]);
 
-    await waitFor(() =>
-      expect(mockStripeCheckout).toHaveBeenCalledWith({
-        credits: 30,
-        amountBrl: 9.9,
-        method: "card",
-      })
-    );
+    const dialog = await screen.findByRole("dialog", { name: "card-dialog" });
+    expect(dialog).toHaveTextContent("Cartão: Profissional");
+    expect(cardDialogProps).toHaveBeenLastCalledWith(expect.objectContaining({ pkg: PACKAGES[1] }));
+
+    await user.click(screen.getByRole("button", { name: /fechar cartão/i }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
   });
 
-  it("sends the Pix click to the inline Pix payment, not Stripe", async () => {
+  it("sends the Pix click to the inline Pix payment with the package id", async () => {
     const user = userEvent.setup();
     renderPage();
 
@@ -139,13 +204,7 @@ describe("CreditsPage", () => {
     pixButtons.forEach((button) => expect(button).toBeEnabled());
     await user.click(pixButtons[1]);
 
-    await waitFor(() =>
-      expect(mockPixPayment).toHaveBeenCalledWith({
-        credits: 120,
-        amountBrl: 29.9,
-      })
-    );
-    expect(mockStripeCheckout).not.toHaveBeenCalled();
+    await waitFor(() => expect(mockPixPayment).toHaveBeenCalledWith({ packageId: "pkg-pro" }));
   });
 
   // The whole point of Checkout Transparente: the QR shows up right here.
@@ -158,11 +217,6 @@ describe("CreditsPage", () => {
     expect(await screen.findByRole("dialog")).toBeInTheDocument();
     expect(screen.getByRole("img", { name: /qr code/i })).toBeInTheDocument();
     expect(screen.getByText(PIX_PAYMENT.qrCode)).toBeInTheDocument();
-  });
-
-  it("keeps the QR dialog closed until a Pix payment exists", () => {
-    renderPage();
-    expect(screen.queryByRole("dialog")).toBeNull();
   });
 
   it("clears the Pix when the buyer closes the QR dialog", async () => {
@@ -188,112 +242,17 @@ describe("CreditsPage", () => {
     expect(screen.queryByRole("dialog")).toBeNull();
   });
 
-  it("does not render the R$1 test package for regular users", () => {
-    renderPage();
-    expect(screen.queryByText(/teste \(admin\)/i)).not.toBeInTheDocument();
-    expect(screen.getAllByRole("button", { name: /cartão de crédito/i })).toHaveLength(3);
-  });
-
-  it("renders the R$1 test package card for super-admins, with both payment methods", async () => {
-    const auth = await import("@/hooks/useAuth");
-    vi.mocked(auth.useAuth).mockReturnValue({
-      profile: { credit_balance: 9, is_super_admin: true },
-    } as never);
-    renderPage();
-
-    expect(screen.getByText(/teste \(admin\)/i)).toBeInTheDocument();
-    expect(screen.getByText(/1 crédito$/i)).toBeInTheDocument();
-    expect(screen.getByText(/R\$\s*1[,.]00/i)).toBeInTheDocument();
-    expect(screen.getAllByRole("button", { name: /cartão de crédito/i })).toHaveLength(4);
-    // R$1 clears the R$0,50 Pix minimum, so the smoke test covers both rails.
-    expect(screen.getAllByRole("button", { name: /^pix$/i })).toHaveLength(4);
-  });
-
-  it("calls the Stripe checkout with 1 credit / R$1 when the super-admin buys the test package", async () => {
-    const auth = await import("@/hooks/useAuth");
-    vi.mocked(auth.useAuth).mockReturnValue({
-      profile: { credit_balance: 9, is_super_admin: true },
-    } as never);
-    const user = userEvent.setup();
-    mockStripeCheckout.mockResolvedValue({ url: "https://stripe.com/checkout" });
-    renderPage();
-
-    const cardButtons = screen.getAllByRole("button", { name: /cartão de crédito/i });
-    await user.click(cardButtons[3]);
-
-    await waitFor(() =>
-      expect(mockStripeCheckout).toHaveBeenCalledWith({
-        credits: 1,
-        amountBrl: 1,
-        method: "card",
-      })
-    );
-  });
-
-  it("lets the super-admin smoke-test a real Pix payment with the R$1 package", async () => {
-    const auth = await import("@/hooks/useAuth");
-    vi.mocked(auth.useAuth).mockReturnValue({
-      profile: { credit_balance: 9, is_super_admin: true },
-    } as never);
-    const user = userEvent.setup();
-    renderPage();
-
-    const pixButtons = screen.getAllByRole("button", { name: /^pix$/i });
-    await user.click(pixButtons[3]);
-
-    await waitFor(() =>
-      expect(mockPixPayment).toHaveBeenCalledWith({
-        credits: 1,
-        amountBrl: 1,
-      })
-    );
-    expect(await screen.findByRole("dialog")).toBeInTheDocument();
-  });
-
-  it("shows empty state when no transactions", async () => {
+  it("disables both buttons while a Pix is being created", async () => {
     const m = await import("@/hooks/useCredits");
-    vi.mocked(m.useTransactionHistory).mockReturnValue({
-      data: [],
-      isLoading: false,
-    } as never);
+    vi.mocked(m.useCreatePixPayment).mockReturnValue({ mutateAsync: mockPixPayment, isPending: true } as never);
     renderPage();
-    expect(screen.getByText(/nenhuma movimentação/i)).toBeInTheDocument();
+    screen.getAllByRole("button", { name: /^pix$/i }).forEach((b) => expect(b).toBeDisabled());
+    screen.getAllByRole("button", { name: /cartão de crédito/i }).forEach((b) => expect(b).toBeDisabled());
   });
 
-  it("shows dash when profile is null (branch 46: credit_balance ?? '—')", async () => {
-    const auth = await import("@/hooks/useAuth");
-    vi.mocked(auth.useAuth).mockReturnValue({ profile: null } as never);
+  it("names Mercado Pago as the provider for both rails", () => {
     renderPage();
-    expect(screen.getByText("—")).toBeInTheDocument();
-  });
-
-  it("shows loading state for transactions (branch 104)", async () => {
-    const m = await import("@/hooks/useCredits");
-    vi.mocked(m.useTransactionHistory).mockReturnValue({
-      data: [],
-      isLoading: true,
-    } as never);
-    renderPage();
-    expect(screen.getByText(/Carregando/i)).toBeInTheDocument();
-  });
-
-  it("falls back to raw type key when tx.type is unknown (branch 121: TYPE_LABELS ?? tx.type)", async () => {
-    const m = await import("@/hooks/useCredits");
-    vi.mocked(m.useTransactionHistory).mockReturnValue({
-      data: [
-        {
-          id: "t99",
-          user_id: "u1",
-          delta: 5,
-          type: "unknown_type_xyz",
-          ref_id: null,
-          payment_id: null,
-          created_at: "2026-04-20T10:00:00Z",
-        },
-      ],
-      isLoading: false,
-    } as never);
-    renderPage();
-    expect(screen.getByText("unknown_type_xyz")).toBeInTheDocument();
+    expect(screen.getByText(/via Mercado Pago/i)).toBeInTheDocument();
+    expect(screen.queryByText(/stripe/i)).toBeNull();
   });
 });
