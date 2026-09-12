@@ -662,6 +662,7 @@ export type Database = {
         }
         Returns: Json
       }
+      migrate_legacy_access: { Args: never; Returns: Json }
       open_adapt_reservation: {
         Args: { p_amount: number; p_request_id: string; p_user_id: string }
         Returns: Json
