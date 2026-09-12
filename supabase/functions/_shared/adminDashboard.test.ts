@@ -4,6 +4,9 @@ import {
   isUserActive,
   shapeSeries,
   mergeUserRows,
+  pickSubscriptionPerUser,
+  summarizeSubscriptions,
+  type SubscriptionLite,
   type AuthUserLite,
   type ProfileLite,
   type SpendingLite,
@@ -102,6 +105,7 @@ describe("mergeUserRows", () => {
       created_at: "2026-01-01T00:00:00Z",
       is_active: true,
       is_super_admin: true,
+      subscription: null,
     });
   });
 
@@ -138,6 +142,7 @@ describe("mergeUserRows", () => {
       created_at: null,
       is_active: true,
       is_super_admin: false,
+      subscription: null,
     });
   });
 
@@ -150,5 +155,66 @@ describe("mergeUserRows", () => {
 
   it("returns an empty array when there are no users", () => {
     expect(mergeUserRows([], profiles, spending, NOW)).toEqual([]);
+  });
+});
+
+describe("subscriptions on the dashboard", () => {
+  const PRO = { name: "Profissional", price_brl: "59.90" };
+  const BASIC = { name: "Básico", price_brl: 19.9 };
+  const rows: SubscriptionLite[] = [
+    { user_id: "u1", status: "cancelled", created_at: "2026-01-01T00:00:00Z", plans: BASIC },
+    { user_id: "u1", status: "authorized", created_at: "2026-02-01T00:00:00Z", next_payment_date: "2026-07-01T00:00:00Z", mp_preapproval_id: "pre-1", plans: PRO },
+    { user_id: "u2", status: "rejected", created_at: "2026-03-01T00:00:00Z", plans: BASIC },
+    { user_id: "u2", status: "rejected", created_at: "2026-04-01T00:00:00Z", plans: PRO },
+    { user_id: "u3", status: "past_due", created_at: "2026-04-01T00:00:00Z", plans: BASIC },
+    { user_id: "u4", status: "authorized", created_at: "2026-04-01T00:00:00Z", plans: null },
+  ];
+
+  it("picks the live subscription over closed ones, and the newest among equals", () => {
+    const picked = pickSubscriptionPerUser(rows);
+    expect(picked.get("u1")).toEqual({
+      status: "authorized", plan_name: "Profissional", price_brl: 59.9,
+      next_payment_date: "2026-07-01T00:00:00Z", current_period_end: null, mp_preapproval_id: "pre-1",
+    });
+    expect(picked.get("u2")).toMatchObject({ status: "rejected", plan_name: "Profissional" });
+    expect(picked.get("u4")).toMatchObject({ plan_name: null, price_brl: 0 });
+    expect(picked.get("nobody")).toBeUndefined();
+  });
+
+  it("keeps the first row when an unknown status ties and the other is not newer", () => {
+    const picked = pickSubscriptionPerUser([
+      { user_id: "u9", status: "weird", created_at: "2026-02-01T00:00:00Z", plans: PRO },
+      { user_id: "u9", status: "weird", plans: BASIC },
+      { user_id: "u9", status: "weird", created_at: "2026-01-01T00:00:00Z", plans: BASIC },
+    ]);
+    expect(picked.get("u9")).toMatchObject({ plan_name: "Profissional" });
+    const undated = pickSubscriptionPerUser([
+      { user_id: "u8", status: "pending", plans: BASIC },
+      { user_id: "u8", status: "pending", created_at: "2026-01-01T00:00:00Z", plans: PRO },
+    ]);
+    // No date on the current row: nothing can be "newer" than it, so it stays.
+    expect(undated.get("u8")).toMatchObject({ plan_name: "Básico" });
+  });
+
+  it("summarises counts, live total and MRR from authorized plans", () => {
+    expect(summarizeSubscriptions(rows)).toEqual({
+      by_status: { cancelled: 1, authorized: 2, rejected: 2, past_due: 1 },
+      mrr_brl: 59.9,
+      live: 3,
+    });
+    expect(summarizeSubscriptions([])).toEqual({ by_status: {}, mrr_brl: 0, live: 0 });
+  });
+
+  it("attaches the subscription to the user row (null when never subscribed)", () => {
+    const users = mergeUserRows(
+      [{ id: "u1" }, { id: "u5" }],
+      [],
+      [],
+      NOW,
+      rows,
+    );
+    expect(users[0].subscription).toMatchObject({ status: "authorized" });
+    expect(users[1].subscription).toBeNull();
+    expect(mergeUserRows([{ id: "u1" }], [], [], NOW)[0].subscription).toBeNull();
   });
 });

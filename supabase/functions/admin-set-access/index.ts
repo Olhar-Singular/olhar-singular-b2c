@@ -2,6 +2,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { authorizeSuperAdmin } from "../_shared/adminAuth.ts";
 import { validateSetAccessInput } from "../_shared/adminSetAccess.ts";
+import { logAdminAction } from "../_shared/adminAudit.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -61,6 +62,12 @@ serve(async (req) => {
       return json({ error: data.error ?? "internal_error" }, 422);
     }
 
+    await logAdminAction(supabase, {
+      actorId: auth.userId,
+      targetUserId: input.userId,
+      action: input.action,
+      payload: input.action === "set_kind" ? { kind: input.kind } : { days: input.days },
+    });
     console.info("admin-set-access:", auth.userId, "->", input.userId, input.action);
     return json({ success: true, ...data }, 200);
   } catch (error) {

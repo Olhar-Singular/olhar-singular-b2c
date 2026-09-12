@@ -8,15 +8,13 @@ export interface AuthClientUser {
 
 export interface AdminAuthClient {
   auth: {
-    getUser(token: string): Promise<{ data: { user: AuthClientUser | null } | null; error: unknown }>;
+    getUser(token: string): PromiseLike<{ data: { user: AuthClientUser | null } | null; error: unknown }>;
   };
-  from(table: string): {
-    select(columns: string): {
-      eq(column: string, value: string): {
-        maybeSingle(): PromiseLike<{ data: { is_super_admin: boolean | null } | null; error: unknown }>;
-      };
-    };
-  };
+  // Structural typing of the PostgREST builder chain made `deno check` hit
+  // "type instantiation is excessively deep" against supabase-js's generics;
+  // the profile read below is the only use, so the chain is left untyped.
+  // deno-lint-ignore no-explicit-any
+  from(table: string): any;
 }
 
 export type AuthorizeResult =

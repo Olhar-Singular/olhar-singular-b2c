@@ -149,7 +149,7 @@ serve(async (req) => {
         await runCreditRpc("reverse_credit_reservation", () =>
           serviceClient.rpc("reverse_credit_reservation", {
             p_id: requestId.id,
-          }) as Promise<{ data: CreditRpcResult | null; error: unknown }>);
+          }) as PromiseLike<{ data: CreditRpcResult | null; error: unknown }>);
       } catch (e) {
         // Never mask the original failure — the job will pick this reservation
         // up on its next pass, since it is still `open`.
@@ -343,7 +343,7 @@ serve(async (req) => {
             await runCreditRpc("settle_credit_reservation", () =>
               serviceClient.rpc("settle_credit_reservation", {
                 p_id: requestId.id,
-              }) as Promise<{ data: CreditRpcResult | null; error: unknown }>);
+              }) as PromiseLike<{ data: CreditRpcResult | null; error: unknown }>);
           } catch (e) {
             // Failing to settle only risks refunding a charge we were entitled
             // to keep — never the user's money. Log and deliver anyway.

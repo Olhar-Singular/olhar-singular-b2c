@@ -4,6 +4,7 @@ import { authorizeSuperAdmin } from "../_shared/adminAuth.ts";
 import { parseCancelInput } from "../_shared/subscribeInput.ts";
 import { runCancelSubscription } from "../_shared/subscriptionActions.ts";
 import { buildSubscriptionActionDeps } from "../_shared/subscriptionActionDeps.ts";
+import { logAdminAction } from "../_shared/adminAudit.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -51,14 +52,25 @@ serve(async (req) => {
     const admin = createClient(supabaseUrl, serviceKey);
 
     let targetUserId = user.id;
+    let onBehalf = false;
     if (parsed.userId && parsed.userId !== user.id) {
       const auth = await authorizeSuperAdmin(admin, authHeader);
       if (!auth.ok) return json({ error: "Não autorizado." }, auth.status);
       targetUserId = parsed.userId;
+      onBehalf = true;
     }
 
     const result = await runCancelSubscription({ userId: targetUserId }, buildSubscriptionActionDeps(admin, mpAccessToken));
     if (!result.ok) return json({ error: ERRORS[result.error], code: result.error }, result.httpStatus);
+
+    if (onBehalf) {
+      await logAdminAction(admin, {
+        actorId: user.id,
+        targetUserId,
+        action: "cancel_subscription",
+        payload: { subscriptionId: result.subscriptionId },
+      });
+    }
 
     return json({ status: "cancelled", subscriptionId: result.subscriptionId });
   } catch (e) {

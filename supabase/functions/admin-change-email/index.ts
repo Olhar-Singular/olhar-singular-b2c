@@ -1,8 +1,8 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { authorizeSuperAdmin } from "../_shared/adminAuth.ts";
+import { validateChangeEmailInput } from "../_shared/adminCreateUser.ts";
 import { logAdminAction } from "../_shared/adminAudit.ts";
-import { validateGrantInput } from "../_shared/adminGrantCredits.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -17,6 +17,9 @@ function json(body: unknown, status: number) {
   });
 }
 
+// Support fix for a typo made at checkout (no confirmation e-mail is sent to
+// payers, so a wrong address locks the buyer out). The new e-mail is set as
+// confirmed; the audit row never carries the address itself.
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
@@ -36,37 +39,29 @@ serve(async (req) => {
       return json({ error: "invalid_body" }, 400);
     }
 
-    const validated = validateGrantInput(body);
+    const validated = validateChangeEmailInput(body, auth.userId);
     if (!validated.ok) {
-      const status = validated.error === "invalid_amount" ? 422 : 400;
-      return json({ error: validated.error }, status);
+      return json({ error: validated.error }, validated.error === "cannot_change_self" ? 409 : 400);
     }
+    const { userId, email } = validated.input;
 
-    const { data, error } = await supabase.rpc("admin_grant_credits", {
-      p_user_id: validated.input.userId,
-      p_amount: validated.input.amount,
-    });
-
+    const { error } = await supabase.auth.admin.updateUserById(userId, { email, email_confirm: true });
     if (error) {
-      console.error("admin-grant-credits rpc error:", error);
+      const code = (error as { code?: string }).code ?? "";
+      if (code === "email_exists" || error.status === 422 || /already/i.test(error.message)) {
+        return json({ error: "email_exists" }, 409);
+      }
+      if (error.status === 404) return json({ error: "user_not_found" }, 404);
+      console.error("admin-change-email error:", error.status, error.message);
       return json({ error: "internal_error" }, 500);
     }
 
-    if (data?.success === false) {
-      if (data.error === "user_not_found") return json({ error: "user_not_found" }, 404);
-      console.error("admin-grant-credits unexpected failure:", data);
-      return json({ error: "internal_error" }, 500);
-    }
+    await logAdminAction(supabase, { actorId: auth.userId, targetUserId: userId, action: "change_email" });
 
-    await logAdminAction(supabase, {
-      actorId: auth.userId,
-      targetUserId: validated.input.userId,
-      action: "grant_credits",
-      payload: { amount: validated.input.amount },
-    });
-    return json({ success: true, new_balance: data.new_balance }, 200);
+    console.info("admin-change-email:", auth.userId, "->", userId);
+    return json({ success: true }, 200);
   } catch (error) {
-    console.error("admin-grant-credits unhandled error:", error);
+    console.error("admin-change-email unhandled error:", error);
     return json({ error: "internal_error" }, 500);
   }
 });

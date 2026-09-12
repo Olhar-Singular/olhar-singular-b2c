@@ -8,6 +8,8 @@ import {
   type ProfileLite,
   type SpendingLite,
   type SeriesRow,
+  type SubscriptionLite,
+  summarizeSubscriptions,
 } from "../_shared/adminDashboard.ts";
 
 const corsHeaders = {
@@ -88,12 +90,23 @@ serve(async (req) => {
       return json({ error: "internal_error" }, 500);
     }
 
+    // Subscriptions with their plan (one row per user is picked in the merge).
+    const { data: subscriptionsData, error: subscriptionsError } = await supabase
+      .from("subscriptions")
+      .select("user_id, status, next_payment_date, current_period_end, mp_preapproval_id, created_at, plans(name, price_brl)");
+    if (subscriptionsError) {
+      console.error("admin-dashboard subscriptions error:", subscriptionsError);
+      return json({ error: "internal_error" }, 500);
+    }
+    const subscriptions = (subscriptionsData ?? []) as unknown as SubscriptionLite[];
+
     const now = new Date();
     const users = mergeUserRows(
       authUsers,
       (profilesData ?? []) as ProfileLite[],
       (spendingRes.data ?? []) as SpendingLite[],
       now,
+      subscriptions,
     );
 
     return json(
@@ -106,6 +119,7 @@ serve(async (req) => {
           monthly: shapeSeries((monthlyRes.data ?? []) as SeriesRow[]),
         },
         users,
+        subscriptions: summarizeSubscriptions(subscriptions),
       },
       200,
     );
