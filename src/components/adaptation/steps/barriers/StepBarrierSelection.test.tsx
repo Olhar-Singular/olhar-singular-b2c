@@ -2,6 +2,7 @@ import { render, screen, waitFor, fireEvent, within } from "@testing-library/rea
 import userEvent from "@testing-library/user-event";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { MemoryRouter } from "react-router-dom";
 import { StepBarrierSelection } from "./StepBarrierSelection";
 import type { WizardData } from "@/lib/adaptation/wizard/wizardState";
 import { useBarrierProfiles, useCreateBarrierProfile } from "@/hooks/useBarrierProfiles";
@@ -31,7 +32,7 @@ vi.mock("@/hooks/useBarrierProfiles", () => ({
 }));
 
 const mockUseAuth = vi.fn(() => ({
-  profile: { free_adaptation_used: false, credit_balance: 30 },
+  profile: { access_kind: "legacy", credit_balance: 30, plan_credits: 0, plan_period_end: null },
 }));
 
 vi.mock("@/hooks/useAuth", () => ({
@@ -55,12 +56,14 @@ function renderStep(data: WizardData = baseData) {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={qc}>
+      <MemoryRouter>
       <StepBarrierSelection
         data={data}
         updateData={mockUpdateData}
         onNext={mockOnNext}
         onPrev={mockOnPrev}
       />
+    </MemoryRouter>
     </QueryClientProvider>
   );
 }
@@ -69,7 +72,7 @@ describe("StepBarrierSelection", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockMutateAsync.mockResolvedValue(undefined);
-    mockUseAuth.mockReturnValue({ profile: { free_adaptation_used: false, credit_balance: 30 } });
+    mockUseAuth.mockReturnValue({ profile: { access_kind: "legacy", credit_balance: 30, plan_credits: 0, plan_period_end: null } });
     vi.mocked(useBarrierProfiles).mockReturnValue({ data: mockBarrierProfiles, isLoading: false } as never);
     vi.mocked(useCreateBarrierProfile).mockReturnValue({ mutateAsync: mockMutateAsync, isPending: false } as never);
   });
@@ -251,23 +254,34 @@ describe("StepBarrierSelection", () => {
 
   it("does not show credit badge when no barriers are selected", () => {
     renderStep();
-    expect(screen.queryByText(/Grátis/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Sem débito/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/créditos/i)).not.toBeInTheDocument();
   });
 
-  it("shows 'Grátis' badge when barriers exist and first adaptation is free", () => {
-    mockUseAuth.mockReturnValue({ profile: { free_adaptation_used: false, credit_balance: 30 } });
+  it("shows 'Sem débito' when the account is exempt (courtesy)", () => {
+    mockUseAuth.mockReturnValue({ profile: { access_kind: "exempt", credit_balance: 0, plan_credits: 0, plan_period_end: null } });
     renderStep({
       ...baseData,
       barrierProfileId: "prof-1",
       barriers: [{ dimension: "tea", barrier_key: "tea_abstracao", label: "TEA", is_active: true }],
     });
-    expect(screen.getByText(/Grátis/i)).toBeInTheDocument();
-    expect(screen.getByText(/primeira adaptação por IA/i)).toBeInTheDocument();
+    expect(screen.getByText(/Sem débito/i)).toBeInTheDocument();
+    expect(screen.getByText(/conta com cortesia/i)).toBeInTheDocument();
   });
 
-  it("shows credit cost badge when barriers exist and free adaptation was used", () => {
-    mockUseAuth.mockReturnValue({ profile: { free_adaptation_used: true, credit_balance: 30 } });
+  it("warns and links to /creditos when the two buckets cannot cover the cost", () => {
+    mockUseAuth.mockReturnValue({ profile: { access_kind: "legacy", credit_balance: 3, plan_credits: 0, plan_period_end: null } });
+    renderStep({
+      ...baseData,
+      barrierProfileId: "prof-1",
+      barriers: [{ dimension: "tea", barrier_key: "tea_abstracao", label: "TEA", is_active: true }],
+    });
+    expect(screen.getByText(/Seus créditos acabaram/i)).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /Comprar créditos/i })).toHaveAttribute("href", "/creditos");
+  });
+
+  it("shows credit cost badge when barriers exist and the account pays", () => {
+    mockUseAuth.mockReturnValue({ profile: { access_kind: "legacy", credit_balance: 30, plan_credits: 0, plan_period_end: null } });
     renderStep({
       ...baseData,
       barrierProfileId: "prof-1",
@@ -278,7 +292,7 @@ describe("StepBarrierSelection", () => {
   });
 
   it("shows lower credit cost for low-complexity barriers", () => {
-    mockUseAuth.mockReturnValue({ profile: { free_adaptation_used: true, credit_balance: 30 } });
+    mockUseAuth.mockReturnValue({ profile: { access_kind: "legacy", credit_balance: 30, plan_credits: 0, plan_period_end: null } });
     renderStep({
       ...baseData,
       barrierProfileId: "prof-1",
@@ -289,7 +303,7 @@ describe("StepBarrierSelection", () => {
   });
 
   it("escalates to highest complexity when multiple dimensions are selected", () => {
-    mockUseAuth.mockReturnValue({ profile: { free_adaptation_used: true, credit_balance: 30 } });
+    mockUseAuth.mockReturnValue({ profile: { access_kind: "legacy", credit_balance: 30, plan_credits: 0, plan_period_end: null } });
     renderStep({
       ...baseData,
       barrierProfileId: "prof-1",
@@ -311,12 +325,12 @@ describe("StepBarrierSelection", () => {
     const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     rerender(
       <QueryClientProvider client={qc}>
-        <StepBarrierSelection
+        <MemoryRouter><StepBarrierSelection
           data={{ ...baseData, barrierProfileId: "prof-1", barriers: [{ dimension: "tea", barrier_key: "x", label: "X", is_active: true }] }}
           updateData={mockUpdateData}
           onNext={mockOnNext}
           onPrev={mockOnPrev}
-        />
+        /></MemoryRouter>
       </QueryClientProvider>,
     );
     await user.click(screen.getByRole("button", { name: /adaptar/i }));
@@ -412,7 +426,7 @@ describe("StepBarrierSelection", () => {
       const qc2 = new QueryClient({ defaultOptions: { queries: { retry: false } } });
       rerender(
         <QueryClientProvider client={qc2}>
-          <StepBarrierSelection data={baseData} updateData={mockUpdateData} onNext={mockOnNext} onPrev={mockOnPrev} />
+          <MemoryRouter><StepBarrierSelection data={baseData} updateData={mockUpdateData} onNext={mockOnNext} onPrev={mockOnPrev} /></MemoryRouter>
         </QueryClientProvider>,
       );
 
@@ -439,7 +453,7 @@ describe("StepBarrierSelection", () => {
       const qc2 = new QueryClient({ defaultOptions: { queries: { retry: false } } });
       rerender(
         <QueryClientProvider client={qc2}>
-          <StepBarrierSelection data={baseData} updateData={mockUpdateData} onNext={mockOnNext} onPrev={mockOnPrev} />
+          <MemoryRouter><StepBarrierSelection data={baseData} updateData={mockUpdateData} onNext={mockOnNext} onPrev={mockOnPrev} /></MemoryRouter>
         </QueryClientProvider>,
       );
 

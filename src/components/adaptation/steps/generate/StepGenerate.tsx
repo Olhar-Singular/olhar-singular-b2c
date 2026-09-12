@@ -142,7 +142,7 @@ export function StepGenerate({ data, onResult, onNext, onPrev, onLoadingChange, 
     if (fnError) {
       const context = (fnError as { context?: Response }).context;
       if (context?.status === 402) {
-        setCreditError("Créditos insuficientes. Adquira mais créditos para continuar.");
+        setCreditError("Seus créditos acabaram. Compre créditos extras para continuar.");
         return;
       }
       let errMsg = "Falha na adaptação";

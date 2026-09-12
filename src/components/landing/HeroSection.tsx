@@ -1,4 +1,3 @@
-import { Link } from "react-router-dom";
 import { ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -13,7 +12,7 @@ export default function HeroSection() {
             {/* Text side */}
             <div>
               <Badge variant="secondary" className="mb-5 text-xs font-medium">
-                50 créditos grátis ao cadastrar, sem cartão
+                Planos mensais e créditos avulsos, sem fidelidade
               </Badge>
               <h1 className="text-4xl sm:text-5xl lg:text-[3.25rem] font-extrabold text-primary-foreground leading-tight mb-5">
                 Adapte atividades para qualquer barreira de aprendizagem em minutos
@@ -23,12 +22,12 @@ export default function HeroSection() {
                 Sem diagnóstico, sem laudo. Foco nas barreiras observáveis em sala.
               </p>
               <div className="flex flex-col sm:flex-row gap-3">
-                <Link to="/auth?signup=1">
+                <a href="#precos">
                   <Button size="lg" className="bg-white text-primary hover:bg-white/90 font-semibold gap-2 w-full sm:w-auto">
-                    Começar grátis
+                    Ver planos
                     <ArrowRight className="w-4 h-4" aria-hidden="true" />
                   </Button>
-                </Link>
+                </a>
                 <a href="#como-funciona">
                   <Button size="lg" variant="outline" className="border-white text-white bg-white/20 hover:bg-white/30 font-semibold w-full sm:w-auto">
                     Ver como funciona

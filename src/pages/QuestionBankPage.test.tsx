@@ -17,7 +17,7 @@ const mockRefreshProfile = vi.fn().mockResolvedValue(undefined);
 
 const mockUseAuthContext = vi.fn(() => ({
   user: { id: "u1" },
-  profile: { credit_balance: 10, free_extraction_used: false },
+  profile: { credit_balance: 10, access_kind: "legacy", plan_credits: 0, plan_period_end: null },
   refreshProfile: mockRefreshProfile,
 }));
 
@@ -154,7 +154,7 @@ beforeEach(async () => {
   (useQuestionStats as ReturnType<typeof vi.fn>).mockReturnValue({ data: { total: 0, bySubject: {} }, isLoading: false });
   mockUseAuthContext.mockReturnValue({
     user: { id: "u1" },
-    profile: { credit_balance: 10, free_extraction_used: false },
+    profile: { credit_balance: 10, access_kind: "legacy", plan_credits: 0, plan_period_end: null },
     refreshProfile: mockRefreshProfile,
   });
   getSessionSpy.mockResolvedValue({ data: { session: { access_token: "tok" } } });
@@ -208,19 +208,24 @@ describe("QuestionBankPage", () => {
     expect(screen.getByText(/banco de questões/i)).toBeInTheDocument();
   });
 
-  it("shows the free extraction badge when not used", () => {
-    render(<QuestionBankPage />, { wrapper });
-    expect(screen.getByText(/extração gratuita/i)).toBeInTheDocument();
-  });
-
-  it("shows credit balance when free extraction is used", () => {
+  it("shows the courtesy badge for an exempt account", () => {
     mockUseAuthContext.mockReturnValue({
       user: { id: "u1" },
-      profile: { credit_balance: 10, free_extraction_used: true },
+      profile: { credit_balance: 0, access_kind: "exempt", plan_credits: 0, plan_period_end: null },
       refreshProfile: mockRefreshProfile,
     });
     render(<QuestionBankPage />, { wrapper });
-    expect(screen.getByText(/10/)).toBeInTheDocument();
+    expect(screen.getByText(/conta com cortesia/i)).toBeInTheDocument();
+  });
+
+  it("shows the total credit balance (plan + extras) for a paying account", () => {
+    mockUseAuthContext.mockReturnValue({
+      user: { id: "u1" },
+      profile: { credit_balance: 10, plan_credits: 5, plan_period_end: "2099-01-01T00:00:00Z", access_kind: "subscriber" },
+      refreshProfile: mockRefreshProfile,
+    });
+    render(<QuestionBankPage />, { wrapper });
+    expect(screen.getByText(/15 crédito/)).toBeInTheDocument();
   });
 
   it("shows empty state when no questions", () => {
@@ -606,7 +611,7 @@ describe("QuestionBankPage", () => {
   it("Extrair com IA is disabled when no credits and free extraction used", async () => {
     mockUseAuthContext.mockReturnValue({
       user: { id: "u1" },
-      profile: { credit_balance: 0, free_extraction_used: true },
+      profile: { credit_balance: 0, access_kind: "legacy", plan_credits: 0, plan_period_end: null },
       refreshProfile: mockRefreshProfile,
     });
     render(<QuestionBankPage />, { wrapper });
@@ -863,10 +868,11 @@ describe("QuestionBankPage", () => {
     });
   });
 
-  it("creditBalance and freeExtractionUsed default to 0/false when profile is null", () => {
+  it("shows a zero balance and no courtesy badge while the profile is null", () => {
     mockUseAuthContext.mockReturnValue({ user: { id: "u1" }, profile: null, refreshProfile: mockRefreshProfile });
     render(<QuestionBankPage />, { wrapper });
-    expect(screen.getByText(/extração gratuita/i)).toBeInTheDocument();
+    expect(screen.queryByText(/conta com cortesia/i)).toBeNull();
+    expect(screen.getByText(/0 crédito/)).toBeInTheDocument();
   });
 
   it("subject filter: clicking a sidebar subject button passes subject to useQuestions", async () => {
@@ -1991,11 +1997,16 @@ describe("QuestionBankPage", () => {
 
   // ── Provas tab: isFree badge inside Provas card ───────────────────────────
 
-  it("Provas tab: shows free extraction notice when isFree is true", async () => {
+  it("Provas tab: shows the courtesy notice for an exempt account", async () => {
+    mockUseAuthContext.mockReturnValue({
+      user: { id: "u1" },
+      profile: { credit_balance: 0, access_kind: "exempt", plan_credits: 0, plan_period_end: null },
+      refreshProfile: mockRefreshProfile,
+    });
     render(<QuestionBankPage />, { wrapper });
     fireEvent.click(screen.getByRole("tab", { name: /Provas/i }));
     await waitFor(() => {
-      expect(screen.getByText(/Extração gratuita disponível\./i)).toBeInTheDocument();
+      expect(screen.getByText(/esta extração não debita créditos/i)).toBeInTheDocument();
     });
   });
 
@@ -2004,7 +2015,7 @@ describe("QuestionBankPage", () => {
   it("extract: handleExtract returns early when canExtract is false and no file", async () => {
     mockUseAuthContext.mockReturnValue({
       user: { id: "u1" },
-      profile: { credit_balance: 0, free_extraction_used: true },
+      profile: { credit_balance: 0, access_kind: "legacy", plan_credits: 0, plan_period_end: null },
       refreshProfile: mockRefreshProfile,
     });
     invokeSpy.mockClear();
@@ -2508,7 +2519,7 @@ describe("QuestionBankPage", () => {
   it("re-extract: does nothing when canExtract is false", async () => {
     mockUseAuthContext.mockReturnValue({
       user: { id: "u1" },
-      profile: { credit_balance: 0, free_extraction_used: true },
+      profile: { credit_balance: 0, access_kind: "legacy", plan_credits: 0, plan_period_end: null },
       refreshProfile: mockRefreshProfile,
     });
     pdfUploadsRows = [

@@ -39,6 +39,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { useAuthContext } from "@/contexts/AuthContext";
+import { canAfford, computeAccess } from "@/lib/domain/access";
 import { useQuestions, useDeleteQuestion, useQuestionStats, useInsertQuestions } from "@/hooks/useQuestionBank";
 import { validateExtractedQuestions } from "@/lib/domain/questionParser";
 import { supabase } from "@/integrations/supabase/client";
@@ -158,10 +159,12 @@ type PdfUpload = {
 
 export default function QuestionBankPage() {
   const { profile, refreshProfile, user } = useAuthContext();
-  const creditBalance = profile?.credit_balance ?? 0;
-  const freeExtractionUsed = profile?.free_extraction_used ?? false;
-  const isFree = !freeExtractionUsed;
-  const canExtract = isFree || creditBalance >= EXTRACTION_COST;
+  // Two buckets (plan first, extras after) and the courtesy exemption; the
+  // server applies the same rule inside the reservation RPC.
+  const access = computeAccess(profile, new Date());
+  const creditBalance = access?.total ?? 0;
+  const isFree = access?.unlimited ?? false;
+  const canExtract = canAfford(access, EXTRACTION_COST);
 
   // Question list state
   const [subjectFilter, setSubjectFilter] = useState("all");
@@ -922,7 +925,7 @@ export default function QuestionBankPage() {
               variant="outline"
               className="border-green-500 text-green-600 dark:text-green-400 flex items-center gap-1"
             >
-              <Gift className="w-3 h-3" /> Extração gratuita disponível
+              <Gift className="w-3 h-3" /> Conta com cortesia: sem débito
             </Badge>
           )}
           {!isFree && (
@@ -1172,7 +1175,7 @@ export default function QuestionBankPage() {
 
               {isFree && (
                 <p className="text-xs text-green-600 dark:text-green-400 flex items-center gap-1">
-                  <Gift className="w-3 h-3" /> Extração gratuita disponível.
+                  <Gift className="w-3 h-3" /> Conta com cortesia: esta extração não debita créditos.
                 </p>
               )}
 

@@ -2,6 +2,7 @@ import { Link } from "react-router-dom";
 import { CheckCircle2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { SUPPORT_EMAIL } from "@/lib/constants";
 
 const PACKAGES = [
   { label: "Básico",        credits: 30,  price: "R$ 9,90",  perCredit: "3 a 6 adaptações",   highlight: false },
@@ -16,7 +17,7 @@ export default function PricingSection() {
         <div className="text-center mb-14">
           <h2 className="text-3xl font-bold text-foreground mb-3">Planos e preços</h2>
           <p className="text-muted-foreground max-w-lg mx-auto">
-            Comece grátis. Compre créditos quando precisar. Créditos nunca expiram.
+            Planos mensais que repõem seus créditos todo mês. Créditos extras avulsos não expiram.
           </p>
         </div>
 
@@ -24,25 +25,25 @@ export default function PricingSection() {
           {/* Free tier */}
           <div className="bg-card rounded-xl border border-border shadow-card p-6 flex flex-col">
             <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1">Para conhecer</p>
-            <p className="text-2xl font-extrabold text-foreground mb-1">Grátis</p>
-            <p className="text-sm text-muted-foreground mb-4">Sempre</p>
+            <p className="text-2xl font-extrabold text-foreground mb-1">Teste</p>
+            <p className="text-sm text-muted-foreground mb-4">7 dias, por convite</p>
             <ul className="space-y-2 text-sm text-foreground flex-1 mb-6">
               <li className="flex items-center gap-2">
                 <CheckCircle2 className="w-4 h-4 text-primary shrink-0" aria-hidden="true" />
-                50 créditos grátis ao cadastrar
-              </li>
-              <li className="flex items-center gap-2">
-                <CheckCircle2 className="w-4 h-4 text-primary shrink-0" aria-hidden="true" />
-                1 adaptação completa sem custo
+                50 créditos para experimentar
               </li>
               <li className="flex items-center gap-2">
                 <CheckCircle2 className="w-4 h-4 text-primary shrink-0" aria-hidden="true" />
                 Acesso a todas as funcionalidades
               </li>
+              <li className="flex items-center gap-2">
+                <CheckCircle2 className="w-4 h-4 text-primary shrink-0" aria-hidden="true" />
+                Sem cartão: a equipe libera o convite
+              </li>
             </ul>
-            <Link to="/auth?signup=1">
-              <Button variant="outline" className="w-full">Começar grátis</Button>
-            </Link>
+            <a href={`mailto:${SUPPORT_EMAIL}?subject=Quero%20testar%20o%20Olhar%20Singular`}>
+              <Button variant="outline" className="w-full">Pedir um convite</Button>
+            </a>
           </div>
 
           {/* Paid packages */}
@@ -70,7 +71,7 @@ export default function PricingSection() {
               <ul className={`space-y-2 text-sm flex-1 mb-6 ${pkg.highlight ? "text-primary-foreground/90" : "text-foreground"}`}>
                 <li className="flex items-center gap-2">
                   <CheckCircle2 className="w-4 h-4 shrink-0" aria-hidden="true" />
-                  Créditos nunca expiram
+                  Créditos extras não expiram
                 </li>
                 <li className="flex items-center gap-2">
                   <CheckCircle2 className="w-4 h-4 shrink-0" aria-hidden="true" />
@@ -94,7 +95,7 @@ export default function PricingSection() {
         </div>
 
         <p className="text-xs text-muted-foreground text-center mt-6">
-          Pix ou cartão via Mercado Pago. Créditos nunca expiram.
+          Pix ou cartão via Mercado Pago. Créditos extras não expiram.
         </p>
       </div>
     </section>

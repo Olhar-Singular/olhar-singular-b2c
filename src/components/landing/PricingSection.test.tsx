@@ -9,10 +9,16 @@ describe("PricingSection", () => {
     expect(screen.getByRole("heading", { name: /Planos e preços/i })).toBeInTheDocument();
   });
 
-  it("renders the free tier with 50 free credits and a signup CTA", () => {
+  it("renders the 7-day trial as invite-only, with no signup link", () => {
     renderWithProviders(<PricingSection />);
-    expect(screen.getByText(/Grátis/)).toBeInTheDocument();
-    expect(screen.getByText(/50 créditos grátis ao cadastrar/i)).toBeInTheDocument();
+    expect(screen.getByText(/7 dias, por convite/i)).toBeInTheDocument();
+    expect(screen.getByText(/50 créditos para experimentar/i)).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /Pedir um convite/i })).toHaveAttribute(
+      "href",
+      expect.stringMatching(/^mailto:/),
+    );
+    expect(screen.queryByText(/grátis/i)).toBeNull();
+    expect(screen.queryByText(/nunca expiram/i)).toBeNull();
   });
 
   it("renders all three paid packages with prices", () => {

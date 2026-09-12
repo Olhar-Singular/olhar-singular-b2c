@@ -11,12 +11,11 @@ describe("LandingFooter", () => {
     expect(screen.getByRole("contentinfo")).toBeInTheDocument();
   });
 
-  it("renders Entrar and Criar conta links", () => {
+  it("renders Entrar and Planos links (no public signup)", () => {
     renderWithProviders(<LandingFooter />);
-    const entrar = screen.getByRole("link", { name: /Entrar/i });
-    expect(entrar).toHaveAttribute("href", "/auth");
-    const signup = screen.getByRole("link", { name: /Criar conta/i });
-    expect(signup).toHaveAttribute("href", "/auth?signup=1");
+    expect(screen.getByRole("link", { name: /Entrar/i })).toHaveAttribute("href", "/auth");
+    expect(screen.getByRole("link", { name: /Planos/i })).toHaveAttribute("href", "#precos");
+    expect(screen.queryByRole("link", { name: /Criar conta/i })).toBeNull();
   });
 
   it("includes the pedagogical disclaimer", () => {

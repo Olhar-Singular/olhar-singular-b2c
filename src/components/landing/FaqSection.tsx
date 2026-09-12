@@ -12,11 +12,11 @@ const FAQ = [
   },
   {
     q: "Quanto vale 1 crédito?",
-    a: "Uma adaptação custa de 5 a 12 créditos, conforme a complexidade das barreiras — e a sua primeira adaptação é grátis. Iniciar uma conversa com a ISA custa 3 créditos, e as mensagens seguintes na mesma conversa são gratuitas.",
+    a: "Uma adaptação custa de 5 a 12 créditos, conforme a complexidade das barreiras. Extrair questões de uma prova custa 5. Iniciar uma conversa com a ISA custa 3 créditos, e as mensagens seguintes na mesma conversa não debitam.",
   },
   {
     q: "Os créditos expiram?",
-    a: "Nunca. Seus créditos ficam na conta indefinidamente, sem data de validade.",
+    a: "Os créditos do plano renovam todo mês: o saldo do mês é substituído pela cota do plano na renovação. Os créditos extras, comprados avulsos, não expiram.",
   },
   {
     q: "A ferramenta substitui o professor?",

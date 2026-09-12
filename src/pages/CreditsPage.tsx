@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import PixPaymentDialog from "@/components/credits/PixPaymentDialog";
 import CardPaymentDialog from "@/components/credits/CardPaymentDialog";
-import { useAuth } from "@/hooks/useAuth";
+import { useAccess } from "@/hooks/useAccess";
 import { useTransactionHistory, useCreatePixPayment, usePackages } from "@/hooks/useCredits";
 import type { CreditPackageView, PixPayment } from "@/hooks/useCredits";
 
@@ -21,14 +21,23 @@ const TYPE_LABELS: Record<string, string> = {
   chat: "Chat com IA",
   refund: "Reembolso",
   admin_grant: "Crédito concedido",
+  trial_grant: "Créditos do período de teste",
+  plan_grant: "Créditos do plano",
+  plan_reset: "Créditos do plano encerrados",
+  compensation: "Compensação",
+  clawback: "Estorno do plano",
 };
+
+function formatDate(value: Date) {
+  return format(value, "dd/MM/yyyy", { locale: ptBR });
+}
 
 function formatBrl(value: number) {
   return value.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 }
 
 export default function CreditsPage() {
-  const { profile } = useAuth();
+  const access = useAccess();
   const { data: transactions = [], isLoading } = useTransactionHistory();
   // The catalogue comes from credit_packages; RLS already hides inactive rows
   // and shows the admin-only R$1 smoke package only to super-admins.
@@ -60,11 +69,28 @@ export default function CreditsPage() {
             <div>
               <p className="text-sm text-muted-foreground">Seu saldo atual</p>
               <p className="text-4xl font-bold text-foreground tabular-nums">
-                {profile?.credit_balance ?? "—"}
+                {access ? access.total : "—"}
               </p>
-              <p className="text-xs text-muted-foreground mt-0.5">créditos disponíveis</p>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                {access?.unlimited ? "conta com cortesia: sem débito" : "créditos disponíveis"}
+              </p>
             </div>
           </div>
+          {access && !access.unlimited && (
+            <dl className="text-right text-sm space-y-1">
+              <div>
+                <dt className="text-muted-foreground inline">
+                  {access.kind === "trial" ? "Teste" : "Plano"}
+                  {access.periodEnd && access.planCredits > 0 ? ` até ${formatDate(access.periodEnd)}` : ""}:{" "}
+                </dt>
+                <dd className="inline font-semibold tabular-nums">{access.planCredits}</dd>
+              </div>
+              <div>
+                <dt className="text-muted-foreground inline">Extras (não expiram): </dt>
+                <dd className="inline font-semibold tabular-nums">{access.extraCredits}</dd>
+              </div>
+            </dl>
+          )}
         </CardContent>
       </Card>
 
@@ -138,7 +164,7 @@ export default function CreditsPage() {
         )}
 
         <p className="text-xs text-muted-foreground text-center">
-          Pix ou cartão via Mercado Pago, sem sair desta página. Créditos nunca expiram.
+          Pix ou cartão via Mercado Pago, sem sair desta página. Créditos extras não expiram.
         </p>
       </section>
 

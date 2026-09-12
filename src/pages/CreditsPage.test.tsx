@@ -74,7 +74,7 @@ vi.mock("@/components/credits/CardPaymentDialog", () => ({
 
 vi.mock("@/hooks/useAuth", () => ({
   useAuth: vi.fn(() => ({
-    profile: { credit_balance: 9 },
+    profile: { credit_balance: 9, plan_credits: 0, plan_period_end: null, access_kind: "legacy" },
   })),
 }));
 
@@ -104,13 +104,44 @@ describe("CreditsPage", () => {
     mockPixPayment.mockResolvedValue(PIX_PAYMENT);
     const auth = await import("@/hooks/useAuth");
     vi.mocked(auth.useAuth).mockReturnValue({
-      profile: { credit_balance: 9 },
+      profile: { credit_balance: 9, plan_credits: 0, plan_period_end: null, access_kind: "legacy" },
     } as never);
   });
 
-  it("renders current credit balance", () => {
+  it("renders the total balance and the extras bucket for a legacy account", () => {
     renderPage();
-    expect(screen.getByText(/^9$/)).toBeInTheDocument();
+    // Total and the extras line both read 9 for a legacy account.
+    expect(screen.getAllByText(/^9$/).length).toBeGreaterThanOrEqual(1);
+    expect(screen.getByText(/extras \(não expiram\)/i)).toBeInTheDocument();
+  });
+
+  it("splits the balance into plan (with its end date) and extras", async () => {
+    const auth = await import("@/hooks/useAuth");
+    vi.mocked(auth.useAuth).mockReturnValue({
+      profile: { credit_balance: 4, plan_credits: 40, plan_period_end: "2099-03-15T12:00:00Z", access_kind: "subscriber" },
+    } as never);
+    renderPage();
+    expect(screen.getByText(/^44$/)).toBeInTheDocument();
+    expect(screen.getByText(/plano até 15\/03\/2099/i)).toBeInTheDocument();
+  });
+
+  it("labels the plan bucket as a trial for trial accounts", async () => {
+    const auth = await import("@/hooks/useAuth");
+    vi.mocked(auth.useAuth).mockReturnValue({
+      profile: { credit_balance: 0, plan_credits: 50, plan_period_end: "2099-03-15T12:00:00Z", access_kind: "trial", trial_started_at: "2099-03-08T12:00:00Z" },
+    } as never);
+    renderPage();
+    expect(screen.getByText(/teste até 15\/03\/2099/i)).toBeInTheDocument();
+  });
+
+  it("tells a courtesy account that nothing is debited and hides the buckets", async () => {
+    const auth = await import("@/hooks/useAuth");
+    vi.mocked(auth.useAuth).mockReturnValue({
+      profile: { credit_balance: 0, plan_credits: 0, plan_period_end: null, access_kind: "exempt" },
+    } as never);
+    renderPage();
+    expect(screen.getByText(/conta com cortesia/i)).toBeInTheDocument();
+    expect(screen.queryByText(/extras \(não expiram\)/i)).toBeNull();
   });
 
   it("renders a placeholder when the profile has not loaded", async () => {

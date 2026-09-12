@@ -115,9 +115,9 @@ describe("AdaptacoesPage", () => {
     expect(screen.getByText(/3 crédito/i)).toBeInTheDocument();
   });
 
-  it("shows 'Gratuita' for zero-credit adaptations", () => {
+  it("shows 'Sem débito' for zero-credit adaptations", () => {
     renderPage();
-    expect(screen.getAllByText(/gratuita/i).length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText(/sem débito/i).length).toBeGreaterThanOrEqual(1);
   });
 
   it("navigates to the wizard from Nova adaptação", () => {

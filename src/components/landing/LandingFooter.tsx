@@ -11,7 +11,7 @@ export default function LandingFooter() {
         </Link>
         <nav className="flex items-center gap-6 text-sm text-muted-foreground" aria-label="Links do rodapé">
           <Link to="/auth" className="hover:text-foreground transition-colors">Entrar</Link>
-          <Link to="/auth?signup=1" className="hover:text-foreground transition-colors">Criar conta</Link>
+          <a href="#precos" className="hover:text-foreground transition-colors">Planos</a>
         </nav>
       </div>
       <p className="text-xs text-muted-foreground text-center mt-4 px-4">

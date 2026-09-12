@@ -9,7 +9,7 @@ function formatDate(iso: string): string {
 }
 
 function CreditsLabel({ n, wasFree }: { n: number; wasFree?: boolean }) {
-  if (n === 0 || wasFree) return <span className="text-xs text-emerald-600 font-medium">Gratuita</span>;
+  if (n === 0 || wasFree) return <span className="text-xs text-emerald-600 font-medium">Sem débito</span>;
   return (
     <span className="flex items-center gap-1 text-xs text-muted-foreground">
       <Coins className="w-3 h-3" />

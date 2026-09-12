@@ -1,4 +1,5 @@
 import { useState, useCallback, useEffect } from "react";
+import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
@@ -11,6 +12,7 @@ import {
 import { ArrowLeft, Sparkles, User, Coins, Plus } from "lucide-react";
 import { useBarrierProfiles, useCreateBarrierProfile } from "@/hooks/useBarrierProfiles";
 import { useAuth } from "@/hooks/useAuth";
+import { canAfford, computeAccess } from "@/lib/domain/access";
 import {
   BARRIER_DIMENSIONS,
   COMPLEXITY_LABELS,
@@ -40,8 +42,12 @@ export function StepBarrierSelection({ data, updateData, onNext, onPrev }: Props
     data.barriers.filter((b) => b.is_active).map((b) => b.dimension).filter(Boolean),
   )];
   const hasBarriers = activeDimensions.length > 0;
-  const isFreeAdaptation = !profile?.free_adaptation_used;
+  // Courtesy accounts never pay; everyone else sees the cost and whether the
+  // two buckets cover it (the server re-checks inside the reservation RPC).
+  const access = computeAccess(profile, new Date());
+  const isExempt = access?.unlimited ?? false;
   const creditCost = calcAdaptationCost(activeDimensions);
+  const affordable = canAfford(access, creditCost);
   const complexityTier = getComplexityTier(activeDimensions);
 
   const handleProfileChange = useCallback((profileId: string) => {
@@ -166,23 +172,33 @@ export function StepBarrierSelection({ data, updateData, onNext, onPrev }: Props
       )}
 
       {hasBarriers && (
-        isFreeAdaptation ? (
+        isExempt ? (
           <div className="flex items-center gap-2 p-3 bg-primary/5 rounded-lg border border-primary/20">
             <Coins className="w-4 h-4 text-primary shrink-0" />
             <p className="text-sm">
-              <strong>Grátis</strong>
-              <span className="text-muted-foreground ml-1">(primeira adaptação por IA)</span>
+              <strong>Sem débito</strong>
+              <span className="text-muted-foreground ml-1">(conta com cortesia)</span>
             </p>
           </div>
         ) : (
-          <div className="flex items-center gap-2 p-3 bg-amber-50 rounded-lg border border-amber-200">
-            <Coins className="w-4 h-4 text-amber-600 shrink-0" />
-            <p className="text-sm text-amber-800">
+          <div
+            className={`flex items-center gap-2 p-3 rounded-lg border ${
+              affordable ? "bg-amber-50 border-amber-200" : "bg-destructive/10 border-destructive/30"
+            }`}
+          >
+            <Coins className={`w-4 h-4 shrink-0 ${affordable ? "text-amber-600" : "text-destructive"}`} />
+            <p className={`text-sm ${affordable ? "text-amber-800" : "text-destructive"}`}>
               Esta adaptação consumirá{" "}
               <strong>{creditCost} créditos</strong>
-              <span className="ml-1 text-amber-600">
+              <span className={`ml-1 ${affordable ? "text-amber-600" : ""}`}>
                 (complexidade {COMPLEXITY_LABELS[complexityTier]})
               </span>
+              {!affordable && (
+                <span className="block mt-1">
+                  Seus créditos acabaram.{" "}
+                  <Link to="/creditos" className="underline font-medium">Comprar créditos</Link>
+                </span>
+              )}
             </p>
           </div>
         )

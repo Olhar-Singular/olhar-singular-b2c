@@ -314,7 +314,7 @@ describe("StepGenerate", () => {
     renderWithProviders(
       <StepGenerate data={baseData} onResult={vi.fn()} onNext={vi.fn()} onPrev={vi.fn()} />,
     );
-    await waitFor(() => expect(screen.getByText(/Créditos insuficientes/i)).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText(/Seus créditos acabaram/i)).toBeInTheDocument());
     expect(screen.getByRole("link", { name: /Comprar créditos/i })).toHaveAttribute("href", "/creditos");
   });
 
@@ -327,7 +327,7 @@ describe("StepGenerate", () => {
     renderWithProviders(
       <StepGenerate data={baseData} onResult={vi.fn()} onNext={vi.fn()} onPrev={onPrev} />,
     );
-    await waitFor(() => expect(screen.getByText(/Créditos insuficientes/i)).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText(/Seus créditos acabaram/i)).toBeInTheDocument());
     fireEvent.click(screen.getByRole("button", { name: /Voltar/i }));
     expect(onPrev).toHaveBeenCalled();
   });

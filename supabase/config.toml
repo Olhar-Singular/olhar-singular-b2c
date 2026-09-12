@@ -5,6 +5,10 @@ project_id = "orientador-digital-b2c"
 # tela de nova senha nunca recebe a sessão de recovery.
 # Portas: 8080 (`make dev`) e 3000 (`make verify-adaptar`).
 [auth]
+# Sem cadastro público: contas nascem pelo checkout pago (assinatura) ou por
+# convite do admin. Em produção, o mesmo flag (disable_signup) é aplicado pela
+# Management API no deploy (spec de pagamentos, runbook).
+enable_signup = false
 additional_redirect_urls = [
   "http://localhost:8080/redefinir-senha",
   "http://localhost:3000/redefinir-senha",

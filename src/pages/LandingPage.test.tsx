@@ -15,11 +15,13 @@ describe("LandingPage", () => {
     expect(h1.textContent?.trim().length).toBeGreaterThan(0);
   });
 
-  it("each CTA 'Começar grátis' links to /auth?signup=1", () => {
+  it("has no public signup: every 'Ver planos' CTA points to the pricing section", () => {
     renderLanding();
-    const links = screen.getAllByRole("link", { name: /começar grátis/i });
+    const links = screen.getAllByRole("link", { name: /ver planos/i });
     expect(links.length).toBeGreaterThan(0);
-    links.forEach((l) => expect(l).toHaveAttribute("href", "/auth?signup=1"));
+    links.forEach((l) => expect(l).toHaveAttribute("href", "#precos"));
+    expect(screen.queryByRole("link", { name: /começar grátis/i })).toBeNull();
+    expect(screen.queryByRole("link", { name: /criar conta/i })).toBeNull();
   });
 
   it("renders the three paid packages with prices", () => {
@@ -29,10 +31,10 @@ describe("LandingPage", () => {
     expect(screen.getByText(/R\$\s*59,90/)).toBeInTheDocument();
   });
 
-  it("advertises 50 free credits at signup", () => {
+  it("never promises free signup credits or credits that never expire", () => {
     renderLanding();
-    const matches = screen.getAllByText(/50 créditos grátis/i);
-    expect(matches.length).toBeGreaterThan(0);
+    expect(screen.queryByText(/50 créditos grátis/i)).toBeNull();
+    expect(screen.queryByText(/nunca expiram/i)).toBeNull();
   });
 
   it("footer carries pedagogical disclaimer", () => {
