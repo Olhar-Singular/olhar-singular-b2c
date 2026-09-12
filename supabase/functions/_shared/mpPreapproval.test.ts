@@ -80,6 +80,7 @@ describe("interpretPreapproval", () => {
 
   it("treats a payload without id as rejected", () => {
     expect(interpretPreapproval({ status: "authorized" })).toMatchObject({ status: "rejected", preapprovalId: null });
+    expect(interpretPreapproval({})).toMatchObject({ status: "rejected", statusDetail: "unknown" });
     expect(interpretPreapproval({ message: "invalid card", status: 400 })).toMatchObject({
       status: "rejected",
       statusDetail: "invalid card",
@@ -147,9 +148,11 @@ describe("interpretAuthorizedPayment", () => {
   });
 
   it("marks recycling with no payment as pending (not paid)", () => {
-    const out = interpretAuthorizedPayment({ ...ap, status: "recycling", payment: undefined });
+    const out = interpretAuthorizedPayment({ ...ap, status: "recycling", payment: undefined, transaction_amount: undefined, debit_date: undefined, retry_attempt: undefined });
     expect(out?.invoice.payment_status).toBe("pending");
     expect(out?.invoice.mp_payment_id).toBeNull();
+    expect(out?.invoice).toMatchObject({ amount_brl: null, debit_date: null, retry_attempt: null, status: "recycling" });
+    expect(interpretAuthorizedPayment({ id: 1, preapproval_id: "pre-1" })?.invoice.status).toBeNull();
   });
 
   it("returns null without an authorized_payment id or a subscription reference", () => {

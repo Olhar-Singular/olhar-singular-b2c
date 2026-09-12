@@ -13,7 +13,7 @@ export interface AdminAuthClient {
   from(table: string): {
     select(columns: string): {
       eq(column: string, value: string): {
-        maybeSingle(): Promise<{ data: { is_super_admin: boolean | null } | null; error: unknown }>;
+        maybeSingle(): PromiseLike<{ data: { is_super_admin: boolean | null } | null; error: unknown }>;
       };
     };
   };

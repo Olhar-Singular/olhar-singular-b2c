@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { parseSubscribeInput } from "./subscribeInput";
+import { parseCancelInput, parseSubscribeInput, parseUpdateCardInput } from "./subscribeInput";
 
 const CARD = { token: "tok", payment_method_id: "visa", payer: { email: "a@b.c" } };
 
@@ -46,5 +46,41 @@ describe("parseSubscribeInput", () => {
       cardLastFour: null,
       attribution: undefined,
     });
+  });
+});
+
+describe("parseUpdateCardInput", () => {
+  it("accepts the Brick card with an optional last four", () => {
+    expect(parseUpdateCardInput({ card: CARD, cardLastFour: "4321" })).toMatchObject({ ok: true, cardLastFour: "4321" });
+    expect(parseUpdateCardInput({ card: CARD, cardLastFour: "12" })).toMatchObject({ ok: true, cardLastFour: null });
+    expect(parseUpdateCardInput({ card: CARD })).toMatchObject({ ok: true, cardLastFour: null });
+  });
+
+  it("rejects a missing body or card", () => {
+    expect(parseUpdateCardInput(null)).toEqual({ ok: false, error: "invalid_body" });
+    expect(parseUpdateCardInput("x")).toEqual({ ok: false, error: "invalid_body" });
+    expect(parseUpdateCardInput({})).toEqual({ ok: false, error: "invalid_card" });
+    expect(parseUpdateCardInput({ card: { ...CARD, installments: 3 } })).toEqual({ ok: false, error: "installments_not_allowed" });
+  });
+});
+
+describe("parseCancelInput", () => {
+  const ID = "0F6A2C2E-6D7B-4D0E-9A4B-1C2D3E4F5A6B";
+
+  it("defaults to the caller when there is no body or userId", () => {
+    expect(parseCancelInput(null)).toEqual({ ok: true, userId: null });
+    expect(parseCancelInput(undefined)).toEqual({ ok: true, userId: null });
+    expect(parseCancelInput({})).toEqual({ ok: true, userId: null });
+    expect(parseCancelInput({ userId: null })).toEqual({ ok: true, userId: null });
+  });
+
+  it("normalises a target user uuid", () => {
+    expect(parseCancelInput({ userId: ID })).toEqual({ ok: true, userId: ID.toLowerCase() });
+  });
+
+  it("rejects a non-object body or a malformed userId", () => {
+    expect(parseCancelInput("x")).toEqual({ ok: false, error: "invalid_body" });
+    expect(parseCancelInput({ userId: "someone" })).toEqual({ ok: false, error: "invalid_body" });
+    expect(parseCancelInput({ userId: 12 })).toEqual({ ok: false, error: "invalid_body" });
   });
 });

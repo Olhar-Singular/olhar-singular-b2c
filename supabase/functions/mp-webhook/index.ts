@@ -7,6 +7,8 @@ import {
 } from "../_shared/mpEvents.ts";
 import { validateMpSignature } from "../_shared/mpSignature.ts";
 import { approvePurchaseAndGrant, rejectPendingPurchase } from "../_shared/purchaseGrant.ts";
+import { parseSubscriptionNotification } from "../_shared/mpPreapproval.ts";
+import { handleSubscriptionWebhook, type SubscriptionWebhookDeps } from "../_shared/subscriptionActions.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -35,9 +37,61 @@ serve(async (req) => {
 
     const url = new URL(req.url);
     const body = await req.json();
+    const queryId = url.searchParams.get("data.id");
+
+    // Subscription topics: status mirror (subscription_preapproval) and monthly
+    // charges (subscription_authorized_payment). Same trust model as payments:
+    // the object is re-fetched from MP with our token, the ping is only a hint.
+    const subEvent = parseSubscriptionNotification(body, queryId);
+    if (subEvent.topic && subEvent.topic !== "payment" && subEvent.id) {
+      const admin = createClient(supabaseUrl, serviceKey);
+      const mpHeaders = { Authorization: `Bearer ${mpToken}` };
+      const fetchJson = async (path: string) => {
+        const resp = await fetch(`https://api.mercadopago.com${path}`, { headers: mpHeaders });
+        if (!resp.ok) {
+          console.error("mp-webhook: failed to fetch", path, resp.status);
+          return null;
+        }
+        return await resp.json();
+      };
+      const deps: SubscriptionWebhookDeps = {
+        fetchPreapproval: (id) => fetchJson(`/preapproval/${encodeURIComponent(id)}`),
+        fetchAuthorizedPayment: (id) => fetchJson(`/authorized_payments/${encodeURIComponent(id)}`),
+        findSubscriptionByPreapproval: async (preapprovalId) => {
+          const { data } = await admin.from("subscriptions").select("id").eq("mp_preapproval_id", preapprovalId).maybeSingle();
+          return data;
+        },
+        syncStatus: async (input) => {
+          const { data, error } = await admin.rpc("sync_subscription_status", {
+            p_subscription_id: input.subscriptionId,
+            p_mp_preapproval_id: input.preapprovalId,
+            p_mp_status: input.mpStatus,
+            p_next_payment_date: input.nextPaymentDate,
+          });
+          if (error) throw new Error(`sync_subscription_status failed: ${error.message}`);
+          return data?.result;
+        },
+        renew: async (subscriptionId, invoice) => {
+          const { data, error } = await admin.rpc("renew_subscription", {
+            p_subscription_id: subscriptionId,
+            p_invoice: invoice,
+          });
+          if (error) throw new Error(`renew_subscription failed: ${error.message}`);
+          return data?.result;
+        },
+        log: (message, ...args) => console.warn(message, ...args),
+      };
+      const outcome = await handleSubscriptionWebhook({ topic: subEvent.topic, id: subEvent.id }, deps);
+      // provider_unavailable → 502 so MP retries; anything else is acknowledged.
+      if (!outcome.handled && outcome.reason === "provider_unavailable") {
+        return json({ error: "Erro ao buscar assinatura." }, 502);
+      }
+      return json({ received: true, ...(outcome.handled ? { result: outcome.result } : { ignored: outcome.reason }) });
+    }
+
     // MP puts the id in the body AND as the query param data.id; the signature is
     // computed over the query one.
-    const paymentId = parsePaymentNotification(body) ?? url.searchParams.get("data.id");
+    const paymentId = parsePaymentNotification(body) ?? queryId;
 
     // Ignore non-payment topics (merchant_order, etc.).
     if (!paymentId) {
