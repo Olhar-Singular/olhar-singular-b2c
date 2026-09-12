@@ -74,7 +74,7 @@ CREATE TABLE public.subscription_invoices (
 ALTER TABLE profiles ADD COLUMN plan_period_start timestamptz;  -- entra no guard
 ```
 
-- [ ] RED (pgTAP: RLS das 3 tabelas, seed dos planos, índice único parcial, guard) → GREEN → commit
+- [x] RED (pgTAP: RLS das 3 tabelas, seed dos planos, índice único parcial, guard) → GREEN → commit
   `feat(assinatura): schema de planos, assinaturas e faturas`.
 
 ---
@@ -105,7 +105,7 @@ sync_subscription_status(p_subscription_id, p_mp_status, p_next_payment_date) �
 -- Todas REVOKE/GRANT service_role.
 ```
 
-- [ ] RED (ativação com reset do trial; 1ª parcela confirma sem reset; renovação reseta; mesmo id
+- [x] RED (ativação com reset do trial; 1ª parcela confirma sem reset; renovação reseta; mesmo id
   `recycling` depois `approved` credita uma vez; replay não credita; 1ª parcela recusada → clawback;
   renovação recusada → past_due sem tocar saldo; cancel mantém créditos; ACL) → GREEN → commit
   `feat(assinatura): ativar, renovar, estornar e cancelar a assinatura no banco`.
@@ -128,7 +128,7 @@ interpretAuthorizedPayment(ap) → invoice jsonb para renew_subscription (paymen
 mpEvents.extractApprovedGrant/RejectedPurchase: external_reference precisa ser UUID; senão null.
 ```
 
-- [ ] RED → GREEN → commit `feat(assinatura): montar o preapproval e interpretar os eventos de assinatura`.
+- [x] RED → GREEN → commit `feat(assinatura): montar o preapproval e interpretar os eventos de assinatura`.
 
 ---
 
@@ -148,7 +148,7 @@ runSubscribe(input: { userId, email, planSlug, card, cardLastFour?, attribution?
 `index.ts`: auth obrigatória (Bearer válido), `parseSubscribeInput`, monta deps com o client
 service_role, `APP_URL` como `back_url` (`/creditos`).
 
-- [ ] RED → GREEN → `denoImportGraph` → commit `feat(assinatura): assinar um plano com cartão pelo app`.
+- [x] RED → GREEN → `denoImportGraph` → commit `feat(assinatura): assinar um plano com cartão pelo app`.
 
 ---
 
@@ -165,7 +165,7 @@ service_role, `APP_URL` como `back_url` (`/creditos`).
   → `cancel_subscription_local`. Body `userId` só com `authorizeSuperAdmin`.
 - `update-subscription-card`: `PUT /preapproval/{id} {card_token_id}` → espelha `card_brand`/last4.
 
-- [ ] RED → GREEN → commit `feat(assinatura): webhook de assinatura, cancelamento e troca de cartão`.
+- [x] RED → GREEN → commit `feat(assinatura): webhook de assinatura, cancelamento e troca de cartão`.
 
 ---
 
@@ -186,14 +186,14 @@ do `ProtectedRoute` + `Layout`), `PricingSection` (cards de plano lendo `usePlan
 "Assinar" → `/assinar?plano=<slug>`; extras citados), `Layout` (item "Assinar" no menu quando
 não assinante).
 
-- [ ] RED → GREEN por arquivo → commit `feat(assinatura): assinar, acompanhar, cancelar e trocar o cartão pelo app`.
+- [x] RED → GREEN por arquivo → commit `feat(assinatura): assinar, acompanhar, cancelar e trocar o cartão pelo app` (843ee10).
 
 ---
 
 ### Task 7: docs vivas + validação
 
-- [ ] `dominio-orientador` (fluxo Assinatura na tabela; gotchas: 1ª parcela, transição da fatura,
+- [x] `dominio-orientador` (fluxo Assinatura na tabela; gotchas: 1ª parcela, transição da fatura,
   `processed` não é pago, uma viva por usuário), `edge-fn-writer` (árvore), `.env.example`
   (`APP_URL`), `Makefile` nada novo.
-- [ ] `make lint`, `npx vitest run`, `npm run test:coverage`, `make test-db`, `make fn-check`.
-- [ ] Commit `docs(skills): assinatura mensal via Mercado Pago`.
+- [x] `make lint`, `npx vitest run`, `npm run test:coverage`, `make test-db`, `make fn-check` (11 erros pré-existentes, nenhum em assinatura).
+- [x] Commit `docs(skills): assinatura mensal via Mercado Pago`.

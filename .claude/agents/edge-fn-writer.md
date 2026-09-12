@@ -1,6 +1,6 @@
 ---
 name: edge-fn-writer
-description: Use este agente pra criar uma edge function nova em `supabase/functions/<nome>/` ou modificar o scaffolding de uma existente (auth, CORS, logging de IA, config). Ele conhece o padrão compartilhado em `supabase/functions/_shared/` e garante consistência com as 10 functions já existentes. NÃO use pra debugging lógico de negócio dentro de uma function, apenas pra scaffolding/estrutura.
+description: Use este agente pra criar uma edge function nova em `supabase/functions/<nome>/` ou modificar o scaffolding de uma existente (auth, CORS, logging de IA, config). Ele conhece o padrão compartilhado em `supabase/functions/_shared/` e garante consistência com as functions já existentes (`subscribe`, `cancel-subscription`, `update-subscription-card` são o modelo mais recente: `index.ts` só monta `deps` e chama um `run*` puro de `_shared/`). NÃO use pra debugging lógico de negócio dentro de uma function, apenas pra scaffolding/estrutura.
 tools: Read, Write, Edit, Grep, Glob, Bash
 model: sonnet
 ---
@@ -34,6 +34,11 @@ supabase/functions/
 │   ├── cardPaymentInput.ts # validação do body { packageId, card } do create-card-payment
 │   ├── mpPixPayment.ts  # body do POST /v1/payments (Pix) + extração do QR — Checkout Transparente
 │   ├── mpEvents.ts      # parsing do webhook Mercado Pago (grant/reject por status do pagamento)
+│   ├── mpPreapproval.ts # assinatura: body do POST /preapproval, interpretação, tópicos do webhook, shape do authorized_payment
+│   ├── subscribeFlow.ts # runSubscribe(input, deps): plano válido, uma viva, ativação otimista, pending, recusa, nunca repetir o POST
+│   ├── subscribeInput.ts # parseSubscribeInput / parseUpdateCardInput / parseCancelInput
+│   ├── subscriptionActions.ts # runCancelSubscription / runUpdateSubscriptionCard / handleSubscriptionWebhook (deps injetadas)
+│   ├── subscriptionActionDeps.ts # wiring Supabase+MP dos deps acima (compartilhado por cancel e update-card)
 │   ├── mpSignature.ts   # validateMpSignature() — HMAC do header x-signature
 │   └── sanitize.ts      # sanitize() — limpa strings antes de salvar
 └── <nome-da-function>/
