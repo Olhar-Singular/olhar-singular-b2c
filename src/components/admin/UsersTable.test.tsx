@@ -184,6 +184,15 @@ describe("UsersTable", () => {
     screen.getAllByRole("button", { name: /alterar acesso de/i }).forEach((b) => expect(b).toBeDisabled());
   });
 
+  it("tolerates a missing onSetAccess handler (defaults to a no-op)", async () => {
+    const ue = userEvent.setup();
+    const trialUsers = [{ ...users[0], access_kind: "trial", trial_started_at: "2026-09-01T00:00:00Z" }];
+    render(<UsersTable users={trialUsers} onToggleStatus={onToggleStatus} onGrantCredits={onGrantCredits} />);
+    await ue.click(screen.getByRole("button", { name: /alterar acesso de alice/i }));
+    await ue.click(await screen.findByRole("menuitem", { name: /\+7 dias/i }));
+    expect(screen.getByTestId("access-u1")).toBeInTheDocument();
+  });
+
   it("forwards access changes from the row menu", async () => {
     const ue = userEvent.setup();
     const onSetAccess = vi.fn();

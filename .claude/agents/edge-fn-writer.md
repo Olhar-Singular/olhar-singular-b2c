@@ -19,7 +19,9 @@ supabase/functions/
 ├── _shared/             # LÓGICA EXTRAÍDA + TESTADA (cada *.ts tem *.test.ts):
 │   ├── aiConfig.ts      # getAiConfig() → { apiKey, baseUrl, resolveModel } (Google/Gemini via AI_API_KEY)
 │   ├── logAiUsage.ts    # logAiUsage() — grava uso de IA em ai_usage_logs
-│   ├── credits.ts       # chargeCredits() / chargeErrorResponse() / refundCredits() — débito de crédito
+│   ├── credits.ts       # chargeCredits() / chargeErrorResponse() — débito por balde (mode charged|exempt); runCreditRpc()
+│   ├── creditReservation.ts # interpretReservation()/reservationErrorResponse()/resolveRequestId() — reserva crash-safe
+│   ├── adminSetAccess.ts # validateSetAccessInput() — trial/exempt/legacy ou extendDays 7/14/30
 │   ├── creditGuard.ts   # guarda de saldo antes de operação cara
 │   ├── credits/Packages/adaptationCost.ts  # pacotes e cálculo de custo
 │   ├── adminAuth.ts     # checagem de super-admin

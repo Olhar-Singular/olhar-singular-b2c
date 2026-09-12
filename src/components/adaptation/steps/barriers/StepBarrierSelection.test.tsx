@@ -269,6 +269,17 @@ describe("StepBarrierSelection", () => {
     expect(screen.getByText(/conta com cortesia/i)).toBeInTheDocument();
   });
 
+  it("shows the cost (and no courtesy badge) while the profile has not loaded", () => {
+    mockUseAuth.mockReturnValue({ profile: null });
+    renderStep({
+      ...baseData,
+      barrierProfileId: "prof-1",
+      barriers: [{ dimension: "tea", barrier_key: "tea_abstracao", label: "TEA", is_active: true }],
+    });
+    expect(screen.queryByText(/Sem débito/i)).toBeNull();
+    expect(screen.getByText(/12 créditos/i)).toBeInTheDocument();
+  });
+
   it("warns and links to /creditos when the two buckets cannot cover the cost", () => {
     mockUseAuth.mockReturnValue({ profile: { access_kind: "legacy", credit_balance: 3, plan_credits: 0, plan_period_end: null } });
     renderStep({

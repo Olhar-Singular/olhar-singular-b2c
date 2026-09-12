@@ -11,7 +11,7 @@ description: >-
 
 # Domínio — Orientador Digital B2C
 
-Plataforma educacional B2C. **Educadores adaptam atividades pedagógicas (provas, exercícios) para alunos com barreiras de aprendizagem (ex.: TEA), usando IA.** Monetização por **créditos** (Pix e cartão via Mercado Pago, os dois inline). 1ª adaptação grátis; demais debitam crédito. Redesign em curso (assinatura mensal, trial só via admin): `docs/superpowers/specs/2026-09-11-pagamentos-assinatura-mp-design.md`.
+Plataforma educacional B2C. **Educadores adaptam atividades pedagógicas (provas, exercícios) para alunos com barreiras de aprendizagem (ex.: TEA), usando IA.** Monetização por **créditos em dois baldes** (plano mensal, que zera na renovação, e extras avulsos, que nunca expiram; Pix e cartão via Mercado Pago, os dois inline). **Não há cadastro público nem adaptação grátis**: contas nascem pelo checkout pago ou por convite do admin (trial de 7 dias/50 créditos ou cortesia). Redesign em curso (assinatura): `docs/superpowers/specs/2026-09-11-pagamentos-assinatura-mp-design.md`.
 
 ## Fluxos → onde estão
 
@@ -23,7 +23,7 @@ Plataforma educacional B2C. **Educadores adaptam atividades pedagógicas (provas
 | **Chat** | `ChatPage` | `useChatSessions`, `useSendMessage` | `chat` | Orientação pedagógica via IA. |
 | **Créditos** | `CreditsPage` | `useCredits` | `create-card-payment`, `create-pix-payment`, `mp-webhook` | Compra sem sair da página: cartão pelo Card Payment Brick (`components/payments/MpCardBrick` + `components/credits/CardPaymentDialog`), Pix pelo QR (`components/credits/PixPaymentDialog`). Pacotes vêm da tabela `credit_packages` (`usePackages`). RPCs `deduct_credits`/`grant_credits`/`approve_purchase_and_grant`. |
 | **Admin** | `AdminPage`, `DashboardPage` | `useAdminDashboard`, `useHistory` | `admin-dashboard`, `admin-grant-credits`, `admin-user-status` | Painel super-admin. |
-| **Auth** | `AuthPage`, `ForgotPasswordPage`, `ResetPasswordPage`, `LandingPage` | `useAuth` | — | Signup (senha + confirmação por link) ganha 50 créditos (trigger). Pós-signup, `AuthPage` mostra a view "Verifique seu e-mail" com botão Reenviar (cooldown 60s) via `supabase.auth.resend({ type: "signup" })`. As 3 telas públicas compartilham o shell `components/auth/AuthLayout`. Templates: `supabase/templates/{confirmation,recovery}.html` (registrados no `config.toml`). |
+| **Auth** | `AuthPage`, `ForgotPasswordPage`, `ResetPasswordPage`, `LandingPage` | `useAuth`, `useAccess` | `admin-set-access` | **Só login** (`enable_signup = false`; `?signup=1` antigo mostra um aviso). Contas nascem pelo checkout pago (Fase 3/4) ou por convite do admin com `access_kind` no `user_metadata` (`trial` ou `exempt`). O trial (50 créditos no balde do plano, 7 dias) começa na **confirmação do e-mail** (trigger `on_auth_user_confirmed` → `start_trial_for`). As 3 telas públicas compartilham `components/auth/AuthLayout`. Templates: `supabase/templates/{confirmation,recovery}.html`. |
 | **Esqueci a senha** | `ForgotPasswordPage` (`/esqueci-senha`) → `ResetPasswordPage` (`/redefinir-senha`) | — | — | `resetPasswordForEmail(email, { redirectTo: <origin>/redefinir-senha })` → e-mail (`recovery.html`) → a página de destino recebe a sessão de recovery e chama `updateUser({ password })`, depois `signOut()` + volta pro login. Rotas **públicas** (fora do `ProtectedRoute`). |
 
 ## Onde mora a lógica
@@ -216,13 +216,25 @@ Plataforma educacional B2C. **Educadores adaptam atividades pedagógicas (provas
   saídas só (`settle`/`reverse`) — por isso primeiro medimos a frequência. `expected_question_count`
   vem do cliente (extração ou seleção do banco); **0 = desconhecido** (texto digitado) e pula a
   checagem. Ao ligar enforcement, lembre que cada reask custa ~50s de um orçamento de 240s.
-- 1ª adaptação grátis: flag **`profiles.free_adaptation_used`**; só depois debita. A flag é
-  **reivindicada antes** da chamada de IA (UPDATE atômico `… WHERE free_adaptation_used = false`,
-  pra fechar a corrida de duplo-grátis) e **devolvida em qualquer falha** — senão uma geração
-  que dá timeout queima o grátis do usuário novo pra sempre.
-- **Cobrança do Adaptar é por RESERVA, não por débito solto** (migration
-  `20260723140633_credit_reservations`): `adapt-activity` chama **`open_adapt_reservation`**
-  (reserva + free-first/débito **na mesma transação**), e só existem duas saídas —
+- **Dois baldes de crédito** (migration `20260913000000`): `profiles.plan_credits` + `plan_period_end`
+  (balde mensal; também abriga os 50 do trial; expiração é **lazy**, ninguém zera a coluna) e
+  `credit_balance` (extras, nunca expiram; DEFAULT 0, o bônus de cadastro acabou). `access_kind` ∈
+  `subscriber | trial | exempt | legacy`; `exempt` nunca debita (ledger com delta 0, bucket `exempt`).
+  **`consume_credits`** é o único ponto que debita: plano primeiro, extras depois, uma linha de
+  ledger por balde (`credit_transactions.bucket`). `deduct_credits` é wrapper com o payload antigo.
+  No cliente, **`computeAccess()`** (`src/lib/domain/access.ts`) e `useAccess()` derivam total,
+  paywall, dias de trial; o servidor aplica a mesma regra na RPC. As flags `free_*_used` ficam no
+  schema mas **nada mais as lê** (usuários antigos foram compensados em extras pela migration
+  `20260913000003`, que também os marcou `legacy` e os super-admins `exempt`).
+- **Paywall é suave**: só adaptar, extrair e chat bloqueiam (402 com `plan_balance`/`extra_balance`);
+  leitura, edição e PDF continuam. `AccessBanner` no `Layout` mostra dias de teste / teste
+  encerrado / créditos esgotados com CTA para `/creditos`. Ban do Auth é só ação disciplinar.
+- **Cobrança do Adaptar (e da extração) é por RESERVA, não por débito solto** (migrations
+  `20260723140633_credit_reservations` e `20260913000001_consume_credits`): `adapt-activity` chama
+  **`open_adapt_reservation`** e `extract-questions` chama **`open_credit_reservation(kind 'extract')`**
+  (reserva + débito por balde **na mesma transação**, gravando `plan_charged`/`extra_charged` e
+  `period_end_at_open`); estorno volta ao balde de origem, e a parte do plano só volta se o MESMO
+  período ainda estiver ativo (senão é descartada, nunca vira extra). Só existem duas saídas —
   `settle_credit_reservation` logo antes do 200, ou `reverse_credit_reservation` em qualquer
   falha. O **`id` da reserva é o `request_id` que o cliente manda** (`StepGenerate` gera um
   `crypto.randomUUID()` por tentativa): é a chave de idempotência, então replay → **409**, não
@@ -236,7 +248,7 @@ Plataforma educacional B2C. **Educadores adaptam atividades pedagógicas (provas
   ler `{ error }` parece sucesso — o try/catch do refund nunca dispara, o `onError` vira código
   morto e o usuário perde o crédito pago sem um log sequer. Mesma armadilha em `.insert()`
   (ver `logAiUsage`, que checa o `error` do insert).
-- **Escrita de dinheiro é só service_role** (migration `20260722000001_harden_credit_paywall`): `deduct_credits`/`grant_credits` têm `REVOKE EXECUTE` de anon/authenticated (só edge fns via service_role chamam) e as colunas `credit_balance`/`free_adaptation_used`/`free_extraction_used` têm o trigger `prevent_credit_self_mutation` que barra UPDATE por JWT authenticated/anon. O cliente **nunca** escreve saldo/flags direto — sempre via edge function. Alterou essas RPCs? Use **`CREATE OR REPLACE`** (nunca `DROP`+`CREATE`, reabre o EXECUTE p/ PUBLIC). Cobertura: `credit_paywall_guard.test.sql`.
+- **Escrita de dinheiro é só service_role** (migration `20260722000001_harden_credit_paywall`): `deduct_credits`/`grant_credits` têm `REVOKE EXECUTE` de anon/authenticated (só edge fns via service_role chamam) e as colunas de dinheiro e identidade (`credit_balance`, `plan_credits`, `plan_period_end`, `access_kind`, `trial_started_at`, `cpf`, `must_set_password`, aceite dos termos, além das `free_*_used` legadas) têm o trigger `prevent_credit_self_mutation` que barra UPDATE por JWT authenticated/anon; **INSERT e DELETE do próprio perfil e INSERT no ledger foram revogados** (migration `20260913000000`): a linha nasce só por `handle_new_user` e o extrato só por RPC. O cliente **nunca** escreve saldo/acesso direto — sempre via edge function. Alterou essas RPCs? Use **`CREATE OR REPLACE`** (nunca `DROP`+`CREATE`, reabre o EXECUTE p/ PUBLIC). Cobertura: `credit_paywall_guard.test.sql`.
 - **As funções de trigger também estão revogadas** (migration `20260816000000_harden_function_acls`, fecha os avisos do Supabase security advisor): `handle_new_user`, `prevent_credit_self_mutation` e `prevent_super_admin_self_escalation` perderam o EXECUTE default de anon/authenticated, e `handle_updated_at`/`get_user_school_id` ganharam `search_path = public`. Isso **não** afeta o disparo: o Postgres checa EXECUTE na criação do trigger, não quando ele roda. Vale a mesma regra do `CREATE OR REPLACE`. Cobertura: `function_hardening.test.sql`.
 - Edge function importa o pacote canônico com **extensão `.ts` explícita** (Vite resolve sem, Deno não).
 - **O limite de tamanho da atividade é checado ANTES de cobrar.** `sanitize()` escapa o HTML e só

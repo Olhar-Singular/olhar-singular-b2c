@@ -2,6 +2,12 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
+> **Status (2026-09-12):** Tasks 1 a 9 concluídas e commitadas na branch `redesign/assinatura-mp`.
+> Ajustes durante a execução: a compensação pula contas isentas; `admin_set_access_kind` inicia o
+> trial na hora quando o e-mail já está confirmado; `AuthPage` ganhou suíte nova (só login); os
+> CTAs da landing apontam para `#precos` e o card gratuito virou "Teste de 7 dias, por convite"
+> (mailto de suporte) até a Fase 4 reescrever a copy; `fn-check` segue com os 15 erros pré-existentes.
+
 **Goal:** O saldo deixa de ser um inteiro único. Passa a existir o **balde do plano** (`plan_credits`,
 válido até `plan_period_end`, que também abriga os 50 créditos do trial) e o **balde extras**
 (`credit_balance`, nunca expira). Consumo debita plano primeiro, extras depois; estorno volta ao
@@ -91,15 +97,15 @@ ALTER TABLE public.credit_reservations ADD CONSTRAINT credit_reservations_kind_c
 -- handle_new_user: access_kind := raw_user_meta_data->>'access_kind' se em ('trial','exempt').
 ```
 
-- [ ] **RED:** `two_buckets_schema.test.sql` (colunas e defaults; `access_kind` inválido falha;
+- [x] **RED:** `two_buckets_schema.test.sql` (colunas e defaults; `access_kind` inválido falha;
   `cpf` com letra falha; `handle_new_user` com `access_kind: 'trial'` no metadata cria perfil
   `trial`, com `'hacker'` cria `subscriber`); `credit_paywall_guard` com `throws_ok` para
   `plan_credits`, `plan_period_end`, `access_kind`, `cpf`, `must_set_password` e para
   `INSERT`/`DELETE` em `profiles` como authenticated; `rls_policies`: INSERT no ledger → 42501;
   `signup_credits`: `credit_balance = 0`, `plan_credits = 0`, `access_kind = 'subscriber'`.
   `make test-db` falha.
-- [ ] **GREEN:** migration; `supabase migration up`; `make test-db` passa; `make gen-types`.
-- [ ] Commit `feat(credits): dois baldes no schema e fim do INSERT/DELETE do próprio perfil`.
+- [x] **GREEN:** migration; `supabase migration up`; `make test-db` passa; `make gen-types`.
+- [x] Commit `feat(credits): dois baldes no schema e fim do INSERT/DELETE do próprio perfil`.
 
 ---
 
@@ -132,14 +138,14 @@ ALTER TABLE public.credit_reservations ADD CONSTRAINT credit_reservations_kind_c
 -- reconcile_stale_credit_reservations: sem 'free_released' (mantém a chave com 0 por compatibilidade).
 ```
 
-- [ ] **RED:** `consume_credits_two_buckets.test.sql` (plano primeiro; plano expirado ignora;
+- [x] **RED:** `consume_credits_two_buckets.test.sql` (plano primeiro; plano expirado ignora;
   isento não debita e gera ledger 0; insuficiente com totais; ledger por balde; wrapper
   `deduct_credits` devolve os mesmos campos antigos). `credit_reservations.test.sql` reescrito:
   fixtures com `plan_credits/plan_period_end`, reserva mista (plano 5 + extra 7), estorno de
   origem, estorno após expiração descarta a parcela do plano, reconciliação. Apagar
   `free_adaptation_claim.test.sql`. `make test-db` falha.
-- [ ] **GREEN:** migration; `migration up`; `make test-db` passa; `make gen-types`.
-- [ ] Commit `feat(credits): consumir do plano antes dos extras e estornar ao balde de origem`.
+- [x] **GREEN:** migration; `migration up`; `make test-db` passa; `make gen-types`.
+- [x] Commit `feat(credits): consumir do plano antes dos extras e estornar ao balde de origem`.
 
 ---
 
@@ -165,12 +171,12 @@ ALTER TABLE public.credit_reservations ADD CONSTRAINT credit_reservations_kind_c
 -- REVOKE/GRANT em todas.
 ```
 
-- [ ] **RED:** `trial_on_confirm.test.sql` (INSERT trial sem confirmação não inicia; UPDATE de
+- [x] **RED:** `trial_on_confirm.test.sql` (INSERT trial sem confirmação não inicia; UPDATE de
   `email_confirmed_at` inicia uma vez e só uma; INSERT já confirmado inicia; `subscriber`
   confirmado não ganha nada); `admin_access.test.sql` (extend 7/14/30, teto 90, recusa sem
   `trial_started_at`, `set_access_kind` para exempt/legacy/trial confirmado, ACL 42501).
-- [ ] **GREEN:** migration; `make test-db`; `make gen-types`.
-- [ ] Commit `feat(credits): trial que começa na confirmação do e-mail e acesso definido pelo admin`.
+- [x] **GREEN:** migration; `make test-db`; `make gen-types`.
+- [x] Commit `feat(credits): trial que começa na confirmação do e-mail e acesso definido pelo admin`.
 
 ---
 
@@ -194,7 +200,7 @@ cria fixtures **antes** de chamar a lógica: a migration expõe a lógica numa f
 `public.migrate_legacy_access()` (service_role only) e a chama uma vez; o teste chama de novo
 sobre fixtures e confere idempotência.
 
-- [ ] **RED/GREEN** como acima. Commit `feat(credits): migrar usuários existentes para o estado legacy com compensação`.
+- [x] **RED/GREEN** como acima. Commit `feat(credits): migrar usuários existentes para o estado legacy com compensação`.
 
 ---
 
@@ -214,10 +220,10 @@ sobre fixtures e confere idempotência.
   body `{ userId, kind: 'legacy'|'trial'|'exempt' }` ou `{ userId, extendDays: 7|14|30 }`;
   `authorizeSuperAdmin`; registra em `admin_actions`? (tabela é da Fase 5: aqui só `console.info`).
 
-- [ ] **RED:** testes dos módulos puros (exempt em `chargeCredits`/`interpretReservation`;
+- [x] **RED:** testes dos módulos puros (exempt em `chargeCredits`/`interpretReservation`;
   `mergeUserRows` com as colunas novas e CPF `***.***.***-09`; `validateSetAccessInput`).
-- [ ] **GREEN:** implementar; `npx vitest run supabase/functions`; `denoImportGraph` verde.
-- [ ] Commit `feat(credits): edge functions consomem pelos dois baldes e extração vira reserva`.
+- [x] **GREEN:** implementar; `npx vitest run supabase/functions`; `denoImportGraph` verde.
+- [x] Commit `feat(credits): edge functions consomem pelos dois baldes e extração vira reserva`.
 
 ---
 
@@ -242,7 +248,7 @@ export function canAfford(access: Access | null, cost: number): boolean;
 ```
 Hook `useAccess()` em `src/hooks/useAccess.ts` (usa `useAuth().profile` + `Date`).
 
-- [ ] **RED/GREEN** com todos os ramos. Commit `feat(credits): calcular o estado de acesso no cliente`.
+- [x] **RED/GREEN** com todos os ramos. Commit `feat(credits): calcular o estado de acesso no cliente`.
 
 ---
 
@@ -270,7 +276,7 @@ Hook `useAccess()` em `src/hooks/useAccess.ts` (usa `useAuth().profile` + `Date`
   (copy completa fica para a Fase 4), tests
 - Modify: `supabase/config.toml` (`[auth] enable_signup = false`)
 
-- [ ] **RED/GREEN** por arquivo. Commit `feat(credits): paywall suave, saldo por balde e fim do cadastro público`.
+- [x] **RED/GREEN** por arquivo. Commit `feat(credits): paywall suave, saldo por balde e fim do cadastro público`.
 
 ---
 
@@ -282,14 +288,14 @@ Hook `useAccess()` em `src/hooks/useAccess.ts` (usa `useAuth().profile` + `Date`
   colunas Plano e Extras; filtro por estado; menu "Alterar acesso" com opções e "Estender teste"
   7/14/30), tests
 
-- [ ] **RED/GREEN.** Commit `feat(admin): mostrar o estado de acesso e permitir alterá-lo`.
+- [x] **RED/GREEN.** Commit `feat(admin): mostrar o estado de acesso e permitir alterá-lo`.
 
 ---
 
 ### Task 9: docs vivas + validação
 
-- [ ] `dominio-orientador` (gotchas: dois baldes, `consume_credits`, trial por confirmação, fim das
+- [x] `dominio-orientador` (gotchas: dois baldes, `consume_credits`, trial por confirmação, fim das
   flags), `edge-fn-writer` (árvore), `environment.md` se necessário.
-- [ ] `make lint`, `npx vitest run`, `npm run test:coverage` (100%), `make test-db`, `make fn-check`
+- [x] `make lint`, `npx vitest run`, `npm run test:coverage` (100%), `make test-db`, `make fn-check`
   (sem erros novos além dos 15 conhecidos).
-- [ ] Commit `docs(skills): dois baldes de crédito, trial por confirmação e acesso pelo admin`.
+- [x] Commit `docs(skills): dois baldes de crédito, trial por confirmação e acesso pelo admin`.

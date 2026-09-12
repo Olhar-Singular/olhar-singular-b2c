@@ -13,16 +13,19 @@ vi.mock("@/components/admin/UsersTable", () => ({
     users,
     onToggleStatus,
     onGrantCredits,
+    onSetAccess,
     isUpdating,
   }: {
     users: unknown[];
     onToggleStatus: (i: unknown) => void;
     onGrantCredits: (i: unknown) => void;
+    onSetAccess: (i: unknown) => void;
     isUpdating: boolean;
   }) => (
     <div data-testid="userstable" data-count={users.length} data-updating={String(isUpdating)}>
       <button onClick={() => onToggleStatus({ userId: "u1", action: "ban" })}>toggle</button>
       <button onClick={() => onGrantCredits({ userId: "u1", amount: 10 })}>grant</button>
+      <button onClick={() => onSetAccess({ userId: "u1", kind: "exempt" })}>access</button>
     </div>
   ),
 }));
@@ -97,6 +100,9 @@ describe("AdminPage", () => {
 
     fireEvent.click(screen.getByText("grant"));
     expect(grantMutate).toHaveBeenCalledWith({ userId: "u1", amount: 10 });
+
+    fireEvent.click(screen.getByText("access"));
+    expect(setAccessMutate).toHaveBeenCalledWith({ userId: "u1", kind: "exempt" });
   });
 
   it("renders only the header when there is no data, error, or loading", () => {
