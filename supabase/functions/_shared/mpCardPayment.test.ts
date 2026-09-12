@@ -52,6 +52,23 @@ describe("parseCardFormData", () => {
     expect(parseCardFormData({ ...CARD, installments: 3 })).toEqual({ ok: false, error: "installments_not_allowed" });
   });
 
+  it("ignores a payer that is not an object", () => {
+    const parsed = parseCardFormData({ token: "tok", payment_method_id: "visa", payer: "buyer@test.com" });
+    expect(parsed).toEqual({ ok: true, card: { token: "tok", payment_method_id: "visa" } });
+  });
+
+  it("keeps the identification when the payer has no e-mail", () => {
+    const parsed = parseCardFormData({
+      token: "tok",
+      payment_method_id: "visa",
+      payer: { identification: { type: "CPF", number: "12345678909" } },
+    });
+    expect(parsed).toEqual({
+      ok: true,
+      card: { token: "tok", payment_method_id: "visa", payer: { identification: { type: "CPF", number: "12345678909" } } },
+    });
+  });
+
   it("drops a malformed identification instead of forwarding it", () => {
     const parsed = parseCardFormData({ ...CARD, payer: { email: "a@b.c", identification: { type: "CPF" } } });
     expect(parsed).toEqual({ ok: true, card: { ...CARD, payer: { email: "a@b.c" } } });

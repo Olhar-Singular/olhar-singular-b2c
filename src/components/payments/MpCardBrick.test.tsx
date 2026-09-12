@@ -112,6 +112,13 @@ describe("MpCardBrick", () => {
     expect(screen.getByTestId("card-brick")).toBeInTheDocument();
   });
 
+  it("treats an undefined public key like a missing one", () => {
+    vi.stubEnv("VITE_MP_PUBLIC_KEY", undefined as unknown as string);
+    render(<MpCardBrick amount={29.9} onSubmit={vi.fn()} />);
+    expect(screen.getByRole("alert")).toBeInTheDocument();
+    expect(initMercadoPago).not.toHaveBeenCalled();
+  });
+
   it("shows a visible alert instead of the Brick when the public key is missing", () => {
     vi.stubEnv("VITE_MP_PUBLIC_KEY", "");
     render(<MpCardBrick amount={29.9} onSubmit={vi.fn()} />);

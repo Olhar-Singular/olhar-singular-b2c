@@ -23,6 +23,16 @@ describe("approvePurchaseAndGrant", () => {
     expect(result).toEqual({ granted: true, userId: "u1", credits: 120, newBalance: 130 });
   });
 
+  it("fills safe defaults when the RPC omits the grant details", async () => {
+    const { client } = fakeClient({ data: { success: true, granted: true }, error: null });
+    await expect(approvePurchaseAndGrant(client, { purchaseId: "p1", paymentId: "mp-9" })).resolves.toEqual({
+      granted: true,
+      userId: "",
+      credits: 0,
+      newBalance: 0,
+    });
+  });
+
   it("reports an already processed (or unknown) purchase without granting", async () => {
     const { client } = fakeClient({
       data: { success: true, granted: false, reason: "already_processed" },

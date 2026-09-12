@@ -198,6 +198,16 @@ describe("CardPaymentDialog", () => {
     expect(screen.queryByRole("status")).toBeNull();
   });
 
+  it("uses the singular for a one-credit package and no payer e-mail when the account has none", async () => {
+    const auth = await import("@/hooks/useAuth");
+    vi.mocked(auth.useAuth).mockReturnValue(
+      buildAuthState({ refreshProfile: mockRefreshProfile, user: { id: "u1" } }) as never,
+    );
+    renderDialog({ ...PKG, credits: 1, amountBrl: 1 });
+    expect(screen.getByText(/1 crédito por R\$\s*1,00/i)).toBeInTheDocument();
+    expect(brickProps.mock.calls[0][0].payerEmail).toBeUndefined();
+  });
+
   it("reports close gestures to the parent", async () => {
     const user = userEvent.setup();
     const { onOpenChange } = renderDialog();
