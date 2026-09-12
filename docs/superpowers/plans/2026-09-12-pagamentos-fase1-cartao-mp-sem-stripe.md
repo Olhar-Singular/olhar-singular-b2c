@@ -2,6 +2,12 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
+> **Status (2026-09-12):** Tasks 1 a 12 concluídas e commitadas na branch `redesign/assinatura-mp`
+> (Vitest 221 arquivos verdes, pgTAP 14 arquivos/182 testes). Ajustes durante a execução: a aprovação
+> da compra virou RPC atômica (`approve_purchase_and_grant`), a policy de `credit_packages` foi
+> dividida em anon/authenticated, `fn-check` ficou advisory (15 erros pré-existentes) e a validação
+> no browser (Task 13) ficou pendente porque o MCP do Chrome estava indisponível.
+
 **Goal:** Extras (pacotes avulsos) passam a ser pagos com cartão **dentro da nossa página** via Card
 Payment Brick do Mercado Pago, além do Pix que já existe; a Stripe sai do repositório; os pacotes
 saem do código e vão para a tabela `credit_packages`. Nada do modelo de assinatura/baldes entra
@@ -74,16 +80,16 @@ ALTER TABLE public.credit_purchases ADD COLUMN status_detail text;
 A policy usa `EXISTS (SELECT 1 FROM public.profiles p WHERE p.id = auth.uid() AND p.is_super_admin)`
 para o ramo `admin_only`.
 
-- [ ] **Step 1 (RED):** escrever `credit_packages_rls.test.sql` (`plan(9)`): tabela existe; anon
+- [x] **Step 1 (RED):** escrever `credit_packages_rls.test.sql` (`plan(9)`): tabela existe; anon
   vê exatamente 3 linhas e nenhuma `admin_only`; authenticated comum vê 3; super-admin
   (`profiles.is_super_admin = true` setado como superuser) vê 4; authenticated não consegue
   `INSERT`/`UPDATE`/`DELETE` (`42501`); linha `active = false` não aparece; default do provider
   em `credit_purchases` é `'mercadopago'`; coluna `status_detail` existe. Ajustar
   `credit_purchases_payment_method.test.sql` para `'mercadopago'`. Rodar `make test-db`: falha.
-- [ ] **Step 2 (GREEN):** escrever a migration; `make sb-reset` (reaplica) e `make test-db`: passa.
-- [ ] **Step 3:** `make gen-types` e conferir `git diff src/integrations/supabase/types.ts` (só
+- [x] **Step 2 (GREEN):** escrever a migration; `make sb-reset` (reaplica) e `make test-db`: passa.
+- [x] **Step 3:** `make gen-types` e conferir `git diff src/integrations/supabase/types.ts` (só
   `credit_packages` + `status_detail`).
-- [ ] **Step 4:** commit `feat(credits): mover os pacotes de crédito para a tabela credit_packages`.
+- [x] **Step 4:** commit `feat(credits): mover os pacotes de crédito para a tabela credit_packages`.
 
 ---
 
@@ -103,10 +109,10 @@ export function selectPackage(rows: CreditPackageRow[], id: unknown, opts?: { al
 ```
 `ALLOWED_PACKAGES`/`TEST_PACKAGE`/`findPackage` são removidos (a fonte é a tabela).
 
-- [ ] **Step 1 (RED):** reescrever `creditPackages.test.ts` para a nova API (inclui `price_brl`
+- [x] **Step 1 (RED):** reescrever `creditPackages.test.ts` para a nova API (inclui `price_brl`
   como string `"29.90"`, inativo, admin_only nos dois ramos, id não-string).
-- [ ] **Step 2 (GREEN):** implementar. `make test` (arquivo) passa.
-- [ ] **Step 3:** commit `refactor(credits): selecionar pacote pela tabela em vez da whitelist`.
+- [x] **Step 2 (GREEN):** implementar. `make test` (arquivo) passa.
+- [x] **Step 3:** commit `refactor(credits): selecionar pacote pela tabela em vez da whitelist`.
 
 ---
 
@@ -142,11 +148,11 @@ Mapa mínimo de `statusDetailMessage`: `cc_rejected_insufficient_amount`, `cc_re
 `cc_rejected_call_for_authorize`, `cc_rejected_card_disabled`, `cc_rejected_duplicated_payment`,
 `cc_rejected_high_risk`, `cc_rejected_max_attempts`, `cc_rejected_other_reason`, `cc_rejected_blacklist`.
 
-- [ ] **Step 1 (RED):** testes cobrindo cada ramo (issuer_id number vira string; installments ≠ 1
+- [x] **Step 1 (RED):** testes cobrindo cada ramo (issuer_id number vira string; installments ≠ 1
   rejeita; identification ausente não gera chave; `interpretCardPayment` com status desconhecido
   cai em `pending`; `maskPayer` não muta o original).
-- [ ] **Step 2 (GREEN):** implementar. `make test` passa.
-- [ ] **Step 3:** commit `feat(credits): montar e interpretar o pagamento com cartão do Mercado Pago`.
+- [x] **Step 2 (GREEN):** implementar. `make test` passa.
+- [x] **Step 3:** commit `feat(credits): montar e interpretar o pagamento com cartão do Mercado Pago`.
 
 ---
 
@@ -171,11 +177,11 @@ export async function rejectPendingPurchase(client: PurchaseClient, input: { pur
 // UPDATE status='rejected', payment_id, status_detail WHERE id AND status='pending'; erro → throw.
 ```
 
-- [ ] **Step 1 (RED):** testes com cliente fake (aprova e concede; já processada; erro de update
+- [x] **Step 1 (RED):** testes com cliente fake (aprova e concede; já processada; erro de update
   lança; `grant_credits` com `success:false` lança `CreditRpcError`; recusa grava `status_detail`).
-- [ ] **Step 2 (GREEN):** implementar; trocar o bloco equivalente no `mp-webhook/index.ts` pelo
+- [x] **Step 2 (GREEN):** implementar; trocar o bloco equivalente no `mp-webhook/index.ts` pelo
   helper (comportamento idêntico). `make test` passa.
-- [ ] **Step 3:** commit `refactor(credits): compartilhar a aprovação da compra entre webhook e checkout`.
+- [x] **Step 3:** commit `refactor(credits): compartilhar a aprovação da compra entre webhook e checkout`.
 
 ---
 
@@ -198,11 +204,11 @@ https://api.mercadopago.com/v1/payments` com `Authorization: Bearer ACCESS_TOKEN
 statusDetailMessage(detail) }`; `pending` → update `payment_id` → 200 `{ status: "pending", purchaseId }`.
 Nunca 4xx para recusa de cartão (é resultado, não erro de request).
 
-- [ ] **Step 1 (RED):** `cardPaymentInput.test.ts` cobrindo body inválido, `packageId` não string,
+- [x] **Step 1 (RED):** `cardPaymentInput.test.ts` cobrindo body inválido, `packageId` não string,
   cartão inválido, sucesso.
-- [ ] **Step 2 (GREEN):** implementar `cardPaymentInput.ts` e o `index.ts`. `make test` passa;
+- [x] **Step 2 (GREEN):** implementar `cardPaymentInput.ts` e o `index.ts`. `make test` passa;
   `denoImportGraph.test.ts` passa.
-- [ ] **Step 3:** commit `feat(credits): cobrar créditos extras no cartão via Mercado Pago inline`.
+- [x] **Step 3:** commit `feat(credits): cobrar créditos extras no cartão via Mercado Pago inline`.
 
 ---
 
@@ -213,9 +219,9 @@ Nunca 4xx para recusa de cartão (é resultado, não erro de request).
   `selectPackage`), `supabase/functions/_shared/mpPixPayment.ts` (tipo `CreditPackage` novo; sem
   mudança de comportamento), testes correspondentes.
 
-- [ ] **Step 1 (RED):** ajustar `mpPixPayment.test.ts` ao tipo novo (`label`, `id`) se quebrar.
-- [ ] **Step 2 (GREEN):** trocar o parse do body e o lookup. `make test` passa.
-- [ ] **Step 3:** commit `refactor(credits): ler o pacote do Pix pela tabela credit_packages`.
+- [x] **Step 1 (RED):** ajustar `mpPixPayment.test.ts` ao tipo novo (`label`, `id`) se quebrar.
+- [x] **Step 2 (GREEN):** trocar o parse do body e o lookup. `make test` passa.
+- [x] **Step 3:** commit `refactor(credits): ler o pacote do Pix pela tabela credit_packages`.
 
 ---
 
@@ -235,10 +241,10 @@ export function usePurchaseStatus(purchaseId: string | null)  // renomeia usePix
 ```
 `useCreateStripeCheckout` e `CheckoutInput.method` saem, com seus testes.
 
-- [ ] **Step 1 (RED):** testes novos (`usePackages` ordena e converte string→number; `useCreateCardPayment`
+- [x] **Step 1 (RED):** testes novos (`usePackages` ordena e converte string→number; `useCreateCardPayment`
   invoca `create-card-payment` com `{ packageId, card }`, propaga o resultado, toast em erro e rede).
-- [ ] **Step 2 (GREEN):** implementar; remover o bloco Stripe. `make test` passa.
-- [ ] **Step 3:** commit `feat(credits): hooks para pacotes da tabela e pagamento com cartão inline`.
+- [x] **Step 2 (GREEN):** implementar; remover o bloco Stripe. `make test` passa.
+- [x] **Step 3:** commit `feat(credits): hooks para pacotes da tabela e pagamento com cartão inline`.
 
 ---
 
@@ -266,10 +272,10 @@ Nos testes, `vi.mock("@mercadopago/sdk-react", ...)` expõe um `CardPayment` fak
 Brick) | `pending` (polling via `usePurchaseStatus`, mesmo padrão do `PixPaymentDialog`). Mesmos
 `role="status"`/`aria-live` do Pix.
 
-- [ ] **Step 1 (RED):** testes dos dois componentes (sem key; submit aprovado; recusa com mensagem e
+- [x] **Step 1 (RED):** testes dos dois componentes (sem key; submit aprovado; recusa com mensagem e
   retry; pending que vira approved pelo polling; fechar limpa estado).
-- [ ] **Step 2 (GREEN):** implementar. `make test` passa.
-- [ ] **Step 3:** commit `feat(credits): formulário de cartão inline com o Card Payment Brick`.
+- [x] **Step 2 (GREEN):** implementar. `make test` passa.
+- [x] **Step 3:** commit `feat(credits): formulário de cartão inline com o Card Payment Brick`.
 
 ---
 
@@ -286,11 +292,11 @@ filtrado pela RLS, então some o card especial de admin); botão "Cartão de cr�
 `CardPaymentDialog`; "Pix" chama `useCreatePixPayment({ packageId })`. Rodapé: "Pix ou cartão via
 Mercado Pago. Créditos nunca expiram." (ainda verdadeiro nesta fase).
 
-- [ ] **Step 1 (RED):** reescrever `CreditsPage.test.tsx` (mock `usePackages` com 3 pacotes; um
+- [x] **Step 1 (RED):** reescrever `CreditsPage.test.tsx` (mock `usePackages` com 3 pacotes; um
   botão de cartão e um de Pix por pacote; clique no cartão abre o diálogo com o pacote; clique no
   Pix invoca com `packageId`; sem pacotes mostra estado vazio; loading).
-- [ ] **Step 2 (GREEN):** implementar. `make test` passa. Remover `usePixPurchaseStatus` alias.
-- [ ] **Step 3:** commit `feat(credits): comprar créditos extras no cartão sem sair da página`.
+- [x] **Step 2 (GREEN):** implementar. `make test` passa. Remover `usePixPurchaseStatus` alias.
+- [x] **Step 3:** commit `feat(credits): comprar créditos extras no cartão sem sair da página`.
 
 ---
 
@@ -308,10 +314,10 @@ e `_shared/mpEvents.ts` (comentários), `supabase/tests/database/grant_credits.t
 `docs/superpowers/specs/2026-06-01-stripe-credit-card-design.md` e
 `2026-07-22-pacote-teste-superadmin-design.md` (linha `**Status:** superado por 2026-09-11-pagamentos-assinatura-mp-design.md`).
 
-- [ ] **Step 1:** `grep -rn -i stripe src supabase .env.example Makefile supabase/config.toml` e
+- [x] **Step 1:** `grep -rn -i stripe src supabase .env.example Makefile supabase/config.toml` e
   apagar/ajustar cada ocorrência (a `provider` CHECK das migrations antigas fica).
-- [ ] **Step 2:** `make test` + `make lint` + `denoImportGraph` verdes; `App.test.tsx` sem a rota.
-- [ ] **Step 3:** commit `chore(credits): remover a Stripe do código, da config e dos exemplos de env`.
+- [x] **Step 2:** `make test` + `make lint` + `denoImportGraph` verdes; `App.test.tsx` sem a rota.
+- [x] **Step 3:** commit `chore(credits): remover a Stripe do código, da config e dos exemplos de env`.
 
 ---
 
@@ -336,9 +342,9 @@ https://http2.mlstatic.com https://www.mercadopago.com`; `connect-src` + `https:
 https://api.mercadolibre.com https://*.mercadopago.com https://*.mercadolibre.com`; `frame-src` +
 `https://*.mercadopago.com https://*.mercadolibre.com`.
 
-- [ ] **Step 1:** editar; `make fn-check` roda (puxa a imagem uma vez) e passa para todas as
+- [x] **Step 1:** editar; `make fn-check` roda (puxa a imagem uma vez) e passa para todas as
   functions; `make -n fn-deploy-all` lista as functions reais.
-- [ ] **Step 2:** commit `chore(infra): derivar FUNCTIONS do disco, checar Deno via Docker e liberar o MP na CSP`.
+- [x] **Step 2:** commit `chore(infra): derivar FUNCTIONS do disco, checar Deno via Docker e liberar o MP na CSP`.
 
 ---
 
@@ -351,16 +357,16 @@ menção à RPC `is_super_admin(uuid)`, que não existe: o padrão é `authorize
 e `migration-reviewer.md` (mesma correção), `.claude/docs/environment.md` (segredos `MP_*`, sem
 `STRIPE_*`, `VITE_MP_PUBLIC_KEY`).
 
-- [ ] **Step 1:** aplicar; `grep -rn -i "stripe\|is_super_admin(" .claude` só deve achar histórico.
-- [ ] **Step 2:** commit `docs(skills): refletir o cartão inline via Mercado Pago e o fim da Stripe`.
+- [x] **Step 1:** aplicar; `grep -rn -i "stripe\|is_super_admin(" .claude` só deve achar histórico.
+- [x] **Step 2:** commit `docs(skills): refletir o cartão inline via Mercado Pago e o fim da Stripe`.
 
 ---
 
 ### Task 13: validação da fase
 
-- [ ] `make lint`, `make test` (218+ arquivos), `npm run test:coverage` no container (gate 100%),
+- [x] `make lint`, `make test` (218+ arquivos), `npm run test:coverage` no container (gate 100%),
   `make test-db`, `make fn-check`.
 - [ ] Browser (skill `validate-adaptar`, com `make fn-serve-mp-test` no lugar do `fn-serve`):
   em `/creditos`, cartão de teste MP aprovado (titular `APRO`) credita na hora; titular `OTHE`
   recusa com mensagem pt-BR; Pix continua gerando QR. Registrar evidências no resumo final.
-- [ ] Atualizar a memória do projeto (`payment-providers-split.md`): cartão agora é MP inline.
+- [x] Atualizar a memória do projeto (`payment-providers-split.md`): cartão agora é MP inline.
