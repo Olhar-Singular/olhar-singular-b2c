@@ -7,11 +7,6 @@ export type Json =
   | Json[]
 
 export type Database = {
-  // Allows to automatically instantiate createClient with right options
-  // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
-  __InternalSupabase: {
-    PostgrestVersion: "14.5"
-  }
   graphql_public: {
     Tables: {
       [_ in never]: never
@@ -285,6 +280,45 @@ export type Database = {
         }
         Relationships: []
       }
+      credit_packages: {
+        Row: {
+          active: boolean
+          admin_only: boolean
+          created_at: string
+          credits: number
+          highlight: boolean
+          id: string
+          label: string
+          price_brl: number
+          sort_order: number
+          updated_at: string
+        }
+        Insert: {
+          active?: boolean
+          admin_only?: boolean
+          created_at?: string
+          credits: number
+          highlight?: boolean
+          id?: string
+          label: string
+          price_brl: number
+          sort_order?: number
+          updated_at?: string
+        }
+        Update: {
+          active?: boolean
+          admin_only?: boolean
+          created_at?: string
+          credits?: number
+          highlight?: boolean
+          id?: string
+          label?: string
+          price_brl?: number
+          sort_order?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
       credit_purchases: {
         Row: {
           amount_brl: number
@@ -295,6 +329,7 @@ export type Database = {
           payment_method: string
           provider: string
           status: string
+          status_detail: string | null
           updated_at: string
           user_id: string | null
         }
@@ -307,6 +342,7 @@ export type Database = {
           payment_method?: string
           provider?: string
           status?: string
+          status_detail?: string | null
           updated_at?: string
           user_id?: string | null
         }
@@ -319,6 +355,7 @@ export type Database = {
           payment_method?: string
           provider?: string
           status?: string
+          status_detail?: string | null
           updated_at?: string
           user_id?: string | null
         }
@@ -713,3 +750,4 @@ export const Constants = {
     Enums: {},
   },
 } as const
+
