@@ -3,7 +3,7 @@ import { screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { renderWithProviders } from "@/test/helpers";
 import AccountStep from "./AccountStep";
-import { validateAccountForm } from "@/lib/domain/subscriptionUi";
+import { maskCpfForOwner, validateAccountForm } from "@/lib/domain/subscriptionUi";
 
 describe("validateAccountForm", () => {
   const ok = { fullName: "Ana Souza", email: "Ana@Example.com", emailConfirmation: "ana@example.com ", acceptedTerms: true };
@@ -17,6 +17,15 @@ describe("validateAccountForm", () => {
     expect(validateAccountForm({ ...ok, email: "nope" })).toBe("email");
     expect(validateAccountForm({ ...ok, emailConfirmation: "other@example.com" })).toBe("email_mismatch");
     expect(validateAccountForm({ ...ok, acceptedTerms: false })).toBe("terms");
+  });
+});
+
+describe("maskCpfForOwner", () => {
+  it("keeps only the last two digits and refuses anything but 11 digits", () => {
+    expect(maskCpfForOwner("12345678909")).toBe("***.***.***-09");
+    expect(maskCpfForOwner("123")).toBeNull();
+    expect(maskCpfForOwner(null)).toBeNull();
+    expect(maskCpfForOwner(undefined)).toBeNull();
   });
 });
 

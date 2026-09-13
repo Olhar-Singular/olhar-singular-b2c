@@ -316,3 +316,23 @@ describe("CreditsPage (subscription section)", () => {
     expect(screen.getByRole("heading", { name: "Comprar créditos extras" })).toBeInTheDocument();
   });
 });
+
+describe("CreditsPage (CPF)", () => {
+  it("shows the card holder's CPF masked when the checkout recorded it", async () => {
+    const auth = await import("@/hooks/useAuth");
+    vi.mocked(auth.useAuth).mockReturnValue({
+      profile: { credit_balance: 9, plan_credits: 0, plan_period_end: null, access_kind: "legacy", cpf: "12345678909" },
+    } as never);
+    renderWithProviders(<CreditsPage />);
+    expect(screen.getByText(/CPF do titular do cartão: \*\*\*\.\*\*\*\.\*\*\*-09/)).toBeInTheDocument();
+  });
+
+  it("shows nothing about CPF when it was never recorded", async () => {
+    const auth = await import("@/hooks/useAuth");
+    vi.mocked(auth.useAuth).mockReturnValue({
+      profile: { credit_balance: 9, plan_credits: 0, plan_period_end: null, access_kind: "legacy", cpf: null },
+    } as never);
+    renderWithProviders(<CreditsPage />);
+    expect(screen.queryByText(/CPF do titular/)).toBeNull();
+  });
+});

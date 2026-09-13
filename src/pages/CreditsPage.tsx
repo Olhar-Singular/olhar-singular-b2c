@@ -10,6 +10,8 @@ import PixPaymentDialog from "@/components/credits/PixPaymentDialog";
 import CardPaymentDialog from "@/components/credits/CardPaymentDialog";
 import SubscriptionCard from "@/components/credits/SubscriptionCard";
 import { useAccess } from "@/hooks/useAccess";
+import { useAuth } from "@/hooks/useAuth";
+import { maskCpfForOwner } from "@/lib/domain/subscriptionUi";
 import { useSubscription } from "@/hooks/useSubscription";
 import { useTransactionHistory, useCreatePixPayment, usePackages } from "@/hooks/useCredits";
 import type { CreditPackageView, PixPayment } from "@/hooks/useCredits";
@@ -40,6 +42,8 @@ function formatBrl(value: number) {
 
 export default function CreditsPage() {
   const access = useAccess();
+  const { profile } = useAuth();
+  const cpfMasked = maskCpfForOwner(profile?.cpf);
   const { data: subscription } = useSubscription();
   const { data: transactions = [], isLoading } = useTransactionHistory();
   // The catalogue comes from credit_packages; RLS already hides inactive rows
@@ -77,6 +81,11 @@ export default function CreditsPage() {
               <p className="text-xs text-muted-foreground mt-0.5">
                 {access?.unlimited ? "conta com cortesia: sem débito" : "créditos disponíveis"}
               </p>
+              {cpfMasked && (
+                <p className="text-xs text-muted-foreground mt-1 tabular-nums">
+                  CPF do titular do cartão: {cpfMasked}
+                </p>
+              )}
             </div>
           </div>
           {access && !access.unlimited && (

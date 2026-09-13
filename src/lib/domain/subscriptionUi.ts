@@ -52,6 +52,13 @@ export function replacementNotice(access: Access | null): string | null {
   return `Você ainda tem ${access.planCredits} ${access.planCredits === 1 ? "crédito" : "créditos"} ${what} até ${formatDate(access.periodEnd)}. Ao assinar agora, eles são substituídos pelos créditos do novo plano. Seus créditos extras continuam.`;
 }
 
+// The CPF is the card holder's, collected once at checkout (decision 24): shown
+// to its owner masked to the last two digits, never editable in the app.
+export function maskCpfForOwner(cpf: string | null | undefined): string | null {
+  if (!cpf || !/^\d{11}$/.test(cpf)) return null;
+  return `***.***.***-${cpf.slice(-2)}`;
+}
+
 // Brand ids come from MP (master, visa, amex, elo, hipercard...).
 export function formatCard(brand: string | null, lastFour: string | null): string | null {
   if (!brand && !lastFour) return null;
