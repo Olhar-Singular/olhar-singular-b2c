@@ -78,6 +78,7 @@ const CREATE_USER_ERRORS: Record<string, string> = {
   invalid_email: "Informe um e-mail válido.",
   invalid_name: "Informe o nome completo.",
   invalid_mode: "Escolha Teste ou Cortesia.",
+  partial_failure: "Convite enviado, mas o tipo de acesso não foi gravado. Ajuste em Alterar acesso.",
 };
 
 // Invite flow: Supabase sends the e-mail; the person creates the password on

@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useMemo } from "react";
 import { Link } from "react-router-dom";
 import { CheckCircle2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -16,7 +16,8 @@ const EXTRAS = [
 
 export default function PricingSection() {
   const { data } = usePlans();
-  const plans = publicPlans(data);
+  // Memoized: publicPlans allocates, and the effect below keys on identity.
+  const plans = useMemo(() => publicPlans(data), [data]);
 
   // Once per rendered catalogue (the fallback first, the real one when it lands).
   useEffect(() => {

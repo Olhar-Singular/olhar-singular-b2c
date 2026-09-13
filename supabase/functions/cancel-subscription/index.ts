@@ -5,7 +5,7 @@ import { parseCancelInput } from "../_shared/subscribeInput.ts";
 import { runCancelSubscription } from "../_shared/subscriptionActions.ts";
 import { buildSubscriptionActionDeps } from "../_shared/subscriptionActionDeps.ts";
 import { logAdminAction } from "../_shared/adminAudit.ts";
-import { readAnalyticsConfig, sendAnalyticsEvents } from "../_shared/analyticsEvents.ts";
+import { dispatchAnalytics, readAnalyticsConfig, sendAnalyticsEvents } from "../_shared/analyticsEvents.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -64,10 +64,10 @@ serve(async (req) => {
     const result = await runCancelSubscription({ userId: targetUserId }, buildSubscriptionActionDeps(admin, mpAccessToken));
     if (!result.ok) return json({ error: ERRORS[result.error], code: result.error }, result.httpStatus);
 
-    await sendAnalyticsEvents(
+    await dispatchAnalytics(sendAnalyticsEvents(
       [{ name: "subscription_cancelled", eventId: `${result.subscriptionId}:cancel`, userId: targetUserId, valueBrl: null, params: { by_admin: onBehalf } }],
       readAnalyticsConfig(Deno.env),
-    );
+    ));
 
     if (onBehalf) {
       await logAdminAction(admin, {

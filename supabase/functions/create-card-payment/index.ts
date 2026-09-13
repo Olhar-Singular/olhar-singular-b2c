@@ -5,7 +5,7 @@ import { parseCardPaymentRequest } from "../_shared/cardPaymentInput.ts";
 import { buildCardPaymentBody, interpretCardPayment, maskPayer } from "../_shared/mpCardPayment.ts";
 import { statusDetailMessage } from "../_shared/mpStatusDetail.ts";
 import { approvePurchaseAndGrant, rejectPendingPurchase } from "../_shared/purchaseGrant.ts";
-import { readAnalyticsConfig, sendAnalyticsEvents } from "../_shared/analyticsEvents.ts";
+import { dispatchAnalytics, readAnalyticsConfig, sendAnalyticsEvents } from "../_shared/analyticsEvents.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -137,10 +137,10 @@ serve(async (req) => {
       });
       if (result.granted) {
         // No-op without the analytics secrets; never fails the purchase.
-        await sendAnalyticsEvents(
+        await dispatchAnalytics(sendAnalyticsEvents(
           [{ name: "purchase", eventId: purchase.id, userId: user.id, valueBrl: pkg.amountBrl, email: user.email, params: { package: pkg.id, credits: pkg.credits } }],
           readAnalyticsConfig(Deno.env),
-        );
+        ));
       }
       return json({
         status:         "approved",

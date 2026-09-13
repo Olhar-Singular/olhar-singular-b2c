@@ -9,7 +9,7 @@ import { validateMpSignature } from "../_shared/mpSignature.ts";
 import { approvePurchaseAndGrant, rejectPendingPurchase } from "../_shared/purchaseGrant.ts";
 import { parseSubscriptionNotification } from "../_shared/mpPreapproval.ts";
 import { handleSubscriptionWebhook, type SubscriptionWebhookDeps } from "../_shared/subscriptionActions.ts";
-import { readAnalyticsConfig, sendAnalyticsEvents, type AnalyticsEvent, type AttributionLike } from "../_shared/analyticsEvents.ts";
+import { dispatchAnalytics, readAnalyticsConfig, sendAnalyticsEvents, type AnalyticsEvent, type AttributionLike } from "../_shared/analyticsEvents.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -97,14 +97,15 @@ serve(async (req) => {
         : outcome.handled && (outcome.result === "past_due" || outcome.result === "clawback") ? "subscription_payment_failed"
         : null;
       if (analyticsName && outcome.handled) {
-        const { data: sub } = await admin
+        const { data: sub, error: subError } = await admin
           .from("subscriptions")
           .select("id, user_id, attribution, plans(price_brl)")
           .eq("id", outcome.subscriptionId)
           .maybeSingle();
+        if (subError) console.warn("mp-webhook: analytics subscription lookup failed", subError.message);
         if (sub) {
           const price = (sub as { plans?: { price_brl?: number | string } | null }).plans?.price_brl;
-          await sendAnalyticsEvents(
+          await dispatchAnalytics(sendAnalyticsEvents(
             [{
               name: analyticsName,
               eventId: `${sub.id}:${subEvent.id}`,
@@ -114,7 +115,7 @@ serve(async (req) => {
               params: { authorized_payment_id: subEvent.id },
             }],
             readAnalyticsConfig(Deno.env),
-          );
+          ));
         }
       }
       return json({ received: true, ...(outcome.handled ? { result: outcome.result } : { ignored: outcome.reason }) });
@@ -191,16 +192,17 @@ serve(async (req) => {
     }
 
     // Pix (and the rare asynchronous card) lands here only: emit the purchase.
-    const { data: purchaseRow } = await admin
+    const { data: purchaseRow, error: purchaseError } = await admin
       .from("credit_purchases")
       .select("user_id, amount_brl")
       .eq("id", grant.purchaseId)
       .maybeSingle();
+    if (purchaseError) console.warn("mp-webhook: analytics purchase lookup failed", purchaseError.message);
     if (purchaseRow) {
-      await sendAnalyticsEvents(
+      await dispatchAnalytics(sendAnalyticsEvents(
         [{ name: "purchase", eventId: grant.purchaseId, userId: purchaseRow.user_id, valueBrl: Number(purchaseRow.amount_brl), params: { credits: result.credits } }],
         readAnalyticsConfig(Deno.env),
-      );
+      ));
     }
 
     return json({ received: true, credits_granted: result.credits });

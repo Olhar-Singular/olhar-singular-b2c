@@ -5,7 +5,7 @@ import type { SubscribeDeps } from "../_shared/subscribeFlow.ts";
 import { maskPayer } from "../_shared/mpCardPayment.ts";
 import { clientIp, hashIdentifier } from "../_shared/checkoutGuard.ts";
 import { parseAccountInput, runAnonymousCheckout, type CheckoutDeps } from "../_shared/accountProvision.ts";
-import { readAnalyticsConfig, sendAnalyticsEvents, type AttributionLike } from "../_shared/analyticsEvents.ts";
+import { dispatchAnalytics, readAnalyticsConfig, sendAnalyticsEvents, type AttributionLike } from "../_shared/analyticsEvents.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -222,28 +222,31 @@ serve(async (req) => {
           if (code === "email_exists" || error.status === 422 || /already/i.test(error.message)) return "exists";
           throw new Error(`createUser failed: ${error.message}`);
         }
-        // The profile row is born by handle_new_user; flag the forced password step.
-        const { error: flagError } = await admin
-          .from("profiles")
-          .update({ must_set_password: true, full_name: fullName })
-          .eq("id", data.user.id);
-        if (flagError) console.error("subscribe: must_set_password flag failed", data.user.id, flagError.message);
+        // The profile row is born by handle_new_user; flag the forced password
+        // step. One retry, then fail loudly BEFORE any charge: an account with a
+        // random password and no flag would be let in without setting one (the
+        // client still falls back to the metadata stamped above).
+        const flag = () => admin.from("profiles").update({ must_set_password: true, full_name: fullName }).eq("id", data.user.id);
+        let { error: flagError } = await flag();
+        if (flagError) ({ error: flagError } = await flag());
+        if (flagError) throw new Error(`must_set_password flag failed: ${flagError.message}`);
         return { id: data.user.id };
       },
       recordProfileFacts: async ({ userId, cpf, termsVersion }) => {
-        const patch: Record<string, unknown> = {};
+        // Money already moved: these writes get one retry and an ALERT log
+        // (grep target for support), never a failure back to the payer.
+        const retrying = async (label: string, run: () => PromiseLike<{ error: { message: string } | null }>) => {
+          let { error } = await run();
+          if (error) ({ error } = await run());
+          if (error) console.error(`subscribe: ALERT ${label} not recorded after payment`, userId, error.message);
+        };
         if (termsVersion) {
-          patch.terms_version = termsVersion;
-          patch.terms_accepted_at = new Date().toISOString();
-        }
-        if (Object.keys(patch).length > 0) {
-          const { error } = await admin.from("profiles").update(patch).eq("id", userId);
-          if (error) console.error("subscribe: terms update failed", userId, error.message);
+          const patch = { terms_version: termsVersion, terms_accepted_at: new Date().toISOString() };
+          await retrying("terms acceptance", () => admin.from("profiles").update(patch).eq("id", userId));
         }
         if (cpf) {
           // Only when still NULL: the CPF is never overwritten by a later card.
-          const { error } = await admin.from("profiles").update({ cpf }).eq("id", userId).is("cpf", null);
-          if (error) console.error("subscribe: cpf update failed", userId, error.message);
+          await retrying("cpf", () => admin.from("profiles").update({ cpf }).eq("id", userId).is("cpf", null));
         }
       },
       generateSessionToken: async (email) => {
@@ -277,8 +280,9 @@ serve(async (req) => {
 
     if (result.status !== "rejected") {
       // Server-side conversion (GA4 MP / Meta CAPI); no-op without secrets.
-      const { data: planRow } = await admin.from("plans").select("price_brl").eq("slug", parsed.planSlug).maybeSingle();
-      await sendAnalyticsEvents(
+      const { data: planRow, error: planError } = await admin.from("plans").select("price_brl").eq("slug", parsed.planSlug).maybeSingle();
+      if (planError) console.warn("subscribe: analytics plan lookup failed", planError.message);
+      await dispatchAnalytics(sendAnalyticsEvents(
         [{
           name: "subscription_started",
           eventId: result.subscriptionId,
@@ -289,7 +293,7 @@ serve(async (req) => {
           params: { plan: parsed.planSlug, status: result.status, account_created: accountCreated },
         }],
         readAnalyticsConfig(Deno.env),
-      );
+      ));
     }
 
     if (result.status === "rejected") {

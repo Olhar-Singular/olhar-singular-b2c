@@ -117,6 +117,24 @@ export async function buildMetaPayload(event: AnalyticsEvent, now: Date): Promis
 
 export const ANALYTICS_TIMEOUT_MS = 3000;
 
+interface WaitUntilHost {
+  EdgeRuntime?: { waitUntil?: (p: Promise<unknown>) => void };
+}
+
+/**
+ * Keeps the analytics send off the response path: on the Supabase edge runtime
+ * the promise is handed to EdgeRuntime.waitUntil (runs after the response);
+ * elsewhere it is awaited so nothing is lost. Never throws.
+ */
+export async function dispatchAnalytics(send: Promise<void>, host: WaitUntilHost = globalThis as WaitUntilHost): Promise<void> {
+  const waitUntil = host.EdgeRuntime?.waitUntil;
+  if (typeof waitUntil === "function") {
+    waitUntil(send);
+    return;
+  }
+  await send;
+}
+
 async function postWithTimeout(fetchFn: typeof fetch, url: string, body: unknown, log: (m: string, ...a: unknown[]) => void): Promise<void> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), ANALYTICS_TIMEOUT_MS);

@@ -66,6 +66,14 @@ describe("PricingSection", () => {
     expect(screen.getByRole("link", { name: /Assinar/ })).toHaveAttribute("href", "/assinar?plano=unico");
   });
 
+  it("tracks the catalogue once per data identity, not per render", () => {
+    window.dataLayer = [];
+    const { rerender } = renderWithProviders(<PricingSection />);
+    rerender(<PricingSection />);
+    rerender(<PricingSection />);
+    expect(window.dataLayer.filter((e) => (e as { event: string }).event === "view_item_list")).toHaveLength(1);
+  });
+
   it("flags the highlighted (Profissional) plan as Popular", () => {
     renderWithProviders(<PricingSection />);
     expect(screen.getByText(/Popular/i)).toBeInTheDocument();

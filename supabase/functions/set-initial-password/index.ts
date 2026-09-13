@@ -47,7 +47,7 @@ serve(async (req) => {
 
     const admin = createClient(supabaseUrl, serviceKey);
 
-    await runSetInitialPassword(user.id, parsed.password, {
+    const outcome = await runSetInitialPassword(user.id, parsed.password, {
       updatePassword: async (userId, password) => {
         const { error } = await admin.auth.admin.updateUserById(userId, {
           password,
@@ -66,7 +66,7 @@ serve(async (req) => {
       log: (message, ...args) => console.warn(message, ...args),
     });
 
-    return json({ ok: true });
+    return json({ ok: true, flagCleared: outcome.flagCleared });
   } catch (e) {
     console.error("set-initial-password error:", e instanceof Error ? e.message : e);
     // GoTrue's messages are English and can mention the password rule; keep it generic.

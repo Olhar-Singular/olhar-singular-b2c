@@ -105,5 +105,35 @@ describe("ProtectedRoute", () => {
       setup({ session: SESSION, profile: null, profileLoading: false });
       expect(screen.getByTestId("protected-content")).toBeInTheDocument();
     });
+
+    it("falls back to the auth metadata when the profile row is missing", () => {
+      vi.mocked(useAuth).mockReturnValue(
+        buildAuthState({ session: SESSION, profile: null, user: { id: "123", user_metadata: { must_set_password: true } } }) as never,
+      );
+      render(
+        <MemoryRouter initialEntries={["/dashboard"]}>
+          <Routes>
+            <Route path="/dashboard" element={<ProtectedRoute><div data-testid="protected-content" /></ProtectedRoute>} />
+            <Route path="/definir-senha" element={<div data-testid="set-password" />} />
+          </Routes>
+        </MemoryRouter>,
+      );
+      expect(screen.getByTestId("set-password")).toBeInTheDocument();
+    });
+
+    it("trusts the profile over stale metadata once the row exists", () => {
+      vi.mocked(useAuth).mockReturnValue(
+        buildAuthState({ session: SESSION, profile: { must_set_password: false }, user: { id: "123", user_metadata: { must_set_password: true } } }) as never,
+      );
+      render(
+        <MemoryRouter initialEntries={["/dashboard"]}>
+          <Routes>
+            <Route path="/dashboard" element={<ProtectedRoute><div data-testid="protected-content" /></ProtectedRoute>} />
+            <Route path="/definir-senha" element={<div data-testid="set-password" />} />
+          </Routes>
+        </MemoryRouter>,
+      );
+      expect(screen.getByTestId("protected-content")).toBeInTheDocument();
+    });
   });
 });

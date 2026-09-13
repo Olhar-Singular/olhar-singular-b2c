@@ -28,7 +28,7 @@ vi.mock("@/hooks/useAuth", () => ({
   useAuth: () => ({ user: { id: "u1" }, refreshProfile: mockRefreshProfile }),
 }));
 
-vi.mock("sonner", () => ({ toast: { error: vi.fn(), success: vi.fn() } }));
+vi.mock("sonner", () => ({ toast: { error: vi.fn(), success: vi.fn(), warning: vi.fn() } }));
 
 let qc: QueryClient;
 function wrapper({ children }: { children: React.ReactNode }) {
@@ -227,6 +227,17 @@ describe("useSetInitialPassword", () => {
       await result.current.mutateAsync({ password: "secret1" });
     });
     expect(mockInvoke).toHaveBeenCalledWith("set-initial-password", { body: { password: "secret1" } });
+    expect(mockRefreshProfile).toHaveBeenCalled();
+  });
+
+  it("warns when the password was saved but the flag did not clear", async () => {
+    const { toast } = await import("sonner");
+    mockInvoke.mockResolvedValue({ data: { ok: true, flagCleared: false }, error: null });
+    const { result } = renderHook(() => useSetInitialPassword(), { wrapper });
+    await act(async () => {
+      await result.current.mutateAsync({ password: "secret1" });
+    });
+    expect(toast.warning).toHaveBeenCalledWith(expect.stringMatching(/Senha salva/));
     expect(mockRefreshProfile).toHaveBeenCalled();
   });
 

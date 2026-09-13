@@ -25,15 +25,37 @@ export interface SetPasswordDeps {
   log(message: string, ...args: unknown[]): void;
 }
 
+export interface SetPasswordOutcome {
+  /** False when the password changed but profiles.must_set_password could not be cleared. */
+  flagCleared: boolean;
+}
+
 // Order matters: the password changes first (the thing the user asked for),
-// then the flag, then the other sessions. A failure to revoke is logged, not
-// fatal: the user already holds the session that made the request.
-export async function runSetInitialPassword(userId: string, password: string, deps: SetPasswordDeps): Promise<void> {
+// then the flag, then the other sessions. Once the password is saved the call
+// never fails: a flag that would not clear (after one retry) is reported, so
+// the client can say "saved, refresh in a moment" instead of "try again",
+// which would make the user type a new password for nothing. A failure to
+// revoke is logged, not fatal: the user already holds the session that made
+// the request.
+export async function runSetInitialPassword(userId: string, password: string, deps: SetPasswordDeps): Promise<SetPasswordOutcome> {
   await deps.updatePassword(userId, password);
-  await deps.clearFlag(userId);
+
+  let flagCleared = true;
+  try {
+    await deps.clearFlag(userId);
+  } catch (first) {
+    try {
+      await deps.clearFlag(userId);
+    } catch (second) {
+      flagCleared = false;
+      deps.log("set-initial-password: ALERT must_set_password not cleared after password change", userId, first, second);
+    }
+  }
+
   try {
     await deps.revokeOtherSessions();
   } catch (e) {
     deps.log("set-initial-password: could not revoke other sessions", userId, e);
   }
+  return { flagCleared };
 }

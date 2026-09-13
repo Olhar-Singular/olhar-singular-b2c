@@ -195,9 +195,13 @@ export function useSetInitialPassword() {
     mutationFn: async (input: { password: string }) => {
       const { data, error } = await supabase.functions.invoke("set-initial-password", { body: input });
       if (error) throw new Error(await parseInvokeError(error, PASSWORD_FALLBACK));
-      return data as { ok: true };
+      return data as { ok: true; flagCleared?: boolean };
     },
-    onSuccess: () => refreshProfile(),
+    onSuccess: (data) => {
+      refreshProfile();
+      // The password is saved even when the flag could not be cleared right away.
+      if (data.flagCleared === false) toast.warning("Senha salva. Se a tela voltar a pedir a senha, recarregue a página em alguns instantes.");
+    },
     onError: (err: Error) => toast.error(parseEdgeFnError(err, PASSWORD_FALLBACK)),
   });
 }

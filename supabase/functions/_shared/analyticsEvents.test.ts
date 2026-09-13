@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
 import {
+  dispatchAnalytics,
   buildGa4Payload,
   buildMetaPayload,
   readAnalyticsConfig,
@@ -141,5 +142,20 @@ describe("sendAnalyticsEvents", () => {
     expect(warn).toHaveBeenCalled();
     spy.mockRestore();
     warn.mockRestore();
+  });
+});
+
+describe("dispatchAnalytics", () => {
+  it("hands the promise to EdgeRuntime.waitUntil when available, else awaits it", async () => {
+    const waitUntil = vi.fn();
+    const send = Promise.resolve();
+    await dispatchAnalytics(send, { EdgeRuntime: { waitUntil } });
+    expect(waitUntil).toHaveBeenCalledWith(send);
+
+    let settled = false;
+    await dispatchAnalytics(new Promise<void>((r) => setTimeout(() => { settled = true; r(); }, 0)), {});
+    expect(settled).toBe(true);
+    await dispatchAnalytics(Promise.resolve(), { EdgeRuntime: {} });
+    await dispatchAnalytics(Promise.resolve());
   });
 });

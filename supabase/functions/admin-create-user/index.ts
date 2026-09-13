@@ -64,7 +64,13 @@ serve(async (req) => {
       .from("profiles")
       .update({ access_kind: mode, full_name: fullName })
       .eq("id", data.user.id);
-    if (kindError) console.error("admin-create-user profile update failed:", data.user.id, kindError.message);
+    if (kindError) {
+      // The invite is out but the access kind is not what the admin asked:
+      // say so instead of a green toast (the AccessMenu fixes it in one click).
+      console.error("admin-create-user profile update failed:", data.user.id, kindError.message);
+      await logAdminAction(supabase, { actorId: auth.userId, targetUserId: data.user.id, action: "create_user", payload: { mode, profile_updated: false } });
+      return json({ error: "partial_failure", userId: data.user.id }, 500);
+    }
 
     await logAdminAction(supabase, { actorId: auth.userId, targetUserId: data.user.id, action: "create_user", payload: { mode } });
 
