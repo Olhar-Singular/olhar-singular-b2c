@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import type { Session, User } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
 import type { Database } from "@/integrations/supabase/types";
@@ -69,22 +69,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return () => listener.subscription.unsubscribe();
   }, []);
 
-  async function signOut() {
+  // Stable identities: consumers key effects on refreshProfile, and the value
+  // object would otherwise re-render every useAuth() on each provider render.
+  const signOut = useCallback(async () => {
     await supabase.auth.signOut();
-  }
+  }, []);
 
-  async function refreshProfile() {
-    const userId = session?.user?.id;
-    if (userId) await fetchProfile(userId);
-  }
+  const sessionUserId = session?.user?.id;
+  const refreshProfile = useCallback(async () => {
+    if (sessionUserId) await fetchProfile(sessionUserId);
+  }, [sessionUserId]);
 
-  return (
-    <AuthContext.Provider
-      value={{ session, user: session?.user ?? null, profile, loading, profileLoading, signOut, refreshProfile }}
-    >
-      {children}
-    </AuthContext.Provider>
+  const value = useMemo(
+    () => ({ session, user: session?.user ?? null, profile, loading, profileLoading, signOut, refreshProfile }),
+    [session, profile, loading, profileLoading, signOut, refreshProfile],
   );
+
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
 
 export function useAuthContext() {

@@ -68,8 +68,7 @@ export default function AccountStep({ onConfirm, initial }: Props) {
           autoComplete="off"
           value={emailConfirmation}
           onChange={(e) => setEmailConfirmation(e.target.value)}
-          onPaste={(e) => e.preventDefault()}
-          placeholder="Digite de novo, sem colar"
+          placeholder="Digite de novo"
         />
         <p className="text-xs text-muted-foreground">
           É com este e-mail que você entra na plataforma. Não enviamos e-mail de confirmação: o pagamento aprovado já libera o acesso.

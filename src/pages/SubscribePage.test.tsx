@@ -126,7 +126,7 @@ describe("SubscribePage", () => {
   it("pre-selects Profissional and shows the Brick with its price", () => {
     renderPage();
     expect(screen.getByRole("heading", { name: "Assinar um plano" })).toBeInTheDocument();
-    expect(screen.getByRole("radio", { name: /Profissional/ })).toHaveAttribute("aria-checked", "true");
+    expect(screen.getByRole("button", { name: /Profissional/ })).toHaveAttribute("aria-pressed", "true");
     expect(screen.getByText(/Pagar R\$\s*59,90 por mês/)).toBeInTheDocument();
     expect(brickProps).toHaveBeenCalledWith(expect.objectContaining({ amount: 59.9, payerEmail: "a@b.c" }));
     expect(screen.queryByRole("note")).toBeNull();
@@ -144,10 +144,10 @@ describe("SubscribePage", () => {
   it("honours ?plano= and lets the user switch plans", async () => {
     const user = userEvent.setup();
     renderPage("/assinar?plano=basico");
-    expect(screen.getByRole("radio", { name: /Básico/ })).toHaveAttribute("aria-checked", "true");
+    expect(screen.getByRole("button", { name: /Básico/ })).toHaveAttribute("aria-pressed", "true");
 
-    await user.click(screen.getByRole("radio", { name: /Avançado/ }));
-    expect(screen.getByRole("radio", { name: /Avançado/ })).toHaveAttribute("aria-checked", "true");
+    await user.click(screen.getByRole("button", { name: /Avançado/ }));
+    expect(screen.getByRole("button", { name: /Avançado/ })).toHaveAttribute("aria-pressed", "true");
     expect(screen.getByText(/Pagar R\$\s*99,90 por mês/)).toBeInTheDocument();
     expect(brickProps).toHaveBeenLastCalledWith(expect.objectContaining({ amount: 99.9 }));
   });
@@ -289,11 +289,11 @@ describe("SubscribePage (anonymous funnel)", () => {
     renderPage("/assinar?plano=basico");
     expect(screen.getByText("Quem vai usar a plataforma")).toBeInTheDocument();
     expect(screen.queryByTestId("card-brick")).toBeNull();
-    expect(screen.queryByRole("radiogroup")).toBeNull();
+    expect(screen.queryByRole("group", { name: "Planos" })).toBeNull();
 
     await fillAccount(user);
     expect(screen.getByText(/Conta para/)).toHaveTextContent("Nova Pessoa");
-    expect(screen.getByRole("radio", { name: /Básico/ })).toHaveAttribute("aria-checked", "true");
+    expect(screen.getByRole("button", { name: /Básico/ })).toHaveAttribute("aria-pressed", "true");
     expect(brickProps).toHaveBeenCalledWith(expect.objectContaining({ amount: 19.9, payerEmail: "nova@example.com" }));
   });
 

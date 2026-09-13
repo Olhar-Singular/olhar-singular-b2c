@@ -55,7 +55,8 @@ const STATUS_LABELS: Record<SubscriptionStatus, { label: string; tone: "default"
 export default function SubscriptionCard({ subscription, access }: Props) {
   const { user } = useAuth();
   const cancel = useCancelSubscription();
-  const updateCard = useUpdateSubscriptionCard();
+  // The dialog shows the refusal inline; no duplicate toast.
+  const updateCard = useUpdateSubscriptionCard({ toastErrors: false });
   const [confirmCancel, setConfirmCancel] = useState(false);
   const [changingCard, setChangingCard] = useState(false);
   const [cardError, setCardError] = useState<string | null>(null);
@@ -108,7 +109,7 @@ export default function SubscriptionCard({ subscription, access }: Props) {
   const card = formatCard(sub.cardBrand, sub.cardLastFour);
 
   // Rejecting hands the failure back to the Brick, which re-enables its
-  // button for another try (the hook already toasted the reason).
+  // button for another try; the reason is shown inline above the Brick.
   async function handleNewCard(formData: CardFormDataView) {
     setCardError(null);
     try {

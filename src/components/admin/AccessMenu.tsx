@@ -35,7 +35,8 @@ import type { AdminUser, ChangeEmailInput, SetAccessInput } from "@/types/admin"
 interface AccessMenuProps {
   user: AdminUser;
   onSetAccess: (input: SetAccessInput) => void;
-  onChangeEmail?: (input: ChangeEmailInput) => void;
+  /** Resolves when saved; a rejection keeps the dialog (and the typed value) open. */
+  onChangeEmail?: (input: ChangeEmailInput) => void | Promise<unknown>;
   onCancelSubscription?: (input: { userId: string }) => void;
   disabled?: boolean;
 }
@@ -66,10 +67,11 @@ export function AccessMenu({
   const [newEmail, setNewEmail] = useState("");
   const [emailError, setEmailError] = useState<string | null>(null);
   const [confirmCancel, setConfirmCancel] = useState(false);
+  const [savingEmail, setSavingEmail] = useState(false);
   const canExtend = user.access_kind === "trial" && user.trial_started_at !== null;
   const hasLiveSubscription = !!user.subscription && LIVE_SUBSCRIPTION.includes(user.subscription.status);
 
-  function submitEmail(e: React.FormEvent) {
+  async function submitEmail(e: React.FormEvent) {
     e.preventDefault();
     const email = newEmail.trim().toLowerCase();
     if (!EMAIL_RE.test(email)) {
@@ -80,10 +82,17 @@ export function AccessMenu({
       setEmailError("É o mesmo e-mail atual.");
       return;
     }
-    onChangeEmail({ userId: user.id, email });
-    setEmailOpen(false);
-    setNewEmail("");
-    setEmailError(null);
+    setSavingEmail(true);
+    try {
+      await onChangeEmail({ userId: user.id, email });
+      setEmailOpen(false);
+      setNewEmail("");
+      setEmailError(null);
+    } catch {
+      // The hook toasted the reason; keep the value so the admin can fix it.
+    } finally {
+      setSavingEmail(false);
+    }
   }
 
   return (
@@ -156,7 +165,7 @@ export function AccessMenu({
               )}
             </div>
             <DialogFooter>
-              <Button type="submit">Salvar e-mail</Button>
+              <Button type="submit" disabled={savingEmail}>{savingEmail ? "Salvando..." : "Salvar e-mail"}</Button>
             </DialogFooter>
           </form>
         </DialogContent>

@@ -226,7 +226,9 @@ export function useCancelSubscription() {
 
 const CARD_FALLBACK = "O cartão não foi aceito. Tente outro cartão.";
 
-export function useUpdateSubscriptionCard() {
+// `toastErrors: false` when the caller shows the refusal inline (the card
+// dialog), so the user does not read the same message twice.
+export function useUpdateSubscriptionCard({ toastErrors = true }: { toastErrors?: boolean } = {}) {
   const refresh = useSubscriptionRefresh();
   return useMutation({
     mutationFn: async (input: { card: CardFormDataView; cardLastFour?: string | null }) => {
@@ -238,6 +240,8 @@ export function useUpdateSubscriptionCard() {
       refresh();
       toast.success("Cartão atualizado. A próxima cobrança será feita nele.");
     },
-    onError: (err: Error) => toast.error(parseEdgeFnError(err, CARD_FALLBACK)),
+    onError: (err: Error) => {
+      if (toastErrors) toast.error(parseEdgeFnError(err, CARD_FALLBACK));
+    },
   });
 }

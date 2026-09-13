@@ -291,13 +291,19 @@ describe("useUpdateSubscriptionCard", () => {
     expect(toast.success).toHaveBeenCalledWith(expect.stringMatching(/Cartão atualizado/));
   });
 
-  it("toasts when the card is refused", async () => {
+  it("toasts when the card is refused, unless the caller shows it inline", async () => {
     const { toast } = await import("sonner");
     mockInvoke.mockResolvedValue({ data: null, error: new Error("falha") });
     const { result } = renderHook(() => useUpdateSubscriptionCard(), { wrapper });
     await act(async () => {
       try { await result.current.mutateAsync({ card: CARD }); } catch { /* expected */ }
     });
-    expect(toast.error).toHaveBeenCalled();
+    expect(toast.error).toHaveBeenCalledTimes(1);
+
+    const silent = renderHook(() => useUpdateSubscriptionCard({ toastErrors: false }), { wrapper });
+    await act(async () => {
+      try { await silent.result.current.mutateAsync({ card: CARD }); } catch { /* expected */ }
+    });
+    expect(toast.error).toHaveBeenCalledTimes(1);
   });
 });

@@ -31,7 +31,7 @@ interface UsersTableProps {
   onToggleStatus: (input: SetUserStatusInput) => void;
   onGrantCredits: (input: GrantCreditsInput) => void;
   onSetAccess?: (input: SetAccessInput) => void;
-  onChangeEmail?: (input: ChangeEmailInput) => void;
+  onChangeEmail?: (input: ChangeEmailInput) => void | Promise<unknown>;
   onCancelSubscription?: (input: { userId: string }) => void;
   isUpdating?: boolean;
   isGranting?: boolean;

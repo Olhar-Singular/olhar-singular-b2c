@@ -60,15 +60,9 @@ describe("AccountStep", () => {
     expect(onConfirm).not.toHaveBeenCalled();
   });
 
-  it("pre-fills from a previous draft and refuses pasting into the confirmation", async () => {
-    const user = userEvent.setup();
+  it("pre-fills from a previous draft", () => {
     renderWithProviders(<AccountStep onConfirm={vi.fn()} initial={{ fullName: "Ana", email: "ana@example.com" }} />);
     expect(screen.getByLabelText("Nome completo")).toHaveValue("Ana");
     expect(screen.getByLabelText("Confirme o e-mail")).toHaveValue("ana@example.com");
-
-    await user.clear(screen.getByLabelText("Confirme o e-mail"));
-    await user.click(screen.getByLabelText("Confirme o e-mail"));
-    await user.paste("pasted@example.com");
-    expect(screen.getByLabelText("Confirme o e-mail")).toHaveValue("");
   });
 });

@@ -86,6 +86,18 @@ describe("AccessMenu", () => {
   });
 
   describe("account actions", () => {
+    it("keeps the e-mail dialog and the typed value when the change is refused", async () => {
+      onChangeEmail.mockRejectedValueOnce(new Error("email_exists"));
+      const ue = await open();
+      await ue.click(screen.getByRole("menuitem", { name: /alterar e-mail/i }));
+      await screen.findByRole("dialog");
+      await ue.type(screen.getByLabelText(/novo e-mail/i), "taken@x.com");
+      await ue.click(screen.getByRole("button", { name: /salvar e-mail/i }));
+      await waitFor(() => expect(onChangeEmail).toHaveBeenCalled());
+      expect(screen.getByRole("dialog")).toBeInTheDocument();
+      expect(screen.getByLabelText(/novo e-mail/i)).toHaveValue("taken@x.com");
+    });
+
     it("changes the e-mail after validation", async () => {
       const ue = await open();
       await ue.click(screen.getByRole("menuitem", { name: /alterar e-mail/i }));

@@ -40,8 +40,9 @@ const FAQ = [
   },
 ];
 
-function FaqItem({ q, a }: { q: string; a: string }) {
+function FaqItem({ q, a, index }: { q: string; a: string; index: number }) {
   const [open, setOpen] = useState(false);
+  const panelId = `faq-panel-${index}`;
   return (
     <div className="bg-card rounded-xl border border-border shadow-card overflow-hidden">
       <button
@@ -49,6 +50,7 @@ function FaqItem({ q, a }: { q: string; a: string }) {
         onClick={() => setOpen((v) => !v)}
         className="w-full flex items-center justify-between px-6 py-4 text-left"
         aria-expanded={open}
+        aria-controls={panelId}
       >
         <span className="font-semibold text-foreground text-sm">{q}</span>
         <ChevronDown
@@ -57,7 +59,7 @@ function FaqItem({ q, a }: { q: string; a: string }) {
         />
       </button>
       {open && (
-        <div className="px-6 pb-4 text-sm text-muted-foreground leading-relaxed">{a}</div>
+        <div id={panelId} className="px-6 pb-4 text-sm text-muted-foreground leading-relaxed">{a}</div>
       )}
     </div>
   );
@@ -71,8 +73,8 @@ export default function FaqSection() {
           <h2 className="text-3xl font-bold text-foreground mb-3">Perguntas frequentes</h2>
         </div>
         <div className="space-y-3">
-          {FAQ.map((item) => (
-            <FaqItem key={item.q} q={item.q} a={item.a} />
+          {FAQ.map((item, i) => (
+            <FaqItem key={item.q} index={i} q={item.q} a={item.a} />
           ))}
         </div>
       </div>

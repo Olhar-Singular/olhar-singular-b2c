@@ -102,7 +102,7 @@ beforeEach(() => {
   vi.mocked(useGrantCredits).mockReturnValue({ mutate: grantMutate, isPending: false } as never);
   vi.mocked(useSetAccess).mockReturnValue({ mutate: setAccessMutate, isPending: false } as never);
   vi.mocked(useCreateUser).mockReturnValue({ mutateAsync: createMutateAsync, isPending: false } as never);
-  vi.mocked(useChangeEmail).mockReturnValue({ mutate: changeEmailMutate, isPending: false } as never);
+  vi.mocked(useChangeEmail).mockReturnValue({ mutateAsync: changeEmailMutate, isPending: false } as never);
   vi.mocked(useAdminCancelSubscription).mockReturnValue({ mutate: cancelMutate, isPending: false } as never);
 });
 
@@ -168,7 +168,7 @@ describe("AdminPage", () => {
   });
 
   it("marks the table busy while any account mutation is in flight", () => {
-    vi.mocked(useChangeEmail).mockReturnValue({ mutate: changeEmailMutate, isPending: true } as never);
+    vi.mocked(useChangeEmail).mockReturnValue({ mutateAsync: changeEmailMutate, isPending: true } as never);
     mockDashboard({ data: dashboard });
     render(<AdminPage />);
     expect(screen.getByTestId("userstable").getAttribute("data-setting")).toBe("true");

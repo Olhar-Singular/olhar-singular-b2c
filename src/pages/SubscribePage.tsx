@@ -289,15 +289,16 @@ export default function SubscribePage() {
             )}
 
             {plans.length > 0 && (
-              <div role="radiogroup" aria-label="Planos" className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              // Plain toggle buttons (Tab + Enter), not a fake radiogroup: a real one
+              // would need roving tabindex and arrow keys to honour its semantics.
+              <div role="group" aria-label="Planos" className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 {plans.map((plan) => {
                   const active = selected?.id === plan.id;
                   return (
                     <button
                       key={plan.id}
                       type="button"
-                      role="radio"
-                      aria-checked={active}
+                      aria-pressed={active}
                       onClick={() => setSelectedSlug(plan.slug)}
                       className={`text-left rounded-xl border p-5 transition-shadow hover:shadow-card-hover ${
                         active ? "border-primary ring-2 ring-primary/30 shadow-glow" : plan.adminOnly ? "border-dashed border-border" : "border-border"

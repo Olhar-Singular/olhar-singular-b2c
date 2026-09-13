@@ -69,7 +69,7 @@ export default function AdminPage() {
               onToggleStatus={(input) => setStatus.mutate(input)}
               onGrantCredits={(input) => grant.mutate(input)}
               onSetAccess={(input) => setAccess.mutate(input)}
-              onChangeEmail={(input) => changeEmail.mutate(input)}
+              onChangeEmail={(input) => changeEmail.mutateAsync(input)}
               onCancelSubscription={(input) => cancelSubscription.mutate(input)}
               isUpdating={setStatus.isPending}
               isGranting={grant.isPending}
