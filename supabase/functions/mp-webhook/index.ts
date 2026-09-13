@@ -10,6 +10,7 @@ import { approvePurchaseAndGrant, rejectPendingPurchase } from "../_shared/purch
 import { parseSubscriptionNotification } from "../_shared/mpPreapproval.ts";
 import { handleSubscriptionWebhook, type SubscriptionWebhookDeps } from "../_shared/subscriptionActions.ts";
 import { dispatchAnalytics, readAnalyticsConfig, sendAnalyticsEvents, type AnalyticsEvent, type AttributionLike } from "../_shared/analyticsEvents.ts";
+import { cancelPreapprovalAtMp, mpRequest } from "../_shared/mpHttp.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -46,14 +47,13 @@ serve(async (req) => {
     const subEvent = parseSubscriptionNotification(body, queryId);
     if (subEvent.topic && subEvent.topic !== "payment" && subEvent.id) {
       const admin = createClient(supabaseUrl, serviceKey);
-      const mpHeaders = { Authorization: `Bearer ${mpToken}` };
       const fetchJson = async (path: string) => {
-        const resp = await fetch(`https://api.mercadopago.com${path}`, { headers: mpHeaders });
+        const resp = await mpRequest(path, { token: mpToken });
         if (!resp.ok) {
           console.error("mp-webhook: failed to fetch", path, resp.status);
           return null;
         }
-        return await resp.json();
+        return resp.json;
       };
       const deps: SubscriptionWebhookDeps = {
         fetchPreapproval: (id) => fetchJson(`/preapproval/${encodeURIComponent(id)}`),
@@ -82,6 +82,9 @@ serve(async (req) => {
           });
           if (error) throw new Error(`renew_subscription failed: ${error.message}`);
           return data?.result;
+        },
+        cancelPreapproval: async (preapprovalId) => {
+          if (!(await cancelPreapprovalAtMp(preapprovalId, mpToken))) throw new Error("preapproval cancel failed");
         },
         log: (message, ...args) => console.warn(message, ...args),
       };
@@ -150,16 +153,14 @@ serve(async (req) => {
 
     // The notification only carries the id; the status and our external_reference
     // live on the payment itself, fetched authoritatively from MP.
-    const mpResp = await fetch(`https://api.mercadopago.com/v1/payments/${paymentId}`, {
-      headers: { Authorization: `Bearer ${mpToken}` },
-    });
+    const mpResp = await mpRequest(`/v1/payments/${encodeURIComponent(paymentId)}`, { token: mpToken });
 
     if (!mpResp.ok) {
       console.error("mp-webhook: failed to fetch payment", mpResp.status);
       return json({ error: "Erro ao buscar pagamento." }, 502);
     }
 
-    const payment = await mpResp.json();
+    const payment = mpResp.json;
     const admin = createClient(supabaseUrl, serviceKey);
 
     const grant = extractApprovedGrant(payment);

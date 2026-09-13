@@ -42,11 +42,11 @@ describe("buildSubscriptionActionDeps", () => {
     const f = fakeFetch(200, { id: "p1", status: "cancelled" });
     const deps = buildSubscriptionActionDeps(fakeAdmin().client, "tok", f, NOW);
     const out = await deps.putPreapproval("p 1", { status: "cancelled" });
-    expect(f).toHaveBeenCalledWith("https://api.mercadopago.com/preapproval/p%201", {
+    expect(f).toHaveBeenCalledWith("https://api.mercadopago.com/preapproval/p%201", expect.objectContaining({
       method: "PUT",
       headers: { Authorization: "Bearer tok", "Content-Type": "application/json" },
       body: JSON.stringify({ status: "cancelled" }),
-    });
+    }));
     expect(out).toEqual({ ok: true, status: 200, json: { id: "p1", status: "cancelled" } });
   });
 

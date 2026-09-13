@@ -247,6 +247,25 @@ function fnError(code: string) {
   });
 }
 
+describe("admin error translation", () => {
+  it("translates the raw codes of admin-user-status and admin-grant-credits", async () => {
+    mockInvoke.mockResolvedValue({ data: null, error: fnError("unauthorized") });
+    const { wrapper } = makeWrapper();
+    const status = renderHook(() => useSetUserStatus(), { wrapper });
+    await act(async () => {
+      try { await status.result.current.mutateAsync({ userId: "u1", action: "ban" }); } catch { /* expected */ }
+    });
+    expect(toast.error).toHaveBeenCalledWith("Sua sessão expirou. Entre de novo.");
+
+    mockInvoke.mockResolvedValue({ data: null, error: fnError("invalid_amount") });
+    const grant = renderHook(() => useGrantCredits(), { wrapper });
+    await act(async () => {
+      try { await grant.result.current.mutateAsync({ userId: "u1", amount: 0 }); } catch { /* expected */ }
+    });
+    expect(toast.error).toHaveBeenCalledWith("Informe uma quantidade de créditos válida.");
+  });
+});
+
 describe("useCreateUser", () => {
   it("invokes admin-create-user, invalidates and toasts the e-mail", async () => {
     mockInvoke.mockResolvedValue({ data: { success: true, userId: "n1", mode: "trial" }, error: null });
@@ -299,7 +318,7 @@ describe("useChangeEmail", () => {
     await act(async () => {
       try { await result.current.mutateAsync({ userId: "u1", email: "novo@x.com" }); } catch { /* expected */ }
     });
-    expect(toast.error).toHaveBeenCalledWith("Você não pode alterar o próprio e-mail por aqui.");
+    expect(toast.error).toHaveBeenCalledWith("Você não pode alterar a própria conta por aqui.");
 
     mockInvoke.mockResolvedValue({ data: null, error: new Error("falhou") });
     await act(async () => {

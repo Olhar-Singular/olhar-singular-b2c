@@ -6,6 +6,7 @@ import { buildCardPaymentBody, interpretCardPayment, maskPayer } from "../_share
 import { statusDetailMessage } from "../_shared/mpStatusDetail.ts";
 import { approvePurchaseAndGrant, rejectPendingPurchase } from "../_shared/purchaseGrant.ts";
 import { dispatchAnalytics, readAnalyticsConfig, sendAnalyticsEvents } from "../_shared/analyticsEvents.ts";
+import { mpRequest, MpTimeoutError } from "../_shared/mpHttp.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -106,18 +107,18 @@ serve(async (req) => {
 
     // The purchase id doubles as the idempotency key: one row, one charge, even
     // if the request is retried.
-    const mpResp = await fetch("https://api.mercadopago.com/v1/payments", {
-      method: "POST",
-      headers: {
-        Authorization:       `Bearer ${mpAccessToken}`,
-        "Content-Type":      "application/json",
-        "X-Idempotency-Key": purchase.id,
-      },
-      body: JSON.stringify(mpBody),
-    });
+    let mpResp;
+    try {
+      mpResp = await mpRequest("/v1/payments", { method: "POST", token: mpAccessToken, body: mpBody, idempotencyKey: purchase.id });
+    } catch (e) {
+      // Timeout or network: the purchase stays pending and the webhook decides
+      // (the idempotency key means a retry cannot charge twice).
+      console.error("create-card-payment: MP unreachable", e instanceof MpTimeoutError ? "timeout" : e, "purchase:", purchase.id);
+      return json({ status: "pending", purchaseId: purchase.id, message: "O Mercado Pago demorou a responder. Se o pagamento foi feito, os créditos entram em instantes." });
+    }
 
     if (!mpResp.ok) {
-      const errorBody = await mpResp.json().catch(() => ({}));
+      const errorBody = mpResp.json;
       // Never log the token or the payer (e-mail, CPF); ids and MP's message only.
       console.error("create-card-payment: MP error", mpResp.status, maskPayer(errorBody), "purchase:", purchase.id);
       await rejectPendingPurchase(admin, {
@@ -128,7 +129,7 @@ serve(async (req) => {
       return json({ error: "Não foi possível processar o cartão. Tente novamente." }, 502);
     }
 
-    const outcome = interpretCardPayment(await mpResp.json());
+    const outcome = interpretCardPayment(mpResp.json);
 
     if (outcome.status === "approved") {
       const result = await approvePurchaseAndGrant(admin, {

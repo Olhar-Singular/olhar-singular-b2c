@@ -3,6 +3,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { parseSubscribeInput } from "../_shared/subscribeInput.ts";
 import type { SubscribeDeps } from "../_shared/subscribeFlow.ts";
 import { maskPayer } from "../_shared/mpCardPayment.ts";
+import { cancelPreapprovalAtMp, mpRequest } from "../_shared/mpHttp.ts";
 import { clientIp, hashIdentifier } from "../_shared/checkoutGuard.ts";
 import { parseAccountInput, runAnonymousCheckout, type CheckoutDeps } from "../_shared/accountProvision.ts";
 import { dispatchAnalytics, readAnalyticsConfig, sendAnalyticsEvents, type AttributionLike } from "../_shared/analyticsEvents.ts";
@@ -64,6 +65,7 @@ serve(async (req) => {
     // Hashes of e-mail/IP in checkout_attempts; the service key is the fallback
     // so the guard works before the dedicated secret exists.
     const hashSecret      = Deno.env.get("CHECKOUT_HASH_SECRET") ?? serviceKey;
+    if (!Deno.env.get("CHECKOUT_HASH_SECRET")) console.warn("subscribe: CHECKOUT_HASH_SECRET not set, hashing with the service key (set it: runbook step 2)");
 
     // The publishable key travels in Authorization too; only a real user JWT
     // selects the logged-in flow, anything else is anonymous (never 401).
@@ -89,7 +91,6 @@ serve(async (req) => {
     }
 
     const admin = createClient(supabaseUrl, serviceKey);
-    const mpHeaders = { Authorization: `Bearer ${mpAccessToken}`, "Content-Type": "application/json" };
 
     const deps: SubscribeDeps = {
       loadPlan: async (slug) => {
@@ -116,12 +117,27 @@ serve(async (req) => {
       },
       expireStalePending: async (userId) => {
         const cutoff = new Date(Date.now() - PENDING_GRACE_MINUTES * 60 * 1000).toISOString();
-        await admin
+        // An abandoned attempt that already has a preapproval at MP must be
+        // cancelled there too (best effort): otherwise MP could still authorize
+        // and charge it later, with the row closed here.
+        const { data: stale } = await admin
+          .from("subscriptions")
+          .select("id, mp_preapproval_id")
+          .eq("user_id", userId)
+          .eq("status", "pending")
+          .lt("created_at", cutoff);
+        for (const row of stale ?? []) {
+          if (row.mp_preapproval_id && !(await cancelPreapprovalAtMp(row.mp_preapproval_id, mpAccessToken))) {
+            console.error("subscribe: ALERT abandoned preapproval not cancelled at MP", row.id, row.mp_preapproval_id);
+          }
+        }
+        const { error } = await admin
           .from("subscriptions")
           .update({ status: "rejected", status_detail: "abandoned" })
           .eq("user_id", userId)
           .eq("status", "pending")
           .lt("created_at", cutoff);
+        if (error) throw new Error(`expire stale pending failed: ${error.message}`);
       },
       insertSubscription: async (row) => {
         const { data, error } = await admin
@@ -139,23 +155,18 @@ serve(async (req) => {
         return data.id as string;
       },
       postPreapproval: async (body, idempotencyKey) => {
-        const resp = await fetch("https://api.mercadopago.com/preapproval", {
-          method: "POST",
-          headers: { ...mpHeaders, "X-Idempotency-Key": idempotencyKey },
-          body: JSON.stringify(body),
-        });
-        const payload = await resp.json().catch(() => ({}));
-        if (!resp.ok) console.error("subscribe: MP preapproval error", resp.status, maskPayer(payload));
-        return { ok: resp.ok, status: resp.status, json: payload };
+        const resp = await mpRequest("/preapproval", { method: "POST", token: mpAccessToken, body, idempotencyKey });
+        if (!resp.ok) console.error("subscribe: MP preapproval error", resp.status, maskPayer(resp.json));
+        return resp;
       },
       searchPreapprovalByRef: async (subscriptionId) => {
-        const resp = await fetch(
-          `https://api.mercadopago.com/preapproval/search?external_reference=${encodeURIComponent(subscriptionId)}`,
-          { headers: mpHeaders },
+        const resp = await mpRequest(
+          `/preapproval/search?external_reference=${encodeURIComponent(subscriptionId)}`,
+          { token: mpAccessToken },
         );
         if (!resp.ok) return null;
-        const payload = await resp.json().catch(() => ({}));
-        const first = Array.isArray(payload?.results) ? payload.results[0] : null;
+        const results = resp.json.results;
+        const first = Array.isArray(results) ? results[0] : null;
         return first ?? null;
       },
       activate: async (input) => {
@@ -171,12 +182,7 @@ serve(async (req) => {
         return data;
       },
       cancelPreapproval: async (preapprovalId) => {
-        const resp = await fetch(`https://api.mercadopago.com/preapproval/${encodeURIComponent(preapprovalId)}`, {
-          method: "PUT",
-          headers: mpHeaders,
-          body: JSON.stringify({ status: "cancelled" }),
-        });
-        if (!resp.ok) throw new Error(`preapproval cancel failed: ${resp.status}`);
+        if (!(await cancelPreapprovalAtMp(preapprovalId, mpAccessToken))) throw new Error("preapproval cancel failed");
       },
       markPending: async ({ subscriptionId, preapprovalId, mpStatus }) => {
         const { error } = await admin

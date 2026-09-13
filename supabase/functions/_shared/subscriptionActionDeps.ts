@@ -4,6 +4,7 @@
 // MP endpoint so a typo cannot silently break a cancel.
 
 import type { SubscriptionActionDeps } from "./subscriptionActions.ts";
+import { mpRequest } from "./mpHttp.ts";
 
 // Structural slice of supabase-js so the builder is testable with a fake. The
 // builder chains are left untyped on purpose: typing them structurally made
@@ -22,7 +23,6 @@ export function buildSubscriptionActionDeps(
   fetchFn: typeof fetch = fetch,
   now: () => Date = () => new Date(),
 ): SubscriptionActionDeps {
-  const mpHeaders = { Authorization: `Bearer ${mpAccessToken}`, "Content-Type": "application/json" };
   return {
     findLiveSubscription: async (userId) => {
       const { data, error } = await admin
@@ -36,15 +36,8 @@ export function buildSubscriptionActionDeps(
       if (error) throw new Error(`subscriptions lookup failed: ${error.message}`);
       return data as Awaited<ReturnType<SubscriptionActionDeps["findLiveSubscription"]>>;
     },
-    putPreapproval: async (preapprovalId, body) => {
-      const resp = await fetchFn(`https://api.mercadopago.com/preapproval/${encodeURIComponent(preapprovalId)}`, {
-        method: "PUT",
-        headers: mpHeaders,
-        body: JSON.stringify(body),
-      });
-      const json = await resp.json().catch(() => ({}));
-      return { ok: resp.ok, status: resp.status, json };
-    },
+    putPreapproval: (preapprovalId, body) =>
+      mpRequest(`/preapproval/${encodeURIComponent(preapprovalId)}`, { method: "PUT", token: mpAccessToken, body }, fetchFn),
     cancelLocal: async (subscriptionId) => {
       const { data, error } = await admin.rpc("cancel_subscription_local", {
         p_subscription_id: subscriptionId,

@@ -99,6 +99,7 @@ function webhookDeps(overrides: Partial<SubscriptionWebhookDeps> = {}) {
     findSubscriptionByPreapproval: vi.fn(async () => ({ id: "sub-1" })),
     syncStatus: vi.fn(async () => "unchanged"),
     renew: vi.fn(async () => "renewed"),
+    cancelPreapproval: vi.fn(async () => undefined),
     log: vi.fn(),
     ...overrides,
   };
@@ -186,5 +187,50 @@ describe("handleSubscriptionWebhook", () => {
       findSubscriptionByPreapproval: vi.fn(async () => null),
     });
     expect(await handleSubscriptionWebhook({ topic: "subscription_authorized_payment", id: "1" }, d)).toEqual({ handled: false, reason: "unknown_subscription" });
+  });
+
+  it("cancels the preapproval at MP when the row cannot be live (duplicate or paid while closed)", async () => {
+    const dup = webhookDeps({ syncStatus: vi.fn(async () => "duplicate_live_subscription") });
+    await handleSubscriptionWebhook({ topic: "subscription_preapproval", id: "pre-1" }, dup);
+    expect(dup.cancelPreapproval).toHaveBeenCalledWith("pre-1");
+    expect(dup.log).toHaveBeenCalledWith(expect.stringMatching(/ALERT orphan/), expect.objectContaining({ result: "duplicate_live_subscription" }));
+
+    const closed = webhookDeps({ renew: vi.fn(async () => "paid_while_closed") });
+    await handleSubscriptionWebhook({ topic: "subscription_authorized_payment", id: "77" }, closed);
+    expect(closed.cancelPreapproval).toHaveBeenCalledWith("pre-1");
+
+    const healthy = webhookDeps();
+    await handleSubscriptionWebhook({ topic: "subscription_authorized_payment", id: "77" }, healthy);
+    expect(healthy.cancelPreapproval).not.toHaveBeenCalled();
+  });
+
+  it("logs when the orphan cannot be cancelled or has no preapproval id", async () => {
+    const failing = webhookDeps({
+      syncStatus: vi.fn(async () => "duplicate_live_subscription"),
+      cancelPreapproval: vi.fn(async () => { throw new Error("MP down"); }),
+    });
+    await handleSubscriptionWebhook({ topic: "subscription_preapproval", id: "pre-1" }, failing);
+    expect(failing.log).toHaveBeenCalledWith(expect.stringMatching(/could not cancel/), "pre-1", expect.any(Error));
+
+    const noId = webhookDeps({
+      fetchAuthorizedPayment: vi.fn(async () => ({ id: 5, preapproval_id: null, external_reference: SUB_ID, status: "processed", payment: { status: "approved" } })),
+      renew: vi.fn(async () => "paid_while_closed"),
+    });
+    await handleSubscriptionWebhook({ topic: "subscription_authorized_payment", id: "5" }, noId);
+    expect(noId.cancelPreapproval).not.toHaveBeenCalled();
+  });
+
+  it("logs unresolved events so support can trace a charge", async () => {
+    const d = webhookDeps({
+      fetchAuthorizedPayment: vi.fn(async () => ({ id: 5, external_reference: "not-ours", status: "processed" })),
+    });
+    await handleSubscriptionWebhook({ topic: "subscription_authorized_payment", id: "5" }, d);
+    expect(d.log).toHaveBeenCalledWith(expect.stringMatching(/ALERT charge without/), expect.objectContaining({ id: "5" }));
+    const bad = webhookDeps({ fetchAuthorizedPayment: vi.fn(async () => ({})) });
+    await handleSubscriptionWebhook({ topic: "subscription_authorized_payment", id: "9" }, bad);
+    expect(bad.log).toHaveBeenCalledWith(expect.stringMatching(/without id/), { id: "9" });
+    const pre = webhookDeps({ fetchPreapproval: vi.fn(async () => ({ id: "pre-x", external_reference: null })), findSubscriptionByPreapproval: vi.fn(async () => null) });
+    await handleSubscriptionWebhook({ topic: "subscription_preapproval", id: "pre-x" }, pre);
+    expect(pre.log).toHaveBeenCalledWith(expect.stringMatching(/without a known subscription/), expect.objectContaining({ id: "pre-x" }));
   });
 });

@@ -28,15 +28,37 @@ export function useAdminDashboard() {
   });
 }
 
+// Every admin-* function answers with a raw code; translate once here so a
+// super-admin never reads "unauthorized" or "invalid_amount" in a toast.
+const ADMIN_ERRORS: Record<string, string> = {
+  unauthorized: "Sua sessão expirou. Entre de novo.",
+  forbidden: "Só super-admins podem fazer isso.",
+  internal_error: "Erro interno. Tente de novo em instantes.",
+  invalid_body: "Requisição inválida.",
+  user_not_found: "Usuário não encontrado.",
+  invalid_amount: "Informe uma quantidade de créditos válida.",
+  cannot_ban_self: "Você não pode inativar a própria conta.",
+  cannot_change_self: "Você não pode alterar a própria conta por aqui.",
+  email_exists: "Já existe uma conta com este e-mail.",
+  invalid_email: "Informe um e-mail válido.",
+  invalid_name: "Informe o nome completo.",
+  invalid_mode: "Escolha Teste ou Cortesia.",
+  partial_failure: "Convite enviado, mas o tipo de acesso não foi gravado. Ajuste em Alterar acesso.",
+  not_a_trial: "Só é possível estender o teste de uma conta em período de teste já iniciado.",
+  trial_limit_reached: "O período de teste não pode passar de 90 dias no total.",
+};
+
+async function adminError(error: unknown, fallback: string): Promise<Error> {
+  const raw = await parseInvokeError(error, fallback);
+  return new Error(ADMIN_ERRORS[raw] ?? raw);
+}
+
 export function useSetUserStatus() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (input: SetUserStatusInput) => {
       const { data, error } = await supabase.functions.invoke("admin-user-status", { body: input });
-      if (error) {
-        const msg = await parseInvokeError(error, "Erro ao atualizar o usuário. Tente novamente.");
-        throw new Error(msg);
-      }
+      if (error) throw await adminError(error, "Erro ao atualizar o usuário. Tente novamente.");
       return data as { success: boolean };
     },
     onSuccess: (_data, variables) => {
@@ -52,10 +74,7 @@ export function useGrantCredits() {
   return useMutation({
     mutationFn: async (input: GrantCreditsInput) => {
       const { data, error } = await supabase.functions.invoke("admin-grant-credits", { body: input });
-      if (error) {
-        const msg = await parseInvokeError(error, "Erro ao adicionar créditos. Tente novamente.");
-        throw new Error(msg);
-      }
+      if (error) throw await adminError(error, "Erro ao adicionar créditos. Tente novamente.");
       return data as { success: boolean; new_balance: number };
     },
     onSuccess: (_data, variables) => {
@@ -66,21 +85,6 @@ export function useGrantCredits() {
   });
 }
 
-const ACCESS_ERRORS: Record<string, string> = {
-  not_a_trial: "Só é possível estender o teste de uma conta em período de teste já iniciado.",
-  trial_limit_reached: "O período de teste não pode passar de 90 dias no total.",
-  cannot_change_self: "Você não pode alterar o próprio acesso.",
-  user_not_found: "Usuário não encontrado.",
-};
-
-const CREATE_USER_ERRORS: Record<string, string> = {
-  email_exists: "Já existe uma conta com este e-mail.",
-  invalid_email: "Informe um e-mail válido.",
-  invalid_name: "Informe o nome completo.",
-  invalid_mode: "Escolha Teste ou Cortesia.",
-  partial_failure: "Convite enviado, mas o tipo de acesso não foi gravado. Ajuste em Alterar acesso.",
-};
-
 // Invite flow: Supabase sends the e-mail; the person creates the password on
 // /redefinir-senha?convite=1. A trial's clock starts when the invite is accepted.
 export function useCreateUser() {
@@ -88,10 +92,7 @@ export function useCreateUser() {
   return useMutation({
     mutationFn: async (input: CreateUserInput) => {
       const { data, error } = await supabase.functions.invoke("admin-create-user", { body: input });
-      if (error) {
-        const raw = await parseInvokeError(error, "Erro ao enviar o convite. Tente novamente.");
-        throw new Error(CREATE_USER_ERRORS[raw] ?? raw);
-      }
+      if (error) throw await adminError(error, "Erro ao enviar o convite. Tente novamente.");
       return data as { success: boolean; userId: string; mode: "trial" | "exempt" };
     },
     onSuccess: (_data, variables) => {
@@ -102,22 +103,12 @@ export function useCreateUser() {
   });
 }
 
-const CHANGE_EMAIL_ERRORS: Record<string, string> = {
-  email_exists: "Já existe uma conta com este e-mail.",
-  invalid_email: "Informe um e-mail válido.",
-  cannot_change_self: "Você não pode alterar o próprio e-mail por aqui.",
-  user_not_found: "Usuário não encontrado.",
-};
-
 export function useChangeEmail() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (input: ChangeEmailInput) => {
       const { data, error } = await supabase.functions.invoke("admin-change-email", { body: input });
-      if (error) {
-        const raw = await parseInvokeError(error, "Erro ao alterar o e-mail. Tente novamente.");
-        throw new Error(CHANGE_EMAIL_ERRORS[raw] ?? raw);
-      }
+      if (error) throw await adminError(error, "Erro ao alterar o e-mail. Tente novamente.");
       return data as { success: boolean };
     },
     onSuccess: () => {
@@ -150,10 +141,7 @@ export function useSetAccess() {
   return useMutation({
     mutationFn: async (input: SetAccessInput) => {
       const { data, error } = await supabase.functions.invoke("admin-set-access", { body: input });
-      if (error) {
-        const raw = await parseInvokeError(error, "Erro ao alterar o acesso. Tente novamente.");
-        throw new Error(ACCESS_ERRORS[raw] ?? raw);
-      }
+      if (error) throw await adminError(error, "Erro ao alterar o acesso. Tente novamente.");
       return data as { success: boolean };
     },
     onSuccess: (_data, variables) => {

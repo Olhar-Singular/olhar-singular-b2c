@@ -3,6 +3,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { selectPackage, type CreditPackageRow } from "../_shared/creditPackages.ts";
 import { buildPixPaymentBody, extractPixQr } from "../_shared/mpPixPayment.ts";
 import { maskPayer } from "../_shared/mpCardPayment.ts";
+import { mpRequest } from "../_shared/mpHttp.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -91,31 +92,31 @@ serve(async (req) => {
     // pays from inside our page instead of being sent to the MP checkout (which
     // would demand a login). The purchase id doubles as the idempotency key —
     // one row, one charge, even if the request is retried.
-    const mpResp = await fetch("https://api.mercadopago.com/v1/payments", {
-      method: "POST",
-      headers: {
-        Authorization:       `Bearer ${mpAccessToken}`,
-        "Content-Type":      "application/json",
-        "X-Idempotency-Key": purchase.id,
-      },
-      body: JSON.stringify(
-        buildPixPaymentBody({
+    let mpResp;
+    try {
+      mpResp = await mpRequest("/v1/payments", {
+        method: "POST",
+        token: mpAccessToken,
+        idempotencyKey: purchase.id,
+        body: buildPixPaymentBody({
           pkg,
           purchaseId:      purchase.id,
           email:           user.email,
           notificationUrl: `${supabaseUrl}/functions/v1/mp-webhook`,
         }),
-      ),
-    });
+      });
+    } catch (e) {
+      console.error("create-pix-payment: MP unreachable", e instanceof Error ? e.message : e, "purchase:", purchase.id);
+      mpResp = { ok: false, status: 0, json: {} as Record<string, unknown> };
+    }
 
-    const payment = mpResp.ok ? await mpResp.json() : null;
+    const payment = mpResp.ok ? mpResp.json : null;
     const qr = payment ? extractPixQr(payment) : null;
 
     if (!qr) {
       if (!mpResp.ok) {
         // MP echoes submitted fields in validation errors; never log the payer raw.
-        const errorBody = await mpResp.json().catch(() => ({}));
-        console.error("MP payments error:", mpResp.status, maskPayer(errorBody));
+        console.error("MP payments error:", mpResp.status, maskPayer(mpResp.json));
       } else {
         console.error("MP payment without Pix QR:", payment?.id, payment?.status);
       }

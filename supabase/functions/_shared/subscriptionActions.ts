@@ -77,12 +77,29 @@ export interface SubscriptionWebhookDeps {
   findSubscriptionByPreapproval(preapprovalId: string): Promise<{ id: string } | null>;
   syncStatus(input: { subscriptionId: string; preapprovalId: string; mpStatus: string; nextPaymentDate: string | null }): Promise<unknown>;
   renew(subscriptionId: string, invoice: InvoiceForRpc): Promise<unknown>;
+  /** PUT /preapproval/{id} { status: 'cancelled' }; best effort. */
+  cancelPreapproval(preapprovalId: string): Promise<void>;
   log(message: string, ...args: unknown[]): void;
 }
 
 export type WebhookOutcome =
   | { handled: true; result: unknown; subscriptionId: string }
   | { handled: false; reason: "provider_unavailable" | "unknown_subscription" | "invalid_payload" };
+
+// Money (or an authorization) landed on a row that cannot be live: the
+// preapproval at MP would keep charging with no subscription behind it.
+const ORPHAN_RESULTS = ["duplicate_live_subscription", "paid_while_closed"];
+
+async function closeOrphan(result: unknown, preapprovalId: string | null, subscriptionId: string, deps: SubscriptionWebhookDeps): Promise<void> {
+  if (!ORPHAN_RESULTS.includes(String(result))) return;
+  deps.log("mp-webhook: ALERT orphan preapproval, cancelling at MP", { result, subscriptionId, preapprovalId });
+  if (!preapprovalId) return;
+  try {
+    await deps.cancelPreapproval(preapprovalId);
+  } catch (e) {
+    deps.log("mp-webhook: ALERT could not cancel orphan preapproval", preapprovalId, e);
+  }
+}
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -110,22 +127,33 @@ export async function handleSubscriptionWebhook(
     if (!pre) return { handled: false, reason: "provider_unavailable" };
     const preapprovalId = String(pre.id ?? event.id);
     const subscriptionId = await resolveSubscription(pre.external_reference, preapprovalId, deps);
-    if (!subscriptionId) return { handled: false, reason: "unknown_subscription" };
+    if (!subscriptionId) {
+      deps.log("mp-webhook: preapproval without a known subscription", { id: event.id, external_reference: pre.external_reference ?? null, status: pre.status ?? null });
+      return { handled: false, reason: "unknown_subscription" };
+    }
     const result = await deps.syncStatus({
       subscriptionId,
       preapprovalId,
       mpStatus: pre.status ?? "unknown",
       nextPaymentDate: pre.next_payment_date ?? null,
     });
+    await closeOrphan(result, preapprovalId, subscriptionId, deps);
     return { handled: true, result, subscriptionId };
   }
 
   const ap = await deps.fetchAuthorizedPayment(event.id);
   if (!ap) return { handled: false, reason: "provider_unavailable" };
   const shaped = interpretAuthorizedPayment(ap);
-  if (!shaped) return { handled: false, reason: "invalid_payload" };
+  if (!shaped) {
+    deps.log("mp-webhook: authorized_payment without id or reference", { id: event.id });
+    return { handled: false, reason: "invalid_payload" };
+  }
   const subscriptionId = await resolveSubscription(shaped.subscriptionId, shaped.preapprovalId, deps);
-  if (!subscriptionId) return { handled: false, reason: "unknown_subscription" };
+  if (!subscriptionId) {
+    deps.log("mp-webhook: ALERT charge without a known subscription", { id: event.id, preapproval_id: shaped.preapprovalId, external_reference: shaped.subscriptionId, payment_status: shaped.invoice.payment_status });
+    return { handled: false, reason: "unknown_subscription" };
+  }
   const result = await deps.renew(subscriptionId, shaped.invoice);
+  await closeOrphan(result, shaped.preapprovalId, subscriptionId, deps);
   return { handled: true, result, subscriptionId };
 }
