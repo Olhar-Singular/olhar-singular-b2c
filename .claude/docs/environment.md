@@ -20,7 +20,9 @@ DATABASE_URL=                  # Connection string completa (remoto)
 > **Um único `.env`** na raiz é a fonte de verdade: serve o app (Vite) **e** as edge
 > functions locais (`make fn-serve` lê o `.env` raiz — não há mais `supabase/functions/.env`).
 > Guarda também os segredos de backend (`AI_API_KEY`, `ACCESS_TOKEN_MP_PROD`,
-> `VERIFY_TOKEN_MP_PROD`, `APP_URL`, `CHECKOUT_HASH_SECRET`, `GOOGLE_CLIENT_*`, sem prefixo `VITE_`) e a
+> `VERIFY_TOKEN_MP_PROD`, `APP_URL`, `CHECKOUT_HASH_SECRET`, `GA4_MEASUREMENT_ID`, `GA4_API_SECRET`,
+> `META_PIXEL_ID`, `META_CAPI_TOKEN`, `GOOGLE_CLIENT_*`, sem prefixo `VITE_`), a `VITE_GTM_ID` (container
+> do GTM, injetado em runtime só fora do checkout; sem ela nenhum analytics carrega) e a
 > `VITE_MP_PUBLIC_KEY` (public key do Mercado Pago da **mesma aplicação** do
 > `ACCESS_TOKEN_MP_PROD`; vai pro bundle e inicializa o Card Payment Brick). O bloco
 > STAGING (`ACCESS_TOKEN_MP`, `PUBLIC_KEY_MP`, `VERIFY_TOKEN_MP`, usuário de teste) é o

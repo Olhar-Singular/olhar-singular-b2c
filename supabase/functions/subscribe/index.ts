@@ -5,6 +5,7 @@ import type { SubscribeDeps } from "../_shared/subscribeFlow.ts";
 import { maskPayer } from "../_shared/mpCardPayment.ts";
 import { clientIp, hashIdentifier } from "../_shared/checkoutGuard.ts";
 import { parseAccountInput, runAnonymousCheckout, type CheckoutDeps } from "../_shared/accountProvision.ts";
+import { readAnalyticsConfig, sendAnalyticsEvents, type AttributionLike } from "../_shared/analyticsEvents.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -273,6 +274,24 @@ serve(async (req) => {
     if (!outcome.ok) return json({ error: FLOW_ERRORS[outcome.error], code: outcome.error }, outcome.httpStatus);
 
     const { result, accountCreated, sessionTokenHash } = outcome;
+
+    if (result.status !== "rejected") {
+      // Server-side conversion (GA4 MP / Meta CAPI); no-op without secrets.
+      const { data: planRow } = await admin.from("plans").select("price_brl").eq("slug", parsed.planSlug).maybeSingle();
+      await sendAnalyticsEvents(
+        [{
+          name: "subscription_started",
+          eventId: result.subscriptionId,
+          userId: outcome.userId,
+          valueBrl: planRow ? Number(planRow.price_brl) : null,
+          email: user?.email ?? account?.email ?? null,
+          attribution: (parsed.attribution ?? null) as AttributionLike | null,
+          params: { plan: parsed.planSlug, status: result.status, account_created: accountCreated },
+        }],
+        readAnalyticsConfig(Deno.env),
+      );
+    }
+
     if (result.status === "rejected") {
       return json({
         status: "rejected",

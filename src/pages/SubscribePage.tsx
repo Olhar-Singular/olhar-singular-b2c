@@ -13,6 +13,8 @@ import { useAccess } from "@/hooks/useAccess";
 import type { CardFormDataView } from "@/hooks/useCredits";
 import { isLiveSubscription, usePlans, useSubscribe, useSubscription, type PlanView } from "@/hooks/useSubscription";
 import { formatBrl, pickInitialPlan, replacementNotice, TERMS_VERSION } from "@/lib/domain/subscriptionUi";
+import { trackAddPaymentInfo, trackBeginCheckout, trackSubscriptionStarted } from "@/lib/analytics/events";
+import { readAttribution, sessionStore } from "@/lib/analytics/attribution";
 
 type Stage =
   | { kind: "form"; error?: string }
@@ -59,6 +61,12 @@ export default function SubscribePage() {
 
   const notice = replacementNotice(access);
   const payerEmail = anonymous ? account?.email : user?.email ?? undefined;
+  const brickVisible = stage.kind === "form" && (!anonymous || !!account) && !!selected;
+
+  // begin_checkout when the card form is actually on screen for a plan.
+  useEffect(() => {
+    if (brickVisible && selected) trackBeginCheckout(selected);
+  }, [brickVisible, selected]);
 
   // The session token is consumed right here and never stored: verifyOtp turns
   // it into a real session, then the first-access password screen takes over.
@@ -74,11 +82,15 @@ export default function SubscribePage() {
   // A rejected promise hands the failure back to the Brick, which re-enables
   // its button (business refusals were already toasted by the hook).
   async function handleSubmit(plan: PlanView, card: CardFormDataView) {
+    trackAddPaymentInfo(plan);
+    const attribution = readAttribution(sessionStore());
     const result = await subscribe.mutateAsync({
       planSlug: plan.slug,
       card,
       ...(anonymous && account ? { account: { ...account, termsVersion: TERMS_VERSION } } : {}),
+      ...(attribution ? { attribution } : {}),
     });
+    if (result.status !== "rejected") trackSubscriptionStarted(plan, result.subscriptionId, result.status);
 
     if (result.status === "rejected") {
       const message = result.message ?? GENERIC_REJECTION;

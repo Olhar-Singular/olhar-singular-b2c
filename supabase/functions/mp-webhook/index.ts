@@ -9,6 +9,7 @@ import { validateMpSignature } from "../_shared/mpSignature.ts";
 import { approvePurchaseAndGrant, rejectPendingPurchase } from "../_shared/purchaseGrant.ts";
 import { parseSubscriptionNotification } from "../_shared/mpPreapproval.ts";
 import { handleSubscriptionWebhook, type SubscriptionWebhookDeps } from "../_shared/subscriptionActions.ts";
+import { readAnalyticsConfig, sendAnalyticsEvents, type AnalyticsEvent, type AttributionLike } from "../_shared/analyticsEvents.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -89,6 +90,33 @@ serve(async (req) => {
       if (!outcome.handled && outcome.reason === "provider_unavailable") {
         return json({ error: "Erro ao buscar assinatura." }, 502);
       }
+
+      // Server-side conversion events for the money transitions (no-op without secrets).
+      const analyticsName: AnalyticsEvent["name"] | null =
+        outcome.handled && outcome.result === "renewed" ? "subscription_renewed"
+        : outcome.handled && (outcome.result === "past_due" || outcome.result === "clawback") ? "subscription_payment_failed"
+        : null;
+      if (analyticsName && outcome.handled) {
+        const { data: sub } = await admin
+          .from("subscriptions")
+          .select("id, user_id, attribution, plans(price_brl)")
+          .eq("id", outcome.subscriptionId)
+          .maybeSingle();
+        if (sub) {
+          const price = (sub as { plans?: { price_brl?: number | string } | null }).plans?.price_brl;
+          await sendAnalyticsEvents(
+            [{
+              name: analyticsName,
+              eventId: `${sub.id}:${subEvent.id}`,
+              userId: sub.user_id,
+              valueBrl: analyticsName === "subscription_renewed" && price !== undefined ? Number(price) : null,
+              attribution: (sub.attribution ?? null) as AttributionLike | null,
+              params: { authorized_payment_id: subEvent.id },
+            }],
+            readAnalyticsConfig(Deno.env),
+          );
+        }
+      }
       return json({ received: true, ...(outcome.handled ? { result: outcome.result } : { ignored: outcome.reason }) });
     }
 
@@ -160,6 +188,19 @@ serve(async (req) => {
     if (!result.granted) {
       // Already processed (or unknown purchase): safe to acknowledge.
       return json({ received: true });
+    }
+
+    // Pix (and the rare asynchronous card) lands here only: emit the purchase.
+    const { data: purchaseRow } = await admin
+      .from("credit_purchases")
+      .select("user_id, amount_brl")
+      .eq("id", grant.purchaseId)
+      .maybeSingle();
+    if (purchaseRow) {
+      await sendAnalyticsEvents(
+        [{ name: "purchase", eventId: grant.purchaseId, userId: purchaseRow.user_id, valueBrl: Number(purchaseRow.amount_brl), params: { credits: result.credits } }],
+        readAnalyticsConfig(Deno.env),
+      );
     }
 
     return json({ received: true, credits_granted: result.credits });

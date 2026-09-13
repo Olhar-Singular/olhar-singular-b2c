@@ -115,6 +115,8 @@ describe("replacementNotice", () => {
 describe("SubscribePage", () => {
   beforeEach(async () => {
     vi.clearAllMocks();
+    window.dataLayer = [];
+    window.sessionStorage.clear();
     mockUsePlans.mockReturnValue({ data: PLANS, isLoading: false });
     mockUseSubscription.mockReturnValue({ data: null });
     mockSubscribe.mockResolvedValue({ status: "authorized", subscriptionId: "sub-1" });
@@ -128,6 +130,15 @@ describe("SubscribePage", () => {
     expect(screen.getByText(/Pagar R\$\s*59,90 por mês/)).toBeInTheDocument();
     expect(brickProps).toHaveBeenCalledWith(expect.objectContaining({ amount: 59.9, payerEmail: "a@b.c" }));
     expect(screen.queryByRole("note")).toBeNull();
+  });
+
+  it("sends the stored attribution with the checkout", async () => {
+    const user = userEvent.setup();
+    window.sessionStorage.setItem("olhar:attribution", JSON.stringify({ utm_source: "meta" }));
+    renderPage();
+    await user.click(screen.getByRole("button", { name: "Assinar agora" }));
+    expect(mockSubscribe).toHaveBeenCalledWith(expect.objectContaining({ attribution: { utm_source: "meta" } }));
+    window.sessionStorage.clear();
   });
 
   it("honours ?plano= and lets the user switch plans", async () => {
@@ -152,6 +163,9 @@ describe("SubscribePage", () => {
     renderPage();
     await user.click(screen.getByRole("button", { name: "Assinar agora" }));
     expect(mockSubscribe).toHaveBeenCalledWith({ planSlug: "profissional", card: CARD });
+    expect(window.dataLayer?.map((e) => (e as { event: string }).event)).toEqual(
+      expect.arrayContaining(["begin_checkout", "add_payment_info", "subscription_started"]),
+    );
     await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent(/Assinatura ativa! 240 créditos/));
     expect(screen.getByRole("link", { name: /Começar a adaptar/ })).toHaveAttribute("href", "/adaptar");
     expect(screen.queryByTestId("card-brick")).toBeNull();

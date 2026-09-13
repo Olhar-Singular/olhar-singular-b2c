@@ -30,6 +30,7 @@ vi.mock("@/components/common/SuperAdminRoute", () => ({
   SuperAdminRoute: ({ children }: { children: React.ReactNode }) => <>{children}</>,
 }));
 vi.mock("@/components/ui/sonner", () => ({ Toaster: () => <div data-testid="toaster-stub" /> }));
+vi.mock("@/components/common/ConsentBanner", () => ({ ConsentBanner: () => <div data-testid="consent-banner" /> }));
 
 import App from "./App";
 
@@ -38,6 +39,12 @@ describe("App", () => {
     window.history.pushState({}, "", "/");
     render(<App />);
     await waitFor(() => expect(screen.getByTestId("landing-page")).toBeInTheDocument());
+  });
+
+  it("mounts the consent banner on every route", async () => {
+    window.history.pushState({}, "", "/");
+    render(<App />);
+    await waitFor(() => expect(screen.getByTestId("consent-banner")).toBeInTheDocument());
   });
 
   it("renders the auth page on /auth route", async () => {

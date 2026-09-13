@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { Link } from "react-router-dom";
 import { CheckCircle2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -5,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { SUPPORT_EMAIL } from "@/lib/constants";
 import { usePlans } from "@/hooks/useSubscription";
 import { adaptationsRange, formatBrl, publicPlans } from "@/lib/domain/subscriptionUi";
+import { trackSelectPlan, trackViewPlans } from "@/lib/analytics/events";
 
 const EXTRAS = [
   { credits: 30,  price: "R$ 9,90" },
@@ -15,6 +17,11 @@ const EXTRAS = [
 export default function PricingSection() {
   const { data } = usePlans();
   const plans = publicPlans(data);
+
+  // Once per rendered catalogue (the fallback first, the real one when it lands).
+  useEffect(() => {
+    trackViewPlans(plans);
+  }, [plans]);
 
   return (
     <section id="precos" className="py-16 lg:py-24 bg-background">
@@ -88,7 +95,7 @@ export default function PricingSection() {
                   Acesso imediato
                 </li>
               </ul>
-              <Link to={`/assinar?plano=${plan.slug}`}>
+              <Link to={`/assinar?plano=${plan.slug}`} onClick={() => trackSelectPlan(plan)}>
                 <Button
                   className={`w-full ${plan.highlight ? "bg-white text-primary hover:bg-white/90" : ""}`}
                   variant={plan.highlight ? "default" : "outline"}

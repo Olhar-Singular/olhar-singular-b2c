@@ -62,7 +62,7 @@ export interface CheckoutDeps {
 }
 
 export type CheckoutResult =
-  | { ok: true; result: Extract<SubscribeResult, { ok: true }>; accountCreated: boolean; sessionTokenHash: string | null }
+  | { ok: true; result: Extract<SubscribeResult, { ok: true }>; userId: string; accountCreated: boolean; sessionTokenHash: string | null }
   | { ok: false; error: "account_required" | "rate_limited" | "circuit_open" | "email_exists" | Extract<SubscribeResult, { ok: false }>["error"]; httpStatus: number };
 
 export async function runAnonymousCheckout(input: CheckoutInput, deps: CheckoutDeps): Promise<CheckoutResult> {
@@ -117,7 +117,7 @@ export async function runAnonymousCheckout(input: CheckoutInput, deps: CheckoutD
   if (result.status === "rejected") {
     // Never hand a session to someone who only proved they hold a card token:
     // with a fresh account they log in through the e-mail link instead.
-    return { ok: true, result, accountCreated, sessionTokenHash: null };
+    return { ok: true, result, userId, accountCreated, sessionTokenHash: null };
   }
 
   // Money (or a pending validation) happened: record the contractual facts.
@@ -133,5 +133,5 @@ export async function runAnonymousCheckout(input: CheckoutInput, deps: CheckoutD
     if (!sessionTokenHash) deps.log("checkout: magic link generation failed, buyer will log in by e-mail", userId);
   }
 
-  return { ok: true, result, accountCreated, sessionTokenHash };
+  return { ok: true, result, userId, accountCreated, sessionTokenHash };
 }

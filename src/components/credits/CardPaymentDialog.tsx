@@ -13,6 +13,7 @@ import MpCardBrick from "@/components/payments/MpCardBrick";
 import { useAuth } from "@/hooks/useAuth";
 import { useCreateCardPayment, usePurchaseStatus } from "@/hooks/useCredits";
 import type { CardFormDataView, CreditPackageView } from "@/hooks/useCredits";
+import { trackPurchase } from "@/lib/analytics/events";
 
 interface Props {
   pkg: CreditPackageView | null;
@@ -74,6 +75,7 @@ export default function CardPaymentDialog({ pkg, onOpenChange }: Props) {
   async function handleSubmit(current: CreditPackageView, card: CardFormDataView) {
     const result = await payment.mutateAsync({ packageId: current.id, card });
     if (result.status === "approved") {
+      trackPurchase(current, result.purchaseId);
       settleApproved();
     } else if (result.status === "rejected") {
       setStage({ kind: "rejected", message: result.message ?? GENERIC_REJECTION });

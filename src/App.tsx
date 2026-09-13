@@ -24,6 +24,7 @@ import LandingPage from "@/pages/LandingPage";
 import QuestionBankPage from "@/pages/QuestionBankPage";
 import AdaptacoesPage from "@/pages/AdaptacoesPage";
 import Layout from "@/components/common/Layout";
+import { ConsentBanner } from "@/components/common/ConsentBanner";
 
 const queryClient = new QueryClient();
 
@@ -35,6 +36,7 @@ function AppRoot() {
         <ErrorBoundary>
           <Outlet />
         </ErrorBoundary>
+        <ConsentBanner />
         <Toaster position="top-right" />
       </AuthProvider>
     </QueryClientProvider>

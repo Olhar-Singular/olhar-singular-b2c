@@ -81,7 +81,7 @@ export interface SubscriptionWebhookDeps {
 }
 
 export type WebhookOutcome =
-  | { handled: true; result: unknown }
+  | { handled: true; result: unknown; subscriptionId: string }
   | { handled: false; reason: "provider_unavailable" | "unknown_subscription" | "invalid_payload" };
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -117,7 +117,7 @@ export async function handleSubscriptionWebhook(
       mpStatus: pre.status ?? "unknown",
       nextPaymentDate: pre.next_payment_date ?? null,
     });
-    return { handled: true, result };
+    return { handled: true, result, subscriptionId };
   }
 
   const ap = await deps.fetchAuthorizedPayment(event.id);
@@ -127,5 +127,5 @@ export async function handleSubscriptionWebhook(
   const subscriptionId = await resolveSubscription(shaped.subscriptionId, shaped.preapprovalId, deps);
   if (!subscriptionId) return { handled: false, reason: "unknown_subscription" };
   const result = await deps.renew(subscriptionId, shaped.invoice);
-  return { handled: true, result };
+  return { handled: true, result, subscriptionId };
 }

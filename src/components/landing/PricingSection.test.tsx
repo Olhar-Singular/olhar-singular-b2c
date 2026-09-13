@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import PricingSection from "./PricingSection";
 import { DEFAULT_PLANS, adaptationsRange, publicPlans } from "@/lib/domain/subscriptionUi";
 import { renderWithProviders } from "@/test/helpers";
@@ -70,9 +71,14 @@ describe("PricingSection", () => {
     expect(screen.getByText(/Popular/i)).toBeInTheDocument();
   });
 
-  it("each Assinar CTA links to /assinar with the plan slug", () => {
+  it("each Assinar CTA links to /assinar with the plan slug and tracks the selection", async () => {
+    const user = userEvent.setup();
+    window.dataLayer = [];
     renderWithProviders(<PricingSection />);
+    expect(window.dataLayer[0]).toMatchObject({ event: "view_item_list", items: [{ item_id: "basico" }, { item_id: "profissional" }, { item_id: "avancado" }] });
     const links = screen.getAllByRole("link", { name: /Assinar/i });
+    await user.click(links[1]);
+    expect(window.dataLayer.at(-1)).toMatchObject({ event: "select_item", items: [{ item_id: "profissional" }] });
     expect(links.map((l) => l.getAttribute("href"))).toEqual([
       "/assinar?plano=basico",
       "/assinar?plano=profissional",

@@ -1,8 +1,10 @@
+import { useEffect } from "react";
 import { Link } from "react-router-dom";
 import { AlertTriangle, Clock, Coins, Loader2 } from "lucide-react";
 import type { Access } from "@/lib/domain/access";
 import type { SubscriptionView } from "@/hooks/useSubscription";
 import { isRecentRejection } from "@/lib/domain/subscriptionUi";
+import { trackPaywallShown } from "@/lib/analytics/events";
 
 interface Props {
   access: Access | null;
@@ -17,6 +19,19 @@ interface Props {
 // navigation; the paid actions themselves refuse (402) and point to the same
 // place.
 export function AccessBanner({ access, subscription, now = new Date() }: Props) {
+  const paywallReason: "trial_expired" | "no_credits" | null = !access || access.unlimited
+    ? null
+    : access.trialExpired && access.extraCredits === 0
+      ? "trial_expired"
+      : access.paywalled
+        ? "no_credits"
+        : null;
+
+  // One event per reason while it stays on screen.
+  useEffect(() => {
+    if (paywallReason) trackPaywallShown(paywallReason);
+  }, [paywallReason]);
+
   if (!access || access.unlimited) return null;
 
   if (subscription?.status === "past_due") {

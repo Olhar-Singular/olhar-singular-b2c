@@ -83,6 +83,7 @@ describe("runAnonymousCheckout", () => {
     expect(out).toEqual({
       ok: true,
       result: { ok: true, status: "authorized", subscriptionId: "sub-1" },
+      userId: "new-user",
       accountCreated: true,
       sessionTokenHash: "hashed-token",
     });
@@ -101,6 +102,7 @@ describe("runAnonymousCheckout", () => {
     expect(out).toEqual({
       ok: true,
       result: { ok: true, status: "rejected", subscriptionId: "sub-1", detail: "cancelled" },
+      userId: "new-user",
       accountCreated: true,
       sessionTokenHash: null,
     });
@@ -116,7 +118,7 @@ describe("runAnonymousCheckout", () => {
     expect(d.subscribeDeps.insertSubscription).toHaveBeenCalledWith(expect.objectContaining({ userId: "u1", payerEmail: "u1@x.com" }));
     expect(d.recordProfileFacts).toHaveBeenCalledWith({ userId: "u1", cpf: "12345678909", termsVersion: null });
     expect(d.generateSessionToken).not.toHaveBeenCalled();
-    expect(out).toMatchObject({ ok: true, accountCreated: false, sessionTokenHash: null });
+    expect(out).toMatchObject({ ok: true, userId: "u1", accountCreated: false, sessionTokenHash: null });
   });
 
   it("prefers the JWT user over an account block sent alongside", async () => {

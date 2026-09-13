@@ -114,7 +114,7 @@ describe("handleSubscriptionWebhook", () => {
     expect(d.syncStatus).toHaveBeenCalledWith({
       subscriptionId: SUB_ID, preapprovalId: "pre-1", mpStatus: "authorized", nextPaymentDate: "2026-10-12T00:00:00Z",
     });
-    expect(out).toEqual({ handled: true, result: "unchanged" });
+    expect(out).toEqual({ handled: true, result: "unchanged", subscriptionId: SUB_ID });
   });
 
   it("falls back to the preapproval id when the external_reference is missing or foreign", async () => {
@@ -155,7 +155,7 @@ describe("handleSubscriptionWebhook", () => {
     const out = await handleSubscriptionWebhook({ topic: "subscription_authorized_payment", id: "77" }, d);
     expect(d.fetchAuthorizedPayment).toHaveBeenCalledWith("77");
     expect(d.renew).toHaveBeenCalledWith(SUB_ID, expect.objectContaining({ id: "77", payment_status: "approved", mp_payment_id: "900" }));
-    expect(out).toEqual({ handled: true, result: "renewed" });
+    expect(out).toEqual({ handled: true, result: "renewed", subscriptionId: SUB_ID });
   });
 
   it("resolves the subscription by preapproval when the charge carries no external_reference", async () => {
