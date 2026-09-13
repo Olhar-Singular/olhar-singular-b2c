@@ -4,7 +4,7 @@
 -- Only service_role touches the table; the RPC records, counts and purges.
 -- =============================================================================
 BEGIN;
-SELECT plan(12);
+SELECT plan(13);
 
 SELECT has_table('public', 'checkout_attempts', 'checkout_attempts exists');
 SELECT col_not_null('public', 'checkout_attempts', 'ip_hash', 'ip_hash is required');
@@ -39,8 +39,11 @@ SELECT public.record_checkout_attempt('ip-1', 'mail-2', 'attempt');
 SELECT public.record_checkout_attempt('ip-2', 'mail-1', 'rejected');
 SELECT is(
   public.record_checkout_attempt('ip-1', 'mail-1', 'attempt'),
-  '{"by_ip_1h": 3, "by_email_1h": 2, "rejected_10m": 1}'::jsonb,
-  'counts attempts per e-mail and per IP in 1h and rejections in 10min');
+  '{"by_ip_1h": 3, "by_email_1h": 2, "rejected_10m": 1, "rejected_10m_ip": 0}'::jsonb,
+  'counts attempts per e-mail and per IP in 1h and rejections in 10min, globally and per IP');
+SELECT is(
+  (public.record_checkout_attempt('ip-2', 'mail-9', 'rejected')->>'rejected_10m_ip')::int,
+  2, 'rejections per IP count the caller IP only');
 
 -- Old rows are purged by the RPC itself.
 INSERT INTO public.checkout_attempts (ip_hash, email_hash, outcome, created_at)

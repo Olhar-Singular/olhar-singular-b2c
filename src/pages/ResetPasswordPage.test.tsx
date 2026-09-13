@@ -163,7 +163,8 @@ describe("ResetPasswordPage", () => {
 
     await fillAndSubmit("novaSenha1");
     expect(supabase.auth.updateUser).toHaveBeenCalledWith({ password: "novaSenha1" });
-    expect(supabase.auth.signOut).not.toHaveBeenCalled();
+    // Other sessions die; this one stays.
+    expect(supabase.auth.signOut).toHaveBeenCalledWith({ scope: "others" });
     expect(toast.success).toHaveBeenCalledWith("Senha criada! Bem-vindo à plataforma.");
     expect(mockNavigate).toHaveBeenCalledWith("/dashboard", { replace: true });
   });

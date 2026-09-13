@@ -60,7 +60,9 @@ export default function ResetPasswordPage() {
         return;
       }
       if (invited) {
-        // First password of an invited account: straight into the app.
+        // First password of an invited account: straight into the app, but any
+        // other session opened with this account dies here.
+        await supabase.auth.signOut({ scope: "others" });
         toast.success("Senha criada! Bem-vindo à plataforma.");
         navigate("/dashboard", { replace: true });
         return;

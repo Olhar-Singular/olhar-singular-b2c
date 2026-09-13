@@ -130,10 +130,14 @@ export function interpretCardPayment(payment: MpPaymentLike): CardOutcome {
 }
 
 // For logs only: the card token and the payer block (e-mail, CPF) never reach
-// console output. Returns a shallow copy.
+// console output, whatever shape MP used (/v1/payments or /preapproval, whose
+// error bodies can echo the request). Returns a shallow copy.
+const SENSITIVE_KEYS = ["token", "payer", "payer_email", "card_token_id", "card", "external_reference_payer"];
+
 export function maskPayer<T extends Record<string, unknown>>(body: T): T {
   const masked: Record<string, unknown> = { ...body };
-  if ("token" in masked) masked.token = "[redacted]";
-  if ("payer" in masked) masked.payer = "[redacted]";
+  for (const key of SENSITIVE_KEYS) {
+    if (key in masked) masked[key] = "[redacted]";
+  }
   return masked as T;
 }

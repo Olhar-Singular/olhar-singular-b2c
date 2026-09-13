@@ -575,6 +575,17 @@ Cada fase deixa a suíte verde e o produto coerente ("estado ao final" entre par
 
 ## 8. Riscos e pendências
 
+- **Conta criada em nome de um e-mail alheio (decisões 12/13, apontado pela revisão de segurança
+  da Fase 4).** Quem paga com o próprio cartão pode digitar um e-mail que não é seu: a conta nasce
+  confirmada e a sessão é entregue pelo `sessionTokenHash`. O dono desse e-mail só descobre ao
+  tentar assinar (`409 email_exists`) e recupera a conta por "Esqueci minha senha" (a recuperação
+  encerra todas as sessões; o convite encerra as outras). Custo para o atacante: pagar um plano.
+  Mitigações já no código: cartão recusado nunca dá sessão, e-mail digitado duas vezes, admin pode
+  corrigir e-mail. **Decisão em aberto para o dono:** manter (fricção zero, risco aceito) ou trocar
+  a entrega do token pelo link por e-mail (`signInWithOtp`) também no caminho aprovado, que prova a
+  posse do e-mail ao custo de um passo a mais depois do pagamento. A troca é uma linha em
+  `accountProvision.ts` (não gerar o `sessionTokenHash`) mais a copy da tela.
+
 - Preço dos extras vs. plano (decisão 3): o avulso de R$59,90 rende mais crédito que o plano do
   mesmo valor. Tabela permite ajustar sem código.
 - `sandbox_mode: true` na aplicação de produção do MP: conferir no painel antes do smoke.

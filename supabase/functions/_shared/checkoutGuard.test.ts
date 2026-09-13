@@ -39,12 +39,15 @@ describe("isValidEmail", () => {
 describe("clientIp", () => {
   const headers = (map: Record<string, string>) => ({ get: (n: string) => map[n.toLowerCase()] ?? null });
 
-  it("takes the first hop of x-forwarded-for", () => {
-    expect(clientIp(headers({ "x-forwarded-for": "203.0.113.9, 10.0.0.1" }))).toBe("203.0.113.9");
+  it("takes the LAST hop of x-forwarded-for (the one the gateway appended), ignoring forged prefixes", () => {
+    expect(clientIp(headers({ "x-forwarded-for": "1.2.3.4, 203.0.113.9" }))).toBe("203.0.113.9");
+    expect(clientIp(headers({ "x-forwarded-for": "203.0.113.9" }))).toBe("203.0.113.9");
+    expect(clientIp(headers({ "x-forwarded-for": "203.0.113.9, " }))).toBe("203.0.113.9");
   });
 
-  it("falls back to cf-connecting-ip, x-real-ip, then unknown", () => {
-    expect(clientIp(headers({ "x-forwarded-for": " ", "cf-connecting-ip": "1.1.1.1" }))).toBe("1.1.1.1");
+  it("prefers cf-connecting-ip, then falls back to x-real-ip, then unknown", () => {
+    expect(clientIp(headers({ "x-forwarded-for": "9.9.9.9", "cf-connecting-ip": " 1.1.1.1 " }))).toBe("1.1.1.1");
+    expect(clientIp(headers({ "x-forwarded-for": " , " }))).toBe("unknown");
     expect(clientIp(headers({ "x-real-ip": "2.2.2.2" }))).toBe("2.2.2.2");
     expect(clientIp(headers({}))).toBe("unknown");
   });
@@ -60,8 +63,9 @@ describe("hashIdentifier", () => {
 });
 
 describe("decideCheckoutAccess", () => {
-  it("allows under the limits (the counts include the current attempt)", () => {
-    expect(decideCheckoutAccess({ by_email_1h: 5, by_ip_1h: 10, rejected_10m: 20 })).toEqual({ allowed: true });
+  it("allows under the limits (the attempt counts include the current attempt)", () => {
+    expect(decideCheckoutAccess({ by_email_1h: 5, by_ip_1h: 10, rejected_10m: 99, rejected_10m_ip: 2 })).toEqual({ allowed: true });
+    expect(decideCheckoutAccess({ by_email_1h: 1, by_ip_1h: 1, rejected_10m: 0 })).toEqual({ allowed: true });
   });
 
   it("rate-limits per e-mail or per IP", () => {
@@ -69,8 +73,11 @@ describe("decideCheckoutAccess", () => {
     expect(decideCheckoutAccess({ by_email_1h: 1, by_ip_1h: 11, rejected_10m: 0 })).toEqual({ allowed: false, reason: "rate_limited", httpStatus: 429 });
   });
 
-  it("opens the circuit on a rejection storm, before the per-user limits", () => {
-    expect(decideCheckoutAccess({ by_email_1h: 99, by_ip_1h: 0, rejected_10m: 21 })).toEqual({ allowed: false, reason: "circuit_open", httpStatus: 503 });
+  it("opens the circuit for an IP with a few declines, and globally only on a real storm", () => {
+    expect(decideCheckoutAccess({ by_email_1h: 1, by_ip_1h: 1, rejected_10m: 3, rejected_10m_ip: 3 })).toEqual({ allowed: false, reason: "circuit_open", httpStatus: 503 });
+    expect(decideCheckoutAccess({ by_email_1h: 99, by_ip_1h: 0, rejected_10m: 100, rejected_10m_ip: 0 })).toEqual({ allowed: false, reason: "circuit_open", httpStatus: 503 });
+    // Twenty declines spread over other IPs no longer take the funnel down.
+    expect(decideCheckoutAccess({ by_email_1h: 1, by_ip_1h: 1, rejected_10m: 25, rejected_10m_ip: 0 })).toEqual({ allowed: true });
   });
 
   it("honours custom limits", () => {

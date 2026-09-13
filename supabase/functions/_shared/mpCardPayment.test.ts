@@ -177,6 +177,11 @@ describe("maskPayer", () => {
     expect(masked.transaction_amount).toBe(29.9);
   });
 
+  it("also redacts the preapproval field names", () => {
+    const masked = maskPayer({ payer_email: "a@b.c", card_token_id: "tok", card: { last_four: "1" }, status: 400 });
+    expect(masked).toEqual({ payer_email: "[redacted]", card_token_id: "[redacted]", card: "[redacted]", status: 400 });
+  });
+
   it("does not mutate the original object", () => {
     const original = { token: "t", payer: { email: "e" }, other: 1 };
     const masked = maskPayer(original);

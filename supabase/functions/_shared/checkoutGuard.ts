@@ -24,14 +24,19 @@ export function isValidEmail(value: string): boolean {
   return value.length <= 254 && EMAIL_RE.test(value);
 }
 
-// First hop of x-forwarded-for is the client (the gateway appends its own).
+// The LAST hop of x-forwarded-for: the gateway in front of the function
+// appends the address it saw, while anything a direct caller puts in the
+// header (a forged first hop) sits before it. cf-connecting-ip, when present,
+// is set by the edge and wins.
 export function clientIp(headers: { get(name: string): string | null }): string {
+  const cf = headers.get("cf-connecting-ip");
+  if (cf) return cf.trim();
   const forwarded = headers.get("x-forwarded-for");
   if (forwarded) {
-    const first = forwarded.split(",")[0].trim();
-    if (first) return first;
+    const hops = forwarded.split(",").map((h) => h.trim()).filter(Boolean);
+    if (hops.length > 0) return hops[hops.length - 1];
   }
-  return headers.get("cf-connecting-ip") ?? headers.get("x-real-ip") ?? "unknown";
+  return headers.get("x-real-ip") ?? "unknown";
 }
 
 // HMAC-SHA256 hex over WebCrypto (available in Deno and in Node/jsdom).
@@ -51,19 +56,26 @@ export async function hashIdentifier(value: string, secret: string): Promise<str
 export interface AttemptCounts {
   by_email_1h: number;
   by_ip_1h: number;
+  /** Rejections across everyone in the last 10 minutes (card-testing storm). */
   rejected_10m: number;
+  /** Rejections from this IP in the last 10 minutes (absent on older RPCs). */
+  rejected_10m_ip?: number;
 }
 
 export interface CheckoutLimits {
   perEmailPerHour: number;
   perIpPerHour: number;
+  /** Per-IP: a few declines and that IP is out for 10 minutes. */
+  rejectionsPer10MinPerIp: number;
+  /** Global ceiling, high enough that one attacker cannot trip it alone. */
   rejectionsPer10Min: number;
 }
 
 export const DEFAULT_LIMITS: CheckoutLimits = {
   perEmailPerHour: 5,
   perIpPerHour: 10,
-  rejectionsPer10Min: 20,
+  rejectionsPer10MinPerIp: 3,
+  rejectionsPer10Min: 100,
 };
 
 export type CheckoutAccess =
@@ -71,10 +83,11 @@ export type CheckoutAccess =
   | { allowed: false; reason: "rate_limited"; httpStatus: 429 }
   | { allowed: false; reason: "circuit_open"; httpStatus: 503 };
 
-// The counts already include the attempt being decided (the RPC inserts before
-// counting), hence the strict "greater than" comparisons.
+// The attempt counts already include the attempt being decided (the RPC
+// inserts before counting), hence the strict "greater than" on those; the
+// rejection counts do not include it (it has not been decided yet).
 export function decideCheckoutAccess(counts: AttemptCounts, limits: CheckoutLimits = DEFAULT_LIMITS): CheckoutAccess {
-  if (counts.rejected_10m > limits.rejectionsPer10Min) {
+  if ((counts.rejected_10m_ip ?? 0) >= limits.rejectionsPer10MinPerIp || counts.rejected_10m >= limits.rejectionsPer10Min) {
     return { allowed: false, reason: "circuit_open", httpStatus: 503 };
   }
   if (counts.by_email_1h > limits.perEmailPerHour || counts.by_ip_1h > limits.perIpPerHour) {

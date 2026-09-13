@@ -140,7 +140,7 @@ describe("runAnonymousCheckout", () => {
     expect(limited.recordAttempt).toHaveBeenLastCalledWith(expect.any(String), expect.any(String), "refused");
     expect(limited.createUser).not.toHaveBeenCalled();
 
-    const storm = deps({ recordAttempt: vi.fn(async () => ({ by_email_1h: 1, by_ip_1h: 1, rejected_10m: 25 })) });
+    const storm = deps({ recordAttempt: vi.fn(async () => ({ by_email_1h: 1, by_ip_1h: 1, rejected_10m: 1, rejected_10m_ip: 3 })) });
     expect(await runAnonymousCheckout(anonymous(), storm)).toEqual({ ok: false, error: "circuit_open", httpStatus: 503 });
     expect(storm.subscribeDeps.postPreapproval).not.toHaveBeenCalled();
   });

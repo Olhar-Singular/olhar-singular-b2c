@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { parseCancelInput, parseSubscribeInput, parseUpdateCardInput } from "./subscribeInput";
+import { parseCancelInput, parseSubscribeInput, parseUpdateCardInput, sanitizeAttribution } from "./subscribeInput";
 
 const CARD = { token: "tok", payment_method_id: "visa", payer: { email: "a@b.c" } };
 
@@ -82,5 +82,30 @@ describe("parseCancelInput", () => {
     expect(parseCancelInput("x")).toEqual({ ok: false, error: "invalid_body" });
     expect(parseCancelInput({ userId: "someone" })).toEqual({ ok: false, error: "invalid_body" });
     expect(parseCancelInput({ userId: 12 })).toEqual({ ok: false, error: "invalid_body" });
+  });
+});
+
+describe("sanitizeAttribution", () => {
+  it("keeps scalars, truncates strings and drops nested junk", () => {
+    expect(sanitizeAttribution({ utm_source: "meta", landing_path: "/", n: 1, flag: true, nested: { a: 1 }, long: "x".repeat(300) })).toEqual({
+      utm_source: "meta", landing_path: "/", n: 1, flag: true, long: "x".repeat(200),
+    });
+  });
+
+  it("accepts a consent block only when it is exactly the four flags with granted|denied", () => {
+    const good = { analytics_storage: "granted", ad_storage: "denied", ad_user_data: "denied", ad_personalization: "denied" };
+    expect(sanitizeAttribution({ consent: good })).toEqual({ consent: good });
+    expect(sanitizeAttribution({ consent: { ...good, ad_user_data: "yes" } })).toEqual({});
+    expect(sanitizeAttribution({ consent: { analytics_storage: "granted" } })).toEqual({});
+    expect(sanitizeAttribution({ consent: "granted" })).toEqual({});
+    expect(sanitizeAttribution({ consent: null })).toEqual({});
+  });
+
+  it("returns undefined for non-objects and caps the number of keys", () => {
+    expect(sanitizeAttribution(null)).toBeUndefined();
+    expect(sanitizeAttribution([1])).toBeUndefined();
+    expect(sanitizeAttribution("x")).toBeUndefined();
+    const many = Object.fromEntries(Array.from({ length: 30 }, (_, i) => [`k${i}`, "v"]));
+    expect(Object.keys(sanitizeAttribution(many)!)).toHaveLength(20);
   });
 });

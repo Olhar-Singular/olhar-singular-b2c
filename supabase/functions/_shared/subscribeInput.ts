@@ -15,6 +15,34 @@ export type SubscribeRequest =
 
 const SLUG_RE = /^[a-z0-9-]{1,40}$/;
 const LAST_FOUR_RE = /^[0-9]{4}$/;
+const CONSENT_KEYS = ["analytics_storage", "ad_storage", "ad_user_data", "ad_personalization"];
+const ATTRIBUTION_MAX_KEYS = 20;
+
+// Attribution is client-asserted (utm, referrer, consent flags). Keep it small
+// and shaped: only scalar fields, and a consent block that is exactly the four
+// Consent Mode flags with granted|denied, otherwise the block is dropped (a
+// scripted caller cannot smuggle "granted" as anything but a boolean-ish flag).
+export function sanitizeAttribution(value: unknown): Record<string, unknown> | undefined {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) return undefined;
+  const out: Record<string, unknown> = {};
+  for (const [key, raw] of Object.entries(value as Record<string, unknown>).slice(0, ATTRIBUTION_MAX_KEYS)) {
+    if (key === "consent") {
+      if (typeof raw !== "object" || raw === null) continue;
+      const consent: Record<string, string> = {};
+      const ok = CONSENT_KEYS.every((k) => {
+        const v = (raw as Record<string, unknown>)[k];
+        if (v !== "granted" && v !== "denied") return false;
+        consent[k] = v;
+        return true;
+      });
+      if (ok) out.consent = consent;
+      continue;
+    }
+    if (typeof raw === "string") out[key] = raw.slice(0, 200);
+    else if (typeof raw === "number" || typeof raw === "boolean") out[key] = raw;
+  }
+  return out;
+}
 
 export function parseSubscribeInput(body: unknown): SubscribeRequest {
   if (typeof body !== "object" || body === null) return { ok: false, error: "invalid_body" };
@@ -30,10 +58,7 @@ export function parseSubscribeInput(body: unknown): SubscribeRequest {
     planSlug,
     card: parsed.card,
     cardLastFour: typeof cardLastFour === "string" && LAST_FOUR_RE.test(cardLastFour) ? cardLastFour : null,
-    attribution:
-      typeof attribution === "object" && attribution !== null && !Array.isArray(attribution)
-        ? (attribution as Record<string, unknown>)
-        : undefined,
+    attribution: sanitizeAttribution(attribution),
   };
 }
 
