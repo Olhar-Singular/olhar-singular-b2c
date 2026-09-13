@@ -24,7 +24,8 @@ help:
 	@echo "    make lint               ESLint"
 	@echo "    make test               Vitest (single run)"
 	@echo "    make test-watch         Vitest (watch mode)"
-	@echo "    make typecheck          TypeScript check"
+	@echo "    make typecheck          TypeScript check (project references; checa pouco)"
+	@echo "    make typecheck-app      TypeScript check real do app (advisory, erros pré-existentes)"
 	@echo ""
 	@echo "  Supabase Local (roda no host via CLI)"
 	@echo "    make sb-start           Subir Supabase local (todos os serviços)"
@@ -117,6 +118,13 @@ test-watch:
 .PHONY: typecheck
 typecheck:
 	$(EXEC) npm run typecheck
+
+# Type-check REAL do app (o `typecheck` acima resolve para files:[] e não checa
+# nada). Advisory: há erros pré-existentes (vi.fn sem generics em testes,
+# núcleo do Adaptar); acompanhe a contagem, não deixe subir.
+.PHONY: typecheck-app
+typecheck-app:
+	$(EXEC) sh -c 'npm run typecheck:app 2>&1 | tail -n 5; true' 
 
 # ─────────────────────────────────────────────
 #  SUPABASE — LOCAL (roda no host)

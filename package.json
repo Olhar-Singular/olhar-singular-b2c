@@ -15,6 +15,7 @@
     "test:db": "supabase test db",
     "test:pdf-smoke": "node scripts/pdf-font-smoke.mjs",
     "typecheck": "tsc --noEmit",
+    "typecheck:app": "tsc --noEmit -p tsconfig.app.json",
     "prepare": "husky"
   },
   "lint-staged": {

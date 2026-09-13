@@ -512,22 +512,39 @@ CAPI (`event_name`, `event_id`, `user_data` com e-mail SHA-256, `custom_data` co
    Assinaturas (`subscription_preapproval`) e Pagamentos de assinatura
    (`subscription_authorized_payment`); atualizar `VERIFY_TOKEN_MP_PROD` se o segredo mudar.
 2. Supabase secrets: `supabase secrets set APP_URL=https://professor.olharsingular.com
-   VITE_MP_PUBLIC_KEY=... GA4_MEASUREMENT_ID=... GA4_API_SECRET=... META_PIXEL_ID=...
-   META_CAPI_TOKEN=... --project-ref ztngcyflcxgvohtdlbhq`; `supabase secrets unset
-   STRIPE_SECRET_KEY STRIPE_WEBHOOK_SECRET ACCESS_TOKEN_MP`.
+   CHECKOUT_HASH_SECRET=<aleatório longo> GA4_MEASUREMENT_ID=... GA4_API_SECRET=... META_PIXEL_ID=...
+   META_CAPI_TOKEN=... --project-ref ztngcyflcxgvohtdlbhq` (os de analytics podem esperar os IDs:
+   sem eles as functions não enviam nada); `supabase secrets unset STRIPE_SECRET_KEY
+   STRIPE_WEBHOOK_SECRET ACCESS_TOKEN_MP`.
 3. `create extension if not exists pg_cron;` no projeto e reexecutar o bloco DO da migration de
    reservas (reconciliação a cada 15 min).
-4. Auth remoto (Management API, PATCH cirúrgico, nunca `config push`): `disable_signup = true`.
+4. Auth remoto (Management API, PATCH cirúrgico, nunca `config push`): `disable_signup = true`;
+   `uri_allow_list` com `https://professor.olharsingular.com/redefinir-senha`,
+   `.../redefinir-senha?convite=1`, `.../definir-senha`, `.../dashboard`; templates de e-mail
+   **Invite user** (`supabase/templates/invite.html`, assunto "Seu convite para o Olhar Singular")
+   e **Magic Link** (não é enviado no fluxo normal: o `subscribe` gera o link no servidor; só o
+   `signInWithOtp` do cartão recusado envia). Conferir que `mailer_otp_exp` cobre o tempo do
+   checkout (padrão 1h serve).
 5. GitHub: `gh secret set VITE_MP_PUBLIC_KEY` e `VITE_GTM_ID`; Vercel: mesmas vars em Production e
-   Preview.
+   Preview. `subscribe` precisa de `verify_jwt = false` no remoto (o CI faz deploy lendo o
+   `config.toml`; conferir no Dashboard após o 1º deploy).
 6. Merge em `main` **backend antes do front**: `supabase/**` primeiro (db push + functions),
    confirmar `subscribe`/`create-card-payment`/`mp-webhook` no ar, depois o front (Vercel).
 7. Remover do remoto: `supabase functions delete create-stripe-checkout`, `stripe-webhook`,
    `check-and-deduct-credits`, `regenerate-question`. Stripe Dashboard: exportar histórico, revogar
    Secret key, conferir o pagamento live não creditado.
-8. Validar num Preview do Vercel: Brick renderiza (CSP), GTM carrega, banner de consentimento.
+8. Validar num Preview do Vercel: Brick renderiza (CSP), GTM carrega fora de `/assinar` e
+   `/definir-senha` (Network tab), banner de consentimento, `/termos`, `/privacidade`, `/reembolso`.
 9. Smoke em produção com super-admin: pacote R$1 no cartão e no Pix; plano de teste R$1/mês →
-   ativa, webhook renova (aguardar 1ª parcela), cancelar pelo app.
+   ativa, webhook renova (aguardar 1ª parcela), cancelar pelo app. Depois, funil anônimo com um
+   e-mail real e o plano de teste (super-admin não é anônimo: usar um e-mail novo, cartão real,
+   R$1): conta criada, `/definir-senha`, assinatura ativa; conferir `admin_actions` e
+   `checkout_attempts` sem e-mail em claro.
+10. Admin: convidar um usuário Trial e um Cortesia e aceitar os convites (`/redefinir-senha?convite=1`
+   com "Crie sua senha"); conferir o relógio do trial começando no aceite.
+11. Pendências conhecidas: `make typecheck-app` (type-check real) tem 265 erros pré-existentes
+   (testes com `vi.fn()` sem generics e o núcleo do Adaptar); `make fn-check` tem 8, todos em
+   `src/lib/adaptation/canonical/*`. Nenhum em pagamentos. Torná-los bloqueantes é tarefa própria.
 
 ## 7. Fases de implementação (cada uma = commits próprios na branch `redesign/assinatura-mp`)
 

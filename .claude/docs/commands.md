@@ -20,7 +20,8 @@ make build               # Build produção
 make lint                # ESLint
 make test                # Vitest (single run)
 make test-watch          # Vitest (watch mode)
-make typecheck           # TypeScript check
+make typecheck           # TypeScript check (project references: checa pouco)
+make typecheck-app       # TypeScript check real do app (advisory, erros pré-existentes)
 ```
 
 ## Supabase

@@ -88,7 +88,7 @@ export default function SubscribePage() {
       planSlug: plan.slug,
       card,
       ...(anonymous && account ? { account: { ...account, termsVersion: TERMS_VERSION } } : {}),
-      ...(attribution ? { attribution } : {}),
+      ...(attribution ? { attribution: attribution as Record<string, unknown> } : {}),
     });
     if (result.status !== "rejected") trackSubscriptionStarted(plan, result.subscriptionId, result.status);
 
