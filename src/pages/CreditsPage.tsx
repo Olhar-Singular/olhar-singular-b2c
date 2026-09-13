@@ -72,7 +72,7 @@ export default function CreditsPage() {
             <div>
               <p className="text-sm text-muted-foreground">Seu saldo atual</p>
               <p className="text-4xl font-bold text-foreground tabular-nums">
-                {access ? access.total : "—"}
+                {access ? access.total : "..."}
               </p>
               <p className="text-xs text-muted-foreground mt-0.5">
                 {access?.unlimited ? "conta com cortesia: sem débito" : "créditos disponíveis"}

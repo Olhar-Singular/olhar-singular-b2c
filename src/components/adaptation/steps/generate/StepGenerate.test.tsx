@@ -315,7 +315,8 @@ describe("StepGenerate", () => {
       <StepGenerate data={baseData} onResult={vi.fn()} onNext={vi.fn()} onPrev={vi.fn()} />,
     );
     await waitFor(() => expect(screen.getByText(/Seus créditos acabaram/i)).toBeInTheDocument());
-    expect(screen.getByRole("link", { name: /Comprar créditos/i })).toHaveAttribute("href", "/creditos");
+    expect(screen.getByRole("link", { name: /Comprar créditos extras/i })).toHaveAttribute("href", "/creditos");
+    expect(screen.getByRole("link", { name: /^Assinar$/ })).toHaveAttribute("href", "/assinar");
   });
 
   it("returns to the previous step from the credit-error screen", async () => {

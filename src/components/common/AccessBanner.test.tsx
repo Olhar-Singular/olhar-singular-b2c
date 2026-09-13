@@ -84,7 +84,8 @@ describe("AccessBanner", () => {
   it("shows the paywall line when the credits ran out (extras included)", () => {
     renderBanner(access({ kind: "legacy", paywalled: true }));
     expect(screen.getByRole("status")).toHaveTextContent(/seus créditos acabaram/i);
-    expect(screen.getByRole("link", { name: /comprar créditos/i })).toHaveAttribute("href", "/creditos");
+    expect(screen.getByRole("link", { name: /comprar créditos extras/i })).toHaveAttribute("href", "/creditos");
+    expect(screen.getByRole("link", { name: /^Assinar$/ })).toHaveAttribute("href", "/assinar");
   });
 
   it("shows the paywall line, not the trial line, for an expired trial that still has extras... none", () => {

@@ -288,7 +288,8 @@ describe("StepBarrierSelection", () => {
       barriers: [{ dimension: "tea", barrier_key: "tea_abstracao", label: "TEA", is_active: true }],
     });
     expect(screen.getByText(/Seus créditos acabaram/i)).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: /Comprar créditos/i })).toHaveAttribute("href", "/creditos");
+    expect(screen.getByRole("link", { name: /comprar créditos extras/i })).toHaveAttribute("href", "/creditos");
+    expect(screen.getByRole("link", { name: /^Assinar$/ })).toHaveAttribute("href", "/assinar");
   });
 
   it("shows credit cost badge when barriers exist and the account pays", () => {

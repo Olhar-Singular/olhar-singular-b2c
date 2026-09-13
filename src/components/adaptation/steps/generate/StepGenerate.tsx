@@ -322,7 +322,10 @@ export function StepGenerate({ data, onResult, onNext, onPrev, onLoadingChange, 
         <p className="text-destructive font-medium">{creditError}</p>
         <div className="flex gap-2">
           <Button asChild>
-            <Link to="/creditos">Comprar créditos</Link>
+            <Link to="/assinar">Assinar</Link>
+          </Button>
+          <Button asChild variant="outline">
+            <Link to="/creditos">Comprar créditos extras</Link>
           </Button>
           {onRestorePrevious && (
             <Button variant="outline" onClick={onRestorePrevious}>Voltar para a adaptação atual</Button>

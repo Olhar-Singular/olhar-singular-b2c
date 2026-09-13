@@ -163,7 +163,7 @@ describe("CreditsPage", () => {
     const auth = await import("@/hooks/useAuth");
     vi.mocked(auth.useAuth).mockReturnValue({ profile: null } as never);
     renderPage();
-    expect(screen.getByText("—")).toBeInTheDocument();
+    expect(screen.getByText("...")).toBeInTheDocument();
   });
 
   it("renders the packages from the catalogue with their prices", () => {

@@ -115,8 +115,11 @@ export function AccessBanner({ access, subscription, now = new Date() }: Props) 
       >
         <Coins className="w-4 h-4 shrink-0" aria-hidden="true" />
         <span>Seus créditos acabaram. Adaptar, extrair e conversar com a ISA ficam pausados.</span>
+        <Link to="/assinar" className="font-medium underline">
+          Assinar
+        </Link>
         <Link to="/creditos" className="font-medium underline">
-          Comprar créditos
+          Comprar créditos extras
         </Link>
       </div>
     );

@@ -196,7 +196,9 @@ export function StepBarrierSelection({ data, updateData, onNext, onPrev }: Props
               {!affordable && (
                 <span className="block mt-1">
                   Seus créditos acabaram.{" "}
-                  <Link to="/creditos" className="underline font-medium">Comprar créditos</Link>
+                  <Link to="/assinar" className="underline font-medium">Assinar</Link>
+                  {" ou "}
+                  <Link to="/creditos" className="underline font-medium">comprar créditos extras</Link>
                 </span>
               )}
             </p>
