@@ -127,4 +127,33 @@ describe("MpCardBrick", () => {
     expect(screen.queryByTestId("card-brick")).toBeNull();
     expect(initMercadoPago).not.toHaveBeenCalled();
   });
+
+  // The SDK re-creates the Brick whenever a prop changes identity: a parent
+  // re-render must not hand it new objects or functions.
+  it("keeps initialization, customization and callbacks stable across parent re-renders", async () => {
+    const user = userEvent.setup();
+    const first = vi.fn(async () => undefined);
+    const second = vi.fn(async () => undefined);
+    const { rerender } = render(<MpCardBrick amount={29.9} payerEmail="a@b.c" onSubmit={first} onError={() => undefined} />);
+    rerender(<MpCardBrick amount={29.9} payerEmail="a@b.c" onSubmit={second} onError={() => undefined} />);
+
+    const [a, b] = cardPaymentProps.mock.calls.map((c) => c[0]);
+    expect(b.initialization).toBe(a.initialization);
+    expect(b.customization).toBe(a.customization);
+    expect(b.onSubmit).toBe(a.onSubmit);
+    expect(b.onError).toBe(a.onError);
+
+    // ...while the latest handler is the one that runs.
+    await user.click(screen.getByRole("button", { name: "Pagar" }));
+    expect(first).not.toHaveBeenCalled();
+    expect(second).toHaveBeenCalledWith(expect.objectContaining({ token: "tok_1" }));
+  });
+
+  it("re-initializes only when the amount or payer changes", () => {
+    const { rerender } = render(<MpCardBrick amount={29.9} payerEmail="a@b.c" onSubmit={async () => undefined} />);
+    rerender(<MpCardBrick amount={59.9} payerEmail="a@b.c" onSubmit={async () => undefined} />);
+    const [a, b] = cardPaymentProps.mock.calls.map((c) => c[0]);
+    expect(b.initialization).not.toBe(a.initialization);
+    expect(b.initialization.amount).toBe(59.9);
+  });
 });

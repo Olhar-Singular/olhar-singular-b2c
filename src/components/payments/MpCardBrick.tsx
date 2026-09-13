@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from "react";
+import { useCallback, useEffect, useMemo, useRef } from "react";
 import { CardPayment } from "@mercadopago/sdk-react";
 import { ensureMercadoPago, readMpPublicKey } from "@/lib/payments/mpInit";
 import type { CardFormDataView } from "@/hooks/useCredits";
@@ -13,9 +13,18 @@ export interface MpCardBrickProps {
   onError?: (message: string) => void;
 }
 
+// Instalments pinned to 1. Module-level so its identity never changes.
+const CUSTOMIZATION = { paymentMethods: { maxInstallments: 1 } };
+
 // Thin wrapper over @mercadopago/sdk-react's Card Payment Brick: the card is
 // tokenized inside the MP iframe (we never see the PAN, PCI SAQ-A), instalments
 // are pinned to 1, and only the fields the backend accepts are forwarded.
+//
+// The SDK's <CardPayment> unmounts and re-creates the Brick whenever ANY prop
+// changes identity (its effect depends on initialization, customization and
+// every callback). A parent re-render with fresh arrow functions therefore
+// wiped the form the user was typing in. Everything handed to it here is
+// stable: the callbacks read the latest props through refs.
 export default function MpCardBrick({ amount, payerEmail, onSubmit, onError }: MpCardBrickProps) {
   const publicKey = readMpPublicKey();
 
@@ -27,6 +36,26 @@ export default function MpCardBrick({ amount, payerEmail, onSubmit, onError }: M
     () => ({ amount, ...(payerEmail ? { payer: { email: payerEmail } } : {}) }),
     [amount, payerEmail],
   );
+
+  const onSubmitRef = useRef(onSubmit);
+  const onErrorRef = useRef(onError);
+  useEffect(() => {
+    onSubmitRef.current = onSubmit;
+    onErrorRef.current = onError;
+  });
+
+  const handleSubmit = useCallback(
+    (formData: { token: string; payment_method_id: string; issuer_id?: string; installments?: number; payer?: CardFormDataView["payer"] }) =>
+      onSubmitRef.current({
+        token: formData.token,
+        payment_method_id: formData.payment_method_id,
+        issuer_id: formData.issuer_id,
+        installments: formData.installments,
+        payer: formData.payer,
+      }),
+    [],
+  );
+  const handleError = useCallback((error: { message: string }) => onErrorRef.current?.(error.message), []);
 
   if (!publicKey) {
     // Misconfiguration must be visible on the checkout, never a broken build.
@@ -43,17 +72,9 @@ export default function MpCardBrick({ amount, payerEmail, onSubmit, onError }: M
       key={`${amount}-${payerEmail ?? ""}`}
       locale="pt-BR"
       initialization={initialization}
-      customization={{ paymentMethods: { maxInstallments: 1 } }}
-      onSubmit={async (formData) =>
-        onSubmit({
-          token: formData.token,
-          payment_method_id: formData.payment_method_id,
-          issuer_id: formData.issuer_id,
-          installments: formData.installments,
-          payer: formData.payer,
-        })
-      }
-      onError={(error) => onError?.(error.message)}
+      customization={CUSTOMIZATION}
+      onSubmit={handleSubmit}
+      onError={handleError}
     />
   );
 }
