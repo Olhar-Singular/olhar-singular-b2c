@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link, useNavigate, useSearchParams } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { CheckCircle2, Loader2, Mail, Sparkles, XCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -21,19 +21,19 @@ type Stage =
   | { kind: "authorized"; plan: PlanView }
   | { kind: "pending" }
   | { kind: "rejected"; message: string }
-  /** Anonymous funnel: the account exists but the card was refused; login goes by e-mail. */
-  | { kind: "rejected_new_account"; message: string; email: string; mailSent: boolean };
+  /** Anonymous funnel: the account exists; the buyer enters through the e-mail link. */
+  | { kind: "new_account"; tone: "success" | "pending" | "rejected"; message: string; email: string; mailSent: boolean };
 
 const GENERIC_REJECTION = "O cartão não foi aceito para a assinatura. Tente outro cartão.";
 
 // Choose a plan, tokenize the card in the Brick, and let the subscribe function
 // activate it on the spot. Logged in: only the card. Anonymous (pay first):
-// name + e-mail + terms, the account is born from the payment, the session
-// arrives as a one-shot magic-link token and the user lands on /definir-senha.
+// name + e-mail + terms, the account is born from the payment and the buyer
+// enters through the login link sent to that e-mail (proof of ownership), then
+// lands on /definir-senha.
 export default function SubscribePage() {
   const { user, session } = useAuth();
   const access = useAccess();
-  const navigate = useNavigate();
   const [params] = useSearchParams();
   const { data: plans = [], isLoading: loadingPlans } = usePlans();
   const { data: subscription } = useSubscription();
@@ -68,15 +68,16 @@ export default function SubscribePage() {
     if (brickVisible && selected) trackBeginCheckout(selected);
   }, [brickVisible, selected]);
 
-  // The session token is consumed right here and never stored: verifyOtp turns
-  // it into a real session, then the first-access password screen takes over.
-  async function openSession(tokenHash: string): Promise<boolean> {
-    const { error } = await supabase.auth.verifyOtp({ token_hash: tokenHash, type: "magiclink" });
-    if (error) {
-      console.error("SubscribePage: verifyOtp failed", error.message);
-      return false;
-    }
-    return true;
+  // A new account never gets a session from the checkout: the login link goes
+  // to the e-mail (proof of ownership) and lands on the first-access password
+  // screen. Whatever the card said, the copy differs, the mechanics do not.
+  async function sendLoginLink(email: string): Promise<boolean> {
+    const { error } = await supabase.auth.signInWithOtp({
+      email,
+      options: { emailRedirectTo: `${window.location.origin}/definir-senha`, shouldCreateUser: false },
+    });
+    if (error) console.error("SubscribePage: signInWithOtp failed", error.message);
+    return !error;
   }
 
   // A rejected promise hands the failure back to the Brick, which re-enables
@@ -92,35 +93,23 @@ export default function SubscribePage() {
     });
     if (result.status !== "rejected") trackSubscriptionStarted(plan, result.subscriptionId, result.status);
 
-    if (result.status === "rejected") {
-      const message = result.message ?? GENERIC_REJECTION;
-      if (result.accountCreated && account) {
-        // Decision 14: the account stays; decision from the review: no session
-        // without a payment, so the login link goes by e-mail (proof of ownership).
-        const { error } = await supabase.auth.signInWithOtp({ email: account.email });
-        setStage({ kind: "rejected_new_account", message, email: account.email, mailSent: !error });
-      } else {
-        setStage({ kind: "rejected", message });
-      }
+    if (result.accountCreated) {
+      // accountCreated only happens in the anonymous flow, so the account
+      // block is always present here (decision 14: the account stays even
+      // when the card was refused).
+      const email = account!.email;
+      const mailSent = await sendLoginLink(email);
+      const tone = result.status === "authorized" ? "success" : result.status === "pending" ? "pending" : "rejected";
+      const message =
+        tone === "success" ? `Assinatura ativa! ${plan.monthlyCredits} créditos já estão na sua conta.`
+        : tone === "pending" ? "Assinatura em análise. Seus créditos entram assim que o cartão for confirmado."
+        : (result.message ?? GENERIC_REJECTION);
+      setStage({ kind: "new_account", tone, message, email, mailSent });
       return;
     }
 
-    if (result.sessionTokenHash && (await openSession(result.sessionTokenHash))) {
-      navigate("/definir-senha", { replace: true });
-      return;
-    }
-    if (result.accountCreated) {
-      // Paid, account created, but no session could be opened: log in by
-      // e-mail. accountCreated only happens in the anonymous flow, so the
-      // account block is always present here.
-      const email = account!.email;
-      const { error } = await supabase.auth.signInWithOtp({ email });
-      setStage({
-        kind: "rejected_new_account",
-        message: "Pagamento aceito! Não conseguimos abrir sua sessão automaticamente.",
-        email,
-        mailSent: !error,
-      });
+    if (result.status === "rejected") {
+      setStage({ kind: "rejected", message: result.message ?? GENERIC_REJECTION });
       return;
     }
 
@@ -220,11 +209,23 @@ export default function SubscribePage() {
         </Card>
       )}
 
-      {stage.kind === "rejected_new_account" && (
-        <Card className="border-border">
+      {stage.kind === "new_account" && (
+        <Card className={stage.tone === "success" ? "border-green-600/30 bg-green-50" : stage.tone === "rejected" ? "border-destructive/30" : "border-border"}>
           <CardContent className="p-6 space-y-3">
-            <p role="status" aria-live="polite" className="flex items-center gap-2 text-sm text-destructive">
-              <XCircle className="w-4 h-4 shrink-0" aria-hidden="true" />
+            <p
+              role="status"
+              aria-live="polite"
+              className={`flex items-center gap-2 text-sm font-medium ${
+                stage.tone === "success" ? "text-green-700" : stage.tone === "rejected" ? "text-destructive" : "text-muted-foreground"
+              }`}
+            >
+              {stage.tone === "success" ? (
+                <CheckCircle2 className="w-5 h-5 shrink-0" aria-hidden="true" />
+              ) : stage.tone === "rejected" ? (
+                <XCircle className="w-4 h-4 shrink-0" aria-hidden="true" />
+              ) : (
+                <Loader2 className="w-4 h-4 shrink-0 animate-spin" aria-hidden="true" />
+              )}
               {stage.message}
             </p>
             <p className="flex items-start gap-2 text-sm text-muted-foreground">
@@ -232,8 +233,9 @@ export default function SubscribePage() {
               <span>
                 Sua conta foi criada com o e-mail <strong className="text-foreground">{stage.email}</strong>.{" "}
                 {stage.mailSent
-                  ? "Enviamos um link de acesso para ele: entre por lá e tente outro cartão em Créditos."
-                  : 'Não conseguimos enviar o link de acesso agora. Use "Esqueci minha senha" na tela de entrada para entrar e tentar outro cartão.'}
+                  ? "Enviamos um link de acesso para ele: abra o e-mail, clique no link e crie sua senha."
+                  : 'Não conseguimos enviar o link de acesso agora. Use "Esqueci minha senha" na tela de entrada para entrar.'}
+                {stage.tone === "rejected" && " Depois, tente outro cartão em Créditos."}
               </span>
             </p>
             <Link to="/auth">

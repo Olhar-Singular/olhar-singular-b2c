@@ -135,8 +135,6 @@ export interface SubscribeResult {
   message?: string;
   /** True when the checkout created the account (anonymous funnel). */
   accountCreated?: boolean;
-  /** Magic-link token hash, present only for a new account whose card was accepted. */
-  sessionTokenHash?: string;
 }
 
 /** Account block of the anonymous checkout. */
@@ -170,8 +168,8 @@ const SUBSCRIBE_FALLBACK = "Não foi possível concluir a assinatura. Tente nova
 
 // A declined card comes back as status "rejected" with a pt-BR message, not as
 // an error; business refusals (exempt, already subscribed, email_exists, rate
-// limit) are errors. Anonymous callers pass `account`; the page consumes the
-// sessionTokenHash right away (verifyOtp) and never stores it.
+// limit) are errors. Anonymous callers pass `account`; the page then asks for
+// the login link by e-mail (no session comes from the checkout).
 export function useSubscribe() {
   const refresh = useSubscriptionRefresh();
   return useMutation({

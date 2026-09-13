@@ -1,7 +1,8 @@
 // The anonymous checkout around runSubscribe: rate limit, account creation with
 // a random password, the subscription itself, and the post-payment writes (CPF,
-// terms, session token). All decisions here, dependencies injected, so the
-// "session only with a payment" rule is unit-tested.
+// terms). No session is ever handed back here: the buyer proves ownership of
+// the e-mail through the login link the client requests (signInWithOtp), which
+// is what stops someone from paying to open an account in a stranger's name.
 
 import { decideCheckoutAccess, extractCpf, isValidEmail, normalizeEmail, type AttemptCounts } from "./checkoutGuard.ts";
 import { runSubscribe, type SubscribeDeps, type SubscribeInput, type SubscribeResult } from "./subscribeFlow.ts";
@@ -56,13 +57,11 @@ export interface CheckoutDeps {
   createUser(input: { email: string; fullName: string }): Promise<{ id: string } | "exists">;
   /** Writes cpf (only when NULL) and the terms acceptance on the profile. */
   recordProfileFacts(input: { userId: string; cpf: string | null; termsVersion: string | null }): Promise<void>;
-  /** auth.admin.generateLink magiclink → hashed_token, or null on failure. */
-  generateSessionToken(email: string): Promise<string | null>;
   log(message: string, ...args: unknown[]): void;
 }
 
 export type CheckoutResult =
-  | { ok: true; result: Extract<SubscribeResult, { ok: true }>; userId: string; accountCreated: boolean; sessionTokenHash: string | null }
+  | { ok: true; result: Extract<SubscribeResult, { ok: true }>; userId: string; accountCreated: boolean }
   | { ok: false; error: "account_required" | "rate_limited" | "circuit_open" | "email_exists" | Extract<SubscribeResult, { ok: false }>["error"]; httpStatus: number };
 
 export async function runAnonymousCheckout(input: CheckoutInput, deps: CheckoutDeps): Promise<CheckoutResult> {
@@ -115,9 +114,8 @@ export async function runAnonymousCheckout(input: CheckoutInput, deps: CheckoutD
   await deps.recordAttempt(ipHash, emailHash, result.status);
 
   if (result.status === "rejected") {
-    // Never hand a session to someone who only proved they hold a card token:
-    // with a fresh account they log in through the e-mail link instead.
-    return { ok: true, result, userId, accountCreated, sessionTokenHash: null };
+    // The account (if just created) stays: decision 14.
+    return { ok: true, result, userId, accountCreated };
   }
 
   // Money (or a pending validation) happened: record the contractual facts.
@@ -127,11 +125,5 @@ export async function runAnonymousCheckout(input: CheckoutInput, deps: CheckoutD
     termsVersion: input.account?.termsVersion ?? null,
   });
 
-  let sessionTokenHash: string | null = null;
-  if (accountCreated) {
-    sessionTokenHash = await deps.generateSessionToken(email);
-    if (!sessionTokenHash) deps.log("checkout: magic link generation failed, buyer will log in by e-mail", userId);
-  }
-
-  return { ok: true, result, userId, accountCreated, sessionTokenHash };
+  return { ok: true, result, userId, accountCreated };
 }

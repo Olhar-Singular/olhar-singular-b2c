@@ -6,24 +6,17 @@ import SubscribePage from "./SubscribePage";
 import { pickInitialPlan, replacementNotice } from "@/lib/domain/subscriptionUi";
 import type { Access } from "@/lib/domain/access";
 
-const { mockSubscribe, brickProps, mockUsePlans, mockUseSubscription, mockVerifyOtp, mockSignInWithOtp, navigateSpy } = vi.hoisted(() => ({
+const { mockSubscribe, brickProps, mockUsePlans, mockUseSubscription, mockSignInWithOtp } = vi.hoisted(() => ({
   mockSubscribe: vi.fn(),
   brickProps: vi.fn(),
   mockUsePlans: vi.fn(),
   mockUseSubscription: vi.fn(),
-  mockVerifyOtp: vi.fn(),
   mockSignInWithOtp: vi.fn(),
-  navigateSpy: vi.fn(),
 }));
 
 vi.mock("@/integrations/supabase/client", () => ({
-  supabase: { auth: { verifyOtp: mockVerifyOtp, signInWithOtp: mockSignInWithOtp } },
+  supabase: { auth: { signInWithOtp: mockSignInWithOtp } },
 }));
-
-vi.mock("react-router-dom", async (orig) => {
-  const actual = await orig<typeof import("react-router-dom")>();
-  return { ...actual, useNavigate: () => navigateSpy };
-});
 
 const CARD = { token: "tok_1", payment_method_id: "master" };
 
@@ -279,7 +272,6 @@ describe("SubscribePage (anonymous funnel)", () => {
     vi.clearAllMocks();
     mockUsePlans.mockReturnValue({ data: PLANS, isLoading: false });
     mockUseSubscription.mockReturnValue({ data: undefined });
-    mockVerifyOtp.mockResolvedValue({ error: null });
     mockSignInWithOtp.mockResolvedValue({ error: null });
     await setAnonymous();
   });
@@ -306,24 +298,40 @@ describe("SubscribePage (anonymous funnel)", () => {
     expect(screen.queryByTestId("card-brick")).toBeNull();
   });
 
-  it("sends the account with the terms version, opens the session from the token and goes to /definir-senha", async () => {
+  it("sends the account with the terms version and, on an accepted card, mails the login link instead of opening a session", async () => {
     const user = userEvent.setup();
-    mockSubscribe.mockResolvedValue({ status: "authorized", subscriptionId: "sub-1", accountCreated: true, sessionTokenHash: "tok-hash" });
+    mockSubscribe.mockResolvedValue({ status: "authorized", subscriptionId: "sub-1", accountCreated: true });
     renderPage();
     await fillAccount(user);
     await user.click(screen.getByRole("button", { name: "Assinar agora" }));
 
-    await waitFor(() => expect(navigateSpy).toHaveBeenCalledWith("/definir-senha", { replace: true }));
+    await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent(/Assinatura ativa! 240 créditos/));
     expect(mockSubscribe).toHaveBeenCalledWith({
       planSlug: "profissional",
       card: CARD,
       account: { fullName: "Nova Pessoa", email: "nova@example.com", termsVersion: "2026-09" },
     });
-    expect(mockVerifyOtp).toHaveBeenCalledWith({ token_hash: "tok-hash", type: "magiclink" });
-    expect(mockSignInWithOtp).not.toHaveBeenCalled();
+    expect(mockSignInWithOtp).toHaveBeenCalledWith({
+      email: "nova@example.com",
+      options: { emailRedirectTo: `${window.location.origin}/definir-senha`, shouldCreateUser: false },
+    });
+    expect(screen.getByText(/Enviamos um link de acesso/)).toBeInTheDocument();
+    expect(screen.getByText(/crie sua senha/)).toBeInTheDocument();
+    expect(screen.queryByTestId("card-brick")).toBeNull();
+    expect(screen.queryByText(/tente outro cartão/)).toBeNull();
   });
 
-  it("on a refused card with a new account, sends the login link by e-mail and explains", async () => {
+  it("mails the login link on pending too, with the analysis copy", async () => {
+    const user = userEvent.setup();
+    mockSubscribe.mockResolvedValue({ status: "pending", subscriptionId: "sub-1", accountCreated: true });
+    renderPage();
+    await fillAccount(user);
+    await user.click(screen.getByRole("button", { name: "Assinar agora" }));
+    await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent(/em análise/));
+    expect(mockSignInWithOtp).toHaveBeenCalled();
+  });
+
+  it("on a refused card with a new account, mails the login link and points to another card", async () => {
     const user = userEvent.setup();
     mockSubscribe.mockResolvedValue({ status: "rejected", subscriptionId: "sub-1", accountCreated: true, message: "Recusado." });
     renderPage();
@@ -331,46 +339,31 @@ describe("SubscribePage (anonymous funnel)", () => {
     await user.click(screen.getByRole("button", { name: "Assinar agora" }));
 
     await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent("Recusado."));
-    expect(mockSignInWithOtp).toHaveBeenCalledWith({ email: "nova@example.com" });
-    expect(screen.getByText(/Enviamos um link de acesso/)).toBeInTheDocument();
+    expect(mockSignInWithOtp).toHaveBeenCalledWith(expect.objectContaining({ email: "nova@example.com" }));
+    expect(screen.getByText(/tente outro cartão em Créditos/)).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /tela de entrada/ })).toHaveAttribute("href", "/auth");
-    expect(navigateSpy).not.toHaveBeenCalled();
     expect(screen.queryByTestId("card-brick")).toBeNull();
+  });
+
+  it("uses the generic refusal when the server sent no message", async () => {
+    const user = userEvent.setup();
+    mockSubscribe.mockResolvedValue({ status: "rejected", subscriptionId: "sub-1", accountCreated: true });
+    renderPage();
+    await fillAccount(user);
+    await user.click(screen.getByRole("button", { name: "Assinar agora" }));
+    await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent(/não foi aceito para a assinatura/));
   });
 
   it("tells the buyer to use the password reset when the login e-mail could not be sent", async () => {
     const user = userEvent.setup();
-    mockSubscribe.mockResolvedValue({ status: "rejected", subscriptionId: "sub-1", accountCreated: true });
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
+    mockSubscribe.mockResolvedValue({ status: "authorized", subscriptionId: "sub-1", accountCreated: true });
     mockSignInWithOtp.mockResolvedValue({ error: { message: "smtp" } });
     renderPage();
     await fillAccount(user);
     await user.click(screen.getByRole("button", { name: "Assinar agora" }));
     await waitFor(() => expect(screen.getByText(/Esqueci minha senha/)).toBeInTheDocument());
-  });
-
-  it("falls back to the e-mail link when the token cannot open a session", async () => {
-    const user = userEvent.setup();
-    const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
-    mockSubscribe.mockResolvedValue({ status: "authorized", subscriptionId: "sub-1", accountCreated: true, sessionTokenHash: "bad" });
-    mockVerifyOtp.mockResolvedValue({ error: { message: "expired" } });
-    renderPage();
-    await fillAccount(user);
-    await user.click(screen.getByRole("button", { name: "Assinar agora" }));
-
-    await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent(/Pagamento aceito!/));
-    expect(mockSignInWithOtp).toHaveBeenCalledWith({ email: "nova@example.com" });
-    expect(navigateSpy).not.toHaveBeenCalled();
     consoleError.mockRestore();
-  });
-
-  it("falls back to the e-mail link when the server created the account but sent no token", async () => {
-    const user = userEvent.setup();
-    mockSubscribe.mockResolvedValue({ status: "pending", subscriptionId: "sub-1", accountCreated: true });
-    renderPage();
-    await fillAccount(user);
-    await user.click(screen.getByRole("button", { name: "Assinar agora" }));
-    await waitFor(() => expect(mockSignInWithOtp).toHaveBeenCalledWith({ email: "nova@example.com" }));
-    expect(screen.getByRole("status")).toHaveTextContent(/Pagamento aceito!/);
   });
 
   it("shows the plain refusal when the account already existed (no new account)", async () => {

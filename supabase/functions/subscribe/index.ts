@@ -50,7 +50,7 @@ const PENDING_GRACE_MINUTES = 15;
 // Subscribe to a monthly plan with the card the Brick tokenized. Public
 // endpoint (verify_jwt = false): with a valid user JWT it is the logged-in
 // flow; without one the account is created from the payment (decision 12) and
-// a session is handed back only when the card was accepted. Decisions live in
+// the buyer enters through the login link sent to the e-mail. Decisions live in
 // runAnonymousCheckout / runSubscribe (unit-tested); this file wires Supabase
 // and Mercado Pago into them.
 serve(async (req) => {
@@ -255,14 +255,6 @@ serve(async (req) => {
           await retrying("cpf", () => admin.from("profiles").update({ cpf }).eq("id", userId).is("cpf", null));
         }
       },
-      generateSessionToken: async (email) => {
-        const { data, error } = await admin.auth.admin.generateLink({ type: "magiclink", email });
-        if (error || !data?.properties?.hashed_token) {
-          console.error("subscribe: generateLink failed", error?.message);
-          return null;
-        }
-        return data.properties.hashed_token;
-      },
       log: (message, ...args) => console.warn(message, ...args),
     };
 
@@ -282,7 +274,7 @@ serve(async (req) => {
 
     if (!outcome.ok) return json({ error: FLOW_ERRORS[outcome.error], code: outcome.error }, outcome.httpStatus);
 
-    const { result, accountCreated, sessionTokenHash } = outcome;
+    const { result, accountCreated } = outcome;
 
     if (result.status !== "rejected") {
       // Server-side conversion (GA4 MP / Meta CAPI); no-op without secrets.
@@ -311,13 +303,9 @@ serve(async (req) => {
         message: "O cartão não foi aceito para a assinatura. Tente outro cartão.",
       });
     }
-    return json({
-      status: result.status,
-      subscriptionId: result.subscriptionId,
-      accountCreated,
-      // Consumed once by verifyOtp on the client; never stored.
-      ...(sessionTokenHash ? { sessionTokenHash } : {}),
-    });
+    // No session in the answer: a new account logs in through the e-mail link
+    // (signInWithOtp on the client), proving it owns the address.
+    return json({ status: result.status, subscriptionId: result.subscriptionId, accountCreated });
   } catch (e) {
     console.error("subscribe error:", e);
     return json({ error: e instanceof Error ? e.message : "Erro desconhecido." }, 500);

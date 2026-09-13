@@ -57,6 +57,13 @@ content_path = "./supabase/templates/recovery.html"
 subject = "Seu convite para o Olhar Singular"
 content_path = "./supabase/templates/invite.html"
 
+# Link de acesso da conta criada pelo checkout (signInWithOtp em /assinar): entra
+# e cai em /definir-senha. Em produção, aplicar via Dashboard (Auth → Email
+# Templates → Magic Link).
+[auth.email.template.magic_link]
+subject = "Seu acesso ao Olhar Singular"
+content_path = "./supabase/templates/magic_link.html"
+
 # O webhook é chamado pelo Mercado Pago sem JWT do Supabase. Sem isto o gateway
 # rejeita a chamada com 401 antes da função rodar.
 [functions.mp-webhook]

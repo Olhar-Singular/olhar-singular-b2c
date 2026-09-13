@@ -44,7 +44,7 @@ Trocar o modelo de monetização e o provedor de cartão:
 
 | # | Decisão | Escolha |
 |---|---------|---------|
-| 12 | Campos do checkout | Nome + e-mail + cartão (Brick, com CPF do titular). Conta criada com **senha aleatória**; no 1º acesso o app obriga a definir senha. Sessão criada via magic link gerado no servidor e trocado por `verifyOtp` no cliente, sem e-mail. |
+| 12 | Campos do checkout | Nome + e-mail + cartão (Brick, com CPF do titular). Conta criada com **senha aleatória**; no 1º acesso o app obriga a definir senha. **Sessão só pelo link de acesso enviado ao e-mail** (`signInWithOtp` → `/definir-senha`): prova de posse do e-mail, decidido em 2026-09-13 (antes: magic link gerado no servidor e trocado por `verifyOtp`, que permitia abrir conta em nome de e-mail alheio). |
 | 13 | Confirmação de e-mail para quem paga | Não. Cartão aprovado é a prova (`email_confirm: true`). Campo de e-mail com etapa de revisão antes de pagar. O comprovante de pagamento é o do MP (nada via Resend na v1). |
 | 14 | Cartão recusado depois da conta criada | Manter a conta, logar e mostrar "pagamento recusado, tente outro cartão". Sem trial: fica no paywall com a assinatura para tentar de novo dentro do app. |
 | 15 | Cadastro público grátis | **Não existe.** Signup desligado no servidor. Admin cria usuários em dois modos: **Trial** (7 dias, 50 créditos, depois paywall) ou **Cortesia** (isento, sem prazo). Quem paga na LP nunca passa por trial. |
@@ -522,9 +522,9 @@ CAPI (`event_name`, `event_id`, `user_data` com e-mail SHA-256, `custom_data` co
    `uri_allow_list` com `https://professor.olharsingular.com/redefinir-senha`,
    `.../redefinir-senha?convite=1`, `.../definir-senha`, `.../dashboard`; templates de e-mail
    **Invite user** (`supabase/templates/invite.html`, assunto "Seu convite para o Olhar Singular")
-   e **Magic Link** (não é enviado no fluxo normal: o `subscribe` gera o link no servidor; só o
-   `signInWithOtp` do cartão recusado envia). Conferir que `mailer_otp_exp` cobre o tempo do
-   checkout (padrão 1h serve).
+   e **Magic Link** (é o e-mail que toda conta nova recebe depois de pagar: `signInWithOtp` com
+   `emailRedirectTo` `/definir-senha`; usar `supabase/templates/magic_link.html`). Conferir que
+   `mailer_otp_exp` cobre o tempo entre pagar e abrir o e-mail (padrão 1h serve).
 5. GitHub: `gh secret set VITE_MP_PUBLIC_KEY` e `VITE_GTM_ID`; Vercel: mesmas vars em Production e
    Preview. `subscribe` precisa de `verify_jwt = false` no remoto (o CI faz deploy lendo o
    `config.toml`; conferir no Dashboard após o 1º deploy).
@@ -575,16 +575,11 @@ Cada fase deixa a suíte verde e o produto coerente ("estado ao final" entre par
 
 ## 8. Riscos e pendências
 
-- **Conta criada em nome de um e-mail alheio (decisões 12/13, apontado pela revisão de segurança
-  da Fase 4).** Quem paga com o próprio cartão pode digitar um e-mail que não é seu: a conta nasce
-  confirmada e a sessão é entregue pelo `sessionTokenHash`. O dono desse e-mail só descobre ao
-  tentar assinar (`409 email_exists`) e recupera a conta por "Esqueci minha senha" (a recuperação
-  encerra todas as sessões; o convite encerra as outras). Custo para o atacante: pagar um plano.
-  Mitigações já no código: cartão recusado nunca dá sessão, e-mail digitado duas vezes, admin pode
-  corrigir e-mail. **Decisão em aberto para o dono:** manter (fricção zero, risco aceito) ou trocar
-  a entrega do token pelo link por e-mail (`signInWithOtp`) também no caminho aprovado, que prova a
-  posse do e-mail ao custo de um passo a mais depois do pagamento. A troca é uma linha em
-  `accountProvision.ts` (não gerar o `sessionTokenHash`) mais a copy da tela.
+- **Conta criada em nome de um e-mail alheio (apontado pela revisão de segurança da Fase 4):
+  resolvido em 2026-09-13.** O checkout nunca devolve sessão; a conta nova entra pelo link de
+  acesso enviado ao e-mail (`signInWithOtp`, `emailRedirectTo` `/definir-senha`). Quem pagar com
+  e-mail alheio cria uma conta que não consegue abrir; o dono do e-mail recupera pelo link ou por
+  "Esqueci minha senha". Custo: um clique no e-mail depois de pagar.
 
 - Preço dos extras vs. plano (decisão 3): o avulso de R$59,90 rende mais crédito que o plano do
   mesmo valor. Tabela permite ajustar sem código.

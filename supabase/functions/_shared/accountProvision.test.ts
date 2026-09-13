@@ -29,7 +29,6 @@ function deps(overrides: Partial<CheckoutDeps> = {}, preapproval?: Record<string
     recordAttempt: vi.fn(async () => ({ by_email_1h: 1, by_ip_1h: 1, rejected_10m: 0 })),
     createUser: vi.fn(async () => ({ id: "new-user" })),
     recordProfileFacts: vi.fn(async () => undefined),
-    generateSessionToken: vi.fn(async () => "hashed-token"),
     log: vi.fn(),
     ...overrides,
   };
@@ -68,7 +67,7 @@ describe("parseAccountInput", () => {
 });
 
 describe("runAnonymousCheckout", () => {
-  it("creates the account, subscribes, records CPF and terms, and returns a session token on authorized", async () => {
+  it("creates the account, subscribes, records CPF and terms, and never returns a session", async () => {
     const d = deps();
     const out = await runAnonymousCheckout(anonymous(), d);
 
@@ -79,24 +78,23 @@ describe("runAnonymousCheckout", () => {
     expect(d.subscribeDeps.insertSubscription).toHaveBeenCalledWith(expect.objectContaining({ userId: "new-user", payerEmail: "a.na+x@gmail.com" }));
     expect(d.recordAttempt).toHaveBeenNthCalledWith(2, "h(203.0.113.9)", "h(ana@gmail.com)", "authorized");
     expect(d.recordProfileFacts).toHaveBeenCalledWith({ userId: "new-user", cpf: "12345678909", termsVersion: "2026-09" });
-    expect(d.generateSessionToken).toHaveBeenCalledWith("a.na+x@gmail.com");
     expect(out).toEqual({
       ok: true,
       result: { ok: true, status: "authorized", subscriptionId: "sub-1" },
       userId: "new-user",
       accountCreated: true,
-      sessionTokenHash: "hashed-token",
     });
+    expect(JSON.stringify(out)).not.toMatch(/token/i);
   });
 
-  it("also hands a session on pending (the webhook activates later)", async () => {
+  it("records the profile facts on pending too (the webhook activates later)", async () => {
     const d = deps({}, { id: "pre-2", status: "pending" });
     const out = await runAnonymousCheckout(anonymous(), d);
-    expect(out).toMatchObject({ ok: true, result: { status: "pending" }, accountCreated: true, sessionTokenHash: "hashed-token" });
+    expect(out).toMatchObject({ ok: true, result: { status: "pending" }, accountCreated: true });
     expect(d.recordProfileFacts).toHaveBeenCalled();
   });
 
-  it("never returns a session for a rejected card, keeps the account, records nothing on the profile", async () => {
+  it("keeps the account on a rejected card and records nothing on the profile", async () => {
     const d = deps({}, { id: "pre-3", status: "cancelled" });
     const out = await runAnonymousCheckout(anonymous(), d);
     expect(out).toEqual({
@@ -104,21 +102,18 @@ describe("runAnonymousCheckout", () => {
       result: { ok: true, status: "rejected", subscriptionId: "sub-1", detail: "cancelled" },
       userId: "new-user",
       accountCreated: true,
-      sessionTokenHash: null,
     });
     expect(d.recordAttempt).toHaveBeenLastCalledWith(expect.any(String), expect.any(String), "rejected");
     expect(d.recordProfileFacts).not.toHaveBeenCalled();
-    expect(d.generateSessionToken).not.toHaveBeenCalled();
   });
 
-  it("uses the logged-in user without creating an account or a session token", async () => {
+  it("uses the logged-in user without creating an account", async () => {
     const d = deps();
     const out = await runAnonymousCheckout(anonymous({ user: { id: "u1", email: "u1@x.com" }, account: null }), d);
     expect(d.createUser).not.toHaveBeenCalled();
     expect(d.subscribeDeps.insertSubscription).toHaveBeenCalledWith(expect.objectContaining({ userId: "u1", payerEmail: "u1@x.com" }));
     expect(d.recordProfileFacts).toHaveBeenCalledWith({ userId: "u1", cpf: "12345678909", termsVersion: null });
-    expect(d.generateSessionToken).not.toHaveBeenCalled();
-    expect(out).toMatchObject({ ok: true, userId: "u1", accountCreated: false, sessionTokenHash: null });
+    expect(out).toMatchObject({ ok: true, userId: "u1", accountCreated: false });
   });
 
   it("prefers the JWT user over an account block sent alongside", async () => {
@@ -155,15 +150,8 @@ describe("runAnonymousCheckout", () => {
     const d = deps();
     (d.subscribeDeps.findLiveSubscription as ReturnType<typeof vi.fn>).mockResolvedValue({ id: "old", status: "authorized" });
     expect(await runAnonymousCheckout(anonymous(), d)).toEqual({ ok: false, error: "already_subscribed", httpStatus: 409 });
-    expect(d.generateSessionToken).not.toHaveBeenCalled();
   });
 
-  it("degrades to e-mail login when the magic link cannot be generated", async () => {
-    const d = deps({ generateSessionToken: vi.fn(async () => null) });
-    const out = await runAnonymousCheckout(anonymous(), d);
-    expect(out).toMatchObject({ ok: true, accountCreated: true, sessionTokenHash: null });
-    expect(d.log).toHaveBeenCalledWith(expect.stringMatching(/magic link/), "new-user");
-  });
 
   it("stores a null CPF when the Brick did not report a valid one", async () => {
     const d = deps();

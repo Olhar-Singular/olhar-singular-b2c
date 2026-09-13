@@ -206,8 +206,8 @@ describe("useSubscribe", () => {
 });
 
 describe("useSubscribe (anonymous funnel)", () => {
-  it("forwards the account block and returns the session token hash untouched", async () => {
-    mockInvoke.mockResolvedValue({ data: { status: "authorized", subscriptionId: "sub-1", accountCreated: true, sessionTokenHash: "h" }, error: null });
+  it("forwards the account block and returns accountCreated untouched", async () => {
+    mockInvoke.mockResolvedValue({ data: { status: "authorized", subscriptionId: "sub-1", accountCreated: true }, error: null });
     const { result } = renderHook(() => useSubscribe(), { wrapper });
     const account = { fullName: "Ana", email: "a@b.c", termsVersion: "2026-09" };
     let out: unknown;
@@ -215,7 +215,7 @@ describe("useSubscribe (anonymous funnel)", () => {
       out = await result.current.mutateAsync({ planSlug: "basico", card: CARD, account });
     });
     expect(mockInvoke).toHaveBeenCalledWith("subscribe", { body: { planSlug: "basico", card: CARD, account } });
-    expect(out).toMatchObject({ accountCreated: true, sessionTokenHash: "h" });
+    expect(out).toMatchObject({ accountCreated: true });
   });
 });
 
