@@ -12,7 +12,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { useAccess } from "@/hooks/useAccess";
 import type { CardFormDataView } from "@/hooks/useCredits";
 import { isLiveSubscription, usePlans, useSubscribe, useSubscription, type PlanView } from "@/hooks/useSubscription";
-import { formatBrl, pickInitialPlan, replacementNotice, TERMS_VERSION } from "@/lib/domain/subscriptionUi";
+import { canSubscribe, formatBrl, pickInitialPlan, replacementNotice, TERMS_VERSION } from "@/lib/domain/subscriptionUi";
 import { trackAddPaymentInfo, trackBeginCheckout, trackSubscriptionStarted } from "@/lib/analytics/events";
 import { readAttribution, sessionStore } from "@/lib/analytics/attribution";
 
@@ -32,7 +32,7 @@ const GENERIC_REJECTION = "O cartão não foi aceito para a assinatura. Tente ou
 // enters through the login link sent to that e-mail (proof of ownership), then
 // lands on /definir-senha.
 export default function SubscribePage() {
-  const { user, session } = useAuth();
+  const { user, session, profile } = useAuth();
   const access = useAccess();
   const [params] = useSearchParams();
   const { data: plans = [], isLoading: loadingPlans } = usePlans();
@@ -122,7 +122,7 @@ export default function SubscribePage() {
     setStage({ kind: "form" });
   }
 
-  if (access?.unlimited) {
+  if (access && !canSubscribe(access, profile?.is_super_admin)) {
     return (
       <div className="mx-auto max-w-2xl px-4 py-8 space-y-4">
         <h1 className="text-2xl font-bold text-foreground">Assinar um plano</h1>

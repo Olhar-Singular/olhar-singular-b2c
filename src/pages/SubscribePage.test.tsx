@@ -241,6 +241,13 @@ describe("SubscribePage", () => {
     expect(screen.queryByTestId("card-brick")).toBeNull();
   });
 
+  it("lets a super-admin on a courtesy account subscribe (smoke plan)", async () => {
+    await setProfile({ ...LEGACY, access_kind: "exempt", is_super_admin: true });
+    renderPage();
+    expect(screen.queryByText(/Sua conta tem cortesia/)).toBeNull();
+    expect(screen.getByTestId("card-brick")).toBeInTheDocument();
+  });
+
   it("points an existing subscriber to the credits page", () => {
     mockUseSubscription.mockReturnValue({ data: { id: "sub-1", status: "authorized" } });
     renderPage();

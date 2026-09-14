@@ -3,7 +3,7 @@ import { screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { renderWithProviders } from "@/test/helpers";
 import AccountStep from "./AccountStep";
-import { maskCpfForOwner, validateAccountForm } from "@/lib/domain/subscriptionUi";
+import { canSubscribe, maskCpfForOwner, validateAccountForm } from "@/lib/domain/subscriptionUi";
 
 describe("validateAccountForm", () => {
   const ok = { fullName: "Ana Souza", email: "Ana@Example.com", emailConfirmation: "ana@example.com ", acceptedTerms: true };
@@ -17,6 +17,17 @@ describe("validateAccountForm", () => {
     expect(validateAccountForm({ ...ok, email: "nope" })).toBe("email");
     expect(validateAccountForm({ ...ok, emailConfirmation: "other@example.com" })).toBe("email_mismatch");
     expect(validateAccountForm({ ...ok, acceptedTerms: false })).toBe("terms");
+  });
+});
+
+describe("canSubscribe", () => {
+  const base = { kind: "exempt" as const, planCredits: 0, extraCredits: 0, total: 0, unlimited: true, paywalled: false, periodEnd: null, daysLeft: null, trialExpired: false, mustSetPassword: false };
+  it("blocks courtesy accounts unless they are the super-admin", () => {
+    expect(canSubscribe(base, false)).toBe(false);
+    expect(canSubscribe(base, null)).toBe(false);
+    expect(canSubscribe(base, true)).toBe(true);
+    expect(canSubscribe({ ...base, kind: "legacy", unlimited: false }, false)).toBe(true);
+    expect(canSubscribe(null, true)).toBe(false);
   });
 });
 

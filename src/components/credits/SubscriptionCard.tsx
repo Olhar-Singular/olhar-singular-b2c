@@ -24,7 +24,7 @@ import {
 import MpCardBrick from "@/components/payments/MpCardBrick";
 import { useAuth } from "@/hooks/useAuth";
 import type { Access } from "@/lib/domain/access";
-import { formatBrl, formatCard, formatDate } from "@/lib/domain/subscriptionUi";
+import { canSubscribe, formatBrl, formatCard, formatDate } from "@/lib/domain/subscriptionUi";
 import type { CardFormDataView } from "@/hooks/useCredits";
 import {
   isLiveSubscription,
@@ -37,6 +37,8 @@ import {
 interface Props {
   subscription: SubscriptionView | null | undefined;
   access: Access | null;
+  /** Super-admins see the card even on a courtesy account (smoke plan). */
+  isSuperAdmin?: boolean;
 }
 
 const STATUS_LABELS: Record<SubscriptionStatus, { label: string; tone: "default" | "secondary" | "destructive" | "outline" }> = {
@@ -52,7 +54,7 @@ const STATUS_LABELS: Record<SubscriptionStatus, { label: string; tone: "default"
 // when the next charge lands, which card, and the two self-service actions
 // (cancel with confirmation, change card with a fresh Brick). Courtesy accounts
 // never see it; anyone else without a live subscription gets the CTA.
-export default function SubscriptionCard({ subscription, access }: Props) {
+export default function SubscriptionCard({ subscription, access, isSuperAdmin = false }: Props) {
   const { user } = useAuth();
   const cancel = useCancelSubscription();
   // The dialog shows the refusal inline; no duplicate toast.
@@ -61,7 +63,7 @@ export default function SubscriptionCard({ subscription, access }: Props) {
   const [changingCard, setChangingCard] = useState(false);
   const [cardError, setCardError] = useState<string | null>(null);
 
-  if (!access || access.unlimited || subscription === undefined) return null;
+  if (!canSubscribe(access, isSuperAdmin) || subscription === undefined) return null;
 
   const live = isLiveSubscription(subscription);
 

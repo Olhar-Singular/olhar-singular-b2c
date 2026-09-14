@@ -107,7 +107,7 @@ export default function CreditsPage() {
       </Card>
 
       {/* Subscription (hidden for courtesy accounts and while loading) */}
-      <SubscriptionCard subscription={subscription} access={access} />
+      <SubscriptionCard subscription={subscription} access={access} isSuperAdmin={!!profile?.is_super_admin} />
 
       {/* Packages */}
       <section className="space-y-4">

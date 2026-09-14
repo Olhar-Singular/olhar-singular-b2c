@@ -7,6 +7,7 @@ import { useState } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { useAccess } from "@/hooks/useAccess";
 import { isLiveSubscription, useSubscription } from "@/hooks/useSubscription";
+import { canSubscribe } from "@/lib/domain/subscriptionUi";
 import { UserAccountMenu } from "@/components/common/UserAccountMenu";
 import { AccessBanner } from "@/components/common/AccessBanner";
 import logoImg from "@/assets/logo-olho-transparent.png";
@@ -36,8 +37,9 @@ export default function Layout({ children }: { children?: React.ReactNode }) {
   const creditTotal = access?.total ?? null;
   const { data: subscription } = useSubscription();
   // "Assinar" is offered to whoever pays and is not paying yet: trial, legacy,
-  // or a subscriber whose subscription ended. Courtesy accounts never see it.
-  const showSubscribe = !!access && !access.unlimited && subscription !== undefined && !isLiveSubscription(subscription);
+  // or a subscriber whose subscription ended. Courtesy accounts never see it,
+  // except the super-admin (smoke plan).
+  const showSubscribe = canSubscribe(access, profile?.is_super_admin) && subscription !== undefined && !isLiveSubscription(subscription);
   const [mobileOpen, setMobileOpen] = useState(false);
 
   const navItems = profile?.is_super_admin ? [...NAV_ITEMS, ADMIN_ITEM] : NAV_ITEMS;

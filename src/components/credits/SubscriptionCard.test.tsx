@@ -101,6 +101,12 @@ describe("SubscriptionCard", () => {
     expect(renderCard(undefined).container).toBeEmptyDOMElement();
   });
 
+  it("shows the card to a super-admin even on a courtesy account (smoke plan)", () => {
+    renderWithProviders(<SubscriptionCard subscription={sub()} access={access({ kind: "exempt", unlimited: true })} isSuperAdmin />);
+    expect(screen.getByText("Ativa")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Cancelar assinatura" })).toBeInTheDocument();
+  });
+
   it("invites a paying account without a subscription to subscribe", () => {
     renderCard(null, access({ kind: "legacy" }));
     expect(screen.getByText(/Assine um plano mensal/)).toBeInTheDocument();

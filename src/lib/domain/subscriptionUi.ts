@@ -45,6 +45,13 @@ export function pickInitialPlan(plans: PlanView[], requestedSlug: string | null)
   );
 }
 
+// Courtesy accounts have nothing to subscribe to, except the super-admin, who
+// runs the R$1/month smoke plan against production (decision 30).
+export function canSubscribe(access: Access | null, isSuperAdmin: boolean | null | undefined): boolean {
+  if (!access) return false;
+  return !access.unlimited || !!isSuperAdmin;
+}
+
 // Decision 5: subscribing replaces the plan/trial bucket, it never sums.
 export function replacementNotice(access: Access | null): string | null {
   if (!access || access.planCredits <= 0 || !access.periodEnd) return null;

@@ -226,6 +226,12 @@ describe("Layout (Assinar nav item)", () => {
     expect(screen.queryByRole("link", { name: /^Assinar$/ })).toBeNull();
   });
 
+  it("offers Assinar to a super-admin on a courtesy account (smoke plan)", () => {
+    setAuth({ profile: { ...LEGACY_PROFILE, access_kind: "exempt", is_super_admin: true } });
+    renderWithProviders(<Layout />, { route: "/dashboard" });
+    expect(screen.getAllByRole("link", { name: /^Assinar$/ }).length).toBeGreaterThan(0);
+  });
+
   it("waits for the subscription query before offering Assinar", () => {
     setAuth({ profile: LEGACY_PROFILE });
     mockUseSubscription.mockReturnValue({ data: undefined });
