@@ -30,6 +30,7 @@ function deps(overrides: Partial<CheckoutDeps> = {}, preapproval?: Record<string
     recordAttempt: vi.fn(async () => ({ by_email_1h: 1, by_ip_1h: 1, rejected_10m: 0 })),
     createUser: vi.fn(async () => ({ id: "new-user" })),
     recordProfileFacts: vi.fn(async () => undefined),
+    trialUsedByCpf: vi.fn(async () => false),
     log: vi.fn(),
     ...overrides,
   };
@@ -158,5 +159,55 @@ describe("runAnonymousCheckout", () => {
     const d = deps();
     await runAnonymousCheckout(anonymous({ card: { token: "tok", payment_method_id: "visa" } }), d);
     expect(d.recordProfileFacts).toHaveBeenCalledWith(expect.objectContaining({ cpf: null }));
+  });
+});
+
+describe("runAnonymousCheckout (trial with card)", () => {
+  const NOW = new Date("2026-09-15T21:52:15.000Z");
+
+  it("checks the CPF before creating the account and runs the trial", async () => {
+    const d = deps();
+    const out = await runAnonymousCheckout(anonymous({ trial: true, now: NOW }), d);
+    expect(d.trialUsedByCpf).toHaveBeenCalledWith("12345678909");
+    expect(d.createUser).toHaveBeenCalled();
+    expect(d.subscribeDeps.insertSubscription).toHaveBeenCalledWith(
+      expect.objectContaining({ userId: "new-user", trialEndsAt: "2026-09-22T21:52:15.000Z" }),
+    );
+    expect(out).toMatchObject({ ok: true, result: { status: "authorized", trialEndsAt: "2026-09-22T21:52:15.000Z" }, accountCreated: true });
+    expect(d.recordProfileFacts).toHaveBeenCalledWith({ userId: "new-user", cpf: "12345678909", termsVersion: "2026-09" });
+  });
+
+  it("refuses a CPF that already had a trial or a subscription, leaving no account behind", async () => {
+    const d = deps({ trialUsedByCpf: vi.fn(async () => true) });
+    const out = await runAnonymousCheckout(anonymous({ trial: true }), d);
+    expect(out).toEqual({ ok: false, error: "trial_used", httpStatus: 409 });
+    expect(d.createUser).not.toHaveBeenCalled();
+    expect(d.subscribeDeps.postPreapproval).not.toHaveBeenCalled();
+  });
+
+  it("requires a valid CPF for the trial (a scripted caller cannot skip decision 4)", async () => {
+    const d = deps();
+    const noCpf = { ...CARD, payer: { identification: { type: "CPF", number: "111.111.111-11" } } };
+    const out = await runAnonymousCheckout(anonymous({ trial: true, card: noCpf }), d);
+    expect(out).toEqual({ ok: false, error: "cpf_required", httpStatus: 400 });
+    expect(d.trialUsedByCpf).not.toHaveBeenCalled();
+    expect(d.createUser).not.toHaveBeenCalled();
+  });
+
+  it("is for new accounts only: a logged-in user asking for the trial is refused", async () => {
+    const d = deps();
+    const out = await runAnonymousCheckout(
+      anonymous({ trial: true, user: { id: "u1", email: "a@b.c" }, account: null }),
+      d,
+    );
+    expect(out).toEqual({ ok: false, error: "trial_requires_new_account", httpStatus: 400 });
+    expect(d.recordAttempt).not.toHaveBeenCalled();
+  });
+
+  it("still applies the rate limit before the CPF check", async () => {
+    const d = deps({ recordAttempt: vi.fn(async () => ({ by_email_1h: 6, by_ip_1h: 1, rejected_10m: 0 })) });
+    const out = await runAnonymousCheckout(anonymous({ trial: true }), d);
+    expect(out).toMatchObject({ ok: false, error: "rate_limited" });
+    expect(d.trialUsedByCpf).not.toHaveBeenCalled();
   });
 });

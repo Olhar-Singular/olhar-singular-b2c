@@ -46,6 +46,10 @@ export interface CheckoutInput {
   backUrl: string;
   attribution?: Record<string, unknown>;
   clientIp: string;
+  /** Trial with card: anonymous funnel only, one per CPF (decisions 1 and 4). */
+  trial?: boolean;
+  /** Clock, injectable for tests. */
+  now?: Date;
 }
 
 export interface CheckoutDeps {
@@ -57,15 +61,27 @@ export interface CheckoutDeps {
   createUser(input: { email: string; fullName: string }): Promise<{ id: string } | "exists">;
   /** Writes cpf (only when NULL) and the terms acceptance on the profile. */
   recordProfileFacts(input: { userId: string; cpf: string | null; termsVersion: string | null }): Promise<void>;
+  /** RPC trial_used_by_cpf: this CPF already ran a trial or held a subscription. */
+  trialUsedByCpf(cpf: string): Promise<boolean>;
   log(message: string, ...args: unknown[]): void;
 }
 
 export type CheckoutResult =
   | { ok: true; result: Extract<SubscribeResult, { ok: true }>; userId: string; accountCreated: boolean }
-  | { ok: false; error: "account_required" | "rate_limited" | "circuit_open" | "email_exists" | Extract<SubscribeResult, { ok: false }>["error"]; httpStatus: number };
+  | {
+      ok: false;
+      error:
+        | "account_required" | "rate_limited" | "circuit_open" | "email_exists"
+        | "trial_requires_new_account" | "cpf_required" | "trial_used"
+        | Extract<SubscribeResult, { ok: false }>["error"];
+      httpStatus: number;
+    };
 
 export async function runAnonymousCheckout(input: CheckoutInput, deps: CheckoutDeps): Promise<CheckoutResult> {
   if (!input.user && !input.account) return { ok: false, error: "account_required", httpStatus: 400 };
+
+  // Whoever has an account subscribes paid at /assinar (decision: trial = new account).
+  if (input.trial && input.user) return { ok: false, error: "trial_requires_new_account", httpStatus: 400 };
 
   const email = input.user?.email ?? input.account!.email;
   const [ipHash, emailHash] = await Promise.all([
@@ -80,6 +96,15 @@ export async function runAnonymousCheckout(input: CheckoutInput, deps: CheckoutD
   if (!access.allowed) {
     await deps.recordAttempt(ipHash, emailHash, "refused");
     return { ok: false, error: access.reason, httpStatus: access.httpStatus };
+  }
+
+  if (input.trial) {
+    // One trial per CPF (decision 4), checked BEFORE the account exists so a
+    // barred CPF never leaves an orphan account. The Brick always sends the
+    // CPF; only a scripted caller reaches cpf_required.
+    const cpf = extractCpf(input.card.payer);
+    if (!cpf) return { ok: false, error: "cpf_required", httpStatus: 400 };
+    if (await deps.trialUsedByCpf(cpf)) return { ok: false, error: "trial_used", httpStatus: 409 };
   }
 
   let userId: string;
@@ -102,6 +127,8 @@ export async function runAnonymousCheckout(input: CheckoutInput, deps: CheckoutD
       cardLastFour: input.cardLastFour,
       backUrl: input.backUrl,
       attribution: input.attribution,
+      trial: input.trial,
+      now: input.now,
     },
     deps.subscribeDeps,
   );
