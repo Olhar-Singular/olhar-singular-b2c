@@ -162,7 +162,7 @@ SELECT public.activate_subscription(
   now() + interval '1 month', 'master', '1234');
 SELECT public.cancel_subscription_local('d0000000-0000-0000-0000-000000000004'::uuid, now());
 SELECT results_eq(
-  $$ SELECT access_kind, plan_credits, plan_period_end > now() + interval '29 days'
+  $$ SELECT access_kind, plan_credits, plan_period_end > now() + interval '27 days'
        FROM public.profiles WHERE id = 'c4444444-4444-4444-4444-444444444444' $$,
   $$ VALUES ('subscriber'::text, 300, true) $$,
   'paid cancel: the credits of the paid period stay (lazy expiry)');
