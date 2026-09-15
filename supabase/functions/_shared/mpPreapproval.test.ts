@@ -4,6 +4,9 @@ import {
   interpretAuthorizedPayment,
   interpretPreapproval,
   parseSubscriptionNotification,
+  PREAPPROVAL_REASON_MAX,
+  TRIAL_DAYS,
+  trialEndDate,
 } from "./mpPreapproval";
 
 const PLAN = { id: "pl-1", slug: "profissional", name: "Profissional", priceBrl: 59.9, monthlyCredits: 480, adminOnly: false };
@@ -40,6 +43,42 @@ describe("buildPreapprovalBody", () => {
       plan: PLAN, subscriptionId: "s", payerEmail: "a@b.c", cardToken: "t", backUrl: "https://x",
     });
     expect(body).not.toHaveProperty("statement_descriptor");
+  });
+
+  it("schedules the first charge with start_date and a trial reason when startDate is given", () => {
+    const body = buildPreapprovalBody({
+      plan: { ...PLAN, name: "Básico", priceBrl: 39.9 },
+      subscriptionId: "sub-1",
+      payerEmail: "a@b.c",
+      cardToken: "tok_1",
+      backUrl: "https://x",
+      startDate: "2026-09-22T21:52:15.000Z",
+    });
+    expect(body.reason).toBe("Teste 7 dias + Básico - Olhar Singular");
+    expect(body.auto_recurring).toEqual({
+      frequency: 1,
+      frequency_type: "months",
+      transaction_amount: 39.9,
+      currency_id: "BRL",
+      start_date: "2026-09-22T21:52:15.000Z",
+    });
+  });
+
+  // MP answers 400 "reason has more than 60 characters" (sandbox, 2026-09-15).
+  it("never sends a reason longer than 60 characters", () => {
+    const long = { ...PLAN, name: "Plano Profissional Completo para Escolas Grandes" };
+    const paid = buildPreapprovalBody({ plan: long, subscriptionId: "s", payerEmail: "a@b.c", cardToken: "t", backUrl: "https://x" });
+    const trial = buildPreapprovalBody({ plan: long, subscriptionId: "s", payerEmail: "a@b.c", cardToken: "t", backUrl: "https://x", startDate: "2026-09-22T00:00:00.000Z" });
+    expect((paid.reason as string).length).toBe(PREAPPROVAL_REASON_MAX);
+    expect((trial.reason as string).length).toBe(PREAPPROVAL_REASON_MAX);
+    expect(paid.reason).toBe("Assinatura Plano Profissional Completo para Escolas Grandes -".slice(0, 60));
+  });
+});
+
+describe("trialEndDate", () => {
+  it("is 7 days after now, with the milliseconds dropped", () => {
+    expect(TRIAL_DAYS).toBe(7);
+    expect(trialEndDate(new Date("2026-09-15T21:52:15.789Z")).toISOString()).toBe("2026-09-22T21:52:15.000Z");
   });
 });
 

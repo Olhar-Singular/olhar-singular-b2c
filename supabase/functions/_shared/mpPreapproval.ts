@@ -16,6 +16,20 @@ export interface PlanLike {
   adminOnly: boolean;
 }
 
+/** Days of the trial with card (spec 2026-09-15, decision 1). */
+export const TRIAL_DAYS = 7;
+
+/** MP rejects a longer reason with 400 "reason has more than 60 characters". */
+export const PREAPPROVAL_REASON_MAX = 60;
+
+// The first charge of a trial: now + 7 days. Whole seconds: MP echoes the value
+// back as next_payment_date and the row stores it as the period end.
+export function trialEndDate(now: Date): Date {
+  const end = new Date(now.getTime() + TRIAL_DAYS * 24 * 60 * 60 * 1000);
+  end.setUTCMilliseconds(0);
+  return end;
+}
+
 export interface PreapprovalInput {
   plan: PlanLike;
   /** subscriptions.id, sent as external_reference so webhooks find the row. */
@@ -24,12 +38,17 @@ export interface PreapprovalInput {
   payerEmail: string;
   cardToken: string;
   backUrl: string;
+  /** ISO date of the first charge (trial with card). Omitted = MP charges now. */
+  startDate?: string;
 }
 
 export function buildPreapprovalBody(input: PreapprovalInput): Record<string, unknown> {
+  // Regular hyphen, not an em dash, per project pt-BR punctuation.
+  const reason = input.startDate
+    ? `Teste ${TRIAL_DAYS} dias + ${input.plan.name} - Olhar Singular`
+    : `Assinatura ${input.plan.name} - Olhar Singular`;
   return {
-    // Regular hyphen, not an em dash, per project pt-BR punctuation.
-    reason: `Assinatura ${input.plan.name} - Olhar Singular`,
+    reason: reason.slice(0, PREAPPROVAL_REASON_MAX),
     external_reference: input.subscriptionId,
     payer_email: input.payerEmail,
     card_token_id: input.cardToken,
@@ -38,6 +57,7 @@ export function buildPreapprovalBody(input: PreapprovalInput): Record<string, un
       frequency_type: "months",
       transaction_amount: input.plan.priceBrl,
       currency_id: "BRL",
+      ...(input.startDate ? { start_date: input.startDate } : {}),
     },
     back_url: input.backUrl,
     status: "authorized",
