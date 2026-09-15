@@ -11,6 +11,7 @@ describe("parseSubscribeInput", () => {
       card: CARD,
       cardLastFour: "1234",
       attribution: { utm_source: "x" },
+      trial: false,
     });
   });
 
@@ -21,7 +22,14 @@ describe("parseSubscribeInput", () => {
       card: CARD,
       cardLastFour: null,
       attribution: undefined,
+      trial: false,
     });
+  });
+
+  it("reads trial only as the boolean true", () => {
+    expect(parseSubscribeInput({ planSlug: "basico", card: CARD, trial: true })).toMatchObject({ ok: true, trial: true });
+    expect(parseSubscribeInput({ planSlug: "basico", card: CARD, trial: "true" })).toMatchObject({ ok: true, trial: false });
+    expect(parseSubscribeInput({ planSlug: "basico", card: CARD, trial: 1 })).toMatchObject({ ok: true, trial: false });
   });
 
   it("rejects a non-object body", () => {
@@ -45,6 +53,7 @@ describe("parseSubscribeInput", () => {
       card: CARD,
       cardLastFour: null,
       attribution: undefined,
+      trial: false,
     });
   });
 });

@@ -1,5 +1,5 @@
 // Request validation for the subscribe edge function, kept pure so the accepted
-// contract ({ planSlug, card, cardLastFour?, attribution? }) is unit-tested.
+// contract ({ planSlug, card, cardLastFour?, attribution?, trial? }) is unit-tested.
 
 import { parseCardFormData, type CardFormData } from "./mpCardPayment.ts";
 
@@ -10,6 +10,8 @@ export type SubscribeRequest =
       card: CardFormData;
       cardLastFour: string | null;
       attribution: Record<string, unknown> | undefined;
+      /** Trial with card (anonymous funnel): the server picks the plan, planSlug is ignored. */
+      trial: boolean;
     }
   | { ok: false; error: "invalid_body" | "invalid_plan" | "invalid_card" | "installments_not_allowed" };
 
@@ -46,7 +48,7 @@ export function sanitizeAttribution(value: unknown): Record<string, unknown> | u
 
 export function parseSubscribeInput(body: unknown): SubscribeRequest {
   if (typeof body !== "object" || body === null) return { ok: false, error: "invalid_body" };
-  const { planSlug, card, cardLastFour, attribution } = body as Record<string, unknown>;
+  const { planSlug, card, cardLastFour, attribution, trial } = body as Record<string, unknown>;
 
   if (typeof planSlug !== "string" || !SLUG_RE.test(planSlug)) return { ok: false, error: "invalid_plan" };
 
@@ -59,6 +61,7 @@ export function parseSubscribeInput(body: unknown): SubscribeRequest {
     card: parsed.card,
     cardLastFour: typeof cardLastFour === "string" && LAST_FOUR_RE.test(cardLastFour) ? cardLastFour : null,
     attribution: sanitizeAttribution(attribution),
+    trial: trial === true,
   };
 }
 
