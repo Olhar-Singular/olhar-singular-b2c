@@ -8,6 +8,7 @@ const CARD = { token: "tok", payment_method_id: "master", payer: { identificatio
 function subscribeDeps(preapproval: Record<string, unknown> = { id: "pre-1", status: "authorized" }): SubscribeDeps {
   return {
     loadPlan: vi.fn(async () => PLAN),
+    loadCheapestPublicPlan: vi.fn(async () => PLAN),
     loadProfile: vi.fn(async () => ({ access_kind: "subscriber", is_super_admin: false })),
     findLiveSubscription: vi.fn(async () => null),
     expireStalePending: vi.fn(async () => undefined),
@@ -80,7 +81,7 @@ describe("runAnonymousCheckout", () => {
     expect(d.recordProfileFacts).toHaveBeenCalledWith({ userId: "new-user", cpf: "12345678909", termsVersion: "2026-09" });
     expect(out).toEqual({
       ok: true,
-      result: { ok: true, status: "authorized", subscriptionId: "sub-1" },
+      result: { ok: true, status: "authorized", subscriptionId: "sub-1", planSlug: "profissional", priceBrl: 59.9 },
       userId: "new-user",
       accountCreated: true,
     });
@@ -99,7 +100,7 @@ describe("runAnonymousCheckout", () => {
     const out = await runAnonymousCheckout(anonymous(), d);
     expect(out).toEqual({
       ok: true,
-      result: { ok: true, status: "rejected", subscriptionId: "sub-1", detail: "cancelled" },
+      result: { ok: true, status: "rejected", subscriptionId: "sub-1", detail: "cancelled", planSlug: "profissional", priceBrl: 59.9 },
       userId: "new-user",
       accountCreated: true,
     });

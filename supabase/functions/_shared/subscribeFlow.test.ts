@@ -6,6 +6,7 @@ const PLAN = {
   id: "pl-pro", slug: "profissional", name: "Profissional", price_brl: "59.90", monthly_credits: 480,
   active: true, admin_only: false,
 };
+const BASIC = { id: "pl-basic", slug: "basico", name: "Básico", price_brl: "39.90", monthly_credits: 300, active: true, admin_only: false };
 const ADMIN_PLAN = { ...PLAN, id: "pl-test", slug: "teste-admin", name: "Teste", price_brl: 1, monthly_credits: 1, admin_only: true };
 
 const CARD: CardFormData = { token: "tok_1", payment_method_id: "master", issuer_id: "24", installments: 1 };
@@ -25,6 +26,7 @@ function input(overrides: Partial<SubscribeInput> = {}): SubscribeInput {
 function deps(overrides: Partial<SubscribeDeps> = {}) {
   const d = {
     loadPlan: vi.fn(async (slug: string) => (slug === "profissional" ? PLAN : slug === "teste-admin" ? ADMIN_PLAN : null)),
+    loadCheapestPublicPlan: vi.fn(async () => BASIC),
     loadProfile: vi.fn(async () => ({ access_kind: "legacy", is_super_admin: false })),
     findLiveSubscription: vi.fn(async () => null),
     expireStalePending: vi.fn(async () => undefined),
@@ -51,7 +53,7 @@ describe("runSubscribe", () => {
     const result = await runSubscribe(input(), d);
 
     expect(d.expireStalePending).toHaveBeenCalledWith("u1");
-    expect(d.insertSubscription).toHaveBeenCalledWith({ userId: "u1", planId: "pl-pro", payerEmail: "account@test.com", attribution: undefined });
+    expect(d.insertSubscription).toHaveBeenCalledWith({ userId: "u1", planId: "pl-pro", payerEmail: "account@test.com", attribution: undefined, trialEndsAt: null });
     const [body, idempotencyKey] = d.postPreapproval.mock.calls[0];
     expect(idempotencyKey).toBe("sub-1");
     expect(body).toMatchObject({
@@ -70,7 +72,7 @@ describe("runSubscribe", () => {
       cardBrand: "master",
       cardLastFour: "1234",
     });
-    expect(result).toEqual({ ok: true, status: "authorized", subscriptionId: "sub-1" });
+    expect(result).toEqual({ ok: true, status: "authorized", subscriptionId: "sub-1", planSlug: "profissional", priceBrl: 59.9 });
   });
 
   it("leaves a pending preapproval for the webhook to activate", async () => {
@@ -80,7 +82,7 @@ describe("runSubscribe", () => {
     const result = await runSubscribe(input(), d);
     expect(d.markPending).toHaveBeenCalledWith({ subscriptionId: "sub-1", preapprovalId: "pre-2", mpStatus: "pending" });
     expect(d.activate).not.toHaveBeenCalled();
-    expect(result).toEqual({ ok: true, status: "pending", subscriptionId: "sub-1" });
+    expect(result).toEqual({ ok: true, status: "pending", subscriptionId: "sub-1", planSlug: "profissional", priceBrl: 59.9 });
   });
 
   it("rejects the subscription when MP declines the card (2xx with another status)", async () => {
@@ -89,7 +91,7 @@ describe("runSubscribe", () => {
     });
     const result = await runSubscribe(input(), d);
     expect(d.reject).toHaveBeenCalledWith({ subscriptionId: "sub-1", detail: "cancelled" });
-    expect(result).toEqual({ ok: true, status: "rejected", subscriptionId: "sub-1", detail: "cancelled" });
+    expect(result).toEqual({ ok: true, status: "rejected", subscriptionId: "sub-1", detail: "cancelled", planSlug: "profissional", priceBrl: 59.9 });
   });
 
   it("rejects the subscription on an HTTP error, keeping MP's message as detail", async () => {
@@ -111,7 +113,7 @@ describe("runSubscribe", () => {
     expect(d.postPreapproval).toHaveBeenCalledTimes(1);
     expect(d.searchPreapprovalByRef).toHaveBeenCalledWith("sub-1");
     expect(d.activate).toHaveBeenCalledWith(expect.objectContaining({ preapprovalId: "pre-9" }));
-    expect(result).toEqual({ ok: true, status: "authorized", subscriptionId: "sub-1" });
+    expect(result).toEqual({ ok: true, status: "authorized", subscriptionId: "sub-1", planSlug: "profissional", priceBrl: 59.9 });
   });
 
   it("rejects when the network failed and nothing was created at MP", async () => {
@@ -169,7 +171,7 @@ describe("runSubscribe", () => {
     const result = await runSubscribe(input(), d);
     expect(d.cancelPreapproval).toHaveBeenCalledWith("pre-1");
     expect(d.reject).toHaveBeenCalledWith({ subscriptionId: "sub-1", detail: "duplicate_live_subscription" });
-    expect(result).toEqual({ ok: true, status: "rejected", subscriptionId: "sub-1", detail: "duplicate_live_subscription" });
+    expect(result).toEqual({ ok: true, status: "rejected", subscriptionId: "sub-1", detail: "duplicate_live_subscription", planSlug: "profissional", priceBrl: 59.9 });
   });
 
   it("still rejects the row when the orphan preapproval cannot be cancelled, and logs it", async () => {
@@ -208,5 +210,58 @@ describe("runSubscribe", () => {
     const d = deps();
     await runSubscribe(input(), d);
     expect(d.postPreapproval.mock.calls[0][0]).toMatchObject({ auto_recurring: { transaction_amount: 59.9 } });
+  });
+});
+
+describe("runSubscribe (trial with card)", () => {
+  const NOW = new Date("2026-09-15T21:52:15.000Z");
+
+  it("ignores planSlug, takes the cheapest public plan, stores trial_ends_at and schedules the first charge", async () => {
+    const d = deps();
+    const result = await runSubscribe(input({ planSlug: "profissional", trial: true, now: NOW }), d);
+
+    expect(d.loadPlan).not.toHaveBeenCalled();
+    expect(d.loadCheapestPublicPlan).toHaveBeenCalled();
+    expect(d.insertSubscription).toHaveBeenCalledWith({
+      userId: "u1", planId: "pl-basic", payerEmail: "account@test.com", attribution: undefined,
+      trialEndsAt: "2026-09-22T21:52:15.000Z",
+    });
+    const [body] = d.postPreapproval.mock.calls[0];
+    expect(body).toMatchObject({
+      reason: "Teste 7 dias + Básico - Olhar Singular",
+      auto_recurring: { transaction_amount: 39.9, start_date: "2026-09-22T21:52:15.000Z" },
+    });
+    expect(d.activate).toHaveBeenCalledWith(expect.objectContaining({ subscriptionId: "sub-1", preapprovalId: "pre-1" }));
+    expect(result).toEqual({
+      ok: true, status: "authorized", subscriptionId: "sub-1",
+      planSlug: "basico", priceBrl: 39.9, trialEndsAt: "2026-09-22T21:52:15.000Z",
+    });
+  });
+
+  it("carries trialEndsAt on a pending trial too", async () => {
+    const d = deps({
+      postPreapproval: vi.fn(async () => ({ ok: true, status: 201, json: { id: "pre-2", status: "pending" } })),
+    });
+    const result = await runSubscribe(input({ trial: true, now: NOW }), d);
+    expect(result).toEqual({
+      ok: true, status: "pending", subscriptionId: "sub-1",
+      planSlug: "basico", priceBrl: 39.9, trialEndsAt: "2026-09-22T21:52:15.000Z",
+    });
+  });
+
+  it("refuses the trial when no public plan is active", async () => {
+    const d = deps({ loadCheapestPublicPlan: vi.fn(async () => null) });
+    const result = await runSubscribe(input({ trial: true, now: NOW }), d);
+    expect(result).toEqual({ ok: false, error: "invalid_plan", httpStatus: 400 });
+    expect(d.insertSubscription).not.toHaveBeenCalled();
+  });
+
+  it("uses the wall clock when no clock is injected", async () => {
+    const d = deps();
+    const before = Date.now();
+    const result = await runSubscribe(input({ trial: true }), d);
+    const end = Date.parse((result as { trialEndsAt: string }).trialEndsAt);
+    expect(end).toBeGreaterThanOrEqual(before + 7 * 24 * 60 * 60 * 1000 - 1000);
+    expect(end).toBeLessThanOrEqual(Date.now() + 7 * 24 * 60 * 60 * 1000);
   });
 });

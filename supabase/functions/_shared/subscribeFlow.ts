@@ -2,9 +2,11 @@
 // branching (plan validation, one live subscription, optimistic activation,
 // pending, rejection, never-retry-the-POST) is unit-tested away from Deno and
 // Supabase. subscribe/index.ts only builds `deps`.
+//
+// Trial with card: cheapest public plan, `trial_ends_at` on the row, `start_date` at MP.
 
 import type { CardFormData } from "./mpCardPayment.ts";
-import { buildPreapprovalBody, interpretPreapproval, type PlanLike } from "./mpPreapproval.ts";
+import { buildPreapprovalBody, interpretPreapproval, trialEndDate, type PlanLike } from "./mpPreapproval.ts";
 
 export interface PlanRow {
   id: string;
@@ -24,6 +26,10 @@ export interface SubscribeInput {
   cardLastFour?: string | null;
   backUrl: string;
   attribution?: Record<string, unknown>;
+  /** Trial with card: the cheapest public plan, first charge in TRIAL_DAYS (decision 1). */
+  trial?: boolean;
+  /** Clock, injectable for tests; the wall clock otherwise. */
+  now?: Date;
 }
 
 export interface PreapprovalHttp {
@@ -34,6 +40,8 @@ export interface PreapprovalHttp {
 
 export interface SubscribeDeps {
   loadPlan(slug: string): Promise<PlanRow | null>;
+  /** The trial's plan is decided here, never by the client: cheapest active, not admin_only. */
+  loadCheapestPublicPlan(): Promise<PlanRow | null>;
   loadProfile(userId: string): Promise<{ access_kind: string; is_super_admin: boolean } | null>;
   /** Live rows (authorized/past_due/paused) AND fresh pending attempts. */
   findLiveSubscription(userId: string): Promise<{ id: string; status: string } | null>;
@@ -44,6 +52,8 @@ export interface SubscribeDeps {
     planId: string;
     payerEmail: string;
     attribution: Record<string, unknown> | undefined;
+    /** ISO of the first charge for a trial; the row carries the intent (activate branches on it). */
+    trialEndsAt: string | null;
   }): Promise<string>;
   postPreapproval(body: Record<string, unknown>, idempotencyKey: string): Promise<PreapprovalHttp>;
   /** GET /preapproval/search?external_reference= ; used only after a network failure. */
@@ -63,9 +73,17 @@ export interface SubscribeDeps {
   log(message: string, ...args: unknown[]): void;
 }
 
+interface ChosenPlan {
+  /** The plan the server actually used (for a trial it is not the requested slug). */
+  planSlug: string;
+  priceBrl: number;
+  /** Trial with card: ISO of the first charge. Absent on a paid-from-day-one attempt and on rejections. */
+  trialEndsAt?: string;
+}
+
 export type SubscribeResult =
-  | { ok: true; status: "authorized" | "pending"; subscriptionId: string }
-  | { ok: true; status: "rejected"; subscriptionId: string; detail: string }
+  | ({ ok: true; status: "authorized" | "pending"; subscriptionId: string } & ChosenPlan)
+  | ({ ok: true; status: "rejected"; subscriptionId: string; detail: string } & ChosenPlan)
   | { ok: false; error: "invalid_plan" | "exempt_user" | "already_subscribed" | "attempt_in_progress" | "profile_not_found"; httpStatus: number };
 
 function toPlanLike(row: PlanRow): PlanLike {
@@ -86,11 +104,17 @@ export async function runSubscribe(input: SubscribeInput, deps: SubscribeDeps): 
     return { ok: false, error: "exempt_user", httpStatus: 409 };
   }
 
-  const planRow = await deps.loadPlan(input.planSlug);
+  const planRow = input.trial ? await deps.loadCheapestPublicPlan() : await deps.loadPlan(input.planSlug);
   if (!planRow || !planRow.active || (planRow.admin_only && !profile.is_super_admin)) {
     return { ok: false, error: "invalid_plan", httpStatus: 400 };
   }
   const plan = toPlanLike(planRow);
+  const chosen: ChosenPlan = { planSlug: plan.slug, priceBrl: plan.priceBrl };
+  // The trial's first charge: computed here (never by the client) and written on
+  // the row before MP is called, so activation knows it is a trial whichever
+  // path reaches it (synchronous authorized or the webhook).
+  const trialEndsAt = input.trial ? trialEndDate(input.now ?? new Date()).toISOString() : null;
+  const trialFields = trialEndsAt ? { trialEndsAt } : {};
 
   // Stale pending rows go first, so what findLiveSubscription returns is
   // either a live subscription or an attempt still in flight (double click,
@@ -108,6 +132,7 @@ export async function runSubscribe(input: SubscribeInput, deps: SubscribeDeps): 
     planId: plan.id,
     payerEmail: input.email,
     attribution: input.attribution,
+    trialEndsAt,
   });
 
   const body = buildPreapprovalBody({
@@ -116,6 +141,7 @@ export async function runSubscribe(input: SubscribeInput, deps: SubscribeDeps): 
     payerEmail: input.email,
     cardToken: input.card.token,
     backUrl: input.backUrl,
+    startDate: trialEndsAt ?? undefined,
   });
 
   let response: Record<string, unknown> | null = null;
@@ -130,7 +156,7 @@ export async function runSubscribe(input: SubscribeInput, deps: SubscribeDeps): 
     response = await deps.searchPreapprovalByRef(subscriptionId);
     if (!response) {
       await deps.reject({ subscriptionId, detail: "network_error" });
-      return { ok: true, status: "rejected", subscriptionId, detail: "network_error" };
+      return { ok: true, status: "rejected", subscriptionId, detail: "network_error", ...chosen };
     }
   }
 
@@ -158,18 +184,18 @@ export async function runSubscribe(input: SubscribeInput, deps: SubscribeDeps): 
         deps.log("subscribe: could not cancel the orphan preapproval", outcome.preapprovalId, e);
       }
       await deps.reject({ subscriptionId, detail });
-      return { ok: true, status: "rejected", subscriptionId, detail };
+      return { ok: true, status: "rejected", subscriptionId, detail, ...chosen };
     }
-    return { ok: true, status: "authorized", subscriptionId };
+    return { ok: true, status: "authorized", subscriptionId, ...chosen, ...trialFields };
   }
 
   if (httpOk && outcome.status === "pending" && outcome.preapprovalId) {
     await deps.markPending({ subscriptionId, preapprovalId: outcome.preapprovalId, mpStatus: "pending" });
-    return { ok: true, status: "pending", subscriptionId };
+    return { ok: true, status: "pending", subscriptionId, ...chosen, ...trialFields };
   }
 
   // interpretPreapproval always fills statusDetail on a rejection.
   const detail = outcome.statusDetail as string;
   await deps.reject({ subscriptionId, detail });
-  return { ok: true, status: "rejected", subscriptionId, detail };
+  return { ok: true, status: "rejected", subscriptionId, detail, ...chosen };
 }
