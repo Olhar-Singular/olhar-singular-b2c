@@ -26,7 +26,7 @@ export default function LandingPage() {
             Comece a adaptar hoje
           </h2>
           <p className="text-primary-foreground/80 mb-8">
-            Planos mensais a partir de R$ 19,90 por mês. Cancele quando quiser.
+            Planos mensais a partir de R$ 39,90 por mês. Cancele quando quiser.
           </p>
           <Link to="/assinar">
             <Button size="lg" className="bg-white text-primary hover:bg-white/90 font-semibold gap-2">

@@ -38,7 +38,7 @@ function wrapper({ children }: { children: React.ReactNode }) {
 // price_brl arrives as a string on some PostgREST paths although the generated
 // type says number; the cast models the runtime shape on purpose.
 const PLAN_ROW = {
-  id: "pl-pro", slug: "profissional", name: "Profissional", price_brl: "59.90" as unknown as number, monthly_credits: 240,
+  id: "pl-pro", slug: "profissional", name: "Profissional", price_brl: "59.90" as unknown as number, monthly_credits: 480,
   highlight: true, admin_only: false, sort_order: 2, active: true, created_at: "", updated_at: "",
 };
 
@@ -63,7 +63,7 @@ beforeEach(() => {
 describe("toPlanView", () => {
   it("normalises the numeric price to a number", () => {
     expect(toPlanView(PLAN_ROW)).toEqual({
-      id: "pl-pro", slug: "profissional", name: "Profissional", priceBrl: 59.9, monthlyCredits: 240, highlight: true, adminOnly: false,
+      id: "pl-pro", slug: "profissional", name: "Profissional", priceBrl: 59.9, monthlyCredits: 480, highlight: true, adminOnly: false,
     });
   });
 });

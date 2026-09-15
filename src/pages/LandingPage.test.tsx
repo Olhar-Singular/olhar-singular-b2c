@@ -29,8 +29,9 @@ describe("LandingPage", () => {
 
   it("renders the three monthly plans with prices", () => {
     renderLanding();
-    // 19,90 also appears in the closing CTA, 59,90 also as an extra package.
-    expect(screen.getAllByText(/R\$\s*19,90/).length).toBeGreaterThan(0);
+    // 39,90 also appears in the closing CTA, 59,90 also as an extra package.
+    expect(screen.getAllByText(/R\$\s*39,90/).length).toBeGreaterThan(0);
+    expect(screen.queryByText(/R\$\s*19,90/)).toBeNull();
     expect(screen.getAllByText(/R\$\s*59,90/).length).toBeGreaterThan(0);
     expect(screen.getByText(/R\$\s*99,90/)).toBeInTheDocument();
   });

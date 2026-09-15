@@ -50,7 +50,7 @@ SELECT results_eq(
 SELECT results_eq(
   $$ SELECT access_kind, plan_credits, credit_balance FROM public.profiles
       WHERE id = 'c1111111-1111-1111-1111-111111111111' $$,
-  $$ VALUES ('subscriber'::text, 60, 2) $$,
+  $$ VALUES ('subscriber'::text, 300, 2) $$,
   'renew: the user got the plan quota (the money was taken)');
 SELECT is(
   (SELECT public.renew_subscription('d0000000-0000-0000-0000-000000000001'::uuid,
@@ -96,7 +96,7 @@ SELECT is(
   'pre-c3', 'activate: the winner keeps the preapproval id');
 SELECT is(
   (SELECT plan_credits FROM public.profiles WHERE id = 'c3333333-3333-3333-3333-333333333333'),
-  60, 'activate: the quota was granted exactly once');
+  300, 'activate: the quota was granted exactly once');
 
 -- ── sync on a closed row is inert
 SELECT is(

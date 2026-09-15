@@ -3,7 +3,7 @@ import { runSubscribe, type SubscribeDeps, type SubscribeInput } from "./subscri
 import type { CardFormData } from "./mpCardPayment";
 
 const PLAN = {
-  id: "pl-pro", slug: "profissional", name: "Profissional", price_brl: "59.90", monthly_credits: 240,
+  id: "pl-pro", slug: "profissional", name: "Profissional", price_brl: "59.90", monthly_credits: 480,
   active: true, admin_only: false,
 };
 const ADMIN_PLAN = { ...PLAN, id: "pl-test", slug: "teste-admin", name: "Teste", price_brl: 1, monthly_credits: 1, admin_only: true };

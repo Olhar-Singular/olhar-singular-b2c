@@ -160,7 +160,7 @@ describe("mergeUserRows", () => {
 
 describe("subscriptions on the dashboard", () => {
   const PRO = { name: "Profissional", price_brl: "59.90" };
-  const BASIC = { name: "Básico", price_brl: 19.9 };
+  const BASIC = { name: "Básico", price_brl: 39.9 };
   const rows: SubscriptionLite[] = [
     { user_id: "u1", status: "cancelled", created_at: "2026-01-01T00:00:00Z", plans: BASIC },
     { user_id: "u1", status: "authorized", created_at: "2026-02-01T00:00:00Z", next_payment_date: "2026-07-01T00:00:00Z", mp_preapproval_id: "pre-1", plans: PRO },

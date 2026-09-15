@@ -44,7 +44,7 @@ SELECT results_eq(
   $$ SELECT access_kind, plan_credits, credit_balance,
             plan_period_end > now() + interval '29 days', plan_period_start IS NOT NULL
        FROM public.profiles WHERE id = 'a1111111-1111-1111-1111-111111111111' $$,
-  $$ VALUES ('subscriber'::text, 240, 5, true, true) $$,
+  $$ VALUES ('subscriber'::text, 480, 5, true, true) $$,
   'activate: subscriber with the plan quota (trial credits replaced, extras kept)');
 SELECT results_eq(
   $$ SELECT status, mp_preapproval_id, card_brand, card_last_four, first_payment_confirmed,
@@ -56,7 +56,7 @@ SELECT results_eq(
   $$ SELECT type, bucket, delta FROM public.credit_transactions
       WHERE user_id = 'a1111111-1111-1111-1111-111111111111' AND type IN ('plan_reset','plan_grant')
       ORDER BY delta $$,
-  $$ VALUES ('plan_reset'::text, 'plan'::text, -17), ('plan_grant', 'plan', 240) $$,
+  $$ VALUES ('plan_reset'::text, 'plan'::text, -17), ('plan_grant', 'plan', 480) $$,
   'activate: the ledger shows the trial remainder closed and the quota granted');
 SELECT is(
   (SELECT granted_at IS NOT NULL FROM public.subscription_invoices
@@ -71,7 +71,7 @@ SELECT is(
   true, 'activate: a second call is a no-op');
 SELECT is(
   (SELECT plan_credits FROM public.profiles WHERE id = 'a1111111-1111-1111-1111-111111111111'),
-  240, 'activate: the replay did not grant again');
+  480, 'activate: the replay did not grant again');
 
 -- Spend a bit so the first charge cannot "refund" it.
 UPDATE public.profiles SET plan_credits = 200 WHERE id = 'a1111111-1111-1111-1111-111111111111';
@@ -131,7 +131,7 @@ SELECT is((SELECT res->>'result' FROM renewed), 'renewed', 'renewal approved: a 
 SELECT results_eq(
   $$ SELECT plan_credits, plan_period_end > now() + interval '29 days', access_kind
        FROM public.profiles WHERE id = 'a1111111-1111-1111-1111-111111111111' $$,
-  $$ VALUES (240, true, 'subscriber'::text) $$,
+  $$ VALUES (480, true, 'subscriber'::text) $$,
   'renewal approved: quota reset and period moved');
 SELECT is(
   (SELECT status FROM public.subscriptions WHERE id = 'b0000000-0000-0000-0000-000000000001'),
@@ -165,7 +165,7 @@ SELECT is(
      'b0000000-0000-0000-0000-000000000002'::uuid, 'pre-2', 'authorized',
      now() + interval '1 month', 'visa', '9999') ->> 'success'),
   'true', 'fresh user activates');
-UPDATE public.profiles SET plan_credits = 55 WHERE id = 'a2222222-2222-2222-2222-222222222222';  -- spent 5 of 60
+UPDATE public.profiles SET plan_credits = 295 WHERE id = 'a2222222-2222-2222-2222-222222222222';  -- spent 5 of 300
 
 CREATE TEMP TABLE clawed AS
   SELECT public.renew_subscription('b0000000-0000-0000-0000-000000000002'::uuid,
@@ -182,7 +182,7 @@ SELECT is(
 SELECT results_eq(
   $$ SELECT type, bucket, delta FROM public.credit_transactions
       WHERE user_id = 'a2222222-2222-2222-2222-222222222222' AND type = 'clawback' $$,
-  $$ VALUES ('clawback'::text, 'plan'::text, -55) $$,
+  $$ VALUES ('clawback'::text, 'plan'::text, -295) $$,
   'clawback: the ledger shows what was taken back');
 
 -- ── Cancel keeps the credits until the period ends ──────────────────────────
@@ -195,7 +195,7 @@ SELECT results_eq(
   'cancel: status and timestamp');
 SELECT is(
   (SELECT plan_credits FROM public.profiles WHERE id = 'a1111111-1111-1111-1111-111111111111'),
-  240, 'cancel: the paid period keeps its credits');
+  480, 'cancel: the paid period keeps its credits');
 
 -- ── sync from the preapproval topic ─────────────────────────────────────────
 INSERT INTO public.subscriptions (id, user_id, plan_id, status, payer_email)
@@ -207,7 +207,7 @@ SELECT is(
   'activated', 'sync: pending -> authorized activates the subscription');
 SELECT is(
   (SELECT plan_credits FROM public.profiles WHERE id = 'a2222222-2222-2222-2222-222222222222'),
-  60, 'sync: activation loaded the plan quota');
+  300, 'sync: activation loaded the plan quota');
 SELECT is(
   (SELECT public.sync_subscription_status('b0000000-0000-0000-0000-000000000003'::uuid, 'pre-3', 'paused', NULL) ->> 'result'),
   'paused', 'sync: paused is mirrored');
@@ -230,7 +230,7 @@ SELECT results_eq(
   'activate: the duplicate attempt is closed with its preapproval id kept for the cancel');
 SELECT is(
   (SELECT plan_credits FROM public.profiles WHERE id = 'a2222222-2222-2222-2222-222222222222'),
-  60, 'activate: the duplicate did not touch the plan bucket');
+  300, 'activate: the duplicate did not touch the plan bucket');
 SELECT has_index('public', 'subscriptions', 'subscriptions_plan_id_idx', 'index on subscriptions.plan_id');
 
 RESET role;

@@ -22,10 +22,10 @@ SELECT has_table('public', 'plans', 'plans exists');
 SELECT results_eq(
   $$ SELECT slug, price_brl::text, monthly_credits, highlight FROM public.plans
       WHERE active AND NOT admin_only ORDER BY sort_order $$,
-  $$ VALUES ('basico'::text, '19.90'::text, 60, false),
-            ('profissional', '59.90', 240, true),
-            ('avancado', '99.90', 500, false) $$,
-  'seed: the three public monthly plans with their credits');
+  $$ VALUES ('basico'::text, '39.90'::text, 300, false),
+            ('profissional', '59.90', 480, true),
+            ('avancado', '99.90', 900, false) $$,
+  'seed: the three public monthly plans with their credits (2026-09 repricing)');
 SELECT is(
   (SELECT count(*)::int FROM public.plans WHERE admin_only AND active),
   1, 'seed: one admin-only smoke plan');

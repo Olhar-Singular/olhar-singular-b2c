@@ -39,7 +39,7 @@ vi.mock("@/hooks/useSubscription", async (orig) => {
 vi.mock("@/hooks/useAuth", () => ({ useAuth: vi.fn() }));
 vi.mock("sonner", () => ({ toast: { error: vi.fn(), success: vi.fn() } }));
 
-const PLAN = { id: "pl", slug: "profissional", name: "Profissional", priceBrl: 59.9, monthlyCredits: 240, highlight: true, adminOnly: false };
+const PLAN = { id: "pl", slug: "profissional", name: "Profissional", priceBrl: 59.9, monthlyCredits: 480, highlight: true, adminOnly: false };
 
 function access(overrides: Partial<Access> = {}): Access {
   return {
@@ -143,7 +143,7 @@ describe("SubscriptionCard", () => {
     renderCard(sub());
     expect(screen.getByText("Ativa")).toBeInTheDocument();
     expect(screen.getByText(/Profissional · R\$\s*59,90\/mês/)).toBeInTheDocument();
-    expect(screen.getByText("240 créditos por mês")).toBeInTheDocument();
+    expect(screen.getByText("480 créditos por mês")).toBeInTheDocument();
     expect(screen.getByText("12/10/2026")).toBeInTheDocument();
     expect(screen.getByText("Master final 1234")).toBeInTheDocument();
   });

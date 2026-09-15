@@ -18,12 +18,12 @@ export function formatDate(value: Date) {
 // Mirror of the seeded `plans` rows, shown until the catalogue loads (and if it
 // never does): the landing page must never render an empty pricing grid.
 export const DEFAULT_PLANS: PlanView[] = [
-  { id: "basico",       slug: "basico",       name: "Básico",       priceBrl: 19.9, monthlyCredits: 60,  highlight: false, adminOnly: false },
-  { id: "profissional", slug: "profissional", name: "Profissional", priceBrl: 59.9, monthlyCredits: 240, highlight: true,  adminOnly: false },
-  { id: "avancado",     slug: "avancado",     name: "Avançado",     priceBrl: 99.9, monthlyCredits: 500, highlight: false, adminOnly: false },
+  { id: "basico",       slug: "basico",       name: "Básico",       priceBrl: 39.9, monthlyCredits: 300, highlight: false, adminOnly: false },
+  { id: "profissional", slug: "profissional", name: "Profissional", priceBrl: 59.9, monthlyCredits: 480, highlight: true,  adminOnly: false },
+  { id: "avancado",     slug: "avancado",     name: "Avançado",     priceBrl: 99.9, monthlyCredits: 900, highlight: false, adminOnly: false },
 ];
 
-// An adaptation costs 5 to 12 credits depending on the activity size.
+// An adaptation costs 5 to 12 credits depending on the barrier (adaptationCost.ts).
 export function adaptationsRange(credits: number): string {
   return `${Math.floor(credits / 12)} a ${Math.floor(credits / 5)} adaptações por mês`;
 }

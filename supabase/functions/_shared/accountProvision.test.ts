@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from "vitest";
 import { parseAccountInput, runAnonymousCheckout, type CheckoutDeps, type CheckoutInput } from "./accountProvision";
 import type { SubscribeDeps } from "./subscribeFlow";
 
-const PLAN = { id: "pl-pro", slug: "profissional", name: "Profissional", price_brl: 59.9, monthly_credits: 240, active: true, admin_only: false };
+const PLAN = { id: "pl-pro", slug: "profissional", name: "Profissional", price_brl: 59.9, monthly_credits: 480, active: true, admin_only: false };
 const CARD = { token: "tok", payment_method_id: "master", payer: { identification: { type: "CPF", number: "123.456.789-09" } } };
 
 function subscribeDeps(preapproval: Record<string, unknown> = { id: "pre-1", status: "authorized" }): SubscribeDeps {

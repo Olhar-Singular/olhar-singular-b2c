@@ -29,8 +29,8 @@ Trocar o modelo de monetização e o provedor de cartão:
 | # | Decisão | Escolha |
 |---|---------|---------|
 | 1 | Avulso continua após o trial? | Sim. Extras via Pix **e** cartão inline. Assinatura serve só para repor créditos mensais. |
-| 2 | Planos mensais | Básico R$19,90 (60 créditos/mês), Profissional R$59,90 (240/mês, "Popular"), Avançado R$99,90 (500/mês). Curva de 3, 4 e 5 créditos por real, derivada dos pacotes atuais. |
-| 3 | Pacotes extras | Mantidos: 30 por R$9,90, 120 por R$29,90, 300 por R$59,90. Vivem em tabela para mudar sem código. **Risco registrado:** a R$59,90 o avulso (300, sem validade) rende mais que o plano Profissional (240, mensal). |
+| 2 | Planos mensais | **Reprecificado em 2026-09 (migration `20260917000000_plans_repricing`)**: Básico R$39,90 (300 créditos/mês), Profissional R$59,90 (480/mês, "Popular"), Avançado R$99,90 (900/mês). Curva de 7,5, 8 e 9 créditos por real, crescente com o plano. Âncora de mercado: Teachy e Skooly vendem "ilimitado" por R$39,90/mês; 300 créditos ≈ 30 adaptações no mix típico (~9,5 créditos cada). Seed original (19,90/60 · 59,90/240 · 99,90/500, curva 3/4/5) ficou só no histórico. |
+| 3 | Pacotes extras | Mantidos: 30 por R$9,90, 120 por R$29,90, 300 por R$59,90. Vivem em tabela para mudar sem código. Risco original (avulso de 300 rendia mais que o Profissional de 240) resolvido pela reprecificação: hoje todo plano rende mais crédito por real que qualquer avulso (5 cr/R$ no maior pacote). |
 | 4 | Renovação | Zera e recarrega a cota. Nunca acumula. |
 | 5 | Créditos do trial | Morrem no fim dos 7 dias. Assinar durante o trial substitui o saldo pela cota do plano, sem somar. |
 | 6 | Flags "1ª adaptação grátis" e "1ª extração grátis" | Aposentadas. Quem ainda tem a flag disponível recebe 12 créditos extras de compensação na migração (9 usuários em produção). |
@@ -409,7 +409,7 @@ Super-admin **não** tem bypass automático: usa Cortesia se quiser.
   Mockado nos testes; sem `VITE_MP_PUBLIC_KEY` renderiza erro visível, não quebra o build.
 - **Paywall UX**: `StepGenerate` (402), `QuestionBankPage` (`canExtract` pelo total), `ChatPage`:
   mensagem única "Seus créditos acabaram" com botões "Assinar" e "Comprar créditos extras".
-- **Landing**: header com "Entrar" e "Assinar"; hero com "Planos a partir de R$19,90/mês"; pricing
+- **Landing**: header com "Entrar" e "Assinar"; hero com "Planos a partir de R$39,90/mês"; pricing
   lendo `plans` e citando extras; FAQ reescrita (créditos do plano renovam todo mês; extras não
   expiram; cancele quando quiser; reembolso em 7 dias; assinatura no cartão, extras no Pix ou
   cartão); CTA final "Assinar agora"; footer com Termos, Privacidade, Reembolso e CNPJ (placeholder).
@@ -581,8 +581,10 @@ Cada fase deixa a suíte verde e o produto coerente ("estado ao final" entre par
   e-mail alheio cria uma conta que não consegue abrir; o dono do e-mail recupera pelo link ou por
   "Esqueci minha senha". Custo: um clique no e-mail depois de pagar.
 
-- Preço dos extras vs. plano (decisão 3): o avulso de R$59,90 rende mais crédito que o plano do
-  mesmo valor. Tabela permite ajustar sem código.
+- Preço dos extras vs. plano (decisão 3): resolvido em 2026-09 (planos a 7,5 a 9 cr/R$, avulsos a
+  3 a 5 cr/R$). Assinaturas vivas mantêm o valor do preapproval no MP; a cota nova entra na renovação
+  seguinte (`renew_subscription` lê `plans.monthly_credits` na hora), e o MRR do admin soma o preço
+  atual da tabela, não o cobrado.
 - `sandbox_mode: true` na aplicação de produção do MP: conferir no painel antes do smoke.
 - Pagamento live da Stripe possivelmente não creditado: a migração lista; crédito manual é decisão
   do dono.

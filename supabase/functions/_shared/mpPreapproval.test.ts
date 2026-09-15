@@ -6,7 +6,7 @@ import {
   parseSubscriptionNotification,
 } from "./mpPreapproval";
 
-const PLAN = { id: "pl-1", slug: "profissional", name: "Profissional", priceBrl: 59.9, monthlyCredits: 240, adminOnly: false };
+const PLAN = { id: "pl-1", slug: "profissional", name: "Profissional", priceBrl: 59.9, monthlyCredits: 480, adminOnly: false };
 
 describe("buildPreapprovalBody", () => {
   it("builds the monthly preapproval from the plan row, never from the request", () => {

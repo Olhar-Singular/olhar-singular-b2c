@@ -10,9 +10,9 @@ vi.mock("@/hooks/useSubscription", () => ({ usePlans: mockUsePlans }));
 
 describe("PricingSection helpers", () => {
   it("estimates adaptations from the 5 to 12 credit cost", () => {
-    expect(adaptationsRange(60)).toBe("5 a 12 adaptações por mês");
-    expect(adaptationsRange(240)).toBe("20 a 48 adaptações por mês");
-    expect(adaptationsRange(500)).toBe("41 a 100 adaptações por mês");
+    expect(adaptationsRange(300)).toBe("25 a 60 adaptações por mês");
+    expect(adaptationsRange(480)).toBe("40 a 96 adaptações por mês");
+    expect(adaptationsRange(900)).toBe("75 a 180 adaptações por mês");
   });
 
   it("falls back to the seeded catalogue and hides admin-only plans", () => {
@@ -48,11 +48,13 @@ describe("PricingSection", () => {
 
   it("renders the three monthly plans with prices even before the catalogue loads", () => {
     renderWithProviders(<PricingSection />);
-    expect(screen.getByText(/R\$\s*19,90/)).toBeInTheDocument();
+    expect(screen.getByText(/R\$\s*39,90/)).toBeInTheDocument();
     expect(screen.getByText(/R\$\s*99,90/)).toBeInTheDocument();
     // 59,90 is also the price of the 300-credit extra package.
     expect(screen.getAllByText(/R\$\s*59,90/).length).toBe(2);
-    expect(screen.getByText(/240 créditos por mês/)).toBeInTheDocument();
+    expect(screen.getByText(/300 créditos por mês/)).toBeInTheDocument();
+    expect(screen.getByText(/480 créditos por mês/)).toBeInTheDocument();
+    expect(screen.getByText(/900 créditos por mês/)).toBeInTheDocument();
   });
 
   it("renders the catalogue from the database when it arrives", () => {
@@ -62,7 +64,7 @@ describe("PricingSection", () => {
     });
     renderWithProviders(<PricingSection />);
     expect(screen.getByText(/R\$\s*42,00/)).toBeInTheDocument();
-    expect(screen.queryByText(/R\$\s*19,90/)).toBeNull();
+    expect(screen.queryByText(/R\$\s*39,90/)).toBeNull();
     expect(screen.getByRole("link", { name: /Assinar/ })).toHaveAttribute("href", "/assinar?plano=unico");
   });
 

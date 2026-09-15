@@ -45,9 +45,9 @@ vi.mock("@/hooks/useSubscription", async (orig) => {
 vi.mock("@/hooks/useAuth", () => ({ useAuth: vi.fn() }));
 vi.mock("sonner", () => ({ toast: { error: vi.fn(), success: vi.fn() } }));
 
-const BASIC = { id: "pl-basic", slug: "basico", name: "Básico", priceBrl: 19.9, monthlyCredits: 60, highlight: false, adminOnly: false };
-const PRO = { id: "pl-pro", slug: "profissional", name: "Profissional", priceBrl: 59.9, monthlyCredits: 240, highlight: true, adminOnly: false };
-const ADV = { id: "pl-adv", slug: "avancado", name: "Avançado", priceBrl: 99.9, monthlyCredits: 500, highlight: false, adminOnly: false };
+const BASIC = { id: "pl-basic", slug: "basico", name: "Básico", priceBrl: 39.9, monthlyCredits: 300, highlight: false, adminOnly: false };
+const PRO = { id: "pl-pro", slug: "profissional", name: "Profissional", priceBrl: 59.9, monthlyCredits: 480, highlight: true, adminOnly: false };
+const ADV = { id: "pl-adv", slug: "avancado", name: "Avançado", priceBrl: 99.9, monthlyCredits: 900, highlight: false, adminOnly: false };
 const PLANS = [BASIC, PRO, ADV];
 
 const LEGACY = { access_kind: "legacy", plan_credits: 0, plan_period_end: null, credit_balance: 3, trial_started_at: null, must_set_password: false };
@@ -159,7 +159,7 @@ describe("SubscribePage", () => {
     expect(window.dataLayer?.map((e) => (e as { event: string }).event)).toEqual(
       expect.arrayContaining(["begin_checkout", "add_payment_info", "subscription_started"]),
     );
-    await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent(/Assinatura ativa! 240 créditos/));
+    await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent(/Assinatura ativa! 480 créditos/));
     expect(screen.getByRole("link", { name: /Começar a adaptar/ })).toHaveAttribute("href", "/adaptar");
     expect(screen.queryByTestId("card-brick")).toBeNull();
   });
@@ -293,7 +293,7 @@ describe("SubscribePage (anonymous funnel)", () => {
     await fillAccount(user);
     expect(screen.getByText(/Conta para/)).toHaveTextContent("Nova Pessoa");
     expect(screen.getByRole("button", { name: /Básico/ })).toHaveAttribute("aria-pressed", "true");
-    expect(brickProps).toHaveBeenCalledWith(expect.objectContaining({ amount: 19.9, payerEmail: "nova@example.com" }));
+    expect(brickProps).toHaveBeenCalledWith(expect.objectContaining({ amount: 39.9, payerEmail: "nova@example.com" }));
   });
 
   it("lets the buyer go back and fix the account", async () => {
@@ -312,7 +312,7 @@ describe("SubscribePage (anonymous funnel)", () => {
     await fillAccount(user);
     await user.click(screen.getByRole("button", { name: "Assinar agora" }));
 
-    await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent(/Assinatura ativa! 240 créditos/));
+    await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent(/Assinatura ativa! 480 créditos/));
     expect(mockSubscribe).toHaveBeenCalledWith({
       planSlug: "profissional",
       card: CARD,
