@@ -30,8 +30,11 @@ describe("mpRequest", () => {
       new Promise<Response>((_r, reject) => init.signal?.addEventListener("abort", () => reject(new Error("aborted")))),
     ) as unknown as typeof fetch;
     const pending = mpRequest("/slow", { token: "t", timeoutMs: 50 }, hanging);
+    // Attach the handler before the clock fires: the rejection lands while the
+    // timers are being flushed, and an unhandled one fails the whole run.
+    const timedOut = expect(pending).rejects.toBeInstanceOf(MpTimeoutError);
     await vi.advanceTimersByTimeAsync(60);
-    await expect(pending).rejects.toBeInstanceOf(MpTimeoutError);
+    await timedOut;
     vi.useRealTimers();
 
     const failing = vi.fn(async () => { throw new TypeError("fetch failed"); }) as unknown as typeof fetch;
