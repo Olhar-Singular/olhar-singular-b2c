@@ -77,12 +77,12 @@ interface ChosenPlan {
   /** The plan the server actually used (for a trial it is not the requested slug). */
   planSlug: string;
   priceBrl: number;
-  /** Trial with card: ISO of the first charge. Absent on a paid-from-day-one attempt and on rejections. */
-  trialEndsAt?: string;
 }
 
 export type SubscribeResult =
-  | ({ ok: true; status: "authorized" | "pending"; subscriptionId: string } & ChosenPlan)
+  | ({ ok: true; status: "authorized" | "pending"; subscriptionId: string;
+       /** Trial with card: ISO of the first charge. Absent on a paid-from-day-one attempt. */
+       trialEndsAt?: string } & ChosenPlan)
   | ({ ok: true; status: "rejected"; subscriptionId: string; detail: string } & ChosenPlan)
   | { ok: false; error: "invalid_plan" | "exempt_user" | "already_subscribed" | "attempt_in_progress" | "profile_not_found"; httpStatus: number };
 
