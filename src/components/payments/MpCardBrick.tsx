@@ -11,10 +11,12 @@ export interface MpCardBrickProps {
   /** Receives the tokenized card. Resolve when the backend answered; reject to let the Brick re-enable. */
   onSubmit: (card: CardFormDataView) => Promise<void>;
   onError?: (message: string) => void;
+  /** Text of the Brick's submit button; MP's default ("Pagar") when omitted. */
+  submitLabel?: string;
 }
 
 // Instalments pinned to 1. Module-level so its identity never changes.
-const CUSTOMIZATION = { paymentMethods: { maxInstallments: 1 } };
+const BASE_CUSTOMIZATION = { paymentMethods: { maxInstallments: 1 } };
 
 // Thin wrapper over @mercadopago/sdk-react's Card Payment Brick: the card is
 // tokenized inside the MP iframe (we never see the PAN, PCI SAQ-A), instalments
@@ -25,7 +27,7 @@ const CUSTOMIZATION = { paymentMethods: { maxInstallments: 1 } };
 // every callback). A parent re-render with fresh arrow functions therefore
 // wiped the form the user was typing in. Everything handed to it here is
 // stable: the callbacks read the latest props through refs.
-export default function MpCardBrick({ amount, payerEmail, onSubmit, onError }: MpCardBrickProps) {
+export default function MpCardBrick({ amount, payerEmail, onSubmit, onError, submitLabel }: MpCardBrickProps) {
   const publicKey = readMpPublicKey();
 
   useEffect(() => {
@@ -35,6 +37,12 @@ export default function MpCardBrick({ amount, payerEmail, onSubmit, onError }: M
   const initialization = useMemo(
     () => ({ amount, ...(payerEmail ? { payer: { email: payerEmail } } : {}) }),
     [amount, payerEmail],
+  );
+
+  // Stable per label: a new object would re-create the Brick (see the note above).
+  const customization = useMemo(
+    () => (submitLabel ? { ...BASE_CUSTOMIZATION, visual: { texts: { formSubmit: submitLabel } } } : BASE_CUSTOMIZATION),
+    [submitLabel],
   );
 
   const onSubmitRef = useRef(onSubmit);
@@ -72,7 +80,7 @@ export default function MpCardBrick({ amount, payerEmail, onSubmit, onError }: M
       key={`${amount}-${payerEmail ?? ""}`}
       locale="pt-BR"
       initialization={initialization}
-      customization={CUSTOMIZATION}
+      customization={customization}
       onSubmit={handleSubmit}
       onError={handleError}
     />

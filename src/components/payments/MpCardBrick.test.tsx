@@ -156,4 +156,15 @@ describe("MpCardBrick", () => {
     expect(b.initialization).not.toBe(a.initialization);
     expect(b.initialization.amount).toBe(59.9);
   });
+
+  it("labels the Brick's submit button when submitLabel is given, and leaves MP's default otherwise", () => {
+    render(<MpCardBrick amount={39.9} onSubmit={vi.fn()} submitLabel="Começar o teste" />);
+    expect(cardPaymentProps).toHaveBeenLastCalledWith(
+      expect.objectContaining({ customization: { paymentMethods: { maxInstallments: 1 }, visual: { texts: { formSubmit: "Começar o teste" } } } }),
+    );
+    render(<MpCardBrick amount={39.9} onSubmit={vi.fn()} />);
+    expect(cardPaymentProps).toHaveBeenLastCalledWith(
+      expect.objectContaining({ customization: { paymentMethods: { maxInstallments: 1 } } }),
+    );
+  });
 });

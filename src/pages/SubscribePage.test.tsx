@@ -3,7 +3,7 @@ import { screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { renderWithProviders, buildAuthState } from "@/test/helpers";
 import SubscribePage from "./SubscribePage";
-import { pickInitialPlan, replacementNotice } from "@/lib/domain/subscriptionUi";
+import { cheapestPublicPlan, isCardTrial, pickInitialPlan, replacementNotice, TERMS_VERSION, TRIAL_CREDITS, TRIAL_DAYS, trialFirstChargeDate } from "@/lib/domain/subscriptionUi";
 import type { Access } from "@/lib/domain/access";
 
 const { mockSubscribe, brickProps, mockUsePlans, mockUseSubscription, mockSignInWithOtp } = vi.hoisted(() => ({
@@ -102,6 +102,36 @@ describe("replacementNotice", () => {
     expect(replacementNotice(null)).toBeNull();
     expect(replacementNotice({ ...base, planCredits: 0 })).toBeNull();
     expect(replacementNotice({ ...base, periodEnd: null })).toBeNull();
+  });
+});
+
+describe("trial helpers", () => {
+  it("cheapestPublicPlan picks the lowest price among non-admin plans", () => {
+    const smoke = { ...BASIC, id: "t", slug: "teste-admin", priceBrl: 1, adminOnly: true };
+    expect(cheapestPublicPlan([PRO, ADV, BASIC, smoke])).toBe(BASIC);
+    expect(cheapestPublicPlan([smoke])).toBeNull();
+    expect(cheapestPublicPlan([])).toBeNull();
+  });
+
+  it("trialFirstChargeDate is 7 days ahead", () => {
+    expect(TRIAL_DAYS).toBe(7);
+    expect(TRIAL_CREDITS).toBe(50);
+    expect(trialFirstChargeDate(new Date("2026-09-15T12:00:00Z"))).toEqual(new Date("2026-09-22T12:00:00Z"));
+  });
+
+  it("isCardTrial is a live row born as a trial that MP has not charged yet", () => {
+    const base = {
+      id: "s", status: "authorized" as const, statusDetail: null, plan: null, nextPaymentDate: null,
+      currentPeriodEnd: null, cancelledAt: null, cardBrand: null, cardLastFour: null,
+      firstPaymentConfirmed: false, trialEndsAt: new Date("2026-09-22T12:00:00Z"), createdAt: null,
+    };
+    expect(isCardTrial(base)).toBe(true);
+    expect(isCardTrial({ ...base, status: "past_due" })).toBe(true);
+    expect(isCardTrial({ ...base, firstPaymentConfirmed: true })).toBe(false);
+    expect(isCardTrial({ ...base, trialEndsAt: null })).toBe(false);
+    expect(isCardTrial({ ...base, status: "cancelled" })).toBe(false);
+    expect(isCardTrial(null)).toBe(false);
+    expect(isCardTrial(undefined)).toBe(false);
   });
 });
 
@@ -316,7 +346,7 @@ describe("SubscribePage (anonymous funnel)", () => {
     expect(mockSubscribe).toHaveBeenCalledWith({
       planSlug: "profissional",
       card: CARD,
-      account: { fullName: "Nova Pessoa", email: "nova@example.com", termsVersion: "2026-09" },
+      account: { fullName: "Nova Pessoa", email: "nova@example.com", termsVersion: TERMS_VERSION },
     });
     expect(mockSignInWithOtp).toHaveBeenCalledWith({
       email: "nova@example.com",

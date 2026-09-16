@@ -2,10 +2,10 @@
 // subscription card, access banner). Kept out of the component files so
 // React fast refresh stays intact and the rules are unit-tested on their own.
 
-import { format } from "date-fns";
+import { addDays, format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import type { Access } from "@/lib/domain/access";
-import type { PlanView, SubscriptionView } from "@/hooks/useSubscription";
+import type { PlanView, SubscriptionStatus, SubscriptionView } from "@/hooks/useSubscription";
 
 export function formatBrl(value: number) {
   return value.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
@@ -82,9 +82,34 @@ export function isRecentRejection(subscription: SubscriptionView | null | undefi
   return now.getTime() - subscription.createdAt.getTime() < REJECTED_WINDOW_MS;
 }
 
+/** Trial with card (spec 2026-09-15, decision 1). Mirrors TRIAL_DAYS in _shared/mpPreapproval.ts. */
+export const TRIAL_DAYS = 7;
+export const TRIAL_CREDITS = 50;
+
+// The trial runs on the cheapest public plan: the server decides (subscribeFlow),
+// this mirror only feeds the copy. Null while the catalogue is empty.
+export function cheapestPublicPlan(plans: PlanView[]): PlanView | null {
+  return plans
+    .filter((p) => !p.adminOnly)
+    .reduce<PlanView | null>((best, p) => (best === null || p.priceBrl < best.priceBrl ? p : best), null);
+}
+
+// The date shown before the checkout; the server's trialEndsAt is the truth after it.
+export function trialFirstChargeDate(now: Date): Date {
+  return addDays(now, TRIAL_DAYS);
+}
+
+const LIVE_STATUSES: readonly SubscriptionStatus[] = ["authorized", "past_due", "paused"];
+
+// A live subscription born as a trial that MP has not charged yet: the card,
+// the banner and the cancel dialog read differently until the first charge.
+export function isCardTrial(sub: SubscriptionView | null | undefined): boolean {
+  return !!sub && LIVE_STATUSES.includes(sub.status) && sub.trialEndsAt !== null && !sub.firstPaymentConfirmed;
+}
+
 // Version of the Terms of Use the checkout records on the profile. Bump when
 // the legal text changes; the pages under /termos show the same value.
-export const TERMS_VERSION = "2026-09";
+export const TERMS_VERSION = "2026-09.2";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 
