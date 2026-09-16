@@ -4,7 +4,8 @@ Plataforma educacional B2C (em construção). Educadores adaptam atividades peda
 (provas, exercícios) para alunos com **barreiras de aprendizagem** (ex.: TEA) usando IA;
 monetização por **créditos** em dois baldes: plano mensal (39,90/300 · 59,90/480 · 99,90/900,
 tabela `plans`) + extras avulsos que não expiram. Sem cadastro público nem adaptação grátis:
-conta nasce pelo checkout pago ou por convite do admin (trial 7 dias/50 créditos). Stack idêntica ao
+conta nasce pelo checkout pago, pelo teste de 7 dias com cartão (sem cobrança até o 8º dia) ou
+por convite do admin (trial 7 dias/50 créditos). Stack idêntica ao
 projeto B2B de referência `orientador-digital`.
 
 ## Contexto do projeto

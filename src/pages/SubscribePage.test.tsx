@@ -500,6 +500,31 @@ describe("SubscribePage (trial with card, ?trial=1)", () => {
     await waitFor(() => expect(brickProps).toHaveBeenCalledWith("rejected"));
   });
 
+  it("falls back to the day count when the server sends no trial end date", async () => {
+    const user = userEvent.setup();
+    mockSubscribe.mockResolvedValue({ status: "authorized", subscriptionId: "sub-1", accountCreated: true });
+    renderPage("/assinar?trial=1");
+    await fillAccount(user);
+    await user.click(screen.getByRole("button", { name: "Assinar agora" }));
+    await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent("Teste ativado! 50 créditos já estão na sua conta."));
+    expect(screen.getByRole("status")).toHaveTextContent(`A primeira cobrança de R$ 39,90 será em ${TRIAL_DAYS} dias.`);
+  });
+
+  it("shows the trial analysis copy on pending, not the generic subscription one", async () => {
+    const user = userEvent.setup();
+    mockSubscribe.mockResolvedValue({ status: "pending", subscriptionId: "sub-1", accountCreated: true });
+    renderPage("/assinar?trial=1");
+    await fillAccount(user);
+    await user.click(screen.getByRole("button", { name: "Assinar agora" }));
+    await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent("Teste em análise. Seus créditos entram assim que o cartão for confirmado."));
+  });
+
+  it("omits the plan name from the intro while the catalogue is still loading", () => {
+    mockUsePlans.mockReturnValue({ data: [], isLoading: true });
+    renderPage("/assinar?trial=1");
+    expect(screen.getByText(`Cartão obrigatório, nada é cobrado hoje. Em ${TRIAL_DAYS} dias começa o plano. Cancele antes e não paga nada.`)).toBeInTheDocument();
+  });
+
   it("ignores ?trial=1 for a logged-in user (paid flow, plan selector visible)", async () => {
     await setProfile(LEGACY);
     renderPage("/assinar?trial=1");

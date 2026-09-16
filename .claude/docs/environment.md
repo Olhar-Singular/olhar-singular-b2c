@@ -26,7 +26,9 @@ DATABASE_URL=                  # Connection string completa (remoto)
 > `VITE_MP_PUBLIC_KEY` (public key do Mercado Pago da **mesma aplicação** do
 > `ACCESS_TOKEN_MP_PROD`; vai pro bundle e inicializa o Card Payment Brick). O bloco
 > STAGING (`ACCESS_TOKEN_MP`, `PUBLIC_KEY_MP`, `VERIFY_TOKEN_MP`, usuário de teste) é o
-> vendedor de TESTE do MP, usado por `make fn-serve-mp-test`. As `VITE_SUPABASE_*`
+> vendedor de TESTE do MP, usado por `make fn-serve-mp-test`, e `BUYER_TEST_EMAIL_MP`, o
+> comprador de teste usado como e-mail da conta no funil anônimo do sandbox (o link de
+> acesso cai no Mailpit local). As `VITE_SUPABASE_*`
 > servem aos dois ambientes — o que muda é o conteúdo.
 >
 > **Login com Google (OAuth):** `GOOGLE_CLIENT_ID` e `GOOGLE_CLIENT_SECRET` alimentam o

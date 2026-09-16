@@ -160,6 +160,19 @@ describe("AccessBanner (subscription states)", () => {
     expect(screen.getByRole("link", { name: "Ver detalhes" })).toHaveAttribute("href", "/creditos");
   });
 
+  it("uses the singular day/credit and skips the charge line when the plan is not loaded yet", () => {
+    render(
+      <MemoryRouter>
+        <AccessBanner
+          now={NOW}
+          access={access({ kind: "trial", planCredits: 1, extraCredits: 0, total: 1, daysLeft: 1 })}
+          subscription={subscription({ firstPaymentConfirmed: false, trialEndsAt: new Date("2026-09-21T12:00:00Z"), plan: null })}
+        />
+      </MemoryRouter>,
+    );
+    expect(screen.getByRole("status")).toHaveTextContent("Teste grátis: 1 dia restante e 1 crédito.");
+  });
+
   it("keeps the invite-trial banner when the trial has no card behind it", () => {
     render(
       <MemoryRouter>

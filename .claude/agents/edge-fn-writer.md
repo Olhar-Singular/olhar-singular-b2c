@@ -35,7 +35,7 @@ supabase/functions/
 │   ├── mpPixPayment.ts  # body do POST /v1/payments (Pix) + extração do QR — Checkout Transparente
 │   ├── mpEvents.ts      # parsing do webhook Mercado Pago (grant/reject por status do pagamento)
 │   ├── mpPreapproval.ts # assinatura: body do POST /preapproval, interpretação, tópicos do webhook, shape do authorized_payment
-│   ├── subscribeFlow.ts # runSubscribe(input, deps): plano válido, uma viva, ativação otimista, pending, recusa, nunca repetir o POST
+│   ├── subscribeFlow.ts # runSubscribe(input, deps): plano válido (ou o mais barato no trial), uma viva, trial_ends_at na linha, ativação otimista, pending, recusa, nunca repetir o POST
 │   ├── subscribeInput.ts # parseSubscribeInput / parseUpdateCardInput / parseCancelInput
 │   ├── subscriptionActions.ts # runCancelSubscription / runUpdateSubscriptionCard / handleSubscriptionWebhook (deps injetadas)
 │   ├── subscriptionActionDeps.ts # wiring Supabase+MP dos deps acima (compartilhado por cancel e update-card)

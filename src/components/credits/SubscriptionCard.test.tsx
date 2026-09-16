@@ -273,6 +273,13 @@ describe("SubscriptionCard (trial with card)", () => {
     expect(screen.getByRole("button", { name: /Trocar cartão/ })).toBeInTheDocument();
   });
 
+  it("uses the singular for a single credit left in the trial", () => {
+    renderWithProviders(
+      <SubscriptionCard subscription={trialSub()} access={access({ kind: "trial", planCredits: 1, total: 6, periodEnd: new Date("2026-09-22T12:00:00Z"), daysLeft: 7 })} />,
+    );
+    expect(screen.getByText(/Você tem 1 crédito do teste até 22\/09\/2026\. Cancelar agora encerra o acesso na hora e nada é cobrado\./)).toBeInTheDocument();
+  });
+
   it("confirms the trial cancellation with its own copy and cancels", async () => {
     const user = userEvent.setup();
     renderWithProviders(<SubscriptionCard subscription={trialSub()} access={trialAccess()} />);
