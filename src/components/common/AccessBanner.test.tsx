@@ -20,6 +20,7 @@ function subscription(overrides: Partial<SubscriptionView>): SubscriptionView {
     cardBrand: null,
     cardLastFour: null,
     firstPaymentConfirmed: true,
+    trialEndsAt: null,
     createdAt: new Date("2026-09-14T10:00:00Z"),
     ...overrides,
   };

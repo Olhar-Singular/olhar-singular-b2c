@@ -9,6 +9,7 @@ import {
   toSubscriptionView,
   isLiveSubscription,
   useSubscribe,
+  subscribeErrorCode,
   useCancelSubscription,
   useUpdateSubscriptionCard,
   useSetInitialPassword,
@@ -48,6 +49,7 @@ const SUB_ROW = {
   next_payment_date: "2026-10-12T12:00:00Z", current_period_start: "2026-09-12T12:00:00Z",
   current_period_end: "2026-10-12T12:00:00Z", cancel_requested_at: null, cancelled_at: null,
   card_brand: "master", card_last_four: "1234", first_payment_confirmed: true, attribution: null,
+  trial_ends_at: null,
   created_at: "2026-09-12T12:00:00Z", updated_at: "2026-09-12T12:00:00Z", plans: PLAN_ROW,
 };
 
@@ -103,7 +105,12 @@ describe("toSubscriptionView / isLiveSubscription", () => {
     expect(view.nextPaymentDate?.toISOString()).toBe("2026-10-12T12:00:00.000Z");
     expect(view.currentPeriodEnd?.toISOString()).toBe("2026-10-12T12:00:00.000Z");
     expect(view.cancelledAt).toBeNull();
+    expect(view.trialEndsAt).toBeNull();
     expect(view.createdAt?.toISOString()).toBe("2026-09-12T12:00:00.000Z");
+  });
+
+  it("reads trial_ends_at as a Date", () => {
+    expect(toSubscriptionView({ ...SUB_ROW, trial_ends_at: "2026-09-22T21:52:15Z" } as never).trialEndsAt).toEqual(new Date("2026-09-22T21:52:15Z"));
   });
 
   it("tolerates a missing plan and unparseable dates", () => {
@@ -217,6 +224,36 @@ describe("useSubscribe (anonymous funnel)", () => {
     expect(mockInvoke).toHaveBeenCalledWith("subscribe", { body: { planSlug: "basico", card: CARD, account } });
     expect(out).toMatchObject({ accountCreated: true });
   });
+
+  it("forwards trial and returns trialEndsAt", async () => {
+    mockInvoke.mockResolvedValue({ data: { status: "authorized", subscriptionId: "sub-1", accountCreated: true, trialEndsAt: "2026-09-22T21:52:15.000Z" }, error: null });
+    const { result } = renderHook(() => useSubscribe(), { wrapper });
+    const account = { fullName: "Ana", email: "a@b.c", termsVersion: "2026-09" };
+    let out: unknown;
+    await act(async () => {
+      out = await result.current.mutateAsync({ planSlug: "basico", card: CARD, account, trial: true });
+    });
+    expect(mockInvoke).toHaveBeenCalledWith("subscribe", { body: { planSlug: "basico", card: CARD, account, trial: true } });
+    expect(out).toMatchObject({ trialEndsAt: "2026-09-22T21:52:15.000Z" });
+  });
+
+  it("exposes the backend code on the error and does not toast trial_used (the page answers inline)", async () => {
+    const { toast } = await import("sonner");
+    const error = Object.assign(new Error("Edge Function returned a non-2xx status code"), {
+      context: new Response(JSON.stringify({ error: "Este CPF já usou o teste.", code: "trial_used" }), { status: 409 }),
+    });
+    mockInvoke.mockResolvedValue({ data: null, error });
+    const { result } = renderHook(() => useSubscribe(), { wrapper });
+    let caught: unknown;
+    await act(async () => {
+      try { await result.current.mutateAsync({ planSlug: "basico", card: CARD, trial: true }); } catch (e) { caught = e; }
+    });
+    expect(subscribeErrorCode(caught)).toBe("trial_used");
+    expect((caught as Error).message).toBe("Este CPF já usou o teste.");
+    expect(toast.error).not.toHaveBeenCalled();
+    expect(subscribeErrorCode(new Error("x"))).toBeNull();
+    expect(subscribeErrorCode(null)).toBeNull();
+  });
 });
 
 describe("useSetInitialPassword", () => {
@@ -275,6 +312,14 @@ describe("useCancelSubscription", () => {
     });
     expect(toast.error).toHaveBeenCalled();
     expect(toast.success).not.toHaveBeenCalled();
+  });
+
+  it("confirms a trial cancellation without promising credits until the period end", async () => {
+    const { toast } = await import("sonner");
+    mockInvoke.mockResolvedValue({ data: { status: "cancelled", subscriptionId: "sub-1" }, error: null });
+    const { result } = renderHook(() => useCancelSubscription({ trial: true }), { wrapper });
+    await act(async () => { await result.current.mutateAsync(); });
+    expect(toast.success).toHaveBeenCalledWith("Teste cancelado. Nada foi cobrado.");
   });
 });
 

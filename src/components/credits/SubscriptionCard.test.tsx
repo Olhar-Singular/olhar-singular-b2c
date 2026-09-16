@@ -69,6 +69,7 @@ function sub(overrides: Partial<SubscriptionView> = {}): SubscriptionView {
     cardBrand: "master",
     cardLastFour: "1234",
     firstPaymentConfirmed: true,
+    trialEndsAt: null,
     createdAt: new Date("2026-09-12T12:00:00Z"),
     ...overrides,
   };

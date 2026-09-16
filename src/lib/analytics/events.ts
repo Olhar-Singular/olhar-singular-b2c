@@ -48,6 +48,18 @@ export function trackSubscriptionStarted(plan: PlanItem, subscriptionId: string,
   });
 }
 
+/** Trial with card: no money yet (value 0), same dedupe key as the subscription. */
+export function trackTrialStarted(plan: PlanItem, subscriptionId: string, status: "authorized" | "pending"): void {
+  pushEvent("trial_started", {
+    event_id: subscriptionId,
+    transaction_id: subscriptionId,
+    currency: "BRL",
+    value: 0,
+    status,
+    items: [planItem(plan)],
+  });
+}
+
 /** Extras paid by card and approved on the spot (Pix lands via the server only). */
 export function trackPurchase(pkg: { id: string; label: string; credits: number; amountBrl: number }, purchaseId: string): void {
   pushEvent("purchase", {

@@ -4,7 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import type { Database } from "@/integrations/supabase/types";
 import type { CardFormDataView } from "@/hooks/useCredits";
-import { parseInvokeError, parseEdgeFnError } from "@/lib/utils/errors";
+import { parseInvokeError, parseInvokeFailure, parseEdgeFnError } from "@/lib/utils/errors";
 
 type PlanRow = Database["public"]["Tables"]["plans"]["Row"];
 type SubscriptionRow = Database["public"]["Tables"]["subscriptions"]["Row"];
@@ -72,6 +72,8 @@ export interface SubscriptionView {
   cardBrand: string | null;
   cardLastFour: string | null;
   firstPaymentConfirmed: boolean;
+  /** Trial with card: when MP collects the first charge. Null for a paid-from-day-one row. */
+  trialEndsAt: Date | null;
   createdAt: Date | null;
 }
 
@@ -101,6 +103,7 @@ export function toSubscriptionView(row: SubscriptionWithPlan): SubscriptionView 
     cardBrand: row.card_brand,
     cardLastFour: row.card_last_four,
     firstPaymentConfirmed: row.first_payment_confirmed,
+    trialEndsAt: dateOrNull(row.trial_ends_at),
     createdAt: dateOrNull(row.created_at),
   };
 }
@@ -135,6 +138,8 @@ export interface SubscribeResult {
   message?: string;
   /** True when the checkout created the account (anonymous funnel). */
   accountCreated?: boolean;
+  /** Trial with card: ISO date of the first charge. */
+  trialEndsAt?: string | null;
 }
 
 /** Account block of the anonymous checkout. */
@@ -150,6 +155,8 @@ export interface SubscribeInput {
   cardLastFour?: string | null;
   account?: SubscribeAccountInput;
   attribution?: Record<string, unknown>;
+  /** Trial with card (anonymous funnel only): the server picks the cheapest plan. */
+  trial?: boolean;
 }
 
 // Every subscription mutation moves plan credits and the subscription row on
@@ -166,6 +173,12 @@ function useSubscriptionRefresh() {
 
 const SUBSCRIBE_FALLBACK = "Não foi possível concluir a assinatura. Tente novamente.";
 
+/** The backend's code on a subscribe refusal (e.g. "trial_used"), null otherwise. */
+export function subscribeErrorCode(err: unknown): string | null {
+  const code = (err as { code?: unknown } | null)?.code;
+  return typeof code === "string" ? code : null;
+}
+
 // A declined card comes back as status "rejected" with a pt-BR message, not as
 // an error; business refusals (exempt, already subscribed, email_exists, rate
 // limit) are errors. Anonymous callers pass `account`; the page then asks for
@@ -175,11 +188,17 @@ export function useSubscribe() {
   return useMutation({
     mutationFn: async (input: SubscribeInput) => {
       const { data, error } = await supabase.functions.invoke("subscribe", { body: input });
-      if (error) throw new Error(await parseInvokeError(error, SUBSCRIBE_FALLBACK));
+      if (error) {
+        const failure = await parseInvokeFailure(error, SUBSCRIBE_FALLBACK);
+        throw Object.assign(new Error(failure.message), { code: failure.code });
+      }
       return data as SubscribeResult;
     },
     onSuccess: refresh,
-    onError: (err: Error) => toast.error(parseEdgeFnError(err, SUBSCRIBE_FALLBACK)),
+    // trial_used is answered inline by the page (same card, paid plan, one click).
+    onError: (err: Error) => {
+      if (subscribeErrorCode(err) !== "trial_used") toast.error(parseEdgeFnError(err, SUBSCRIBE_FALLBACK));
+    },
   });
 }
 
@@ -206,7 +225,9 @@ export function useSetInitialPassword() {
 
 const CANCEL_FALLBACK = "Não foi possível cancelar agora. Tente de novo em alguns minutos.";
 
-export function useCancelSubscription() {
+// `trial`: cancelling inside the trial removes the trial credits at once, so the
+// confirmation must not promise them until the period end.
+export function useCancelSubscription({ trial = false }: { trial?: boolean } = {}) {
   const refresh = useSubscriptionRefresh();
   return useMutation({
     mutationFn: async () => {
@@ -216,7 +237,7 @@ export function useCancelSubscription() {
     },
     onSuccess: () => {
       refresh();
-      toast.success("Assinatura cancelada. Seus créditos valem até o fim do período pago.");
+      toast.success(trial ? "Teste cancelado. Nada foi cobrado." : "Assinatura cancelada. Seus créditos valem até o fim do período pago.");
     },
     onError: (err: Error) => toast.error(parseEdgeFnError(err, CANCEL_FALLBACK)),
   });
