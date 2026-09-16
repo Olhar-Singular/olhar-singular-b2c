@@ -38,4 +38,9 @@ describe("LandingFooter (legal)", () => {
     expect(screen.getByRole("link", { name: "Reembolso" })).toHaveAttribute("href", "/reembolso");
     expect(screen.getByText(/CNPJ/)).toBeInTheDocument();
   });
+
+  it("does not print the support e-mail", () => {
+    renderWithProviders(<LandingFooter />);
+    expect(screen.queryByText(/contato@olharsingular\.com/)).not.toBeInTheDocument();
+  });
 });

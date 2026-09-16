@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { screen, fireEvent } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import FaqSection from "./FaqSection";
 import { renderWithProviders } from "@/test/helpers";
 
@@ -46,5 +47,16 @@ describe("FaqSection (subscription)", () => {
     expect(screen.getByRole("button", { name: /Posso cancelar quando quiser/ })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /Como troco de plano/ })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /E se eu me arrepender/ })).toBeInTheDocument();
+  });
+
+  it("explains the 7-day trial with card and the cancel rule inside it", async () => {
+    const user = userEvent.setup();
+    renderWithProviders(<FaqSection />);
+    await user.click(screen.getByRole("button", { name: "Como funciona o teste grátis de 7 dias?" }));
+    expect(screen.getByText(/cartão de crédito/i)).toBeInTheDocument();
+    expect(screen.getByText(/No 8º dia cobramos R\$ 39,90/)).toBeInTheDocument();
+    expect(screen.getByText(/um teste por CPF/i)).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Posso cancelar quando quiser?" }));
+    expect(screen.getByText(/Durante o teste grátis, cancelar encerra o acesso na hora/)).toBeInTheDocument();
   });
 });

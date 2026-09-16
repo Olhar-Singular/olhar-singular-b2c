@@ -3,9 +3,8 @@ import { Link } from "react-router-dom";
 import { CheckCircle2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { SUPPORT_EMAIL } from "@/lib/constants";
 import { usePlans } from "@/hooks/useSubscription";
-import { adaptationsRange, formatBrl, publicPlans } from "@/lib/domain/subscriptionUi";
+import { adaptationsRange, cheapestPublicPlan, formatBrl, publicPlans, TRIAL_CREDITS, TRIAL_DAYS } from "@/lib/domain/subscriptionUi";
 import { trackSelectPlan, trackViewPlans } from "@/lib/analytics/events";
 
 const EXTRAS = [
@@ -18,6 +17,7 @@ export default function PricingSection() {
   const { data } = usePlans();
   // Memoized: publicPlans allocates, and the effect below keys on identity.
   const plans = useMemo(() => publicPlans(data), [data]);
+  const trialPlan = useMemo(() => cheapestPublicPlan(plans), [plans]);
 
   // Once per rendered catalogue (the fallback first, the real one when it lands).
   useEffect(() => {
@@ -35,15 +35,15 @@ export default function PricingSection() {
         </div>
 
         <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-6 items-stretch">
-          {/* Free tier */}
+          {/* Trial with card: 7 days free on the cheapest plan (spec 2026-09-15) */}
           <div className="bg-card rounded-xl border border-border shadow-card p-6 flex flex-col">
             <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1">Para conhecer</p>
-            <p className="text-2xl font-extrabold text-foreground mb-1">Teste</p>
-            <p className="text-sm text-muted-foreground mb-4">7 dias, por convite</p>
-            <ul className="space-y-2 text-sm text-foreground flex-1 mb-6">
+            <p className="text-2xl font-extrabold text-foreground mb-1">Teste grátis</p>
+            <p className="text-sm text-muted-foreground mb-4">{TRIAL_DAYS} dias · {TRIAL_CREDITS} créditos</p>
+            <ul className="space-y-2 text-sm text-foreground flex-1 mb-4">
               <li className="flex items-center gap-2">
                 <CheckCircle2 className="w-4 h-4 text-primary shrink-0" aria-hidden="true" />
-                50 créditos para experimentar
+                {TRIAL_CREDITS} créditos para experimentar
               </li>
               <li className="flex items-center gap-2">
                 <CheckCircle2 className="w-4 h-4 text-primary shrink-0" aria-hidden="true" />
@@ -51,12 +51,17 @@ export default function PricingSection() {
               </li>
               <li className="flex items-center gap-2">
                 <CheckCircle2 className="w-4 h-4 text-primary shrink-0" aria-hidden="true" />
-                Sem cartão: a equipe libera o convite
+                Cartão obrigatório. Nada é cobrado por {TRIAL_DAYS} dias.
               </li>
             </ul>
-            <a href={`mailto:${SUPPORT_EMAIL}?subject=Quero%20testar%20o%20Olhar%20Singular`}>
-              <Button variant="outline" className="w-full">Pedir um convite</Button>
-            </a>
+            {trialPlan && (
+              <p className="text-xs text-muted-foreground mb-4">
+                Depois, {formatBrl(trialPlan.priceBrl)}/mês ({trialPlan.monthlyCredits} créditos). Cancele antes e não paga nada.
+              </p>
+            )}
+            <Link to="/assinar?trial=1">
+              <Button variant="outline" className="w-full">Testar {TRIAL_DAYS} dias grátis</Button>
+            </Link>
           </div>
 
           {/* Monthly plans */}

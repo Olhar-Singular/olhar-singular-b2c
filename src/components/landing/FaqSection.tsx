@@ -23,8 +23,12 @@ const FAQ = [
     a: "Você escolhe um plano mensal e paga no cartão de crédito, em 1x. Todo mês, na mesma data, a cobrança se repete e seus créditos do plano são renovados. Precisa de mais créditos num mês? Compre créditos extras avulsos, por Pix ou cartão, que não expiram.",
   },
   {
+    q: "Como funciona o teste grátis de 7 dias?",
+    a: "Você informa nome, e-mail e um cartão de crédito. O cartão é validado (uma cobrança simbólica pode aparecer e é estornada), nada é cobrado por 7 dias e você recebe 50 créditos para experimentar tudo. No 8º dia cobramos R$ 39,90 e sua conta vira o plano Básico, com 300 créditos por mês. Cancelou antes do 8º dia? Nada é cobrado e o acesso encerra na hora. É um teste por CPF.",
+  },
+  {
     q: "Posso cancelar quando quiser?",
-    a: "Sim, em Créditos, com um clique. Você não é mais cobrado e continua usando os créditos do plano até o fim do período já pago. Os extras continuam com você.",
+    a: "Sim, em Créditos, com um clique. Você não é mais cobrado e continua usando os créditos do plano até o fim do período já pago. Os extras continuam com você. Durante o teste grátis, cancelar encerra o acesso na hora e nada é cobrado.",
   },
   {
     q: "Como troco de plano?",

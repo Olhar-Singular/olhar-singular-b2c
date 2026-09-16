@@ -34,21 +34,30 @@ describe("PricingSection", () => {
     expect(screen.getByRole("heading", { name: /Planos e preços/i })).toBeInTheDocument();
   });
 
-  it("renders the 7-day trial as invite-only, with no signup link", () => {
+  it("renders the 7-day trial with card, pointing to /assinar?trial=1 and naming the plan that follows", () => {
     renderWithProviders(<PricingSection />);
-    expect(screen.getByText(/7 dias, por convite/i)).toBeInTheDocument();
-    expect(screen.getByText(/50 créditos para experimentar/i)).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: /Pedir um convite/i })).toHaveAttribute(
-      "href",
-      expect.stringMatching(/^mailto:/),
-    );
-    expect(screen.queryByText(/grátis/i)).toBeNull();
-    expect(screen.queryByText(/nunca expiram/i)).toBeNull();
+    expect(screen.getByText("Teste grátis")).toBeInTheDocument();
+    expect(screen.getByText(/7 dias · 50 créditos/)).toBeInTheDocument();
+    expect(screen.getByText(/Cartão obrigatório\. Nada é cobrado por 7 dias/)).toBeInTheDocument();
+    expect(screen.getByText(/Depois, R\$\s*39,90\/mês \(300 créditos\)\. Cancele antes e não paga nada\./)).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /Testar 7 dias grátis/i })).toHaveAttribute("href", "/assinar?trial=1");
+    expect(screen.queryByText(/convite/i)).toBeNull();
+    expect(screen.queryByRole("link", { name: /mailto/ })).toBeNull();
+    expect(document.querySelector('a[href^="mailto:"]')).toBeNull();
+  });
+
+  it("follows the catalogue for the plan after the trial", () => {
+    mockUsePlans.mockReturnValue({
+      data: [{ id: "x", slug: "unico", name: "Único", priceBrl: 42, monthlyCredits: 120, highlight: false, adminOnly: false }],
+      isLoading: false,
+    });
+    renderWithProviders(<PricingSection />);
+    expect(screen.getByText(/Depois, R\$\s*42,00\/mês \(120 créditos\)/)).toBeInTheDocument();
   });
 
   it("renders the three monthly plans with prices even before the catalogue loads", () => {
     renderWithProviders(<PricingSection />);
-    expect(screen.getByText(/R\$\s*39,90/)).toBeInTheDocument();
+    expect(screen.getAllByText(/R\$\s*39,90/).length).toBe(2);
     expect(screen.getByText(/R\$\s*99,90/)).toBeInTheDocument();
     // 59,90 is also the price of the 300-credit extra package.
     expect(screen.getAllByText(/R\$\s*59,90/).length).toBe(2);
@@ -63,7 +72,8 @@ describe("PricingSection", () => {
       isLoading: false,
     });
     renderWithProviders(<PricingSection />);
-    expect(screen.getByText(/R\$\s*42,00/)).toBeInTheDocument();
+    // 42,00 is also the trial card's "Depois, ..." price, since Único is the only (cheapest) plan.
+    expect(screen.getAllByText(/R\$\s*42,00/).length).toBe(2);
     expect(screen.queryByText(/R\$\s*39,90/)).toBeNull();
     expect(screen.getByRole("link", { name: /Assinar/ })).toHaveAttribute("href", "/assinar?plano=unico");
   });

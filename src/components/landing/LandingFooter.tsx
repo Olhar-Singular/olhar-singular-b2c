@@ -21,7 +21,7 @@ export default function LandingFooter() {
         Ferramenta pedagógica. Não realiza diagnóstico. A decisão final é sempre do profissional.
       </p>
       <p className="text-xs text-muted-foreground text-center mt-2 px-4">
-        Olhar Singular · CNPJ 66.792.955/0001-37 · contato@olharsingular.com
+        Olhar Singular · CNPJ 66.792.955/0001-37
       </p>
     </footer>
   );
