@@ -4,6 +4,7 @@ import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { render } from "@testing-library/react";
 import LegalPage from "./LegalPage";
 import { isLegalSlug, LEGAL_DOCS } from "@/lib/domain/legalDocs";
+import { TERMS_VERSION } from "@/lib/domain/subscriptionUi";
 
 vi.mock("@/assets/logo-olho-transparent.png", () => ({ default: "stub://logo.png" }));
 
@@ -54,5 +55,19 @@ describe("LegalPage", () => {
     renderAt("/inexistente/");
     expect(screen.getByRole("heading", { level: 1, name: /não encontrada/ })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /Voltar ao início/ })).toHaveAttribute("href", "/");
+  });
+
+  it("terms carry the trial clause and the current version", () => {
+    const terms = LEGAL_DOCS.termos;
+    const clause = terms.sections.find((s) => s.title === "4. Teste grátis");
+    expect(clause).toBeDefined();
+    expect(clause!.paragraphs.join(" ")).toMatch(/cartão de crédito válido/);
+    expect(clause!.paragraphs.join(" ")).toMatch(/8º dia/);
+    expect(clause!.paragraphs.join(" ")).toMatch(/um teste por CPF/);
+    expect(terms.sections.map((s) => s.title)).toEqual([
+      "1. O serviço", "2. Conta e acesso", "3. Planos, créditos e pagamento", "4. Teste grátis",
+      "5. Cancelamento", "6. Uso aceitável", "7. Alterações",
+    ]);
+    expect(terms.sections.at(-1)!.paragraphs[0]).toContain(TERMS_VERSION);
   });
 });

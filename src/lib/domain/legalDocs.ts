@@ -33,7 +33,7 @@ export const LEGAL_DOCS: Record<LegalSlug, LegalDoc> = {
       {
         title: "2. Conta e acesso",
         paragraphs: [
-          "A conta é pessoal e nasce da assinatura de um plano ou de um convite da equipe. Você é responsável por manter sua senha em sigilo e por tudo o que for feito com a sua conta.",
+          "A conta é pessoal e nasce da assinatura de um plano, do teste grátis com cartão ou de um convite da equipe. Você é responsável por manter sua senha em sigilo e por tudo o que for feito com a sua conta.",
           "Contas criadas pelo pagamento recebem uma senha provisória e precisam definir a própria senha no primeiro acesso.",
         ],
       },
@@ -46,19 +46,27 @@ export const LEGAL_DOCS: Record<LegalSlug, LegalDoc> = {
         ],
       },
       {
-        title: "4. Cancelamento",
+        title: "4. Teste grátis",
+        paragraphs: [
+          "O teste grátis de 7 dias exige um cartão de crédito válido, que é verificado no cadastro (uma cobrança simbólica de validação pode aparecer e é estornada pela operadora). Durante o teste nada é cobrado e a conta recebe 50 créditos.",
+          "No 8º dia, salvo cancelamento anterior em Créditos, o cartão é cobrado pelo plano mensal mais barato em vigor e a conta passa a ser uma assinatura comum, com renovação automática. Cancelar antes do 8º dia encerra o acesso aos créditos do teste na hora e nada é cobrado.",
+          "É um teste por CPF: quem já usou o teste ou já teve uma assinatura só assina um plano pago.",
+        ],
+      },
+      {
+        title: "5. Cancelamento",
         paragraphs: [
           "Você pode cancelar a assinatura a qualquer momento em Créditos. Não há nova cobrança e o acesso aos créditos do plano continua até o fim do período já pago.",
         ],
       },
       {
-        title: "5. Uso aceitável",
+        title: "6. Uso aceitável",
         paragraphs: [
           "É proibido usar a plataforma para produzir conteúdo ilícito, discriminatório ou que viole direitos de terceiros, bem como tentar burlar o sistema de créditos ou acessar dados de outras contas.",
         ],
       },
       {
-        title: "6. Alterações",
+        title: "7. Alterações",
         paragraphs: [
           "Podemos atualizar estes termos. Mudanças relevantes serão comunicadas por e-mail ou na plataforma. Versão atual: " + TERMS_VERSION + ".",
         ],
