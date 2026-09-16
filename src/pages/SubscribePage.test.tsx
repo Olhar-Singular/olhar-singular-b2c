@@ -113,6 +113,12 @@ describe("trial helpers", () => {
     expect(cheapestPublicPlan([])).toBeNull();
   });
 
+  it("cheapestPublicPlan breaks a price tie by slug, same order the server uses", () => {
+    const alt = { ...BASIC, id: "pl-alt", slug: "alternativo" };
+    expect(cheapestPublicPlan([BASIC, alt])).toBe(alt);
+    expect(cheapestPublicPlan([alt, BASIC])).toBe(alt);
+  });
+
   it("trialFirstChargeDate is 7 days ahead", () => {
     expect(TRIAL_DAYS).toBe(7);
     expect(TRIAL_CREDITS).toBe(50);
@@ -517,6 +523,23 @@ describe("SubscribePage (trial with card, ?trial=1)", () => {
     await fillAccount(user);
     await user.click(screen.getByRole("button", { name: "Assinar agora" }));
     await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent("Teste em análise. Seus créditos entram assim que o cartão for confirmado."));
+  });
+
+  it("on a refused trial card, offers another card without keeping a stranded account", async () => {
+    const user = userEvent.setup();
+    mockSubscribe.mockResolvedValue({ status: "rejected", subscriptionId: "sub-1", accountCreated: false, message: "Recusado." });
+    renderPage("/assinar?trial=1");
+    await fillAccount(user);
+    await user.click(screen.getByRole("button", { name: "Assinar agora" }));
+
+    await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent("Recusado."));
+    expect(screen.getByRole("button", { name: "Tentar com outro cartão" })).toBeInTheDocument();
+    expect(mockSignInWithOtp).not.toHaveBeenCalled();
+    expect(screen.queryByText(/Sua conta foi criada/)).toBeNull();
+
+    await user.click(screen.getByRole("button", { name: "Tentar com outro cartão" }));
+    expect(screen.getByTestId("card-brick")).toBeInTheDocument();
+    expect(brickProps).toHaveBeenLastCalledWith(expect.objectContaining({ submitLabel: "Começar o teste" }));
   });
 
   it("omits the plan name from the intro while the catalogue is still loading", () => {

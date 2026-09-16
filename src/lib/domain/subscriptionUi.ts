@@ -87,11 +87,15 @@ export const TRIAL_DAYS = 7;
 export const TRIAL_CREDITS = 50;
 
 // The trial runs on the cheapest public plan: the server decides (subscribeFlow),
-// this mirror only feeds the copy. Null while the catalogue is empty.
+// this mirror only feeds the copy. Null while the catalogue is empty. Tie
+// broken by slug: the server orders the same way (price_brl, slug).
 export function cheapestPublicPlan(plans: PlanView[]): PlanView | null {
   return plans
     .filter((p) => !p.adminOnly)
-    .reduce<PlanView | null>((best, p) => (best === null || p.priceBrl < best.priceBrl ? p : best), null);
+    .reduce<PlanView | null>(
+      (best, p) => (best === null || p.priceBrl < best.priceBrl || (p.priceBrl === best.priceBrl && p.slug < best.slug) ? p : best),
+      null,
+    );
 }
 
 // The date shown before the checkout; the server's trialEndsAt is the truth after it.
