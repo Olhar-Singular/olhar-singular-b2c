@@ -107,7 +107,10 @@ serve(async (req) => {
           .select("*")
           .eq("active", true)
           .eq("admin_only", false)
+          // Deterministic pick on a price tie: same order the client mirrors
+          // in cheapestPublicPlan (src/lib/domain/subscriptionUi.ts).
           .order("price_brl", { ascending: true })
+          .order("slug", { ascending: true })
           .limit(1)
           .maybeSingle();
         if (error) throw new Error(`plans lookup failed: ${error.message}`);
@@ -227,6 +230,10 @@ serve(async (req) => {
         const { data, error } = await admin.rpc("trial_used_by_cpf", { p_cpf: cpf });
         if (error) throw new Error(`trial_used_by_cpf failed: ${error.message}`);
         return data === true;
+      },
+      deleteUser: async (userId) => {
+        const { error } = await admin.auth.admin.deleteUser(userId);
+        if (error) throw new Error(`deleteUser failed: ${error.message}`);
       },
       recordAttempt: async (ipHash, emailHash, outcome) => {
         const { data, error } = await admin.rpc("record_checkout_attempt", {

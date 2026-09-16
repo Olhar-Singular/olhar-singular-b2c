@@ -31,6 +31,7 @@ function deps(overrides: Partial<CheckoutDeps> = {}, preapproval?: Record<string
     createUser: vi.fn(async () => ({ id: "new-user" })),
     recordProfileFacts: vi.fn(async () => undefined),
     trialUsedByCpf: vi.fn(async () => false),
+    deleteUser: vi.fn(async () => undefined),
     log: vi.fn(),
     ...overrides,
   };
@@ -107,6 +108,7 @@ describe("runAnonymousCheckout", () => {
     });
     expect(d.recordAttempt).toHaveBeenLastCalledWith(expect.any(String), expect.any(String), "rejected");
     expect(d.recordProfileFacts).not.toHaveBeenCalled();
+    expect(d.deleteUser).not.toHaveBeenCalled();
   });
 
   it("uses the logged-in user without creating an account", async () => {
@@ -209,5 +211,31 @@ describe("runAnonymousCheckout (trial with card)", () => {
     const out = await runAnonymousCheckout(anonymous({ trial: true }), d);
     expect(out).toMatchObject({ ok: false, error: "rate_limited" });
     expect(d.trialUsedByCpf).not.toHaveBeenCalled();
+  });
+
+  it("deletes the just-created account when a trial card is refused, so the e-mail can retry", async () => {
+    const d = deps({}, { id: "pre-4", status: "cancelled" });
+    const out = await runAnonymousCheckout(anonymous({ trial: true }), d);
+    expect(d.deleteUser).toHaveBeenCalledWith("new-user");
+    expect(d.recordProfileFacts).not.toHaveBeenCalled();
+    expect(out).toMatchObject({ ok: true, result: { status: "rejected" }, accountCreated: false });
+  });
+
+  it("keeps the account and logs an ALERT when deleting the refused trial account fails", async () => {
+    const deleteError = new Error("admin api down");
+    const d = deps({ deleteUser: vi.fn(async () => { throw deleteError; }) }, { id: "pre-5", status: "cancelled" });
+    const out = await runAnonymousCheckout(anonymous({ trial: true }), d);
+    expect(d.deleteUser).toHaveBeenCalledWith("new-user");
+    expect(d.log).toHaveBeenCalledWith(
+      "subscribe: ALERT could not delete the account of a refused trial card", "new-user", deleteError,
+    );
+    expect(out).toMatchObject({ ok: true, result: { status: "rejected" }, accountCreated: true });
+  });
+
+  it("does not delete the account when the trial card is authorized", async () => {
+    const d = deps({}, { id: "pre-6", status: "authorized" });
+    const out = await runAnonymousCheckout(anonymous({ trial: true }), d);
+    expect(d.deleteUser).not.toHaveBeenCalled();
+    expect(out).toMatchObject({ ok: true, accountCreated: true });
   });
 });

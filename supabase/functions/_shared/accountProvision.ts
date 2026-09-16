@@ -63,6 +63,8 @@ export interface CheckoutDeps {
   recordProfileFacts(input: { userId: string; cpf: string | null; termsVersion: string | null }): Promise<void>;
   /** RPC trial_used_by_cpf: this CPF already ran a trial or held a subscription. */
   trialUsedByCpf(cpf: string): Promise<boolean>;
+  /** auth.admin.deleteUser: undoes an account created seconds ago by a refused trial card. */
+  deleteUser(userId: string): Promise<void>;
   log(message: string, ...args: unknown[]): void;
 }
 
@@ -141,7 +143,21 @@ export async function runAnonymousCheckout(input: CheckoutInput, deps: CheckoutD
   await deps.recordAttempt(ipHash, emailHash, result.status);
 
   if (result.status === "rejected") {
-    // The account (if just created) stays: decision 14.
+    if (input.trial && accountCreated) {
+      // The trial account holds nothing worth keeping yet: no CPF, no terms,
+      // no credits, and MP has nothing pending for a synchronous rejection
+      // (recordAttempt(..., "rejected") already ran above). Deleting it is a
+      // rollback, not a data loss, and lets the same e-mail simply try
+      // another card instead of hitting email_exists (or, if logged in
+      // later, trial_requires_new_account) on a dead-end account.
+      try {
+        await deps.deleteUser(userId);
+        accountCreated = false;
+      } catch (e) {
+        deps.log("subscribe: ALERT could not delete the account of a refused trial card", userId, e);
+      }
+    }
+    // The account (if just created, and not deleted above) stays: decision 14.
     return { ok: true, result, userId, accountCreated };
   }
 
