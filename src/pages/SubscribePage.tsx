@@ -11,9 +11,10 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useAccess } from "@/hooks/useAccess";
 import type { CardFormDataView } from "@/hooks/useCredits";
-import { isLiveSubscription, usePlans, useSubscribe, useSubscription, type PlanView } from "@/hooks/useSubscription";
-import { canSubscribe, formatBrl, pickInitialPlan, replacementNotice, TERMS_VERSION } from "@/lib/domain/subscriptionUi";
-import { trackAddPaymentInfo, trackBeginCheckout, trackSubscriptionStarted } from "@/lib/analytics/events";
+import { parseIsoOrNull } from "@/lib/domain/access";
+import { isLiveSubscription, subscribeErrorCode, usePlans, useSubscribe, useSubscription, type PlanView, type SubscribeResult } from "@/hooks/useSubscription";
+import { canSubscribe, cheapestPublicPlan, formatBrl, formatDate, pickInitialPlan, replacementNotice, TERMS_VERSION, TRIAL_CREDITS, TRIAL_DAYS, trialFirstChargeDate } from "@/lib/domain/subscriptionUi";
+import { trackAddPaymentInfo, trackBeginCheckout, trackSubscriptionStarted, trackTrialStarted } from "@/lib/analytics/events";
 import { readAttribution, sessionStore } from "@/lib/analytics/attribution";
 
 type Stage =
@@ -22,7 +23,9 @@ type Stage =
   | { kind: "pending" }
   | { kind: "rejected"; message: string }
   /** Anonymous funnel: the account exists; the buyer enters through the e-mail link. */
-  | { kind: "new_account"; tone: "success" | "pending" | "rejected"; message: string; email: string; mailSent: boolean };
+  | { kind: "new_account"; tone: "success" | "pending" | "rejected"; message: string; email: string; mailSent: boolean }
+  /** The CPF already had a trial: same card, paid plan, one click (no new token: MP was never called). */
+  | { kind: "trial_used"; plan: PlanView; card: CardFormDataView; message: string };
 
 const GENERIC_REJECTION = "O cartão não foi aceito para a assinatura. Tente outro cartão.";
 
@@ -48,9 +51,13 @@ export default function SubscribePage() {
   const [attempt, setAttempt] = useState(0);
 
   const requested = params.get("plano");
+  // ?trial=1 is the landing's trial CTA: anonymous only (a logged-in user
+  // subscribes paid); the plan is the cheapest public one, decided again by the
+  // server, and the selector is hidden.
+  const trialMode = anonymous && params.get("trial") === "1";
   const selected = useMemo(
-    () => plans.find((p) => p.slug === selectedSlug) ?? pickInitialPlan(plans, requested),
-    [plans, selectedSlug, requested],
+    () => (trialMode ? cheapestPublicPlan(plans) : plans.find((p) => p.slug === selectedSlug) ?? pickInitialPlan(plans, requested)),
+    [plans, selectedSlug, requested, trialMode],
   );
 
   // Once the catalogue arrives, pin the initial choice so the Brick's amount
@@ -81,17 +88,32 @@ export default function SubscribePage() {
   }
 
   // A rejected promise hands the failure back to the Brick, which re-enables
-  // its button (business refusals were already toasted by the hook).
-  async function handleSubmit(plan: PlanView, card: CardFormDataView) {
+  // its button (business refusals were already toasted by the hook), except
+  // trial_used, which this page answers inline.
+  async function handleSubmit(plan: PlanView, card: CardFormDataView, trial: boolean) {
     trackAddPaymentInfo(plan);
     const attribution = readAttribution(sessionStore());
-    const result = await subscribe.mutateAsync({
-      planSlug: plan.slug,
-      card,
-      ...(anonymous && account ? { account: { ...account, termsVersion: TERMS_VERSION } } : {}),
-      ...(attribution ? { attribution: attribution as Record<string, unknown> } : {}),
-    });
-    if (result.status !== "rejected") trackSubscriptionStarted(plan, result.subscriptionId, result.status);
+    let result: SubscribeResult;
+    try {
+      result = await subscribe.mutateAsync({
+        planSlug: plan.slug,
+        card,
+        ...(trial ? { trial: true } : {}),
+        ...(anonymous && account ? { account: { ...account, termsVersion: TERMS_VERSION } } : {}),
+        ...(attribution ? { attribution: attribution as Record<string, unknown> } : {}),
+      });
+    } catch (e) {
+      if (trial && subscribeErrorCode(e) === "trial_used") {
+        setStage({ kind: "trial_used", plan, card, message: (e as Error).message });
+        return;
+      }
+      throw e;
+    }
+    if (result.status !== "rejected") {
+      if (trial) trackTrialStarted(plan, result.subscriptionId, result.status);
+      else trackSubscriptionStarted(plan, result.subscriptionId, result.status);
+    }
+    const firstCharge = parseIsoOrNull(result.trialEndsAt);
 
     if (result.accountCreated) {
       // accountCreated only happens in the anonymous flow, so the account
@@ -101,9 +123,15 @@ export default function SubscribePage() {
       const mailSent = await sendLoginLink(email);
       const tone = result.status === "authorized" ? "success" : result.status === "pending" ? "pending" : "rejected";
       const message =
-        tone === "success" ? `Assinatura ativa! ${plan.monthlyCredits} créditos já estão na sua conta.`
-        : tone === "pending" ? "Assinatura em análise. Seus créditos entram assim que o cartão for confirmado."
-        : (result.message ?? GENERIC_REJECTION);
+        tone === "success"
+          ? trial
+            ? `Teste ativado! ${TRIAL_CREDITS} créditos já estão na sua conta. A primeira cobrança de ${formatBrl(plan.priceBrl)} será em ${firstCharge ? formatDate(firstCharge) : `${TRIAL_DAYS} dias`}.`
+            : `Assinatura ativa! ${plan.monthlyCredits} créditos já estão na sua conta.`
+          : tone === "pending"
+            ? trial
+              ? "Teste em análise. Seus créditos entram assim que o cartão for confirmado."
+              : "Assinatura em análise. Seus créditos entram assim que o cartão for confirmado."
+            : (result.message ?? GENERIC_REJECTION);
       setStage({ kind: "new_account", tone, message, email, mailSent });
       return;
     }
@@ -153,9 +181,11 @@ export default function SubscribePage() {
   return (
     <div className="mx-auto max-w-3xl px-4 py-8 space-y-8">
       <header className="space-y-1">
-        <h1 className="text-2xl font-bold text-foreground">Assinar um plano</h1>
+        <h1 className="text-2xl font-bold text-foreground">{trialMode ? `Teste grátis por ${TRIAL_DAYS} dias` : "Assinar um plano"}</h1>
         <p className="text-sm text-muted-foreground">
-          Créditos novos todo mês, cobrados no cartão em 1x. Cancele quando quiser.
+          {trialMode
+            ? `Cartão obrigatório, nada é cobrado hoje. Em ${TRIAL_DAYS} dias começa o plano${selected ? ` ${selected.name} (${formatBrl(selected.priceBrl)}/mês)` : ""}. Cancele antes e não paga nada.`
+            : "Créditos novos todo mês, cobrados no cartão em 1x. Cancele quando quiser."}
         </p>
       </header>
 
@@ -245,6 +275,22 @@ export default function SubscribePage() {
         </Card>
       )}
 
+      {stage.kind === "trial_used" && (
+        <Card className="border-amber-300 bg-amber-50">
+          <CardContent className="p-6 space-y-3">
+            <p role="status" aria-live="polite" className="text-sm text-amber-900">
+              {stage.message} Você pode assinar o plano {stage.plan.name} por {formatBrl(stage.plan.priceBrl)}/mês com o mesmo cartão, sem digitar nada de novo.
+            </p>
+            <div className="flex flex-wrap gap-2">
+              <Button onClick={() => handleSubmit(stage.plan, stage.card, false)} disabled={subscribe.isPending}>
+                Assinar {formatBrl(stage.plan.priceBrl)}/mês
+              </Button>
+              <Button variant="outline" onClick={retry}>Usar outro cartão</Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {stage.kind === "form" && anonymous && !account && (
         <Card>
           <CardHeader className="pb-2">
@@ -275,66 +321,79 @@ export default function SubscribePage() {
 
       {stage.kind === "form" && (!anonymous || account) && (
         <>
-          <section className="space-y-4" aria-labelledby="plans-heading">
-            <h2 id="plans-heading" className="font-semibold text-foreground">Escolha o plano</h2>
+          {!trialMode && (
+            <section className="space-y-4" aria-labelledby="plans-heading">
+              <h2 id="plans-heading" className="font-semibold text-foreground">Escolha o plano</h2>
 
-            {loadingPlans && (
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4" data-testid="plans-loading">
-                <Skeleton className="h-40" />
-                <Skeleton className="h-40" />
-                <Skeleton className="h-40" />
-              </div>
-            )}
+              {loadingPlans && (
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4" data-testid="plans-loading">
+                  <Skeleton className="h-40" />
+                  <Skeleton className="h-40" />
+                  <Skeleton className="h-40" />
+                </div>
+              )}
 
-            {!loadingPlans && plans.length === 0 && (
-              <p className="text-sm text-muted-foreground text-center py-6">Nenhum plano disponível no momento.</p>
-            )}
+              {!loadingPlans && plans.length === 0 && (
+                <p className="text-sm text-muted-foreground text-center py-6">Nenhum plano disponível no momento.</p>
+              )}
 
-            {plans.length > 0 && (
-              // Plain toggle buttons (Tab + Enter), not a fake radiogroup: a real one
-              // would need roving tabindex and arrow keys to honour its semantics.
-              <div role="group" aria-label="Planos" className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                {plans.map((plan) => {
-                  const active = selected?.id === plan.id;
-                  return (
-                    <button
-                      key={plan.id}
-                      type="button"
-                      aria-pressed={active}
-                      onClick={() => setSelectedSlug(plan.slug)}
-                      className={`text-left rounded-xl border p-5 transition-shadow hover:shadow-card-hover ${
-                        active ? "border-primary ring-2 ring-primary/30 shadow-glow" : plan.adminOnly ? "border-dashed border-border" : "border-border"
-                      }`}
-                    >
-                      <div className="flex items-center justify-between mb-1">
-                        <span className="font-semibold">{plan.name}</span>
-                        {plan.highlight && <Badge className="text-xs">Popular</Badge>}
-                        {plan.adminOnly && (
-                          <Badge variant="outline" className="text-xs">
-                            Só admins
-                          </Badge>
-                        )}
-                      </div>
-                      <p className="text-2xl font-bold tabular-nums">{formatBrl(plan.priceBrl)}<span className="text-sm font-normal text-muted-foreground">/mês</span></p>
-                      <p className="text-sm text-muted-foreground">{plan.monthlyCredits} créditos por mês</p>
-                    </button>
-                  );
-                })}
-              </div>
-            )}
-          </section>
+              {plans.length > 0 && (
+                // Plain toggle buttons (Tab + Enter), not a fake radiogroup: a real one
+                // would need roving tabindex and arrow keys to honour its semantics.
+                <div role="group" aria-label="Planos" className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                  {plans.map((plan) => {
+                    const active = selected?.id === plan.id;
+                    return (
+                      <button
+                        key={plan.id}
+                        type="button"
+                        aria-pressed={active}
+                        onClick={() => setSelectedSlug(plan.slug)}
+                        className={`text-left rounded-xl border p-5 transition-shadow hover:shadow-card-hover ${
+                          active ? "border-primary ring-2 ring-primary/30 shadow-glow" : plan.adminOnly ? "border-dashed border-border" : "border-border"
+                        }`}
+                      >
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="font-semibold">{plan.name}</span>
+                          {plan.highlight && <Badge className="text-xs">Popular</Badge>}
+                          {plan.adminOnly && (
+                            <Badge variant="outline" className="text-xs">
+                              Só admins
+                            </Badge>
+                          )}
+                        </div>
+                        <p className="text-2xl font-bold tabular-nums">{formatBrl(plan.priceBrl)}<span className="text-sm font-normal text-muted-foreground">/mês</span></p>
+                        <p className="text-sm text-muted-foreground">{plan.monthlyCredits} créditos por mês</p>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </section>
+          )}
+
+          {trialMode && selected && (
+            <p className="text-sm text-muted-foreground">
+              Plano {selected.name} · {formatBrl(selected.priceBrl)}/mês · {selected.monthlyCredits} créditos por mês, a partir do 8º dia.
+            </p>
+          )}
 
           {selected && (
             <Card>
               <CardHeader className="pb-2">
                 <CardTitle className="text-base">
-                  Pagar {formatBrl(selected.priceBrl)} por mês no cartão
+                  {trialMode ? "Cartão de crédito" : `Pagar ${formatBrl(selected.priceBrl)} por mês no cartão`}
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-3">
                 {notice && (
                   <p role="note" className="text-sm rounded-md bg-amber-50 text-amber-900 px-3 py-2">
                     {notice}
+                  </p>
+                )}
+                {trialMode && (
+                  <p role="note" className="text-sm rounded-md bg-primary/5 text-foreground px-3 py-2">
+                    Hoje: R$ 0,00. Em {formatDate(trialFirstChargeDate(new Date()))} cobramos {formatBrl(selected.priceBrl)} no cartão e seu plano vira {selected.monthlyCredits} créditos/mês. Cancele antes em Créditos e nada é cobrado. Uma cobrança de validação pode aparecer e é estornada.
                   </p>
                 )}
                 {stage.error && (
@@ -346,11 +405,14 @@ export default function SubscribePage() {
                   key={`${selected.id}-${attempt}-${payerEmail ?? ""}`}
                   amount={selected.priceBrl}
                   payerEmail={payerEmail}
-                  onSubmit={(card) => handleSubmit(selected, card)}
+                  onSubmit={(card) => handleSubmit(selected, card, trialMode)}
                   onError={(message) => setStage({ kind: "form", error: message })}
+                  {...(trialMode ? { submitLabel: "Começar o teste" } : {})}
                 />
                 <p className="text-xs text-muted-foreground">
-                  A primeira cobrança é feita agora e as próximas todo mês na mesma data. Os créditos do plano zeram a cada renovação; os extras não expiram.
+                  {trialMode
+                    ? `Você recebe ${TRIAL_CREDITS} créditos agora. A cobrança só acontece em ${TRIAL_DAYS} dias, e depois todo mês na mesma data.`
+                    : "A primeira cobrança é feita agora e as próximas todo mês na mesma data. Os créditos do plano zeram a cada renovação; os extras não expiram."}
                 </p>
               </CardContent>
             </Card>

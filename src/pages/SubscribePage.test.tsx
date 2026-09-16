@@ -3,7 +3,7 @@ import { screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { renderWithProviders, buildAuthState } from "@/test/helpers";
 import SubscribePage from "./SubscribePage";
-import { cheapestPublicPlan, isCardTrial, pickInitialPlan, replacementNotice, TERMS_VERSION, TRIAL_CREDITS, TRIAL_DAYS, trialFirstChargeDate } from "@/lib/domain/subscriptionUi";
+import { cheapestPublicPlan, formatDate, isCardTrial, pickInitialPlan, replacementNotice, TERMS_VERSION, TRIAL_CREDITS, TRIAL_DAYS, trialFirstChargeDate } from "@/lib/domain/subscriptionUi";
 import type { Access } from "@/lib/domain/access";
 
 const { mockSubscribe, brickProps, mockUsePlans, mockUseSubscription, mockSignInWithOtp } = vi.hoisted(() => ({
@@ -417,5 +417,94 @@ describe("SubscribePage (anonymous funnel)", () => {
     mockUseSubscription.mockReturnValue({ data: { id: "x", status: "authorized" } });
     renderPage();
     expect(screen.getByText("Quem vai usar a plataforma")).toBeInTheDocument();
+  });
+});
+
+describe("SubscribePage (trial with card, ?trial=1)", () => {
+  beforeEach(async () => {
+    vi.clearAllMocks();
+    mockUsePlans.mockReturnValue({ data: PLANS, isLoading: false });
+    mockUseSubscription.mockReturnValue({ data: undefined });
+    mockSignInWithOtp.mockResolvedValue({ error: null });
+    await setAnonymous();
+  });
+
+  it("locks the cheapest plan, shows the first-charge date and labels the Brick button", async () => {
+    const user = userEvent.setup();
+    renderPage("/assinar?trial=1");
+    expect(screen.getByRole("heading", { level: 1, name: "Teste grátis por 7 dias" })).toBeInTheDocument();
+    await fillAccount(user);
+    expect(screen.queryByRole("group", { name: "Planos" })).toBeNull();
+    expect(screen.getByText(/Plano Básico · R\$\s*39,90\/mês · 300 créditos por mês/)).toBeInTheDocument();
+    const expected = trialFirstChargeDate(new Date());
+    expect(screen.getByRole("note")).toHaveTextContent(`Hoje: R$ 0,00. Em ${formatDate(expected)} cobramos R$ 39,90 no cartão e seu plano vira 300 créditos/mês.`);
+    expect(screen.getByRole("note")).toHaveTextContent(/Cancele antes em Créditos e nada é cobrado\. Uma cobrança de validação pode aparecer e é estornada\./);
+    expect(brickProps).toHaveBeenCalledWith(expect.objectContaining({ amount: 39.9, payerEmail: "nova@example.com", submitLabel: "Começar o teste" }));
+  });
+
+  it("sends trial: true with the account and, when authorized, mails the login link with the trial copy", async () => {
+    const user = userEvent.setup();
+    mockSubscribe.mockResolvedValue({ status: "authorized", subscriptionId: "sub-1", accountCreated: true, trialEndsAt: "2026-09-22T21:52:15.000Z" });
+    window.dataLayer = [];
+    renderPage("/assinar?trial=1");
+    await fillAccount(user);
+    await user.click(screen.getByRole("button", { name: "Assinar agora" }));
+
+    await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent("Teste ativado! 50 créditos já estão na sua conta."));
+    expect(screen.getByRole("status")).toHaveTextContent(`A primeira cobrança de R$ 39,90 será em ${formatDate(new Date("2026-09-22T21:52:15.000Z"))}.`);
+    expect(mockSubscribe).toHaveBeenCalledWith({
+      planSlug: "basico",
+      card: CARD,
+      trial: true,
+      account: { fullName: "Nova Pessoa", email: "nova@example.com", termsVersion: TERMS_VERSION },
+    });
+    expect(mockSignInWithOtp).toHaveBeenCalledWith(expect.objectContaining({ email: "nova@example.com" }));
+    expect(window.dataLayer.some((e) => (e as { event: string }).event === "trial_started")).toBe(true);
+    expect(window.dataLayer.some((e) => (e as { event: string }).event === "subscription_started")).toBe(false);
+  });
+
+  it("on trial_used offers the paid plan with the same card, without a new token", async () => {
+    const user = userEvent.setup();
+    mockSubscribe
+      .mockRejectedValueOnce(Object.assign(new Error("Este CPF já usou o teste."), { code: "trial_used" }))
+      .mockResolvedValueOnce({ status: "authorized", subscriptionId: "sub-2", accountCreated: true });
+    renderPage("/assinar?trial=1");
+    await fillAccount(user);
+    await user.click(screen.getByRole("button", { name: "Assinar agora" }));
+
+    await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent("Este CPF já usou o teste."));
+    expect(screen.queryByTestId("card-brick")).toBeNull();
+    await user.click(screen.getByRole("button", { name: /Assinar R\$\s*39,90\/mês/ }));
+    await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent(/Assinatura ativa! 300 créditos/));
+    expect(mockSubscribe).toHaveBeenLastCalledWith(expect.objectContaining({ planSlug: "basico", card: CARD }));
+    expect(mockSubscribe.mock.calls[1][0]).not.toHaveProperty("trial");
+  });
+
+  it("lets the buyer try another card after trial_used", async () => {
+    const user = userEvent.setup();
+    mockSubscribe.mockRejectedValueOnce(Object.assign(new Error("Este CPF já usou o teste."), { code: "trial_used" }));
+    renderPage("/assinar?trial=1");
+    await fillAccount(user);
+    await user.click(screen.getByRole("button", { name: "Assinar agora" }));
+    await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent("Este CPF já usou o teste."));
+    await user.click(screen.getByRole("button", { name: "Usar outro cartão" }));
+    expect(screen.getByTestId("card-brick")).toBeInTheDocument();
+  });
+
+  it("hands other refusals back to the Brick as before", async () => {
+    const user = userEvent.setup();
+    mockSubscribe.mockRejectedValueOnce(Object.assign(new Error("Muitas tentativas."), { code: "rate_limited" }));
+    renderPage("/assinar?trial=1");
+    await fillAccount(user);
+    await user.click(screen.getByRole("button", { name: "Assinar agora" }));
+    await waitFor(() => expect(brickProps).toHaveBeenCalledWith("rejected"));
+  });
+
+  it("ignores ?trial=1 for a logged-in user (paid flow, plan selector visible)", async () => {
+    await setProfile(LEGACY);
+    renderPage("/assinar?trial=1");
+    expect(screen.getByRole("heading", { level: 1, name: "Assinar um plano" })).toBeInTheDocument();
+    expect(screen.getByRole("group", { name: "Planos" })).toBeInTheDocument();
+    expect(brickProps).toHaveBeenCalledWith(expect.not.objectContaining({ submitLabel: expect.anything() }));
   });
 });
