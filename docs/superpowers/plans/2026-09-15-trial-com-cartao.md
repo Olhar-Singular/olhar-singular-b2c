@@ -36,7 +36,7 @@ seção 12: só o teste com cartão; estorno em autoatendimento e Admin ficam pa
   `Teste 7 dias + ${plan.name} - Olhar Singular`, sempre cortado em 60.
 - **`src/integrations/supabase/types.ts` e `src/components/ui/*` são gerados: NÃO editar.** A
   coluna nova entra nos tipos por `make gen-types`.
-- **pt-BR sem travessão (`—`)**: vírgula, dois-pontos ou parênteses. Código e comentários em inglês.
+- **pt-BR sem travessão**: vírgula, dois-pontos ou parênteses. Código e comentários em inglês.
 - **Guarda de copy** (`src/test/copyGuard.test.ts`): "grátis" só pode aparecer numa linha que também
   tenha "teste"/"testar"; "nunca expiram", "gratuit*" e "Stripe" continuam proibidos.
 - Analytics: nada de e-mail/CPF no `dataLayer`; eventos tipados em `src/lib/analytics/events.ts` e
@@ -1578,7 +1578,7 @@ export async function parseInvokeFailure(err: unknown, fallback: string): Promis
       const code = typeof body?.code === "string" && body.code ? body.code : null;
       if (typeof errorMsg === "string" && errorMsg) return { message: errorMsg, code };
     } catch {
-      // body already consumed or not JSON — fall through
+      // body already consumed or not JSON, fall through
     }
   }
   return { message: fallback, code: null };
@@ -2660,7 +2660,29 @@ observada em `authorized_payments/search` (registrar o resultado na seção 13 d
 
 - [ ] **Step 6: runbook de deploy (só com o dono)**
 
-1. `git push origin main` ⇒ o CI aplica a migration e publica `subscribe` e `mp-webhook`.
+1. **Push em duas etapas** (mitiga o descompasso de deploy: o Vercel redeploya o front em
+   minutos, o workflow "Supabase Deploy" (`supabase.yml`) demora mais; se o front novo já mandar
+   `trial: true` para um `subscribe` remoto ainda antigo, o campo é ignorado e a pessoa é cobrada
+   na hora). Primeiro `git push origin b21935c:main`: esse é o fim da leva puramente backend já
+   commitada (`982bcd6`..`b21935c`, todas tocando só `supabase/**` e `src/integrations/supabase/types.ts`)
+   e sobe o contrato do trial no banco/edge (`trial_ends_at`, `activate`/`renew`/`cancel` ramificados,
+   `trial_used_by_cpf`, `subscribe` aceitando `trial`) sem nenhuma mudança visível no front (que
+   ainda não manda `trial: true`, então nada muda pra quem já usa `/assinar`). Espere o workflow
+   "Supabase Deploy" terminar no GitHub Actions. Depois `git push origin main` sobe o resto de uma
+   vez: front que liga o trial na UI (`6d9c024`..`682eddb`), mais os dois commits de hardening do
+   fix wave final (`renew_subscription` não zera fatura ainda não liquidada; cartão recusado no
+   teste apaga a conta). Esses dois últimos não precisam ir antes do front: são reforços de borda
+   (janela de webhook ainda não liquidado, conta órfã num cartão recusado), não o contrato básico
+   que evita cobrar errado.
+   - **Nota:** o dispatch que fez esse fix wave verificou `git log --stat` na íntegra e a premissa
+     original deste passo ("nenhum commit antes do fix de `renew_subscription` toca em `src/` fora
+     de `types.ts`") não valia: a leva de 13 tasks já commitada tem 7 commits 100% backend
+     (`982bcd6`..`b21935c`) seguidos de 8 commits que tocam `src/` (`6d9c024`..`682eddb`, hooks,
+     landing, `SubscribePage`, Créditos, Termos, docs), todos **ainda não empurrados** pro
+     remoto (`origin/main` seguia em `c4f50fc` quando o fix wave começou). Por isso o split real
+     de "backend primeiro" usa `b21935c` (o fim da leva original 100% backend), não o SHA de um
+     commit do fix wave: qualquer commit do fix wave já carrega os 8 commits de front como
+     ancestrais, e empurrar "até ele" incluiria o front de qualquer forma.
 2. Nenhum secret novo no remoto (`BUYER_TEST_EMAIL_MP` é só local).
 3. Smoke em produção: não há como testar o trial sem um cartão real; o dono decide se roda um
    trial real com cartão próprio (cancelar antes do 8º dia ⇒ R$ 0,00) ou se confia no sandbox.

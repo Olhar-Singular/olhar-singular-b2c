@@ -25,6 +25,7 @@ Data: 2026-09-15. Estende o spec `2026-09-11-pagamentos-assinatura-mp-design.md`
 | 4 | Trial repetido | Barrado por **CPF** (além do e-mail): CPF que já teve trial ou assinatura só assina pago. |
 | 5 | Estorno | **Autoatendimento** em Créditos, sempre disponível, só da última cobrança aprovada, zera `plan_credits` e cancela a assinatura. Vale mesmo com créditos parcialmente usados (devolve integral, zera o que sobrou). |
 | 6 | Onde explicar | Card Teste (1 linha) + FAQ (pergunta nova) + `/assinar?trial=1` (caixa com a data exata da 1ª cobrança) + Créditos durante o trial + Termos de Uso e Política de Reembolso. |
+| 7 | Cartão recusado no teste | A conta recém-criada é apagada (`auth.admin.deleteUser`) para o e-mail poder tentar outro cartão; a decisão 14 (a conta fica) vale só para o funil pago. |
 
 ## 3. Mecanismo escolhido no Mercado Pago
 
@@ -117,7 +118,11 @@ para achar a última cobrança.
   devolve `result: 'trial_converted'` (o `mp-webhook` trata como `renewed` para o analytics:
   `subscription_renewed` com o valor do plano). Numa linha sem `trial_ends_at` nada muda (a cota
   já foi carregada na ativação). Cobrança recusada no 8º dia: `clawback_subscription` já
-  existente zera o plano e fecha a assinatura; nenhuma mudança.
+  existente zera o plano e fecha a assinatura; nenhuma mudança. **Guarda de fatura não liquidada**
+  (migration `20260918000001`, item 1 do fix wave final): fatura com `status = 'scheduled'` ou
+  `payment_status` em `pending`/`in_process`/`authorized` só é espelhada e devolve `pending`
+  (nunca `clawback`/`past_due`), e uma fatura `approved` com `amount_brl = 0` (validação de
+  cartão do MP) devolve `ignored` sem converter nem renovar nada.
 - **`cancel_subscription_local`**: se `subscriptions.trial_ends_at IS NOT NULL AND
   first_payment_confirmed = false` (cancelou dentro do trial) ⇒ também `plan_credits = 0`,
   `plan_period_end = now()`, ledger `plan_reset` negativo com o que sobrou. Fora do trial mantém
@@ -153,6 +158,11 @@ para achar a última cobrança.
 - `insertSubscription` grava `trial_ends_at = start_date`; `authorized` ⇒ o mesmo
   `activate_subscription` de sempre (ramifica pela coluna, seção 5); `pending` e `rejected` seguem
   o fluxo pago atual (sem crédito, sem sessão no `rejected`).
+- **exceção no `rejected` do teste** (decisão 7, fix wave final): quando `trial && accountCreated`,
+  `runAnonymousCheckout` apaga a conta recém-criada (`auth.admin.deleteUser`) antes de responder,
+  para o mesmo e-mail poder tentar outro cartão em vez de travar em `email_exists`; falha ao
+  apagar mantém a conta e loga um ALERT. A decisão 14 (a conta fica num `rejected`) segue valendo
+  só para o funil pago.
 - CPF inválido ou ausente com `trial: true` ⇒ 400 `cpf_required` (sem CPF não há como aplicar a
   decisão 4; o Brick sempre o envia, só um caller scriptado cai aqui).
 - o resultado de `runSubscribe` passa a carregar `planSlug` e `priceBrl` (o servidor escolheu o
