@@ -7,10 +7,11 @@ import { formatCard } from "@/lib/domain/subscriptionUi";
 import type { Access } from "@/lib/domain/access";
 import type { SubscriptionView } from "@/hooks/useSubscription";
 
-const { mockCancel, mockUpdateCard, brickProps } = vi.hoisted(() => ({
+const { mockCancel, mockUpdateCard, brickProps, cancelOpts } = vi.hoisted(() => ({
   mockCancel: vi.fn(),
   mockUpdateCard: vi.fn(),
   brickProps: vi.fn(),
+  cancelOpts: vi.fn(),
 }));
 
 const CARD = { token: "tok_new", payment_method_id: "visa" };
@@ -31,7 +32,10 @@ vi.mock("@/hooks/useSubscription", async (orig) => {
   const actual = await orig<typeof import("@/hooks/useSubscription")>();
   return {
     ...actual,
-    useCancelSubscription: () => ({ mutate: mockCancel, isPending: false }),
+    useCancelSubscription: (opts?: unknown) => {
+      cancelOpts(opts);
+      return { mutate: mockCancel, isPending: false };
+    },
     useUpdateSubscriptionCard: () => ({ mutateAsync: mockUpdateCard, isPending: false }),
   };
 });
@@ -174,6 +178,7 @@ describe("SubscriptionCard", () => {
     await user.click(screen.getByRole("button", { name: "Cancelar assinatura" }));
     await user.click(within(screen.getByRole("alertdialog")).getByRole("button", { name: "Cancelar assinatura" }));
     expect(mockCancel).toHaveBeenCalledTimes(1);
+    expect(cancelOpts).toHaveBeenCalledWith({ trial: false });
   });
 
   it("wording of the confirmation without a known period end", async () => {
@@ -235,5 +240,48 @@ describe("SubscriptionCard", () => {
     await user.click(screen.getByRole("button", { name: /Trocar cartão/ }));
     expect(screen.getByRole("dialog")).toHaveTextContent(/próxima cobrança\. Nada é cobrado agora/);
     expect(brickProps).toHaveBeenCalledWith(expect.objectContaining({ amount: 1, payerEmail: undefined }));
+  });
+});
+
+describe("SubscriptionCard (trial with card)", () => {
+  beforeEach(async () => {
+    vi.clearAllMocks();
+    mockUpdateCard.mockResolvedValue({ status: "updated" });
+    const auth = await import("@/hooks/useAuth");
+    vi.mocked(auth.useAuth).mockReturnValue(buildAuthState({ user: { id: "u1", email: "a@b.c" } }) as never);
+  });
+
+  const trialSub = () => sub({
+    status: "authorized",
+    plan: { ...PLAN, slug: "basico", name: "Básico", priceBrl: 39.9, monthlyCredits: 300, highlight: false },
+    firstPaymentConfirmed: false,
+    trialEndsAt: new Date("2026-09-22T12:00:00Z"),
+    nextPaymentDate: new Date("2026-09-22T12:00:00Z"),
+    cardBrand: "visa",
+    cardLastFour: "5682",
+  });
+  const trialAccess = () => access({ kind: "trial", planCredits: 42, total: 47, periodEnd: new Date("2026-09-22T12:00:00Z"), daysLeft: 7 });
+
+  it("shows the trial, the first charge and the immediate consequence of cancelling", () => {
+    renderWithProviders(<SubscriptionCard subscription={trialSub()} access={trialAccess()} />);
+    expect(screen.getByText("Teste grátis")).toBeInTheDocument();
+    expect(screen.getByText(/depois Básico · R\$\s*39,90\/mês/)).toBeInTheDocument();
+    expect(screen.getByText("Primeira cobrança")).toBeInTheDocument();
+    expect(screen.getByText("22/09/2026")).toBeInTheDocument();
+    expect(screen.getByText(/42 créditos do teste até 22\/09\/2026\. Cancelar agora encerra o acesso na hora e nada é cobrado\./)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Cancelar teste" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Trocar cartão/ })).toBeInTheDocument();
+  });
+
+  it("confirms the trial cancellation with its own copy and cancels", async () => {
+    const user = userEvent.setup();
+    renderWithProviders(<SubscriptionCard subscription={trialSub()} access={trialAccess()} />);
+    await user.click(screen.getByRole("button", { name: "Cancelar teste" }));
+    const dialog = screen.getByRole("alertdialog");
+    expect(dialog).toHaveTextContent("Cancelar o teste?");
+    expect(dialog).toHaveTextContent(/Nada será cobrado\. Seus créditos do teste são removidos na hora; os extras não expiram\./);
+    await user.click(within(dialog).getByRole("button", { name: "Cancelar teste" }));
+    expect(mockCancel).toHaveBeenCalled();
+    expect(cancelOpts).toHaveBeenCalledWith({ trial: true });
   });
 });

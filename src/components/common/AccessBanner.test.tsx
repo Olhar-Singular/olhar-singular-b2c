@@ -141,6 +141,33 @@ describe("AccessBanner (subscription states)", () => {
     );
     expect(screen.getByRole("status")).toHaveTextContent(/foi recusado/);
   });
+
+  it("names the first charge of a trial with card", () => {
+    render(
+      <MemoryRouter>
+        <AccessBanner
+          now={NOW}
+          access={access({ kind: "trial", planCredits: 42, extraCredits: 0, total: 42, periodEnd: new Date("2026-09-21T12:00:00Z"), daysLeft: 7 })}
+          subscription={subscription({
+            firstPaymentConfirmed: false,
+            trialEndsAt: new Date("2026-09-21T12:00:00Z"),
+            plan: { id: "b", slug: "basico", name: "Básico", priceBrl: 39.9, monthlyCredits: 300, highlight: false, adminOnly: false },
+          })}
+        />
+      </MemoryRouter>,
+    );
+    expect(screen.getByRole("status")).toHaveTextContent("Teste grátis: 7 dias restantes e 42 créditos. Em 21/09/2026 cobramos R$ 39,90 no cartão.");
+    expect(screen.getByRole("link", { name: "Ver detalhes" })).toHaveAttribute("href", "/creditos");
+  });
+
+  it("keeps the invite-trial banner when the trial has no card behind it", () => {
+    render(
+      <MemoryRouter>
+        <AccessBanner now={NOW} access={access({ kind: "trial", planCredits: 42, total: 42, daysLeft: 3 })} subscription={null} />
+      </MemoryRouter>,
+    );
+    expect(screen.getByRole("status")).toHaveTextContent("Período de teste: 3 dias restantes e 42 créditos para usar.");
+  });
 });
 
 describe("isRecentRejection", () => {

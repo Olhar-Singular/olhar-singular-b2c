@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import { AlertTriangle, Clock, Coins, Loader2 } from "lucide-react";
 import type { Access } from "@/lib/domain/access";
 import type { SubscriptionView } from "@/hooks/useSubscription";
-import { isRecentRejection } from "@/lib/domain/subscriptionUi";
+import { formatBrl, formatDate, isCardTrial, isRecentRejection } from "@/lib/domain/subscriptionUi";
 import { trackPaywallShown } from "@/lib/analytics/events";
 
 interface Props {
@@ -71,6 +71,27 @@ export function AccessBanner({ access, subscription, now = new Date() }: Props) 
         <span>O cartão da assinatura foi recusado. Você pode tentar com outro cartão.</span>
         <Link to="/assinar" className="font-medium underline">
           Tentar de novo
+        </Link>
+      </div>
+    );
+  }
+
+  if (isCardTrial(subscription) && access.kind === "trial" && !access.trialExpired && access.daysLeft !== null) {
+    const days = access.daysLeft;
+    const sub = subscription!;
+    const charge = sub.plan && sub.trialEndsAt ? ` Em ${formatDate(sub.trialEndsAt)} cobramos ${formatBrl(sub.plan.priceBrl)} no cartão.` : "";
+    return (
+      <div
+        role="status"
+        className="bg-primary/10 text-primary text-sm px-4 py-2 flex items-center justify-center gap-2 flex-wrap"
+      >
+        <Clock className="w-4 h-4 shrink-0" aria-hidden="true" />
+        <span>
+          Teste grátis: {days === 1 ? "1 dia restante" : `${days} dias restantes`} e{" "}
+          {access.planCredits} {access.planCredits === 1 ? "crédito" : "créditos"}.{charge}
+        </span>
+        <Link to="/creditos" className="font-medium underline">
+          Ver detalhes
         </Link>
       </div>
     );

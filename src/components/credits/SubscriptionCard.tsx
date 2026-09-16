@@ -24,7 +24,7 @@ import {
 import MpCardBrick from "@/components/payments/MpCardBrick";
 import { useAuth } from "@/hooks/useAuth";
 import type { Access } from "@/lib/domain/access";
-import { canSubscribe, formatBrl, formatCard, formatDate } from "@/lib/domain/subscriptionUi";
+import { canSubscribe, formatBrl, formatCard, formatDate, isCardTrial } from "@/lib/domain/subscriptionUi";
 import type { CardFormDataView } from "@/hooks/useCredits";
 import {
   isLiveSubscription,
@@ -56,7 +56,9 @@ const STATUS_LABELS: Record<SubscriptionStatus, { label: string; tone: "default"
 // never see it; anyone else without a live subscription gets the CTA.
 export default function SubscriptionCard({ subscription, access, isSuperAdmin = false }: Props) {
   const { user } = useAuth();
-  const cancel = useCancelSubscription();
+  // Hooks run before the early returns; isCardTrial is false while loading.
+  const cardTrial = isCardTrial(subscription);
+  const cancel = useCancelSubscription({ trial: cardTrial });
   // The dialog shows the refusal inline; no duplicate toast.
   const updateCard = useUpdateSubscriptionCard({ toastErrors: false });
   const [confirmCancel, setConfirmCancel] = useState(false);
@@ -107,7 +109,7 @@ export default function SubscriptionCard({ subscription, access, isSuperAdmin = 
 
   // Live from here on: the row exists and has a plan.
   const sub = subscription!;
-  const status = STATUS_LABELS[sub.status];
+  const status = cardTrial ? { label: "Teste grátis", tone: "default" as const } : STATUS_LABELS[sub.status];
   const card = formatCard(sub.cardBrand, sub.cardLastFour);
 
   // Rejecting hands the failure back to the Brick, which re-enables its
@@ -136,19 +138,29 @@ export default function SubscriptionCard({ subscription, access, isSuperAdmin = 
           <div>
             <dt className="text-muted-foreground">Plano</dt>
             <dd className="font-semibold">
-              {sub.plan ? `${sub.plan.name} · ${formatBrl(sub.plan.priceBrl)}/mês` : "Plano"}
+              {cardTrial && sub.plan
+                ? `Teste grátis · depois ${sub.plan.name} · ${formatBrl(sub.plan.priceBrl)}/mês`
+                : sub.plan ? `${sub.plan.name} · ${formatBrl(sub.plan.priceBrl)}/mês` : "Plano"}
             </dd>
             {sub.plan && <dd className="text-xs text-muted-foreground">{sub.plan.monthlyCredits} créditos por mês</dd>}
           </div>
           <div>
-            <dt className="text-muted-foreground">Próxima cobrança</dt>
-            <dd className="font-semibold">{sub.nextPaymentDate ? formatDate(sub.nextPaymentDate) : "a confirmar"}</dd>
+            <dt className="text-muted-foreground">{cardTrial ? "Primeira cobrança" : "Próxima cobrança"}</dt>
+            <dd className="font-semibold">
+              {cardTrial && sub.trialEndsAt ? formatDate(sub.trialEndsAt) : sub.nextPaymentDate ? formatDate(sub.nextPaymentDate) : "a confirmar"}
+            </dd>
           </div>
           <div>
             <dt className="text-muted-foreground">Cartão</dt>
             <dd className="font-semibold">{card ?? "não informado"}</dd>
           </div>
         </dl>
+
+        {cardTrial && sub.trialEndsAt && (
+          <p className="text-sm text-muted-foreground">
+            Você tem {access.planCredits} {access.planCredits === 1 ? "crédito" : "créditos"} do teste até {formatDate(sub.trialEndsAt)}. Cancelar agora encerra o acesso na hora e nada é cobrado.
+          </p>
+        )}
 
         {sub.status === "past_due" && (
           <p role="alert" className="text-sm text-destructive">
@@ -162,7 +174,7 @@ export default function SubscriptionCard({ subscription, access, isSuperAdmin = 
             Trocar cartão
           </Button>
           <Button variant="ghost" className="text-muted-foreground" onClick={() => setConfirmCancel(true)} disabled={cancel.isPending}>
-            Cancelar assinatura
+            {cardTrial ? "Cancelar teste" : "Cancelar assinatura"}
           </Button>
         </div>
       </CardContent>
@@ -170,15 +182,21 @@ export default function SubscriptionCard({ subscription, access, isSuperAdmin = 
       <AlertDialog open={confirmCancel} onOpenChange={setConfirmCancel}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Cancelar a assinatura?</AlertDialogTitle>
+            <AlertDialogTitle>{cardTrial ? "Cancelar o teste?" : "Cancelar a assinatura?"}</AlertDialogTitle>
             <AlertDialogDescription>
-              Você não será mais cobrado. Seus créditos do plano continuam valendo até{" "}
-              {access.periodEnd ? formatDate(access.periodEnd) : "o fim do período pago"}; os extras não expiram.
+              {cardTrial ? (
+                <>Nada será cobrado. Seus créditos do teste são removidos na hora; os extras não expiram.</>
+              ) : (
+                <>
+                  Você não será mais cobrado. Seus créditos do plano continuam valendo até{" "}
+                  {access.periodEnd ? formatDate(access.periodEnd) : "o fim do período pago"}; os extras não expiram.
+                </>
+              )}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Manter assinatura</AlertDialogCancel>
-            <AlertDialogAction onClick={() => cancel.mutate()}>Cancelar assinatura</AlertDialogAction>
+            <AlertDialogCancel>{cardTrial ? "Manter o teste" : "Manter assinatura"}</AlertDialogCancel>
+            <AlertDialogAction onClick={() => cancel.mutate()}>{cardTrial ? "Cancelar teste" : "Cancelar assinatura"}</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
