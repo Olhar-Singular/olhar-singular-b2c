@@ -21,6 +21,7 @@ export interface AttributionLike {
 export type AnalyticsEventName =
   | "purchase"
   | "subscription_started"
+  | "trial_started"
   | "subscription_renewed"
   | "subscription_payment_failed"
   | "subscription_cancelled"
@@ -48,6 +49,7 @@ export interface AnalyticsConfig {
 const META_EVENT_NAMES: Record<AnalyticsEventName, string> = {
   purchase: "Purchase",
   subscription_started: "Subscribe",
+  trial_started: "StartTrial",
   subscription_renewed: "Purchase",
   subscription_payment_failed: "SubscriptionPaymentFailed",
   subscription_cancelled: "SubscriptionCancelled",

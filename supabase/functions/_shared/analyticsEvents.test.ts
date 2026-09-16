@@ -77,6 +77,14 @@ describe("buildMetaPayload", () => {
     expect(noEmailData.custom_data).toEqual({ currency: "BRL" });
   });
 
+  it("maps trial_started to StartTrial", async () => {
+    const trialEvent = event({ name: "trial_started", eventId: "sub-9", userId: "u1", valueBrl: 0 });
+    const meta = await buildMetaPayload(trialEvent, NOW);
+    expect((meta.data as Record<string, unknown>[])[0]).toMatchObject({ event_name: "StartTrial" });
+    const ga4 = buildGa4Payload(trialEvent);
+    expect(ga4).toMatchObject({ events: [{ name: "trial_started" }] });
+  });
+
   it("maps every event name", async () => {
     for (const [name, expected] of [["purchase", "Purchase"], ["subscription_renewed", "Purchase"], ["subscription_payment_failed", "SubscriptionPaymentFailed"], ["subscription_cancelled", "SubscriptionCancelled"], ["refund", "Refund"]] as const) {
       const payload = await buildMetaPayload(event({ name }), NOW);

@@ -41,6 +41,9 @@ const FLOW_ERRORS: Record<string, string> = {
   rate_limited: "Muitas tentativas. Aguarde alguns minutos e tente de novo.",
   circuit_open: "O checkout está temporariamente indisponível. Tente de novo em alguns minutos.",
   email_exists: "Este e-mail já tem conta. Entre para assinar.",
+  trial_requires_new_account: "Você já tem conta: o teste é só para contas novas. Assine um plano em Créditos.",
+  cpf_required: "Informe um CPF válido para começar o teste.",
+  trial_used: "Este CPF já usou o teste. Você pode assinar um plano com o mesmo cartão.",
 };
 
 // A pending subscription older than this is a dead attempt and must not block a
@@ -50,9 +53,10 @@ const PENDING_GRACE_MINUTES = 15;
 // Subscribe to a monthly plan with the card the Brick tokenized. Public
 // endpoint (verify_jwt = false): with a valid user JWT it is the logged-in
 // flow; without one the account is created from the payment (decision 12) and
-// the buyer enters through the login link sent to the e-mail. Decisions live in
-// runAnonymousCheckout / runSubscribe (unit-tested); this file wires Supabase
-// and Mercado Pago into them.
+// the buyer enters through the login link sent to the e-mail. With `trial:
+// true` in the anonymous flow the cheapest public plan starts free for 7 days.
+// Decisions live in runAnonymousCheckout / runSubscribe (unit-tested); this
+// file wires Supabase and Mercado Pago into them.
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
@@ -95,6 +99,18 @@ serve(async (req) => {
     const deps: SubscribeDeps = {
       loadPlan: async (slug) => {
         const { data } = await admin.from("plans").select("*").eq("slug", slug).maybeSingle();
+        return data;
+      },
+      loadCheapestPublicPlan: async () => {
+        const { data, error } = await admin
+          .from("plans")
+          .select("*")
+          .eq("active", true)
+          .eq("admin_only", false)
+          .order("price_brl", { ascending: true })
+          .limit(1)
+          .maybeSingle();
+        if (error) throw new Error(`plans lookup failed: ${error.message}`);
         return data;
       },
       loadProfile: async (userId) => {
@@ -148,6 +164,7 @@ serve(async (req) => {
             payer_email: row.payerEmail,
             status: "pending",
             attribution: row.attribution ?? null,
+            trial_ends_at: row.trialEndsAt,
           })
           .select("id")
           .single();
@@ -206,6 +223,11 @@ serve(async (req) => {
     const checkoutDeps: CheckoutDeps = {
       subscribeDeps: deps,
       hash: (value) => hashIdentifier(value, hashSecret),
+      trialUsedByCpf: async (cpf) => {
+        const { data, error } = await admin.rpc("trial_used_by_cpf", { p_cpf: cpf });
+        if (error) throw new Error(`trial_used_by_cpf failed: ${error.message}`);
+        return data === true;
+      },
       recordAttempt: async (ipHash, emailHash, outcome) => {
         const { data, error } = await admin.rpc("record_checkout_attempt", {
           p_ip_hash: ipHash,
@@ -268,6 +290,7 @@ serve(async (req) => {
         backUrl: `${appUrl}/creditos`,
         attribution: parsed.attribution,
         clientIp: clientIp(req.headers),
+        trial: parsed.trial,
       },
       checkoutDeps,
     );
@@ -278,17 +301,21 @@ serve(async (req) => {
 
     if (result.status !== "rejected") {
       // Server-side conversion (GA4 MP / Meta CAPI); no-op without secrets.
-      const { data: planRow, error: planError } = await admin.from("plans").select("price_brl").eq("slug", parsed.planSlug).maybeSingle();
-      if (planError) console.warn("subscribe: analytics plan lookup failed", planError.message);
+      const trial = !!result.trialEndsAt;
       await dispatchAnalytics(sendAnalyticsEvents(
         [{
-          name: "subscription_started",
+          name: trial ? "trial_started" : "subscription_started",
           eventId: result.subscriptionId,
           userId: outcome.userId,
-          valueBrl: planRow ? Number(planRow.price_brl) : null,
+          valueBrl: trial ? 0 : result.priceBrl,
           email: user?.email ?? account?.email ?? null,
           attribution: (parsed.attribution ?? null) as AttributionLike | null,
-          params: { plan: parsed.planSlug, status: result.status, account_created: accountCreated },
+          params: {
+            plan: result.planSlug,
+            status: result.status,
+            account_created: accountCreated,
+            ...(trial ? { trial_ends_at: result.trialEndsAt as string } : {}),
+          },
         }],
         readAnalyticsConfig(Deno.env),
       ));
@@ -305,7 +332,12 @@ serve(async (req) => {
     }
     // No session in the answer: a new account logs in through the e-mail link
     // (signInWithOtp on the client), proving it owns the address.
-    return json({ status: result.status, subscriptionId: result.subscriptionId, accountCreated });
+    return json({
+      status: result.status,
+      subscriptionId: result.subscriptionId,
+      accountCreated,
+      ...(result.trialEndsAt ? { trialEndsAt: result.trialEndsAt } : {}),
+    });
   } catch (e) {
     console.error("subscribe error:", e);
     return json({ error: e instanceof Error ? e.message : "Erro desconhecido." }, 500);

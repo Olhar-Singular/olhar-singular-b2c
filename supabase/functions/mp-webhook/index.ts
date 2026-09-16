@@ -96,7 +96,7 @@ serve(async (req) => {
 
       // Server-side conversion events for the money transitions (no-op without secrets).
       const analyticsName: AnalyticsEvent["name"] | null =
-        outcome.handled && outcome.result === "renewed" ? "subscription_renewed"
+        outcome.handled && (outcome.result === "renewed" || outcome.result === "trial_converted") ? "subscription_renewed"
         : outcome.handled && (outcome.result === "past_due" || outcome.result === "clawback") ? "subscription_payment_failed"
         : null;
       if (analyticsName && outcome.handled) {
