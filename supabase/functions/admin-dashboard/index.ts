@@ -9,6 +9,7 @@ import {
   type SpendingLite,
   type SeriesRow,
   type SubscriptionLite,
+  type InvoiceLite,
   summarizeSubscriptions,
 } from "../_shared/adminDashboard.ts";
 
@@ -93,12 +94,25 @@ serve(async (req) => {
     // Subscriptions with their plan (one row per user is picked in the merge).
     const { data: subscriptionsData, error: subscriptionsError } = await supabase
       .from("subscriptions")
-      .select("user_id, status, next_payment_date, current_period_end, mp_preapproval_id, created_at, plans(name, price_brl)");
+      .select("id, user_id, status, next_payment_date, current_period_end, mp_preapproval_id, created_at, trial_ends_at, first_payment_confirmed, plans(name, price_brl)");
     if (subscriptionsError) {
       console.error("admin-dashboard subscriptions error:", subscriptionsError);
       return json({ error: "internal_error" }, 500);
     }
     const subscriptions = (subscriptionsData ?? []) as unknown as SubscriptionLite[];
+
+    // Approved charges (with a mp_payment_id) — the last one per subscription
+    // becomes its "last_charge" (paid trial and self-service refund visibility).
+    const { data: invoicesData, error: invoicesError } = await supabase
+      .from("subscription_invoices")
+      .select("subscription_id, amount_brl, debit_date, refunded_at")
+      .eq("payment_status", "approved")
+      .not("mp_payment_id", "is", null);
+    if (invoicesError) {
+      console.error("admin-dashboard subscription_invoices error:", invoicesError);
+      return json({ error: "internal_error" }, 500);
+    }
+    const invoices = (invoicesData ?? []) as InvoiceLite[];
 
     const now = new Date();
     const users = mergeUserRows(
@@ -107,6 +121,7 @@ serve(async (req) => {
       (spendingRes.data ?? []) as SpendingLite[],
       now,
       subscriptions,
+      invoices,
     );
 
     return json(

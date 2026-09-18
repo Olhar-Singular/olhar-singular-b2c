@@ -5,11 +5,13 @@ import {
   shapeSeries,
   mergeUserRows,
   pickSubscriptionPerUser,
+  pickLastChargePerSubscription,
   summarizeSubscriptions,
   type SubscriptionLite,
   type AuthUserLite,
   type ProfileLite,
   type SpendingLite,
+  type InvoiceLite,
 } from "./adminDashboard";
 
 const NOW = new Date("2026-06-01T12:00:00Z");
@@ -175,6 +177,7 @@ describe("subscriptions on the dashboard", () => {
     expect(picked.get("u1")).toEqual({
       status: "authorized", plan_name: "Profissional", price_brl: 59.9,
       next_payment_date: "2026-07-01T00:00:00Z", current_period_end: null, mp_preapproval_id: "pre-1",
+      trial_ends_at: null, first_payment_confirmed: false, last_charge: null,
     });
     expect(picked.get("u2")).toMatchObject({ status: "rejected", plan_name: "Profissional" });
     expect(picked.get("u4")).toMatchObject({ plan_name: null, price_brl: 0 });
@@ -216,5 +219,77 @@ describe("subscriptions on the dashboard", () => {
     expect(users[0].subscription).toMatchObject({ status: "authorized" });
     expect(users[1].subscription).toBeNull();
     expect(mergeUserRows([{ id: "u1" }], [], [], NOW)[0].subscription).toBeNull();
+  });
+
+  it("propagates trial_ends_at and first_payment_confirmed, defaulting to null/false", () => {
+    const cardTrialRows: SubscriptionLite[] = [
+      {
+        id: "sub-1", user_id: "u1", status: "authorized", created_at: "2026-02-01T00:00:00Z",
+        trial_ends_at: "2026-06-10T00:00:00Z", first_payment_confirmed: false, plans: PRO,
+      },
+    ];
+    const users = mergeUserRows([{ id: "u1" }, { id: "u5" }], [], [], NOW, cardTrialRows);
+    expect(users[0].subscription).toMatchObject({
+      trial_ends_at: "2026-06-10T00:00:00Z",
+      first_payment_confirmed: false,
+    });
+    // No subscription at all -> no card-trial fields to propagate.
+    expect(users[1].subscription).toBeNull();
+    // A subscription without trial fields defaults to null/false.
+    expect(mergeUserRows([{ id: "u1" }], [], [], NOW, rows)[0].subscription).toMatchObject({
+      trial_ends_at: null,
+      first_payment_confirmed: false,
+    });
+  });
+});
+
+describe("pickLastChargePerSubscription", () => {
+  it("keeps the most recent invoice per subscription by debit_date", () => {
+    const invoices: InvoiceLite[] = [
+      { subscription_id: "sub-1", amount_brl: 39.9, debit_date: "2026-05-01T00:00:00Z", refunded_at: null },
+      { subscription_id: "sub-1", amount_brl: "59.90", debit_date: "2026-06-01T00:00:00Z", refunded_at: null },
+      { subscription_id: "sub-2", amount_brl: 99.9, debit_date: "2026-04-01T00:00:00Z", refunded_at: "2026-04-05T00:00:00Z" },
+    ];
+    const picked = pickLastChargePerSubscription(invoices);
+    expect(picked.get("sub-1")).toEqual({ amount_brl: 59.9, debit_date: "2026-06-01T00:00:00Z", refunded_at: null });
+    expect(picked.get("sub-2")).toEqual({ amount_brl: 99.9, debit_date: "2026-04-01T00:00:00Z", refunded_at: "2026-04-05T00:00:00Z" });
+    expect(picked.get("nobody")).toBeUndefined();
+  });
+
+  it("keeps the current row when a later one has no debit_date to compare", () => {
+    const picked = pickLastChargePerSubscription([
+      { subscription_id: "sub-1", amount_brl: 39.9, debit_date: "2026-05-01T00:00:00Z", refunded_at: null },
+      { subscription_id: "sub-1", amount_brl: 1, debit_date: null, refunded_at: null },
+    ]);
+    expect(picked.get("sub-1")).toMatchObject({ amount_brl: 39.9 });
+  });
+
+  it("returns an empty map for no invoices", () => {
+    expect(pickLastChargePerSubscription([]).size).toBe(0);
+  });
+});
+
+describe("mergeUserRows with invoices", () => {
+  const sub: SubscriptionLite = {
+    id: "sub-1", user_id: "u1", status: "authorized", created_at: "2026-02-01T00:00:00Z",
+    trial_ends_at: "2026-06-10T00:00:00Z", first_payment_confirmed: false,
+    plans: { name: "Profissional", price_brl: 59.9 },
+  };
+
+  it("attaches the last charge to the subscription when an approved invoice exists", () => {
+    const invoices: InvoiceLite[] = [
+      { subscription_id: "sub-1", amount_brl: 39.9, debit_date: "2026-06-05T00:00:00Z", refunded_at: null },
+    ];
+    const users = mergeUserRows([{ id: "u1" }], [], [], NOW, [sub], invoices);
+    expect(users[0].subscription?.last_charge).toEqual({
+      amount_brl: 39.9, debit_date: "2026-06-05T00:00:00Z", refunded_at: null,
+    });
+  });
+
+  it("leaves last_charge null when there is no matching invoice", () => {
+    const users = mergeUserRows([{ id: "u1" }], [], [], NOW, [sub], []);
+    expect(users[0].subscription?.last_charge).toBeNull();
+    // Also null when invoices are omitted entirely (default param).
+    expect(mergeUserRows([{ id: "u1" }], [], [], NOW, [sub])[0].subscription?.last_charge).toBeNull();
   });
 });

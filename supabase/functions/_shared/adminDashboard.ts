@@ -33,13 +33,31 @@ export interface SeriesRow {
 
 /** A subscriptions row joined with its plan, as the dashboard reads it. */
 export interface SubscriptionLite {
+  id?: string;
   user_id: string;
   status: string;
   next_payment_date?: string | null;
   current_period_end?: string | null;
   mp_preapproval_id?: string | null;
   created_at?: string | null;
+  trial_ends_at?: string | null;
+  first_payment_confirmed?: boolean | null;
   plans?: { name?: string | null; price_brl?: number | string | null } | null;
+}
+
+/** The most recent approved charge on a subscription. */
+export interface LastCharge {
+  amount_brl: number;
+  debit_date: string | null;
+  refunded_at: string | null;
+}
+
+/** A subscription_invoices row, as the dashboard reads it (approved charges only). */
+export interface InvoiceLite {
+  subscription_id: string;
+  amount_brl: number | string | null;
+  debit_date: string | null;
+  refunded_at: string | null;
 }
 
 export interface AdminSubscriptionRow {
@@ -49,6 +67,9 @@ export interface AdminSubscriptionRow {
   next_payment_date: string | null;
   current_period_end: string | null;
   mp_preapproval_id: string | null;
+  trial_ends_at: string | null;
+  first_payment_confirmed: boolean;
+  last_charge: LastCharge | null;
 }
 
 export interface AdminSubscriptionSummary {
@@ -84,7 +105,12 @@ export interface AdminUserRow {
 }
 
 // One row per user: the live one wins; otherwise the newest attempt.
-export function pickSubscriptionPerUser(rows: SubscriptionLite[]): Map<string, AdminSubscriptionRow> {
+// `lastChargeBySubscription` (keyed by subscription id) attaches the most
+// recent approved charge to the winning row, when known.
+export function pickSubscriptionPerUser(
+  rows: SubscriptionLite[],
+  lastChargeBySubscription: Map<string, LastCharge> = new Map(),
+): Map<string, AdminSubscriptionRow> {
   const byUser = new Map<string, SubscriptionLite>();
   for (const row of rows) {
     const current = byUser.get(row.user_id);
@@ -105,6 +131,30 @@ export function pickSubscriptionPerUser(rows: SubscriptionLite[]): Map<string, A
       next_payment_date: row.next_payment_date ?? null,
       current_period_end: row.current_period_end ?? null,
       mp_preapproval_id: row.mp_preapproval_id ?? null,
+      trial_ends_at: row.trial_ends_at ?? null,
+      first_payment_confirmed: row.first_payment_confirmed ?? false,
+      last_charge: (row.id ? lastChargeBySubscription.get(row.id) : undefined) ?? null,
+    });
+  }
+  return out;
+}
+
+// One entry per subscription: the invoice with the latest debit_date wins.
+// Callers pre-filter to approved invoices with a mp_payment_id.
+export function pickLastChargePerSubscription(invoices: InvoiceLite[]): Map<string, LastCharge> {
+  const bySubscription = new Map<string, InvoiceLite>();
+  for (const invoice of invoices) {
+    const current = bySubscription.get(invoice.subscription_id);
+    if (!current || Date.parse(invoice.debit_date ?? "") > Date.parse(current.debit_date ?? "")) {
+      bySubscription.set(invoice.subscription_id, invoice);
+    }
+  }
+  const out = new Map<string, LastCharge>();
+  for (const [subscriptionId, invoice] of bySubscription) {
+    out.set(subscriptionId, {
+      amount_brl: Number(invoice.amount_brl ?? 0),
+      debit_date: invoice.debit_date ?? null,
+      refunded_at: invoice.refunded_at ?? null,
     });
   }
   return out;
@@ -148,10 +198,12 @@ export function mergeUserRows(
   spending: SpendingLite[],
   now: Date,
   subscriptions: SubscriptionLite[] = [],
+  invoices: InvoiceLite[] = [],
 ): AdminUserRow[] {
   const profileById = new Map(profiles.map((p) => [p.id, p]));
   const spendById = new Map(spending.map((s) => [s.user_id, Number(s.total_usd ?? 0)]));
-  const subscriptionById = pickSubscriptionPerUser(subscriptions);
+  const lastChargeBySubscription = pickLastChargePerSubscription(invoices);
+  const subscriptionById = pickSubscriptionPerUser(subscriptions, lastChargeBySubscription);
 
   return authUsers.map((u) => {
     const profile = profileById.get(u.id);
