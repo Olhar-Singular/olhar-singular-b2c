@@ -9,12 +9,29 @@
 -- would be marked past_due (money gone, access untouched) and an unconfirmed
 -- one would be clawed back (access removed, but the plan credits already
 -- granted against that money stayed). Both are wrong: the money went back, so
--- the same consequences as confirm_refund apply. An invoice already refunded
--- (by confirm_refund or a replayed webhook) is only re-mirrored, never
--- reprocessed, and the routing runs before confirm_refund's own lock so the
--- lock order (subscription -> invoice -> profile) documented in
--- 20260920000000 is kept: renew_subscription already holds the subscription
--- lock (FOR UPDATE OF s) from the same transaction.
+-- the same consequences as confirm_refund apply, but ONLY when this invoice's
+-- money actually landed in the profile bucket it still owns:
+--   - never granted (granted_at IS NULL, e.g. still pending/never claimed) or
+--     MP's R$0 card-validation charge: nothing to claw back, so the invoice is
+--     only marked refunded (never treated as money by a later out-of-order
+--     'approved') and the result is 'closed'.
+--   - granted while this subscription was not live (paid_while_closed): that
+--     money was never applied to the profile's real bucket, which may now
+--     belong to a DIFFERENT live subscription of the same user. Clawing back
+--     via confirm_refund here would zero that OTHER subscription's credits.
+--     Same treatment: mark refunded, result 'closed', no confirm_refund.
+--   - anything else (granted against a bucket this subscription actually
+--     owns, no other live subscription confusing the picture): confirm_refund,
+--     result 'refunded_externally'.
+-- An invoice already refunded (by confirm_refund or a replayed webhook) is
+-- only re-mirrored, never reprocessed, and the routing runs before
+-- confirm_refund's own lock so the lock order (subscription -> invoice ->
+-- profile) documented in 20260920000000 is kept: renew_subscription already
+-- holds the subscription lock (FOR UPDATE OF s) from the same transaction.
+-- The mirror upsert never lets a later out-of-order 'approved' overwrite a
+-- recorded refund's payment_status back to 'approved', and the paid path
+-- checks refunded_at before claiming granted_at, so that later 'approved'
+-- can only ever reply 'refund_mirrored', never grant or reactivate.
 --
 -- CREATE OR REPLACE with the SAME signature (p_subscription_id uuid,
 -- p_invoice jsonb): the service_role-only ACL granted in 20260914000001 is
@@ -38,6 +55,7 @@ DECLARE
   v_claimed    boolean;
   v_period_end timestamptz;
   v_other_live boolean;
+  v_invoice    record;
 BEGIN
   IF v_invoice_id IS NULL OR v_invoice_id = '' THEN
     RETURN jsonb_build_object('success', false, 'error', 'invalid_invoice');
@@ -65,7 +83,12 @@ BEGIN
   ON CONFLICT (id) DO UPDATE
     SET mp_payment_id  = COALESCE(EXCLUDED.mp_payment_id, subscription_invoices.mp_payment_id),
         status         = COALESCE(EXCLUDED.status, subscription_invoices.status),
-        payment_status = COALESCE(EXCLUDED.payment_status, subscription_invoices.payment_status),
+        -- A recorded refund is never downgraded back to 'approved' by a later,
+        -- out-of-order notification (MP does not guarantee delivery order).
+        payment_status = CASE
+                            WHEN subscription_invoices.refunded_at IS NOT NULL THEN subscription_invoices.payment_status
+                            ELSE COALESCE(EXCLUDED.payment_status, subscription_invoices.payment_status)
+                          END,
         amount_brl     = COALESCE(EXCLUDED.amount_brl, subscription_invoices.amount_brl),
         debit_date     = COALESCE(EXCLUDED.debit_date, subscription_invoices.debit_date),
         retry_attempt  = COALESCE(EXCLUDED.retry_attempt, subscription_invoices.retry_attempt),
@@ -73,16 +96,46 @@ BEGIN
 
   -- A refund or chargeback of this charge (MP panel, acquirer): the money went
   -- back, so the plan credits of that charge go too, exactly like the
-  -- self-service refund. Already recorded by confirm_refund → nothing to do.
+  -- self-service refund -- but only when this invoice's money actually landed
+  -- in the bucket it still owns (see the header comment for the three cases).
   IF COALESCE(p_invoice->>'payment_status', '') IN ('refunded', 'charged_back') THEN
-    IF EXISTS (SELECT 1 FROM public.subscription_invoices WHERE id = v_invoice_id AND refunded_at IS NOT NULL) THEN
+    SELECT granted_at, refunded_at, amount_brl
+      INTO v_invoice
+      FROM public.subscription_invoices
+     WHERE id = v_invoice_id;
+
+    IF v_invoice.refunded_at IS NOT NULL THEN
+      -- Already recorded by confirm_refund or a previous replay → nothing to do.
       RETURN jsonb_build_object('success', true, 'result', 'refund_mirrored');
     END IF;
-    IF v_sub.status IN ('cancelled', 'rejected') AND NOT EXISTS (
-         SELECT 1 FROM public.subscription_invoices WHERE id = v_invoice_id AND granted_at IS NOT NULL) THEN
-      -- Never granted anything: just the mirror.
+
+    IF v_invoice.granted_at IS NULL OR COALESCE(v_invoice.amount_brl, 0) = 0 THEN
+      -- Never granted anything (still pending, never claimed) or MP's R$0
+      -- card-validation charge: no bucket to claw back. Record the refund on
+      -- the invoice anyway so a later out-of-order 'approved' can never treat
+      -- it as money.
+      UPDATE public.subscription_invoices
+         SET refunded_at = now(), mp_refund_id = 'external:' || COALESCE(p_invoice->>'payment_status', 'refunded')
+       WHERE id = v_invoice_id;
       RETURN jsonb_build_object('success', true, 'result', 'closed');
     END IF;
+
+    SELECT EXISTS (
+      SELECT 1 FROM public.subscriptions o
+       WHERE o.user_id = v_sub.user_id AND o.id <> p_subscription_id
+         AND o.status IN ('authorized', 'past_due', 'paused')
+    ) INTO v_other_live;
+    IF v_other_live THEN
+      -- Granted while this subscription was not live (paid_while_closed): that
+      -- money was never applied to the profile's real bucket, which may now
+      -- belong to a DIFFERENT live subscription of the same user.
+      -- confirm_refund would wrongly zero that other subscription's credits.
+      UPDATE public.subscription_invoices
+         SET refunded_at = now(), mp_refund_id = 'external:' || COALESCE(p_invoice->>'payment_status', 'refunded')
+       WHERE id = v_invoice_id;
+      RETURN jsonb_build_object('success', true, 'result', 'closed');
+    END IF;
+
     PERFORM public.confirm_refund(v_invoice_id, 'external:' || COALESCE(p_invoice->>'payment_status', 'refunded'));
     RETURN jsonb_build_object('success', true, 'result', 'refunded_externally');
   END IF;
@@ -115,6 +168,14 @@ BEGIN
     END IF;
     PERFORM public.mark_subscription_past_due(p_subscription_id);
     RETURN jsonb_build_object('success', true, 'result', 'past_due');
+  END IF;
+
+  -- An out-of-order 'approved' arriving after a refund/chargeback was already
+  -- recorded for this invoice (MP does not guarantee delivery order): the
+  -- mirror upsert above never let payment_status regress to 'approved', so
+  -- this is stale; never grant or reactivate off it.
+  IF EXISTS (SELECT 1 FROM public.subscription_invoices WHERE id = v_invoice_id AND refunded_at IS NOT NULL) THEN
+    RETURN jsonb_build_object('success', true, 'result', 'refund_mirrored');
   END IF;
 
   -- Paid. The grant happens on the claim of granted_at, once per invoice.
