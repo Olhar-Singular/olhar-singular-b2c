@@ -195,7 +195,7 @@ describe("UsersTable", () => {
 
   it("tolerates missing e-mail and cancel handlers (default no-ops)", async () => {
     const ue = userEvent.setup();
-    const withSub = [{ ...users[0], subscription: { status: "paused", plan_name: null, price_brl: 0, next_payment_date: null, current_period_end: null, mp_preapproval_id: "p" } }];
+    const withSub = [{ ...users[0], subscription: { status: "paused", plan_name: null, price_brl: 0, next_payment_date: null, current_period_end: null, mp_preapproval_id: "p", trial_ends_at: null, first_payment_confirmed: true, last_charge: null } }];
     render(<UsersTable users={withSub} onToggleStatus={onToggleStatus} onGrantCredits={onGrantCredits} />);
     await ue.click(screen.getByRole("button", { name: /alterar acesso de alice/i }));
     await ue.click(await screen.findByRole("menuitem", { name: /cancelar assinatura/i }));
@@ -223,7 +223,7 @@ describe("UsersTable", () => {
     const onCancelSubscription = vi.fn();
     const withSub = [{
       ...users[0],
-      subscription: { status: "authorized", plan_name: "Profissional", price_brl: 59.9, next_payment_date: "2026-10-12T12:00:00Z", current_period_end: null, mp_preapproval_id: "p" },
+      subscription: { status: "authorized", plan_name: "Profissional", price_brl: 59.9, next_payment_date: "2026-10-12T12:00:00Z", current_period_end: null, mp_preapproval_id: "p", trial_ends_at: null, first_payment_confirmed: true, last_charge: null },
     }, users[1]];
     render(
       <UsersTable users={withSub} onToggleStatus={onToggleStatus} onGrantCredits={onGrantCredits} onChangeEmail={onChangeEmail} onCancelSubscription={onCancelSubscription} />,
@@ -236,5 +236,40 @@ describe("UsersTable", () => {
     await ue.click(await screen.findByRole("menuitem", { name: /cancelar assinatura/i }));
     await ue.click(await screen.findByRole("button", { name: /^cancelar assinatura$/i }));
     expect(onCancelSubscription).toHaveBeenCalledWith({ userId: "u1" });
+  });
+
+  it("badges a live card trial as Teste (cartão) and lists it in the filter", () => {
+    const cardTrialUsers = [{
+      ...users[0],
+      access_kind: "trial",
+      trial_started_at: "2026-09-01T00:00:00Z",
+      plan_period_end: "2099-01-01T00:00:00Z",
+      subscription: {
+        status: "authorized", plan_name: null, price_brl: 0, next_payment_date: null, current_period_end: null, mp_preapproval_id: "p",
+        trial_ends_at: "2026-09-08T00:00:00Z", first_payment_confirmed: false, last_charge: null,
+      },
+    }];
+    render(<UsersTable users={cardTrialUsers} onToggleStatus={onToggleStatus} onGrantCredits={onGrantCredits} now={new Date("2026-09-05T12:00:00Z")} />);
+    expect(screen.getByTestId("access-u1")).toHaveTextContent("Teste (cartão)");
+
+    fireEvent.change(screen.getByLabelText(/filtrar por estado/i), { target: { value: "trial_card" } });
+    expect(bodyRows()).toHaveLength(1);
+    fireEvent.change(screen.getByLabelText(/filtrar por estado/i), { target: { value: "trial" } });
+    expect(screen.getByText("Nenhum usuário encontrado.")).toBeInTheDocument();
+  });
+
+  it("shows the last charge row, with the refund note when the charge was refunded", () => {
+    const withCharge = [{
+      ...users[0],
+      subscription: {
+        status: "authorized", plan_name: "Profissional", price_brl: 59.9, next_payment_date: "2026-10-12T12:00:00Z", current_period_end: null, mp_preapproval_id: "p",
+        trial_ends_at: null, first_payment_confirmed: true,
+        last_charge: { amount_brl: 39.9, debit_date: "2026-09-12T00:00:00Z", refunded_at: "2026-09-13T00:00:00Z" },
+      },
+    }, users[1]];
+    render(<UsersTable users={withCharge} onToggleStatus={onToggleStatus} onGrantCredits={onGrantCredits} />);
+    expect(screen.getByTestId("last-charge-u1")).toHaveTextContent(/R\$\s*39,90 em 12\/09\/2026/);
+    expect(screen.getByTestId("last-charge-u1")).toHaveTextContent(/estornada em 13\/09\/2026/);
+    expect(screen.queryByTestId("last-charge-u2")).not.toBeInTheDocument();
   });
 });

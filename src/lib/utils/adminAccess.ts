@@ -3,18 +3,31 @@ import { ptBR } from "date-fns/locale";
 import type { AdminUser } from "@/types/admin";
 
 /** Operational state of an account, as the support team reasons about it. */
-export type AdminAccessState = "subscriber" | "past_due" | "trial" | "trial_expired" | "exempt" | "legacy" | "blocked" | "inactive";
+export type AdminAccessState = "subscriber" | "past_due" | "trial" | "trial_card" | "trial_expired" | "exempt" | "legacy" | "blocked" | "inactive";
 
 export const ACCESS_STATE_LABELS: Record<AdminAccessState, string> = {
   subscriber: "Assinante",
   past_due: "Inadimplente",
-  trial: "Teste",
+  trial: "Teste (convite)",
+  trial_card: "Teste (cartão)",
   trial_expired: "Teste encerrado",
   exempt: "Cortesia",
   legacy: "Legado",
   blocked: "Sem créditos",
   inactive: "Inativo",
 };
+
+const CARD_TRIAL_LIVE_STATUSES = ["authorized", "past_due", "paused"];
+
+/** A live subscription mid its 7-day card trial: the day-8 charge has not confirmed yet. */
+export function isCardTrialUser(user: AdminUser): boolean {
+  return (
+    !!user.subscription &&
+    CARD_TRIAL_LIVE_STATUSES.includes(user.subscription.status) &&
+    !!user.subscription.trial_ends_at &&
+    !user.subscription.first_payment_confirmed
+  );
+}
 
 const KINDS = ["subscriber", "trial", "exempt", "legacy"] as const;
 
@@ -39,6 +52,7 @@ export function adminAccessState(user: AdminUser, now: Date): AdminAccessState {
   const active = planActive(user, now);
   if (kind === "trial") {
     if (!active) return "trial_expired";
+    if (isCardTrialUser(user)) return "trial_card";
     return "trial";
   }
   const available = (active ? user.plan_credits : 0) + user.credit_balance;
@@ -77,4 +91,22 @@ export function formatSubscription(user: AdminUser): { label: string; detail: st
     ? `próx. ${format(new Date(next), "dd/MM/yyyy", { locale: ptBR })}`
     : null;
   return { label, detail };
+}
+
+function formatBrl(value: number): string {
+  return value.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+}
+
+/** "R$ 39,90 em dd/MM/yyyy" (+ " · estornada em dd/MM/yyyy" when refunded); null without a charge. */
+export function formatLastCharge(user: AdminUser): string | null {
+  const charge = user.subscription?.last_charge;
+  if (!charge) return null;
+  const debit = charge.debit_date ? Date.parse(charge.debit_date) : NaN;
+  const debitPart = !Number.isNaN(debit) ? ` em ${format(new Date(debit), "dd/MM/yyyy", { locale: ptBR })}` : "";
+  let result = `${formatBrl(charge.amount_brl)}${debitPart}`;
+  const refunded = charge.refunded_at ? Date.parse(charge.refunded_at) : NaN;
+  if (!Number.isNaN(refunded)) {
+    result += ` · estornada em ${format(new Date(refunded), "dd/MM/yyyy", { locale: ptBR })}`;
+  }
+  return result;
 }

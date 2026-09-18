@@ -224,6 +224,29 @@ describe("useSetAccess", () => {
     expect(toast.error).toHaveBeenCalledWith("O período de teste não pode passar de 90 dias no total.");
   });
 
+  it("translates card_trial (extension blocked while the day-8 MP charge is live)", async () => {
+    mockInvoke.mockResolvedValue({
+      data: null,
+      error: Object.assign(new Error("Edge Function returned a non-2xx status code"), {
+        context: { json: () => Promise.resolve({ error: "card_trial" }) },
+      }),
+    });
+    const { wrapper } = makeWrapper();
+
+    const { result } = renderHook(() => useSetAccess(), { wrapper });
+    await act(async () => {
+      try {
+        await result.current.mutateAsync({ userId: "u1", extendDays: 7 });
+      } catch {
+        /* expected */
+      }
+    });
+
+    expect(toast.error).toHaveBeenCalledWith(
+      "Teste com cartão: a cobrança do 8º dia é fixa no Mercado Pago e não pode ser adiada. Conceda créditos extras ou cancele o teste.",
+    );
+  });
+
   it("passes an unknown error message through", async () => {
     mockInvoke.mockResolvedValue({ data: null, error: new Error("falhou") });
     const { wrapper } = makeWrapper();

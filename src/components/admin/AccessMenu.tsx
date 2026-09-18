@@ -30,6 +30,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { userDisplayName } from "@/lib/utils/adminFormat";
+import { isCardTrialUser } from "@/lib/utils/adminAccess";
 import type { AdminUser, ChangeEmailInput, SetAccessInput } from "@/types/admin";
 
 interface AccessMenuProps {
@@ -68,7 +69,8 @@ export function AccessMenu({
   const [emailError, setEmailError] = useState<string | null>(null);
   const [confirmCancel, setConfirmCancel] = useState(false);
   const [savingEmail, setSavingEmail] = useState(false);
-  const canExtend = user.access_kind === "trial" && user.trial_started_at !== null;
+  const cardTrial = isCardTrialUser(user);
+  const canExtend = user.access_kind === "trial" && user.trial_started_at !== null && !cardTrial;
   const hasLiveSubscription = !!user.subscription && LIVE_SUBSCRIPTION.includes(user.subscription.status);
 
   async function submitEmail(e: React.FormEvent) {
@@ -122,6 +124,11 @@ export function AccessMenu({
           ))}
           <DropdownMenuSeparator />
           <DropdownMenuLabel>Estender período de teste</DropdownMenuLabel>
+          {cardTrial && (
+            <p className="px-2 pb-1.5 text-xs text-muted-foreground">
+              Teste com cartão: a cobrança do 8º dia é fixa no Mercado Pago. Conceda créditos extras ou cancele o teste.
+            </p>
+          )}
           {EXTEND_PRESETS.map((days) => (
             <DropdownMenuItem
               key={days}

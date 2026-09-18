@@ -17,6 +17,13 @@ export interface AdminMetrics {
 
 export type AdminAccessKind = "subscriber" | "trial" | "exempt" | "legacy";
 
+/** The most recent approved charge on a subscription. */
+export interface AdminLastCharge {
+  amount_brl: number;
+  debit_date: string | null;
+  refunded_at: string | null;
+}
+
 /** The user's live subscription, or the most recent attempt. */
 export interface AdminSubscription {
   status: string;
@@ -25,6 +32,10 @@ export interface AdminSubscription {
   next_payment_date: string | null;
   current_period_end: string | null;
   mp_preapproval_id: string | null;
+  /** Set only for a trial that started with a card (round 2). */
+  trial_ends_at: string | null;
+  first_payment_confirmed: boolean;
+  last_charge: AdminLastCharge | null;
 }
 
 export interface AdminSubscriptionSummary {

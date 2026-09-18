@@ -20,6 +20,7 @@ import {
   adminPlanCredits,
   formatPeriodEnd,
   formatSubscription,
+  formatLastCharge,
   type AdminAccessState,
 } from "@/lib/utils/adminAccess";
 import { GrantCreditsButton } from "@/components/admin/GrantCreditsButton";
@@ -46,6 +47,7 @@ const STATE_BADGE: Record<AdminAccessState, "default" | "secondary" | "destructi
   subscriber: "default",
   past_due: "destructive",
   trial: "secondary",
+  trial_card: "secondary",
   trial_expired: "outline",
   exempt: "secondary",
   legacy: "outline",
@@ -145,6 +147,7 @@ export function UsersTable({
                 const state = adminAccessState(user, now);
                 const periodEnd = formatPeriodEnd(user, now);
                 const subscription = formatSubscription(user);
+                const lastCharge = formatLastCharge(user);
                 return (
                 <tr key={user.id} className="border-b last:border-0">
                   <td className="px-3 py-2">
@@ -177,6 +180,9 @@ export function UsersTable({
                       <>
                         <span className="text-foreground">{subscription.label}</span>
                         {subscription.detail && <span className="block text-xs">{subscription.detail}</span>}
+                        {lastCharge && (
+                          <span className="block text-xs" data-testid={`last-charge-${user.id}`}>{lastCharge}</span>
+                        )}
                       </>
                     ) : (
                       "—"

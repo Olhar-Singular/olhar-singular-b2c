@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { formatSubscription, adminAccessState, adminPlanCredits, formatPeriodEnd, ACCESS_STATE_LABELS } from "./adminAccess";
+import { formatSubscription, adminAccessState, adminPlanCredits, formatPeriodEnd, formatLastCharge, isCardTrialUser, ACCESS_STATE_LABELS } from "./adminAccess";
 import type { AdminUser } from "@/types/admin";
 
 const NOW = new Date("2026-09-12T12:00:00Z");
@@ -77,6 +77,7 @@ describe("subscriptions in the admin table", () => {
   const sub = (overrides: Partial<NonNullable<AdminUser["subscription"]>> = {}) => ({
     status: "authorized", plan_name: "Profissional", price_brl: 59.9,
     next_payment_date: "2026-10-12T12:00:00Z", current_period_end: null, mp_preapproval_id: "p",
+    trial_ends_at: null, first_payment_confirmed: true, last_charge: null,
     ...overrides,
   });
 
@@ -93,5 +94,92 @@ describe("subscriptions in the admin table", () => {
     expect(formatSubscription(user({ subscription: sub({ plan_name: null, status: "weird", next_payment_date: "garbage" }) }))).toEqual({ label: "weird", detail: null });
     expect(formatSubscription(user({ subscription: sub({ next_payment_date: null }) }))).toEqual({ label: "Profissional · Ativa", detail: null });
     expect(formatSubscription(user())).toBeNull();
+  });
+
+  describe("isCardTrialUser", () => {
+    it("is true for a live subscription mid card trial, not yet confirmed", () => {
+      expect(isCardTrialUser(user({
+        subscription: sub({ status: "authorized", trial_ends_at: "2026-09-25T00:00:00Z", first_payment_confirmed: false }),
+      }))).toBe(true);
+      expect(isCardTrialUser(user({
+        subscription: sub({ status: "past_due", trial_ends_at: "2026-09-25T00:00:00Z", first_payment_confirmed: false }),
+      }))).toBe(true);
+      expect(isCardTrialUser(user({
+        subscription: sub({ status: "paused", trial_ends_at: "2026-09-25T00:00:00Z", first_payment_confirmed: false }),
+      }))).toBe(true);
+    });
+
+    it("is false once the first payment is confirmed", () => {
+      expect(isCardTrialUser(user({
+        subscription: sub({ trial_ends_at: "2026-09-25T00:00:00Z", first_payment_confirmed: true }),
+      }))).toBe(false);
+    });
+
+    it("is false without a trial_ends_at (a plain subscription)", () => {
+      expect(isCardTrialUser(user({ subscription: sub({ trial_ends_at: null, first_payment_confirmed: false }) }))).toBe(false);
+    });
+
+    it("is false for a closed subscription status or no subscription at all", () => {
+      expect(isCardTrialUser(user({
+        subscription: sub({ status: "cancelled", trial_ends_at: "2026-09-25T00:00:00Z", first_payment_confirmed: false }),
+      }))).toBe(false);
+      expect(isCardTrialUser(user())).toBe(false);
+    });
+  });
+
+  it("reads a live authorized/past_due/paused trial with an unconfirmed card as Teste (cartão)", () => {
+    const cardTrial = (status: string) => user({
+      access_kind: "trial", plan_credits: 50, plan_period_end: "2026-09-20T00:00:00Z",
+      subscription: sub({ status, trial_ends_at: "2026-09-19T00:00:00Z", first_payment_confirmed: false }),
+    });
+    expect(adminAccessState(cardTrial("authorized"), NOW)).toBe("trial_card");
+    expect(adminAccessState(cardTrial("past_due"), NOW)).toBe("trial_card");
+    expect(adminAccessState(cardTrial("paused"), NOW)).toBe("trial_card");
+    expect(ACCESS_STATE_LABELS.trial_card).toBe("Teste (cartão)");
+    expect(ACCESS_STATE_LABELS.trial).toBe("Teste (convite)");
+  });
+
+  it("keeps the invite trial (trial) when the card trial has already been confirmed or expired", () => {
+    expect(adminAccessState(user({
+      access_kind: "trial", plan_credits: 50, plan_period_end: "2026-09-20T00:00:00Z",
+      subscription: sub({ status: "authorized", trial_ends_at: "2026-09-19T00:00:00Z", first_payment_confirmed: true }),
+    }), NOW)).toBe("trial");
+    // No plan_period_end active -> trial_expired wins regardless of the card trial.
+    expect(adminAccessState(user({
+      access_kind: "trial",
+      subscription: sub({ status: "authorized", trial_ends_at: "2026-09-19T00:00:00Z", first_payment_confirmed: false }),
+    }), NOW)).toBe("trial_expired");
+  });
+});
+
+describe("formatLastCharge", () => {
+  const sub = (overrides: Partial<NonNullable<AdminUser["subscription"]>> = {}) => ({
+    status: "authorized", plan_name: "Profissional", price_brl: 59.9,
+    next_payment_date: null, current_period_end: null, mp_preapproval_id: "p",
+    trial_ends_at: null, first_payment_confirmed: true, last_charge: null,
+    ...overrides,
+  });
+
+  it("formats the amount and the debit date", () => {
+    expect(formatLastCharge(user({
+      subscription: sub({ last_charge: { amount_brl: 39.9, debit_date: "2026-09-12T00:00:00Z", refunded_at: null } }),
+    }))).toMatch(/^R\$\s*39,90 em 12\/09\/2026$/);
+  });
+
+  it("appends the refund date when the charge was refunded", () => {
+    expect(formatLastCharge(user({
+      subscription: sub({ last_charge: { amount_brl: 39.9, debit_date: "2026-09-12T00:00:00Z", refunded_at: "2026-09-13T00:00:00Z" } }),
+    }))).toMatch(/^R\$\s*39,90 em 12\/09\/2026 · estornada em 13\/09\/2026$/);
+  });
+
+  it("returns null when there is no charge yet", () => {
+    expect(formatLastCharge(user({ subscription: sub({ last_charge: null }) }))).toBeNull();
+    expect(formatLastCharge(user())).toBeNull();
+  });
+
+  it("omits the date fragment when a charge has no debit_date", () => {
+    expect(formatLastCharge(user({
+      subscription: sub({ last_charge: { amount_brl: 39.9, debit_date: null, refunded_at: null } }),
+    }))).toMatch(/^R\$\s*39,90$/);
   });
 });

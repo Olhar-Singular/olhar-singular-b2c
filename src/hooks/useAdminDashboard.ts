@@ -46,6 +46,7 @@ const ADMIN_ERRORS: Record<string, string> = {
   partial_failure: "Convite enviado, mas o tipo de acesso não foi gravado. Ajuste em Alterar acesso.",
   not_a_trial: "Só é possível estender o teste de uma conta em período de teste já iniciado.",
   trial_limit_reached: "O período de teste não pode passar de 90 dias no total.",
+  card_trial: "Teste com cartão: a cobrança do 8º dia é fixa no Mercado Pago e não pode ser adiada. Conceda créditos extras ou cancele o teste.",
 };
 
 async function adminError(error: unknown, fallback: string): Promise<Error> {
