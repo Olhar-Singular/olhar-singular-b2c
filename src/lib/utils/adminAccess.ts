@@ -99,7 +99,7 @@ function formatBrl(value: number): string {
 
 /** "R$ 39,90 em dd/MM/yyyy" (+ " · estornada em dd/MM/yyyy" when refunded); null without a charge. */
 export function formatLastCharge(user: AdminUser): string | null {
-  const charge = user.subscription?.last_charge ?? null;
+  const charge = user.subscription?.last_charge;
   if (!charge) return null;
   const debit = charge.debit_date ? Date.parse(charge.debit_date) : NaN;
   const debitPart = !Number.isNaN(debit) ? ` em ${format(new Date(debit), "dd/MM/yyyy", { locale: ptBR })}` : "";

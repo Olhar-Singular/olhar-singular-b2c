@@ -109,12 +109,26 @@ serve(async (req) => {
         if (subError) console.warn("mp-webhook: analytics subscription lookup failed", subError.message);
         if (sub) {
           const price = (sub as { plans?: { price_brl?: number | string } | null }).plans?.price_brl;
+          const planValueBrl = price !== undefined ? Number(price) : null;
+          // A refund's real value is what was actually charged (the invoice this
+          // authorized_payment mirrored), not the plan's current price; the plan
+          // price is only a fallback for an invoice whose amount is unknown.
+          let valueBrl = analyticsName === "subscription_renewed" ? planValueBrl : null;
+          if (analyticsName === "refund") {
+            const { data: invoiceRow, error: invoiceError } = await admin
+              .from("subscription_invoices")
+              .select("amount_brl")
+              .eq("id", subEvent.id)
+              .maybeSingle();
+            if (invoiceError) console.warn("mp-webhook: analytics invoice lookup failed", invoiceError.message);
+            valueBrl = invoiceRow?.amount_brl != null ? Number(invoiceRow.amount_brl) : planValueBrl;
+          }
           await dispatchAnalytics(sendAnalyticsEvents(
             [{
               name: analyticsName,
               eventId: `${sub.id}:${subEvent.id}`,
               userId: sub.user_id,
-              valueBrl: (analyticsName === "subscription_renewed" || analyticsName === "refund") && price !== undefined ? Number(price) : null,
+              valueBrl,
               attribution: (sub.attribution ?? null) as AttributionLike | null,
               params: { authorized_payment_id: subEvent.id },
             }],

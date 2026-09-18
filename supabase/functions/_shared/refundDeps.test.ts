@@ -105,6 +105,12 @@ describe("buildRefundDeps", () => {
       expect(out).toEqual({ ok: false, status: 0, refundId: null, message: "timeout" });
     });
 
+    it("propagates a non-timeout error instead of swallowing it as a timeout", async () => {
+      const f = vi.fn(async () => { throw new Error("network down"); }) as unknown as typeof fetch;
+      const deps = buildRefundDeps(fakeAdmin().client, "tok", f, NOW);
+      await expect(deps.postRefund("pay-1", "refund:inv-1")).rejects.toThrow("network down");
+    });
+
     it("reports status 0 when the request aborts (mpRequest converts the abort to MpTimeoutError)", async () => {
       vi.useFakeTimers();
       try {
@@ -162,6 +168,12 @@ describe("buildRefundDeps", () => {
       const f = vi.fn(async () => { throw new MpTimeoutError("/v1/payments/pay-1"); }) as unknown as typeof fetch;
       const deps = buildRefundDeps(fakeAdmin().client, "tok", f, NOW);
       expect(await deps.getPaymentRefundState("pay-1")).toBeNull();
+    });
+
+    it("propagates a non-timeout error instead of swallowing it as a timeout", async () => {
+      const f = vi.fn(async () => { throw new Error("network down"); }) as unknown as typeof fetch;
+      const deps = buildRefundDeps(fakeAdmin().client, "tok", f, NOW);
+      await expect(deps.getPaymentRefundState("pay-1")).rejects.toThrow("network down");
     });
   });
 

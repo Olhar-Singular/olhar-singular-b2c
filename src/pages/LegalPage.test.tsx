@@ -83,6 +83,7 @@ describe("LegalPage", () => {
     const reembolso = LEGAL_DOCS.reembolso;
     const extras = reembolso.sections.find((s) => s.title === "2. Créditos extras avulsos");
     expect(extras!.paragraphs.join(" ")).toMatch(/Peça pelo suporte no menu da sua conta\./);
+    expect(JSON.stringify(LEGAL_DOCS.reembolso)).not.toMatch(/@/);
   });
 
   it("privacidade points the LGPD request to the support channel in the account menu, without an e-mail address", () => {

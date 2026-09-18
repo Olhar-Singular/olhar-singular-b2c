@@ -333,4 +333,15 @@ describe("mergeUserRows refund_count", () => {
   it("defaults refund_count to 0 without subscriptions or invoices", () => {
     expect(mergeUserRows([{ id: "u1" }], [], [], NOW)[0].refund_count).toBe(0);
   });
+
+  it("ignores a refunded invoice whose subscription_id is not in the subscriptions list", () => {
+    const subs: SubscriptionLite[] = [
+      { id: "sub-1", user_id: "u1", status: "authorized", created_at: "2026-05-01T00:00:00Z", plans: null },
+    ];
+    const invoices: InvoiceLite[] = [
+      { subscription_id: "sub-dangling", amount_brl: 39.9, debit_date: "2026-01-05T00:00:00Z", refunded_at: "2026-01-06T00:00:00Z" },
+    ];
+    const users = mergeUserRows([{ id: "u1" }], [], [], NOW, subs, invoices);
+    expect(users[0].refund_count).toBe(0);
+  });
 });

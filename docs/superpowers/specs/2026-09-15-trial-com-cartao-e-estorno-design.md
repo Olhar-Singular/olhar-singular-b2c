@@ -334,6 +334,6 @@ Rodada 2 implementada em 2026-09-18 (commits na `main`).
 - Fuso: `start_date` em UTC; a data exibida usa `America/Sao_Paulo`. Um trial iniciado 23h
   pode mostrar "cobra em D+8" localmente; aceitável.
 - ~~`SUPPORT_EMAIL` ainda vive no menu da conta e na Privacidade~~: resolvido na rodada 2b
-  (2026-09-18) — o e-mail fica só no `UserAccountMenu` (logado); Privacidade e Reembolso apontam
+  (2026-09-18): o e-mail fica só no `UserAccountMenu` (logado); Privacidade e Reembolso apontam
   para o suporte pelo menu da conta, sem `@` no texto público.
 - Estorno via API do MP em cartão pode levar até 2 faturas; o texto avisa.

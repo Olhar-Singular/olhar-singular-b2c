@@ -1,12 +1,14 @@
 import { useMemo, useState } from "react";
 import { ChevronDown } from "lucide-react";
-import { usePlans } from "@/hooks/useSubscription";
+import { usePlans, type PlanView } from "@/hooks/useSubscription";
 import { cheapestPublicPlan, formatBrl, publicPlans } from "@/lib/domain/subscriptionUi";
 
-function buildFaq(trialPlan: ReturnType<typeof cheapestPublicPlan>) {
-  const priceLabel = trialPlan ? formatBrl(trialPlan.priceBrl) : "";
-  const planName = trialPlan?.name ?? "";
-  const monthlyCredits = trialPlan?.monthlyCredits ?? "";
+// publicPlans() always falls back to DEFAULT_PLANS (all non-admin-only) when the
+// catalogue is empty, so cheapestPublicPlan() over that result is never null here.
+function buildFaq(trialPlan: PlanView) {
+  const priceLabel = formatBrl(trialPlan.priceBrl);
+  const planName = trialPlan.name;
+  const monthlyCredits = trialPlan.monthlyCredits;
 
   return [
     {
@@ -80,7 +82,8 @@ function FaqItem({ q, a, index }: { q: string; a: string; index: number }) {
 export default function FaqSection() {
   const { data } = usePlans();
   const plans = useMemo(() => publicPlans(data), [data]);
-  const trialPlan = useMemo(() => cheapestPublicPlan(plans), [plans]);
+  // publicPlans() never returns an empty, all-admin-only list (see buildFaq's comment).
+  const trialPlan = useMemo(() => cheapestPublicPlan(plans)!, [plans]);
   const faq = useMemo(() => buildFaq(trialPlan), [trialPlan]);
 
   return (
