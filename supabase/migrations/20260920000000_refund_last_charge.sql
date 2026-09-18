@@ -95,18 +95,29 @@ SECURITY DEFINER
 SET search_path = public
 AS $$
 DECLARE
+  v_sub_id  uuid;
   v_invoice record;
   v_user    uuid;
   v_left    integer;
 BEGIN
+  -- Lock order: subscription, then invoice, then profile. Matches
+  -- renew_subscription (locks the subscription first, updates the invoice
+  -- row by id after) so a webhook replay racing this RPC on the same
+  -- subscription cannot deadlock.
+  SELECT subscription_id INTO v_sub_id
+    FROM public.subscription_invoices
+   WHERE id = p_invoice_id;
+  IF NOT FOUND THEN
+    RETURN jsonb_build_object('success', false, 'error', 'invoice_not_found');
+  END IF;
+
+  SELECT user_id INTO v_user FROM public.subscriptions WHERE id = v_sub_id FOR UPDATE;
+
   SELECT id, subscription_id, refunded_at
     INTO v_invoice
     FROM public.subscription_invoices
    WHERE id = p_invoice_id
      FOR UPDATE;
-  IF NOT FOUND THEN
-    RETURN jsonb_build_object('success', false, 'error', 'invoice_not_found');
-  END IF;
   IF v_invoice.refunded_at IS NOT NULL THEN
     RETURN jsonb_build_object('success', true, 'already', true, 'subscription_id', v_invoice.subscription_id);
   END IF;
@@ -114,8 +125,6 @@ BEGIN
   UPDATE public.subscription_invoices
      SET refunded_at = now(), mp_refund_id = p_mp_refund_id
    WHERE id = p_invoice_id;
-
-  SELECT user_id INTO v_user FROM public.subscriptions WHERE id = v_invoice.subscription_id FOR UPDATE;
 
   -- The money went back: the plan credits of that charge go too (extras stay).
   SELECT plan_credits INTO v_left FROM public.profiles WHERE id = v_user FOR UPDATE;
