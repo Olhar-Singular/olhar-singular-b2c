@@ -36,7 +36,7 @@ const FAQ = [
   },
   {
     q: "E se eu me arrepender?",
-    a: "Você tem 7 dias a partir da primeira cobrança para pedir reembolso integral, desde que os créditos não tenham sido usados. Veja a política de reembolso no rodapé. Uma pequena cobrança de validação do cartão pode aparecer e é estornada automaticamente pela operadora.",
+    a: "Em Créditos você pede o estorno integral da última cobrança com um clique, a qualquer momento enquanto a assinatura estiver ativa (ou até 30 dias depois de cancelar). Os créditos restantes do plano daquele mês são removidos, os extras ficam, e a assinatura é cancelada. O dinheiro volta no mesmo cartão em até duas faturas.",
   },
   {
     q: "A ferramenta substitui o professor?",

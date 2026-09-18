@@ -121,21 +121,22 @@ export const LEGAL_DOCS: Record<LegalSlug, LegalDoc> = {
     intro: "Regras para arrependimento, cancelamento e cobranças indevidas.",
     sections: [
       {
-        title: "1. Arrependimento (7 dias)",
+        title: "1. Estorno da última cobrança",
         paragraphs: [
-          "Em até 7 dias corridos após a primeira cobrança de uma assinatura ou a compra de créditos extras, você pode pedir reembolso integral, desde que os créditos não tenham sido usados. Créditos parcialmente usados são reembolsados proporcionalmente, a nosso critério.",
+          "Você pode pedir o estorno integral da última cobrança da assinatura a qualquer momento, em Créditos, com um clique, enquanto a assinatura estiver ativa ou em até 30 dias após cancelá-la. Vale mesmo que parte dos créditos daquele mês já tenha sido usada.",
+          "Ao estornar, os créditos restantes do plano daquele mês são removidos e a assinatura é cancelada. Os créditos extras avulsos ficam com você. Cobranças anteriores à última não são estornadas.",
         ],
       },
       {
-        title: "2. Renovações",
+        title: "2. Créditos extras avulsos",
         paragraphs: [
-          "Renovações mensais não são reembolsadas depois de creditadas, salvo cobrança indevida. Para não ser cobrado, cancele antes da data de renovação indicada em Créditos.",
+          "Em até 7 dias corridos após a compra de créditos extras, você pode pedir reembolso integral, desde que os créditos não tenham sido usados.",
         ],
       },
       {
-        title: "3. Como pedir",
+        title: "3. Como funciona",
         paragraphs: [
-          "Escreva para " + SUPPORT_EMAIL + " com o e-mail da conta. O estorno é feito pelo Mercado Pago no mesmo meio de pagamento e pode levar até duas faturas para aparecer no cartão.",
+          "O estorno é feito pelo Mercado Pago no mesmo cartão e pode levar até duas faturas para aparecer. Uma cobrança simbólica de validação do cartão, quando existe, é estornada automaticamente pela operadora.",
         ],
       },
     ],

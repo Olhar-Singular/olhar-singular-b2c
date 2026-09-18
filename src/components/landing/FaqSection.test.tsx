@@ -59,4 +59,13 @@ describe("FaqSection (subscription)", () => {
     await user.click(screen.getByRole("button", { name: "Posso cancelar quando quiser?" }));
     expect(screen.getByText(/Durante o teste grátis, cancelar encerra o acesso na hora/)).toBeInTheDocument();
   });
+
+  it("answers the regret question with the self-service refund of the last charge", async () => {
+    const user = userEvent.setup();
+    renderWithProviders(<FaqSection />);
+    await user.click(screen.getByRole("button", { name: /E se eu me arrepender/ }));
+    expect(screen.getByText(/estorno integral da última cobrança/)).toBeInTheDocument();
+    expect(screen.getByText(/até 30 dias depois de cancelar/)).toBeInTheDocument();
+    expect(screen.getByText(/em até duas faturas/)).toBeInTheDocument();
+  });
 });

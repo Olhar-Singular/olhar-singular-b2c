@@ -70,4 +70,12 @@ describe("LegalPage", () => {
     ]);
     expect(terms.sections.at(-1)!.paragraphs[0]).toContain(TERMS_VERSION);
   });
+
+  it("reembolso describes the self-service refund flow, without an e-mail address", () => {
+    const reembolso = LEGAL_DOCS.reembolso;
+    expect(reembolso.sections.map((s) => s.title)).toEqual([
+      "1. Estorno da última cobrança", "2. Créditos extras avulsos", "3. Como funciona",
+    ]);
+    expect(JSON.stringify(reembolso)).not.toMatch(/@/);
+  });
 });
