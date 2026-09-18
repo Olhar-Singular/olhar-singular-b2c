@@ -35,7 +35,8 @@ export interface AdminSubscription {
   /** Set only for a trial that started with a card (round 2). */
   trial_ends_at: string | null;
   first_payment_confirmed: boolean;
-  last_charge: AdminLastCharge | null;
+  /** Absent on an old backend that has not shipped it yet. */
+  last_charge?: AdminLastCharge | null;
 }
 
 export interface AdminSubscriptionSummary {
@@ -64,6 +65,8 @@ export interface AdminUser {
   is_active: boolean;
   is_super_admin: boolean;
   subscription?: AdminSubscription | null;
+  /** Number of invoices with refunded_at across the user's subscriptions. Absent on an old backend. */
+  refund_count?: number;
 }
 
 export interface AdminDashboardData {

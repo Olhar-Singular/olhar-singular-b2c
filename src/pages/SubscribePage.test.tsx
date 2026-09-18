@@ -486,6 +486,21 @@ describe("SubscribePage (trial with card, ?trial=1)", () => {
     expect(mockSubscribe.mock.calls[1][0]).not.toHaveProperty("trial");
   });
 
+  it("does not double-track add_payment_info on the trial_used resubmit", async () => {
+    const user = userEvent.setup();
+    mockSubscribe
+      .mockRejectedValueOnce(Object.assign(new Error("Este CPF já usou o teste."), { code: "trial_used" }))
+      .mockResolvedValueOnce({ status: "authorized", subscriptionId: "sub-2", accountCreated: true });
+    window.dataLayer = [];
+    renderPage("/assinar?trial=1");
+    await fillAccount(user);
+    await user.click(screen.getByRole("button", { name: "Assinar agora" }));
+    await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent("Este CPF já usou o teste."));
+    await user.click(screen.getByRole("button", { name: /Assinar R\$\s*39,90\/mês/ }));
+    await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent(/Assinatura ativa! 300 créditos/));
+    expect(window.dataLayer.filter((e) => (e as { event: string }).event === "add_payment_info")).toHaveLength(1);
+  });
+
   it("lets the buyer try another card after trial_used", async () => {
     const user = userEvent.setup();
     mockSubscribe.mockRejectedValueOnce(Object.assign(new Error("Este CPF já usou o teste."), { code: "trial_used" }));
@@ -554,5 +569,8 @@ describe("SubscribePage (trial with card, ?trial=1)", () => {
     expect(screen.getByRole("heading", { level: 1, name: "Assinar um plano" })).toBeInTheDocument();
     expect(screen.getByRole("group", { name: "Planos" })).toBeInTheDocument();
     expect(brickProps).toHaveBeenCalledWith(expect.not.objectContaining({ submitLabel: expect.anything() }));
+    expect(screen.getByRole("note")).toHaveTextContent(
+      "O teste grátis de 7 dias é só para contas novas. Como você já tem conta, assine um plano.",
+    );
   });
 });

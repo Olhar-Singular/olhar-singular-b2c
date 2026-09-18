@@ -272,4 +272,14 @@ describe("UsersTable", () => {
     expect(screen.getByTestId("last-charge-u1")).toHaveTextContent(/estornada em 13\/09\/2026/);
     expect(screen.queryByTestId("last-charge-u2")).not.toBeInTheDocument();
   });
+
+  it("shows the refund count in the subscription cell only when greater than zero", () => {
+    const withRefunds = [
+      { ...users[0], refund_count: 2, subscription: { status: "authorized", plan_name: "Profissional", price_brl: 59.9, next_payment_date: null, current_period_end: null, mp_preapproval_id: "p", trial_ends_at: null, first_payment_confirmed: true, last_charge: null } },
+      { ...users[1], refund_count: 0 },
+    ];
+    render(<UsersTable users={withRefunds} onToggleStatus={onToggleStatus} onGrantCredits={onGrantCredits} />);
+    expect(screen.getByTestId("refunds-u1")).toHaveTextContent("estornos: 2");
+    expect(screen.queryByTestId("refunds-u2")).not.toBeInTheDocument();
+  });
 });

@@ -1,8 +1,15 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest";
 import { screen, fireEvent } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import FaqSection from "./FaqSection";
 import { renderWithProviders } from "@/test/helpers";
+
+const { mockUsePlans } = vi.hoisted(() => ({ mockUsePlans: vi.fn() }));
+vi.mock("@/hooks/useSubscription", () => ({ usePlans: mockUsePlans }));
+
+beforeEach(() => {
+  mockUsePlans.mockReturnValue({ data: undefined, isLoading: true });
+});
 
 describe("FaqSection", () => {
   it("renders the FAQ heading", () => {
@@ -58,6 +65,17 @@ describe("FaqSection (subscription)", () => {
     expect(screen.getByText(/um teste por CPF/i)).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Posso cancelar quando quiser?" }));
     expect(screen.getByText(/Durante o teste grátis, cancelar encerra o acesso na hora/)).toBeInTheDocument();
+  });
+
+  it("follows the catalogue for the plan the trial converts to, instead of a hardcoded price/name/quota", async () => {
+    mockUsePlans.mockReturnValue({
+      data: [{ id: "x", slug: "unico", name: "Único", priceBrl: 42, monthlyCredits: 120, highlight: false, adminOnly: false }],
+      isLoading: false,
+    });
+    const user = userEvent.setup();
+    renderWithProviders(<FaqSection />);
+    await user.click(screen.getByRole("button", { name: "Como funciona o teste grátis de 7 dias?" }));
+    expect(screen.getByText(/No 8º dia cobramos R\$\s*42,00 e sua conta vira o plano Único, com 120 créditos por mês/)).toBeInTheDocument();
   });
 
   it("answers the regret question with the self-service refund of the last charge", async () => {

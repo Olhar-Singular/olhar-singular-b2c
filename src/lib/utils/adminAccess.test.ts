@@ -177,6 +177,15 @@ describe("formatLastCharge", () => {
     expect(formatLastCharge(user())).toBeNull();
   });
 
+  it("tolerates an old backend that omits last_charge entirely (not even null)", () => {
+    const legacySub: NonNullable<AdminUser["subscription"]> = {
+      status: "authorized", plan_name: "Profissional", price_brl: 59.9,
+      next_payment_date: null, current_period_end: null, mp_preapproval_id: "p",
+      trial_ends_at: null, first_payment_confirmed: true,
+    };
+    expect(formatLastCharge(user({ subscription: legacySub }))).toBeNull();
+  });
+
   it("omits the date fragment when a charge has no debit_date", () => {
     expect(formatLastCharge(user({
       subscription: sub({ last_charge: { amount_brl: 39.9, debit_date: null, refunded_at: null } }),

@@ -90,8 +90,10 @@ export default function SubscribePage() {
   // A rejected promise hands the failure back to the Brick, which re-enables
   // its button (business refusals were already toasted by the hook), except
   // trial_used, which this page answers inline.
-  async function handleSubmit(plan: PlanView, card: CardFormDataView, trial: boolean) {
-    trackAddPaymentInfo(plan);
+  async function handleSubmit(plan: PlanView, card: CardFormDataView, trial: boolean, { resubmit = false }: { resubmit?: boolean } = {}) {
+    // trial_used resubmits the same card for the paid plan (no new Brick
+    // submission), so the add_payment_info of the first attempt already covers it.
+    if (!resubmit) trackAddPaymentInfo(plan);
     const attribution = readAttribution(sessionStore());
     let result: SubscribeResult;
     try {
@@ -187,6 +189,11 @@ export default function SubscribePage() {
             ? `Cartão obrigatório, nada é cobrado hoje. Em ${TRIAL_DAYS} dias começa o plano${selected ? ` ${selected.name} (${formatBrl(selected.priceBrl)}/mês)` : ""}. Cancele antes e não paga nada.`
             : "Créditos novos todo mês, cobrados no cartão em 1x. Cancele quando quiser."}
         </p>
+        {params.get("trial") === "1" && !anonymous && (
+          <p role="note" className="text-sm rounded-md bg-amber-50 text-amber-900 px-3 py-2">
+            O teste grátis de 7 dias é só para contas novas. Como você já tem conta, assine um plano.
+          </p>
+        )}
       </header>
 
       {stage.kind === "authorized" && (
@@ -282,7 +289,7 @@ export default function SubscribePage() {
               {stage.message} Você pode assinar o plano {stage.plan.name} por {formatBrl(stage.plan.priceBrl)}/mês com o mesmo cartão, sem digitar nada de novo.
             </p>
             <div className="flex flex-wrap gap-2">
-              <Button onClick={() => handleSubmit(stage.plan, stage.card, false)} disabled={subscribe.isPending}>
+              <Button onClick={() => handleSubmit(stage.plan, stage.card, false, { resubmit: true })} disabled={subscribe.isPending}>
                 Assinar {formatBrl(stage.plan.priceBrl)}/mês
               </Button>
               <Button variant="outline" onClick={retry}>Usar outro cartão</Button>

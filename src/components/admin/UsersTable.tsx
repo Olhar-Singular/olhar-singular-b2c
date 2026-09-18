@@ -183,6 +183,9 @@ export function UsersTable({
                         {lastCharge && (
                           <span className="block text-xs" data-testid={`last-charge-${user.id}`}>{lastCharge}</span>
                         )}
+                        {(user.refund_count ?? 0) > 0 && (
+                          <span className="block text-xs" data-testid={`refunds-${user.id}`}>estornos: {user.refund_count}</span>
+                        )}
                       </>
                     ) : (
                       "—"
