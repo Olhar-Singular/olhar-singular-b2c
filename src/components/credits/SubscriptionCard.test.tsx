@@ -7,9 +7,11 @@ import { canRefundLastCharge, formatCard } from "@/lib/domain/subscriptionUi";
 import type { Access } from "@/lib/domain/access";
 import type { LastChargeView, SubscriptionView } from "@/hooks/useSubscription";
 
-const { mockCancel, mockUpdateCard, brickProps, cancelOpts } = vi.hoisted(() => ({
+const { mockCancel, mockUpdateCard, mockRefund, mockUseLastCharge, brickProps, cancelOpts } = vi.hoisted(() => ({
   mockCancel: vi.fn(),
   mockUpdateCard: vi.fn(),
+  mockRefund: vi.fn(),
+  mockUseLastCharge: vi.fn(),
   brickProps: vi.fn(),
   cancelOpts: vi.fn(),
 }));
@@ -37,6 +39,8 @@ vi.mock("@/hooks/useSubscription", async (orig) => {
       return { mutate: mockCancel, isPending: false };
     },
     useUpdateSubscriptionCard: () => ({ mutateAsync: mockUpdateCard, isPending: false }),
+    useLastCharge: (id: string | null | undefined) => mockUseLastCharge(id),
+    useRefundLastCharge: () => ({ mutate: mockRefund, isPending: false }),
   };
 });
 
@@ -143,6 +147,7 @@ describe("SubscriptionCard", () => {
   beforeEach(async () => {
     vi.clearAllMocks();
     mockUpdateCard.mockResolvedValue({ status: "updated" });
+    mockUseLastCharge.mockReturnValue({ data: null, isLoading: false });
     const auth = await import("@/hooks/useAuth");
     vi.mocked(auth.useAuth).mockReturnValue(buildAuthState({ user: { id: "u1", email: "a@b.c" } }) as never);
   });
@@ -294,6 +299,7 @@ describe("SubscriptionCard (trial with card)", () => {
   beforeEach(async () => {
     vi.clearAllMocks();
     mockUpdateCard.mockResolvedValue({ status: "updated" });
+    mockUseLastCharge.mockReturnValue({ data: null, isLoading: false });
     const auth = await import("@/hooks/useAuth");
     vi.mocked(auth.useAuth).mockReturnValue(buildAuthState({ user: { id: "u1", email: "a@b.c" } }) as never);
   });
@@ -337,5 +343,90 @@ describe("SubscriptionCard (trial with card)", () => {
     await user.click(within(dialog).getByRole("button", { name: "Cancelar teste" }));
     expect(mockCancel).toHaveBeenCalled();
     expect(cancelOpts).toHaveBeenCalledWith({ trial: true });
+  });
+});
+
+describe("SubscriptionCard (refund)", () => {
+  const REFUND_BUTTON = "Pedir estorno da última cobrança";
+
+  beforeEach(async () => {
+    vi.clearAllMocks();
+    mockUpdateCard.mockResolvedValue({ status: "updated" });
+    mockUseLastCharge.mockReturnValue({ data: null, isLoading: false });
+    const auth = await import("@/hooks/useAuth");
+    vi.mocked(auth.useAuth).mockReturnValue(buildAuthState({ user: { id: "u1", email: "a@b.c" } }) as never);
+  });
+
+  it("offers the refund on a live subscription with a charge", () => {
+    mockUseLastCharge.mockReturnValue({ data: lastCharge(), isLoading: false });
+    renderCard(sub());
+    expect(screen.getByRole("button", { name: REFUND_BUTTON })).toBeInTheDocument();
+  });
+
+  it("hides the refund button once the charge was already refunded, showing when it was requested instead", () => {
+    mockUseLastCharge.mockReturnValue({ data: lastCharge({ refundedAt: new Date("2026-09-17T10:00:00Z") }), isLoading: false });
+    renderCard(sub());
+    expect(screen.queryByRole("button", { name: REFUND_BUTTON })).toBeNull();
+    expect(screen.getByText(/Estorno de R\$\s*39,90 solicitado em 17\/09\/2026\./)).toBeInTheDocument();
+  });
+
+  it("falls back to zero when the refunded charge has no amount on record", () => {
+    mockUseLastCharge.mockReturnValue({ data: lastCharge({ amountBrl: null, refundedAt: new Date("2026-09-17T10:00:00Z") }), isLoading: false });
+    renderCard(sub());
+    expect(screen.getByText(/Estorno de R\$\s*0,00 solicitado em 17\/09\/2026\./)).toBeInTheDocument();
+  });
+
+  it("hides the refund button during the card trial before any charge exists", () => {
+    const trialSub = sub({
+      plan: { ...PLAN, slug: "basico", name: "Básico", priceBrl: 39.9, monthlyCredits: 300, highlight: false },
+      firstPaymentConfirmed: false,
+      trialEndsAt: new Date("2026-09-22T12:00:00Z"),
+    });
+    renderCard(trialSub, access({ kind: "trial", planCredits: 42, total: 47, periodEnd: new Date("2026-09-22T12:00:00Z"), daysLeft: 7 }));
+    expect(screen.queryByRole("button", { name: REFUND_BUTTON })).toBeNull();
+  });
+
+  it("offers the refund on a subscription cancelled 10 days ago", () => {
+    mockUseLastCharge.mockReturnValue({ data: lastCharge(), isLoading: false });
+    const now = new Date("2026-09-18T12:00:00Z");
+    renderWithProviders(
+      <SubscriptionCard
+        subscription={sub({ status: "cancelled", cancelledAt: new Date("2026-09-08T12:00:00Z") })}
+        access={access()}
+        now={now}
+      />,
+    );
+    expect(screen.getByRole("button", { name: REFUND_BUTTON })).toBeInTheDocument();
+  });
+
+  it("does not offer the refund on a subscription cancelled 40 days ago", () => {
+    mockUseLastCharge.mockReturnValue({ data: lastCharge(), isLoading: false });
+    const now = new Date("2026-09-18T12:00:00Z");
+    renderWithProviders(
+      <SubscriptionCard
+        subscription={sub({ status: "cancelled", cancelledAt: new Date("2026-08-09T12:00:00Z") })}
+        access={access()}
+        now={now}
+      />,
+    );
+    expect(screen.queryByRole("button", { name: REFUND_BUTTON })).toBeNull();
+  });
+
+  it("confirms with the exact copy and calls refund.mutate", async () => {
+    const user = userEvent.setup();
+    mockUseLastCharge.mockReturnValue({ data: lastCharge(), isLoading: false });
+    renderCard(sub(), access({ planCredits: 200 }));
+    await user.click(screen.getByRole("button", { name: REFUND_BUTTON }));
+    const dialog = screen.getByRole("alertdialog");
+    expect(dialog).toHaveTextContent("Estornar a última cobrança?");
+    expect(dialog).toHaveTextContent(
+      /Devolvemos R\$\s*39,90 no mesmo cartão \(pode levar até duas faturas\), os 200 créditos restantes do plano são removidos e a assinatura é cancelada\. Os créditos extras ficam\./,
+    );
+    await user.click(within(dialog).getByRole("button", { name: "Manter" }));
+    expect(mockRefund).not.toHaveBeenCalled();
+
+    await user.click(screen.getByRole("button", { name: REFUND_BUTTON }));
+    await user.click(within(screen.getByRole("alertdialog")).getByRole("button", { name: "Pedir estorno" }));
+    expect(mockRefund).toHaveBeenCalledTimes(1);
   });
 });

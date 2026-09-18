@@ -30,6 +30,7 @@ const TYPE_LABELS: Record<string, string> = {
   plan_reset: "Créditos do plano encerrados",
   compensation: "Compensação",
   clawback: "Estorno do plano",
+  refund_clawback: "Créditos removidos pelo estorno",
 };
 
 function formatDate(value: Date) {

@@ -209,6 +209,16 @@ describe("CreditsPage", () => {
     expect(screen.getByText("mystery_type")).toBeInTheDocument();
   });
 
+  it("labels the credits removed by a self-service refund", async () => {
+    const m = await import("@/hooks/useCredits");
+    vi.mocked(m.useTransactionHistory).mockReturnValue({
+      data: [{ id: "t4", user_id: "u1", delta: -180, type: "refund_clawback", ref_id: null, payment_id: null, created_at: "2026-09-18T10:00:00Z" }],
+      isLoading: false,
+    } as never);
+    renderPage();
+    expect(screen.getByText(/créditos removidos pelo estorno/i)).toBeInTheDocument();
+  });
+
   it("shows the loading and empty states of the history", async () => {
     const m = await import("@/hooks/useCredits");
     vi.mocked(m.useTransactionHistory).mockReturnValue({ data: undefined, isLoading: true } as never);

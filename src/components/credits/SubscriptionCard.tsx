@@ -24,11 +24,13 @@ import {
 import MpCardBrick from "@/components/payments/MpCardBrick";
 import { useAuth } from "@/hooks/useAuth";
 import type { Access } from "@/lib/domain/access";
-import { canSubscribe, formatBrl, formatCard, formatDate, isCardTrial } from "@/lib/domain/subscriptionUi";
+import { canRefundLastCharge, canSubscribe, formatBrl, formatCard, formatDate, isCardTrial } from "@/lib/domain/subscriptionUi";
 import type { CardFormDataView } from "@/hooks/useCredits";
 import {
   isLiveSubscription,
   useCancelSubscription,
+  useLastCharge,
+  useRefundLastCharge,
   useUpdateSubscriptionCard,
   type SubscriptionStatus,
   type SubscriptionView,
@@ -39,6 +41,7 @@ interface Props {
   access: Access | null;
   /** Super-admins see the card even on a courtesy account (smoke plan). */
   isSuperAdmin?: boolean;
+  now?: Date;
 }
 
 const STATUS_LABELS: Record<SubscriptionStatus, { label: string; tone: "default" | "secondary" | "destructive" | "outline" }> = {
@@ -54,20 +57,54 @@ const STATUS_LABELS: Record<SubscriptionStatus, { label: string; tone: "default"
 // when the next charge lands, which card, and the two self-service actions
 // (cancel with confirmation, change card with a fresh Brick). Courtesy accounts
 // never see it; anyone else without a live subscription gets the CTA.
-export default function SubscriptionCard({ subscription, access, isSuperAdmin = false }: Props) {
+export default function SubscriptionCard({ subscription, access, isSuperAdmin = false, now = new Date() }: Props) {
   const { user } = useAuth();
   // Hooks run before the early returns; isCardTrial is false while loading.
   const cardTrial = isCardTrial(subscription);
   const cancel = useCancelSubscription({ trial: cardTrial });
   // The dialog shows the refusal inline; no duplicate toast.
   const updateCard = useUpdateSubscriptionCard({ toastErrors: false });
+  const lastCharge = useLastCharge(subscription?.id);
+  const refund = useRefundLastCharge();
   const [confirmCancel, setConfirmCancel] = useState(false);
   const [changingCard, setChangingCard] = useState(false);
   const [cardError, setCardError] = useState<string | null>(null);
+  const [confirmRefund, setConfirmRefund] = useState(false);
 
   if (!canSubscribe(access, isSuperAdmin) || subscription === undefined) return null;
 
   const live = isLiveSubscription(subscription);
+  // Available on a live subscription or up to 30 days after cancelling it
+  // (decision 5); once refunded, the row below replaces the button.
+  const canRefund = canRefundLastCharge(subscription, lastCharge.data, now);
+  const refundRow = lastCharge.data?.refundedAt ? (
+    <p className="text-sm text-muted-foreground">
+      Estorno de {formatBrl(lastCharge.data.amountBrl ?? 0)} solicitado em {formatDate(lastCharge.data.refundedAt)}.
+    </p>
+  ) : canRefund ? (
+    <Button variant="ghost" className="text-muted-foreground" onClick={() => setConfirmRefund(true)}>
+      Pedir estorno da última cobrança
+    </Button>
+  ) : null;
+  const refundDialog = (
+    <AlertDialog open={confirmRefund} onOpenChange={setConfirmRefund}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Estornar a última cobrança?</AlertDialogTitle>
+          <AlertDialogDescription>
+            Devolvemos {formatBrl(lastCharge.data?.amountBrl ?? 0)} no mesmo cartão (pode levar até duas faturas), os{" "}
+            {access.planCredits} créditos restantes do plano são removidos e a assinatura é cancelada. Os créditos extras ficam.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel>Manter</AlertDialogCancel>
+          <AlertDialogAction onClick={() => refund.mutate()} disabled={refund.isPending}>
+            Pedir estorno
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+  );
 
   if (!live) {
     const cancelledUntil =
@@ -102,7 +139,9 @@ export default function SubscriptionCard({ subscription, access, isSuperAdmin = 
               </Button>
             </Link>
           )}
+          {refundRow}
         </CardContent>
+        {refundDialog}
       </Card>
     );
   }
@@ -177,6 +216,8 @@ export default function SubscriptionCard({ subscription, access, isSuperAdmin = 
             {cardTrial ? "Cancelar teste" : "Cancelar assinatura"}
           </Button>
         </div>
+
+        {refundRow}
       </CardContent>
 
       <AlertDialog open={confirmCancel} onOpenChange={setConfirmCancel}>
@@ -226,6 +267,8 @@ export default function SubscriptionCard({ subscription, access, isSuperAdmin = 
           )}
         </DialogContent>
       </Dialog>
+
+      {refundDialog}
     </Card>
   );
 }
