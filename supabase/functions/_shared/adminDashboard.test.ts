@@ -108,6 +108,7 @@ describe("mergeUserRows", () => {
       is_active: true,
       is_super_admin: true,
       subscription: null,
+      refund_count: 0,
     });
   });
 
@@ -145,6 +146,7 @@ describe("mergeUserRows", () => {
       is_active: true,
       is_super_admin: false,
       subscription: null,
+      refund_count: 0,
     });
   });
 
@@ -306,5 +308,29 @@ describe("mergeUserRows with invoices", () => {
     expect(users[0].subscription?.last_charge).toBeNull();
     // Also null when invoices are omitted entirely (default param).
     expect(mergeUserRows([{ id: "u1" }], [], [], NOW, [sub])[0].subscription?.last_charge).toBeNull();
+  });
+});
+
+describe("mergeUserRows refund_count", () => {
+  it("counts refunded invoices per user across their subscriptions", () => {
+    const subs: SubscriptionLite[] = [
+      { id: "sub-1", user_id: "u1", status: "cancelled", created_at: "2026-01-01T00:00:00Z", plans: null },
+      { id: "sub-2", user_id: "u1", status: "authorized", created_at: "2026-05-01T00:00:00Z", plans: null },
+      { id: "sub-3", user_id: "u2", status: "authorized", created_at: "2026-05-01T00:00:00Z", plans: null },
+    ];
+    const invoices: InvoiceLite[] = [
+      { subscription_id: "sub-1", amount_brl: 39.9, debit_date: "2026-01-05T00:00:00Z", refunded_at: "2026-01-06T00:00:00Z" },
+      { subscription_id: "sub-2", amount_brl: 39.9, debit_date: "2026-05-05T00:00:00Z", refunded_at: "2026-05-06T00:00:00Z" },
+      { subscription_id: "sub-2", amount_brl: 39.9, debit_date: "2026-06-05T00:00:00Z", refunded_at: null },
+      { subscription_id: "sub-3", amount_brl: 39.9, debit_date: "2026-05-05T00:00:00Z", refunded_at: null },
+    ];
+    const users = mergeUserRows([{ id: "u1" }, { id: "u2" }, { id: "u3" }], [], [], NOW, subs, invoices);
+    expect(users[0].refund_count).toBe(2);
+    expect(users[1].refund_count).toBe(0);
+    expect(users[2].refund_count).toBe(0);
+  });
+
+  it("defaults refund_count to 0 without subscriptions or invoices", () => {
+    expect(mergeUserRows([{ id: "u1" }], [], [], NOW)[0].refund_count).toBe(0);
   });
 });

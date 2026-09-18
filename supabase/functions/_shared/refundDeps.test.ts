@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
 import { buildRefundDeps, type RefundAdminClient } from "./refundDeps";
+import { MpTimeoutError } from "./mpHttp";
 
 function fakeAdmin(overrides: { rpcResults?: Record<string, { data: unknown; error: { message: string } | null }> } = {}) {
   const rpc = vi.fn(async (fn: string) => {
@@ -96,6 +97,29 @@ describe("buildRefundDeps", () => {
       const out = await deps.postRefund("pay-1", "refund:inv-1");
       expect(out).toEqual({ ok: true, status: 201, refundId: null, message: null });
     });
+
+    it("reports status 0 (never permanent) when MP times out", async () => {
+      const f = vi.fn(async () => { throw new MpTimeoutError("/v1/payments/pay-1/refunds"); }) as unknown as typeof fetch;
+      const deps = buildRefundDeps(fakeAdmin().client, "tok", f, NOW);
+      const out = await deps.postRefund("pay-1", "refund:inv-1");
+      expect(out).toEqual({ ok: false, status: 0, refundId: null, message: "timeout" });
+    });
+
+    it("reports status 0 when the request aborts (mpRequest converts the abort to MpTimeoutError)", async () => {
+      vi.useFakeTimers();
+      try {
+        const f = vi.fn((_url: string, init?: RequestInit) => new Promise((_resolve, reject) => {
+          const abortError = new DOMException("The operation was aborted.", "AbortError");
+          init?.signal?.addEventListener("abort", () => reject(abortError));
+        })) as unknown as typeof fetch;
+        const deps = buildRefundDeps(fakeAdmin().client, "tok", f, NOW);
+        const pending = deps.postRefund("pay-1", "refund:inv-1");
+        await vi.advanceTimersByTimeAsync(15_000);
+        expect(await pending).toEqual({ ok: false, status: 0, refundId: null, message: "timeout" });
+      } finally {
+        vi.useRealTimers();
+      }
+    });
   });
 
   describe("getPaymentRefundState", () => {
@@ -132,6 +156,12 @@ describe("buildRefundDeps", () => {
       const deps = buildRefundDeps(fakeAdmin().client, "tok", f, NOW);
       const out = await deps.getPaymentRefundState("pay-1");
       expect(out).toEqual({ refunded: false, refundId: null });
+    });
+
+    it("returns null when MP times out", async () => {
+      const f = vi.fn(async () => { throw new MpTimeoutError("/v1/payments/pay-1"); }) as unknown as typeof fetch;
+      const deps = buildRefundDeps(fakeAdmin().client, "tok", f, NOW);
+      expect(await deps.getPaymentRefundState("pay-1")).toBeNull();
     });
   });
 

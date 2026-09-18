@@ -101,6 +101,20 @@ async function closeOrphan(result: unknown, preapprovalId: string | null, subscr
   }
 }
 
+// An external refund/chargeback (MP panel, acquirer) already zeroed the plan
+// bucket and cancelled the subscription locally (renew_subscription ->
+// confirm_refund); the preapproval at MP must stop charging too, best effort.
+async function cancelAfterExternalRefund(result: unknown, preapprovalId: string | null, subscriptionId: string, deps: SubscriptionWebhookDeps): Promise<void> {
+  if (String(result) !== "refunded_externally") return;
+  if (!preapprovalId) return;
+  try {
+    await deps.cancelPreapproval(preapprovalId);
+    deps.log("mp-webhook: preapproval cancelled after an external refund", { subscriptionId, preapprovalId });
+  } catch (e) {
+    deps.log("mp-webhook: ALERT could not cancel the preapproval after an external refund", preapprovalId, e);
+  }
+}
+
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 async function resolveSubscription(
@@ -155,5 +169,6 @@ export async function handleSubscriptionWebhook(
   }
   const result = await deps.renew(subscriptionId, shaped.invoice);
   await closeOrphan(result, shaped.preapprovalId, subscriptionId, deps);
+  await cancelAfterExternalRefund(result, shaped.preapprovalId, subscriptionId, deps);
   return { handled: true, result, subscriptionId };
 }

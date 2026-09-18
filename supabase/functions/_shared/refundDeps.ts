@@ -4,7 +4,7 @@
 // silently break a refund.
 
 import type { RefundDeps, RefundableCharge } from "./refundFlow.ts";
-import { mpRequest, cancelPreapprovalAtMp } from "./mpHttp.ts";
+import { mpRequest, cancelPreapprovalAtMp, MpTimeoutError } from "./mpHttp.ts";
 
 // Structural slice of supabase-js so the builder is testable with a fake.
 export interface RefundAdminClient {
@@ -32,20 +32,31 @@ export function buildRefundDeps(
       } as RefundableCharge;
     },
     postRefund: async (mpPaymentId, idempotencyKey) => {
-      const resp = await mpRequest(
-        `/v1/payments/${encodeURIComponent(mpPaymentId)}/refunds`,
-        { method: "POST", token: mpAccessToken, body: {}, idempotencyKey },
-        fetchFn,
-      );
-      return {
-        ok: resp.ok,
-        status: resp.status,
-        refundId: resp.json.id != null ? String(resp.json.id) : null,
-        message: typeof resp.json.message === "string" ? resp.json.message : null,
-      };
+      try {
+        const resp = await mpRequest(
+          `/v1/payments/${encodeURIComponent(mpPaymentId)}/refunds`,
+          { method: "POST", token: mpAccessToken, body: {}, idempotencyKey },
+          fetchFn,
+        );
+        return {
+          ok: resp.ok,
+          status: resp.status,
+          refundId: resp.json.id != null ? String(resp.json.id) : null,
+          message: typeof resp.json.message === "string" ? resp.json.message : null,
+        };
+      } catch (e) {
+        if (e instanceof MpTimeoutError) return { ok: false, status: 0, refundId: null, message: "timeout" };
+        throw e;
+      }
     },
     getPaymentRefundState: async (mpPaymentId) => {
-      const resp = await mpRequest(`/v1/payments/${encodeURIComponent(mpPaymentId)}`, { method: "GET", token: mpAccessToken }, fetchFn);
+      let resp;
+      try {
+        resp = await mpRequest(`/v1/payments/${encodeURIComponent(mpPaymentId)}`, { method: "GET", token: mpAccessToken }, fetchFn);
+      } catch (e) {
+        if (e instanceof MpTimeoutError) return null;
+        throw e;
+      }
       if (!resp.ok) return null;
       const transactionAmount = Number(resp.json.transaction_amount ?? Infinity);
       const refundedAmount = Number(resp.json.transaction_amount_refunded ?? 0);

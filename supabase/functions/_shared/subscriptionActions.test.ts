@@ -204,6 +204,37 @@ describe("handleSubscriptionWebhook", () => {
     expect(healthy.cancelPreapproval).not.toHaveBeenCalled();
   });
 
+  it("cancels the preapproval at MP after an external refund, but not on a mirror or a normal renewal", async () => {
+    const refunded = webhookDeps({ renew: vi.fn(async () => "refunded_externally") });
+    await handleSubscriptionWebhook({ topic: "subscription_authorized_payment", id: "77" }, refunded);
+    expect(refunded.cancelPreapproval).toHaveBeenCalledWith("pre-1");
+    expect(refunded.log).toHaveBeenCalledWith(expect.stringMatching(/preapproval cancelled after an external refund/), expect.anything());
+
+    const mirrored = webhookDeps({ renew: vi.fn(async () => "refund_mirrored") });
+    await handleSubscriptionWebhook({ topic: "subscription_authorized_payment", id: "77" }, mirrored);
+    expect(mirrored.cancelPreapproval).not.toHaveBeenCalled();
+
+    const renewed = webhookDeps({ renew: vi.fn(async () => "renewed") });
+    await handleSubscriptionWebhook({ topic: "subscription_authorized_payment", id: "77" }, renewed);
+    expect(renewed.cancelPreapproval).not.toHaveBeenCalled();
+  });
+
+  it("logs an ALERT when the preapproval cancel after an external refund fails or has no preapproval id", async () => {
+    const failing = webhookDeps({
+      renew: vi.fn(async () => "refunded_externally"),
+      cancelPreapproval: vi.fn(async () => { throw new Error("MP down"); }),
+    });
+    await handleSubscriptionWebhook({ topic: "subscription_authorized_payment", id: "77" }, failing);
+    expect(failing.log).toHaveBeenCalledWith(expect.stringMatching(/ALERT could not cancel/), "pre-1", expect.any(Error));
+
+    const noId = webhookDeps({
+      fetchAuthorizedPayment: vi.fn(async () => ({ id: 5, preapproval_id: null, external_reference: SUB_ID, status: "processed", payment: { status: "approved" } })),
+      renew: vi.fn(async () => "refunded_externally"),
+    });
+    await handleSubscriptionWebhook({ topic: "subscription_authorized_payment", id: "5" }, noId);
+    expect(noId.cancelPreapproval).not.toHaveBeenCalled();
+  });
+
   it("logs when the orphan cannot be cancelled or has no preapproval id", async () => {
     const failing = webhookDeps({
       syncStatus: vi.fn(async () => "duplicate_live_subscription"),

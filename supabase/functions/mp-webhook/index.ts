@@ -98,6 +98,7 @@ serve(async (req) => {
       const analyticsName: AnalyticsEvent["name"] | null =
         outcome.handled && (outcome.result === "renewed" || outcome.result === "trial_converted") ? "subscription_renewed"
         : outcome.handled && (outcome.result === "past_due" || outcome.result === "clawback") ? "subscription_payment_failed"
+        : outcome.handled && outcome.result === "refunded_externally" ? "refund"
         : null;
       if (analyticsName && outcome.handled) {
         const { data: sub, error: subError } = await admin
@@ -113,7 +114,7 @@ serve(async (req) => {
               name: analyticsName,
               eventId: `${sub.id}:${subEvent.id}`,
               userId: sub.user_id,
-              valueBrl: analyticsName === "subscription_renewed" && price !== undefined ? Number(price) : null,
+              valueBrl: (analyticsName === "subscription_renewed" || analyticsName === "refund") && price !== undefined ? Number(price) : null,
               attribution: (sub.attribution ?? null) as AttributionLike | null,
               params: { authorized_payment_id: subEvent.id },
             }],

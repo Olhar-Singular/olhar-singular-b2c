@@ -52,7 +52,7 @@ export interface LastCharge {
   refunded_at: string | null;
 }
 
-/** A subscription_invoices row, as the dashboard reads it (approved charges only). */
+/** A subscription_invoices row, as the dashboard reads it (approved charges with money, refunded ones included). */
 export interface InvoiceLite {
   subscription_id: string;
   amount_brl: number | string | null;
@@ -102,6 +102,8 @@ export interface AdminUserRow {
   is_super_admin: boolean;
   /** The live subscription, or the most recent one; null when never subscribed. */
   subscription: AdminSubscriptionRow | null;
+  /** Number of invoices with refunded_at across all of the user's subscriptions. */
+  refund_count: number;
 }
 
 // One row per user: the live one wins; otherwise the newest attempt.
@@ -208,6 +210,19 @@ export function mergeUserRows(
   const lastChargeBySubscription = pickLastChargePerSubscription(invoices);
   const subscriptionById = pickSubscriptionPerUser(subscriptions, lastChargeBySubscription);
 
+  // subscription_id -> user_id, to attribute a refunded invoice to its owner.
+  const userBySubscription = new Map<string, string>();
+  for (const s of subscriptions) {
+    if (s.id) userBySubscription.set(s.id, s.user_id);
+  }
+  const refundCountByUser = new Map<string, number>();
+  for (const invoice of invoices) {
+    if (!invoice.refunded_at) continue;
+    const userId = userBySubscription.get(invoice.subscription_id);
+    if (!userId) continue;
+    refundCountByUser.set(userId, (refundCountByUser.get(userId) ?? 0) + 1);
+  }
+
   return authUsers.map((u) => {
     const profile = profileById.get(u.id);
     return {
@@ -226,6 +241,7 @@ export function mergeUserRows(
       is_active: isUserActive(u.banned_until, now),
       is_super_admin: profile?.is_super_admin ?? false,
       subscription: subscriptionById.get(u.id) ?? null,
+      refund_count: refundCountByUser.get(u.id) ?? 0,
     };
   });
 }
