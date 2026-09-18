@@ -317,7 +317,8 @@ a Política de Reembolso continua com o texto atual (inclusive a referência a e
 4. Validação em sandbox (`make fn-serve-mp-test`, comprador `BUYER_TEST_EMAIL_MP`) + runbook de
    deploy (nunca sem o dono).
 
-Rodada 1 implementada em 2026-09-15 (commits na `main`).
+Rodada 1 implementada em 2026-09-15 e em produção em 2026-09-16. Rodada 2 (estorno, admin, `card_trial`,
+estorno externo/chargeback, contador de estornos, FAQ dinâmica) implementada e em produção em 2026-09-18.
 
 **Rodada 2 (plano `docs/superpowers/plans/2026-09-18-trial-rodada2-estorno-admin.md`):**
 `refund-last-charge` + `refundFlow` + RPCs de estorno + UI/legal do estorno + Admin (estados
@@ -327,8 +328,19 @@ Rodada 2 implementada em 2026-09-18 (commits na `main`).
 
 ## 13. Riscos e pendências
 
-- ~~Comportamento exato do `start_date` no MP~~: confirmado em sandbox (seção 3). Falta só
-  observar a cobrança do 8º dia no preapproval deixado vivo (2026-09-22).
+- ~~Comportamento exato do `start_date` no MP~~: confirmado em sandbox (seção 3). A conversão do 8º dia
+  foi validada em 2026-09-18 com um `authorized_payment` real (preapproval pago no sandbox cobra em ~2 min:
+  `status: processed`, `payment.status: approved`, `retry_attempt: 1`) disparado no `mp-webhook` local ⇒
+  `trial_converted`. Falta só observar em 2026-09-22 se o MP emite algo antes do débito no preapproval
+  `48cada46…` (guard `pending`).
+- **Estorno: caminho de sucesso não validado no sandbox.** As credenciais do vendedor de teste (bloco
+  STAGING) respondem 401 `Unauthorized use of live credentials` em `POST /v1/payments/{id}/refunds`
+  (e em `POST /v1/payments`); só `GET` funciona. O caminho de falha foi validado localmente (401 ⇒ 422
+  "recusou o estorno", sem escrita). Para validar o sucesso: colar as **credenciais de TESTE da aplicação**
+  (painel do MP → Suas integrações → app → Credenciais de teste → `TEST-…`) em `ACCESS_TOKEN_MP_TEST` no
+  `.env` e repetir: preapproval pago com o comprador `BUYER_TEST_EMAIL_MP` → cobrança em ~2 min → estorno
+  + replay. Em produção o token `_PROD` já faz pagamentos, então o estorno deve funcionar; um smoke com
+  o plano `teste-admin` (R$ 1,00) e estorno em seguida fecha a dúvida a custo zero.
 - Cobrança simbólica de validação: é do MP, não configurável; está nos textos. No sandbox veio
   R$ 0,00; em produção pode ser um valor pequeno estornado automaticamente.
 - Fuso: `start_date` em UTC; a data exibida usa `America/Sao_Paulo`. Um trial iniciado 23h
