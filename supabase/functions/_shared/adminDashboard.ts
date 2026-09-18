@@ -146,7 +146,9 @@ export function pickLastChargePerSubscription(invoices: InvoiceLite[]): Map<stri
   for (const invoice of invoices) {
     const current = bySubscription.get(invoice.subscription_id);
     const currentIsUndated = !current || Number.isNaN(Date.parse(current.debit_date ?? ""));
-    if (currentIsUndated || Date.parse(invoice.debit_date ?? "") > Date.parse(current!.debit_date ?? "")) {
+    // currentIsUndated is false only when current.debit_date parsed to a real date, so the
+    // right-hand side never sees a null/empty debit_date here: no "?? ''" fallback to reach.
+    if (currentIsUndated || Date.parse(invoice.debit_date ?? "") > Date.parse(current!.debit_date!)) {
       bySubscription.set(invoice.subscription_id, invoice);
     }
   }

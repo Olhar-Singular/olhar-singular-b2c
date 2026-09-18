@@ -1,6 +1,6 @@
 ---
 name: edge-fn-writer
-description: Use este agente pra criar uma edge function nova em `supabase/functions/<nome>/` ou modificar o scaffolding de uma existente (auth, CORS, logging de IA, config). Ele conhece o padrão compartilhado em `supabase/functions/_shared/` e garante consistência com as functions já existentes (`subscribe`, `cancel-subscription`, `update-subscription-card` são o modelo mais recente: `index.ts` só monta `deps` e chama um `run*` puro de `_shared/`). NÃO use pra debugging lógico de negócio dentro de uma function, apenas pra scaffolding/estrutura.
+description: Use este agente pra criar uma edge function nova em `supabase/functions/<nome>/` ou modificar o scaffolding de uma existente (auth, CORS, logging de IA, config). Ele conhece o padrão compartilhado em `supabase/functions/_shared/` e garante consistência com as functions já existentes (`subscribe`, `cancel-subscription`, `update-subscription-card`, `refund-last-charge` são o modelo mais recente: `index.ts` só monta `deps` e chama um `run*` puro de `_shared/`). NÃO use pra debugging lógico de negócio dentro de uma function, apenas pra scaffolding/estrutura.
 tools: Read, Write, Edit, Grep, Glob, Bash
 model: sonnet
 ---
@@ -39,6 +39,8 @@ supabase/functions/
 │   ├── subscribeInput.ts # parseSubscribeInput / parseUpdateCardInput / parseCancelInput
 │   ├── subscriptionActions.ts # runCancelSubscription / runUpdateSubscriptionCard / handleSubscriptionWebhook (deps injetadas)
 │   ├── subscriptionActionDeps.ts # wiring Supabase+MP dos deps acima (compartilhado por cancel e update-card)
+│   ├── refundFlow.ts    # runRefundLastCharge(input, deps): MP primeiro, cancela o preapproval, depois confirm_refund
+│   ├── refundDeps.ts    # buildRefundDeps(admin, mpAccessToken, fetch, now): wiring das RPCs refund_last_charge/confirm_refund + MP
 │   ├── checkoutGuard.ts # normalizeEmail, hashIdentifier (HMAC), clientIp, decideCheckoutAccess (429/503), isValidCpf/extractCpf
 │   ├── accountProvision.ts # parseAccountInput + runAnonymousCheckout (rate limit, createUser, runSubscribe, CPF/termos, magic link só com pagamento)
 │   ├── setInitialPassword.ts # parsePasswordInput + runSetInitialPassword (senha, flag, revoga outras sessões)

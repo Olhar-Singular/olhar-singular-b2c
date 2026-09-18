@@ -88,8 +88,8 @@ verdade do trial; a diferença entre "trial (cartão)" e "trial (convite)" é a 
 
 **`credit_transactions.type`**: ganha `refund_clawback`.
 
-Índice: `subscription_invoices (subscription_id, debit_date desc) where payment_status = 'approved'`
-para achar a última cobrança.
+Índice: **não é preciso** um índice novo: `idx_subscription_invoices_subscription (subscription_id,
+debit_date DESC)` já serve a busca da última cobrança (poucas linhas por assinatura).
 
 ## 5. Regras de crédito (RPCs `SECURITY DEFINER`, `service_role` only)
 
@@ -180,7 +180,16 @@ para achar a última cobrança.
 3. `PUT /preapproval/{id} { status: 'cancelled' }` (best effort, log em falha: o próximo webhook
    `subscription_preapproval` sincroniza);
 4. `confirm_refund(invoice_id, refund_id)`;
-5. resposta `{ amount_brl, refunded_at }`; analytics `subscription_refunded`.
+5. resposta `{ amountBrl, refundedAt, subscriptionId }` (camelCase como o resto do contrato JSON);
+   analytics `refund` (nome já existente no `AnalyticsEventName`, Meta `Refund`), com o valor.
+6. **Só o próprio usuário** (JWT); sem `userId` de admin nesta rodada. Elegibilidade: assinatura
+   viva, ou a mais recente `cancelled` com `cancelled_at` há menos de 30 dias. Idempotência:
+   `X-Idempotency-Key = "refund:" + invoice.id` no MP e `confirm_refund` no-op quando
+   `refunded_at` já existe; um replay depois de um `confirm_refund` que falhou repete o POST com
+   a mesma chave e confirma. O endpoint de estorno não pôde ser validado no sandbox em 2026-09-18
+   (o token de teste não cria pagamentos avulsos e ainda não há cobrança de assinatura): a
+   validação real é em 22/09, estornando a cobrança do 8º dia do preapproval `48cada46…`. Falha
+   segura: MP não-2xx ⇒ 502 sem escrita, o usuário tenta de novo.
 
 **`mp-webhook`**: sem mudança de contrato. Um `payment` com `status = 'refunded'` de um
 `mp_payment_id` que já tem `refunded_at` é ignorado com log (idempotência).
@@ -232,9 +241,17 @@ para achar a última cobrança.
 
 ## 9. Admin
 
-- Tabela de usuários: filtro "trial" separa "trial (cartão)" e "trial (convite)".
-- Nova coluna/ação de leitura: última invoice e se foi estornada (`refunded_at`). Sem ação de
-  estorno manual nesta rodada (o painel do MP continua servindo).
+- Tabela de usuários: o estado "Teste" separa **"Teste (cartão)"** (assinatura viva com
+  `trial_ends_at` e `first_payment_confirmed = false`) de **"Teste (convite)"**; o filtro segue os
+  estados.
+- Nova coluna/ação de leitura: última invoice aprovada (valor, data) e se foi estornada
+  (`refunded_at`). Sem ação de estorno manual nesta rodada (o painel do MP continua servindo).
+- **Estender teste com cartão: não existe** (decidido em 2026-09-18 após spike no sandbox: `PUT
+  /preapproval/{id}` com `auto_recurring.start_date` ou `free_trial` responde 200 e ignora; pausar
+  não move `next_payment_date`; o MP cobra no dia 8 de qualquer jeito). `admin_extend_trial`
+  devolve `{ success: false, error: 'card_trial' }` quando o usuário tem uma assinatura viva com
+  `trial_ends_at` não nulo e `first_payment_confirmed = false`; a UI desabilita "Estender" e explica:
+  para dar mais tempo, conceda créditos extras ou cancele o teste.
 
 ## 10. Segurança
 
@@ -279,7 +296,11 @@ a Política de Reembolso continua com o texto atual (inclusive a referência a e
 
 Rodada 1 implementada em 2026-09-15 (commits na `main`).
 
-**Rodada 2:** `refund-last-charge` + `refundFlow` + RPCs de estorno + UI/legal do estorno + Admin.
+**Rodada 2 (plano `docs/superpowers/plans/2026-09-18-trial-rodada2-estorno-admin.md`):**
+`refund-last-charge` + `refundFlow` + RPCs de estorno + UI/legal do estorno + Admin (estados
+"Teste (cartão)"/"Teste (convite)", última cobrança) + `admin_extend_trial` recusando trial com cartão.
+
+Rodada 2 implementada em 2026-09-18 (commits na `main`).
 
 ## 13. Riscos e pendências
 

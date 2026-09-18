@@ -275,6 +275,13 @@ describe("pickLastChargePerSubscription", () => {
   it("returns an empty map for no invoices", () => {
     expect(pickLastChargePerSubscription([]).size).toBe(0);
   });
+
+  it("falls back to 0/null when the picked invoice has no amount or debit_date", () => {
+    const picked = pickLastChargePerSubscription([
+      { subscription_id: "sub-1", amount_brl: null, debit_date: null, refunded_at: null },
+    ]);
+    expect(picked.get("sub-1")).toEqual({ amount_brl: 0, debit_date: null, refunded_at: null });
+  });
 });
 
 describe("mergeUserRows with invoices", () => {
