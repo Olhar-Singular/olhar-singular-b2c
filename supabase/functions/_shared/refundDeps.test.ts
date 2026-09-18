@@ -126,6 +126,13 @@ describe("buildRefundDeps", () => {
       const deps = buildRefundDeps(fakeAdmin().client, "tok", f, NOW);
       expect(await deps.getPaymentRefundState("pay-1")).toBeNull();
     });
+
+    it("defaults the transaction amounts when MP's body omits them, reporting not refunded", async () => {
+      const f = fakeFetch(200, { status: "approved" });
+      const deps = buildRefundDeps(fakeAdmin().client, "tok", f, NOW);
+      const out = await deps.getPaymentRefundState("pay-1");
+      expect(out).toEqual({ refunded: false, refundId: null });
+    });
   });
 
   describe("cancelPreapproval", () => {

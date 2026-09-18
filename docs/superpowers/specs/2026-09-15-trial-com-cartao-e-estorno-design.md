@@ -130,13 +130,15 @@ debit_date DESC)` já serve a busca da última cobrança (poucas linhas por assi
 - **`refund_last_charge(p_user_id uuid) → jsonb`**: em transação, com `FOR UPDATE` na assinatura
   viva (ou a mais recente cancelada há menos de 30 dias):
   1. acha a última `subscription_invoices` com `payment_status = 'approved'`, `mp_payment_id`
-     não nulo e `refunded_at IS NULL`; se não houver ⇒ `{ error: 'nothing_to_refund' }`;
+     não nulo, `refunded_at IS NULL`, `amount_brl > 0` (a fatura de validação de cartão do MP,
+     espelhada com `amount_brl = 0`, nunca é oferecida) e nunca uma cobrança mais antiga que uma
+     já estornada (em vez de qualquer trava vitalícia: um cancelamento de preapproval que falhou
+     no MP não pode travar o usuário para sempre); se não houver ⇒ `{ error: 'nothing_to_refund' }`;
   2. devolve `{ invoice_id, mp_payment_id, amount_brl }` para a edge function chamar o MP;
   3. a confirmação vem por **`confirm_refund(p_invoice_id, p_mp_refund_id)`**: marca
      `refunded_at`, `mp_refund_id`; `plan_credits = 0`, `plan_period_end = now()`, ledger
      `refund_clawback` negativo com o saldo restante do plano (extras intocados);
      `cancel_subscription_local` (o preapproval é cancelado no MP pela edge function antes).
-  Nunca estorna a cobrança de validação do MP (não vira invoice) nem mais de uma invoice.
 
 ## 6. Edge functions
 
@@ -175,9 +177,14 @@ debit_date DESC)` já serve a busca da última cobrança (poucas linhas por assi
 `runRefundLastCharge` puro em `_shared/refundFlow.ts`, no padrão de `cancel-subscription`):
 
 1. `refund_last_charge(user)` ⇒ `nothing_to_refund` vira 409;
-2. `POST /v1/payments/{mp_payment_id}/refunds` com idempotência; não-2xx ⇒ 502 sem tocar no
-   banco (o usuário pode tentar de novo);
-3. `PUT /preapproval/{id} { status: 'cancelled' }` (best effort, log em falha: o próximo webhook
+2. `POST /v1/payments/{mp_payment_id}/refunds` com idempotência; num não-2xx, antes de desistir,
+   confere `GET /v1/payments/{id}` (um timeout não prova que nada aconteceu no MP): se o estorno
+   já existir lá, segue como sucesso com esse `refund_id` (replay depois de um `confirm_refund`
+   que falhou); senão ⇒ `provider_error` sem tocar no banco, com `permanent: true` numa recusa
+   4xx (não vai funcionar numa nova tentativa, `index.ts` responde 422 em vez do 502 padrão,
+   `code` continua `provider_error`) e `false` numa falha transitória;
+3. `PUT /preapproval/{id} { status: 'cancelled' }` (best effort, uma retentativa antes de logar
+   `ALERT preapproval not cancelled at MP`, convenção de `closeOrphan`: o próximo webhook
    `subscription_preapproval` sincroniza);
 4. `confirm_refund(invoice_id, refund_id)`;
 5. resposta `{ amountBrl, refundedAt, subscriptionId }` (camelCase como o resto do contrato JSON);

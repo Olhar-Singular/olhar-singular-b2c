@@ -296,8 +296,11 @@ export function useLastCharge(subscriptionId: string | null | undefined) {
         .from("subscription_invoices")
         .select("id, amount_brl, debit_date, refunded_at")
         .eq("subscription_id", subscriptionId!)
-        .eq("payment_status", "approved")
+        // approved, or already refunded (an authorized_payment update after the refund
+        // may overwrite payment_status with 'refunded': keep the row visible either way).
+        .or("payment_status.eq.approved,refunded_at.not.is.null")
         .not("mp_payment_id", "is", null)
+        .gt("amount_brl", 0)
         .order("debit_date", { ascending: false, nullsFirst: false })
         .limit(1)
         .maybeSingle();

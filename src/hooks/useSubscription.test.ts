@@ -389,8 +389,9 @@ describe("useLastCharge", () => {
     expect(mockFrom).toHaveBeenCalledWith("subscription_invoices");
     expect(c.select).toHaveBeenCalledWith("id, amount_brl, debit_date, refunded_at");
     expect(c.eq).toHaveBeenCalledWith("subscription_id", "sub-1");
-    expect(c.eq).toHaveBeenCalledWith("payment_status", "approved");
+    expect(c.or).toHaveBeenCalledWith("payment_status.eq.approved,refunded_at.not.is.null");
     expect(c.not).toHaveBeenCalledWith("mp_payment_id", "is", null);
+    expect(c.gt).toHaveBeenCalledWith("amount_brl", 0);
     expect(c.order).toHaveBeenCalledWith("debit_date", { ascending: false, nullsFirst: false });
     expect(c.limit).toHaveBeenCalledWith(1);
     expect(result.current.data).toEqual(toLastChargeView(row));
