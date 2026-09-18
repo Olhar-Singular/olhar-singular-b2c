@@ -145,7 +145,8 @@ export function pickLastChargePerSubscription(invoices: InvoiceLite[]): Map<stri
   const bySubscription = new Map<string, InvoiceLite>();
   for (const invoice of invoices) {
     const current = bySubscription.get(invoice.subscription_id);
-    if (!current || Date.parse(invoice.debit_date ?? "") > Date.parse(current.debit_date ?? "")) {
+    const currentIsUndated = !current || Number.isNaN(Date.parse(current.debit_date ?? ""));
+    if (currentIsUndated || Date.parse(invoice.debit_date ?? "") > Date.parse(current!.debit_date ?? "")) {
       bySubscription.set(invoice.subscription_id, invoice);
     }
   }

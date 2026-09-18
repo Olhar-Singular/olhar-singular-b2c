@@ -107,7 +107,8 @@ serve(async (req) => {
       .from("subscription_invoices")
       .select("subscription_id, amount_brl, debit_date, refunded_at")
       .eq("payment_status", "approved")
-      .not("mp_payment_id", "is", null);
+      .not("mp_payment_id", "is", null)
+      .order("debit_date", { ascending: false, nullsFirst: false });
     if (invoicesError) {
       console.error("admin-dashboard subscription_invoices error:", invoicesError);
       return json({ error: "internal_error" }, 500);

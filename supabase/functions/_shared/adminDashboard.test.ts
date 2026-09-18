@@ -264,6 +264,14 @@ describe("pickLastChargePerSubscription", () => {
     expect(picked.get("sub-1")).toMatchObject({ amount_brl: 39.9 });
   });
 
+  it("replaces an undated row seen first once a real-dated row shows up (order is not guaranteed by the query)", () => {
+    const picked = pickLastChargePerSubscription([
+      { subscription_id: "sub-1", amount_brl: 1, debit_date: null, refunded_at: null },
+      { subscription_id: "sub-1", amount_brl: 39.9, debit_date: "2026-05-01T00:00:00Z", refunded_at: null },
+    ]);
+    expect(picked.get("sub-1")).toMatchObject({ amount_brl: 39.9, debit_date: "2026-05-01T00:00:00Z" });
+  });
+
   it("returns an empty map for no invoices", () => {
     expect(pickLastChargePerSubscription([]).size).toBe(0);
   });
