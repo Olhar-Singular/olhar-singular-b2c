@@ -83,6 +83,7 @@ export function createQueryChain<T>(result: SupabaseQueryResult<T>): ChainStep {
     neq: vi.fn().mockReturnThis(),
     in: vi.fn().mockReturnThis(),
     is: vi.fn().mockReturnThis(),
+    not: vi.fn().mockReturnThis(),
     or: vi.fn().mockReturnThis(),
     order: vi.fn().mockReturnThis(),
     limit: vi.fn().mockReturnThis(),

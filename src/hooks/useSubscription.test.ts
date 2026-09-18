@@ -13,8 +13,12 @@ import {
   useCancelSubscription,
   useUpdateSubscriptionCard,
   useSetInitialPassword,
+  toLastChargeView,
+  useLastCharge,
+  useRefundLastCharge,
 } from "./useSubscription";
 import { supabase } from "@/integrations/supabase/client";
+import { createQueryChain } from "@/test/helpers";
 
 const { mockRefreshProfile } = vi.hoisted(() => ({ mockRefreshProfile: vi.fn() }));
 
@@ -350,5 +354,99 @@ describe("useUpdateSubscriptionCard", () => {
       try { await silent.result.current.mutateAsync({ card: CARD }); } catch { /* expected */ }
     });
     expect(toast.error).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("toLastChargeView", () => {
+  it("normalises a numeric string amount and parses the dates", () => {
+    expect(
+      toLastChargeView({ id: "inv-1", amount_brl: "39.90" as unknown as number, debit_date: "2026-09-12T12:00:00Z", refunded_at: null }),
+    ).toEqual({ id: "inv-1", amountBrl: 39.9, debitDate: new Date("2026-09-12T12:00:00Z"), refundedAt: null });
+  });
+
+  it("keeps a null amount and reads refunded_at", () => {
+    expect(
+      toLastChargeView({ id: "inv-1", amount_brl: null, debit_date: null, refunded_at: "2026-09-18T10:00:00Z" }),
+    ).toEqual({ id: "inv-1", amountBrl: null, debitDate: null, refundedAt: new Date("2026-09-18T10:00:00Z") });
+  });
+});
+
+describe("useLastCharge", () => {
+  it("is disabled without a subscription id", () => {
+    const { result } = renderHook(() => useLastCharge(null), { wrapper });
+    expect(result.current.fetchStatus).toBe("idle");
+    expect(mockFrom).not.toHaveBeenCalled();
+  });
+
+  it("loads the newest approved charge with money", async () => {
+    const row = { id: "inv-1", amount_brl: 39.9, debit_date: "2026-09-12T12:00:00Z", refunded_at: null };
+    const c = createQueryChain({ data: row, error: null });
+    mockFrom.mockReturnValue(c);
+
+    const { result } = renderHook(() => useLastCharge("sub-1"), { wrapper });
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+
+    expect(mockFrom).toHaveBeenCalledWith("subscription_invoices");
+    expect(c.select).toHaveBeenCalledWith("id, amount_brl, debit_date, refunded_at");
+    expect(c.eq).toHaveBeenCalledWith("subscription_id", "sub-1");
+    expect(c.eq).toHaveBeenCalledWith("payment_status", "approved");
+    expect(c.not).toHaveBeenCalledWith("mp_payment_id", "is", null);
+    expect(c.order).toHaveBeenCalledWith("debit_date", { ascending: false, nullsFirst: false });
+    expect(c.limit).toHaveBeenCalledWith(1);
+    expect(result.current.data).toEqual(toLastChargeView(row));
+  });
+
+  it("resolves to null when there is no charge and surfaces errors", async () => {
+    mockFrom.mockReturnValue(createQueryChain({ data: null, error: null }));
+    const { result } = renderHook(() => useLastCharge("sub-1"), { wrapper });
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(result.current.data).toBeNull();
+
+    qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    mockFrom.mockReturnValue(createQueryChain({ data: null, error: { message: "boom" } }));
+    const failed = renderHook(() => useLastCharge("sub-1"), { wrapper });
+    await waitFor(() => expect(failed.result.current.isError).toBe(true));
+  });
+});
+
+describe("useRefundLastCharge", () => {
+  it("invokes refund-last-charge, refreshes and confirms with the refunded amount", async () => {
+    const { toast } = await import("sonner");
+    mockInvoke.mockResolvedValue({ data: { amountBrl: 39.9, refundedAt: "2026-09-18T10:00:00Z", subscriptionId: "sub-1" }, error: null });
+    const invalidate = vi.spyOn(qc, "invalidateQueries");
+
+    const { result } = renderHook(() => useRefundLastCharge(), { wrapper });
+    await act(async () => {
+      await result.current.mutateAsync();
+    });
+
+    expect(mockInvoke).toHaveBeenCalledWith("refund-last-charge", { body: {} });
+    expect(mockRefreshProfile).toHaveBeenCalled();
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: ["subscription"] });
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: ["credit_transactions"] });
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: ["last_charge"] });
+    expect(toast.success).toHaveBeenCalledWith(expect.stringMatching(/Estorno de R\$\s*39,90 solicitado\. Ele aparece no cartão em até duas faturas\./));
+  });
+
+  it("toasts the fallback message when the provider refuses", async () => {
+    const { toast } = await import("sonner");
+    mockInvoke.mockResolvedValue({ data: null, error: new Error("Edge Function returned a non-2xx status code") });
+    const { result } = renderHook(() => useRefundLastCharge(), { wrapper });
+    await act(async () => {
+      try { await result.current.mutateAsync(); } catch { /* expected */ }
+    });
+    expect(toast.error).toHaveBeenCalledWith("Não foi possível estornar agora. Tente de novo em alguns minutos.");
+    expect(toast.success).not.toHaveBeenCalled();
+    expect(mockRefreshProfile).not.toHaveBeenCalled();
+  });
+
+  it("toasts the backend's own message otherwise", async () => {
+    const { toast } = await import("sonner");
+    mockInvoke.mockResolvedValue({ data: null, error: new Error("falha") });
+    const { result } = renderHook(() => useRefundLastCharge(), { wrapper });
+    await act(async () => {
+      try { await result.current.mutateAsync(); } catch { /* expected */ }
+    });
+    expect(toast.error).toHaveBeenCalledWith("falha");
   });
 });

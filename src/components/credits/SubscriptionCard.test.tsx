@@ -3,9 +3,9 @@ import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { renderWithProviders, buildAuthState } from "@/test/helpers";
 import SubscriptionCard from "./SubscriptionCard";
-import { formatCard } from "@/lib/domain/subscriptionUi";
+import { canRefundLastCharge, formatCard } from "@/lib/domain/subscriptionUi";
 import type { Access } from "@/lib/domain/access";
-import type { SubscriptionView } from "@/hooks/useSubscription";
+import type { LastChargeView, SubscriptionView } from "@/hooks/useSubscription";
 
 const { mockCancel, mockUpdateCard, brickProps, cancelOpts } = vi.hoisted(() => ({
   mockCancel: vi.fn(),
@@ -89,6 +89,53 @@ describe("formatCard", () => {
     expect(formatCard(null, "1234")).toBe("Cartão final 1234");
     expect(formatCard("visa", null)).toBe("Visa");
     expect(formatCard(null, null)).toBeNull();
+  });
+});
+
+function lastCharge(overrides: Partial<LastChargeView> = {}): LastChargeView {
+  return {
+    id: "inv-1",
+    amountBrl: 39.9,
+    debitDate: new Date("2026-09-12T12:00:00Z"),
+    refundedAt: null,
+    ...overrides,
+  };
+}
+
+describe("canRefundLastCharge", () => {
+  const now = new Date("2026-09-18T12:00:00Z");
+  const daysAgo = (n: number) => new Date(now.getTime() - n * 24 * 60 * 60 * 1000);
+
+  it("is false without a subscription or a charge", () => {
+    expect(canRefundLastCharge(null, lastCharge(), now)).toBe(false);
+    expect(canRefundLastCharge(sub(), null, now)).toBe(false);
+  });
+
+  it("is false once the charge was already refunded", () => {
+    expect(canRefundLastCharge(sub(), lastCharge({ refundedAt: new Date("2026-09-17T00:00:00Z") }), now)).toBe(false);
+  });
+
+  it("is true while the subscription is live (authorized, past_due or paused)", () => {
+    expect(canRefundLastCharge(sub({ status: "authorized" }), lastCharge(), now)).toBe(true);
+    expect(canRefundLastCharge(sub({ status: "past_due" }), lastCharge(), now)).toBe(true);
+    expect(canRefundLastCharge(sub({ status: "paused" }), lastCharge(), now)).toBe(true);
+  });
+
+  it("is true up to 30 days after cancelling", () => {
+    expect(canRefundLastCharge(sub({ status: "cancelled", cancelledAt: daysAgo(10) }), lastCharge(), now)).toBe(true);
+  });
+
+  it("is false more than 30 days after cancelling", () => {
+    expect(canRefundLastCharge(sub({ status: "cancelled", cancelledAt: daysAgo(40) }), lastCharge(), now)).toBe(false);
+  });
+
+  it("is false when cancelled without a cancellation date", () => {
+    expect(canRefundLastCharge(sub({ status: "cancelled", cancelledAt: null }), lastCharge(), now)).toBe(false);
+  });
+
+  it("is false for other non-live statuses (pending, rejected)", () => {
+    expect(canRefundLastCharge(sub({ status: "pending" }), lastCharge(), now)).toBe(false);
+    expect(canRefundLastCharge(sub({ status: "rejected" }), lastCharge(), now)).toBe(false);
   });
 });
 

@@ -5,6 +5,7 @@ import { useAuth } from "@/hooks/useAuth";
 import type { Database } from "@/integrations/supabase/types";
 import type { CardFormDataView } from "@/hooks/useCredits";
 import { parseInvokeError, parseInvokeFailure, parseEdgeFnError } from "@/lib/utils/errors";
+import { formatBrl } from "@/lib/domain/subscriptionUi";
 
 type PlanRow = Database["public"]["Tables"]["plans"]["Row"];
 type SubscriptionRow = Database["public"]["Tables"]["subscriptions"]["Row"];
@@ -262,5 +263,77 @@ export function useUpdateSubscriptionCard({ toastErrors = true }: { toastErrors?
     onError: (err: Error) => {
       if (toastErrors) toast.error(parseEdgeFnError(err, CARD_FALLBACK));
     },
+  });
+}
+
+/** The newest approved charge with money of a subscription. */
+export interface LastChargeView {
+  id: string;
+  amountBrl: number | null;
+  debitDate: Date | null;
+  refundedAt: Date | null;
+}
+
+type SubscriptionInvoiceRow = Database["public"]["Tables"]["subscription_invoices"]["Row"];
+
+export function toLastChargeView(
+  row: Pick<SubscriptionInvoiceRow, "id" | "amount_brl" | "debit_date" | "refunded_at">,
+): LastChargeView {
+  return {
+    id: row.id,
+    amountBrl: row.amount_brl === null ? null : Number(row.amount_brl),
+    debitDate: dateOrNull(row.debit_date),
+    refundedAt: dateOrNull(row.refunded_at),
+  };
+}
+
+/** The newest approved charge with money of a subscription (owner RLS); null when none. */
+export function useLastCharge(subscriptionId: string | null | undefined) {
+  return useQuery({
+    queryKey: ["last_charge", subscriptionId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("subscription_invoices")
+        .select("id, amount_brl, debit_date, refunded_at")
+        .eq("subscription_id", subscriptionId!)
+        .eq("payment_status", "approved")
+        .not("mp_payment_id", "is", null)
+        .order("debit_date", { ascending: false, nullsFirst: false })
+        .limit(1)
+        .maybeSingle();
+      if (error) throw error;
+      return data ? toLastChargeView(data) : null;
+    },
+    enabled: !!subscriptionId,
+    staleTime: 1000 * 30,
+  });
+}
+
+export interface RefundLastChargeResult {
+  amountBrl: number;
+  refundedAt: string;
+  subscriptionId: string;
+}
+
+const REFUND_FALLBACK = "Não foi possível estornar agora. Tente de novo em alguns minutos.";
+
+// Self-service refund of the last charge: the server refunds at Mercado Pago,
+// removes the remaining plan credits of that charge and cancels the
+// subscription. The client only has to catch up (same pattern as cancel).
+export function useRefundLastCharge() {
+  const refresh = useSubscriptionRefresh();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async () => {
+      const { data, error } = await supabase.functions.invoke("refund-last-charge", { body: {} });
+      if (error) throw new Error(await parseInvokeError(error, REFUND_FALLBACK));
+      return data as RefundLastChargeResult;
+    },
+    onSuccess: (data) => {
+      refresh();
+      queryClient.invalidateQueries({ queryKey: ["last_charge"] });
+      toast.success(`Estorno de ${formatBrl(data.amountBrl)} solicitado. Ele aparece no cartão em até duas faturas.`);
+    },
+    onError: (err: Error) => toast.error(parseEdgeFnError(err, REFUND_FALLBACK)),
   });
 }

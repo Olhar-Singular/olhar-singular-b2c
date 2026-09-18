@@ -5,7 +5,7 @@
 import { addDays, format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import type { Access } from "@/lib/domain/access";
-import type { PlanView, SubscriptionStatus, SubscriptionView } from "@/hooks/useSubscription";
+import type { LastChargeView, PlanView, SubscriptionStatus, SubscriptionView } from "@/hooks/useSubscription";
 
 export function formatBrl(value: number) {
   return value.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
@@ -141,3 +141,17 @@ export const ACCOUNT_FORM_MESSAGES: Record<AccountFormError, string> = {
   email_mismatch: "Os e-mails não coincidem. Confira antes de continuar: é por ele que você entra na plataforma.",
   terms: "É preciso aceitar os Termos de Uso e a Política de Privacidade.",
 };
+
+export const REFUND_WINDOW_DAYS = 30;
+
+// Decision 5: the last approved charge can always be refunded by the user,
+// while the subscription is live or up to 30 days after cancelling it.
+export function canRefundLastCharge(
+  sub: SubscriptionView | null | undefined,
+  lastCharge: LastChargeView | null | undefined,
+  now: Date,
+): boolean {
+  if (!sub || !lastCharge || lastCharge.refundedAt) return false;
+  if (LIVE_STATUSES.includes(sub.status)) return true;
+  return sub.status === "cancelled" && !!sub.cancelledAt && now.getTime() - sub.cancelledAt.getTime() < REFUND_WINDOW_DAYS * 24 * 60 * 60 * 1000;
+}
