@@ -1,0 +1,56 @@
+// Wiring of RefundDeps over Supabase + Mercado Pago, shared by
+// refund-last-charge. No decisions here (those live in refundFlow.ts); the
+// tests pin the RPC names/params and the MP endpoint so a typo cannot
+// silently break a refund.
+
+import type { RefundDeps, RefundableCharge } from "./refundFlow.ts";
+import { mpRequest, cancelPreapprovalAtMp } from "./mpHttp.ts";
+
+// Structural slice of supabase-js so the builder is testable with a fake.
+export interface RefundAdminClient {
+  // deno-lint-ignore no-explicit-any
+  rpc(fn: string, args: Record<string, unknown>): PromiseLike<any>;
+}
+
+export function buildRefundDeps(
+  admin: RefundAdminClient,
+  mpAccessToken: string,
+  fetchFn: typeof fetch = fetch,
+  now: () => Date = () => new Date(),
+): RefundDeps {
+  return {
+    findRefundable: async (userId) => {
+      const { data, error } = await admin.rpc("refund_last_charge", { p_user_id: userId });
+      if (error) throw new Error(`refund_last_charge failed: ${error.message}`);
+      if (!data?.success) return null;
+      return {
+        invoiceId: data.invoice_id,
+        mpPaymentId: data.mp_payment_id,
+        amountBrl: data.amount_brl,
+        subscriptionId: data.subscription_id,
+        mpPreapprovalId: data.mp_preapproval_id ?? null,
+      } as RefundableCharge;
+    },
+    postRefund: async (mpPaymentId, idempotencyKey) => {
+      const resp = await mpRequest(
+        `/v1/payments/${encodeURIComponent(mpPaymentId)}/refunds`,
+        { method: "POST", token: mpAccessToken, body: {}, idempotencyKey },
+        fetchFn,
+      );
+      return {
+        ok: resp.ok,
+        status: resp.status,
+        refundId: resp.json.id != null ? String(resp.json.id) : null,
+        message: typeof resp.json.message === "string" ? resp.json.message : null,
+      };
+    },
+    cancelPreapproval: (preapprovalId) => cancelPreapprovalAtMp(preapprovalId, mpAccessToken, fetchFn),
+    confirmRefund: async (invoiceId, mpRefundId) => {
+      const { data, error } = await admin.rpc("confirm_refund", { p_invoice_id: invoiceId, p_mp_refund_id: mpRefundId });
+      if (error) throw new Error(`confirm_refund failed: ${error.message}`);
+      return data;
+    },
+    now,
+    log: (message, ...args) => console.warn(message, ...args),
+  };
+}
