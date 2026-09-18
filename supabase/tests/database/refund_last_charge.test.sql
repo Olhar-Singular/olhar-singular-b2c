@@ -10,7 +10,7 @@
 -- not move the day-8 charge.
 -- =============================================================================
 BEGIN;
-SELECT plan(26);
+SELECT plan(30);
 
 INSERT INTO auth.users (id, email) VALUES
   ('e1111111-1111-1111-1111-111111111111', 'payer@test.com'),
@@ -59,6 +59,18 @@ SELECT 'f0000000-0000-0000-0000-000000000005', 'e5555555-5555-5555-5555-55555555
 UPDATE public.profiles SET access_kind = 'trial', plan_credits = 50, plan_period_end = now() + interval '6 days', trial_started_at = now() - interval '1 day'
  WHERE id = 'e5555555-5555-5555-5555-555555555555';
 
+-- Card trial whose only invoice is the MP R$ 0 validation charge (approved,
+-- has a mp_payment_id): must never be refundable nor shown as a last charge.
+INSERT INTO auth.users (id, email) VALUES
+  ('e6666666-6666-6666-6666-666666666666', 'zero-amount@test.com');
+INSERT INTO public.subscriptions (id, user_id, plan_id, status, payer_email, trial_ends_at, mp_preapproval_id)
+SELECT 'f0000000-0000-0000-0000-000000000006', 'e6666666-6666-6666-6666-666666666666', id, 'authorized', 'zero-amount@test.com', now() + interval '6 days', 'pre-6'
+  FROM public.plans WHERE slug = 'basico';
+INSERT INTO public.subscription_invoices (id, subscription_id, mp_payment_id, status, payment_status, amount_brl, debit_date, granted_at)
+VALUES ('ap-zero', 'f0000000-0000-0000-0000-000000000006', 'pay-0', 'processed', 'approved', 0, now() - interval '1 day', now() - interval '1 day');
+UPDATE public.profiles SET access_kind = 'trial', plan_credits = 50, plan_period_end = now() + interval '6 days', trial_started_at = now() - interval '1 day'
+ WHERE id = 'e6666666-6666-6666-6666-666666666666';
+
 SELECT set_config('request.jwt.claims', '{"role":"service_role"}', true);
 SET LOCAL role service_role;
 
@@ -88,8 +100,11 @@ SELECT is(
   (SELECT public.refund_last_charge('e4444444-4444-4444-4444-444444444444'::uuid) ->> 'error'),
   'nothing_to_refund', 'find: cancelled more than 30 days ago is out of the window');
 SELECT is(
-  (SELECT public.refund_last_charge('e5555555-5555-5555-5555-555555555555'::uuid) ->> 'error'),
+  (SELECT public.refund_last_charge('00000000-0000-0000-0000-000000000000'::uuid) ->> 'error'),
   'nothing_to_refund', 'find: unknown or chargeless user has nothing to refund');
+SELECT is(
+  (SELECT public.refund_last_charge('e6666666-6666-6666-6666-666666666666'::uuid) ->> 'error'),
+  'nothing_to_refund', 'find: an approved invoice with amount_brl = 0 (MP card validation) is never refundable');
 
 -- ── confirm_refund: once, zeroes the plan bucket, keeps extras, cancels ─────
 CREATE TEMP TABLE conf AS
@@ -126,6 +141,19 @@ SELECT is(
 SELECT is(
   (SELECT public.refund_last_charge('e1111111-1111-1111-1111-111111111111'::uuid) ->> 'error'),
   'nothing_to_refund', 'find: after the refund, the older charge is NOT offered (last charge only)');
+
+-- A newer charge lands on the same (now cancelled < 30 days) subscription:
+-- the bound is "newer than the newest refunded invoice", not a lifetime lock.
+INSERT INTO public.subscription_invoices (id, subscription_id, mp_payment_id, status, payment_status, amount_brl, debit_date, granted_at)
+VALUES ('ap-newer', 'f0000000-0000-0000-0000-000000000001', 'pay-newer', 'processed', 'approved', 39.90, now(), now());
+SELECT is(
+  (SELECT public.refund_last_charge('e1111111-1111-1111-1111-111111111111'::uuid) ->> 'invoice_id'),
+  'ap-newer', 'find: a charge newer than the last refunded one is offered again');
+SELECT is((SELECT public.confirm_refund('ap-newer', 'refund-newer') ->> 'success'), 'true', 'confirm: refunds the newer charge too');
+SELECT is(
+  (SELECT public.refund_last_charge('e1111111-1111-1111-1111-111111111111'::uuid) ->> 'error'),
+  'nothing_to_refund', 'find: the older ap-old is still never offered once ap-newer is refunded too');
+
 SELECT is(
   (SELECT public.confirm_refund('does-not-exist', 'r') ->> 'error'),
   'invoice_not_found', 'confirm: unknown invoice');
