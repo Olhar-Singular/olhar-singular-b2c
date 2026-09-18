@@ -98,6 +98,36 @@ describe("buildRefundDeps", () => {
     });
   });
 
+  describe("getPaymentRefundState", () => {
+    it("reports refunded when MP's status is 'refunded', with the first refund id", async () => {
+      const f = fakeFetch(200, { status: "refunded", transaction_amount: 59.9, transaction_amount_refunded: 59.9, refunds: [{ id: 777 }] });
+      const deps = buildRefundDeps(fakeAdmin().client, "tok", f, NOW);
+      const out = await deps.getPaymentRefundState("pay-1");
+      expect(f).toHaveBeenCalledWith("https://api.mercadopago.com/v1/payments/pay-1", expect.objectContaining({ method: "GET" }));
+      expect(out).toEqual({ refunded: true, refundId: "777" });
+    });
+
+    it("reports refunded when the refunded amount covers the transaction amount, even with a different status", async () => {
+      const f = fakeFetch(200, { status: "approved", transaction_amount: 59.9, transaction_amount_refunded: 59.9 });
+      const deps = buildRefundDeps(fakeAdmin().client, "tok", f, NOW);
+      const out = await deps.getPaymentRefundState("pay-1");
+      expect(out).toEqual({ refunded: true, refundId: null });
+    });
+
+    it("reports not refunded when the amount refunded is short and the status is not 'refunded'", async () => {
+      const f = fakeFetch(200, { status: "approved", transaction_amount: 59.9, transaction_amount_refunded: 0 });
+      const deps = buildRefundDeps(fakeAdmin().client, "tok", f, NOW);
+      const out = await deps.getPaymentRefundState("pay-1");
+      expect(out).toEqual({ refunded: false, refundId: null });
+    });
+
+    it("returns null on a non-2xx response", async () => {
+      const f = fakeFetch(404, { message: "not found" });
+      const deps = buildRefundDeps(fakeAdmin().client, "tok", f, NOW);
+      expect(await deps.getPaymentRefundState("pay-1")).toBeNull();
+    });
+  });
+
   describe("cancelPreapproval", () => {
     it("delegates to cancelPreapprovalAtMp with the token", async () => {
       const f = fakeFetch(200, { id: "pre-1", status: "cancelled" });

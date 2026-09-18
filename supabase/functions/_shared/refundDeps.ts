@@ -44,6 +44,16 @@ export function buildRefundDeps(
         message: typeof resp.json.message === "string" ? resp.json.message : null,
       };
     },
+    getPaymentRefundState: async (mpPaymentId) => {
+      const resp = await mpRequest(`/v1/payments/${encodeURIComponent(mpPaymentId)}`, { method: "GET", token: mpAccessToken }, fetchFn);
+      if (!resp.ok) return null;
+      const transactionAmount = Number(resp.json.transaction_amount ?? Infinity);
+      const refundedAmount = Number(resp.json.transaction_amount_refunded ?? 0);
+      const refunded = resp.json.status === "refunded" || refundedAmount >= transactionAmount;
+      const refunds = resp.json.refunds as Array<{ id?: unknown }> | undefined;
+      const refundId = refunds?.[0]?.id != null ? String(refunds[0].id) : null;
+      return { refunded, refundId };
+    },
     cancelPreapproval: (preapprovalId) => cancelPreapprovalAtMp(preapprovalId, mpAccessToken, fetchFn),
     confirmRefund: async (invoiceId, mpRefundId) => {
       const { data, error } = await admin.rpc("confirm_refund", { p_invoice_id: invoiceId, p_mp_refund_id: mpRefundId });

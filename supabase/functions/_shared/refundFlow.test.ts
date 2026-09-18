@@ -15,6 +15,7 @@ function refundDeps(overrides: Partial<RefundDeps> = {}) {
   const d = {
     findRefundable: vi.fn(async () => CHARGE),
     postRefund: vi.fn(async () => ({ ok: true, status: 201, refundId: "ref-1", message: null })),
+    getPaymentRefundState: vi.fn(async () => null),
     cancelPreapproval: vi.fn(async () => true),
     confirmRefund: vi.fn(async () => ({ success: true, already: false, subscription_id: "sub-1", credits_removed: 300 })),
     now: NOW,
@@ -34,13 +35,49 @@ describe("runRefundLastCharge", () => {
     expect(d.confirmRefund).not.toHaveBeenCalled();
   });
 
-  it("reports provider_error when MP refuses the refund, without touching the DB or the preapproval", async () => {
+  it("reports provider_error (permanent) when MP refuses the refund with a 4xx and never refunded it", async () => {
     const d = refundDeps({ postRefund: vi.fn(async () => ({ ok: false, status: 400, refundId: null, message: "invalid payment" })) });
     const result = await runRefundLastCharge({ userId: "u1" }, d);
-    expect(result).toEqual({ ok: false, error: "provider_error", httpStatus: 502 });
+    expect(result).toEqual({ ok: false, error: "provider_error", httpStatus: 502, permanent: true });
+    expect(d.getPaymentRefundState).toHaveBeenCalledWith("pay-1");
     expect(d.confirmRefund).not.toHaveBeenCalled();
     expect(d.cancelPreapproval).not.toHaveBeenCalled();
     expect(d.log).toHaveBeenCalledWith(expect.stringMatching(/MP refused/), 400, "invalid payment");
+  });
+
+  it("reports provider_error (not permanent) when MP is down with a 5xx and never refunded it", async () => {
+    const d = refundDeps({ postRefund: vi.fn(async () => ({ ok: false, status: 503, refundId: null, message: "unavailable" })) });
+    const result = await runRefundLastCharge({ userId: "u1" }, d);
+    expect(result).toEqual({ ok: false, error: "provider_error", httpStatus: 502, permanent: false });
+  });
+
+  it("continues as a success when MP confirms the refund already landed after a non-2xx POST (replay after a failed confirm)", async () => {
+    const d = refundDeps({
+      postRefund: vi.fn(async () => ({ ok: false, status: 500, refundId: null, message: "timeout" })),
+      getPaymentRefundState: vi.fn(async () => ({ refunded: true, refundId: "ref-99" })),
+    });
+    const result = await runRefundLastCharge({ userId: "u1" }, d);
+    expect(d.confirmRefund).toHaveBeenCalledWith("inv-1", "ref-99");
+    expect(d.cancelPreapproval).toHaveBeenCalledWith("pre-1");
+    expect(d.log).toHaveBeenCalledWith(expect.stringMatching(/already existed/));
+    expect(result).toEqual({
+      ok: true,
+      amountBrl: 59.9,
+      refundedAt: "2026-09-18T10:00:00.000Z",
+      subscriptionId: "sub-1",
+      invoiceId: "inv-1",
+      creditsRemoved: 300,
+    });
+  });
+
+  it("falls back to 'unknown' when MP confirms the refund landed but reports no refund id", async () => {
+    const d = refundDeps({
+      postRefund: vi.fn(async () => ({ ok: false, status: 500, refundId: null, message: "timeout" })),
+      getPaymentRefundState: vi.fn(async () => ({ refunded: true, refundId: null })),
+    });
+    const result = await runRefundLastCharge({ userId: "u1" }, d);
+    expect(d.confirmRefund).toHaveBeenCalledWith("inv-1", "unknown");
+    expect(result.ok).toBe(true);
   });
 
   it("cancels the preapproval, confirms the refund and returns the shaped result on a 2xx", async () => {
@@ -64,10 +101,21 @@ describe("runRefundLastCharge", () => {
     expect(d.cancelPreapproval).not.toHaveBeenCalled();
   });
 
-  it("only logs when the best-effort preapproval cancel fails, still confirming the refund", async () => {
+  it("retries the preapproval cancel once when it fails, without alerting when the retry succeeds", async () => {
+    const cancelPreapproval = vi.fn().mockResolvedValueOnce(false).mockResolvedValueOnce(true);
+    const d = refundDeps({ cancelPreapproval });
+    const result = await runRefundLastCharge({ userId: "u1" }, d);
+    expect(cancelPreapproval).toHaveBeenCalledTimes(2);
+    expect(d.log).not.toHaveBeenCalledWith(expect.stringMatching(/ALERT/), expect.anything());
+    expect(d.confirmRefund).toHaveBeenCalledWith("inv-1", "ref-1");
+    expect(result.ok).toBe(true);
+  });
+
+  it("logs an ALERT and still confirms the refund when the preapproval cancel fails even after the retry", async () => {
     const d = refundDeps({ cancelPreapproval: vi.fn(async () => false) });
     const result = await runRefundLastCharge({ userId: "u1" }, d);
-    expect(d.log).toHaveBeenCalledWith(expect.stringMatching(/could not cancel/), "pre-1");
+    expect(d.cancelPreapproval).toHaveBeenCalledTimes(2);
+    expect(d.log).toHaveBeenCalledWith(expect.stringMatching(/ALERT preapproval not cancelled/), "pre-1");
     expect(d.confirmRefund).toHaveBeenCalledWith("inv-1", "ref-1");
     expect(result.ok).toBe(true);
   });

@@ -22,6 +22,8 @@ const ERRORS: Record<string, string> = {
   provider_error: "Não foi possível estornar agora. Tente de novo em alguns minutos.",
 };
 
+const PERMANENT_REFUSAL_MESSAGE = "O Mercado Pago recusou o estorno desta cobrança. Fale com o suporte pelo menu da conta.";
+
 // Self-service refund of the last charge (round 2 of the card trial fix
 // wave): the user asks for their money back, we refund at Mercado Pago
 // first, then record it once (confirm_refund) and drop the plan credits of
@@ -48,7 +50,14 @@ serve(async (req) => {
     const admin = createClient(supabaseUrl, serviceKey);
 
     const result = await runRefundLastCharge({ userId: user.id }, buildRefundDeps(admin, mpAccessToken));
-    if (!result.ok) return json({ error: ERRORS[result.error], code: result.error }, result.httpStatus);
+    if (!result.ok) {
+      // A permanent refusal (4xx) at MP will never succeed on retry: say so plainly
+      // instead of the generic "try again in a few minutes" of a transient failure.
+      if (result.error === "provider_error" && result.permanent) {
+        return json({ error: PERMANENT_REFUSAL_MESSAGE, code: "provider_error" }, 422);
+      }
+      return json({ error: ERRORS[result.error], code: result.error }, result.httpStatus);
+    }
 
     await dispatchAnalytics(sendAnalyticsEvents(
       [{ name: "refund", eventId: `${result.invoiceId}:refund`, userId: user.id, valueBrl: result.amountBrl, params: { subscription_id: result.subscriptionId } }],
