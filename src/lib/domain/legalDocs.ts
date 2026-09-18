@@ -2,7 +2,6 @@
 // legal review lands. The version shown is the one the checkout records on
 // profiles.terms_version, so both move together.
 
-import { SUPPORT_EMAIL } from "@/lib/constants";
 import { TERMS_VERSION } from "@/lib/domain/subscriptionUi";
 
 export type LegalSlug = "termos" | "privacidade" | "reembolso";
@@ -111,7 +110,7 @@ export const LEGAL_DOCS: Record<LegalSlug, LegalDoc> = {
       {
         title: "6. Seus direitos",
         paragraphs: [
-          "Você pode pedir acesso, correção, exclusão e portabilidade dos seus dados, além de revogar consentimentos, escrevendo para " + SUPPORT_EMAIL + ".",
+          "Você pode pedir acesso, correção, exclusão e portabilidade dos seus dados, além de revogar consentimentos, escrevendo para o suporte pelo menu da sua conta (Suporte), que mostra o e-mail de contato.",
         ],
       },
     ],
@@ -130,7 +129,7 @@ export const LEGAL_DOCS: Record<LegalSlug, LegalDoc> = {
       {
         title: "2. Créditos extras avulsos",
         paragraphs: [
-          "Em até 7 dias corridos após a compra de créditos extras, você pode pedir reembolso integral, desde que os créditos não tenham sido usados.",
+          "Em até 7 dias corridos após a compra de créditos extras, você pode pedir reembolso integral, desde que os créditos não tenham sido usados. Peça pelo suporte no menu da sua conta.",
         ],
       },
       {

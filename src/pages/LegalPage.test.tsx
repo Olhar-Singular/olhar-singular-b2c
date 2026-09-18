@@ -78,4 +78,19 @@ describe("LegalPage", () => {
     ]);
     expect(JSON.stringify(reembolso)).not.toMatch(/@/);
   });
+
+  it("reembolso points the extras refund (not self-service) to the support channel in the account menu", () => {
+    const reembolso = LEGAL_DOCS.reembolso;
+    const extras = reembolso.sections.find((s) => s.title === "2. Créditos extras avulsos");
+    expect(extras!.paragraphs.join(" ")).toMatch(/Peça pelo suporte no menu da sua conta\./);
+  });
+
+  it("privacidade points the LGPD request to the support channel in the account menu, without an e-mail address", () => {
+    const privacidade = LEGAL_DOCS.privacidade;
+    expect(JSON.stringify(privacidade)).not.toMatch(/@/);
+    const rights = privacidade.sections.find((s) => s.title === "6. Seus direitos");
+    expect(rights!.paragraphs.join(" ")).toMatch(
+      /escrevendo para o suporte pelo menu da sua conta \(Suporte\), que mostra o e-mail de contato\./,
+    );
+  });
 });

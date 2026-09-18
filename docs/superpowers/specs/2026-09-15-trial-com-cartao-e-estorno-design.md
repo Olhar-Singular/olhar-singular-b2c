@@ -122,7 +122,14 @@ debit_date DESC)` já serve a busca da última cobrança (poucas linhas por assi
   (migration `20260918000001`, item 1 do fix wave final): fatura com `status = 'scheduled'` ou
   `payment_status` em `pending`/`in_process`/`authorized` só é espelhada e devolve `pending`
   (nunca `clawback`/`past_due`), e uma fatura `approved` com `amount_brl = 0` (validação de
-  cartão do MP) devolve `ignored` sem converter nem renovar nada.
+  cartão do MP) devolve `ignored` sem converter nem renovar nada. **Estorno/chargeback externo**
+  (migration `20260920000002`, rodada 2b): `payment_status` `refunded` ou `charged_back` (painel
+  de suporte do MP, ou chargeback do adquirente) tem as mesmas consequências do `confirm_refund`
+  (zera o balde do plano, cancela a assinatura localmente) em vez de virar `past_due`/`clawback`;
+  devolve `refunded_externally`. Fatura já estornada só é remirada (`refund_mirrored`); numa
+  assinatura fechada cuja fatura nunca foi concedida, só fecha (`closed`). O `mp-webhook` cancela
+  a preapproval no MP quando o resultado é `refunded_externally` (best effort, log de ALERT se
+  falhar) e emite o evento de analytics `refund`.
 - **`cancel_subscription_local`**: se `subscriptions.trial_ends_at IS NOT NULL AND
   first_payment_confirmed = false` (cancelou dentro do trial) ⇒ também `plan_credits = 0`,
   `plan_period_end = now()`, ledger `plan_reset` negativo com o que sobrou. Fora do trial mantém
@@ -242,9 +249,13 @@ debit_date DESC)` já serve a busca da última cobrança (poucas linhas por assi
   disponível para a **última cobrança**, integral, remove os créditos do plano daquele mês,
   cancela a assinatura, extras intocados; cobranças anteriores não são estornadas. Some a
   referência a e-mail (item 6 da lista original de remoção).
+- **Política de Reembolso §2** (rodada 2b): créditos extras avulsos não têm fluxo de
+  autoatendimento, então o texto agora aponta "Peça pelo suporte no menu da sua conta."
 - **Política de Privacidade §6**: canal LGPD passa a ser o menu da conta ("Suporte → Entrar em
-  contato") em vez do e-mail no texto. *(Decisão pendente do dono: o menu ainda usa
-  `SUPPORT_EMAIL`; se o e-mail sair do menu também, o canal LGPD precisa de outro destino.)*
+  contato") em vez do e-mail no texto (`SUPPORT_EMAIL` sai do import de `legalDocs.ts`). Decidido
+  com o dono em 2026-09-18: o e-mail de contato fica só logado, no `UserAccountMenu`, nunca no
+  texto público; o teste de `legalDocs.test.ts`/`LegalPage.test.tsx` trava isso exigindo que
+  `JSON.stringify` da Privacidade e do Reembolso não contenha `@`.
 
 ## 9. Admin
 
@@ -253,6 +264,11 @@ debit_date DESC)` já serve a busca da última cobrança (poucas linhas por assi
   estados.
 - Nova coluna/ação de leitura: última invoice aprovada (valor, data) e se foi estornada
   (`refunded_at`). Sem ação de estorno manual nesta rodada (o painel do MP continua servindo).
+- **`refund_count`** (rodada 2b): `AdminUserRow`/`AdminUser` carregam a contagem de faturas com
+  `refunded_at` em todas as assinaturas do usuário (`mergeUserRows` em `_shared/adminDashboard.ts`,
+  a partir das mesmas invoices já buscadas para `last_charge`); a `UsersTable` mostra "estornos:
+  N" na célula de assinatura quando `> 0`. Campo opcional no tipo, tolerante a um backend antigo
+  que ainda não manda `refund_count`.
 - **Estender teste com cartão: não existe** (decidido em 2026-09-18 após spike no sandbox: `PUT
   /preapproval/{id}` com `auto_recurring.start_date` ou `free_trial` responde 200 e ignora; pausar
   não move `next_payment_date`; o MP cobra no dia 8 de qualquer jeito). `admin_extend_trial`
@@ -317,6 +333,7 @@ Rodada 2 implementada em 2026-09-18 (commits na `main`).
   R$ 0,00; em produção pode ser um valor pequeno estornado automaticamente.
 - Fuso: `start_date` em UTC; a data exibida usa `America/Sao_Paulo`. Um trial iniciado 23h
   pode mostrar "cobra em D+8" localmente; aceitável.
-- `SUPPORT_EMAIL` ainda vive no menu da conta e na Privacidade; decisão do dono sobre remover
-  do menu fica fora deste spec.
+- ~~`SUPPORT_EMAIL` ainda vive no menu da conta e na Privacidade~~: resolvido na rodada 2b
+  (2026-09-18) — o e-mail fica só no `UserAccountMenu` (logado); Privacidade e Reembolso apontam
+  para o suporte pelo menu da conta, sem `@` no texto público.
 - Estorno via API do MP em cartão pode levar até 2 faturas; o texto avisa.
