@@ -458,22 +458,31 @@ export function StepReview({
         no fluxo: reserva o próprio espaço no fim da mesa em vez de cobrir o pé
         da folha, onde mora a última pauta da questão aberta.
       */}
-      <div className="sticky bottom-0 z-10 flex justify-between gap-2 border-t border-surface-chrome-line bg-surface-chrome px-2 py-3">
-        <Button variant="outline" onClick={onPrev} aria-label="Voltar">
+      <div className="sticky bottom-0 z-10 flex flex-wrap justify-between gap-2 border-t border-surface-chrome-line bg-surface-chrome px-2 py-3">
+        <Button variant="outline" onClick={onPrev} aria-label="Voltar" className="shrink-0">
           <ArrowLeft className="w-4 h-4 mr-2" /> Voltar
         </Button>
-        <div className="flex items-center gap-2">
+        <div className="flex min-w-0 items-center gap-2">
           {/* Filing the adaptation used to be possible only on the Exportar
               step, so anyone who finished editing and left never filed it. */}
+          {/* Achado 0225: com o rótulo por extenso os três botões somavam mais
+              que 390px e empurravam "Exportar", a ação primária do passo, para
+              fora da viewport. Abaixo de `sm` este vira só ícone, o mesmo
+              tratamento que a barra de chrome do topo recebeu no achado 0010. */}
           <Button
             variant="outline"
             onClick={() => onSave?.()}
             disabled={!canSave || saving}
             aria-label="Salvar adaptação"
+            title="Salvar adaptação"
+            className="shrink-0 px-2 sm:px-4"
           >
-            <Save className="w-4 h-4 mr-2" /> {saving ? "Salvando…" : "Salvar adaptação"}
+            <Save className="w-4 h-4" />
+            <span className="hidden sm:ml-2 sm:inline">
+              {saving ? "Salvando…" : "Salvar adaptação"}
+            </span>
           </Button>
-          <Button onClick={onNext} aria-label="Avançar para exportação">
+          <Button onClick={onNext} aria-label="Avançar para exportação" className="shrink-0">
             Exportar <ArrowRight className="w-4 h-4 ml-2" />
           </Button>
         </div>

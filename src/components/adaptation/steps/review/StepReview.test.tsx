@@ -696,6 +696,22 @@ describe("StepReview", () => {
       expect(screen.getByRole("button", { name: /Salvar adaptação/i })).toBeDisabled();
     });
 
+    /**
+     * Regressão (caça 0225): em 390x844 os três botões da barra de ações somavam
+     * mais que a viewport e "Exportar" (a ação primária do passo) ficava
+     * parcialmente fora da tela, com o `main` rolando 34px no eixo X. O botão do
+     * meio vira só ícone abaixo de `sm`, como a barra de chrome do topo já faz.
+     */
+    it("barra de ações: rótulo do Salvar só a partir de sm, nome acessível preservado", () => {
+      setup({ canSave: true });
+      const button = screen.getByRole("button", { name: "Salvar adaptação" });
+      expect(button).toHaveAttribute("aria-label", "Salvar adaptação");
+      expect(button).toHaveAttribute("title", "Salvar adaptação");
+      const label = within(button).getByText("Salvar adaptação");
+      expect(label).toHaveClass("hidden");
+      expect(label).toHaveClass("sm:inline");
+    });
+
     it("does not break when no save handler is wired", () => {
       setup({ canSave: true });
       expect(() =>
