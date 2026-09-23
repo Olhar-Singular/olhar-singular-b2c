@@ -18,7 +18,7 @@ import {
   AlignRight,
   Clipboard,
 } from "lucide-react";
-import { chooseImageEncoding } from "./imageManagerUtils";
+import { chooseImageEncoding, fitToPrintResolution } from "./imageManagerUtils";
 import type { ImageItem, ImageAlign } from "./imageManagerUtils";
 
 type Props = {
@@ -34,8 +34,6 @@ type Props = {
   restoreFocusRef?: RefObject<HTMLElement>;
 };
 
-const MAX_DIMENSION = 800;
-
 function generateId() {
   return Math.random().toString(36).slice(2, 10);
 }
@@ -46,12 +44,7 @@ function resizeImage(file: File): Promise<string> {
     reader.onload = () => {
       const img = new Image();
       img.onload = () => {
-        let { width, height } = img;
-        if (width > MAX_DIMENSION || height > MAX_DIMENSION) {
-          const ratio = Math.min(MAX_DIMENSION / width, MAX_DIMENSION / height);
-          width = Math.round(width * ratio);
-          height = Math.round(height * ratio);
-        }
+        const { width, height } = fitToPrintResolution(img.width, img.height);
         const canvas = document.createElement("canvas");
         canvas.width = width;
         canvas.height = height;

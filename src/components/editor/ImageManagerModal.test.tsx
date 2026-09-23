@@ -405,13 +405,13 @@ describe("ImageManagerModal", () => {
     expect(screen.getByText(/imagens adicionadas/i)).toBeInTheDocument();
   });
 
-  it("resizes oversized images (width > 800) via the resize ratio branch", async () => {
-    // Override FakeImage to simulate an oversized image (triggers lines 43-45)
+  it("resizes images beyond the print budget via the resize ratio branch", async () => {
+    // Override FakeImage to simulate an oversized image (triggers the shrink)
     class BigImage {
       onload: (() => void) | null = null;
       onerror: ((err: unknown) => void) | null = null;
-      width = 1600;
-      height = 900;
+      width = 6000;
+      height = 3000;
       set src(_v: string) {
         queueMicrotask(() => this.onload?.());
       }
@@ -434,6 +434,47 @@ describe("ImageManagerModal", () => {
     Object.defineProperty(input, "files", { value: [png], writable: false });
     fireEvent.change(input);
     await waitFor(() => expect(screen.queryAllByRole("img").length).toBeGreaterThan(0));
+  });
+
+  it("keeps a 2400px scan at print resolution instead of squashing it to 800px (0320)", async () => {
+    const drawImage = vi.fn();
+    HTMLCanvasElement.prototype.toDataURL = vi.fn(() => "data:image/png;base64,OUT") as never;
+    HTMLCanvasElement.prototype.getContext = vi.fn(() => ({
+      drawImage,
+      fillRect: vi.fn(),
+      set fillStyle(_v: string) {},
+    })) as never;
+
+    class BigImage {
+      onload: (() => void) | null = null;
+      onerror: ((err: unknown) => void) | null = null;
+      width = 2400;
+      height = 1200;
+      set src(_v: string) {
+        queueMicrotask(() => this.onload?.());
+      }
+    }
+    (globalThis as { Image: unknown }).Image = BigImage as unknown;
+
+    class FR {
+      onload: (() => void) | null = null;
+      result: string | null = null;
+      readAsDataURL() {
+        this.result = "data:image/png;base64,SCAN";
+        queueMicrotask(() => this.onload?.());
+      }
+    }
+    (globalThis as { FileReader: unknown }).FileReader = FR as unknown;
+
+    render(<ImageManagerModal open onClose={vi.fn()} onConfirm={vi.fn()} />);
+    const input = document.querySelector('input[type="file"]') as HTMLInputElement;
+    const png = new File([new Uint8Array([0x89])], "scan.png", { type: "image/png" });
+    Object.defineProperty(input, "files", { value: [png], writable: false, configurable: true });
+    fireEvent.change(input);
+    await waitFor(() => expect(drawImage).toHaveBeenCalled());
+    const [, , , width] = drawImage.mock.calls[0] as [unknown, number, number, number];
+    // 515,28pt de coluna impressa = 7,157in: a 300 ppi isso pede >= 2147px.
+    expect(width).toBeGreaterThanOrEqual(2147);
   });
 
   it("encodes a transparent PNG as PNG (never JPEG, which would flatten alpha onto black)", async () => {

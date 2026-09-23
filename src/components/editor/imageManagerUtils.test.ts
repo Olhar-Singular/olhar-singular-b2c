@@ -6,6 +6,8 @@ import {
   scanAndRegisterUrls,
   expandImageRegistry,
   chooseImageEncoding,
+  fitToPrintResolution,
+  MAX_IMAGE_DIMENSION_PX,
   type ImageItem,
 } from "./imageManagerUtils";
 
@@ -126,5 +128,29 @@ describe("chooseImageEncoding", () => {
 
   it("falls back to JPEG for unknown types", () => {
     expect(chooseImageEncoding("").mime).toBe("image/jpeg");
+  });
+});
+
+describe("fitToPrintResolution", () => {
+  it("keeps enough pixels for 300 ppi across the printed text column", () => {
+    // 0320: a coluna impressa mede 515,28pt (A4 595,28pt menos 40pt de cada
+    // margem) = 7,157in. A 300 ppi isso exige ~2148px de origem.
+    expect(MAX_IMAGE_DIMENSION_PX).toBeGreaterThanOrEqual(2147);
+  });
+
+  it("does not shrink a scan that already fits the print budget", () => {
+    expect(fitToPrintResolution(2000, 1500)).toEqual({ width: 2000, height: 1500 });
+  });
+
+  it("shrinks only what exceeds the budget, preserving the aspect ratio", () => {
+    const { width, height } = fitToPrintResolution(8000, 4000);
+    expect(width).toBe(MAX_IMAGE_DIMENSION_PX);
+    expect(height).toBe(Math.round(MAX_IMAGE_DIMENSION_PX / 2));
+  });
+
+  it("caps by the taller side when the image is portrait", () => {
+    const { width, height } = fitToPrintResolution(4000, 8000);
+    expect(height).toBe(MAX_IMAGE_DIMENSION_PX);
+    expect(width).toBe(Math.round(MAX_IMAGE_DIMENSION_PX / 2));
   });
 });

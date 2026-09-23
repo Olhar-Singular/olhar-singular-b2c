@@ -1,3 +1,5 @@
+import { PAGE_MARGIN_PT } from "@/components/adaptation/render/pageTokens";
+
 export type ImageAlign = "left" | "center" | "right";
 
 export type ImageItem = {
@@ -108,4 +110,40 @@ export function chooseImageEncoding(fileType: string): {
   return ALPHA_CAPABLE_MIME.has(fileType.toLowerCase())
     ? { mime: "image/png", quality: undefined }
     : { mime: "image/jpeg", quality: JPEG_QUALITY };
+}
+
+/** Largura da página A4 em pontos (o `size="A4"` do react-pdf é 595,28 x 842pt). */
+const A4_WIDTH_PT = 595.28;
+/** Resolução alvo de impressão, em pixels por polegada. */
+const PRINT_PPI = 300;
+
+/**
+ * Teto de pixels de uma imagem enviada pela modal, dimensionado pela FOLHA e
+ * não por um número solto: a coluna de texto impressa mede
+ * `595,28 - 2 x PAGE_MARGIN_PT` = 515,28pt = 7,157in, e uma figura que ocupe
+ * essa largura inteira só chega aos 300 ppi de padrão de impressão com ~2148px
+ * de origem. O teto anterior (800px) imprimia a ~112 ppi e borrava todo texto
+ * pequeno dentro da figura — mapa, rótulo de eixo, numeração (achado 0320).
+ *
+ * A redução é destrutiva: só a data URI já reduzida vai para o `src` do nó, o
+ * arquivo original não fica em lugar nenhum. Por isso o teto é o do pior caso
+ * de layout (imagem ocupando a coluna inteira), não o do caso médio.
+ */
+export const MAX_IMAGE_DIMENSION_PX = Math.ceil(
+  ((A4_WIDTH_PT - 2 * PAGE_MARGIN_PT) / 72) * PRINT_PPI
+);
+
+/**
+ * Encolhe a imagem só no que ultrapassa `MAX_IMAGE_DIMENSION_PX`, preservando
+ * a proporção. Dentro do teto, devolve as dimensões originais intactas.
+ */
+export function fitToPrintResolution(
+  width: number,
+  height: number
+): { width: number; height: number } {
+  if (width <= MAX_IMAGE_DIMENSION_PX && height <= MAX_IMAGE_DIMENSION_PX) {
+    return { width, height };
+  }
+  const ratio = Math.min(MAX_IMAGE_DIMENSION_PX / width, MAX_IMAGE_DIMENSION_PX / height);
+  return { width: Math.round(width * ratio), height: Math.round(height * ratio) };
 }
