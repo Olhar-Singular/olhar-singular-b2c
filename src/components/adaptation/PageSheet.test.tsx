@@ -1263,4 +1263,48 @@ describe("PageSheet", () => {
     expect(sheet.style.fontFamily).toContain("monospace");
     expect(sheet.style.getPropertyValue("--doc-block-spacing")).toBe("24px");
   });
+
+  /*
+    Achado 0226: os dois textos auxiliares da mesa (o contador "N páginas A4" e o
+    aviso de rolagem horizontal) também nasceram com `text-muted-foreground`, o
+    token calibrado para o `--background` claro do app. Desenhados sobre o
+    gradiente da mesa eles ficam em ~3,6:1 (pior ainda na borda `--sf-mesa-2`),
+    abaixo dos 4,5:1 de SC 1.4.3 — e são justamente os dois textos que explicam
+    por que a folha aparece cortada. Mesma tinta de superfície do 0249.
+  */
+  describe("contraste dos textos auxiliares sobre a mesa (achado 0226)", () => {
+    const withClientWidth = (width: number, run: () => void) => {
+      const spy = vi
+        .spyOn(HTMLElement.prototype, "clientWidth", "get")
+        .mockReturnValue(width);
+      try {
+        run();
+      } finally {
+        spy.mockRestore();
+      }
+    };
+
+    it("pinta o contador de folhas com a tinta da mesa", () => {
+      withClientWidth(332, () => {
+        render(<PageSheet paginated toolbar={null}><span>x</span></PageSheet>);
+        const contador = screen.getByTestId("page-count");
+        expect(contador.className).toContain("text-surface-mesa-ink");
+        expect(contador.className).not.toMatch(/(^|\s)text-muted-foreground(\s|$)/);
+      });
+    });
+
+    it("pinta o aviso de rolagem horizontal com a tinta da mesa", () => {
+      withClientWidth(332, () => {
+        render(<PageSheet paginated toolbar={null}><span>x</span></PageSheet>);
+        const zoomIn = screen.getByRole("button", { name: "Aumentar zoom" });
+        act(() => {
+          zoomIn.click();
+          zoomIn.click();
+        });
+        const aviso = screen.getByTestId("page-overflow-hint");
+        expect(aviso.className).toContain("text-surface-mesa-ink");
+        expect(aviso.className).not.toMatch(/(^|\s)text-muted-foreground(\s|$)/);
+      });
+    });
+  });
 });

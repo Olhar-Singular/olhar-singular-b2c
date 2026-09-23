@@ -555,7 +555,12 @@ export function PageSheet({
         {paginated && (
           <p
             data-testid="page-count"
-            className="mx-auto mb-2 text-xs text-muted-foreground text-right"
+            /*
+              Achado 0226: mesma tinta de superfície do controle de zoom (0249).
+              `--muted-foreground` foi calibrado para o `--background` claro do
+              app; sobre o gradiente da mesa ele dá ~3,6:1, abaixo de SC 1.4.3.
+            */
+            className="mx-auto mb-2 text-xs text-surface-mesa-ink text-right"
             /*
               Achado 0221: a largura acompanha a folha ATÉ o limite da mesa.
               Com a escala no piso a folha passa da moldura, e copiar sua
@@ -644,7 +649,8 @@ export function PageSheet({
           <p
             data-testid="page-overflow-hint"
             role="status"
-            className="mx-auto mb-2 text-xs text-muted-foreground"
+            /* Achado 0226: tinta da mesa, como o contador acima. */
+            className="mx-auto mb-2 text-xs text-surface-mesa-ink"
             style={{ width: `${Math.min(SHEET_WIDTH_PX * scale, frameWidth)}px` }}
           >
             A folha é mais larga que a tela: role na horizontal para ver o resto.
