@@ -188,6 +188,24 @@ describe("PageSheet", () => {
       });
     });
 
+    /*
+      Achado 0224: a pista nascia DEPOIS da moldura, e a folha tem sempre altura
+      de A4 inteiro (0118/0131). O corte aparece no topo do papel e a explicação
+      dele ficava uma folha abaixo (~842px por página), fora da mesma tela.
+    */
+    it("põe a pista de rolagem acima da folha (achado 0224)", () => {
+      withClientWidth(200, () => {
+        withHeight(1123, () => {
+          render(<PageSheet paginated toolbar={null}><span>x</span></PageSheet>);
+          const hint = screen.getByTestId("page-overflow-hint");
+          const sheet = screen.getByTestId("page-sheet");
+          expect(hint.compareDocumentPosition(sheet)).toBe(
+            Node.DOCUMENT_POSITION_FOLLOWING,
+          );
+        });
+      });
+    });
+
     it("não cria parada de tabulação nem aviso quando a folha cabe inteira (achado 0222)", () => {
       withClientWidth(1200, () => {
         withHeight(1123, () => {

@@ -623,6 +623,28 @@ export function PageSheet({
           da folha para fora do alcance da rolagem; a margem automática
           colapsa para zero nesse caso e a folha rola inteira.
         */}
+        {overflows && (
+          /*
+            Achado 0241: a pista aparece como resultado direto de um clique no
+            zoom. Sem `role="status"` a folha passava a estar cortada em
+            silêncio para quem não a enxerga.
+
+            Achado 0224: e ela fica ACIMA do papel, junto do contador. Depois da
+            moldura o aviso caía abaixo da folha inteira — que tem sempre altura
+            de A4 cheio (0118/0151) —, logo a ~842px do corte por página do
+            documento: numa viewport de 844px quem via o texto cortado no topo
+            do papel não via a explicação. O corte é visível na borda de cima da
+            folha, então a pista tem de morar na mesma tela que ele.
+          */
+          <p
+            data-testid="page-overflow-hint"
+            role="status"
+            className="mx-auto mb-2 text-xs text-muted-foreground"
+            style={{ width: `${Math.min(SHEET_WIDTH_PX * scale, frameWidth)}px` }}
+          >
+            A folha é mais larga que a tela: role na horizontal para ver o resto.
+          </p>
+        )}
         <div className="relative">
           <div
             ref={frameRef}
@@ -660,20 +682,6 @@ export function PageSheet({
             />
           )}
         </div>
-        {overflows && (
-          /*
-            Achado 0241: a pista aparece como resultado direto de um clique no
-            zoom. Sem `role="status"` a folha passava a estar cortada em
-            silêncio para quem não a enxerga.
-          */
-          <p
-            data-testid="page-overflow-hint"
-            role="status"
-            className="mt-2 text-xs text-muted-foreground"
-          >
-            A folha é mais larga que a tela: role na horizontal para ver o resto.
-          </p>
-        )}
       </div>
     </div>
   );
