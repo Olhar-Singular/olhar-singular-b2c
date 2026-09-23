@@ -420,37 +420,55 @@ describe("PageSheet", () => {
 
     /*
       Achado 0242: o rodapé do PDF é `fixed` e sai em TODA página; a folha da
-      prévia não desenhava nenhum. A moldura chama de volta uma vez por folha
-      contada, como o `render` do `<Text fixed>` recebe `pageNumber`/`totalPages`.
+      prévia não desenhava nenhum. A moldura chama de volta com
+      `pageNumber`/`totalPages`, como o `render` do `<Text fixed>`.
     */
-    it("desenha o rodapé uma vez por folha contada", () => {
+    it("desenha o rodapé com a contagem de folhas do arquivo", () => {
       withHeight(2300, () => {
         render(
           <PageSheet paginated toolbar={null} footer={(n, total) => <span>{`pé ${n}/${total}`}</span>}>
             <span>x</span>
           </PageSheet>,
         );
-        expect(screen.getByText("pé 1/3")).toBeInTheDocument();
-        expect(screen.getByText("pé 2/3")).toBeInTheDocument();
         expect(screen.getByText("pé 3/3")).toBeInTheDocument();
       });
     });
 
-    it("põe cada rodapé dentro da margem inferior da sua página, como o PDF", () => {
+    /*
+      Achado 0178: o rodapé das folhas intermediárias caía EM CIMA do conteúdo.
+      Esta folha é um fluxo contínuo (as viradas são régua, não corte), então o
+      texto continua correndo pela faixa onde o arquivo tem margem em branco:
+      com 2 folhas o `Página 1 de 2` saía atravessado pelas linhas de resposta.
+      Enquanto o fluxo não for recortado em folhas de verdade, só a ÚLTIMA folha
+      tem lugar seguro para o pé — lá ele cai no branco que sobra, como no
+      arquivo.
+    */
+    it("não pinta rodapé sobre o conteúdo das folhas intermediárias (achado 0178)", () => {
       withHeight(2300, () => {
         render(
           <PageSheet paginated toolbar={null} footer={(n) => <span>{`pé ${n}`}</span>}>
             <span>x</span>
           </PageSheet>,
         );
-        const bottomOf = (n: number) =>
-          parseFloat((screen.getByText(`pé ${n}`).parentElement as HTMLElement).style.bottom);
-        // A base da página N é o fim da área útil dela mais a margem, então o pé
-        // fica a (total - N) áreas úteis + FOOTER_BOTTOM do fim do papel — e na
-        // última folha isso é exatamente o pé do arquivo.
-        expect(bottomOf(3)).toBeCloseTo(FOOTER_BOTTOM_PX, 2);
-        expect(bottomOf(2)).toBeCloseTo(PAGE_CONTENT_HEIGHT_PX + FOOTER_BOTTOM_PX, 2);
-        expect(bottomOf(1)).toBeCloseTo(2 * PAGE_CONTENT_HEIGHT_PX + FOOTER_BOTTOM_PX, 2);
+        expect(screen.queryByText("pé 1")).not.toBeInTheDocument();
+        expect(screen.queryByText("pé 2")).not.toBeInTheDocument();
+        expect(screen.getByText("pé 3")).toBeInTheDocument();
+      });
+    });
+
+    it("põe o rodapé dentro da margem inferior da última página, como o PDF", () => {
+      withHeight(2300, () => {
+        render(
+          <PageSheet paginated toolbar={null} footer={(n) => <span>{`pé ${n}`}</span>}>
+            <span>x</span>
+          </PageSheet>,
+        );
+        const bottom = parseFloat(
+          (screen.getByText("pé 3").parentElement as HTMLElement).style.bottom,
+        );
+        // A base da última página é o pé do papel, então o rodapé fica a
+        // FOOTER_BOTTOM dele — exatamente onde o arquivo imprime.
+        expect(bottom).toBeCloseTo(FOOTER_BOTTOM_PX, 2);
       });
     });
 

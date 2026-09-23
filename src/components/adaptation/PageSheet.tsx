@@ -499,37 +499,41 @@ export function PageSheet({
       {/*
         Achado 0242: o rodapé do PDF é `fixed`, sai em toda página e mora DENTRO
         da margem inferior (`FOOTER_BOTTOM_PT` acima da base da folha). Aqui ele
-        é desenhado uma vez por folha CONTADA, na mesma posição relativa: a base
-        da página N deste fluxo é o fim da área útil dela mais a margem, logo o
-        pé fica a `(total - N) x área útil + FOOTER_BOTTOM` do fim do papel — e
-        na última folha isso é exatamente o pé do arquivo.
+        é desenhado na mesma posição relativa da ÚLTIMA página (veja o 0178
+        abaixo): a base dela é o pé do papel, logo o rótulo fica a
+        `FOOTER_BOTTOM` dele, exatamente onde o arquivo imprime.
 
         Fora do fluxo (`absolute`) pela mesma razão do PDF: o rodapé não pode
-        empurrar o conteúdo nem entrar na medição que decide a paginação. Como
-        esta folha é um fluxo contínuo (as viradas são régua, não corte), o pé
-        das páginas intermediárias cai sobre o texto seguinte; desencostá-lo
-        exigiria recortar o fluxo em folhas de verdade, a mesma unificação
-        editor/prévia/PDF que as réguas acima já deixam fora de escopo.
+        empurrar o conteúdo nem entrar na medição que decide a paginação.
+
+        Achado 0178: mas ele sai SÓ na última folha. A primeira versão desenhava
+        um pé por folha CONTADA e, como esta folha é um fluxo contínuo (as
+        viradas são régua, não corte), o texto continua correndo pela faixa onde
+        o arquivo tem margem em branco: com 2 folhas o `Página 1 de 2` saía
+        atravessado pelas linhas de resposta da dissertativa, o tracejado por
+        dentro das letras. Na última folha o pé cai no branco que sobra, no mesmo
+        lugar do arquivo. Reservar a margem em toda virada exigiria recortar o
+        fluxo em folhas de verdade, a mesma unificação editor/prévia/PDF que as
+        réguas acima já deixam fora de escopo; até lá, mostrar o rótulo de página
+        uma vez só mente menos do que rasurar o conteúdo em todas as outras.
       */}
-      {footer &&
-        Array.from({ length: pageCount }, (_, page) => (
-          <div
-            key={page}
-            aria-hidden="true"
-            className="pointer-events-none"
-            style={{
-              position: "absolute",
-              left: 0,
-              right: 0,
-              // A base é a do PAPEL: na prévia e no PDF ele tem exatamente
-              // `pageCount` folhas (excedente 0) e no Revisar pode estar
-              // esticado pelo chrome, que empurra o pé junto (achados 0183/0184).
-              bottom: `${drawnExcess + (pageCount - 1 - page) * PAGE_CONTENT_HEIGHT_PX + FOOTER_BOTTOM_PX}px`,
-            }}
-          >
-            {footer(page + 1, pageCount)}
-          </div>
-        ))}
+      {footer && (
+        <div
+          aria-hidden="true"
+          className="pointer-events-none"
+          style={{
+            position: "absolute",
+            left: 0,
+            right: 0,
+            // A base é a do PAPEL: na prévia e no PDF ele tem exatamente
+            // `pageCount` folhas (excedente 0) e no Revisar pode estar
+            // esticado pelo chrome, que empurra o pé junto (achados 0183/0184).
+            bottom: `${drawnExcess + FOOTER_BOTTOM_PX}px`,
+          }}
+        >
+          {footer(pageCount, pageCount)}
+        </div>
+      )}
     </div>
   );
 
