@@ -329,7 +329,14 @@ export function QuestionNodeView({ node, updateAttributes, editor, getPos, delet
             <AlertDialogAction
               onClick={() => {
                 deletedRef.current = true;
-                deleteNodeAndRefocus(deleteNode, editor, getPos);
+                // Achado 0256: a exclusão é anunciada numa região viva — sem isso, para
+                // quem não vê a folha, apagar a questão certa e a errada soam igual.
+                deleteNodeAndRefocus(
+                  deleteNode,
+                  editor,
+                  getPos,
+                  ordinal === undefined ? "Questão excluída" : `Questão ${ordinal} excluída`,
+                );
               }}
               className="bg-destructive-surface text-destructive-foreground hover:bg-destructive-surface-hover"
             >

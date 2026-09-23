@@ -68,7 +68,7 @@ export function ScaffoldNodeView({ node, updateAttributes, editor, deleteNode, g
           size="icon"
           className={cn("h-6 w-6 text-destructive hover:bg-surface-mesa hover:text-destructive", FOLHA_TOUCH_TARGET)}
           disabled={disabled}
-          onClick={() => deleteNodeAndRefocus(deleteNode, editor, getPos)}
+          onClick={() => deleteNodeAndRefocus(deleteNode, editor, getPos, "Apoio excluído")}
           title="Excluir apoio"
           aria-label="Excluir apoio"
         >

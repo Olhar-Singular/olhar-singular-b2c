@@ -177,3 +177,20 @@ describe("deleteNodeAndRefocus — documento ProseMirror real (achado 0352)", ()
     expect(focusedOn(doc, 0)).toBeUndefined();
   });
 });
+
+describe("deleteNodeAndRefocus — anúncio em região viva (achado 0256)", () => {
+  it("anuncia a exclusão numa região role=status depois de apagar o nó", async () => {
+    const deleteNode = vi.fn();
+    const editor: RefocusEditor = { commands: { focus: vi.fn() } };
+
+    deleteNodeAndRefocus(deleteNode, editor, () => 0, "Questão 2 excluída");
+
+    const region = await vi.waitFor(() => {
+      const found = document.querySelector('[role="status"]');
+      if (!found || !found.textContent?.trim()) throw new Error("sem anúncio");
+      return found;
+    });
+    expect(region.getAttribute("aria-live")).toBe("polite");
+    expect(region.textContent).toContain("Questão 2 excluída");
+  });
+});

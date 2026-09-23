@@ -593,6 +593,31 @@ describe("QuestionNodeView — rail actions", () => {
     expect(focus).toHaveBeenCalledWith(100); // a posição do nó apagado, não o <body>
   });
 
+  // Achado 0256: excluir apagava enunciado, instrução e alternativas sem que
+  // nenhuma região viva da tela mudasse — o alertdialog cobre o *perguntar*, não
+  // o *acontecer*.
+  it("anuncia a exclusão numa região viva citando a questão (achado 0256)", async () => {
+    const { props } = makeProps(mc, { priorQuestions: 1 });
+    render(<QuestionNodeView {...props} />);
+    fireEvent.click(screen.getByLabelText("Excluir questão"));
+    fireEvent.click(screen.getByRole("button", { name: "Excluir" }));
+    await waitFor(() => {
+      const region = document.querySelector('[role="status"][aria-live="polite"]');
+      expect(region?.textContent?.trim()).toBe("Questão 2 excluída");
+    });
+  });
+
+  it("anuncia sem número quando a posição da questão é desconhecida (achado 0256)", async () => {
+    const { props } = makeProps(mc, { getPosUndefined: true });
+    render(<QuestionNodeView {...props} />);
+    fireEvent.click(screen.getByLabelText("Excluir questão"));
+    fireEvent.click(screen.getByRole("button", { name: "Excluir" }));
+    await waitFor(() => {
+      const region = document.querySelector('[role="status"][aria-live="polite"]');
+      expect(region?.textContent?.trim()).toBe("Questão excluída");
+    });
+  });
+
   it("mantém a questão quando a confirmação é cancelada (achado 0252)", () => {
     const { props, deleteNode } = makeProps(mc);
     render(<QuestionNodeView {...props} />);

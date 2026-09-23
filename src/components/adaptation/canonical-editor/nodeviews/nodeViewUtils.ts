@@ -7,6 +7,7 @@ import type { ResolvedPos } from "@tiptap/pm/model";
 import { TextSelection } from "@tiptap/pm/state";
 
 import { renderLatexToHtml } from "@/lib/domain/latexRenderer";
+import { announceOnSheet } from "./srAnnouncer";
 
 /**
  * Minimal structural view of a ProseMirror doc node — just enough for
@@ -90,9 +91,14 @@ export function deleteNodeAndRefocus(
   deleteNode: () => void,
   editor: RefocusEditor,
   getPos?: () => number | undefined,
+  announcement?: string,
 ): void {
   const posBefore = typeof getPos === "function" ? getPos() : undefined;
   deleteNode();
+  // Achado 0256: a exclusão em si era muda — nenhuma região viva da tela mudava.
+  // O anúncio mora aqui, no caminho único por onde passam os cinco deleteNode()
+  // da folha, para não repetir a decisão em cada nodeview.
+  if (announcement) announceOnSheet(announcement);
   const focus = editor?.commands?.focus;
   if (typeof focus !== "function") return;
   const doc = editor?.state?.doc;

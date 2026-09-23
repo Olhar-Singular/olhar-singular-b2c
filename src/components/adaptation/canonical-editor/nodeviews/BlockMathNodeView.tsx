@@ -56,7 +56,7 @@ export function BlockMathNodeView({ node, updateAttributes, editor, deleteNode, 
             size="icon"
             className={cn("h-7 w-7 text-destructive", FOLHA_TOUCH_TARGET)}
             disabled={disabled}
-            onClick={() => deleteNodeAndRefocus(deleteNode, editor, getPos)}
+            onClick={() => deleteNodeAndRefocus(deleteNode, editor, getPos, "Fórmula excluída")}
             title="Excluir fórmula"
             aria-label="Excluir fórmula"
           >
@@ -98,7 +98,7 @@ export function BlockMathNodeView({ node, updateAttributes, editor, deleteNode, 
               variant="ghost"
               size="sm"
               className="text-destructive"
-              onClick={() => deleteNodeAndRefocus(deleteNode, editor, getPos)}
+              onClick={() => deleteNodeAndRefocus(deleteNode, editor, getPos, "Fórmula excluída")}
               title="Excluir fórmula"
               aria-label="Excluir fórmula"
             >

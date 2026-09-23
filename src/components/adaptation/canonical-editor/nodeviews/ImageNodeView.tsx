@@ -352,7 +352,7 @@ export function ImageNodeView({ node, updateAttributes, deleteNode, editor, getP
             <AlertDialogAction
               onClick={() => {
                 deletedRef.current = true;
-                deleteNodeAndRefocus(deleteNode, editor, getPos);
+                deleteNodeAndRefocus(deleteNode, editor, getPos, "Imagem excluída");
               }}
               className="bg-destructive-surface text-destructive-foreground hover:bg-destructive-surface-hover"
             >
