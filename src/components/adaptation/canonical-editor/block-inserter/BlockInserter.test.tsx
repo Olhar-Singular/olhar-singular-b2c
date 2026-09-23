@@ -141,6 +141,41 @@ describe("BlockInserter", () => {
     expect((trigger.parentElement as HTMLElement).className).toContain("pointer-events-auto");
   });
 
+  /*
+    Achado 0246: a folha inteira (overlay incluso) leva `transform: scale()`.
+    `getBoundingClientRect` e `coordsAtPos` medem em coordenadas de VIEWPORT,
+    ou seja, já multiplicadas pela escala; aplicar esse número como `top` de um
+    filho do elemento escalado multiplica a escala outra vez e encolhe as faixas
+    contra o topo da folha. O `top` gravado tem de ser de LAYOUT.
+  */
+  it("grava o top em coordenadas de layout quando a folha está escalada (achado 0246)", () => {
+    const SCALE = 0.4181;
+    const LAYOUT_WIDTH = 794;
+    const rect = vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockReturnValue({
+      top: 0,
+      left: 0,
+      right: LAYOUT_WIDTH * SCALE,
+      bottom: 0,
+      width: LAYOUT_WIDTH * SCALE,
+      height: 0,
+      x: 0,
+      y: 0,
+      toJSON: () => ({}),
+    } as DOMRect);
+    const width = vi
+      .spyOn(HTMLElement.prototype, "offsetWidth", "get")
+      .mockReturnValue(LAYOUT_WIDTH);
+    try {
+      // Lacunas a 0, 150 e 900 px de layout, medidas já escaladas pelo browser.
+      const { editor } = makeEditor([0, 150 * SCALE, 900 * SCALE]);
+      render(<BlockInserter editor={editor} />);
+      expect(zoneTops().map((t) => Math.round(parseFloat(t)))).toEqual([0, 150, 900]);
+    } finally {
+      rect.mockRestore();
+      width.mockRestore();
+    }
+  });
+
   it("recomputes positions on window resize", () => {
     const { editor, coordsAtPos } = makeEditor();
     render(<BlockInserter editor={editor} />);

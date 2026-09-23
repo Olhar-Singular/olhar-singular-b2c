@@ -14,7 +14,9 @@
  * digitava sumia. O hover continua funcionando: `:hover` no botão propaga para o
  * `group` e revela as linhas. Positions recompute
  * on every editor transaction, on scroll/resize e quando o DOM do editor muda de
- * tamanho sem transação (`ResizeObserver`, achado 0247); duas faixas nunca
+ * tamanho sem transação (`ResizeObserver`, achado 0247). As coordenadas medidas
+ * são de viewport (pós-`transform` da folha) e por isso são convertidas para px
+ * de layout dividindo pela escala vigente (achado 0246); duas faixas nunca
  * dividem o mesmo retângulo.
  *
  * The component must be placed inside a `position: relative` ancestor that wraps
@@ -45,7 +47,20 @@ export function BlockInserter({ editor }: { editor: Editor }) {
     const layer = layerRef.current;
     /* v8 ignore next -- layer ref is always set after mount */
     if (!layer) return;
-    const base = layer.getBoundingClientRect().top;
+    const layerRect = layer.getBoundingClientRect();
+    const base = layerRect.top;
+    /*
+      Achado 0246: a folha (e este overlay, que vive dentro dela) recebe
+      `transform: scale()` da `PageSheet`. Tanto `getBoundingClientRect` quanto o
+      `coordsAtPos` do ProseMirror medem em coordenadas de VIEWPORT, ou seja, já
+      multiplicadas pela escala; o `top` inline, por outro lado, é interpretado
+      em px de LAYOUT, antes do transform. Aplicar a diferença medida direto
+      escalava duas vezes e encolhia as faixas contra o topo da folha (a 17,5%
+      da distância certa em 390px). Dividir pela escala vigente devolve o valor
+      ao espaço de layout — e, de quebra, torna o `top` independente da escala,
+      então mudar o degrau de zoom não exige remedição.
+    */
+    const scale = layer.offsetWidth > 0 ? layerRect.width / layer.offsetWidth : 1;
     /*
       Achado 0247: enquanto um bloco ainda não tem altura (NodeView React que o
       portal só pinta num commit posterior, `<img>` antes de o arquivo carregar,
@@ -60,7 +75,7 @@ export function BlockInserter({ editor }: { editor: Editor }) {
     */
     let floor = -Infinity;
     const next = topLevelGaps(editor.state.doc).map((gap) => {
-      const top = Math.max(editor.view.coordsAtPos(gap.pos).top - base, floor);
+      const top = Math.max((editor.view.coordsAtPos(gap.pos).top - base) / scale, floor);
       floor = top + ZONE_HEIGHT_PX;
       return { gap, top };
     });
