@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -23,6 +23,8 @@ import type { WizardData, BarrierItem } from "@/lib/adaptation/wizard/wizardStat
 import { BarrierProfileForm } from "@/components/forms/BarrierProfileForm";
 import type { BarrierProfileFormValues } from "@/components/forms/BarrierProfileForm";
 
+const PROFILE_ERROR_ID = "profile-select-error";
+
 type Props = {
   data: WizardData;
   updateData: (partial: Partial<WizardData>) => void;
@@ -37,6 +39,7 @@ export function StepBarrierSelection({ data, updateData, onNext, onPrev }: Props
   const [error, setError] = useState("");
   const [creatingProfile, setCreatingProfile] = useState(false);
   const [selectNewest, setSelectNewest] = useState(false);
+  const selectRef = useRef<HTMLSelectElement>(null);
 
   const activeDimensions = [...new Set(
     data.barriers.filter((b) => b.is_active).map((b) => b.dimension).filter(Boolean),
@@ -95,13 +98,21 @@ export function StepBarrierSelection({ data, updateData, onNext, onPrev }: Props
     setSelectNewest(true);
   }
 
+  // Both validation failures are about the profile field, so the message is
+  // tied to the select (aria-invalid + aria-describedby) and the focus goes
+  // back to it: the alert alone announces the problem but never says where.
+  function failValidation(message: string) {
+    setError(message);
+    selectRef.current?.focus();
+  }
+
   function handleNext() {
     if (!data.barrierProfileId) {
-      setError("Selecione um perfil de barreira antes de continuar.");
+      failValidation("Selecione um perfil de barreira antes de continuar.");
       return;
     }
     if (data.barriers.filter((b) => b.is_active).length === 0) {
-      setError("O perfil selecionado não possui barreiras. Crie um novo perfil com ao menos uma barreira.");
+      failValidation("O perfil selecionado não possui barreiras. Crie um novo perfil com ao menos uma barreira.");
       return;
     }
     setError("");
@@ -137,6 +148,10 @@ export function StepBarrierSelection({ data, updateData, onNext, onPrev }: Props
           <div className="flex gap-2 items-center">
             <select
               id="profile-select"
+              ref={selectRef}
+              aria-required="true"
+              aria-invalid={error ? true : undefined}
+              aria-describedby={error ? PROFILE_ERROR_ID : undefined}
               className="flex-1 rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               value={data.barrierProfileId ?? ""}
               onChange={(e) => handleProfileChange(e.target.value)}
@@ -168,7 +183,7 @@ export function StepBarrierSelection({ data, updateData, onNext, onPrev }: Props
       )}
 
       {error && (
-        <p role="alert" className="text-sm text-destructive-strong">{error}</p>
+        <p role="alert" id={PROFILE_ERROR_ID} className="text-sm text-destructive-strong">{error}</p>
       )}
 
       {hasBarriers && (

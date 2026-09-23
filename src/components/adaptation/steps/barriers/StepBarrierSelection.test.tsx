@@ -225,6 +225,55 @@ describe("StepBarrierSelection", () => {
     expect(mockOnNext).not.toHaveBeenCalled();
   });
 
+  it("still shows the error when there is no select to focus", async () => {
+    const user = userEvent.setup();
+    vi.mocked(useBarrierProfiles).mockReturnValue({ data: [], isLoading: false } as never);
+    renderStep();
+    await user.click(screen.getByRole("button", { name: /adaptar/i }));
+    expect(screen.getByRole("alert")).toHaveTextContent(/selecione um perfil/i);
+  });
+
+  it("marks the profile select as invalid, describes it by the error and focuses it", async () => {
+    const user = userEvent.setup();
+    renderStep();
+    const select = screen.getByRole("combobox");
+    expect(select).toHaveAttribute("aria-required", "true");
+    await user.click(screen.getByRole("button", { name: /adaptar/i }));
+    const alert = screen.getByRole("alert");
+    expect(select).toHaveAttribute("aria-invalid", "true");
+    expect(alert.id).toBeTruthy();
+    expect(select).toHaveAttribute("aria-describedby", alert.id);
+    expect(select).toHaveFocus();
+  });
+
+  it("clears aria-invalid on the select once a profile is chosen", async () => {
+    const user = userEvent.setup();
+    const { rerender } = renderStep();
+    await user.click(screen.getByRole("button", { name: /adaptar/i }));
+    expect(screen.getByRole("combobox")).toHaveAttribute("aria-invalid", "true");
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    rerender(
+      <QueryClientProvider client={qc}>
+        <MemoryRouter>
+          <StepBarrierSelection
+            data={{
+              ...baseData,
+              barrierProfileId: "prof-1",
+              barriers: [{ dimension: "tea", barrier_key: "tea_abstracao", label: "TEA", is_active: true }],
+            }}
+            updateData={mockUpdateData}
+            onNext={mockOnNext}
+            onPrev={mockOnPrev}
+          />
+        </MemoryRouter>
+      </QueryClientProvider>
+    );
+    await user.click(screen.getByRole("button", { name: /adaptar/i }));
+    const select = screen.getByRole("combobox");
+    expect(select).not.toHaveAttribute("aria-invalid");
+    expect(select).not.toHaveAttribute("aria-describedby");
+  });
+
   it("shows error when profile has no barriers and user clicks Adaptar", async () => {
     const user = userEvent.setup();
     renderStep({ ...baseData, barrierProfileId: "prof-1", barriers: [] });
