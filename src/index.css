@@ -477,7 +477,15 @@
   font-weight: 500;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: hsl(var(--muted-foreground) / 0.7);
+  /* Achado 0322: chrome sobre o PAPEL usa a paleta do papel. O anterior era
+     `hsl(var(--muted-foreground) / 0.7)`, que compunha com o branco da folha em
+     rgb(149,161,165) = 2,55:1 — metade dos 4,5:1 que a WCAG 1.4.3 pede de texto
+     de 9 px. E `--muted-foreground` e do tema do app: no `.dark` ele clareia
+     (195 10% 71%) enquanto a folha continua branca. `--sf-ink-soft` e o token
+     light-only da folha (5,8:1 sobre o papel), o mesmo que o filete do bloco e a
+     instrucao da questao ja usam. O recuo visual do rotulo vem do tamanho e do
+     peso, nao da opacidade. */
+  color: hsl(var(--sf-ink-soft));
   pointer-events: none;
 }
 

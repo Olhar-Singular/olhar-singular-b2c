@@ -713,6 +713,46 @@ describe("index.css — rotulo de tipo de bloco nao entra no nome acessivel", ()
 });
 
 /**
+ * Contraste do rotulo de tipo de bloco sobre o papel (achado 0322).
+ *
+ * O rotulo "TÍTULO"/"SEÇÃO"/"PARÁGRAFO" e desenhado a 9 px (0.5625rem) sobre o
+ * branco da folha: texto normal, entao a WCAG 1.4.3 pede 4,5:1. A cor era
+ * `hsl(var(--muted-foreground) / 0.7)`, que compoe com o papel em rgb(149,161,165)
+ * e cai para 2,55:1 — sao os unicos elementos que dizem o que cada faixa da folha
+ * e, na superficie onde o usuario precisa distinguir chrome de texto impresso.
+ *
+ * Alem da opacidade, o token estava errado de familia: `--muted-foreground` e do
+ * tema do app e vira `195 10% 71%` no `.dark`, enquanto a folha e branca nos dois
+ * temas (os `--sf-*` nao tem override no `.dark`). Chrome sobre o papel usa a
+ * paleta do papel — mesma regra que o filete do bloco ja segue.
+ */
+describe("index.css — contraste do rotulo de tipo de bloco (achado 0322)", () => {
+  /** Cor declarada na regra do rotulo, resolvida contra o papel branco. */
+  function labelInk(): [number, number, number] {
+    const body = ruleBody(".tiptap:not(.rich-text-field) > p::before");
+    const match = body.match(
+      /(?:^|[\s;])color:\s*hsl\(var\(--([a-z0-9-]+)\)(?:\s*\/\s*([\d.]+))?\)/,
+    );
+    expect(match, `cor do rotulo nao reconhecida: ${body}`).not.toBeNull();
+    const alpha = match![2] ? Number(match![2]) : 1;
+    return mix(hslTokenToRgb(token(":root", match![1])), WHITE, alpha);
+  }
+
+  it("mantem o rotulo de 9 px em 4,5:1 sobre o papel branco (WCAG 1.4.3)", () => {
+    expect(ratioRgb(labelInk(), WHITE)).toBeGreaterThanOrEqual(4.5);
+  });
+
+  it("usa um token da folha, que o tema escuro nao reescreve", () => {
+    const body = ruleBody(".tiptap:not(.rich-text-field) > p::before");
+    const name = body.match(/(?:^|[\s;])color:\s*hsl\(var\(--([a-z0-9-]+)\)/)![1];
+    expect(
+      themeBody(".dark"),
+      `--${name} muda no tema escuro, mas o papel continua branco`,
+    ).not.toMatch(new RegExp(`--${name}\\s*:`));
+  });
+});
+
+/**
  * Coluna de texto do bloco de topo (achado 0206).
  *
  * `padding: 0 1rem` no bloco de topo estreitava a coluna do Revisar em 16 px de
