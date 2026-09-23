@@ -53,7 +53,23 @@ export function mathToPdfText(latex: string): string {
 }
 
 /**
- * Quebra o LaTeX do bloco nas linhas que cabem na coluna útil.
+ * Onde cortar `rest` para que a linha fique perto de `target` caracteres.
+ *
+ * Devolve o fim da linha e por onde continuar (o espaço usado na quebra é
+ * consumido). Sem nenhum espaço no trecho que cabe, corta no seco no alvo.
+ */
+function balancedCut(rest: string, target: number): { end: number; next: number } {
+  const head = rest.slice(0, MATH_PDF_MAX_ATOM_CHARS + 1);
+  let best = -1;
+  for (let i = 0; i < head.length; i += 1) {
+    if (!/\s/.test(head[i])) continue;
+    if (best < 0 || Math.abs(i - target) < Math.abs(best - target)) best = i;
+  }
+  return best < 0 ? { end: target, next: target } : { end: best, next: best + 1 };
+}
+
+/**
+ * Quebra o LaTeX do bloco em linhas EQUILIBRADAS que cabem na coluna útil.
  *
  * Existe porque `alignItems: "center"` só centra uma caixa que ENCOLHE ao
  * conteúdo: quando o `<Text>` é mais largo que a coluna, o Yoga clampa a caixa
@@ -63,19 +79,27 @@ export function mathToPdfText(latex: string): string {
  * `<Text>` que cabe, a caixa que as agrupa mede a linha mais larga e volta a
  * ter o que centrar.
  *
- * A quebra prefere o último espaço que cabe (o LaTeX segue legível nos dois
- * pedaços) e só corta no seco quando não há espaço nenhum. Dentro de cada linha
- * os espaços saem inquebráveis, para que o textkit não quebre de novo.
+ * A quebra mira o alvo `ceil(sobra / linhas que faltam)` em vez de saturar a
+ * linha. Pegar "o máximo que cabe" fazia a primeira linha medir quase a coluna
+ * inteira, então a caixa também media, e a centralização sobrava 4,58 pt de
+ * 515,28 (0,9%): no papel o bloco lia como um parágrafo colado na margem, com o
+ * vazio todo no fim da última linha (achado 0435). Com as linhas parecidas a
+ * caixa é mais estreita que a coluna por construção, que é o que o
+ * `alignItems: "center"` precisa para ter efeito visível.
+ *
+ * Entre os espaços candidatos ganha o mais próximo do alvo (o LaTeX segue
+ * legível nos pedaços) e só corta no seco quando não há espaço nenhum. Dentro
+ * de cada linha os espaços saem inquebráveis, para que o textkit não quebre de
+ * novo.
  */
 export function mathBlockLines(latex: string): string[] {
   const lines: string[] = [];
   let rest = latex.trim();
   while (rest.length > MATH_PDF_MAX_ATOM_CHARS) {
-    const head = rest.slice(0, MATH_PDF_MAX_ATOM_CHARS + 1);
-    const space = head.search(/\s\S*$/);
-    const cut = space > 0 ? space : MATH_PDF_MAX_ATOM_CHARS;
-    lines.push(rest.slice(0, cut));
-    rest = rest.slice(space > 0 ? cut + 1 : cut);
+    const target = Math.ceil(rest.length / Math.ceil(rest.length / MATH_PDF_MAX_ATOM_CHARS));
+    const { end, next } = balancedCut(rest, target);
+    lines.push(rest.slice(0, end));
+    rest = rest.slice(next).trimStart();
   }
   lines.push(rest);
   return lines.map((line) => latexLayoutAtom(line, MATH_PDF_MAX_ATOM_CHARS));

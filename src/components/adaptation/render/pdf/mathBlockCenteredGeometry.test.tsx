@@ -87,3 +87,34 @@ describe("PdfMath — a tinta do bloco cai no meio da coluna (achado 0433)", () 
     expect(impresso).toBe(LONGA.replace(/\s+/g, " "));
   });
 });
+
+/**
+ * Quanto a caixa da fórmula desloca da margem, em pt (achado 0435).
+ *
+ * `inkStartX` mede onde a tinta começa; aqui interessa o TAMANHO do
+ * deslocamento. Centrar uma caixa que satura a coluna desloca 4,58 pt de 515,28
+ * (0,9%): tecnicamente centrado, a olho nu um parágrafo encostado na margem.
+ */
+const centerOffset = (latex: string) => inkStartX(latex) - PAGE_MARGIN_PT;
+
+/** Largura de cada linha impressa, em pt. */
+const lineWidths = (latex: string) =>
+  textLines(PdfMath({ block: mathBlock(latex) }) as ReactElement).map((l) => l.length * ADVANCE_PT);
+
+describe("PdfMath — a centralização do bloco quebrado tem que ser visível (achado 0435)", () => {
+  it("desloca a caixa da fórmula longa bem mais que a sobra de um token", () => {
+    // 0,9% da coluna (a quebra saturada de hoje) lê como texto colado na margem.
+    expect(centerOffset(LONGA)).toBeGreaterThan(COLUMN_PT * 0.05);
+  });
+
+  it("equilibra as linhas em vez de saturar a primeira", () => {
+    const widths = lineWidths(LONGA);
+    expect(widths.length).toBeGreaterThan(1);
+    expect(Math.min(...widths)).toBeGreaterThan(Math.max(...widths) * 0.6);
+  });
+
+  it("equilibra também a fórmula sem espaço nenhum onde quebrar", () => {
+    const widths = lineWidths("x".repeat(MATH_PDF_MAX_ATOM_CHARS + 5));
+    expect(Math.min(...widths)).toBeGreaterThan(Math.max(...widths) * 0.6);
+  });
+});

@@ -51,7 +51,7 @@ describe("mathToPdfText — fórmula maior que a coluna (achado 0427)", () => {
   });
 });
 
-describe("mathBlockLines — a fórmula em bloco quebra onde a coluna manda (achado 0433)", () => {
+describe("mathBlockLines — a fórmula em bloco quebra equilibrada (achados 0433 e 0435)", () => {
   const BLOCO =
     "\\int_{0}^{1} \\frac{x^2 + 1}{\\sqrt{x^3 + 2x}}\\,dx = \\sum_{n=1}^{\\infty} \\frac{1}{n^2}";
 
@@ -65,13 +65,14 @@ describe("mathBlockLines — a fórmula em bloco quebra onde a coluna manda (ach
     for (const line of lines) expect(line.length).toBeLessThanOrEqual(MATH_PDF_MAX_ATOM_CHARS);
   });
 
-  it("quebra no último espaço que cabe, sem perder caractere", () => {
+  it("quebra no espaço mais perto do alvo, sem perder caractere", () => {
     expect(mathBlockLines(BLOCO).join(" ").replace(/\s+/g, " ")).toBe(BLOCO.replace(/\s+/g, " "));
   });
 
-  it("corta no seco quando não há espaço nenhum onde quebrar", () => {
+  it("corta no seco, e ainda assim equilibrado, quando não há espaço nenhum", () => {
     const semEspaco = "x".repeat(MATH_PDF_MAX_ATOM_CHARS + 5);
     const lines = mathBlockLines(semEspaco);
-    expect(lines).toEqual(["x".repeat(MATH_PDF_MAX_ATOM_CHARS), "x".repeat(5)]);
+    const alvo = Math.ceil(semEspaco.length / 2);
+    expect(lines).toEqual(["x".repeat(alvo), "x".repeat(semEspaco.length - alvo)]);
   });
 });
