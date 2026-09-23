@@ -78,4 +78,50 @@ describe("pdfExportWarnings", () => {
     });
     expect(warnings).toHaveLength(2);
   });
+  it("avisa que o texto alternativo da imagem não chega ao PDF", () => {
+    const warnings = pdfExportWarnings(
+      doc([
+        {
+          id: id(1),
+          type: "image",
+          src: "https://exemplo.com/figura.png",
+          alt: "figura larga de apoio",
+        },
+      ]),
+    );
+    expect(warnings).toHaveLength(1);
+    expect(warnings[0]).toMatch(/texto alternativo/i);
+    expect(warnings[0]).toMatch(/leitor de tela/i);
+  });
+
+  it("avisa também quando a imagem está dentro do enunciado de uma questão", () => {
+    const warnings = pdfExportWarnings(
+      doc([
+        {
+          id: id(1),
+          type: "question",
+          number: 1,
+          stem: [
+            { id: id(2), type: "paragraph", content: [{ type: "text", text: "q" }] },
+            { id: id(3), type: "image", src: "https://exemplo.com/figura.png", alt: "mapa" },
+          ],
+          answer: { kind: "open", lines: 3 },
+        },
+      ]),
+    );
+    expect(warnings).toHaveLength(1);
+    expect(warnings[0]).toMatch(/texto alternativo/i);
+  });
+
+  it("acumula o aviso de imagem e o de fórmula", () => {
+    const warnings = pdfExportWarnings(
+      doc([
+        { id: id(1), type: "image", src: "https://exemplo.com/figura.png", alt: "figura" },
+        { id: id(2), type: "blockMath", latex: "a^2" },
+      ]),
+    );
+    expect(warnings).toHaveLength(2);
+    expect(warnings[0]).toMatch(/texto alternativo/i);
+    expect(warnings[1]).toMatch(/LaTeX/i);
+  });
 });

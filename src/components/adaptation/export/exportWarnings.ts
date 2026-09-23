@@ -109,6 +109,18 @@ export function pdfExportWarnings(
 ): string[] {
   const warnings: string[] = [];
 
+  // O `alt` é o campo de acessibilidade da imagem na folha, mas o
+  // `@react-pdf/renderer` não gera PDF marcado (sem `/StructTreeRoot`, sem
+  // `/Alt`), então nada dele chega ao arquivo. O defeito a fechar não é a
+  // limitação da biblioteca, é o silêncio sobre ela — o Word já avisa da perda
+  // equivalente em `docxExportWarnings`.
+  if (everyBlock(document.blocks).some((block) => block.type === "image")) {
+    warnings.push(
+      "O texto alternativo das imagens não vai para o PDF: o arquivo não é marcado, " +
+        "então um leitor de tela não anuncia a figura.",
+    );
+  }
+
   if (documentHasMath(document)) {
     warnings.push("As fórmulas saem como texto LaTeX, sem formatação matemática.");
   }
