@@ -1,8 +1,25 @@
 import { useState, useCallback, useEffect, useRef } from "react";
 import { DEFAULT_IMAGE_WIDTH_PX } from "@/components/adaptation/render/pageTokens";
+import { FOLHA_TOUCH_TARGET } from "@/components/adaptation/canonical-editor/folhaChrome";
 
 /** Teto que o arraste pode ALCANÇAR por conta própria (ver 0308). */
 const MAX_DRAG_WIDTH_PX = 800;
+/** Piso absoluto: uma imagem menor que isto deixa de ser clicável na folha. */
+const MIN_WIDTH_PX = 50;
+/** Passo do teclado; com Shift, o passo grosso (achado 0302). */
+const KEY_STEP_PX = 10;
+const KEY_STEP_LARGE_PX = 50;
+
+/**
+ * Mesmo clamp para o arraste e para o teclado.
+ *
+ * O teto é móvel de propósito (0308): limita o que o GESTO acrescenta, nunca o
+ * que o documento já tinha — uma imagem de 2400px encolhe normalmente, mas
+ * crescer é no-op em vez de despencar para 800.
+ */
+function clampWidth(start: number, next: number) {
+  return Math.max(MIN_WIDTH_PX, Math.min(Math.max(MAX_DRAG_WIDTH_PX, start), next));
+}
 
 type Props = {
   src: string;
@@ -59,8 +76,7 @@ export default function ImageResizer({ src, alt, initialWidth, onResize }: Props
          * largura de partida já passa do teto, crescer é no-op e só encolher
          * tem efeito.
          */
-        const ceiling = Math.max(MAX_DRAG_WIDTH_PX, startWidth.current);
-        const newWidth = Math.max(50, Math.min(ceiling, startWidth.current + delta));
+        const newWidth = clampWidth(startWidth.current, startWidth.current + delta);
         widthRef.current = newWidth;
         setWidth(newWidth);
       };
@@ -79,6 +95,27 @@ export default function ImageResizer({ src, alt, initialWidth, onResize }: Props
       document.addEventListener("mousemove", onMouseMove);
       document.addEventListener("mouseup", onMouseUp);
       detachRef.current = detach;
+    },
+    [onResize]
+  );
+
+  /**
+   * 0302 — a alça era uma `<div>` sem `tabindex`, sem `role` e sem teclado, e o
+   * arraste é a ÚNICA forma de mudar a largura da imagem em toda a UI (a barra
+   * da imagem só alinha, troca e exclui). Sem mouse, nenhuma imagem era
+   * redimensionável. As setas movem pelo mesmo clamp do arraste.
+   */
+  const handleKeyDown = useCallback(
+    (e: React.KeyboardEvent) => {
+      const direction = e.key === "ArrowRight" || e.key === "ArrowUp" ? 1 : e.key === "ArrowLeft" || e.key === "ArrowDown" ? -1 : 0;
+      if (direction === 0) return;
+      e.preventDefault();
+      const step = e.shiftKey ? KEY_STEP_LARGE_PX : KEY_STEP_PX;
+      const current = widthRef.current;
+      const newWidth = clampWidth(current, current + direction * step);
+      widthRef.current = newWidth;
+      setWidth(newWidth);
+      onResize(newWidth);
     },
     [onResize]
   );
@@ -104,9 +141,24 @@ export default function ImageResizer({ src, alt, initialWidth, onResize }: Props
       */}
       <img src={src} alt={alt} className="w-full" />
       {/* Resize handle - bottom right corner */}
-      <div
+      {/*
+        0302 — botão de verdade, na ordem de tabulação, com o piso de alvo de
+        toque da folha (24 x 24 CSS px, WCAG 2.2 SC 2.5.8, devolvendo a escala —
+        mesmo remédio de 0013/0236) e visível também no foco e em ponteiro
+        grosso: `opacity-0` até o hover deixava a única forma de redimensionar
+        invisível no toque e para quem chega por teclado.
+      */}
+      <button
+        type="button"
+        role="slider"
+        aria-label="Redimensionar imagem"
+        aria-valuenow={width}
+        aria-valuemin={MIN_WIDTH_PX}
+        aria-valuemax={Math.max(MAX_DRAG_WIDTH_PX, width)}
+        aria-valuetext={`${width} pixels de largura`}
         onMouseDown={handleMouseDown}
-        className="absolute bottom-0 right-0 w-4 h-4 bg-surface-accent/80 rounded-tl-md cursor-se-resize opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center"
+        onKeyDown={handleKeyDown}
+        className={`absolute bottom-0 right-0 w-4 h-4 ${FOLHA_TOUCH_TARGET} bg-surface-accent/80 rounded-tl-md cursor-se-resize opacity-0 group-hover:opacity-100 focus-visible:opacity-100 [@media(hover:none)]:opacity-100 transition-opacity flex items-center justify-center`}
         title="Arraste para redimensionar"
       >
         <svg
@@ -120,7 +172,7 @@ export default function ImageResizer({ src, alt, initialWidth, onResize }: Props
           <line x1="7" y1="1" x2="1" y2="7" />
           <line x1="7" y1="4" x2="4" y2="7" />
         </svg>
-      </div>
+      </button>
       {/*
         Width indicator on hover. 0337 — decoração de edição: `opacity-0` não
         remove da árvore de acessibilidade, e como o resizer vive dentro do

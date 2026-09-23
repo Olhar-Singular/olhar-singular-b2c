@@ -222,6 +222,99 @@ describe("ImageResizer", () => {
   });
 
   /**
+   * 0302 — a alça era uma `<div>` sem `tabindex`, sem `role` e sem handler de
+   * teclado: quem navega por teclado nunca chegava nela, e o arraste é a ÚNICA
+   * forma de mudar a largura da imagem em toda a UI (a barra da imagem só tem
+   * alinhar, trocar e excluir). Sem mouse, nenhuma imagem era redimensionável.
+   */
+  describe("0302 — alça operável por teclado", () => {
+    const handle = () => screen.getByRole("slider", { name: /redimensionar imagem/i });
+
+    it("expõe a alça como controle focável, com nome e valor atual", () => {
+      render(<ImageResizer src="https://x.png" alt="ilustração" initialWidth={300} onResize={vi.fn()} />);
+      const h = handle();
+      expect(h.tagName).toBe("BUTTON");
+      expect(h).toHaveAttribute("type", "button");
+      expect(h).toHaveAttribute("aria-valuenow", "300");
+      expect(h).toHaveAttribute("aria-valuemin", "50");
+      h.focus();
+      expect(document.activeElement).toBe(h);
+    });
+
+    it("aumenta e diminui a largura com as setas, comitando o valor", () => {
+      const onResize = vi.fn();
+      render(<ImageResizer src="https://x.png" alt="ilustração" initialWidth={300} onResize={onResize} />);
+
+      fireEvent.keyDown(handle(), { key: "ArrowRight" });
+      expect(onResize).toHaveBeenLastCalledWith(310);
+      expect(screen.getByText("310px")).toBeInTheDocument();
+
+      fireEvent.keyDown(handle(), { key: "ArrowLeft" });
+      expect(onResize).toHaveBeenLastCalledWith(300);
+    });
+
+    it("usa passo grande com Shift", () => {
+      const onResize = vi.fn();
+      render(<ImageResizer src="https://x.png" alt="ilustração" initialWidth={300} onResize={onResize} />);
+
+      fireEvent.keyDown(handle(), { key: "ArrowRight", shiftKey: true });
+      expect(onResize).toHaveBeenLastCalledWith(350);
+    });
+
+    it("respeita o mesmo clamp do arraste, inclusive o teto móvel do 0308", () => {
+      const onResize = vi.fn();
+      const { unmount } = render(
+        <ImageResizer src="https://x.png" alt="ilustração" initialWidth={795} onResize={onResize} />,
+      );
+      fireEvent.keyDown(handle(), { key: "ArrowRight", shiftKey: true });
+      expect(onResize).toHaveBeenLastCalledWith(800);
+      unmount();
+
+      onResize.mockClear();
+      render(<ImageResizer src="https://y.png" alt="ilustração" initialWidth={52} onResize={onResize} />);
+      fireEvent.keyDown(handle(), { key: "ArrowLeft", shiftKey: true });
+      expect(onResize).toHaveBeenLastCalledWith(50);
+    });
+
+    it("não encolhe uma largura acima do teto ao crescer pelo teclado", () => {
+      const onResize = vi.fn();
+      render(<ImageResizer src="https://x.png" alt="ilustração" initialWidth={2400} onResize={onResize} />);
+      fireEvent.keyDown(handle(), { key: "ArrowRight" });
+      expect(onResize).toHaveBeenLastCalledWith(2400);
+      fireEvent.keyDown(handle(), { key: "ArrowLeft" });
+      expect(onResize).toHaveBeenLastCalledWith(2390);
+    });
+
+    it("ignora teclas que não são seta", () => {
+      const onResize = vi.fn();
+      render(<ImageResizer src="https://x.png" alt="ilustração" initialWidth={300} onResize={onResize} />);
+      fireEvent.keyDown(handle(), { key: "a" });
+      expect(onResize).not.toHaveBeenCalled();
+    });
+
+    /**
+     * 16 x 16 px (`w-4 h-4`) está abaixo do mínimo de 24 x 24 do WCAG 2.2
+     * SC 2.5.8 — mesmo remédio dos achados 0013/0236: o piso do alvo é a classe
+     * `folha-touch-target`, que devolve a escala da folha.
+     */
+    it("dá à alça o piso de alvo de toque da folha", () => {
+      render(<ImageResizer src="https://x.png" alt="ilustração" onResize={vi.fn()} />);
+      expect(handle().className).toContain("folha-touch-target");
+    });
+
+    /**
+     * `opacity-0` até o hover deixa a alça invisível e indescobrível no toque
+     * (onde não existe hover) e para quem chega por teclado.
+     */
+    it("revela a alça no foco e em ponteiro grosso, não só no hover", () => {
+      render(<ImageResizer src="https://x.png" alt="ilustração" onResize={vi.fn()} />);
+      const cls = handle().className;
+      expect(cls).toContain("focus-visible:opacity-100");
+      expect(cls).toContain("[@media(hover:none)]:opacity-100");
+    });
+  });
+
+  /**
    * 0342 — o chrome do resizer (moldura de hover/foco, alça e selo de largura)
    * é desenhado sobre a folha, que é papel e não segue o tema do app. Vinha com
    * `outline-border`, `bg-primary/80` e `text-muted-foreground`: tokens do app,
