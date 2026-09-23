@@ -8,6 +8,8 @@
  * Unidades: o usuário pensa em px (tamanho 11–28); `pageStyle.fontSize` é
  * armazenado em pt (paridade direta com o PDF). Conversão px↔pt fica isolada aqui.
  */
+import type { RefObject } from "react";
+import { Anchor as PopoverAnchor } from "@radix-ui/react-popover";
 import { Type } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -31,6 +33,18 @@ const clamp = (n: number, min: number, max: number) => Math.min(max, Math.max(mi
 type Props = {
   value: ResolvedPageStyle;
   onChange: (partial: Partial<PageStyle>) => void;
+};
+
+type PopoverProps = Props & {
+  /**
+   * Achado 0152: superfície da folha (a moldura da mesa). Quando informada, é
+   * ELA que ancora o painel, não o gatilho: o botão "Formato" mora na barra de
+   * chrome em cima do papel, e abrir a partir dele joga o painel sobre as
+   * primeiras linhas do documento — justo a região onde o efeito de fonte,
+   * corpo e espaçamento aparece primeiro. Ancorado na moldura e aberto à
+   * esquerda, o painel cai no vão ao lado do papel.
+   */
+  anchorRef?: RefObject<HTMLElement | null>;
 };
 
 /**
@@ -171,9 +185,10 @@ export function AppearanceControls({ value, onChange }: Props) {
   );
 }
 
-export function AppearancePopover({ value, onChange }: Props) {
+export function AppearancePopover({ value, onChange, anchorRef }: PopoverProps) {
   return (
     <Popover>
+      {anchorRef && <PopoverAnchor virtualRef={anchorRef} />}
       <PopoverTrigger asChild>
         <Button
           size="sm"
@@ -186,8 +201,18 @@ export function AppearancePopover({ value, onChange }: Props) {
           <span className="hidden sm:ml-1 sm:inline">Formato</span>
         </Button>
       </PopoverTrigger>
+      {/*
+        Achado 0152: `side="left"` + `align="start"` tiram o painel de cima do
+        papel — ele sai ao lado da folha, sobre a mesa, e o professor vê o texto
+        mudar enquanto clica. `collisionPadding` mantém o painel dentro da
+        janela quando não há vão (telas estreitas), caso em que o Radix vira o
+        lado por conta própria.
+      */}
       <PopoverContent
-        align="end"
+        side="left"
+        align="start"
+        sideOffset={12}
+        collisionPadding={16}
         aria-label="Formato"
         className="w-72 border-surface-chrome-line bg-surface-chrome text-surface-ink"
       >

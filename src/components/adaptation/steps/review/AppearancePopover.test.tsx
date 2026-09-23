@@ -185,6 +185,35 @@ describe("AppearancePopover", () => {
     expect(within(dialog).getByLabelText("Fonte")).toBeInTheDocument();
   });
 
+  /*
+    Achado 0152: o painel abria com o padrão do Radix (`side="bottom"`) logo
+    abaixo do gatilho, que mora na barra de chrome em cima da folha — ou seja,
+    caía sobre o papel que ele formata e escondia as primeiras linhas justo
+    enquanto o professor mexia em fonte/corpo/espaçamento. O retângulo real
+    depende de layout que o jsdom não calcula, então o que se trava aqui são as
+    props de posicionamento: ele sai PARA O LADO da superfície, sobre a mesa.
+  */
+  it("abre ao lado da folha, não sobre ela (achado 0152)", () => {
+    const onChange = vi.fn();
+    render(<AppearancePopover value={value} onChange={onChange} />);
+    fireEvent.click(screen.getByRole("button", { name: /formato/i }));
+    const dialog = screen.getByRole("dialog");
+    expect(dialog).toHaveAttribute("data-side", "left");
+    expect(dialog).toHaveAttribute("data-align", "start");
+  });
+
+  it("ancora na superfície da folha quando ela é informada (achado 0152)", () => {
+    const onChange = vi.fn();
+    const anchor = document.createElement("div");
+    document.body.appendChild(anchor);
+    const anchorRef = { current: anchor };
+    render(<AppearancePopover value={value} onChange={onChange} anchorRef={anchorRef} />);
+    fireEvent.click(screen.getByRole("button", { name: /formato/i }));
+    const dialog = screen.getByRole("dialog");
+    expect(dialog).toHaveAttribute("data-side", "left");
+    expect(within(dialog).getByLabelText("Fonte")).toBeInTheDocument();
+  });
+
   it("dá nome acessível ao painel, igual ao rótulo do gatilho", () => {
     const onChange = vi.fn();
     render(<AppearancePopover value={value} onChange={onChange} />);

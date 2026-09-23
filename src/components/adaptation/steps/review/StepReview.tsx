@@ -385,7 +385,13 @@ export function StepReview({
             <RefreshCw className="w-4 h-4" />
             <span className="hidden sm:ml-1 sm:inline">Regerar</span>
           </Button>
-          <AppearancePopover value={resolvePageStyle(pageStyle)} onChange={handleAppearanceChange} />
+          {/* Achado 0152: o painel se ancora na superfície da folha, não neste
+              botão — daqui ele abriria por cima do papel que formata. */}
+          <AppearancePopover
+            value={resolvePageStyle(pageStyle)}
+            onChange={handleAppearanceChange}
+            anchorRef={surfaceRef}
+          />
           {originalExam && (
             <Button
               size="sm"
