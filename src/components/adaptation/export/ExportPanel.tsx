@@ -19,7 +19,11 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { TITLE_FIELD_HINT, TITLE_FIELD_LABEL } from "@/components/adaptation/titleField";
+import {
+  documentTitle,
+  TITLE_FIELD_HINT,
+  TITLE_FIELD_LABEL,
+} from "@/components/adaptation/titleField";
 import { Switch } from "@/components/ui/switch";
 import type { CanonicalDocument, DocumentHeader, PageStyle } from "@/lib/adaptation/canonical/schema";
 import { documentToPlainText } from "@/lib/adaptation/canonical/plainText";
@@ -205,13 +209,28 @@ export function ExportPanel({
         */}
         <div className="space-y-1">
           <Label htmlFor="pdf-title">{TITLE_FIELD_LABEL}</Label>
-          <Input
-            id="pdf-title"
-            aria-describedby="pdf-title-hint"
-            maxLength={120}
-            value={header.title ?? ""}
-            onChange={(e) => setField("title", e.target.value)}
-          />
+          {/*
+            Achado 0185: o mesmo campo vazio aparecia de dois jeitos opostos em
+            passos vizinhos — sugestão derivada do documento no Revisar, caixa
+            vazia aqui. Quem lia o nome no passo 5 não o encontrava no 6, sem
+            nada dizendo qual valia (vale o vazio: sem `header.title` o PDF sai
+            sem linha de título). Mesma sugestão e mesmo selo nos dois passos.
+          */}
+          <div className="flex items-center gap-2">
+            <Input
+              id="pdf-title"
+              aria-describedby="pdf-title-hint"
+              maxLength={120}
+              placeholder={documentTitle(document)}
+              value={header.title ?? ""}
+              onChange={(e) => setField("title", e.target.value)}
+            />
+            {(header.title ?? "").trim() === "" && (
+              <span className="shrink-0 rounded border border-input bg-muted px-1.5 py-0.5 text-xs font-medium text-foreground">
+                Sem nome
+              </span>
+            )}
+          </div>
           <p id="pdf-title-hint" className="text-xs text-muted-foreground">
             {TITLE_FIELD_HINT}
           </p>

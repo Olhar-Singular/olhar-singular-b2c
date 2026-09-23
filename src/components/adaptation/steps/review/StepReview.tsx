@@ -10,7 +10,11 @@ import { PageBreakMarker } from "@/components/adaptation/canonical-editor/page-b
 import { OriginalDocExtension } from "@/components/adaptation/canonical-editor/originalDocExtension";
 import { UploadedExamExtension } from "@/components/adaptation/canonical-editor/uploadedExamExtension";
 import { PageSheet } from "@/components/adaptation/PageSheet";
-import { TITLE_FIELD_HINT, TITLE_FIELD_LABEL } from "@/components/adaptation/titleField";
+import {
+  documentTitle,
+  TITLE_FIELD_HINT,
+  TITLE_FIELD_LABEL,
+} from "@/components/adaptation/titleField";
 import { AppearancePopover } from "./AppearancePopover";
 import { MetadataDrawer } from "./MetadataDrawer";
 import { OriginalExamDialog } from "./OriginalExamDialog";
@@ -100,8 +104,6 @@ const NO_SUBJECT = "__sem_materia__";
 const NO_FOLDER = "__sem_pasta__";
 const NEW_FOLDER = "__nova_pasta__";
 
-const FALLBACK_TITLE = "Atividade adaptada";
-
 /**
  * Extensions specific to the Revisar surface, beyond the canonical set: the
  * page-break marker (§6.6 / Fase 5b) and the original-question snapshot
@@ -109,19 +111,6 @@ const FALLBACK_TITLE = "Atividade adaptada";
  * per adaptation) is added separately, memoized on `originalExam`.
  */
 const REVIEW_EXTENSIONS = [PageBreakMarker, OriginalDocExtension];
-
-/** Document title for the chrome bar: plain text of the first heading, or a fallback. */
-function documentTitle(doc: CanonicalDocument): string {
-  const heading = doc.blocks.find(
-    (b): b is Extract<Block, { type: "heading" }> => b.type === "heading",
-  );
-  if (!heading) return FALLBACK_TITLE;
-  const text = heading.content
-    .map((n) => (n.type === "text" ? n.text : ""))
-    .join("")
-    .trim();
-  return text || FALLBACK_TITLE;
-}
 
 /**
  * StepReview — superfície única de edição "Revisar" (plano §8, Fase 1).

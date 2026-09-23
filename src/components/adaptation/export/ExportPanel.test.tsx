@@ -590,3 +590,49 @@ describe("foco depois de confirmar o aviso (0419)", () => {
     await waitFor(() => expect(globalThis.document.activeElement).toBe(trigger));
   });
 });
+
+// Achado 0185: o MESMO `header.title` vazio aparecia de dois jeitos opostos em
+// passos vizinhos — o Revisar mostrava o título derivado do documento como
+// sugestão (mais o selo "Sem nome"), o Exportar mostrava a caixa vazia. O
+// professor lia um nome no passo 5, não o via no 6, e não tinha como saber qual
+// dos dois dizia a verdade (o cabeçalho impresso sai sem título: o vazio vence).
+describe("estado vazio do título espelha o Revisar (0185)", () => {
+  const docComHeading: CanonicalDocument = {
+    schemaVersion: 1,
+    blocks: [
+      { id: id(9), type: "heading", level: 1, content: [{ type: "text", text: "Prova de Ciências" }] },
+      ...document.blocks,
+    ],
+  };
+
+  const renderPanel = (doc: CanonicalDocument, header: DocumentHeader = {}) =>
+    render(
+      <ExportPanel document={doc} header={header} onDownload={vi.fn().mockResolvedValue(undefined)} />,
+    );
+
+  it("sugere o título derivado do documento quando o professor não nomeou", () => {
+    renderPanel(docComHeading);
+    const field = screen.getByLabelText(TITLE_FIELD_LABEL);
+    expect(field).toHaveValue("");
+    expect(field).toHaveAttribute("placeholder", "Prova de Ciências");
+  });
+
+  it("cai no mesmo texto padrão do Revisar quando o documento não tem heading", () => {
+    renderPanel(document);
+    expect(screen.getByLabelText(TITLE_FIELD_LABEL)).toHaveAttribute(
+      "placeholder",
+      "Atividade adaptada",
+    );
+  });
+
+  it("marca 'Sem nome' ao lado do campo, como o Revisar", () => {
+    renderPanel(docComHeading);
+    expect(screen.getByText("Sem nome")).toBeInTheDocument();
+  });
+
+  it("some com o selo quando há título de verdade", () => {
+    renderPanel(docComHeading, { title: "Minha Prova" });
+    expect(screen.getByLabelText(TITLE_FIELD_LABEL)).toHaveValue("Minha Prova");
+    expect(screen.queryByText("Sem nome")).not.toBeInTheDocument();
+  });
+});
