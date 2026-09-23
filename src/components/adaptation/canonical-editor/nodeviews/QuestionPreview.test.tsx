@@ -177,6 +177,20 @@ describe("QuestionPreview", () => {
     expect(row.className).not.toContain("justify-between");
   });
 
+  it("remove-instruction button is out of the folha flow, so it cannot stretch the instruction line (achado 0321)", () => {
+    setup({ instruction: [{ type: "text", text: "Marque a alternativa correta." }] });
+    const btn = screen.getByLabelText("Remover instrução");
+    // 28px of chrome must not set the height of a ~19px line of print, nor eat
+    // width from the text column: the x is an overlay anchored to the end of the
+    // line, like the rail and the "+" inserter.
+    expect(btn.className).toContain("absolute");
+    const host = btn.parentElement!;
+    expect(host.className).toContain("relative");
+    expect(host.className).toContain("w-0");
+    // the host must not be a printed box either: no height of its own
+    expect(host.className).not.toContain("h-7");
+  });
+
   it("does not render a remove-instruction button when there is no instruction", () => {
     setup({ instruction: null });
     expect(screen.queryByLabelText("Remover instrução")).not.toBeInTheDocument();

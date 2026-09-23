@@ -110,17 +110,26 @@ export function QuestionPreview({
               plain
             />
           </div>
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            className="h-7 w-7 shrink-0 text-muted-foreground opacity-0 transition-opacity group-hover/instruction:opacity-100 group-focus-within/instruction:opacity-100 focus-visible:opacity-100"
-            disabled={disabled}
-            onClick={() => onInstructionChange(null)}
-            aria-label="Remover instrução"
-          >
-            <X className="h-4 w-4" />
-          </Button>
+          {/* Âncora de largura ZERO: o `x` é overlay (`absolute`), como o rail e
+              o inserter "+". No fluxo, o alvo de 28px do achado 0005 passava a
+              medir a linha da instrução (19px) e inflava a folha em 9px por
+              questão, que o impresso não tem — e ainda roubava 32px da coluna
+              do texto, quebrando a instrução em ponto diferente do papel
+              (achado 0321). `self-stretch` faz a âncora herdar a altura do
+              texto sem contribuir com altura nenhuma. */}
+          <div className="relative w-0 shrink-0 self-stretch">
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="absolute left-0 top-1/2 h-7 w-7 -translate-y-1/2 text-muted-foreground opacity-0 transition-opacity group-hover/instruction:opacity-100 group-focus-within/instruction:opacity-100 focus-visible:opacity-100"
+              disabled={disabled}
+              onClick={() => onInstructionChange(null)}
+              aria-label="Remover instrução"
+            >
+              <X className="h-4 w-4" />
+            </Button>
+          </div>
         </div>
       )}
       <div contentEditable={false} className="mt-2" style={{ fontSize: "var(--doc-fs-alternative, inherit)" }}>
