@@ -147,8 +147,6 @@ export default function CanonicalAdaptationWizard({ editMode }: Props = {}) {
     editMode ? editMode.initialData : INITIAL_WIZARD_DATA,
   );
 
-  const hasUnsavedResult = !!data.result && !isSaved && !isGenerating;
-  const navGuard = useNavigationGuard(isGenerating || isUploading || hasUnsavedResult);
   const [stepIndex, setStepIndex] = useState(editMode ? REVIEW_INDEX : 0);
   /**
    * Passo mais avançado já alcançado (0108).
@@ -255,6 +253,24 @@ export default function CanonicalAdaptationWizard({ editMode }: Props = {}) {
    */
   const savingHasError =
     captureFailure !== null || saveStatus === "error" || saveStatus === "conflict";
+
+  /**
+   * 0239 · A guarda de saída fala do que NÃO está no banco.
+   *
+   * O predicado era só `!isSaved`, que descreve o botão "Salvar adaptação":
+   * qualquer edição o derruba e nada além desse botão o levanta. Só que o
+   * documento viaja no AUTOSAVE, não no botão — então sair com "Rascunho
+   * salvo" aceso na própria tela abria o diálogo de perda de alterações. Aviso
+   * que mente é aviso que o professor aprende a ignorar, e é o mesmo que
+   * precisa ser levado a sério quando a perda é real.
+   *
+   * Fora do autosave sobram as COLUNAS (matéria/pasta), que viajam no
+   * "Salvar adaptação" — `filingDirty` (0143) é quem responde por elas.
+   */
+  const documentPersisted = saveStatus === "saved" && !savingHasError;
+  const hasUnsavedResult =
+    !!data.result && !isSaved && !isGenerating && (!documentPersisted || filingDirty);
+  const navGuard = useNavigationGuard(isGenerating || isUploading || hasUnsavedResult);
 
   const currentKey = STEPS[stepIndex];
 

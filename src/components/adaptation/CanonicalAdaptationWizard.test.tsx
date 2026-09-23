@@ -1300,6 +1300,58 @@ describe("CanonicalAdaptationWizard — navigation guard", () => {
     expect(mockNavGuard).toHaveBeenLastCalledWith(false);
   });
 
+  /**
+   * 0239 · A guarda de saída fala do que NÃO está no banco.
+   *
+   * `isSaved` sozinho descreve só o botão "Salvar adaptação": qualquer edição o
+   * derruba para sempre, então sair com "Rascunho salvo" aceso na tela abria o
+   * diálogo de perda. O autosave já carimbou `adaptation_result`; o que ele não
+   * cobre são as COLUNAS (matéria/pasta), e disso quem fala é `filingDirty`.
+   */
+  describe("0239 · autosave desarma a guarda", () => {
+    function editSeedForGuard() {
+      return {
+        adaptationId: "edit-1",
+        initialData: {
+          activityType: "exercício",
+          activityText: "texto",
+          selectedQuestions: [],
+          barriers: [],
+          barrierProfileId: null,
+          result: makeResult(),
+        },
+        initialUpdatedAt: "2026-01-01T00:00:00Z",
+      };
+    }
+
+    it("não arma a guarda quando o autosave já gravou a edição", () => {
+      mockDraftStatus.value = "saved";
+      renderWithProviders(<CanonicalAdaptationWizard editMode={editSeedForGuard()} />);
+      fireEvent.click(screen.getByTestId("edit-content"));
+      expect(screen.getByText("Rascunho salvo")).toBeInTheDocument();
+      expect(mockNavGuard).toHaveBeenLastCalledWith(false);
+    });
+
+    it("mantém a guarda com matéria escolhida e não salva, mesmo com o autosave em dia", () => {
+      mockDraftStatus.value = "saved";
+      renderWithProviders(<CanonicalAdaptationWizard editMode={editSeedForGuard()} />);
+      fireEvent.click(screen.getByTestId("edit-content"));
+      fireEvent.click(screen.getByTestId("review-file"));
+      expect(mockNavGuard).toHaveBeenLastCalledWith(true);
+    });
+
+    it("mantém a guarda enquanto o autosave está em voo ou falhou", () => {
+      mockDraftStatus.value = "saving";
+      const view = renderWithProviders(<CanonicalAdaptationWizard editMode={editSeedForGuard()} />);
+      fireEvent.click(screen.getByTestId("edit-content"));
+      expect(mockNavGuard).toHaveBeenLastCalledWith(true);
+
+      mockDraftStatus.value = "error";
+      view.rerender(<CanonicalAdaptationWizard editMode={editSeedForGuard()} />);
+      expect(mockNavGuard).toHaveBeenLastCalledWith(true);
+    });
+  });
+
   // --- generation guard dialog ------------------------------------------------
 
   it("shows 'A adaptação ainda está em andamento' dialog when generating and blocked", () => {
