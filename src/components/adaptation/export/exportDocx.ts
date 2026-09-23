@@ -39,9 +39,11 @@ import type {
   DocumentHeader,
   Block,
   Inline,
+  NodeStyle,
   RichText,
   PageStyle,
 } from "@/lib/adaptation/canonical/schema";
+import { isAllowedColor } from "@/lib/adaptation/canonical/colors";
 import {
   fontFamilyToDocx,
   DOCX_NON_STANDARD_FONTS,
@@ -137,7 +139,64 @@ export function docxFileName(header: DocumentHeader): string {
 }
 
 /** Formatting inherited from the surrounding context (table header, instruction). */
-type RunStyle = { bold?: boolean; italics?: boolean; size?: number; color?: string };
+type RunStyle = {
+  bold?: boolean;
+  italics?: boolean;
+  size?: number;
+  color?: string;
+  font?: string;
+};
+
+/** Paragraph properties a `NodeStyle` contributes. */
+type ParagraphStyle = { alignment?: (typeof ALIGNMENT)[keyof typeof ALIGNMENT] };
+
+/** `NodeStyle.align` → OOXML `w:jc` (note: `justify` is `both` in the docx lib). */
+const ALIGNMENT = {
+  left: AlignmentType.LEFT,
+  center: AlignmentType.CENTER,
+  right: AlignmentType.RIGHT,
+  justify: AlignmentType.JUSTIFIED,
+} as const;
+
+/** px (the canonical NodeStyle unit) → pt, the unit shared with the PDF. */
+const pxToPt = (px: number): number => px * (72 / 96);
+/** px → twips, the OOXML spacing unit (1pt = 20 twips). */
+const pxToTwips = (px: number): number => Math.round(pxToPt(px) * 20);
+/** An allowed palette color in the docx unit (raw hex, no `#`); `undefined` otherwise. */
+const docxColor = (color?: string): string | undefined =>
+  color !== undefined && isAllowedColor(color) ? color.slice(1).toUpperCase() : undefined;
+
+/**
+ * O `NodeStyle` do bloco projetado no docx — o análogo de `nodeStyleToPdf` e de
+ * `nodeStyleToCss`, quebrado nas três formas que o OOXML exige:
+ *
+ * - `paragraph`: vale para TODO parágrafo do bloco (o alinhamento é do bloco);
+ * - `spacing`:   só para o ÚLTIMO, senão o `spacingAfter` (que é o espaço DEPOIS
+ *                do bloco) viraria espaço entre as linhas de dentro dele;
+ * - `run`:       cor/corpo/fonte herdados por todo run do bloco.
+ *
+ * Sem isso o Word era a única das quatro superfícies que descartava a
+ * formatação por nó em silêncio (achado 0134).
+ */
+export function nodeStyleToDocx(style?: NodeStyle): {
+  paragraph: ParagraphStyle;
+  spacing: { spacing?: { after: number } };
+  run: RunStyle;
+} {
+  const paragraph: ParagraphStyle = {};
+  const spacing: { spacing?: { after: number } } = {};
+  const run: RunStyle = {};
+  if (!style) return { paragraph, spacing, run };
+
+  if (style.align !== undefined) paragraph.alignment = ALIGNMENT[style.align];
+  if (style.spacingAfter !== undefined) spacing.spacing = { after: pxToTwips(style.spacingAfter) };
+  const color = docxColor(style.color);
+  if (color !== undefined) run.color = color;
+  if (style.fontSize !== undefined) run.size = Math.round(pxToPt(style.fontSize) * 2);
+  if (style.fontFamily !== undefined) run.font = fontFamilyToDocx(style.fontFamily);
+
+  return { paragraph, spacing, run };
+}
 
 export function richTextToRuns(nodes: Inline[], inherited: RunStyle = {}): TextRun[] {
   return nodes.map((node) => {
@@ -147,6 +206,10 @@ export function richTextToRuns(nodes: Inline[], inherited: RunStyle = {}): TextR
       // data loss in the middle of a sentence.
       return new TextRun({ ...inherited, text: latexLayoutAtom(node.latex), font: MATH_FONT });
     }
+    // Cor e corpo do próprio run vencem o herdado, validados pela MESMA paleta
+    // que a tela (`textRunStyle`) e o PDF (`marksToPdfStyle`) usam. Ignorá-los
+    // apagava o destaque que a professora pintou (achado 0134); `fontSize`
+    // inline é pt, como nas outras superfícies, daí o meio-ponto por 2.
     return new TextRun({
       ...inherited,
       text: node.text,
@@ -154,15 +217,27 @@ export function richTextToRuns(nodes: Inline[], inherited: RunStyle = {}): TextR
       italics: node.marks?.includes("italic") || inherited.italics,
       underline: node.marks?.includes("underline") ? {} : undefined,
       strike: node.marks?.includes("strike"),
+      color: docxColor(node.color) ?? inherited.color,
+      size: node.fontSize !== undefined && node.fontSize > 0
+        ? Math.round(node.fontSize * 2)
+        : inherited.size,
     });
   });
 }
 
+/** The block-level style carried into the answer rows (achado 0134). */
+type InheritedStyle = { paragraph: ParagraphStyle; run: RunStyle };
+const NO_STYLE: InheritedStyle = { paragraph: {}, run: {} };
+
 /** An answer row: an empty marker plus the item's content. */
-function answerRow(marker: string, content: RichText): Paragraph {
+function answerRow(marker: string, content: RichText, style: InheritedStyle = NO_STYLE): Paragraph {
   return new Paragraph({
+    ...style.paragraph,
     indent: { left: ANSWER_INDENT },
-    children: [new TextRun({ text: `${marker} ` }), ...richTextToRuns(content)],
+    children: [
+      new TextRun({ ...style.run, text: `${marker} ` }),
+      ...richTextToRuns(content, style.run),
+    ],
   });
 }
 
@@ -170,40 +245,48 @@ function answerRow(marker: string, content: RichText): Paragraph {
  * The typed answer, mirroring PdfAnswer kind by kind. Exhaustive over the union
  * (no default), so a new kind is a compile error rather than a silent omission.
  */
-function answerToDocx(answer: Extract<Block, { type: "question" }>["answer"]): DocxBlock[] {
+function answerToDocx(
+  answer: Extract<Block, { type: "question" }>["answer"],
+  style: InheritedStyle = NO_STYLE,
+): DocxBlock[] {
   switch (answer.kind) {
     case "open": {
       const lines = answer.answerLines ?? 3;
       return Array.from(
         { length: lines },
-        () => new Paragraph({ children: [new TextRun({ text: "_".repeat(60) })] }),
+        () =>
+          new Paragraph({
+            ...style.paragraph,
+            children: [new TextRun({ ...style.run, text: "_".repeat(60) })],
+          }),
       );
     }
     case "multipleChoice":
       return answer.alternatives.map((alternative, i) =>
         // No ✔ on the correct one — the gabarito stays hidden, as in the PDF.
-        answerRow(`${indexToLetter(i)})`, alternative.content),
+        answerRow(`${indexToLetter(i)})`, alternative.content, style),
       );
     case "trueFalse":
-      return answer.items.map((item) => answerRow("(  ) V  (  ) F", item.content));
+      return answer.items.map((item) => answerRow("(  ) V  (  ) F", item.content, style));
     case "checkbox":
       // [ ] for every item, never [x] — `checked` is the answer key.
-      return answer.items.map((item) => answerRow("[ ]", item.content));
+      return answer.items.map((item) => answerRow("[ ]", item.content, style));
     case "matching":
       return answer.pairs.map(
         (pair) =>
           new Paragraph({
+            ...style.paragraph,
             indent: { left: ANSWER_INDENT },
             children: [
-              ...richTextToRuns(pair.left),
-              new TextRun({ text: "  ↔  " }),
-              ...richTextToRuns(pair.right),
+              ...richTextToRuns(pair.left, style.run),
+              new TextRun({ ...style.run, text: "  ↔  " }),
+              ...richTextToRuns(pair.right, style.run),
             ],
           }),
       );
     case "ordering":
       // Authored order, NOT sorted by `position` — sorting would reveal the answer.
-      return answer.items.map((item) => answerRow("____", item.content));
+      return answer.items.map((item) => answerRow("____", item.content, style));
     case "fillBlank":
       // The gaps live inline in the stem; there is no separate answer to show
       // (same contract as PdfAnswer, which renders an empty view here).
@@ -216,7 +299,12 @@ function answerToDocx(answer: Extract<Block, { type: "question" }>["answer"]): D
           children: cells.map(
             (cell) =>
               new TableCell({
-                children: [new Paragraph({ children: richTextToRuns(cell, { bold }) })],
+                children: [
+                  new Paragraph({
+                    ...style.paragraph,
+                    children: richTextToRuns(cell, { ...style.run, bold }),
+                  }),
+                ],
               }),
           ),
         });
@@ -231,6 +319,11 @@ function answerToDocx(answer: Extract<Block, { type: "question" }>["answer"]): D
 }
 
 export function blockToDocxParagraphs(block: Block, number: number): DocxBlock[] {
+  // `block.style` projetado no docx: alinhamento em todo parágrafo do bloco,
+  // `spacingAfter` só no último, cor/corpo/fonte herdados pelos runs.
+  const { paragraph: para, spacing, run } = nodeStyleToDocx(block.style);
+  const inherited: InheritedStyle = { paragraph: para, run };
+
   switch (block.type) {
     case "heading": {
       const level =
@@ -247,23 +340,29 @@ export function blockToDocxParagraphs(block: Block, number: number): DocxBlock[]
       return [
         new Paragraph({
           heading: level,
+          ...para,
+          ...spacing,
           children: richTextToRuns(block.content, {
             bold: true,
             color: DOCX_INK,
             size: Math.round(HEADING_PT[block.level] * 2),
+            // O `block.style` vence os defaults do título (achado 0134).
+            ...run,
           }),
         }),
       ];
     }
 
     case "paragraph":
-      return [new Paragraph({ children: richTextToRuns(block.content) })];
+      return [new Paragraph({ ...para, ...spacing, children: richTextToRuns(block.content, run) })];
 
     case "blockMath":
       return [
         new Paragraph({
           alignment: AlignmentType.CENTER,
-          children: [new TextRun({ text: latexLayoutAtom(block.latex), font: MATH_FONT })],
+          ...para,
+          ...spacing,
+          children: [new TextRun({ ...run, text: latexLayoutAtom(block.latex), font: MATH_FONT })],
         }),
       ];
 
@@ -272,11 +371,18 @@ export function blockToDocxParagraphs(block: Block, number: number): DocxBlock[]
       // labelled placeholder means the teacher can see WHERE it belonged
       // instead of finding a hole where a figure used to be.
       const label = block.alt?.trim() ? `[Imagem: ${block.alt.trim()}]` : "[Imagem]";
+      const hasCaption = block.caption !== undefined && block.caption.length > 0;
       const paragraphs: DocxBlock[] = [
-        new Paragraph({ children: [new TextRun({ text: label, italics: true })] }),
+        new Paragraph({
+          ...para,
+          ...(hasCaption ? {} : spacing),
+          children: [new TextRun({ ...run, text: label, italics: true })],
+        }),
       ];
-      if (block.caption && block.caption.length > 0) {
-        paragraphs.push(new Paragraph({ children: richTextToRuns(block.caption) }));
+      if (hasCaption) {
+        paragraphs.push(
+          new Paragraph({ ...para, ...spacing, children: richTextToRuns(block.caption!, run) }),
+        );
       }
       return paragraphs;
     }
@@ -288,8 +394,11 @@ export function blockToDocxParagraphs(block: Block, number: number): DocxBlock[]
       return [
         new Paragraph({
           ...SCAFFOLDING_BOX,
+          ...para,
+          ...(block.items.length > 0 ? {} : spacing),
           children: [
             new TextRun({
+              ...run,
               text: SCAFFOLDING_LABEL.toUpperCase(),
               bold: true,
               size: CAPTION_SIZE,
@@ -300,7 +409,9 @@ export function blockToDocxParagraphs(block: Block, number: number): DocxBlock[]
           (item, i) =>
             new Paragraph({
               ...SCAFFOLDING_BOX,
-              children: [new TextRun({ text: `${i + 1}. ${item}` })],
+              ...para,
+              ...(i === block.items.length - 1 ? spacing : {}),
+              children: [new TextRun({ ...run, text: `${i + 1}. ${item}` })],
             }),
         ),
       ];
@@ -312,24 +423,30 @@ export function blockToDocxParagraphs(block: Block, number: number): DocxBlock[]
       // outras três superfícies varrem a coluna inteira), texto editável e
       // reflowável, dependente de a fonte ter o glifo, e lido pelo leitor de
       // tela (achado 0168).
-      return [new Paragraph({ ...DIVIDER_RULE, children: [] })];
+      return [new Paragraph({ ...DIVIDER_RULE, ...para, ...spacing, children: [] })];
 
     case "question": {
       const label = block.customNumber ?? String(number);
       const position = block.enunciadoPosition ?? "below";
       const hasEnunciado = block.enunciado != null && block.enunciado.length > 0;
       const enunciado = hasEnunciado
-        ? [new Paragraph({ children: richTextToRuns(block.enunciado!), spacing: { after: 60 } })]
+        ? [
+            new Paragraph({
+              ...para,
+              children: richTextToRuns(block.enunciado!, run),
+              spacing: { after: 60 },
+            }),
+          ]
         : [];
 
       // The stem is a list of BLOCKS (it can hold images, math, nested
       // questions). Only paragraphs used to survive, so anything else in a stem
       // vanished from the Word file.
       const [first, ...restStem] = block.stem;
-      const firstRuns =
-        first?.type === "paragraph" ? richTextToRuns(first.content) : [];
+      const firstRuns = first?.type === "paragraph" ? richTextToRuns(first.content, run) : [];
       const numbered = new Paragraph({
-        children: [new TextRun({ text: `${label}. `, bold: true }), ...firstRuns],
+        ...para,
+        children: [new TextRun({ ...run, text: `${label}. `, bold: true }), ...firstRuns],
       });
       const stemRest = (first?.type === "paragraph" ? restStem : block.stem).flatMap((child) =>
         blockToDocxParagraphs(child, 1),
@@ -343,12 +460,19 @@ export function blockToDocxParagraphs(block: Block, number: number): DocxBlock[]
         ...(block.instruction
           ? [
               new Paragraph({
-                children: richTextToRuns(block.instruction, { italics: true, size: SUB_SIZE }),
+                ...para,
+                children: richTextToRuns(block.instruction, {
+                  ...run,
+                  italics: true,
+                  size: run.size ?? SUB_SIZE,
+                }),
               }),
             ]
           : []),
-        ...answerToDocx(block.answer),
-        new Paragraph({ children: [] }),
+        ...answerToDocx(block.answer, inherited),
+        // O parágrafo que fecha a questão é o último do bloco: é nele que o
+        // `spacingAfter` do `block.style` cabe (achado 0134).
+        new Paragraph({ ...para, ...spacing, children: [] }),
       ];
     }
   }

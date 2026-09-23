@@ -943,3 +943,131 @@ describe("0166 · o Word imprime na mesma tinta das outras superfícies", () => 
     colors.forEach((p) => expect(p.val).toBe(inkHex));
   });
 });
+
+/**
+ * Achado 0134 — o Word era a única saída que apagava a formatação escolhida
+ * pela professora: a cor e o tamanho do run inline (`InlineText.color` /
+ * `.fontSize`) nunca eram lidos, e `block.style` (`NodeStyle`: align, color,
+ * fontSize, fontFamily, spacingAfter) não chegava ao arquivo — o PDF honra
+ * tudo por `nodeStyleToPdf` e a tela por `nodeStyleToCss`.
+ */
+describe("0134 · o Word carrega a formatação por nó", () => {
+  /** Atributos do primeiro nó com esse `rootKey` (ex.: `w:jc`, `w:spacing`). */
+  function docxNodeAttrs(node: unknown, rootKey: string): Record<string, unknown> | undefined {
+    let found: Record<string, unknown> | undefined;
+    const walk = (o: unknown): void => {
+      if (Array.isArray(o)) return o.forEach(walk);
+      if (o === null || typeof o !== "object") return;
+      const n = o as { rootKey?: string; root?: unknown };
+      if (n.rootKey === rootKey && Array.isArray(n.root)) {
+        const attr = n.root.find((c) => (c as { rootKey?: string }).rootKey === "_attr") as
+          | { root?: Record<string, { value?: unknown }> }
+          | undefined;
+        if (attr?.root) {
+          found ??= Object.fromEntries(
+            Object.entries(attr.root)
+              .filter(([, v]) => v?.value !== undefined)
+              .map(([k, v]) => [k, v.value]),
+          );
+        }
+      }
+      Object.values(o as Record<string, unknown>).forEach(walk);
+    };
+    walk(node);
+    return found;
+  }
+
+  it("o run inline sai na cor e no corpo que a tela e o PDF mostram", () => {
+    const runs = richTextToRuns([
+      { type: "text", text: "Palavra em destaque", color: "#DC2626", fontSize: 18 },
+    ]);
+    const props = docxRunProps(runs[0]);
+    expect(props.some((p) => p.key === "w:color" && p.val === "DC2626")).toBe(true);
+    // fontSize inline é pt (como em `textRunStyle`/`marksToPdfStyle`): 18pt = 36 meios-pontos.
+    expect(props.some((p) => p.key === "w:sz" && p.val === 36)).toBe(true);
+  });
+
+  it("cor fora da paleta do documento não vira propriedade de run", () => {
+    const runs = richTextToRuns([{ type: "text", text: "x", color: "#123456" }]);
+    expect(docxRunProps(runs[0]).some((p) => p.key === "w:color" && p.val === "123456")).toBe(false);
+  });
+
+  it("o `block.style` do parágrafo vira alinhamento, espaçamento e estilo de run", () => {
+    const [paragraph] = blockToDocxParagraphs(
+      {
+        id: id(134),
+        type: "paragraph",
+        content: text("centralizado"),
+        style: {
+          align: "center",
+          color: "#2563EB",
+          fontSize: 24,
+          fontFamily: "georgia",
+          spacingAfter: 16,
+        },
+      },
+      1,
+    );
+    expect(docxNodeAttrs(paragraph, "w:jc")).toEqual({ val: "center" });
+    // px → twips (1px = 0,75pt; 1pt = 20 twips): 16px = 240 twips.
+    expect(docxNodeAttrs(paragraph, "w:spacing")).toEqual({ after: 240 });
+    const props = docxRunProps(paragraph);
+    expect(props.some((p) => p.key === "w:color" && p.val === "2563EB")).toBe(true);
+    // NodeStyle.fontSize é px (como em `nodeStyleToPdf`): 24px = 18pt = 36 meios-pontos.
+    expect(props.some((p) => p.key === "w:sz" && p.val === 36)).toBe(true);
+    expect(docxNodeAttrs(paragraph, "w:rFonts")).toMatchObject({ ascii: "Georgia" });
+  });
+
+  it("o espaçamento depois do bloco vai no ÚLTIMO parágrafo, não em cada um", () => {
+    const style = { spacingAfter: 16 } as const;
+    const [label, passo] = blockToDocxParagraphs(
+      { id: id(139), type: "scaffolding", items: ["um", "dois"], style },
+      1,
+    ) as [unknown, unknown];
+    expect(docxNodeAttrs(label, "w:spacing")).toBeUndefined();
+    expect(docxNodeAttrs(passo, "w:spacing")).toBeUndefined();
+
+    // Sem passos, o rótulo é o último (e único) parágrafo do bloco.
+    const [soRotulo] = blockToDocxParagraphs(
+      { id: id(140), type: "scaffolding", items: [], style },
+      1,
+    );
+    expect(docxNodeAttrs(soRotulo, "w:spacing")).toEqual({ after: 240 });
+
+    // A legenda é o último parágrafo do bloco de imagem; sem ela, é a marcação.
+    const [marcacao, legenda] = blockToDocxParagraphs(
+      { id: id(141), type: "image", src: "https://e.com/a.png", caption: text("fig"), style },
+      1,
+    ) as [unknown, unknown];
+    expect(docxNodeAttrs(marcacao, "w:spacing")).toBeUndefined();
+    expect(docxNodeAttrs(legenda, "w:spacing")).toEqual({ after: 240 });
+    const [semLegenda] = blockToDocxParagraphs(
+      { id: id(142), type: "image", src: "https://e.com/a.png", style },
+      1,
+    );
+    expect(docxNodeAttrs(semLegenda, "w:spacing")).toEqual({ after: 240 });
+  });
+
+  it("o alinhamento do bloco vale para o heading e para a questão inteira", () => {
+    const [heading] = blockToDocxParagraphs(
+      { id: id(135), type: "heading", level: 1, content: text("T"), style: { align: "right" } },
+      1,
+    );
+    expect(docxNodeAttrs(heading, "w:jc")).toEqual({ val: "right" });
+
+    const question = blockToDocxParagraphs(
+      {
+        id: id(136),
+        type: "question",
+        stem: [{ id: id(137), type: "paragraph", content: text("pergunta") }],
+        answer: { kind: "multipleChoice", alternatives: [{ id: id(138), content: text("a") }] },
+        style: { align: "justify", color: "#16A34A" },
+      },
+      1,
+    );
+    question.forEach((p) => {
+      if (p instanceof Paragraph) expect(docxNodeAttrs(p, "w:jc")).toEqual({ val: "both" });
+    });
+    expect(docxRunProps(question).some((p) => p.key === "w:color" && p.val === "16A34A")).toBe(true);
+  });
+});
