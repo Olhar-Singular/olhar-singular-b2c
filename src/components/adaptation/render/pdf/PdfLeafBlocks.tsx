@@ -177,6 +177,11 @@ export function PdfScaffolding({
 }) {
   return (
     <View
+      // A moldura é indivisível: sem isto o react-pdf parte a View que não cabe
+      // e repinta fundo, borda e cantos na folha seguinte, abrindo a página com
+      // uma tira bege vazia (o padding e a borda de baixo) enquanto as duas
+      // telas mostram a caixa sempre inteira (achado 0177).
+      wrap={false}
       style={{
         backgroundColor: SCAFFOLDING_BG,
         borderWidth: RULE_WIDTH_PT,
