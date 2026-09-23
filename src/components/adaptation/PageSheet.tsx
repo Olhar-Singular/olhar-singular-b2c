@@ -20,6 +20,7 @@ import {
 import { resolvePageStyle } from "./render/pageStyle";
 import { FOOTER_BOTTOM_PX } from "./render/footerLabel";
 import type { PageStyle } from "@/lib/adaptation/canonical/schema";
+import { cn } from "@/lib/utils";
 
 interface PageSheetProps {
   /**
@@ -702,7 +703,18 @@ export function PageSheet({
           <div
             ref={frameRef}
             onScroll={(event) => setScrollLeft(event.currentTarget.scrollLeft)}
-            className="overflow-x-auto focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+            /*
+              Achado 0237: o anel de foco acompanha a parada de tabulação. As
+              classes vieram com o 0222 e ficaram no elemento quando o 0234
+              restringiu o tab stop à prévia — mas um `div` sem `tabindex` nunca
+              casa `:focus-visible`, então no Revisar elas eram um estado
+              prometido pelo CSS que não podia acontecer.
+            */
+            className={cn(
+              "overflow-x-auto",
+              needsKeyboardScroll &&
+                "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+            )}
             /*
               Achado 0222: sem nenhum focável dentro (a prévia é render de
               leitura), o Chrome só dá rolagem por seta a um container que

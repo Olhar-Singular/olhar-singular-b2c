@@ -348,6 +348,30 @@ describe("PageSheet", () => {
     });
 
     /*
+      Achado 0237: as classes de foco da moldura nasceram com a parada de
+      tabulação do 0222, e ficaram presas ao elemento quando o 0234 restringiu
+      o tab stop à prévia. Um `div` sem `tabindex` nunca casa `:focus-visible`:
+      no Revisar, a única superfície em que se passa o tempo todo, o CSS promete
+      um anel de foco que não pode acontecer.
+    */
+    it("só carrega o anel de foco quando a moldura é focável (achado 0237)", () => {
+      withClientWidth(200, () => {
+        withHeight(900, () => {
+          const { unmount } = render(<PageSheet toolbar={null}><span>x</span></PageSheet>);
+          const revisar = screen.getByTestId("page-sheet").parentElement!.parentElement!;
+          expect(revisar).not.toHaveAttribute("tabindex");
+          expect(revisar.className).not.toContain("focus-visible:");
+          unmount();
+
+          render(<PageSheet paginated toolbar={null}><span>x</span></PageSheet>);
+          const previa = screen.getByTestId("page-sheet").parentElement!.parentElement!;
+          expect(previa).toHaveAttribute("tabindex", "0");
+          expect(previa.className).toContain("focus-visible:ring-2");
+        });
+      });
+    });
+
+    /*
       Achado 0235: o piso 0,75 nasceu para a PRÉVIA (0216), tela onde ninguém
       digita, e o 0234 levou o `scale` para o Revisar sem reexaminá-lo. Em 390px
       de viewport a mesa mede 332px e a folha era desenhada com 595,5px: 44% de
