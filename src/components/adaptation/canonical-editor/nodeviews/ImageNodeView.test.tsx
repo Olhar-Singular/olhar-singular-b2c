@@ -696,3 +696,47 @@ describe("ImageNodeView — foco depois de excluir (achado 0253)", () => {
     expect(focus).toHaveBeenCalledWith(7);
   });
 });
+
+// Achado 0354: a confirmação de excluir a imagem é aberta por estado, sem
+// AlertDialogTrigger, e a lixeira vive no chrome `contentEditable={false}` — o
+// ProseMirror faz preventDefault no mousedown, o botão nunca recebe foco de DOM e
+// o Radix fica sem `previouslyFocusedElement` para restaurar: sair sem excluir
+// larga o foco no <body> e o próximo Tab recomeça do topo (WCAG 2.4.3). É a mesma
+// falha que o 0254 corrigiu no diálogo gêmeo do QuestionNodeView.
+describe("ImageNodeView — foco ao sair da confirmação sem excluir (achado 0354)", () => {
+  it("devolve o foco ao botão Excluir imagem quando o diálogo fecha por Escape", async () => {
+    const { props } = makeProps();
+    render(<ImageNodeView {...props} />);
+    fireEvent.click(screen.getByRole("button", { name: "Excluir imagem" }));
+    fireEvent.keyDown(screen.getByRole("alertdialog"), { key: "Escape" });
+    await waitFor(() =>
+      expect(document.activeElement).toBe(screen.getByRole("button", { name: "Excluir imagem" })),
+    );
+  });
+
+  it("devolve o foco ao botão Excluir imagem quando o diálogo fecha por Cancelar", async () => {
+    const { props } = makeProps();
+    render(<ImageNodeView {...props} />);
+    fireEvent.click(screen.getByRole("button", { name: "Excluir imagem" }));
+    fireEvent.click(screen.getByRole("button", { name: "Cancelar" }));
+    await waitFor(() =>
+      expect(document.activeElement).toBe(screen.getByRole("button", { name: "Excluir imagem" })),
+    );
+  });
+
+  // Não regredir o 0253: confirmando, quem manda no foco é o deleteNodeAndRefocus,
+  // que já levou o cursor para a folha — o handler não pode roubá-lo de volta.
+  it("não rouba o foco da folha quando a saída é confirmar a exclusão", async () => {
+    const { props } = makeProps();
+    const focus = vi.fn();
+    (props.editor as unknown as { commands: unknown }).commands = { focus };
+    (props.editor as unknown as { state: unknown }).state = { doc: { content: { size: 50 } } };
+    render(<ImageNodeView {...props} />);
+    const trash = screen.getByRole("button", { name: "Excluir imagem" });
+    fireEvent.click(trash);
+    fireEvent.click(screen.getByRole("button", { name: "Excluir" }));
+    await waitFor(() => expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument());
+    expect(document.activeElement).not.toBe(trash);
+    expect(focus).toHaveBeenCalledWith(7);
+  });
+});

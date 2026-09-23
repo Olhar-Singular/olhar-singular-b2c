@@ -52,6 +52,11 @@ export function ImageNodeView({ node, updateAttributes, deleteNode, editor, getP
   // legenda) e o autosave grava a perda em seguida. Mesma barreira que "Excluir
   // questão" ganhou no achado 0252: o clique só abre a confirmação.
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
+  // 0354 — a lixeira é o gatilho do diálogo e vive no mesmo chrome não editável:
+  // sem `ref` não há âncora para devolver o foco a quem desistiu da exclusão.
+  const deleteButtonRef = useRef<HTMLButtonElement>(null);
+  // Marca a saída "confirmou a exclusão" para o onCloseAutoFocus do diálogo.
+  const deletedRef = useRef(false);
   const [cropping, setCropping] = useState(false);
   const { src, alt, width, alignment, caption } = node.attrs as {
     src: string;
@@ -205,6 +210,7 @@ export function ImageNodeView({ node, updateAttributes, deleteNode, editor, getP
               </Button>
             )}
             <Button
+              ref={deleteButtonRef}
               type="button"
               variant="ghost"
               size="sm"
@@ -322,7 +328,24 @@ export function ImageNodeView({ node, updateAttributes, deleteNode, editor, getP
         </div>
       </div>
       <AlertDialog open={confirmDeleteOpen} onOpenChange={setConfirmDeleteOpen}>
-        <AlertDialogContent>
+        <AlertDialogContent
+          // Achado 0354: o diálogo é aberto por estado, sem AlertDialogTrigger, e a
+          // lixeira mora no chrome `contentEditable={false}` — o ProseMirror faz
+          // preventDefault no mousedown do nodeview não editável, então o botão nunca
+          // recebe foco de DOM e o Radix não tem `previouslyFocusedElement` para
+          // restaurar: o foco cairia no <body>. Devolvemos à mão. Confirmar é o caso
+          // oposto: ali quem manda é o `deleteNodeAndRefocus` (achado 0253), que já
+          // levou o cursor para a folha — o Radix não pode roubá-lo de volta para um
+          // chrome que sumiu. Mesma correção que o 0254 fez no diálogo da questão.
+          onCloseAutoFocus={(event) => {
+            event.preventDefault();
+            if (deletedRef.current) {
+              deletedRef.current = false;
+              return;
+            }
+            deleteButtonRef.current?.focus();
+          }}
+        >
           <AlertDialogHeader>
             <AlertDialogTitle>Excluir imagem?</AlertDialogTitle>
             <AlertDialogDescription>
@@ -337,7 +360,10 @@ export function ImageNodeView({ node, updateAttributes, deleteNode, editor, getP
           <AlertDialogFooter className="flex-col">
             <AlertDialogCancel>Cancelar</AlertDialogCancel>
             <AlertDialogAction
-              onClick={() => deleteNodeAndRefocus(deleteNode, editor, getPos)}
+              onClick={() => {
+                deletedRef.current = true;
+                deleteNodeAndRefocus(deleteNode, editor, getPos);
+              }}
               className="bg-destructive-surface text-destructive-foreground hover:bg-destructive-surface-hover"
             >
               Excluir
