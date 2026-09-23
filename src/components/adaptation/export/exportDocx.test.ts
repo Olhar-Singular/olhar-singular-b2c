@@ -168,8 +168,9 @@ describe("blockToDocxParagraphs", () => {
 });
 
 describe("headerParagraphs", () => {
-  it("um parágrafo por campo preenchido, mais o separador", () => {
-    expect(headerParagraphs({ title: "T", school: "E", teacher: "P", date: "D" })).toHaveLength(5);
+  it("um parágrafo por bloco do cabeçalho, mais o separador", () => {
+    // Professor(a) e Data dividem UMA linha, como no PDF (achado 0142).
+    expect(headerParagraphs({ title: "T", school: "E", teacher: "P", date: "D" })).toHaveLength(4);
   });
 
   // Achado 0426: o separador entre cabeçalho e conteúdo era emitido SEMPRE, então
@@ -194,10 +195,76 @@ describe("headerParagraphs", () => {
   it("o separador é o último parágrafo e não tem texto", () => {
     const paragraphs = headerParagraphs({ title: "T" });
     expect(paragraphs).toHaveLength(2);
-    expect(docxText(paragraphs[0])).toBe("Título: T");
+    expect(docxText(paragraphs[0])).toBe("T");
     expect(docxText(paragraphs[1])).toBe("");
   });
 });
+// ---------------------------------------------------------------------------
+// 0142 — o cabeçalho do Word espelha o do PDF
+// ---------------------------------------------------------------------------
+//
+// O mesmo cabeçalho do Passo 6 virava dois desenhos: no PDF e na prévia, título
+// centralizado em 18pt, escola abaixo, Professor(a)/Data nos extremos e uma
+// régua; no Word, quatro linhas rotuladas à esquerda, inclusive um "Título:"
+// impresso em cima do título. A referência é `PdfHeader` (AdaptationPdf.tsx).
+describe("0142 · o cabeçalho do Word espelha o do PDF", () => {
+  /** Valores dos nós com esse `rootKey`, já sem o invólucro `{key, value}`. */
+  function vals(node: unknown, key: string): unknown[] {
+    return docxRunProps(node)
+      .filter((p) => p.key === key)
+      .map((p) => (p.val && typeof p.val === "object" ? (p.val as { value?: unknown }).value : p.val));
+  }
+  /** Valor do primeiro nó com esse `rootKey` (ex.: `w:jc` → "center"). */
+  const firstVal = (node: unknown, key: string): unknown => vals(node, key)[0];
+  const full = () =>
+    headerParagraphs({
+      title: "Prova de Ciências",
+      school: "Escola Municipal Teste",
+      teacher: "Prof. Alexandre",
+      date: "2026-08-22",
+    });
+
+  it("o título sai centralizado, em negrito e no corpo do PDF, sem o rótulo", () => {
+    const title = full()[0];
+    expect(docxText(title)).toBe("Prova de Ciências");
+    expect(firstVal(title, "w:jc")).toBe("center");
+    expect(firstVal(title, "w:sz")).toBe(36);
+    expect(docxRunProps(title).some((p) => p.key === "w:b")).toBe(true);
+  });
+
+  it("a escola sai centralizada abaixo do título, a 11pt", () => {
+    const school = full()[1];
+    expect(docxText(school)).toBe("Escola Municipal Teste");
+    expect(firstVal(school, "w:jc")).toBe("center");
+    expect(firstVal(school, "w:sz")).toBe(22);
+  });
+
+  it("professor e data dividem UMA linha, a 10pt, com a data alinhada à direita", () => {
+    const meta = full()[2];
+    expect(docxText(meta)).toContain("Professor(a): Prof. Alexandre");
+    expect(docxText(meta)).toContain("Data: 22/08/2026");
+    expect(firstVal(meta, "w:sz")).toBe(20);
+    // A data vai para o extremo oposto por uma parada de tabulação à direita,
+    // que é como o Word faz o `space-between` do PDF.
+    expect(vals(meta, "w:tab")).toContain("right");
+    expect(vals(meta, "w:tab")).toContain(undefined);
+  });
+
+  it("a régua do cabeçalho é a borda inferior da linha Professor(a)/Data", () => {
+    expect(paragraphBorder(full()[2], "w:bottom")).toEqual({
+      style: "single",
+      size: Math.round(RULE_WIDTH_PT * 8),
+      color: "333333",
+    });
+  });
+
+  it("só o título preenchido → ele mesmo carrega a régua", () => {
+    const only = headerParagraphs({ title: "T" });
+    expect(docxText(only[0])).toBe("T");
+    expect(paragraphBorder(only[0], "w:bottom")).toBeDefined();
+  });
+});
+
 
 // ---------------------------------------------------------------------------
 // B15 — o Word não pode perder conteúdo em silêncio

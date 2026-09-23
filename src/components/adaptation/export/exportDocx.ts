@@ -33,6 +33,9 @@ import {
   PageBreak,
   BorderStyle,
   ShadingType,
+  Tab,
+  TabStopType,
+  TabStopPosition,
 } from "docx";
 import type {
   CanonicalDocument,
@@ -65,6 +68,7 @@ import { documentHasMath, everyBlock } from "./exportWarnings";
 import { perQuestionBreakFlags } from "../render/perQuestionBreaks";
 import { latexLayoutAtom } from "../render/mathAtom";
 import { DEFAULT_PANEL_SETTINGS, formatHeaderDateBR, type PanelSettings } from "./panelSettings";
+import { HEADER_SPACING_PT } from "../render/headerSpacing";
 
 /** A docx section child. Tables are blocks too, not paragraphs. */
 export type DocxBlock = Paragraph | Table;
@@ -124,6 +128,30 @@ const DIVIDER_RULE = {
     },
   },
 } as const;
+
+/**
+ * Cabeçalho do documento, espelhando `PdfHeader` (`render/pdf/AdaptationPdf`):
+ * título 18pt negrito centralizado, escola 11pt centralizada, Professor(a)/Data
+ * a 10pt nos extremos e uma régua fechando o bloco (achado 0142). Os corpos vão
+ * em meios-pontos, a unidade do OOXML; a régua usa a mesma espessura de token
+ * das outras superfícies e a cor do filete do PDF.
+ */
+const HEADER_TITLE_HALF_PT = 18 * 2;
+const HEADER_SCHOOL_HALF_PT = 11 * 2;
+const HEADER_META_HALF_PT = 10 * 2;
+const HEADER_RULE_COLOR = "333333";
+const HEADER_RULE = {
+  border: {
+    bottom: {
+      style: BorderStyle.SINGLE,
+      size: Math.round(RULE_WIDTH_PT * 8),
+      color: HEADER_RULE_COLOR,
+    },
+  },
+} as const;
+
+/** Pontos → twips (1/20 pt), a unidade de espaçamento do OOXML. */
+const ptToTwip = (pt: number): number => Math.round(pt * 20);
 
 /** Derive a safe .docx filename from the document header title. */
 export function docxFileName(header: DocumentHeader): string {
@@ -479,25 +507,56 @@ export function blockToDocxParagraphs(block: Block, number: number): DocxBlock[]
 }
 
 export function headerParagraphs(header: DocumentHeader): Paragraph[] {
-  const lines: [string, string][] = [
-    ["Título", header.title ?? ""],
-    ["Escola", header.school ?? ""],
-    ["Professor(a)", header.teacher ?? ""],
-    // A data vai pelo MESMO formatador da prévia, do PDF e do "Copiar": sem ele,
-    // só o Word imprimia o valor cru do `<input type="date">` (2026-08-18) numa
-    // prova que nenhuma tela do app mostrou assim (achado 0133).
-    ["Data", header.date ? formatHeaderDateBR(header.date) : ""],
-  ].filter(([, v]) => v) as [string, string][];
+  const title = header.title?.trim() ?? "";
+  const school = header.school?.trim() ?? "";
+  const teacher = header.teacher?.trim() ?? "";
+  // A data vai pelo MESMO formatador da prévia, do PDF e do "Copiar": sem ele,
+  // só o Word imprimia o valor cru do `<input type="date">` (2026-08-18) numa
+  // prova que nenhuma tela do app mostrou assim (achado 0133).
+  const date = header.date?.trim() ? formatHeaderDateBR(header.date.trim()) : "";
 
-  if (lines.length === 0) return [];
+  if (!title && !school && !teacher && !date) return [];
+
+  const blocks: NonNullable<ConstructorParameters<typeof Paragraph>[0]>[] = [];
+
+  if (title) {
+    blocks.push({
+      alignment: AlignmentType.CENTER,
+      children: [new TextRun({ text: title, bold: true, size: HEADER_TITLE_HALF_PT })],
+    });
+  }
+  if (school) {
+    blocks.push({
+      alignment: AlignmentType.CENTER,
+      spacing: { before: ptToTwip(HEADER_SPACING_PT.schoolTop) },
+      children: [new TextRun({ text: school, size: HEADER_SCHOOL_HALF_PT })],
+    });
+  }
+  if (teacher || date) {
+    // Professor(a) e Data dividem UMA linha nos extremos opostos: o que no PDF
+    // é `justifyContent: space-between` aqui é uma parada de tabulação à
+    // direita, o equivalente do Word.
+    const meta: TextRun[] = [];
+    if (teacher)
+      meta.push(new TextRun({ text: `Professor(a): ${teacher}`, size: HEADER_META_HALF_PT }));
+    meta.push(new TextRun({ children: [new Tab()], size: HEADER_META_HALF_PT }));
+    if (date) meta.push(new TextRun({ text: `Data: ${date}`, size: HEADER_META_HALF_PT }));
+    blocks.push({
+      tabStops: [{ type: TabStopType.RIGHT, position: TabStopPosition.MAX }],
+      spacing: {
+        before: ptToTwip(HEADER_SPACING_PT.metaTop),
+        after: ptToTwip(HEADER_SPACING_PT.bottomPadding),
+      },
+      children: meta,
+    });
+  }
+
+  // A régua fica na ÚLTIMA linha do cabeçalho, seja ela qual for — no PDF ela é
+  // a borda do bloco inteiro, e o bloco encolhe com os campos vazios.
+  blocks[blocks.length - 1] = { ...blocks[blocks.length - 1], ...HEADER_RULE };
 
   return [
-    ...lines.map(
-      ([label, value]) =>
-        new Paragraph({
-          children: [new TextRun({ text: `${label}: `, bold: true }), new TextRun({ text: value })],
-        }),
-    ),
+    ...blocks.map((options) => new Paragraph(options)),
     // O separador entre cabeçalho e conteúdo sai JUNTO com o cabeçalho: emitido
     // solto na seção, ele sobrevivia ao cabeçalho vazio (o estado padrão do
     // Passo 6) e o .docx abria com uma linha em branco no topo, enquanto o PDF e
