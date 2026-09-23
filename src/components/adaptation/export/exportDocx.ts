@@ -9,6 +9,7 @@
  * `documentRunStyle`    — pure pageStyle → docx run mapping (font + half-points + ink).
  * `docxContentBlocks`   — pure document + PanelSettings → docx blocks, já com as
  *                         quebras de página (switch do painel e `style.pageBreakBefore`).
+ * `docxSectionProperties` — margem da página derivada de `PAGE_MARGIN_PT`.
  * `downloadDocx`        — side-effecting blob + DOM download (v8 ignore).
  *
  * Presentation mirrors the PDF (`render/pdf/PdfAnswer`, `PdfLeafBlocks`,
@@ -60,6 +61,7 @@ import {
   SCAFFOLDING_BORDER,
   SCAFFOLDING_LABEL,
   HEADING_PT,
+  PAGE_MARGIN_PT,
   RULE_COLOR,
   RULE_WIDTH_PT,
 } from "../render/pageTokens";
@@ -675,6 +677,27 @@ export function docxContentBlocks(
   });
 }
 
+/**
+ * As propriedades da seção do .docx — hoje só a margem da página.
+ *
+ * Achado 0331: a seção ia sem `properties`, então valia a margem default da lib
+ * `docx` (1440 twips = 1 polegada = 72pt), contra os 40pt de `PAGE_MARGIN_PT`
+ * que o PDF e as duas telas usam. Mesma folha A4, coluna 12,4% mais estreita
+ * (451,28pt contra 515,28pt): como a quebra de linha e a paginação dependem da
+ * largura útil, o documento inteiro reflowa entre a prévia aprovada e o arquivo
+ * que o professor abre no Word.
+ *
+ * Mora fora de `downloadDocx` (que é `v8 ignore` pelos efeitos de DOM) para
+ * nascer com teste, como `documentRunStyle` e `docxContentBlocks`.
+ */
+export function docxSectionProperties(): {
+  page: { margin: { top: number; right: number; bottom: number; left: number } };
+} {
+  // O Word mede a página em twips: 1pt = 20 twips, logo 40pt = 800.
+  const margin = Math.round(PAGE_MARGIN_PT * 20);
+  return { page: { margin: { top: margin, right: margin, bottom: margin, left: margin } } };
+}
+
 /* v8 ignore start */
 export async function downloadDocx(
   document: CanonicalDocument,
@@ -688,6 +711,7 @@ export async function downloadDocx(
     styles: { default: { document: { run: documentRunStyle(pageStyle) } } },
     sections: [
       {
+        properties: docxSectionProperties(),
         children: [...headerParagraphs(header), ...contentParagraphs],
       },
     ],

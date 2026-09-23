@@ -10,8 +10,15 @@ import {
   headerParagraphs,
   docxExportWarnings,
   documentRunStyle,
+  docxSectionProperties,
 } from "./exportDocx";
-import { HEADING_PT, RULE_COLOR, RULE_WIDTH_PT, pageTokensToPdf } from "../render/pageTokens";
+import {
+  HEADING_PT,
+  PAGE_MARGIN_PT,
+  RULE_COLOR,
+  RULE_WIDTH_PT,
+  pageTokensToPdf,
+} from "../render/pageTokens";
 import type {
   Block,
   Inline,
@@ -1136,5 +1143,27 @@ describe("0134 · o Word carrega a formatação por nó", () => {
       if (p instanceof Paragraph) expect(docxNodeAttrs(p, "w:jc")).toEqual({ val: "both" });
     });
     expect(docxRunProps(question).some((p) => p.key === "w:color" && p.val === "16A34A")).toBe(true);
+  });
+});
+
+/**
+ * Achado 0331: a seção do .docx ia sem `properties`, então a margem era o
+ * default da lib `docx` (1440 twips = 1 polegada = 72pt) contra os 40pt que o
+ * PDF e as duas telas leem de `PAGE_MARGIN_PT`. Na mesma folha A4 isso deixa a
+ * coluna do Word 12,4% mais estreita (451,28pt contra 515,28pt) e reflowa o
+ * documento inteiro: o professor aprova a prévia e abre um arquivo com outras
+ * quebras de linha e outra contagem de páginas.
+ */
+describe("docxSectionProperties", () => {
+  it("deriva a margem da página de PAGE_MARGIN_PT, nos quatro lados", () => {
+    const twips = Math.round(PAGE_MARGIN_PT * 20); // 1pt = 20 twips
+    expect(docxSectionProperties()).toEqual({
+      page: { margin: { top: twips, right: twips, bottom: twips, left: twips } },
+    });
+  });
+
+  it("não usa a margem de 1 polegada que a lib docx aplica por default", () => {
+    const { margin } = docxSectionProperties().page;
+    Object.values(margin).forEach((side) => expect(side).not.toBe(1440));
   });
 });
