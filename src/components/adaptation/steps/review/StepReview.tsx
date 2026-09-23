@@ -459,7 +459,17 @@ export function StepReview({
         </div>
       )}
 
-      <div className="flex justify-between pt-4">
+      {/*
+        Achado 0156: a barra ficava no fim do fluxo do documento (`static`), e a
+        folha cresce em múltiplos de A4 — em 1366x768 com o texto em 28px o CTA
+        "Exportar" caía 1.786px abaixo da dobra, a maior parte disso o branco que
+        sobra na última folha. Navegar dentro do papel e comandar o passo são
+        coisas diferentes e não podem disputar o mesmo eixo de rolagem, então a
+        barra gruda no pé do quadro. Sendo `sticky` (e não `fixed`) ela continua
+        no fluxo: reserva o próprio espaço no fim da mesa em vez de cobrir o pé
+        da folha, onde mora a última pauta da questão aberta.
+      */}
+      <div className="sticky bottom-0 z-10 flex justify-between gap-2 border-t border-surface-chrome-line bg-surface-chrome px-2 py-3">
         <Button variant="outline" onClick={onPrev} aria-label="Voltar">
           <ArrowLeft className="w-4 h-4 mr-2" /> Voltar
         </Button>

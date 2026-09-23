@@ -736,4 +736,25 @@ describe("StepReview", () => {
       expect(ext.options).toEqual({ file: null, pageImages: [], userId: null });
     });
   });
+  // Achado 0156: a barra de ações do passo ficava no fim do fluxo, sem `sticky`.
+  // Como a folha cresce em múltiplos de A4, "Salvar adaptação" e "Exportar"
+  // desciam junto: em 1366x768, com texto 28px, o CTA caía em y~2554 (1.786px
+  // abaixo da dobra), a maior parte disso papel em branco da segunda folha.
+  describe("barra de ações do passo (0156)", () => {
+    it("gruda a barra no pé do quadro, com fundo opaco e separação", () => {
+      setup();
+      const bar = screen.getByLabelText("Avançar para exportação").parentElement!.parentElement!;
+      expect(bar.className).toMatch(/(?:^|\s)sticky(?:\s|$)/);
+      expect(bar.className).toMatch(/(?:^|\s)bottom-0(?:\s|$)/);
+      expect(bar.className).toMatch(/(?:^|\s)bg-surface-chrome(?:\s|$)/);
+      expect(bar.className).toMatch(/(?:^|\s)border-t(?:\s|$)/);
+      expect(bar.className).toMatch(/(?:^|\s)z-\d+(?:\s|$)/);
+    });
+
+    it("mantém Voltar na mesma barra grudada", () => {
+      setup();
+      const bar = screen.getByLabelText("Voltar").parentElement!;
+      expect(bar.className).toMatch(/(?:^|\s)sticky(?:\s|$)/);
+    });
+  });
 });

@@ -240,4 +240,16 @@ describe("StepExportCanonical", () => {
     expect(onPrev).toHaveBeenCalled();
     expect(onRestart).toHaveBeenCalled();
   });
+  // Achado 0156: mesma barra, mesmo sintoma — num documento de 2.944px os dois
+  // CTAs do passo ("Voltar" / "Nova adaptação") só apareciam depois de rolar a
+  // prévia inteira.
+  it("gruda a barra de ações no pé do quadro (0156)", () => {
+    renderStep({});
+    const bar = screen.getByRole("button", { name: /Nova adaptação/i }).parentElement!;
+    expect(bar.className).toMatch(/(?:^|\s)sticky(?:\s|$)/);
+    expect(bar.className).toMatch(/(?:^|\s)bottom-0(?:\s|$)/);
+    expect(bar.className).toMatch(/(?:^|\s)bg-surface-chrome(?:\s|$)/);
+    expect(bar.className).toMatch(/(?:^|\s)border-t(?:\s|$)/);
+    expect(bar.className).toMatch(/(?:^|\s)z-\d+(?:\s|$)/);
+  });
 });

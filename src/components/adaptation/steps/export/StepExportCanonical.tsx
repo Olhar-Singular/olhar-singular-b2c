@@ -101,7 +101,9 @@ export function StepExportCanonical({
         <CanonicalRenderer document={document} pageBreakPerQuestion={pageBreakPerQuestion} />
       </PageSheet>
 
-      <div className="flex justify-between">
+      {/* Mesma barra, mesmo achado 0156: num documento de 2.944px os CTAs do
+          passo só apareciam depois de rolar a prévia inteira. */}
+      <div className="sticky bottom-0 z-10 flex justify-between gap-2 border-t border-surface-chrome-line bg-surface-chrome px-2 py-3">
         <Button variant="outline" onClick={onPrev}>
           <ArrowLeft className="w-4 h-4 mr-2" /> Voltar
         </Button>
