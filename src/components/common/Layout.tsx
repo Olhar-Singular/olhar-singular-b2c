@@ -152,9 +152,11 @@ export default function Layout({ children }: { children?: React.ReactNode }) {
             </span>
           )}
           <button
+            type="button"
             onClick={() => setMobileOpen((v) => !v)}
             aria-label={mobileOpen ? "Fechar menu" : "Abrir menu"}
             aria-expanded={mobileOpen}
+            className="-mr-2 inline-flex min-h-11 min-w-11 items-center justify-center rounded-md focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-foreground focus-visible:ring-offset-0"
           >
             {mobileOpen
               ? <X className="w-5 h-5" aria-hidden="true" />

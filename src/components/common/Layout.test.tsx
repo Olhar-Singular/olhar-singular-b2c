@@ -131,6 +131,17 @@ describe("Layout", () => {
     expect(screen.getByRole("button", { name: /Abrir menu/i })).toBeInTheDocument();
   });
 
+  it("hamburger button keeps a 44x44 touch target around the 20px icon (0201)", () => {
+    setAuth();
+    renderWithProviders(<Layout />, { route: "/dashboard" });
+    const open = screen.getByRole("button", { name: /Abrir menu/i });
+    expect(open).toHaveAttribute("type", "button");
+    const cls = open.className;
+    expect(cls).toContain("min-h-11");
+    expect(cls).toContain("min-w-11");
+    expect(cls).toContain("focus-visible:ring-2");
+  });
+
   it("mobile drawer link click closes the drawer", () => {
     setAuth();
     renderWithProviders(<Layout />, { route: "/dashboard" });
