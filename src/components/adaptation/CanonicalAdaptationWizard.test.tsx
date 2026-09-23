@@ -458,6 +458,37 @@ describe("CanonicalAdaptationWizard", () => {
     expect(screen.getByTestId("pick-type")).toBeInTheDocument();
   });
 
+  // 0108-B: o `disabled` do stepper era calculado contra o passo ATUAL, então voltar
+  // ao Tipo para conferir a escolha trancava de novo todos os passos já percorridos —
+  // com os dados preenchidos e o documento já gerado. Vale o passo mais avançado que
+  // já foi alcançado.
+  it("the step indicator keeps every reached step reachable after going back", () => {
+    renderWithProviders(<CanonicalAdaptationWizard />);
+    advanceToReview();
+    fireEvent.click(screen.getByRole("button", { name: /1.*Tipo/i }));
+
+    expect(screen.getByRole("button", { name: /2.*Atividade/i })).toBeEnabled();
+    expect(screen.getByRole("button", { name: /5.*Revisar/i })).toBeEnabled();
+    // e o passo nunca alcançado continua trancado
+    expect(screen.getByRole("button", { name: /6.*Exportar/i })).toBeDisabled();
+
+    // o salto direto de volta ao Revisar funciona, sem percorrer Próximo por Próximo
+    fireEvent.click(screen.getByRole("button", { name: /5.*Revisar/i }));
+    expect(screen.getByTestId("review-doc")).toBeInTheDocument();
+  });
+
+  it("Nova adaptação tranca de novo os passos do documento anterior", async () => {
+    renderWithProviders(<CanonicalAdaptationWizard />);
+    advanceToReview();
+    fireEvent.click(screen.getByRole("button", { name: /Avançar para exportação/i }));
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: /Nova adaptação/i }));
+    });
+
+    expect(screen.getByRole("button", { name: /2.*Atividade/i })).toBeDisabled();
+    expect(screen.getByRole("button", { name: /5.*Revisar/i })).toBeDisabled();
+  });
+
   // On 390px the step strip overflows horizontally: the active chip sits outside
   // the viewport and the container stays at scrollLeft 0. The chip must scroll
   // itself into view whenever the step changes.

@@ -34,3 +34,35 @@ describe("StepActivityType", () => {
     expect(onSelect).toHaveBeenNthCalledWith(3, "projeto");
   });
 });
+
+// 0108-A: o passo 1 não tinha estado de selecionado. Quem voltava ao Tipo depois de
+// escolher via os quatro cards idênticos — impossível distinguir "o clique não pegou"
+// de "pegou e a tela não mostra".
+describe("StepActivityType — estado de selecionado (0108)", () => {
+  it("marks the current type with aria-pressed and leaves the others unpressed", () => {
+    render(<StepActivityType value="prova" onSelect={vi.fn()} />);
+    expect(screen.getByRole("button", { name: /Prova/i })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByRole("button", { name: /Exercício/i })).toHaveAttribute("aria-pressed", "false");
+    expect(screen.getByRole("button", { name: /Texto.*Leitura/i })).toHaveAttribute("aria-pressed", "false");
+    expect(screen.getByRole("button", { name: /Projeto.*Pesquisa/i })).toHaveAttribute("aria-pressed", "false");
+  });
+
+  it("leaves every card unpressed when no type was chosen yet", () => {
+    render(<StepActivityType onSelect={vi.fn()} />);
+    screen
+      .getAllByRole("button")
+      .forEach((b) => expect(b).toHaveAttribute("aria-pressed", "false"));
+  });
+
+  // A distinção não pode depender só de cor (WCAG 1.4.1): o card escolhido carrega
+  // um selo textual, lido por leitor de tela e visível em tons de cinza.
+  it("marks the selected card with a non-color badge", () => {
+    const { rerender } = render(<StepActivityType value="texto" onSelect={vi.fn()} />);
+    const selected = screen.getByTestId("activity-type-selected");
+    expect(selected).toHaveTextContent(/Selecionado/i);
+    expect(screen.getByRole("button", { name: /Texto.*Leitura/i })).toContainElement(selected);
+
+    rerender(<StepActivityType onSelect={vi.fn()} />);
+    expect(screen.queryByTestId("activity-type-selected")).not.toBeInTheDocument();
+  });
+});

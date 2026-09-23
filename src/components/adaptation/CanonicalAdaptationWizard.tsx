@@ -150,6 +150,16 @@ export default function CanonicalAdaptationWizard({ editMode }: Props = {}) {
   const hasUnsavedResult = !!data.result && !isSaved && !isGenerating;
   const navGuard = useNavigationGuard(isGenerating || isUploading || hasUnsavedResult);
   const [stepIndex, setStepIndex] = useState(editMode ? REVIEW_INDEX : 0);
+  /**
+   * Passo mais avançado já alcançado (0108).
+   *
+   * O `disabled` dos chips era calculado contra o passo ATUAL, então voltar ao
+   * Tipo para conferir a escolha trancava de novo os passos já percorridos:
+   * com a atividade escrita, as barreiras marcadas e o documento gerado, o
+   * professor tinha que refazer Próximo por Próximo. A trava existe para
+   * impedir pular etapa não cumprida, não para punir quem volta.
+   */
+  const [maxStepReached, setMaxStepReached] = useState(editMode ? REVIEW_INDEX : 0);
   const [confirmRegenerate, setConfirmRegenerate] = useState(false);
   /**
    * Set while the editor cannot convert the sheet to the canonical model, i.e.
@@ -285,6 +295,12 @@ export default function CanonicalAdaptationWizard({ editMode }: Props = {}) {
     stepRegionRef.current?.focus({ preventScroll: true });
   }, [stepIndex]);
 
+  // O teto só sobe sozinho; quem o rebaixa é quem invalida o que havia adiante
+  // ("Nova adaptação" e "Regerar"), explicitamente.
+  useEffect(() => {
+    setMaxStepReached((max) => Math.max(max, stepIndex));
+  }, [stepIndex]);
+
   const updateData = useCallback((partial: Partial<WizardData>) => {
     setData((prev) => ({ ...prev, ...partial }));
   }, []);
@@ -370,6 +386,7 @@ export default function CanonicalAdaptationWizard({ editMode }: Props = {}) {
     await flushPending();
     setData(INITIAL_WIZARD_DATA);
     setStepIndex(0);
+    setMaxStepReached(0);
     setStashedResult(null);
     setDraftId(null);
     setDraftUpdatedAt(null);
@@ -391,6 +408,9 @@ export default function CanonicalAdaptationWizard({ editMode }: Props = {}) {
     setStashedResult(data.result);
     setData((prev) => clearResult(prev));
     setStepIndex(GENERATE_INDEX);
+    // O documento anterior saiu do estado: Revisar e Exportar deixam de ser
+    // passos alcançados até a nova geração chegar.
+    setMaxStepReached(GENERATE_INDEX);
   }
 
   /**
@@ -484,6 +504,7 @@ export default function CanonicalAdaptationWizard({ editMode }: Props = {}) {
       case "activity_type":
         return (
           <StepActivityType
+            value={data.activityType}
             onSelect={(type) => {
               // Resets to "bank": re-picking a type after having toggled into the
               // upload path (then navigating back) should not strand the Atividade
@@ -594,11 +615,11 @@ export default function CanonicalAdaptationWizard({ editMode }: Props = {}) {
               type="button"
               ref={i === stepIndex ? activeStepRef : undefined}
               onClick={() => goTo(i)}
-              disabled={i > stepIndex}
+              disabled={i > maxStepReached}
               className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
                 i === stepIndex
                   ? "bg-primary text-primary-foreground"
-                  : i < stepIndex
+                  : i <= maxStepReached
                   ? "bg-primary/10 text-primary-strong hover:bg-primary/20"
                   : "bg-muted text-muted-foreground cursor-not-allowed"
               }`}
