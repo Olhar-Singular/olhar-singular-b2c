@@ -132,8 +132,14 @@ export function AdaptationPdf({ document, settings = DEFAULT_PANEL_SETTINGS, pag
   // per-element sizes the screen sheet emits as --doc-fs-* vars.
   const elementSizes = resolveElementFontSizes(resolved);
 
+  // Achado 0310: metadados do PDF. `/Title` faz o visualizador e o leitor de
+  // tela anunciarem a atividade (e não o nome do arquivo) e `/Lang` dá ao
+  // sintetizador as regras de pronúncia do pt-BR (WCAG 3.1.1). O título sai do
+  // mesmo `header.title` que já nomeia o cabeçalho impresso e o `.docx`.
+  const documentTitle = settings.header.title?.trim() || "Atividade adaptada";
+
   return (
-    <Document>
+    <Document title={documentTitle} language="pt-BR">
       <Page size="A4" style={pageTokensToPdf(resolved)}>
         <PdfHeader header={settings.header} />
         {(() => {

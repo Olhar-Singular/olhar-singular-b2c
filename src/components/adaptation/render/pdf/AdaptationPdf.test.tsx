@@ -62,6 +62,20 @@ describe("AdaptationPdf", () => {
     expect(el.props.children.type).toBe(Page);
   });
 
+  it("passes document metadata (title from header, pt-BR language) to <Document>", () => {
+    const el = AdaptationPdf({
+      document: renderDocument,
+      settings: { header: { title: "  Prova de Ciências  " }, pageBreakPerQuestion: false },
+    });
+    expect(el.props.title).toBe("Prova de Ciências");
+    expect(el.props.language).toBe("pt-BR");
+  });
+
+  it("falls back to a generic title when the header has none", () => {
+    const el = AdaptationPdf({ document: renderDocument, settings });
+    expect(el.props.title).toBe("Atividade adaptada");
+  });
+
   it("applies font family from pageStyle (lexend → 'Lexend')", () => {
     const el = AdaptationPdf({
       document: renderDocument,
