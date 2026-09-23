@@ -66,6 +66,8 @@ export function ImageNodeView({ node, updateAttributes, deleteNode, editor, getP
     caption: RichText | null;
   };
   const disabled = !editor.isEditable;
+  /** 0309 — o default `null` imprime como esquerda em todas as superfícies. */
+  const resolvedAlignment = alignment ?? "left";
 
   // Only set for adaptações do "Adaptar direto do arquivo" (UploadedExamExtension,
   // configured per Revisar session) — absent for Banco de Questões adaptações
@@ -161,10 +163,23 @@ export function ImageNodeView({ node, updateAttributes, deleteNode, editor, getP
             type="button"
             variant="ghost"
             size="icon"
-            className={cn("h-7 w-7", FOLHA_GHOST, FOLHA_TOUCH_TARGET, alignment === value && "bg-surface-mesa-2 text-surface-ink")}
+            /*
+              0309 — o grupo compara o alinhamento RESOLVIDO, não o atributo cru:
+              `alignment` nasce `null` e as três superfícies (editor, prévia e
+              PDF) desenham `null` como esquerda, então `null === "left"` deixava
+              os três apagados enquanto a imagem já estava à esquerda.
+            */
+            className={cn("h-7 w-7", FOLHA_GHOST, FOLHA_TOUCH_TARGET, resolvedAlignment === value && "bg-surface-mesa-2 text-surface-ink")}
             disabled={disabled}
             onClick={() => updateAttributes({ alignment: value })}
             title={label}
+            /*
+              0309 — escolha exclusiva precisa de estado programático: sem
+              `aria-pressed` o leitor de tela anuncia três botões comuns e o
+              ativo só existe como cor de fundo (WCAG 1.4.1). Mesmo contrato que
+              a SelectionBubble desta superfície já cumpre.
+            */
+            aria-pressed={resolvedAlignment === value}
             aria-label={label}
           >
             <Icon className="h-3.5 w-3.5" />

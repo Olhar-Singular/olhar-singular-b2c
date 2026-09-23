@@ -211,6 +211,39 @@ describe("ImageNodeView", () => {
     expect(updateAttributes).toHaveBeenCalledWith({ alignment: "center" });
   });
 
+  // --- Estado do grupo de alinhamento (achado 0309) --------------------------
+
+  /**
+   * 0309 — os três botões são escolha exclusiva e o único sinal de "este está
+   * ativo" era a cor de fundo: leitor de tela ouvia três botões comuns (WCAG
+   * 1.4.1 e 4.1.2). A SelectionBubble da mesma superfície já expõe
+   * `aria-pressed`; a barra da imagem ficou de fora.
+   */
+  it("expõe aria-pressed no alinhamento ativo (achado 0309)", () => {
+    renderImage({ alignment: "center" });
+    expect(screen.getByRole("button", { name: "Alinhar à esquerda" })).toHaveAttribute("aria-pressed", "false");
+    expect(screen.getByRole("button", { name: "Centralizar" })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByRole("button", { name: "Alinhar à direita" })).toHaveAttribute("aria-pressed", "false");
+  });
+
+  /**
+   * 0309 — `alignment` nasce `null` e as três superfícies (editor, prévia e PDF)
+   * desenham `null` como esquerda. Comparar cru (`null === "left"`) deixava o
+   * grupo inteiro apagado enquanto a imagem já estava à esquerda.
+   */
+  it("com alignment null o botão da esquerda aparece ativo (achado 0309)", () => {
+    renderImage({ alignment: null });
+    expect(screen.getByRole("button", { name: "Alinhar à esquerda" })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByRole("button", { name: "Centralizar" })).toHaveAttribute("aria-pressed", "false");
+    expect(screen.getByRole("button", { name: "Alinhar à direita" })).toHaveAttribute("aria-pressed", "false");
+  });
+
+  it("com alignment null o botão da esquerda também recebe o realce visual (achado 0309)", () => {
+    renderImage({ alignment: null });
+    expect(screen.getByRole("button", { name: "Alinhar à esquerda" }).className).toMatch(/bg-surface-mesa-2/);
+    expect(screen.getByRole("button", { name: "Centralizar" }).className).not.toMatch(/bg-surface-mesa-2/);
+  });
+
   it("sempre mostra os controles de alinhamento + trocar imagem", () => {
     const { props } = makeProps({ alignment: "left" });
     render(<ImageNodeView {...props} />);
