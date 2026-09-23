@@ -38,6 +38,8 @@ import {
 } from "@/components/ui/alert-dialog";
 import { type PanelSettings } from "./panelSettings";
 
+type ExportWarning = { format: "pdf" | "word"; warnings: string[] };
+
 type Props = {
   document: CanonicalDocument;
   /**
@@ -81,9 +83,21 @@ export function ExportPanel({
    * "Word gerado!" / "PDF gerado!" por cima de conteúdo que o arquivo não
    * carrega — o professor só descobria o buraco na frente da turma.
    */
-  const [pending, setPending] = useState<{ format: "pdf" | "word"; warnings: string[] } | null>(
-    null,
-  );
+  const [pending, setPending] = useState<ExportWarning | null>(null);
+  /**
+   * 0129 — o conteúdo do diálogo continua montado durante a animação de saída
+   * (200 ms). Se o render lesse `pending` direto, nesse intervalo ele veria
+   * `null`: o título cairia no ramo do Word e a lista de avisos ficaria vazia,
+   * trocando a identidade do aviso (e o nome acessível do diálogo) bem na hora
+   * em que o professor decide se confia no arquivo. O render lê daqui, que
+   * guarda o último aviso aberto e sobrevive ao fechamento.
+   */
+  const [shown, setShown] = useState<ExportWarning | null>(null);
+
+  const openPending = (next: ExportWarning) => {
+    setPending(next);
+    setShown(next);
+  };
 
   /**
    * 0419 — o Radix devolve o foco ao gatilho quando o diálogo fecha, mas
@@ -137,7 +151,7 @@ export function ExportPanel({
   const handleExport = async () => {
     const warnings = pdfExportWarnings(document, pageStyle);
     if (warnings.length > 0) {
-      setPending({ format: "pdf", warnings });
+      openPending({ format: "pdf", warnings });
       return;
     }
     await runPdfExport();
@@ -162,15 +176,18 @@ export function ExportPanel({
     // Only interrupt when there is something to say; a clean document still
     // downloads in one click.
     if (warnings.length > 0) {
-      setPending({ format: "word", warnings });
+      openPending({ format: "word", warnings });
       return;
     }
     await runWordExport();
   };
 
   const confirmPending = () => {
-    const format = pending?.format;
-    restoreFocusRef.current = format === "pdf" ? "pdf" : "word";
+    // `pending` é sempre não-nulo aqui: só o diálogo aberto chama. Ler o
+    // formato dele (e não um default) evita que um estado indefinido escolha
+    // sozinho a exportação Word.
+    const { format } = pending;
+    restoreFocusRef.current = format;
     setPending(null);
     if (format === "pdf") void runPdfExport();
     else void runWordExport();
@@ -262,37 +279,39 @@ export function ExportPanel({
       </div>
 
       <AlertDialog open={pending !== null} onOpenChange={(open) => !open && setPending(null)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>
-              {pending?.format === "pdf" ? "O que não vai para o PDF" : "O que não vai para o Word"}
-            </AlertDialogTitle>
-            <AlertDialogDescription asChild>
-              <div>
-                {/* A referência é sempre a prévia, a única superfície que o professor
-                    tem na tela. Comparar com o PDF mentiria quando há fórmula: os dois
-                    formatos imprimem o mesmo LaTeX cru. */}
-                <p className="mb-2">
-                  O arquivo será gerado, mas estes itens não saem como aparecem na prévia:
-                </p>
-                <ul className="list-disc space-y-1 pl-5 text-left">
-                  {(pending?.warnings ?? []).map((warning) => (
-                    <li key={warning}>{warning}</li>
-                  ))}
-                </ul>
-                {/* Só empurra para o PDF quando o PDF é de fato mais fiel: com
-                    fórmula ele imprime o mesmo LaTeX cru que o Word. */}
-                {pending?.format === "word" && !documentHasMath(document) && (
-                  <p className="mt-2">Para fidelidade total, exporte em PDF.</p>
-                )}
-              </div>
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter className="flex-col">
-            <AlertDialogCancel>Cancelar</AlertDialogCancel>
-            <AlertDialogAction onClick={confirmPending}>Baixar mesmo assim</AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
+        {shown !== null && (
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>
+                {shown.format === "pdf" ? "O que não vai para o PDF" : "O que não vai para o Word"}
+              </AlertDialogTitle>
+              <AlertDialogDescription asChild>
+                <div>
+                  {/* A referência é sempre a prévia, a única superfície que o professor
+                      tem na tela. Comparar com o PDF mentiria quando há fórmula: os dois
+                      formatos imprimem o mesmo LaTeX cru. */}
+                  <p className="mb-2">
+                    O arquivo será gerado, mas estes itens não saem como aparecem na prévia:
+                  </p>
+                  <ul className="list-disc space-y-1 pl-5 text-left">
+                    {shown.warnings.map((warning) => (
+                      <li key={warning}>{warning}</li>
+                    ))}
+                  </ul>
+                  {/* Só empurra para o PDF quando o PDF é de fato mais fiel: com
+                      fórmula ele imprime o mesmo LaTeX cru que o Word. */}
+                  {shown.format === "word" && !documentHasMath(document) && (
+                    <p className="mt-2">Para fidelidade total, exporte em PDF.</p>
+                  )}
+                </div>
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter className="flex-col">
+              <AlertDialogCancel>Cancelar</AlertDialogCancel>
+              <AlertDialogAction onClick={confirmPending}>Baixar mesmo assim</AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        )}
       </AlertDialog>
     </div>
   );
