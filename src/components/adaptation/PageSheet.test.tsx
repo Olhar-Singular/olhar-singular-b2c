@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { act, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen } from "@testing-library/react";
 import { PageSheet } from "./PageSheet";
 import { PAGE_CONTENT_HEIGHT_PX, PAGE_MARGIN_PX } from "./render/pageTokens";
 import { FOOTER_BOTTOM_PX } from "./render/footerLabel";
@@ -214,6 +214,46 @@ describe("PageSheet", () => {
           expect(frame).not.toHaveAttribute("tabindex");
           expect(frame).not.toHaveAttribute("role");
           expect(screen.queryByTestId("page-overflow-hint")).not.toBeInTheDocument();
+        });
+      });
+    });
+
+    /*
+      Achado 0229: a máscara da borda direita é PISTA de rolagem, e nascia
+      função só da geometria (`overflows`), idêntica do começo ao fim do curso.
+      No fim ela mentia — prometia conteúdo que já tinha acabado — e escurecia
+      24px do papel justamente onde o professor tinha ido conferir (a margem
+      direita do A4); e do documento deixado para trás não havia sinal nenhum.
+    */
+    const rolarMolduraAte = (frame: HTMLElement, left: number) => {
+      Object.defineProperty(frame, "scrollLeft", { value: left, configurable: true });
+      fireEvent.scroll(frame);
+    };
+
+    it("tira a máscara da direita quando a rolagem chega ao fim (achado 0229)", () => {
+      withClientWidth(200, () => {
+        withHeight(1123, () => {
+          render(<PageSheet paginated toolbar={null}><span>x</span></PageSheet>);
+          const frame = screen.getByTestId("page-sheet").parentElement!.parentElement!;
+          expect(screen.getByTestId("page-scroll-mask-right")).toBeInTheDocument();
+          // Folha de 794px no piso de 0,4 = 317,6px numa mesa de 200px: o curso
+          // da rolagem é de 117,6px.
+          rolarMolduraAte(frame, 117.6);
+          expect(screen.queryByTestId("page-scroll-mask-right")).not.toBeInTheDocument();
+        });
+      });
+    });
+
+    it("espelha a pista na borda esquerda depois que a folha rola (achado 0229)", () => {
+      withClientWidth(200, () => {
+        withHeight(1123, () => {
+          render(<PageSheet paginated toolbar={null}><span>x</span></PageSheet>);
+          const frame = screen.getByTestId("page-sheet").parentElement!.parentElement!;
+          // No começo do curso não há nada para trás: só a pista da direita.
+          expect(screen.queryByTestId("page-scroll-mask-left")).not.toBeInTheDocument();
+          rolarMolduraAte(frame, 60);
+          expect(screen.getByTestId("page-scroll-mask-left")).toBeInTheDocument();
+          expect(screen.getByTestId("page-scroll-mask-right")).toBeInTheDocument();
         });
       });
     });

@@ -469,6 +469,37 @@ export function PageSheet({
   */
   const needsKeyboardScroll = overflows && paginated;
 
+  /*
+    Achado 0229: a máscara da borda (0222) é PISTA de rolagem, então tem de
+    saber onde a rolagem está. Nascendo função só de `overflows` — geometria,
+    não gesto — ela ficava idêntica do começo ao fim do curso: no fim prometia
+    um resto de folha que já tinha acabado e, pior, mantinha 15% de tinta preta
+    sobre os 24px que o professor rolou para conferir (a margem direita do A4 e
+    o fim de cada linha). E do documento deixado para trás não havia sinal
+    nenhum. Guardar `scrollLeft` no estado é o que permite as duas pistas
+    aparecerem só do lado onde de fato continua documento.
+
+    O curso é calculado da geometria que este componente já conhece (folha
+    escalada menos mesa) em vez de `scrollWidth`: é a mesma conta que decide
+    `overflows`, e as duas não podem discordar.
+  */
+  const [scrollLeft, setScrollLeft] = useState(0);
+  const maxScroll = Math.max(0, SHEET_WIDTH_PX * scale - frameWidth);
+  // Folga de 1px: rolagem nativa entrega fração de pixel no fim do curso.
+  const hasScrollBefore = overflows && scrollLeft > 1;
+  const hasScrollAfter = overflows && scrollLeft < maxScroll - 1;
+
+  /*
+    Trocar de zoom (ou de largura de mesa) reclampa a rolagem no navegador sem
+    passar pelo `onScroll`: sem esta releitura a pista ficaria falando da
+    geometria anterior.
+  */
+  useLayoutEffect(() => {
+    setScrollLeft(frameRef.current.scrollLeft);
+  }, [scale, frameWidth]);
+
+  const edgeMask = "pointer-events-none absolute inset-y-0 w-6 from-black/15 to-transparent";
+
   const sheet = (
     <div
       ref={sheetRef}
@@ -659,6 +690,7 @@ export function PageSheet({
         <div className="relative">
           <div
             ref={frameRef}
+            onScroll={(event) => setScrollLeft(event.currentTarget.scrollLeft)}
             className="overflow-x-auto focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
             /*
               Achado 0222: sem nenhum focável dentro (a prévia é render de
@@ -682,14 +714,23 @@ export function PageSheet({
             </div>
           </div>
           {/*
-            Máscara na borda direita: no touch a barra de rolagem é
-            sobreposta e só aparece durante o gesto, então a folha terminava
-            cortada na borda sem nenhuma pista de que continua.
+            Máscaras nas bordas: no touch a barra de rolagem é sobreposta e só
+            aparece durante o gesto, então a folha terminava cortada na borda
+            sem nenhuma pista de que continua. Cada uma só existe enquanto há
+            documento daquele lado (achado 0229).
           */}
-          {overflows && (
+          {hasScrollBefore && (
             <div
               aria-hidden="true"
-              className="pointer-events-none absolute inset-y-0 right-0 w-6 bg-gradient-to-l from-black/15 to-transparent"
+              data-testid="page-scroll-mask-left"
+              className={`${edgeMask} left-0 bg-gradient-to-r`}
+            />
+          )}
+          {hasScrollAfter && (
+            <div
+              aria-hidden="true"
+              data-testid="page-scroll-mask-right"
+              className={`${edgeMask} right-0 bg-gradient-to-l`}
             />
           )}
         </div>
