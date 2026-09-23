@@ -666,14 +666,27 @@ export default function CanonicalAdaptationWizard({ editMode }: Props = {}) {
               ref={i === stepIndex ? activeStepRef : undefined}
               onClick={() => goTo(i)}
               disabled={i > maxStepReached}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
+              // 0230: "você está aqui" era só a cor de fundo. O leitor de tela via seis
+              // botões iguais (1.4.1 e 4.1.2 do WCAG), e em 390px a faixa rola, então o
+              // texto "Passo 5 de 6" de fora nem sempre está à vista.
+              aria-current={i === stepIndex ? "step" : undefined}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs transition-colors ${
                 i === stepIndex
-                  ? "bg-primary text-primary-foreground"
+                  ? "bg-primary text-primary-foreground font-bold"
                   : i <= maxStepReached
-                  ? "bg-primary/10 text-primary-strong hover:bg-primary/20"
-                  : "bg-muted text-muted-foreground cursor-not-allowed"
+                  ? "bg-primary/10 text-primary-strong hover:bg-primary/20 font-medium"
+                  : "bg-muted text-muted-foreground cursor-not-allowed font-medium"
               }`}
             >
+              {i === stepIndex && (
+                // marca de forma, não de cor: o ponto e o negrito sobrevivem a
+                // daltonismo, alto contraste e print em escala de cinza.
+                <span
+                  data-testid="step-chip-current-mark"
+                  aria-hidden="true"
+                  className="w-1.5 h-1.5 rounded-full bg-current shrink-0"
+                />
+              )}
               <span className="w-4 h-4 rounded-full border flex items-center justify-center text-[0.6rem] font-bold">
                 {i + 1}
               </span>

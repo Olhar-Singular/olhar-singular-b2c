@@ -597,6 +597,34 @@ describe("CanonicalAdaptationWizard", () => {
     }
   });
 
+  // 0230: o chip do passo atual se distinguia dos demais SÓ pela cor de fundo. A árvore
+  // de acessibilidade entregava seis botões idênticos (nenhum aria-current/selected), e
+  // em 390px a faixa rola: quem não distingue a cor do chip ficava sem nenhuma âncora
+  // dentro do próprio controle. WCAG 1.4.1 (uso de cor) e 4.1.2 (name/role/value).
+  it("marks the current step programmatically and with a non-colour sign", () => {
+    renderWithProviders(<CanonicalAdaptationWizard />);
+
+    const current = () =>
+      screen
+        .getAllByRole("button")
+        .filter((b) => /^\d\s*\S/.test(b.textContent ?? ""))
+        .filter((b) => b.getAttribute("aria-current") === "step");
+
+    // no primeiro passo só o chip "1 Tipo" se anuncia como atual
+    expect(current()).toHaveLength(1);
+    expect(current()[0]).toHaveTextContent(/Tipo/);
+    // e o sinal não é só a cor: o chip atual carrega uma marca própria
+    expect(within(current()[0]).getByTestId("step-chip-current-mark")).toBeInTheDocument();
+
+    advanceToReview();
+
+    expect(current()).toHaveLength(1);
+    expect(current()[0]).toHaveTextContent(/Revisar/);
+    // e os chips já concluídos não ficam anunciando que são o atual
+    expect(screen.getByRole("button", { name: /1.*Tipo/i })).not.toHaveAttribute("aria-current");
+    expect(screen.getAllByTestId("step-chip-current-mark")).toHaveLength(1);
+  });
+
   // 0165: trocar de passo mantinha a rolagem vertical onde estava. Quem saía do fim
   // da folha do Revisar caía no Exportar no meio da prévia, com o cabeçalho do passo
   // e os botões de exportar acima da dobra — sem nenhum sinal de que o passo trocou.
