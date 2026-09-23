@@ -69,6 +69,12 @@ export function StepGenerate({ data, onResult, onNext, onPrev, onLoadingChange, 
   const [phase, setPhase] = useState<"extracting" | "adapting">(data.uploadedExam ? "extracting" : "adapting");
   const [creditError, setCreditError] = useState<string | null>(null);
   const [failed, setFailed] = useState(false);
+  /**
+   * Motivo já parseado da falha (0328). O toast some sozinho; a tela de falha é
+   * permanente, então é ela que precisa carregar o porquê — para o professor e
+   * para ele repassar ao suporte.
+   */
+  const [failReason, setFailReason] = useState<string | null>(null);
   // Upload path only: extraction found more than MAX_QUESTIONS. Generation is
   // paused here — proceeding to the paid adapt-activity call needs an explicit
   // user decision, same as the pre-upload-refactor flow did at the Atividade step.
@@ -186,8 +192,10 @@ export function StepGenerate({ data, onResult, onNext, onPrev, onLoadingChange, 
       /* v8 ignore next -- AbortController race */
       if ((e as Error).name === "AbortError" || controller.signal.aborted) return;
       console.error("Erro ao gerar adaptação:", e);
+      const reason = parseEdgeFnError(e, "Erro ao gerar adaptação.");
       setFailed(true);
-      toast.error(parseEdgeFnError(e, "Erro ao gerar adaptação."));
+      setFailReason(reason);
+      toast.error(reason);
     } finally {
       /* v8 ignore next -- AbortController race */
       if (!controller.signal.aborted) {
@@ -204,6 +212,7 @@ export function StepGenerate({ data, onResult, onNext, onPrev, onLoadingChange, 
 
     setCreditError(null);
     setFailed(false);
+    setFailReason(null);
     setPendingExtracted(null);
 
     if (!data.uploadedExam) {
@@ -231,8 +240,10 @@ export function StepGenerate({ data, onResult, onNext, onPrev, onLoadingChange, 
       /* v8 ignore next -- AbortController race */
       if ((e as Error).name === "AbortError" || controller.signal.aborted) return;
       console.error("Erro ao gerar adaptação:", e);
+      const reason = parseEdgeFnError(e, "Erro ao gerar adaptação.");
       setFailed(true);
-      toast.error(parseEdgeFnError(e, "Erro ao gerar adaptação."));
+      setFailReason(reason);
+      toast.error(reason);
       setLoading(false);
       onLoadingChange?.(false);
       return;
@@ -339,7 +350,10 @@ export function StepGenerate({ data, onResult, onNext, onPrev, onLoadingChange, 
   if (failed) {
     return (
       <div className="text-center py-20 space-y-4">
-        <p className="text-muted-foreground">Não foi possível gerar a adaptação.</p>
+        <div role="alert" className="space-y-1">
+          <p className="text-destructive font-medium">Não foi possível gerar a adaptação.</p>
+          <p className="text-sm text-destructive">{failReason}</p>
+        </div>
         <Button onClick={generate}>Tentar novamente</Button>
         {onRestorePrevious && (
           <Button variant="outline" onClick={onRestorePrevious} className="ml-2">

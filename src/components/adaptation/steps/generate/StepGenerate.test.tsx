@@ -348,6 +348,41 @@ describe("StepGenerate", () => {
   });
 
   /**
+   * Regressão 0328: o motivo da falha vivia só no toast, que some sozinho. A tela
+   * permanente de falha precisa guardar e anunciar o motivo já parseado.
+   */
+  describe("mostra o motivo na tela de falha (0328)", () => {
+    it("exibe o motivo parseado dentro de um alerta anunciado", async () => {
+      invokeMock.mockResolvedValueOnce({
+        data: null,
+        error: { context: { status: 400, json: async () => ({ error: "Campos obrigatórios ausentes: barreiras" }) } },
+      });
+      renderWithProviders(
+        <StepGenerate data={baseData} onResult={vi.fn()} onNext={vi.fn()} onPrev={vi.fn()} />,
+      );
+      const alert = await screen.findByRole("alert");
+      expect(alert).toHaveTextContent("Não foi possível gerar a adaptação.");
+      expect(alert).toHaveTextContent("Campos obrigatórios ausentes: barreiras");
+    });
+
+    it("limpa o motivo anterior ao tentar novamente", async () => {
+      invokeMock
+        .mockResolvedValueOnce({
+          data: null,
+          error: { context: { status: 400, json: async () => ({ error: "Campos obrigatórios ausentes: barreiras" }) } },
+        })
+        .mockResolvedValueOnce({ data: null, error: { message: "network" } });
+      renderWithProviders(
+        <StepGenerate data={baseData} onResult={vi.fn()} onNext={vi.fn()} onPrev={vi.fn()} />,
+      );
+      await screen.findByText("Campos obrigatórios ausentes: barreiras");
+      fireEvent.click(screen.getByRole("button", { name: /Tentar novamente/i }));
+      await screen.findByText("Falha na adaptação");
+      expect(screen.queryByText("Campos obrigatórios ausentes: barreiras")).toBeNull();
+    });
+  });
+
+  /**
    * Regressão 0326: um "Regerar" que falha não pode trancar o professor fora do
    * documento que ele já tinha. O wizard guarda a adaptação anterior e passa a
    * volta por `onRestorePrevious`; sem essa saída, só o reload devolvia o Passo 5.
