@@ -99,7 +99,14 @@ export function RichTextField({
           // folha, onde o campo é só o texto impresso, foco e repouso eram
           // idênticos. O indicador é `outline` com offset: desenha fora do fluxo
           // e não muda a altura do bloco (o que reabriria o achado 0102).
-          "rounded-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring",
+          //
+          // O `focus-visible:outline` sem sufixo (achado 0212) é o que declara o
+          // `outline-style: solid`: no Tailwind 3 o `-2`, o `-offset-2` e o
+          // `-ring` dão só largura, offset e cor. Sem ele o estilo vinha do
+          // `outline: auto` do user-agent, que o reset `.tiptap:focus` de
+          // `index.css` apagava — e o indicador nunca chegava à tela.
+          "rounded-sm focus-visible:outline focus-visible:outline-2",
+          "focus-visible:outline-offset-2 focus-visible:outline-ring",
           // Chrome de input (padding + altura mínima de alvo de clique) só no
           // card. Na folha (`plain`) o campo É o texto impresso: `min-h-[2rem]`
           // + `py-1` contra uma linha de ~22px empurrava cada alternativa de

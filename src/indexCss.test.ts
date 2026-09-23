@@ -602,3 +602,54 @@ describe("contraste do botao destrutivo de confirmacao (WCAG 1.4.3)", () => {
     },
   );
 });
+
+/**
+ * Indicador de foco dos campos da folha, de verdade (achado 0212).
+ *
+ * O achado 0209 acrescentou `focus-visible:outline-2/-offset-2/-ring` ao campo,
+ * e o teste que o acompanhou olhava so para a STRING de classe — ficou verde com
+ * o bug de pe. Duas coisas de CASCATA derrubavam o indicador antes da tela:
+ *
+ * 1. `.tiptap:focus { outline: none }` alcanca o editavel do RichTextField (ele
+ *    carrega `tiptap` entre as classes). Mesma especificidade (0,2,0) da utility
+ *    `:focus-visible`, mas a regra mora FORA de `@layer`, depois das utilities —
+ *    ganha por ordem de fonte. E `outline` e atalho: zera o `outline-style`.
+ * 2. No Tailwind 3, `outline-2`/`-offset-2`/`-ring` dao largura, offset e cor —
+ *    nenhum da `outline-style`. Quem daria e o `outline: auto` do user-agent,
+ *    justamente o que o item 1 apaga.
+ *
+ * Por isso o teste olha para os dois arquivos: o reset so pode valer para foco
+ * de MOUSE (`:not(:focus-visible)`) e a classe precisa declarar o estilo.
+ */
+describe("foco visivel dos campos da folha (WCAG 2.4.7)", () => {
+  const richTextFieldSource = readSource(
+    "./components/adaptation/canonical-editor/RichTextField.tsx",
+  );
+
+  it("o reset do .tiptap nao apaga o foco de teclado", () => {
+    expect(
+      ruleBody(".tiptap:focus", false),
+      ".tiptap:focus { outline: none } apaga o indicador de teclado",
+    ).not.toMatch(/outline/);
+    expect(ruleBody(".tiptap:focus:not(:focus-visible)")).toMatch(
+      /outline:\s*none/,
+    );
+  });
+
+  it("o campo declara outline-style proprio, sem depender do user-agent", () => {
+    // So os literais de classe: comentario nenhum entra na conta.
+    const classes = [
+      ...richTextFieldSource.matchAll(/"([^"\n]*)"/g),
+    ].flatMap((m) => m[1].trim().split(/\s+/));
+    expect(
+      classes.filter((c) => c.startsWith("focus-visible:outline")).length,
+      "classe de foco nao encontrada no RichTextField",
+    ).toBeGreaterThan(0);
+    expect(classes, "sem outline-style (focus-visible:outline)").toContain(
+      "focus-visible:outline",
+    );
+    expect(classes).toContain("focus-visible:outline-2");
+    expect(classes).toContain("focus-visible:outline-offset-2");
+    expect(classes).toContain("focus-visible:outline-ring");
+  });
+});

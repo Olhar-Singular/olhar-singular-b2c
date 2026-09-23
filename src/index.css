@@ -312,7 +312,15 @@
   height: 0;
 }
 
-.tiptap:focus {
+/*
+ * Reset do foco do Tiptap — só para o foco de MOUSE (achado 0212).
+ *
+ * Sem o `:not(:focus-visible)` esta regra alcançava também o foco de teclado:
+ * ela mora fora de `@layer`, depois das utilities, e `outline` é atalho, então
+ * zerava o `outline-style` que o `focus-visible:outline*` do RichTextField
+ * dependia — o campo ficava sem indicador nenhum (WCAG 2.4.7).
+ */
+.tiptap:focus:not(:focus-visible) {
   outline: none;
 }
 
