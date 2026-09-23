@@ -259,6 +259,22 @@ export default function CanonicalAdaptationWizard({ editMode }: Props = {}) {
   const stepStripRef = useRef<HTMLDivElement>(null);
   const activeStepRef = useRef<HTMLButtonElement>(null);
   const stepRegionRef = useRef<HTMLDivElement>(null);
+  // 0218: qual borda da faixa ainda esconde passo. Sem isso a faixa rolada chega
+  // cortada no meio de um rotulo e sem barra de rolagem visivel no Chrome mobile.
+  const [edgeHints, setEdgeHints] = useState({ left: false, right: false });
+  const updateEdgeHints = useCallback(() => {
+    const strip = stepStripRef.current;
+    /* v8 ignore next -- guard: so roda com a faixa montada */
+    if (!strip) return;
+    const maxScroll = strip.scrollWidth - strip.clientWidth;
+    const left = strip.scrollLeft > 0;
+    // 1px de folga: o arredondamento do scroll fracionario deixaria o degrade
+    // aceso para sempre no fim da faixa.
+    const right = strip.scrollLeft < maxScroll - 1;
+    // So troca o estado quando a borda muda de fato: a cada pixel de rolagem
+    // isto roda, e um objeto novo por evento re-renderizaria o wizard inteiro.
+    setEdgeHints((prev) => (prev.left === left && prev.right === right ? prev : { left, right }));
+  }, []);
   // 0165: a troca de passo também precisa devolver a rolagem VERTICAL ao topo.
   // A folha do Revisar é alta; quem clicava em "Exportar" no fim dela caía no
   // passo 6 na mesma altura, no meio da prévia, com o cabeçalho do passo e os
@@ -275,6 +291,7 @@ export default function CanonicalAdaptationWizard({ editMode }: Props = {}) {
     const strip = stepStripRef.current;
     const chip = activeStepRef.current;
     strip.scrollLeft = Math.max(0, chip.offsetLeft - (strip.clientWidth - chip.offsetWidth) / 2);
+    updateEdgeHints();
 
     if (!didMountStep.current) {
       didMountStep.current = true;
@@ -293,7 +310,7 @@ export default function CanonicalAdaptationWizard({ editMode }: Props = {}) {
     // navegador traria a região do passo para a vista (ela nasce ~176 px abaixo do topo)
     // e em telas estreitas a faixa de passos acabava debaixo do cabeçalho fixo.
     stepRegionRef.current?.focus({ preventScroll: true });
-  }, [stepIndex]);
+  }, [stepIndex, updateEdgeHints]);
 
   // O teto só sobe sozinho; quem o rebaixa é quem invalida o que havia adiante
   // ("Nova adaptação" e "Regerar"), explicitamente.
@@ -608,9 +625,34 @@ export default function CanonicalAdaptationWizard({ editMode }: Props = {}) {
   return (
     <div className="mx-auto max-w-6xl px-4 py-6 space-y-6">
       {/* Step indicator */}
-      <div ref={stepStripRef} data-testid="step-strip" className="flex items-center gap-1 overflow-x-auto pb-1">
-        {STEPS.map((key, i) => (
-          <div key={key} className="flex items-center gap-1 shrink-0">
+      {/* 0218: a faixa rola sozinha ate o passo ativo (0009), entao em 390px ela
+          abre cortada no meio de um rotulo e sem barra de rolagem visivel (o
+          Chrome mobile a esconde) — nada dizia que os passos ja percorridos
+          continuavam ali e clicaveis. O degrade marca cada borda que ainda
+          esconde passo; o scroll-snap faz o corte cair entre chips. */}
+      <div className="relative">
+        {edgeHints.left && (
+          <div
+            data-testid="step-strip-fade-left"
+            aria-hidden="true"
+            className="pointer-events-none absolute left-0 top-0 bottom-1 w-8 z-10 bg-gradient-to-r from-background to-transparent"
+          />
+        )}
+        {edgeHints.right && (
+          <div
+            data-testid="step-strip-fade-right"
+            aria-hidden="true"
+            className="pointer-events-none absolute right-0 top-0 bottom-1 w-8 z-10 bg-gradient-to-l from-background to-transparent"
+          />
+        )}
+        <div
+          ref={stepStripRef}
+          data-testid="step-strip"
+          onScroll={updateEdgeHints}
+          className="flex items-center gap-1 overflow-x-auto pb-1 snap-x scroll-px-2"
+        >
+          {STEPS.map((key, i) => (
+            <div key={key} className="flex items-center gap-1 shrink-0 snap-start">
             <button
               type="button"
               ref={i === stepIndex ? activeStepRef : undefined}
@@ -629,11 +671,12 @@ export default function CanonicalAdaptationWizard({ editMode }: Props = {}) {
               </span>
               {STEP_LABELS[key]}
             </button>
-            {i < STEPS.length - 1 && (
-              <div className={`w-4 h-px ${i < stepIndex ? "bg-primary/40" : "bg-border"}`} />
-            )}
-          </div>
-        ))}
+              {i < STEPS.length - 1 && (
+                <div className={`w-4 h-px ${i < stepIndex ? "bg-primary/40" : "bg-border"}`} />
+              )}
+            </div>
+          ))}
+        </div>
       </div>
 
       <div className="flex items-center justify-between">

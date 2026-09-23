@@ -525,6 +525,37 @@ describe("CanonicalAdaptationWizard", () => {
     }
   });
 
+  // 0218: a faixa rolada ate o passo ativo chegava ao usuario cortada no meio de uma
+  // palavra ("3 Barreiras" virava "ras" colado na borda) e sem nenhum sinal de que ha
+  // passos clicaveis fora da vista: no Chrome mobile a barra de rolagem some.
+  // A faixa precisa marcar cada borda que ainda esconde passo.
+  it("marks the step strip edges that still hide steps", () => {
+    renderWithProviders(<CanonicalAdaptationWizard />);
+    const strip = screen.getByTestId("step-strip");
+    Object.defineProperty(strip, "clientWidth", { configurable: true, get: () => 358 });
+    Object.defineProperty(strip, "scrollWidth", { configurable: true, get: () => 641 });
+    Object.defineProperty(strip, "scrollLeft", { configurable: true, writable: true, value: 0 });
+    const scrollTo = (left: number) => {
+      (strip as unknown as { scrollLeft: number }).scrollLeft = left;
+      fireEvent.scroll(strip);
+    };
+
+    // no meio da faixa sobra passo escondido dos dois lados
+    scrollTo(200);
+    expect(screen.getByTestId("step-strip-fade-left")).toBeInTheDocument();
+    expect(screen.getByTestId("step-strip-fade-right")).toBeInTheDocument();
+
+    // na borda esquerda nao ha nada escondido a esquerda
+    scrollTo(0);
+    expect(screen.queryByTestId("step-strip-fade-left")).not.toBeInTheDocument();
+    expect(screen.getByTestId("step-strip-fade-right")).toBeInTheDocument();
+
+    // no fim da faixa nao ha nada escondido a direita
+    scrollTo(283);
+    expect(screen.getByTestId("step-strip-fade-left")).toBeInTheDocument();
+    expect(screen.queryByTestId("step-strip-fade-right")).not.toBeInTheDocument();
+  });
+
   // 0231: scrollIntoView is not scoped to the strip — it scrolls EVERY scrollable
   // ancestor, so on 390px the <main> (overflow-auto) was dragged sideways too and
   // the step opened with its left edge cut off, without any gesture from the user.
