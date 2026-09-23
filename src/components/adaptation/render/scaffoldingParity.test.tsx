@@ -30,6 +30,8 @@ import {
   SCAFFOLDING_LABEL,
   SCAFFOLDING_RADIUS_PX,
   SCAFFOLDING_RADIUS_PT,
+  scaffoldingStepColumnPt,
+  BASE_FONT_PT,
 } from "./pageTokens";
 import { ScaffoldingView } from "./blocks/ScaffoldingView";
 import { ScaffoldNodeView } from "../canonical-editor/nodeviews/ScaffoldNodeView";
@@ -96,6 +98,50 @@ describe("andaime — paridade da caixa entre a prévia e o PDF", () => {
   it("recua o texto do passo no PDF por uma coluna de ordinal do mesmo tamanho", () => {
     const marker = firstMarkerStyle(PdfScaffolding({ block: BLOCK }) as ReactElement);
     expect(marker.width).toBe(SCAFFOLDING_STEP_INDENT_PT);
+  });
+});
+
+/**
+ * Contrato da COLUNA DO ORDINAL do andaime no PDF (achado 0176).
+ *
+ * A coluna era a constante `SCAFFOLDING_STEP_INDENT_PT` (15pt), calibrada na
+ * base de 12pt e com `flexShrink: 0`. Acima do tamanho padrão do popover
+ * "Formato" o rótulo `1.` deixava de caber nela e o `@react-pdf` quebrava o
+ * único ponto quebrável que existe dentro dele: o dígito ficava colado no texto
+ * do passo e o PONTO caía sozinho na linha de baixo (a 28px, o ponto sai uma
+ * entrelinha abaixo do dígito). Nas duas telas isso nunca acontece, porque o
+ * marcador é o `list-decimal` de uma `<ol>` e o navegador o desenha fora da
+ * caixa de conteúdo.
+ *
+ * O remédio é o mesmo que o número da questão (`questionNumberColumnPt`,
+ * achado 0175) e o marcador de alternativa (`alternativeMarkerColumnPt`,
+ * achado 0182) já usam: coluna DERIVADA do corpo, em `em`, somando caractere a
+ * caractere, com o vão também proporcional. Na base de 12pt continua dando os
+ * mesmos 15pt, então a paridade do `0124` não se mexe.
+ */
+describe("andaime — coluna do ordinal derivada do corpo (achado 0176)", () => {
+  it("mantém na base de 12pt a coluna que o token já dava", () => {
+    expect(scaffoldingStepColumnPt("1", BASE_FONT_PT)).toBeCloseTo(SCAFFOLDING_STEP_INDENT_PT, 4);
+  });
+
+  it("escala com o corpo, cabendo o rótulo inteiro em qualquer tamanho", () => {
+    const big = scaffoldingStepColumnPt("1", 21);
+    expect(big).toBeCloseTo((SCAFFOLDING_STEP_INDENT_PT / BASE_FONT_PT) * 21, 4);
+    // o rótulo "1." mede 0,834em: tem que sobrar vão, não faltar.
+    expect(big).toBeGreaterThan(0.834 * 21);
+  });
+
+  it("cresce no ordinal de dois dígitos, como a coluna da questão cresce", () => {
+    expect(scaffoldingStepColumnPt("10")).toBeGreaterThan(scaffoldingStepColumnPt("1"));
+  });
+
+  it("usa a coluna derivada no PDF, no corpo resolvido do documento", () => {
+    const sizes = resolveElementFontSizes(resolvePageStyle({ fontSize: 21 }));
+    const marker = firstMarkerStyle(
+      PdfScaffolding({ block: BLOCK, elementSizes: sizes }) as ReactElement,
+    );
+    expect(marker.width).toBeCloseTo(scaffoldingStepColumnPt("1", sizes.stem), 4);
+    expect(marker.width).toBeGreaterThan(SCAFFOLDING_STEP_INDENT_PT);
   });
 });
 

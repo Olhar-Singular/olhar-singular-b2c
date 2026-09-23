@@ -26,7 +26,7 @@ import {
   SCAFFOLDING_PADDING_PT,
   SCAFFOLDING_MARGIN_Y_PT,
   SCAFFOLDING_RADIUS_PT,
-  SCAFFOLDING_STEP_INDENT_PT,
+  scaffoldingStepColumnPt,
   SCAFFOLDING_BG,
   SCAFFOLDING_BORDER,
   SCAFFOLDING_LABEL,
@@ -195,9 +195,18 @@ export function PdfScaffolding({
       </Text>
       {block.items.map((item, i) => (
         <View key={i} style={{ flexDirection: "row", marginBottom: 2 }}>
-          {/* Coluna de ordinal com a largura do recuo da <ol> da tela: o texto
-              do passo começa na mesma coluna nas duas superfícies. */}
-          <Text style={{ width: SCAFFOLDING_STEP_INDENT_PT, flexShrink: 0 }}>{i + 1}.</Text>
+          {/* Coluna de ordinal derivada do corpo do documento: na base ela dá
+              o recuo da <ol> da tela (mesma coluna nas duas superfícies), e
+              acima do padrão ela cresce junto com o glifo, para o `1.` não
+              quebrar com o ponto órfão na linha de baixo (achado 0176). */}
+          <Text
+            style={{
+              width: scaffoldingStepColumnPt(String(i + 1), elementSizes.stem),
+              flexShrink: 0,
+            }}
+          >
+            {i + 1}.
+          </Text>
           <Text style={{ flexGrow: 1, flexShrink: 1 }}>{item}</Text>
         </View>
       ))}

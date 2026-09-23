@@ -419,6 +419,47 @@ export function alternativeMarkerColumnPt(fontSizePt: number = BASE_FONT_PT): nu
 export const SCAFFOLDING_PADDING_PT = SCAFFOLDING_PADDING_PX / PT_TO_PX;
 export const SCAFFOLDING_MARGIN_Y_PT = SCAFFOLDING_MARGIN_Y_PX / PT_TO_PX;
 export const SCAFFOLDING_STEP_INDENT_PT = SCAFFOLDING_STEP_INDENT_PX / PT_TO_PX;
+
+/**
+ * Vão entre o ordinal do andaime e o texto do passo, em `em` do corpo: a coluna
+ * da base menos a largura do rótulo `1.` na mesma base. Em `em` para o vão
+ * escalar junto com o glifo, em vez de virar uma sobra fixa que encolhe em
+ * proporção conforme o texto cresce.
+ */
+const SCAFFOLDING_STEP_GAP_EM =
+  Math.round(
+    (SCAFFOLDING_STEP_INDENT_PT / BASE_FONT_PT -
+      (QUESTION_NUMBER_DIGIT_EM + QUESTION_NUMBER_PERIOD_EM)) *
+      1e4,
+  ) / 1e4;
+
+/**
+ * Largura da coluna do ordinal do andaime no PDF, em pt, para o corpo dado.
+ *
+ * DERIVADA do corpo, como `questionNumberColumnPt` (achado 0175) e
+ * `alternativeMarkerColumnPt` (achado 0182) já fazem, e pela mesma razão: o
+ * glifo escala com o "Tamanho do texto" do popover Formato, a caixa não
+ * escalava. Era a constante `SCAFFOLDING_STEP_INDENT_PT` (15pt, calibrada na
+ * base de 12pt) com `flexShrink: 0`, então acima do padrão o rótulo `1.` não
+ * cabia e o `@react-pdf` quebrava o único ponto quebrável dele: o dígito colava
+ * no texto do passo e o PONTO caía sozinho na linha de baixo. As duas telas
+ * nunca quebram o marcador, porque o `list-decimal` da `<ol>` é desenhado fora
+ * da caixa de conteúdo (achado 0176).
+ *
+ * Soma caractere a caractere (como a coluna da questão), então o ordinal de
+ * dois dígitos ganha a coluna que precisa; na base de 12pt continua dando os
+ * mesmos 15pt do token, preservando a paridade de recuo do achado 0124.
+ */
+export function scaffoldingStepColumnPt(
+  label: string,
+  fontSizePt: number = BASE_FONT_PT,
+): number {
+  const widthEm = Array.from(`${label}.`).reduce(
+    (acc, char) => acc + (char === "." ? QUESTION_NUMBER_PERIOD_EM : QUESTION_NUMBER_DIGIT_EM),
+    0,
+  );
+  return Math.round((widthEm + SCAFFOLDING_STEP_GAP_EM) * fontSizePt * 1e4) / 1e4;
+}
 export const SCAFFOLDING_RADIUS_PT = SCAFFOLDING_RADIUS_PX / PT_TO_PX;
 
 /**
