@@ -291,7 +291,29 @@ describe("QuestionNodeView — rail actions", () => {
     // bloco anterior e apaga texto impresso da folha (achado 0233).
     expect(rail?.className).toMatch(/\[@media\(hover:none\)\]:opacity-100/);
     expect(rail?.className).toMatch(/-translate-y-full/);
-    expect(wrapper?.className).toMatch(/\[@media\(hover:none\)\]:mt-10/);
+    // A reserva mora em `.folha-rail-host` (index.css): desde o 0236 ela cresce
+    // junto com o alvo de toque, que por sua vez segue a escala da folha.
+    expect(wrapper?.className).toMatch(/(^|\s)folha-rail-host(\s|$)/);
+  });
+
+  /*
+    Achado 0236 — o rail e desenhado DENTRO do `transform: scale()` da folha.
+    Com a folha ajustada a uma viewport de 390px, os 28px declarados chegam ao
+    dedo com 21px (12px no piso do ajuste), abaixo dos 24x24 CSS px do WCAG 2.2
+    SC 2.5.8 (AA) — e em ponteiro grosso o rail e a UNICA porta para editar,
+    mover ou excluir a questao (0232). O piso vem da classe do chrome, que
+    divide a escala de volta.
+  */
+  it("da aos botoes do rail um alvo de toque que sobrevive a escala da folha (achado 0236)", () => {
+    const { props } = makeProps(mc);
+    const { container } = render(<QuestionNodeView {...props} />);
+    const buttons = Array.from(
+      container.querySelectorAll('[data-role="question-rail"] button'),
+    );
+    expect(buttons.length).toBeGreaterThan(0);
+    buttons.forEach((button) => {
+      expect(button.className).toMatch(/(^|\s)folha-touch-target(\s|$)/);
+    });
   });
 
   /**
@@ -332,8 +354,10 @@ describe("QuestionNodeView — rail actions", () => {
     const wrapper = container.querySelector('[data-testid="question-node"]');
     // o rail carrega o marcador que o hospedeiro observa
     expect(rail?.className).toMatch(/(^|\s)folha-rail(\s|$)/);
-    // e o hospedeiro reserva o vao enquanto o foco estiver DENTRO do rail
-    expect(wrapper?.className).toMatch(/has-\[\.folha-rail:focus-within\]:mt-10/);
+    // e o hospedeiro reserva o vao enquanto o foco estiver DENTRO do rail.
+    // A regra mora em `.folha-rail-host:has(.folha-rail:focus-within)`
+    // (index.css) desde o 0236: a reserva cresce junto com o alvo de toque.
+    expect(wrapper?.className).toMatch(/(^|\s)folha-rail-host(\s|$)/);
     // sem reservar em repouso: `my-3` continua sendo a medida do impresso
     expect(wrapper?.className).toMatch(/(^|\s)my-3(\s|$)/);
   });

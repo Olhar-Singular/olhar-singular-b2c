@@ -10,7 +10,7 @@
  * (`--sf-*`, plano §4). A tipografia/margem da folha vêm de `pageTokensToCss`
  * (paridade com o PDF — não mexer aqui). É só apresentação — não conhece o documento.
  */
-import { useId, useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { useId, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import {
   pageTokensToCss,
   PAGE_HEIGHT_PX,
@@ -525,7 +525,18 @@ export function PageSheet({
         minHeight: `${sheetHeight}px`,
         backgroundImage: pageRulesBackground,
         transform: `scale(${scale})`,
-      }}
+        /*
+          Achado 0236: a escala vale para o conteúdo INTEIRO da folha, chrome de
+          edição incluído — os 28px do rail chegavam ao dedo com 21px em 390px
+          (12px no piso do ajuste), abaixo dos 24 x 24 CSS px do WCAG 2.2
+          SC 2.5.8. Publicar o fator é o que deixa o chrome dividi-lo de volta e
+          medir em px de TELA (`.folha-touch-target` / `.folha-rail-host`, em
+          index.css). Custom property e não prop: o chrome nasce dentro do
+          `contenteditable` do Tiptap, em NodeViews que não recebem nada do
+          hospedeiro, e a herança do CSS atravessa isso sem fio nenhum.
+        */
+        ["--folha-scale" as string]: `${scale}`,
+      } as CSSProperties}
     >
       {/*
         Envelope do conteúdo: dá a altura NATURAL do documento, que a folha (já

@@ -120,6 +120,26 @@ describe("PageSheet", () => {
       });
     });
 
+    /*
+      Achado 0236: a escala vale para o conteúdo INTEIRO da folha, chrome de
+      edição incluído — em 390px os botões de 28px do rail chegam ao dedo com
+      21px (ou 12px, no piso do ajuste), abaixo dos 24x24 CSS px do WCAG 2.2
+      SC 2.5.8. O chrome não pode encolher junto com o papel, e como a escala é
+      dinâmica ele precisa lê-la: a folha publica o fator como `--folha-scale`,
+      e as regras de `.folha-touch-target` / `.folha-rail-host` (index.css) o
+      dividem de volta.
+    */
+    it("publica a escala da folha para o chrome se medir por ela (achado 0236)", () => {
+      withClientWidth(200, () => {
+        withHeight(900, () => {
+          render(<PageSheet paginated toolbar={null}><span>x</span></PageSheet>);
+          const sheet = screen.getByTestId("page-sheet");
+          expect(sheet.style.transform).toBe("scale(0.4)");
+          expect(sheet.getAttribute("style")).toContain("--folha-scale: 0.4");
+        });
+      });
+    });
+
     it("deixa a folha rolar na horizontal quando não cabe na moldura (achado 0216)", () => {
       withClientWidth(200, () => {
         withHeight(1123, () => {

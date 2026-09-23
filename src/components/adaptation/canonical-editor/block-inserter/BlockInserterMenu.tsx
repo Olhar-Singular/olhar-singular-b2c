@@ -15,6 +15,8 @@ import { Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { INSERTER_SECTIONS, type InserterItem } from "./blockInserterItems";
+import { FOLHA_TOUCH_TARGET } from "../folhaChrome";
+import { cn } from "@/lib/utils";
 import type { BlockGap } from "./topLevelGaps";
 
 type Props = {
@@ -47,7 +49,7 @@ export function BlockInserterMenu({ gap, label, onPick }: Props) {
           type="button"
           size="icon"
           aria-label={label}
-          className="h-7 w-7 rounded-full bg-surface-accent text-white shadow-sm hover:bg-surface-accent-ink"
+          className={cn("h-7 w-7 rounded-full bg-surface-accent text-white shadow-sm hover:bg-surface-accent-ink", FOLHA_TOUCH_TARGET)}
         >
           <Plus className="h-4 w-4" />
         </Button>

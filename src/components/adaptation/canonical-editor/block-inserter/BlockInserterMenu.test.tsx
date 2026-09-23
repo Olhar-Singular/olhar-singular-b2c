@@ -20,6 +20,19 @@ describe("BlockInserterMenu", () => {
     expect(screen.getByText("Texto e mídia")).toBeInTheDocument();
   });
 
+  /*
+    Achado 0236: o "+" flutua sobre a folha, dentro do `transform: scale()`
+    dela — 24px declarados viravam 18px no dedo, abaixo do minimo de 24x24 CSS
+    px do WCAG 2.2 SC 2.5.8. Em ponteiro grosso ele e permanente (0207), entao
+    e a porta de insercao de bloco no toque.
+  */
+  it("da ao gatilho um alvo de toque que sobrevive a escala da folha (achado 0236)", () => {
+    render(<BlockInserterMenu gap={followingGap} label="Inserir bloco antes de parágrafo 2" onPick={vi.fn()} />);
+    expect(
+      screen.getByRole("button", { name: "Inserir bloco antes de parágrafo 2" }).className,
+    ).toMatch(/(^|\s)folha-touch-target(\s|$)/);
+  });
+
   it("names the menu dialog after the trigger", () => {
     open(followingGap);
     expect(screen.getByRole("dialog", { name: "Inserir bloco antes de parágrafo 2" })).toBeInTheDocument();

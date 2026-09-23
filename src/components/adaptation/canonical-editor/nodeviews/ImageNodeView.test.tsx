@@ -255,6 +255,20 @@ describe("ImageNodeView", () => {
     expect(btn.className).toMatch(/(^|\s)h-6(\s|$)/);
     expect(btn.className).toMatch(/(^|\s)w-6(\s|$)/);
     expect(btn.className).not.toMatch(/(^|\s)[hw]-5(\s|$)/);
+    /*
+      Achado 0236: 24px DECLARADOS nao sao 24px na tela. Os controles da imagem
+      sao desenhados dentro do `transform: scale()` da folha, que vai de 0,4
+      (ajuste em 390px) a 1 — o alvo chegava ao dedo com 18px ou menos. O piso
+      real vem da classe do chrome, que divide a escala de volta.
+    */
+    expect(btn.className).toMatch(/(^|\s)folha-touch-target(\s|$)/);
+  });
+
+  it("alvo minimo dos alinhamentos sobrevive a escala da folha (achado 0236)", () => {
+    renderImage();
+    expect(screen.getByRole("button", { name: "Centralizar" }).className).toMatch(
+      /(^|\s)folha-touch-target(\s|$)/,
+    );
   });
 
   it("clicar remover legenda chama updateAttributes com null", () => {

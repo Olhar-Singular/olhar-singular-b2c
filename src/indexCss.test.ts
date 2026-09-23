@@ -769,3 +769,36 @@ describe("index.css — coluna de texto do bloco de topo", () => {
     ).toBe(0);
   });
 });
+
+/**
+ * Alvo de toque do chrome que vive DENTRO da folha (achado 0236).
+ *
+ * A folha inteira e desenhada num `transform: scale(...)` que vai do ajuste
+ * (0,4 no piso) ate 1, e o chrome de edicao viaja dentro dela: em 390px os
+ * botoes de 28px do rail chegavam ao dedo com 21px, abaixo dos 24x24 CSS px do
+ * WCAG 2.2 SC 2.5.8 (AA). Como a escala e dinamica, o piso tem que ser
+ * dinamico tambem: em px de folha, dividido pela escala que o `PageSheet`
+ * publica em `--folha-scale`.
+ */
+describe("index.css — alvo de toque do chrome da folha (achado 0236)", () => {
+  it("dimensiona o alvo em px de tela, contra-escalando a folha", () => {
+    const body = ruleBody(".folha-touch-target");
+    expect(body).toMatch(/min-width:\s*calc\(24px\s*\/\s*var\(--folha-scale/);
+    expect(body).toMatch(/min-height:\s*calc\(24px\s*\/\s*var\(--folha-scale/);
+  });
+
+  it("cresce a reserva do vao do rail junto com o alvo, em ponteiro grosso", () => {
+    // O rail e uma caixa OPACA ancorada acima do bloco (0233): se o botao
+    // cresce e o vao continua em 2,5rem de folha, o rail volta a ser desenhado
+    // sobre o texto impresso do bloco de cima.
+    expect(css).toMatch(
+      /@media \(hover: none\) \{\s*\.folha-rail-host \{\s*margin-top:\s*calc\(2\.5rem\s*\/\s*var\(--folha-scale/,
+    );
+  });
+
+  it("cresce a mesma reserva quando o teclado acende o rail", () => {
+    expect(
+      ruleBody(".folha-rail-host:has(.folha-rail:focus-within)"),
+    ).toMatch(/margin-top:\s*calc\(2\.5rem\s*\/\s*var\(--folha-scale/);
+  });
+});

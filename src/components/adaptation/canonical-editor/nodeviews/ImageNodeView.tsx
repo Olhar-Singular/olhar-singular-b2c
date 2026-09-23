@@ -2,7 +2,7 @@ import { useRef, useState } from "react";
 import { AlignLeft, AlignCenter, AlignRight, Captions, Crop, ImageIcon, Trash2 } from "lucide-react";
 import { NodeViewWrapper, type NodeViewProps } from "@tiptap/react";
 import { toast } from "sonner";
-import { FOLHA_BUTTON, FOLHA_GHOST, FOLHA_INPUT, FOLHA_RAIL, FOLHA_RAIL_HOST, FOLHA_SELECTED } from "../folhaChrome";
+import { FOLHA_BUTTON, FOLHA_GHOST, FOLHA_INPUT, FOLHA_RAIL, FOLHA_RAIL_HOST, FOLHA_SELECTED, FOLHA_TOUCH_TARGET } from "../folhaChrome";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -161,7 +161,7 @@ export function ImageNodeView({ node, updateAttributes, deleteNode, editor, getP
             type="button"
             variant="ghost"
             size="icon"
-            className={cn("h-7 w-7", FOLHA_GHOST, alignment === value && "bg-surface-mesa-2 text-surface-ink")}
+            className={cn("h-7 w-7", FOLHA_GHOST, FOLHA_TOUCH_TARGET, alignment === value && "bg-surface-mesa-2 text-surface-ink")}
             disabled={disabled}
             onClick={() => updateAttributes({ alignment: value })}
             title={label}
@@ -230,7 +230,7 @@ export function ImageNodeView({ node, updateAttributes, deleteNode, editor, getP
             // ganho vem do padding. 0342 — a tinta é a da folha (FOLHA_GHOST),
             // não a do app: `text-muted-foreground` cai para ~2,3:1 no tema
             // escuro sobre um papel que continua branco.
-            className={cn("h-6 w-6", FOLHA_GHOST, "hover:text-destructive")}
+            className={cn("h-6 w-6", FOLHA_GHOST, FOLHA_TOUCH_TARGET, "hover:text-destructive")}
             disabled={disabled}
             onClick={() => updateAttributes({ caption: null })}
             aria-label="Remover legenda"

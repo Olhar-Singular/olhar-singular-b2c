@@ -52,6 +52,22 @@ describe("ScaffoldNodeView", () => {
     expect(screen.queryByText(/andaime/i)).not.toBeInTheDocument();
   });
 
+  /*
+    Achado 0236: o andaime e desenhado dentro do `transform: scale()` da folha,
+    entao os 24px declarados da lixeira chegam ao dedo com 18px (ou menos, no
+    piso do ajuste) — abaixo dos 24x24 CSS px do WCAG 2.2 SC 2.5.8.
+  */
+  it("da aos controles um alvo de toque que sobrevive a escala da folha (achado 0236)", () => {
+    const { props } = makeProps(["a"]);
+    render(<ScaffoldNodeView {...props} />);
+    expect(screen.getByRole("button", { name: "Excluir apoio" }).className).toMatch(
+      /(^|\s)folha-touch-target(\s|$)/,
+    );
+    expect(screen.getByRole("button", { name: "Remover passo 1" }).className).toMatch(
+      /(^|\s)folha-touch-target(\s|$)/,
+    );
+  });
+
   it("calls deleteNode when the delete button is clicked", () => {
     const { props, deleteNode } = makeProps(["a"]);
     render(<ScaffoldNodeView {...props} />);

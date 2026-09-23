@@ -76,13 +76,34 @@ export const FOLHA_RAIL =
  * opaca, e quem chega por teclado não tem hover para o excesso sumir sozinho —
  * ele fica sobre a última linha do bloco de cima pelas paradas todas do rail
  * (achado 0338). Por isso a reserva também vale enquanto o foco está DENTRO do
- * rail: `has-[.folha-rail:focus-within]:mt-10`. Continua sendo só um estado
+ * rail (`:has(.folha-rail:focus-within)`). Continua sendo só um estado
  * transitório e provocado pelo próprio usuário de teclado — em repouso a folha
  * segue medindo `my-3`, como 0102/0113 exigem, e o hover não reserva nada, para
  * não empurrar texto sob o ponteiro (0413).
+ *
+ * Os dois estados de reserva saíram das utilitárias (`mt-10`) para a classe
+ * marcadora `.folha-rail-host` (index.css) com o achado 0236: o rail cresce com
+ * o alvo de toque, que por sua vez divide a escala da folha de volta, e o vão
+ * reservado tem de seguir a mesma conta — 2,5rem fixos deixariam a invasão do
+ * 0233 voltar em toda folha ajustada.
  */
 export const FOLHA_RAIL_HOST =
-  "group relative my-3 has-[.folha-rail:focus-within]:mt-10 [@media(hover:none)]:mt-10";
+  "folha-rail-host group relative my-3";
+
+/**
+ * Piso de alvo de toque do chrome desenhado SOBRE a folha (achado 0236).
+ *
+ * A folha é escalada por `transform` (do ajuste à moldura, piso 0,4, até 1) e
+ * o chrome viaja dentro dela: os 28px do rail chegavam ao dedo com 21px em
+ * 390px, e com ~12px no piso do ajuste — abaixo dos 24 x 24 CSS px do WCAG 2.2
+ * SC 2.5.8 (AA), no dispositivo em que se toca. Como a escala é dinâmica, o
+ * piso também é: a regra (index.css) divide de volta o `--folha-scale` que o
+ * `PageSheet` publica, e `min-*` faz o botão crescer só o que a escala tirou —
+ * na folha em tamanho real nada muda.
+ *
+ * Vale para todo controle de ÍCONE da folha; os `size="sm"` (36px) já passam.
+ */
+export const FOLHA_TOUCH_TARGET = "folha-touch-target";
 
 /**
  * Campo de texto (`<Input>` shadcn) que vive SOBRE a folha.

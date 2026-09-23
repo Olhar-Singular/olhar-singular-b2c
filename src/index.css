@@ -615,3 +615,49 @@
   background-size: 4px 3px;
   background-position: left calc(100% - 1px);
 }
+
+/* Alvo de toque do chrome que vive DENTRO da folha (achado 0236).
+ *
+ * A folha inteira é desenhada num `transform: scale(...)` — do ajuste à
+ * moldura (piso 0,4) até 1 — e o chrome de edição viaja dentro dela: rail da
+ * questão, "+" do inserter, lixeira do andaime, controles da imagem. Em 390px
+ * os 28px declarados do rail chegavam ao dedo com 21px, e no piso do ajuste
+ * com ~12px: abaixo dos 24 x 24 CSS px do WCAG 2.2 SC 2.5.8 (AA), justamente
+ * no dispositivo em que se toca e em que o rail é a ÚNICA porta para editar,
+ * mover ou excluir a questão (achado 0232).
+ *
+ * O piso é declarado em px de FOLHA divididos pela escala, logo vale 24 px de
+ * TELA em qualquer degrau de zoom. `min-*` e não `h-/w-`: onde a folha está em
+ * tamanho real nada muda (28px > 24px), e o botão só cresce o quanto a escala
+ * tirou. Fora da folha (`--folha-scale` ausente) o fallback 1 devolve o
+ * mínimo do próprio WCAG.
+ *
+ * Por que aqui e não numa utilitária do Tailwind: a regra depende de uma custom
+ * property publicada em runtime pelo `PageSheet`, e vive fora de `@layer` para
+ * vencer o `h-6`/`h-7` do botão sem `!important`. */
+.folha-touch-target {
+  min-width: calc(24px / var(--folha-scale, 1));
+  min-height: calc(24px / var(--folha-scale, 1));
+}
+
+/* A reserva do vão do rail cresce junto (achados 0233/0338 sob o 0236).
+ *
+ * O rail é uma caixa OPACA ancorada acima do bloco (`-translate-y-full`): o
+ * hospedeiro reserva o vão para ela não ser desenhada sobre o texto impresso
+ * do bloco de cima. Se o alvo cresce com a escala e o vão continua nos 2,5rem
+ * fixos, a invasão do 0233 volta em toda folha ajustada. A reserva é a mesma
+ * conta: 2,5rem de folha em tamanho real, divididos pela escala.
+ *
+ * Os dois estados são os de FOLHA_RAIL_HOST: ponteiro grosso, onde o rail é
+ * permanente (0232), e o foco DENTRO do rail, onde quem chega por teclado não
+ * tem hover para o excesso sumir sozinho (0338). Em repouso, com ponteiro
+ * fino, a folha segue medindo `my-3` (0102/0113/0413). */
+.folha-rail-host:has(.folha-rail:focus-within) {
+  margin-top: calc(2.5rem / var(--folha-scale, 1));
+}
+
+@media (hover: none) {
+  .folha-rail-host {
+    margin-top: calc(2.5rem / var(--folha-scale, 1));
+  }
+}

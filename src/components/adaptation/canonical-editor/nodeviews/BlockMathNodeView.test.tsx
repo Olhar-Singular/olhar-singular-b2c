@@ -46,7 +46,17 @@ describe("BlockMathNodeView", () => {
     // top-0 ele tapava a propria formula, e ancorado acima sem reserva taparia
     // o bloco anterior (achado 0233).
     expect(rail?.className).toMatch(/-translate-y-full/);
-    expect(wrapper?.className).toMatch(/\[@media\(hover:none\)\]:mt-10/);
+    // A reserva do vao mora em `.folha-rail-host` (index.css) desde o 0236.
+    expect(wrapper?.className).toMatch(/(^|\s)folha-rail-host(\s|$)/);
+  });
+
+  // Achado 0236: o rail viaja dentro do `scale()` da folha, entao o alvo de
+  // toque tem de dividir a escala de volta para nao cair abaixo de 24x24.
+  it("da a exclusao um alvo de toque que sobrevive a escala da folha (achado 0236)", () => {
+    const { props } = makeProps();
+    const { container } = render(<BlockMathNodeView {...props} />);
+    const button = container.querySelector('[data-role="blockmath-rail"] button');
+    expect(button?.className).toMatch(/(^|\s)folha-touch-target(\s|$)/);
   });
 
   it("renders KaTeX html and enters edit mode on click", () => {

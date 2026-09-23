@@ -25,6 +25,7 @@ import { useEffect, useRef, useState } from "react";
 import { ArrowUp, ArrowDown, ImagePlus, Pencil, RotateCcw, Trash2 } from "lucide-react";
 import { NodeViewWrapper, NodeViewContent, type NodeViewProps } from "@tiptap/react";
 import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -35,7 +36,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { FOLHA_RAIL, FOLHA_RAIL_HOST } from "../folhaChrome";
+import { FOLHA_RAIL, FOLHA_RAIL_HOST, FOLHA_TOUCH_TARGET } from "../folhaChrome";
 import ImageManagerModal from "@/components/editor/ImageManagerModal";
 import type { ImageItem } from "@/components/editor/imageManagerUtils";
 import type { QuestionAnswer, RichText } from "@/lib/adaptation/canonical/schema";
@@ -222,7 +223,7 @@ export function QuestionNodeView({ node, updateAttributes, editor, getPos, delet
         type="button"
         variant="ghost"
         size="icon"
-        className="h-7 w-7 text-surface-accent"
+        className={cn("h-7 w-7 text-surface-accent", FOLHA_TOUCH_TARGET)}
         disabled={disabled}
         onClick={handleExpand}
         title="Editar questão"
@@ -231,22 +232,22 @@ export function QuestionNodeView({ node, updateAttributes, editor, getPos, delet
         <Pencil className="h-3.5 w-3.5" />
       </Button>
       {showMoveUp && (
-        <Button type="button" variant="ghost" size="icon" className="h-7 w-7" disabled={upDisabled} onClick={() => move("up")} title="Mover questão para cima" aria-label="Mover questão para cima">
+        <Button type="button" variant="ghost" size="icon" className={cn("h-7 w-7", FOLHA_TOUCH_TARGET)} disabled={upDisabled} onClick={() => move("up")} title="Mover questão para cima" aria-label="Mover questão para cima">
           <ArrowUp className="h-3.5 w-3.5" />
         </Button>
       )}
       {showMoveDown && (
-        <Button type="button" variant="ghost" size="icon" className="h-7 w-7" disabled={downDisabled} onClick={() => move("down")} title="Mover questão para baixo" aria-label="Mover questão para baixo">
+        <Button type="button" variant="ghost" size="icon" className={cn("h-7 w-7", FOLHA_TOUCH_TARGET)} disabled={downDisabled} onClick={() => move("down")} title="Mover questão para baixo" aria-label="Mover questão para baixo">
           <ArrowDown className="h-3.5 w-3.5" />
         </Button>
       )}
-      <Button ref={imageButtonRef} type="button" variant="ghost" size="icon" className="h-7 w-7" disabled={disabled || pos === null} onClick={() => setModalOpen(true)} title="Adicionar imagem à questão" aria-label="Adicionar imagem à questão">
+      <Button ref={imageButtonRef} type="button" variant="ghost" size="icon" className={cn("h-7 w-7", FOLHA_TOUCH_TARGET)} disabled={disabled || pos === null} onClick={() => setModalOpen(true)} title="Adicionar imagem à questão" aria-label="Adicionar imagem à questão">
         <ImagePlus className="h-3.5 w-3.5" />
       </Button>
-      <Button type="button" variant="ghost" size="icon" className="h-7 w-7" disabled={disabled} onClick={handleReset} title="Restaurar questão ao original" aria-label="Restaurar questão ao original">
+      <Button type="button" variant="ghost" size="icon" className={cn("h-7 w-7", FOLHA_TOUCH_TARGET)} disabled={disabled} onClick={handleReset} title="Restaurar questão ao original" aria-label="Restaurar questão ao original">
         <RotateCcw className="h-3.5 w-3.5" />
       </Button>
-      <Button ref={deleteButtonRef} type="button" variant="ghost" size="icon" className="h-7 w-7 text-destructive" disabled={disabled} onClick={() => setConfirmDeleteOpen(true)} title="Excluir questão" aria-label="Excluir questão">
+      <Button ref={deleteButtonRef} type="button" variant="ghost" size="icon" className={cn("h-7 w-7 text-destructive", FOLHA_TOUCH_TARGET)} disabled={disabled} onClick={() => setConfirmDeleteOpen(true)} title="Excluir questão" aria-label="Excluir questão">
         <Trash2 className="h-3.5 w-3.5" />
       </Button>
     </div>

@@ -18,7 +18,7 @@ import { useState } from "react";
 import { Trash2 } from "lucide-react";
 import { NodeViewWrapper, type NodeViewProps } from "@tiptap/react";
 import { Input } from "@/components/ui/input";
-import { FOLHA_BUTTON, FOLHA_RAIL, FOLHA_RAIL_HOST, FOLHA_SELECTED } from "../folhaChrome";
+import { FOLHA_BUTTON, FOLHA_RAIL, FOLHA_RAIL_HOST, FOLHA_SELECTED, FOLHA_TOUCH_TARGET } from "../folhaChrome";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { deleteNodeAndRefocus, latexToHtml } from "./nodeViewUtils";
@@ -54,7 +54,7 @@ export function BlockMathNodeView({ node, updateAttributes, editor, deleteNode, 
             type="button"
             variant="ghost"
             size="icon"
-            className="h-7 w-7 text-destructive"
+            className={cn("h-7 w-7 text-destructive", FOLHA_TOUCH_TARGET)}
             disabled={disabled}
             onClick={() => deleteNodeAndRefocus(deleteNode, editor, getPos)}
             title="Excluir fórmula"

@@ -24,7 +24,7 @@ import {
   SCAFFOLDING_RADIUS_PX,
 } from "@/components/adaptation/render/pageTokens";
 import { deleteNodeAndRefocus } from "./nodeViewUtils";
-import { FOLHA_BUTTON, FOLHA_GHOST, FOLHA_RAIL, FOLHA_RAIL_HOST, FOLHA_SELECTED } from "../folhaChrome";
+import { FOLHA_BUTTON, FOLHA_GHOST, FOLHA_RAIL, FOLHA_RAIL_HOST, FOLHA_SELECTED, FOLHA_TOUCH_TARGET } from "../folhaChrome";
 import { cn } from "@/lib/utils";
 
 export function ScaffoldNodeView({ node, updateAttributes, editor, deleteNode, getPos, selected }: NodeViewProps) {
@@ -66,7 +66,7 @@ export function ScaffoldNodeView({ node, updateAttributes, editor, deleteNode, g
           type="button"
           variant="ghost"
           size="icon"
-          className="h-6 w-6 text-destructive hover:bg-surface-mesa hover:text-destructive"
+          className={cn("h-6 w-6 text-destructive hover:bg-surface-mesa hover:text-destructive", FOLHA_TOUCH_TARGET)}
           disabled={disabled}
           onClick={() => deleteNodeAndRefocus(deleteNode, editor, getPos)}
           title="Excluir apoio"
@@ -109,7 +109,7 @@ export function ScaffoldNodeView({ node, updateAttributes, editor, deleteNode, g
               type="button"
               variant="ghost"
               size="icon"
-              className={cn("h-6 w-6", FOLHA_GHOST)}
+              className={cn("h-6 w-6", FOLHA_GHOST, FOLHA_TOUCH_TARGET)}
               disabled={disabled}
               onClick={() => updateAttributes({ items: removeStep(items, index) })}
               title="Remover passo"
