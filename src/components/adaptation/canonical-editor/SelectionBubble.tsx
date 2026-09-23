@@ -10,7 +10,7 @@
  * round-trip lossless no canônico — este componente só aciona os comandos. Os
  * swatches reusam `TEXT_COLORS` (allowlist do schema), nunca hex avulso.
  */
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Bold, Italic, Underline, Strikethrough, Ban } from "lucide-react";
 import type { Editor } from "@tiptap/react";
 import { Button } from "@/components/ui/button";
@@ -63,6 +63,16 @@ export function SelectionBubble({ editor }: Props) {
   // navegação entre os controles é por seta. Sem isso, alcançar "Cor" custaria
   // uma dúzia de Tabs — e cada Tab colapsa a seleção, fechando a barra.
   const [activeIndex, setActiveIndex] = useState(0);
+
+  // O BubbleMenuPlugin do Tiptap escreve `tabIndex = 0` no div que embrulha estes
+  // children (createTooltip), criando uma parada de Tab sem `role` e sem nome logo
+  // antes da barra: leitor de tela anuncia um elemento genérico e quem enxerga vê o
+  // foco sumir (caça 0213). Como a biblioteca só escreve o atributo na criação do
+  // tippy, dá para desfazer aqui, deixando o roving tabindex da toolbar ser o único
+  // stop. Vale para as duas montagens (RichTextField e StepReview).
+  useEffect(() => {
+    toolbarRef.current.parentElement.tabIndex = -1;
+  }, []);
 
   const handleFontSizeStep = (delta: number) => {
     const next = Math.max(MIN_FONT_SIZE_PX, Math.min(MAX_FONT_SIZE_PX, currentPx + delta));

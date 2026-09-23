@@ -304,5 +304,16 @@ describe("SelectionBubble", () => {
       fireEvent.keyDown(toolbar, { key: "a" });
       expect(global.document.activeElement).toBe(items[0]);
     });
+
+    it("anula a parada de foco do wrapper do BubbleMenu (caça 0213)", () => {
+      // O BubbleMenuPlugin do Tiptap põe tabIndex=0 no div que embrulha os
+      // children: uma parada de Tab sem role nem nome, antes da toolbar.
+      const wrapper = global.document.createElement("div");
+      wrapper.tabIndex = 0;
+      global.document.body.appendChild(wrapper);
+      render(<SelectionBubble editor={makeEditor()} />, { container: wrapper });
+
+      expect(wrapper.tabIndex).toBe(-1);
+    });
   });
 });
