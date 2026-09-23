@@ -1639,6 +1639,46 @@ describe("CanonicalAdaptationWizard — navigation guard", () => {
       expect(warning).toHaveAttribute("title", expect.stringContaining("src"));
     });
 
+    /**
+     * 0223: o aviso morava numa linha estática acima da folha. Numa prova de
+     * verdade a folha tem milhares de px, então o professor rola para editar e
+     * o único sinal de que nada está sendo salvo sai da tela — justo enquanto
+     * ele digita. Os estados de ERRO ficam grudados no topo; os tranquilos
+     * (Salvando…/Rascunho salvo) continuam rolando com a página.
+     */
+    it("gruda a barra de status no topo enquanto a captura está quebrada", () => {
+      renderWithProviders(<CanonicalAdaptationWizard />);
+      advanceToReview();
+      expect(screen.getByTestId("wizard-status-bar").className).not.toMatch(/sticky/);
+
+      fireEvent.click(screen.getByTestId("break-capture"));
+
+      expect(screen.getByTestId("wizard-status-bar").className).toMatch(/sticky/);
+
+      fireEvent.click(screen.getByTestId("restore-capture"));
+
+      expect(screen.getByTestId("wizard-status-bar").className).not.toMatch(/sticky/);
+    });
+
+    it.each(["error", "conflict"])(
+      "gruda a barra de status no topo quando o autosave termina em %s",
+      (status) => {
+        mockDraftStatus.value = status;
+        renderWithProviders(<CanonicalAdaptationWizard />);
+        advanceToReview();
+
+        expect(screen.getByTestId("wizard-status-bar").className).toMatch(/sticky/);
+      },
+    );
+
+    it("não gruda a barra num estado tranquilo de salvamento", () => {
+      mockDraftStatus.value = "saved";
+      renderWithProviders(<CanonicalAdaptationWizard />);
+      advanceToReview();
+
+      expect(screen.getByTestId("wizard-status-bar").className).not.toMatch(/sticky/);
+    });
+
     it("clears the warning once the editor can capture again", () => {
       renderWithProviders(<CanonicalAdaptationWizard />);
       advanceToReview();

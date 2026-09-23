@@ -248,6 +248,14 @@ export default function CanonicalAdaptationWizard({ editMode }: Props = {}) {
     onConflict: handleConflict,
   });
 
+  /**
+   * O salvamento está num estado que o professor PRECISA ver (0223): captura
+   * quebrada, erro de rede ou conflito. Só estes prendem a barra de status no
+   * topo; "Salvando…"/"Rascunho salvo" seguem rolando com a página.
+   */
+  const savingHasError =
+    captureFailure !== null || saveStatus === "error" || saveStatus === "conflict";
+
   const currentKey = STEPS[stepIndex];
 
   // On narrow viewports (390px) the step strip overflows horizontally and would
@@ -679,7 +687,18 @@ export default function CanonicalAdaptationWizard({ editMode }: Props = {}) {
         </div>
       </div>
 
-      <div className="flex items-center justify-between">
+      {/* 0223: os estados de ERRO do salvamento não podem depender da rolagem.
+          A folha do Revisar tem milhares de px numa prova real, então o aviso
+          estático acima dela saía da tela justo enquanto o professor digitava —
+          e o caso mais grave (captura quebrada / erro de autosave) era o único
+          sem alerta persistente. Grudar só nos estados de erro mantém o chrome
+          silencioso no caminho feliz e não cria uma segunda rolagem (0008). */}
+      <div
+        data-testid="wizard-status-bar"
+        className={`flex items-center justify-between${
+          savingHasError ? " sticky top-0 z-30 bg-background py-1" : ""
+        }`}
+      >
         {/* 0167: região viva — anuncia a troca de passo para quem não tem como
             perceber a mudança de cor do chip. */}
         <p
