@@ -11,8 +11,17 @@
  *
  * `blockGap` (in pt) is the doc-level default inter-block gap resolved from
  * pageStyle. A per-block `style.spacingAfter` (from nodeStyleToPdf) overrides
- * it. image/scaffolding/divider have their own intrinsic structural spacing and
- * do NOT use blockGap — but spacingAfter still overrides via nodeStyleToPdf spread.
+ * it. O vão ENTRE blocos de topo é um só valor, o do documento: imagem e
+ * divisor também o gastam (achado 0130). Antes eles traziam 4pt e 8pt à mão,
+ * então subir o "espaçamento entre blocos" — o ajuste de quem precisa de menos
+ * densidade na folha — não abria um ponto sequer no papel onde houvesse imagem
+ * ou divisor, e a paginação impressa deixava de bater com a prévia. O que
+ * continua intrínseco é o espaçamento INTERNO do bloco (o padding do andaime, o
+ * respiro da legenda), não a junta com o bloco seguinte.
+ *
+ * O andaime é a exceção declarada: ele gasta o mesmo token nas três superfícies
+ * (`SCAFFOLDING_MARGIN_Y`, achado 0124), contrato guardado por
+ * `render/scaffoldingParity.test.tsx`.
  */
 
 import type { ReactNode } from "react";
@@ -121,14 +130,16 @@ const MAX_IMAGE_HEIGHT_PT = (A4_HEIGHT_PT - 2 * PAGE_MARGIN_PT) * 0.92;
 
 export function PdfImage({
   block,
+  blockGap = 12,
   elementSizes = DEFAULT_ELEMENT_SIZES,
 }: {
   block: ImageBlock;
+  blockGap?: number;
   elementSizes?: ElementFontSizesPt;
 }) {
   const alignItems = block.alignment ? IMAGE_ALIGN[block.alignment] : "flex-start";
   return (
-    <View style={{ alignItems, marginBottom: 4, ...nodeStyleToPdf(block.style) }}>
+    <View style={{ alignItems, marginBottom: blockGap, ...nodeStyleToPdf(block.style) }}>
       {/*
         Mirror the screen's `max-w-full`: never wider than the content box and
         never taller than a page. `objectFit: "contain"` preserves the aspect
@@ -214,13 +225,16 @@ export function PdfScaffolding({
   );
 }
 
-export function PdfDivider({ block }: { block: DividerBlock }) {
+export function PdfDivider({ block, blockGap = 12 }: { block: DividerBlock; blockGap?: number }) {
   return (
     <View
       style={{
         borderBottomWidth: RULE_WIDTH_PT,
         borderBottomColor: RULE_COLOR,
-        marginVertical: 8,
+        // Só o vão de BAIXO, como em todo bloco de topo: o de cima já vem do
+        // `marginBottom` do bloco anterior (achado 0130). O `marginVertical: 8`
+        // que morava aqui somava um segundo vão fixo acima do filete.
+        marginBottom: blockGap,
         ...nodeStyleToPdf(block.style),
       }}
     />

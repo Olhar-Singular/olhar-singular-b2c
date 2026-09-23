@@ -672,3 +672,85 @@ describe("Layout — PdfQuestion uses column flex for proper block stacking", ()
     expect((el.props.style as { flexDirection?: string }).flexDirection).toBe("column");
   });
 });
+
+// ---------------------------------------------------------------------------
+// Achado 0130 — o vão ENTRE blocos de topo é o do documento, também no PDF
+// ---------------------------------------------------------------------------
+/**
+ * O controle "Formato > espaçamento entre blocos" resolve um `blockGap` que o
+ * `PdfBlock` distribui. Imagem, divisor e questão traziam o vão à mão (4pt,
+ * 8pt e 8pt), então subir o espaçamento — que é justamente o ajuste de quem
+ * precisa de menos densidade na folha — não abria nem um ponto no papel nesses
+ * blocos, e a paginação impressa deixava de bater com a prévia.
+ *
+ * O andaime fica FORA desta regra de propósito: ele gasta o mesmo token nas
+ * três superfícies (`SCAFFOLDING_MARGIN_Y`, achado 0124), contrato guardado por
+ * `render/scaffoldingParity.test.tsx`.
+ */
+describe("Achado 0130 — blockGap chega a imagem, divisor e questão", () => {
+  /** Expande componentes de função até o elemento host que carrega o estilo. */
+  function hostOf(node: unknown): ReactElement {
+    let el = node as ReactElement;
+    while (typeof el.type === "function") {
+      el = (el.type as (p: unknown) => unknown)(el.props) as ReactElement;
+    }
+    return el;
+  }
+  const marginBottomOf = (node: unknown) =>
+    (hostOf(node).props.style as { marginBottom?: number }).marginBottom;
+
+  /** 40px, o máximo do controle de espaçamento, em pt. */
+  const WIDE_GAP_PT = 30;
+
+  const imageBlock: Extract<Block, { type: "image" }> = {
+    id: id(1),
+    type: "image",
+    src: "data:image/png;base64,iVBORw0KGgo=",
+    caption: rt("legenda"),
+  };
+  const dividerBlock: Extract<Block, { type: "divider" }> = { id: id(2), type: "divider" };
+  const questionBlock: Extract<Block, { type: "question" }> = {
+    id: id(3),
+    type: "question",
+    stem: [{ id: id(4), type: "paragraph", content: rt("enunciado") }],
+    answer: { kind: "open" },
+  };
+
+  it("imagem abre o vão do documento abaixo de si", () => {
+    expect(marginBottomOf(PdfBlock({ block: imageBlock, blockGap: WIDE_GAP_PT }))).toBe(WIDE_GAP_PT);
+  });
+
+  it("divisor abre o vão do documento abaixo de si", () => {
+    expect(marginBottomOf(PdfBlock({ block: dividerBlock, blockGap: WIDE_GAP_PT }))).toBe(
+      WIDE_GAP_PT,
+    );
+  });
+
+  it("questão abre o vão do documento abaixo de si", () => {
+    expect(marginBottomOf(PdfBlock({ block: questionBlock, blockGap: WIDE_GAP_PT }))).toBe(
+      WIDE_GAP_PT,
+    );
+  });
+
+  it("o `spacingAfter` do próprio bloco continua mandando mais que o do documento", () => {
+    const spaced = { ...imageBlock, style: { spacingAfter: 20 } };
+    expect(marginBottomOf(PdfBlock({ block: spaced, blockGap: WIDE_GAP_PT }))).toBe(15);
+  });
+
+  it("no documento padrão os três gastam o mesmo vão do parágrafo", () => {
+    const paragraph: Extract<Block, { type: "paragraph" }> = {
+      id: id(5),
+      type: "paragraph",
+      content: rt("corpo"),
+    };
+    const gaps = [paragraph, imageBlock, dividerBlock, questionBlock].map((block) =>
+      marginBottomOf(PdfBlock({ block, blockGap: DEFAULT_BLOCK_GAP_PT })),
+    );
+    expect(gaps).toEqual([
+      DEFAULT_BLOCK_GAP_PT,
+      DEFAULT_BLOCK_GAP_PT,
+      DEFAULT_BLOCK_GAP_PT,
+      DEFAULT_BLOCK_GAP_PT,
+    ]);
+  });
+});

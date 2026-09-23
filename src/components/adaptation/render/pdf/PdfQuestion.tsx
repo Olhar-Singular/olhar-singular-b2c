@@ -58,12 +58,20 @@ const QUESTION_INNER_GAP_PT = 6;
 export function PdfQuestion({
   block,
   number,
+  blockGap = 12,
   elementSizes = DEFAULT_ELEMENT_SIZES,
   baseFontSize = BASE_FONT_PT,
 }: {
   block: QuestionBlock;
   number: number;
-  elementSizes?: ElementFontSizesPt;
+  /**
+   * Vão do DOCUMENTO abaixo da questão (achado 0130). Era 8pt à mão, então o
+   * controle "espaçamento entre blocos" não abria nada no papel entre uma
+   * questão e a seguinte — justo numa prova, onde quase todo bloco é questão.
+   * Não confundir com `QUESTION_INNER_GAP_PT`, que é a junta entre os blocos
+   * do stem, dentro da questão.
+   */
+  blockGap?: number;
   /** Corpo do documento (pt), de onde a coluna do número é derivada. */
   baseFontSize?: number;
 }) {
@@ -147,7 +155,7 @@ export function PdfQuestion({
     );
 
   return (
-    <View style={{ flexDirection: "column", marginBottom: 8, ...nodeStyleToPdf(block.style) }}>
+    <View style={{ flexDirection: "column", marginBottom: blockGap, ...nodeStyleToPdf(block.style) }}>
       {body}
 
       {block.instruction && (

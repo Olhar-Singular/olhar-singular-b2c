@@ -13,7 +13,10 @@
  *
  * `blockGap` is the doc-level inter-block gap in pt (resolved from pageStyle).
  * It is passed to leaf mappers as the default marginBottom when the block has
- * no per-block `style.spacingAfter`.
+ * no per-block `style.spacingAfter`. Nenhum bloco de topo fica de fora
+ * (achado 0130): imagem, divisor e questão traziam o vão em constante, e o
+ * controle de espaçamento do documento morria no papel. Só o andaime segue no
+ * token que as três superfícies compartilham (achado 0124).
  */
 
 import { View } from "@react-pdf/renderer";
@@ -43,16 +46,17 @@ function dispatch(
     case "blockMath":
       return <PdfMath block={block} blockGap={blockGap} />;
     case "image":
-      return <PdfImage block={block} elementSizes={elementSizes} />;
+      return <PdfImage block={block} blockGap={blockGap} elementSizes={elementSizes} />;
     case "scaffolding":
       return <PdfScaffolding block={block} elementSizes={elementSizes} />;
     case "divider":
-      return <PdfDivider block={block} />;
+      return <PdfDivider block={block} blockGap={blockGap} />;
     case "question":
       return (
         <PdfQuestion
           block={block}
           number={number}
+          blockGap={blockGap}
           elementSizes={elementSizes}
           baseFontSize={baseFontSize}
         />
