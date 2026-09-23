@@ -128,8 +128,14 @@ export default function ImageResizer({ src, alt, initialWidth, onResize }: Props
     <div
       ref={containerRef}
       /* 0342 — o contorno, a alça e o selo são chrome sobre a folha, que é
-         papel e não segue o tema do app: paleta `--sf-*` (surface-*). */
-      className="relative inline-block group my-1.5 hover:outline hover:outline-1 hover:outline-offset-2 hover:outline-surface-ink-faint focus-within:outline focus-within:outline-1 focus-within:outline-offset-2 focus-within:outline-surface-ink-faint"
+         papel e não segue o tema do app: paleta `--sf-*` (surface-*).
+
+         0303 — `max-w-full` é o cap que o read-only (`ImageBlockView`) e o PDF
+         (`maxWidth: "100%"`) já declaram. Sem ele, a largura do documento era
+         uma IMPOSIÇÃO: uma imagem de 2400px só não estourava a folha porque o
+         container de alinhamento é um `flex` e a encolhia como item — contenção
+         por acaso de layout, que some ao mover o nó ou dar `flex-shrink: 0`. */
+      className="relative inline-block group my-1.5 max-w-full hover:outline hover:outline-1 hover:outline-offset-2 hover:outline-surface-ink-faint focus-within:outline focus-within:outline-1 focus-within:outline-offset-2 focus-within:outline-surface-ink-faint"
       style={{ width }}
     >
       {/*

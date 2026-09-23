@@ -53,6 +53,23 @@ describe("ImageResizer", () => {
     expect(wrapper.className).toContain("focus-within:outline");
   });
 
+  /**
+   * 0303 — o wrapper pedia a largura crua do documento (`style={{ width }}`) e
+   * o `<img>` pedia `w-full`, sem NENHUM `max-width` na cadeia. Uma imagem de
+   * 2400px só não estourava a folha porque o container de alinhamento é um
+   * `flex` e a encolhia como flex item: contenção por acaso de layout, não por
+   * regra. O read-only (`ImageBlockView`, `inline-block max-w-full`) e o PDF
+   * (`maxWidth: "100%"`) declaram o cap; a superfície onde o professor edita
+   * precisa declarar o mesmo, para a largura do documento ser um PEDIDO e não
+   * uma imposição.
+   */
+  it("declara o cap de largura no wrapper, como o read-only e o PDF", () => {
+    render(<ImageResizer src="https://x.png" alt="ilustração" initialWidth={2400} onResize={vi.fn()} />);
+    const wrapper = screen.getByRole("img").parentElement as HTMLElement;
+    expect(wrapper.className).toContain("max-w-full");
+    expect(wrapper.style.width).toBe("2400px");
+  });
+
   it("displays width indicator text reflecting current size", () => {
     render(<ImageResizer src="https://x.png" alt="ilustração" initialWidth={250} onResize={vi.fn()} />);
     expect(screen.getByText("250px")).toBeInTheDocument();
