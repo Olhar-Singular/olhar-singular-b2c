@@ -101,6 +101,26 @@ export const RULE_COLOR = ANSWER_LINE_COLOR;
 export const RULE_WIDTH_PX = 1;
 
 /**
+ * Cinza SECUNDÁRIO do documento: legenda da imagem e instrução da questão — os
+ * dois elementos que o papel imprime em tinta mais leve que o corpo.
+ *
+ * Ponto único da prévia do Exportar e do PDF. O TAMANHO desses dois já vinha
+ * daqui (`elementSizes` / `--doc-fs-*`); só a cor tinha ficado fora do pipeline
+ * de tokens, e por isso divergiu sem ninguém ver: a prévia herdava
+ * `text-muted-foreground`, token do chrome do app, e o PDF trazia dois literais
+ * próprios, `#666666` na legenda e `#555555` na instrução. Na tela os dois são a
+ * mesma tinta; no papel a instrução saía mais escura que a legenda — hierarquia
+ * trocada justo na superfície que o professor não consegue conferir antes de
+ * imprimir (achado 0307).
+ *
+ * O valor é o `--muted-foreground` claro resolvido (`hsl(195 10% 41%)`), ou seja
+ * o que a tela já mostrava: quem se move é o PDF. Sendo literal e não var, a
+ * tinta também não inverte no tema escuro sobre um papel que continua branco
+ * (mesmo motivo de `FOLHA_*`, achado 0342). Contraste sobre o branco: 5,3:1.
+ */
+export const INK_MUTED = "#5E6E73";
+
+/**
  * Distância entre uma pauta e a seguinte — a altura útil que sobra para o aluno
  * escrever. Ponto único das TRÊS superfícies, ao lado de `ANSWER_LINE_COLOR`.
  *

@@ -17,6 +17,7 @@ import { nodeStyleToCss } from "../style";
 import { RichTextView } from "../RichTextView";
 import { AnswerView } from "../answers/AnswerView";
 import { BlockView } from "../BlockView";
+import { INK_MUTED } from "../pageTokens";
 import { questionNumbers } from "../questionNumbering";
 
 type QuestionBlock = Extract<Block, { type: "question" }>;
@@ -72,8 +73,11 @@ export function QuestionView({
 
       {block.instruction && (
         <p
-          className="italic text-muted-foreground"
-          style={{ fontSize: "var(--doc-fs-instruction, 0.875em)" }}
+          /* Mesma tinta da legenda da imagem, pelo token de página — na tela
+             os dois elementos secundários são a mesma cor, e o PDF lê a mesma
+             constante (achado 0307). */
+          className="italic"
+          style={{ fontSize: "var(--doc-fs-instruction, 0.875em)", color: INK_MUTED }}
           data-testid="question-instruction"
         >
           <RichTextView content={block.instruction} />

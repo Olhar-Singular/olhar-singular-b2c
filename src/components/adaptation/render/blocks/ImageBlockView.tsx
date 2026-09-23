@@ -6,7 +6,7 @@
 import type { Block } from "@/lib/adaptation/canonical/schema";
 import { nodeStyleToCss } from "../style";
 import { RichTextView } from "../RichTextView";
-import { DEFAULT_IMAGE_WIDTH_PX } from "../pageTokens";
+import { DEFAULT_IMAGE_WIDTH_PX, INK_MUTED } from "../pageTokens";
 
 type ImageBlock = Extract<Block, { type: "image" }>;
 
@@ -37,8 +37,11 @@ export function ImageBlockView({ block }: { block: ImageBlock }) {
       />
       {block.caption && (
         <figcaption
-          className="mt-1 text-muted-foreground"
-          style={{ fontSize: "var(--doc-fs-caption, 0.833em)" }}
+          /* Tinta pelo token de página (`INK_MUTED`), não pelo
+             `text-muted-foreground` do chrome do app: o papel não inverte com o
+             tema e o PDF lê a mesma constante (achado 0307). */
+          className="mt-1"
+          style={{ fontSize: "var(--doc-fs-caption, 0.833em)", color: INK_MUTED }}
         >
           <RichTextView content={block.caption} />
         </figcaption>

@@ -39,6 +39,7 @@ import {
   SCAFFOLDING_BG,
   SCAFFOLDING_BORDER,
   SCAFFOLDING_LABEL,
+  INK_MUTED,
   RULE_COLOR,
   RULE_WIDTH_PT,
   HEADING_PT,
@@ -160,7 +161,7 @@ export function PdfImage({
         }}
       />
       {block.caption && (
-        <Text style={{ ...pdfTextSize(elementSizes.caption), color: "#666666", marginTop: 2 }}>
+        <Text style={{ ...pdfTextSize(elementSizes.caption), color: INK_MUTED, marginTop: 2 }}>
           <PdfRichText content={block.caption} />
         </Text>
       )}

@@ -31,7 +31,7 @@ import { PdfAnswer } from "./PdfAnswer";
 import { PdfBlock } from "./PdfBlock";
 import { PdfParagraph } from "./PdfLeafBlocks";
 import { questionNumbers } from "../questionNumbering";
-import { BASE_FONT_PT, pdfTextSize, questionNumberColumnPt } from "../pageTokens";
+import { BASE_FONT_PT, INK_MUTED, pdfTextSize, questionNumberColumnPt } from "../pageTokens";
 import { resolveElementFontSizes, resolvePageStyle, type ElementFontSizesPt } from "../pageStyle";
 
 type QuestionBlock = Extract<Block, { type: "question" }>;
@@ -160,7 +160,7 @@ export function PdfQuestion({
 
       {block.instruction && (
         <View style={{ marginBottom: 4 }}>
-          <Text style={{ fontStyle: "italic", color: "#555555", ...pdfTextSize(elementSizes.instruction) }}>
+          <Text style={{ fontStyle: "italic", color: INK_MUTED, ...pdfTextSize(elementSizes.instruction) }}>
             <PdfRichText content={block.instruction} />
           </Text>
         </View>
