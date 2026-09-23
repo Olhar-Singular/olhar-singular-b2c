@@ -142,7 +142,7 @@ export function StepGenerate({ data, onResult, onNext, onPrev, onLoadingChange, 
     if (fnError) {
       const context = (fnError as { context?: Response }).context;
       if (context?.status === 402) {
-        setCreditError("Créditos insuficientes. Adquira mais créditos para continuar.");
+        setCreditError("Seus créditos acabaram. Compre créditos extras para continuar.");
         return;
       }
       let errMsg = "Falha na adaptação";
@@ -322,7 +322,10 @@ export function StepGenerate({ data, onResult, onNext, onPrev, onLoadingChange, 
         <p className="text-destructive font-medium">{creditError}</p>
         <div className="flex gap-2">
           <Button asChild>
-            <Link to="/creditos">Comprar créditos</Link>
+            <Link to="/assinar">Assinar</Link>
+          </Button>
+          <Button asChild variant="outline">
+            <Link to="/creditos">Comprar créditos extras</Link>
           </Button>
           {onRestorePrevious && (
             <Button variant="outline" onClick={onRestorePrevious}>Voltar para a adaptação atual</Button>

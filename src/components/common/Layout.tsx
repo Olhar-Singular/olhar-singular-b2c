@@ -1,11 +1,15 @@
 import { Link, useLocation, Outlet, useNavigate } from "react-router-dom";
 import {
   LayoutDashboard, Wand2, Users, MessageSquare,
-  Coins, Menu, X, BookOpen, ShieldCheck, History, LibraryBig,
+  Coins, Menu, X, BookOpen, ShieldCheck, History, LibraryBig, Sparkles,
 } from "lucide-react";
 import { useState } from "react";
 import { useAuth } from "@/hooks/useAuth";
+import { useAccess } from "@/hooks/useAccess";
+import { isLiveSubscription, useSubscription } from "@/hooks/useSubscription";
+import { canSubscribe } from "@/lib/domain/subscriptionUi";
 import { UserAccountMenu } from "@/components/common/UserAccountMenu";
+import { AccessBanner } from "@/components/common/AccessBanner";
 import logoImg from "@/assets/logo-olho-transparent.png";
 
 const NAV_ITEMS = [
@@ -28,6 +32,14 @@ export default function Layout({ children }: { children?: React.ReactNode }) {
   const location = useLocation();
   const navigate = useNavigate();
   const { signOut, profile } = useAuth();
+  // Total across both buckets (plan while its period is active + extras).
+  const access = useAccess();
+  const creditTotal = access?.total ?? null;
+  const { data: subscription } = useSubscription();
+  // "Assinar" is offered to whoever pays and is not paying yet: trial, legacy,
+  // or a subscriber whose subscription ended. Courtesy accounts never see it,
+  // except the super-admin (smoke plan).
+  const showSubscribe = canSubscribe(access, profile?.is_super_admin) && subscription !== undefined && !isLiveSubscription(subscription);
   const [mobileOpen, setMobileOpen] = useState(false);
 
   const navItems = profile?.is_super_admin ? [...NAV_ITEMS, ADMIN_ITEM] : NAV_ITEMS;
@@ -97,12 +109,22 @@ export default function Layout({ children }: { children?: React.ReactNode }) {
           >
             <Coins className="w-4.5 h-4.5 shrink-0" aria-hidden="true" />
             <span className="flex-1">Créditos</span>
-            {profile?.credit_balance != null && (
+            {creditTotal != null && (
               <span className="text-xs font-semibold text-primary-foreground bg-black/20 rounded px-1.5 py-0.5 tabular-nums">
-                {profile.credit_balance}
+                {creditTotal}
               </span>
             )}
           </Link>
+          {showSubscribe && (
+            <Link
+              to="/assinar"
+              aria-current={isActive("/assinar") ? "page" : undefined}
+              className={linkClass("/assinar")}
+            >
+              <Sparkles className="w-4.5 h-4.5 shrink-0" aria-hidden="true" />
+              <span className="flex-1">Assinar</span>
+            </Link>
+          )}
         </nav>
 
         {/* Account menu (Configurações, Suporte, Sair) */}
@@ -123,10 +145,10 @@ export default function Layout({ children }: { children?: React.ReactNode }) {
           <span className="text-[0.65rem] font-semibold text-primary-foreground tracking-widest uppercase">Olhar Singular</span>
         </Link>
         <div className="flex items-center gap-3">
-          {profile?.credit_balance != null && (
+          {creditTotal != null && (
             <span className="text-xs font-semibold flex items-center gap-1">
               <Coins className="w-3.5 h-3.5" aria-hidden="true" />
-              {profile.credit_balance}
+              {creditTotal}
             </span>
           )}
           <button
@@ -172,12 +194,23 @@ export default function Layout({ children }: { children?: React.ReactNode }) {
             >
               <Coins className="w-4.5 h-4.5 shrink-0" aria-hidden="true" />
               <span className="flex-1">Créditos</span>
-              {profile?.credit_balance != null && (
+              {creditTotal != null && (
                 <span className="text-xs font-semibold text-primary-foreground bg-black/20 rounded px-1.5 py-0.5 tabular-nums">
-                  {profile.credit_balance}
+                  {creditTotal}
                 </span>
               )}
             </Link>
+            {showSubscribe && (
+              <Link
+                to="/assinar"
+                onClick={() => setMobileOpen(false)}
+                aria-current={isActive("/assinar") ? "page" : undefined}
+                className={linkClass("/assinar")}
+              >
+                <Sparkles className="w-4.5 h-4.5 shrink-0" aria-hidden="true" />
+                <span className="flex-1">Assinar</span>
+              </Link>
+            )}
             <UserAccountMenu onLogout={() => { setMobileOpen(false); handleLogout(); }} />
           </nav>
         </div>
@@ -186,14 +219,17 @@ export default function Layout({ children }: { children?: React.ReactNode }) {
       <div aria-live="polite" aria-atomic="true" className="sr-only" id="live-announcer" />
 
       {/* ── Main content ── */}
-      <main
-        id="main-content"
-        tabIndex={-1}
-        className="flex-1 mt-14 lg:mt-0 overflow-auto outline-none"
-        role="main"
-      >
-        {children ?? <Outlet />}
-      </main>
+      <div className="flex-1 flex flex-col mt-14 lg:mt-0 min-w-0">
+        <AccessBanner access={access} subscription={subscription} />
+        <main
+          id="main-content"
+          tabIndex={-1}
+          className="flex-1 overflow-auto outline-none"
+          role="main"
+        >
+          {children ?? <Outlet />}
+        </main>
+      </div>
     </div>
   );
 }

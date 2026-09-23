@@ -19,8 +19,8 @@ export default function LandingHeader() {
           <Link to="/auth">
             <Button variant="ghost" size="sm">Entrar</Button>
           </Link>
-          <Link to="/auth?signup=1">
-            <Button size="sm">Começar grátis</Button>
+          <Link to="/assinar">
+            <Button size="sm">Assinar</Button>
           </Link>
         </div>
       </div>

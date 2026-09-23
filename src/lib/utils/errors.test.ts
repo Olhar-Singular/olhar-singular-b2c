@@ -5,6 +5,7 @@ import {
   parseEdgeFnError,
   parseAuthError,
   parseInvokeError,
+  parseInvokeFailure,
   MSG_NETWORK,
 } from "./errors";
 
@@ -133,6 +134,24 @@ describe("parseInvokeError", () => {
     expect(result).not.toMatch(/\d{3}/);
     expect(result).not.toContain("non-2xx");
     expect(result).not.toContain("Edge Function");
+  });
+});
+
+describe("parseInvokeFailure", () => {
+  it("returns the backend message and code from the response body", async () => {
+    const err = Object.assign(new Error("Edge Function returned a non-2xx status code"), {
+      context: new Response(JSON.stringify({ error: "Este CPF já usou o teste.", code: "trial_used" }), { status: 409 }),
+    });
+    await expect(parseInvokeFailure(err, "fallback")).resolves.toEqual({ message: "Este CPF já usou o teste.", code: "trial_used" });
+  });
+
+  it("has no code when the body carries none, or when the error is not the generic invoke one", async () => {
+    const err = Object.assign(new Error("Edge Function returned a non-2xx status code"), {
+      context: new Response(JSON.stringify({ error: "Plano inválido." }), { status: 400 }),
+    });
+    await expect(parseInvokeFailure(err, "fallback")).resolves.toEqual({ message: "Plano inválido.", code: null });
+    await expect(parseInvokeFailure(new Error("boom"), "fallback")).resolves.toEqual({ message: "boom", code: null });
+    await expect(parseInvokeFailure({}, "fallback")).resolves.toEqual({ message: "fallback", code: null });
   });
 });
 

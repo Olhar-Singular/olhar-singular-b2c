@@ -47,25 +47,37 @@ export function parseEdgeFnError(err: unknown, fallback: string): string {
   return fallback;
 }
 
+export interface InvokeFailure {
+  message: string;
+  /** The backend's machine-readable code ({ code } in the JSON body), when it sent one. */
+  code: string | null;
+}
+
 /**
- * For supabase.functions.invoke() errors: reads the real JSON body from the response
- * before falling back to parseEdgeFnError. Always returns a user-safe string.
+ * For supabase.functions.invoke() errors: reads the real JSON body (message + code)
+ * before falling back to parseEdgeFnError. The message is always user-safe.
  */
-export async function parseInvokeError(err: unknown, fallback: string): Promise<string> {
+export async function parseInvokeFailure(err: unknown, fallback: string): Promise<InvokeFailure> {
   if (err instanceof Error && err.message.toLowerCase() !== SUPABASE_GENERIC_INVOKE_MSG) {
-    return parseEdgeFnError(err, fallback);
+    return { message: parseEdgeFnError(err, fallback), code: null };
   }
   const context = (err as Record<string, unknown>)?.context as { json?: () => Promise<unknown> } | undefined;
   if (context?.json) {
     try {
-      const body = await context.json();
-      const errorMsg = (body as Record<string, unknown>)?.error;
-      if (typeof errorMsg === "string" && errorMsg) return errorMsg;
+      const body = (await context.json()) as Record<string, unknown> | null;
+      const errorMsg = body?.error;
+      const code = typeof body?.code === "string" && body.code ? body.code : null;
+      if (typeof errorMsg === "string" && errorMsg) return { message: errorMsg, code };
     } catch {
       // body already consumed or not JSON — fall through
     }
   }
-  return fallback;
+  return { message: fallback, code: null };
+}
+
+/** parseInvokeFailure without the code. */
+export async function parseInvokeError(err: unknown, fallback: string): Promise<string> {
+  return (await parseInvokeFailure(err, fallback)).message;
 }
 
 /** Maps Supabase Auth error messages to Portuguese user-facing strings. */

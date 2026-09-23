@@ -18,7 +18,7 @@
 -- owner can still edit non-money profile columns (e.g. full_name).
 -- =============================================================================
 BEGIN;
-SELECT plan(12);
+SELECT plan(19);
 
 -- ── Fixtures (created as superuser: empty JWT claims ⇒ guard trigger allows) ──
 -- Inserting into auth.users fires handle_new_user(), which auto-creates the
@@ -29,7 +29,8 @@ INSERT INTO auth.users (id, email) VALUES
 UPDATE public.profiles
    SET credit_balance       = 50,
        free_adaptation_used = true,
-       free_extraction_used = true
+       free_extraction_used = true,
+       must_set_password    = true
  WHERE id = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa';
 
 -- ═══════════════════════════════════════════════════════════════════════════
@@ -103,6 +104,50 @@ SELECT throws_ok(
        WHERE id = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa' $$,
   'not authorized to change credit fields',
   'authenticated cannot reset their own free_extraction_used');
+
+-- The two-bucket columns and the identity columns are money/identity too.
+SELECT throws_ok(
+  $$ UPDATE public.profiles SET plan_credits = 999999
+       WHERE id = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa' $$,
+  'not authorized to change credit fields',
+  'authenticated cannot inflate their own plan_credits');
+
+SELECT throws_ok(
+  $$ UPDATE public.profiles SET plan_period_end = now() + interval '100 years'
+       WHERE id = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa' $$,
+  'not authorized to change credit fields',
+  'authenticated cannot extend their own plan_period_end');
+
+SELECT throws_ok(
+  $$ UPDATE public.profiles SET access_kind = 'exempt'
+       WHERE id = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa' $$,
+  'not authorized to change credit fields',
+  'authenticated cannot grant themselves an exempt access_kind');
+
+SELECT throws_ok(
+  $$ UPDATE public.profiles SET cpf = '12345678909'
+       WHERE id = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa' $$,
+  'not authorized to change credit fields',
+  'authenticated cannot edit their own cpf');
+
+SELECT throws_ok(
+  $$ UPDATE public.profiles SET must_set_password = false
+       WHERE id = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa' $$,
+  'not authorized to change credit fields',
+  'authenticated cannot clear must_set_password themselves');
+
+-- Vector 3: delete + re-insert the own profile with arbitrary money columns.
+-- Closed at the grant layer: the row is born by handle_new_user only.
+SELECT throws_ok(
+  $$ DELETE FROM public.profiles WHERE id = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa' $$,
+  '42501', NULL,
+  'authenticated cannot delete their own profile');
+
+SELECT throws_ok(
+  $$ INSERT INTO public.profiles (id, credit_balance, plan_credits, access_kind)
+     VALUES ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 999999, 999999, 'exempt') $$,
+  '42501', NULL,
+  'authenticated cannot insert a profile row');
 
 -- ...but a non-money column (full_name) is still editable by the owner.
 WITH u AS (

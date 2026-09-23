@@ -37,12 +37,13 @@ vi.mock("@/integrations/supabase/client", () => ({
 }));
 
 function TestConsumer() {
-  const { session, profile, loading, refreshProfile } = useAuthContext();
+  const { session, profile, loading, profileLoading, refreshProfile } = useAuthContext();
   if (loading) return <div>loading</div>;
   return (
     <div>
       <span data-testid="session">{session ? "autenticado" : "anônimo"}</span>
       <span data-testid="credits">{profile?.credit_balance ?? "-"}</span>
+      <span data-testid="profile-loading">{profileLoading ? "carregando perfil" : "perfil pronto"}</span>
       <button onClick={() => refreshProfile()}>refresh</button>
     </div>
   );
@@ -89,6 +90,32 @@ describe("AuthContext", () => {
     await waitFor(() =>
       expect(screen.getByTestId("credits")).toHaveTextContent("10")
     );
+  });
+
+  it("exposes profileLoading while the profile row is being fetched", async () => {
+    const { supabase } = await import("@/integrations/supabase/client");
+    vi.mocked(supabase.auth.getSession).mockResolvedValue({
+      data: { session: mockSession as never },
+    });
+    let resolveProfile: (v: unknown) => void = () => {};
+    vi.mocked(supabase.from).mockReturnValueOnce({
+      select: vi.fn().mockReturnThis(),
+      eq: vi.fn().mockReturnThis(),
+      single: vi.fn(() => new Promise((r) => { resolveProfile = r; })),
+    } as never);
+
+    render(
+      <AuthProvider>
+        <TestConsumer />
+      </AuthProvider>
+    );
+
+    await waitFor(() => expect(screen.getByTestId("profile-loading")).toHaveTextContent("carregando perfil"));
+    await act(async () => {
+      resolveProfile({ data: mockProfile, error: null });
+    });
+    await waitFor(() => expect(screen.getByTestId("profile-loading")).toHaveTextContent("perfil pronto"));
+    expect(screen.getByTestId("credits")).toHaveTextContent("10");
   });
 
   it("updates state on auth change event", async () => {
@@ -179,6 +206,41 @@ describe("AuthContext", () => {
       await providedRefresh!();
     });
     expect(supabase.from).not.toHaveBeenCalled();
+  });
+
+  it("keeps the previous profile and logs when a refresh fails", async () => {
+    const { supabase } = await import("@/integrations/supabase/client");
+    vi.mocked(supabase.auth.getSession).mockResolvedValue({
+      data: { session: mockSession as never },
+    });
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    const fromMock = vi.mocked(supabase.from);
+    fromMock.mockReturnValueOnce({
+      select: vi.fn().mockReturnThis(),
+      eq: vi.fn().mockReturnThis(),
+      single: vi.fn().mockResolvedValue({ data: mockProfile, error: null }),
+    } as never);
+    fromMock.mockReturnValue({
+      select: vi.fn().mockReturnThis(),
+      eq: vi.fn().mockReturnThis(),
+      single: vi.fn().mockResolvedValue({ data: null, error: { message: "timeout" } }),
+    } as never);
+
+    render(
+      <AuthProvider>
+        <TestConsumer />
+      </AuthProvider>
+    );
+    await waitFor(() => expect(screen.getByTestId("credits")).toHaveTextContent("10"));
+
+    await act(async () => {
+      screen.getByText("refresh").click();
+    });
+
+    expect(screen.getByTestId("credits")).toHaveTextContent("10");
+    expect(consoleError).toHaveBeenCalledWith("AuthContext: profile fetch failed", "timeout");
+    consoleError.mockRestore();
   });
 
   it("refreshProfile re-fetches and updates profile state", async () => {

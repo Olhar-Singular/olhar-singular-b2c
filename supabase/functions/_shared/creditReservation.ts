@@ -10,21 +10,37 @@
 // See supabase/migrations/*_credit_reservations.sql and its pgTAP suite.
 // =============================================================================
 
-/** Raw jsonb returned by the open_adapt_reservation RPC. */
+/** Raw jsonb returned by the open_*_reservation RPCs. */
 export interface OpenReservationPayload {
   success?: boolean;
   error?: string;
   mode?: string;
   credits_charged?: number;
+  plan_charged?: number;
+  extra_charged?: number;
   new_balance?: number;
   balance?: number;
+  plan_balance?: number;
+  extra_balance?: number;
 }
 
 /** What the request consumed, or why it may not proceed. */
 export type ReservationOutcome =
-  | { status: "free"; creditsCharged: 0 }
-  | { status: "charged"; creditsCharged: number; newBalance: number }
-  | { status: "insufficient"; balance: number | null }
+  /** Courtesy account: reserved for idempotency, nothing moved. */
+  | { status: "exempt"; creditsCharged: 0 }
+  | {
+      status: "charged";
+      creditsCharged: number;
+      planCharged: number;
+      extraCharged: number;
+      newBalance: number;
+    }
+  | {
+      status: "insufficient";
+      balance: number | null;
+      planBalance: number | null;
+      extraBalance: number | null;
+    }
   /** The request_id was already used: charging again would double-bill. */
   | { status: "duplicate" }
   | { status: "error" };
@@ -38,19 +54,30 @@ export function interpretReservation(
   if (data.success === false) {
     if (data.error === "duplicate_request") return { status: "duplicate" };
     if (data.error === "insufficient_credits") {
-      return { status: "insufficient", balance: data.balance ?? null };
+      return {
+        status: "insufficient",
+        balance: data.balance ?? null,
+        planBalance: data.plan_balance ?? null,
+        extraBalance: data.extra_balance ?? null,
+      };
     }
     return { status: "error" };
   }
 
-  if (data.mode === "free") return { status: "free", creditsCharged: 0 };
+  if (data.mode === "exempt") return { status: "exempt", creditsCharged: 0 };
   if (data.mode === "charged") {
+    const creditsCharged = data.credits_charged ?? 0;
+    const planCharged = data.plan_charged ?? 0;
     return {
       status: "charged",
-      creditsCharged: data.credits_charged ?? 0,
+      creditsCharged,
+      planCharged,
+      // Older payloads carry no split: everything came from the single balance.
+      extraCharged: data.extra_charged ?? creditsCharged - planCharged,
       newBalance: data.new_balance ?? 0,
     };
   }
+  // Includes the retired "free" mode: never a free pass.
   return { status: "error" };
 }
 
@@ -64,7 +91,14 @@ export function reservationErrorResponse(
   if (outcome.status === "insufficient") {
     return {
       status: 402,
-      body: { error: "Créditos insuficientes.", balance: outcome.balance, required: cost },
+      body: {
+        error: "Créditos insuficientes.",
+        reason: "insufficient_credits",
+        balance: outcome.balance,
+        plan_balance: outcome.planBalance,
+        extra_balance: outcome.extraBalance,
+        required: cost,
+      },
     };
   }
   if (outcome.status === "duplicate") {

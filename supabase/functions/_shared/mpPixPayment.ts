@@ -8,7 +8,8 @@ import type { CreditPackage } from "./creditPackages.ts";
 export const PIX_EXPIRES_AFTER_SECONDS = 60 * 60;
 
 export interface PixPaymentInput {
-  pkg: CreditPackage;
+  /** Only the amount and the credit count reach the MP body. */
+  pkg: Pick<CreditPackage, "credits" | "amountBrl">;
   purchaseId: string;
   email?: string;
   notificationUrl: string;

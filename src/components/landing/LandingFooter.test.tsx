@@ -11,12 +11,11 @@ describe("LandingFooter", () => {
     expect(screen.getByRole("contentinfo")).toBeInTheDocument();
   });
 
-  it("renders Entrar and Criar conta links", () => {
+  it("renders Entrar and Planos links (no public signup)", () => {
     renderWithProviders(<LandingFooter />);
-    const entrar = screen.getByRole("link", { name: /Entrar/i });
-    expect(entrar).toHaveAttribute("href", "/auth");
-    const signup = screen.getByRole("link", { name: /Criar conta/i });
-    expect(signup).toHaveAttribute("href", "/auth?signup=1");
+    expect(screen.getByRole("link", { name: /Entrar/i })).toHaveAttribute("href", "/auth");
+    expect(screen.getByRole("link", { name: /Planos/i })).toHaveAttribute("href", "#precos");
+    expect(screen.queryByRole("link", { name: /Criar conta/i })).toBeNull();
   });
 
   it("includes the pedagogical disclaimer", () => {
@@ -28,5 +27,20 @@ describe("LandingFooter", () => {
     renderWithProviders(<LandingFooter />);
     const homeLinks = screen.getAllByRole("link").filter((l) => l.getAttribute("href") === "/");
     expect(homeLinks.length).toBeGreaterThan(0);
+  });
+});
+
+describe("LandingFooter (legal)", () => {
+  it("links the legal pages and names the company", () => {
+    renderWithProviders(<LandingFooter />);
+    expect(screen.getByRole("link", { name: "Termos de Uso" })).toHaveAttribute("href", "/termos");
+    expect(screen.getByRole("link", { name: "Privacidade" })).toHaveAttribute("href", "/privacidade");
+    expect(screen.getByRole("link", { name: "Reembolso" })).toHaveAttribute("href", "/reembolso");
+    expect(screen.getByText(/CNPJ/)).toBeInTheDocument();
+  });
+
+  it("does not print the support e-mail", () => {
+    renderWithProviders(<LandingFooter />);
+    expect(screen.queryByText(/contato@olharsingular\.com/)).not.toBeInTheDocument();
   });
 });

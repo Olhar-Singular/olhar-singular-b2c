@@ -1,9 +1,9 @@
 -- =============================================================================
 -- pgTAP: public.credit_purchases.payment_method
--- Stripe is now the single provider for BOTH payment methods (card and Pix), so
--- `provider` alone no longer says how a purchase was paid. This guards the new
--- payment_method column: allowed values, default, NOT NULL, and that widening
--- the table did not loosen RLS (authenticated stays read-only).
+-- `provider` alone does not say how a purchase was paid (both rails are Mercado
+-- Pago now). This guards the payment_method column: allowed values, default,
+-- NOT NULL, and that widening the table did not loosen RLS (authenticated stays
+-- read-only).
 -- =============================================================================
 BEGIN;
 SELECT plan(8);
@@ -31,12 +31,13 @@ SELECT is(
        AND column_name = 'payment_method'),
   '''card''::text', 'payment_method defaults to card');
 
--- Stripe took over new purchases; 'mercadopago' survives only for history.
+-- Mercado Pago is the only provider of new purchases again (Stripe removed in
+-- 2026-09); 'stripe' survives in the CHECK only for historical rows.
 SELECT is(
   (SELECT column_default FROM information_schema.columns
      WHERE table_schema = 'public' AND table_name = 'credit_purchases'
        AND column_name = 'provider'),
-  '''stripe''::text', 'provider defaults to stripe');
+  '''mercadopago''::text', 'provider defaults to mercadopago');
 
 -- ── CHECK constraint ────────────────────────────────────────────────────────
 SELECT lives_ok(

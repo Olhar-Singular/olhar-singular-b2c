@@ -135,6 +135,33 @@ export type Database = {
           },
         ]
       }
+      admin_actions: {
+        Row: {
+          action: string
+          actor_id: string
+          created_at: string
+          id: string
+          payload: Json
+          target_user_id: string | null
+        }
+        Insert: {
+          action: string
+          actor_id: string
+          created_at?: string
+          id?: string
+          payload?: Json
+          target_user_id?: string | null
+        }
+        Update: {
+          action?: string
+          actor_id?: string
+          created_at?: string
+          id?: string
+          payload?: Json
+          target_user_id?: string | null
+        }
+        Relationships: []
+      }
       ai_model_pricing: {
         Row: {
           created_at: string
@@ -285,6 +312,69 @@ export type Database = {
         }
         Relationships: []
       }
+      checkout_attempts: {
+        Row: {
+          created_at: string
+          email_hash: string
+          id: string
+          ip_hash: string
+          outcome: string
+        }
+        Insert: {
+          created_at?: string
+          email_hash: string
+          id?: string
+          ip_hash: string
+          outcome: string
+        }
+        Update: {
+          created_at?: string
+          email_hash?: string
+          id?: string
+          ip_hash?: string
+          outcome?: string
+        }
+        Relationships: []
+      }
+      credit_packages: {
+        Row: {
+          active: boolean
+          admin_only: boolean
+          created_at: string
+          credits: number
+          highlight: boolean
+          id: string
+          label: string
+          price_brl: number
+          sort_order: number
+          updated_at: string
+        }
+        Insert: {
+          active?: boolean
+          admin_only?: boolean
+          created_at?: string
+          credits: number
+          highlight?: boolean
+          id?: string
+          label: string
+          price_brl: number
+          sort_order?: number
+          updated_at?: string
+        }
+        Update: {
+          active?: boolean
+          admin_only?: boolean
+          created_at?: string
+          credits?: number
+          highlight?: boolean
+          id?: string
+          label?: string
+          price_brl?: number
+          sort_order?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
       credit_purchases: {
         Row: {
           amount_brl: number
@@ -295,6 +385,7 @@ export type Database = {
           payment_method: string
           provider: string
           status: string
+          status_detail: string | null
           updated_at: string
           user_id: string | null
         }
@@ -307,6 +398,7 @@ export type Database = {
           payment_method?: string
           provider?: string
           status?: string
+          status_detail?: string | null
           updated_at?: string
           user_id?: string | null
         }
@@ -319,6 +411,7 @@ export type Database = {
           payment_method?: string
           provider?: string
           status?: string
+          status_detail?: string | null
           updated_at?: string
           user_id?: string | null
         }
@@ -328,9 +421,12 @@ export type Database = {
         Row: {
           created_at: string
           credits_charged: number
+          extra_charged: number
           free_claimed: boolean
           id: string
           kind: string
+          period_end_at_open: string | null
+          plan_charged: number
           reversed_at: string | null
           settled_at: string | null
           state: string
@@ -339,9 +435,12 @@ export type Database = {
         Insert: {
           created_at?: string
           credits_charged?: number
+          extra_charged?: number
           free_claimed?: boolean
           id: string
           kind: string
+          period_end_at_open?: string | null
+          plan_charged?: number
           reversed_at?: string | null
           settled_at?: string | null
           state?: string
@@ -350,9 +449,12 @@ export type Database = {
         Update: {
           created_at?: string
           credits_charged?: number
+          extra_charged?: number
           free_claimed?: boolean
           id?: string
           kind?: string
+          period_end_at_open?: string | null
+          plan_charged?: number
           reversed_at?: string | null
           settled_at?: string | null
           state?: string
@@ -362,6 +464,7 @@ export type Database = {
       }
       credit_transactions: {
         Row: {
+          bucket: string
           created_at: string
           delta: number
           id: string
@@ -371,6 +474,7 @@ export type Database = {
           user_id: string | null
         }
         Insert: {
+          bucket?: string
           created_at?: string
           delta: number
           id?: string
@@ -380,6 +484,7 @@ export type Database = {
           user_id?: string | null
         }
         Update: {
+          bucket?: string
           created_at?: string
           delta?: number
           id?: string
@@ -426,8 +531,52 @@ export type Database = {
         }
         Relationships: []
       }
+      plans: {
+        Row: {
+          active: boolean
+          admin_only: boolean
+          created_at: string
+          highlight: boolean
+          id: string
+          monthly_credits: number
+          name: string
+          price_brl: number
+          slug: string
+          sort_order: number
+          updated_at: string
+        }
+        Insert: {
+          active?: boolean
+          admin_only?: boolean
+          created_at?: string
+          highlight?: boolean
+          id?: string
+          monthly_credits: number
+          name: string
+          price_brl: number
+          slug: string
+          sort_order?: number
+          updated_at?: string
+        }
+        Update: {
+          active?: boolean
+          admin_only?: boolean
+          created_at?: string
+          highlight?: boolean
+          id?: string
+          monthly_credits?: number
+          name?: string
+          price_brl?: number
+          slug?: string
+          sort_order?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
+          access_kind: string
+          cpf: string | null
           created_at: string
           credit_balance: number
           free_adaptation_used: boolean
@@ -435,9 +584,18 @@ export type Database = {
           full_name: string | null
           id: string
           is_super_admin: boolean
+          must_set_password: boolean
+          plan_credits: number
+          plan_period_end: string | null
+          plan_period_start: string | null
+          terms_accepted_at: string | null
+          terms_version: string | null
+          trial_started_at: string | null
           updated_at: string
         }
         Insert: {
+          access_kind?: string
+          cpf?: string | null
           created_at?: string
           credit_balance?: number
           free_adaptation_used?: boolean
@@ -445,9 +603,18 @@ export type Database = {
           full_name?: string | null
           id: string
           is_super_admin?: boolean
+          must_set_password?: boolean
+          plan_credits?: number
+          plan_period_end?: string | null
+          plan_period_start?: string | null
+          terms_accepted_at?: string | null
+          terms_version?: string | null
+          trial_started_at?: string | null
           updated_at?: string
         }
         Update: {
+          access_kind?: string
+          cpf?: string | null
           created_at?: string
           credit_balance?: number
           free_adaptation_used?: boolean
@@ -455,6 +622,13 @@ export type Database = {
           full_name?: string | null
           id?: string
           is_super_admin?: boolean
+          must_set_password?: boolean
+          plan_credits?: number
+          plan_period_end?: string | null
+          plan_period_start?: string | null
+          terms_accepted_at?: string | null
+          terms_version?: string | null
+          trial_started_at?: string | null
           updated_at?: string
         }
         Relationships: []
@@ -516,11 +690,158 @@ export type Database = {
         }
         Relationships: []
       }
+      subscription_invoices: {
+        Row: {
+          amount_brl: number | null
+          created_at: string
+          debit_date: string | null
+          granted_at: string | null
+          id: string
+          mp_payment_id: string | null
+          mp_refund_id: string | null
+          payment_status: string | null
+          raw: Json | null
+          refunded_at: string | null
+          retry_attempt: number | null
+          status: string | null
+          subscription_id: string
+          updated_at: string
+        }
+        Insert: {
+          amount_brl?: number | null
+          created_at?: string
+          debit_date?: string | null
+          granted_at?: string | null
+          id: string
+          mp_payment_id?: string | null
+          mp_refund_id?: string | null
+          payment_status?: string | null
+          raw?: Json | null
+          refunded_at?: string | null
+          retry_attempt?: number | null
+          status?: string | null
+          subscription_id: string
+          updated_at?: string
+        }
+        Update: {
+          amount_brl?: number | null
+          created_at?: string
+          debit_date?: string | null
+          granted_at?: string | null
+          id?: string
+          mp_payment_id?: string | null
+          mp_refund_id?: string | null
+          payment_status?: string | null
+          raw?: Json | null
+          refunded_at?: string | null
+          retry_attempt?: number | null
+          status?: string | null
+          subscription_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "subscription_invoices_subscription_id_fkey"
+            columns: ["subscription_id"]
+            isOneToOne: false
+            referencedRelation: "subscriptions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      subscriptions: {
+        Row: {
+          attribution: Json | null
+          cancel_requested_at: string | null
+          cancelled_at: string | null
+          card_brand: string | null
+          card_last_four: string | null
+          created_at: string
+          current_period_end: string | null
+          current_period_start: string | null
+          first_payment_confirmed: boolean
+          id: string
+          mp_preapproval_id: string | null
+          mp_status: string | null
+          next_payment_date: string | null
+          payer_email: string
+          plan_id: string
+          status: string
+          status_detail: string | null
+          trial_ends_at: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          attribution?: Json | null
+          cancel_requested_at?: string | null
+          cancelled_at?: string | null
+          card_brand?: string | null
+          card_last_four?: string | null
+          created_at?: string
+          current_period_end?: string | null
+          current_period_start?: string | null
+          first_payment_confirmed?: boolean
+          id?: string
+          mp_preapproval_id?: string | null
+          mp_status?: string | null
+          next_payment_date?: string | null
+          payer_email: string
+          plan_id: string
+          status?: string
+          status_detail?: string | null
+          trial_ends_at?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          attribution?: Json | null
+          cancel_requested_at?: string | null
+          cancelled_at?: string | null
+          card_brand?: string | null
+          card_last_four?: string | null
+          created_at?: string
+          current_period_end?: string | null
+          current_period_start?: string | null
+          first_payment_confirmed?: boolean
+          id?: string
+          mp_preapproval_id?: string | null
+          mp_status?: string | null
+          next_payment_date?: string | null
+          payer_email?: string
+          plan_id?: string
+          status?: string
+          status_detail?: string | null
+          trial_ends_at?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "subscriptions_plan_id_fkey"
+            columns: ["plan_id"]
+            isOneToOne: false
+            referencedRelation: "plans"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
+      activate_subscription: {
+        Args: {
+          p_card_brand: string
+          p_card_last_four: string
+          p_mp_preapproval_id: string
+          p_mp_status: string
+          p_next_payment_date: string
+          p_subscription_id: string
+        }
+        Returns: Json
+      }
       admin_cost_series: {
         Args: { p_buckets: number; p_granularity: string }
         Returns: {
@@ -536,8 +857,16 @@ export type Database = {
           total_usd: number
         }[]
       }
+      admin_extend_trial: {
+        Args: { p_days: number; p_user_id: string }
+        Returns: Json
+      }
       admin_grant_credits: {
         Args: { p_amount: number; p_user_id: string }
+        Returns: Json
+      }
+      admin_set_access_kind: {
+        Args: { p_kind: string; p_user_id: string }
         Returns: Json
       }
       admin_user_spending: {
@@ -547,6 +876,41 @@ export type Database = {
           total_usd: number
           user_id: string
         }[]
+      }
+      apply_plan_quota: {
+        Args: {
+          p_period_end: string
+          p_period_start: string
+          p_quota: number
+          p_subscription: string
+          p_user_id: string
+        }
+        Returns: undefined
+      }
+      approve_purchase_and_grant: {
+        Args: { p_payment_id: string; p_purchase_id: string }
+        Returns: Json
+      }
+      cancel_subscription_local: {
+        Args: { p_cancelled_at: string; p_subscription_id: string }
+        Returns: Json
+      }
+      clawback_subscription: {
+        Args: { p_subscription_id: string }
+        Returns: Json
+      }
+      confirm_refund: {
+        Args: { p_invoice_id: string; p_mp_refund_id: string }
+        Returns: Json
+      }
+      consume_credits: {
+        Args: {
+          p_amount: number
+          p_ref_id?: string
+          p_type: string
+          p_user_id: string
+        }
+        Returns: Json
       }
       deduct_credits: {
         Args: {
@@ -568,16 +932,67 @@ export type Database = {
         }
         Returns: Json
       }
+      log_admin_action: {
+        Args: {
+          p_action: string
+          p_actor_id: string
+          p_payload: Json
+          p_target_id: string
+        }
+        Returns: string
+      }
+      mark_subscription_past_due: {
+        Args: { p_subscription_id: string }
+        Returns: Json
+      }
+      migrate_legacy_access: { Args: never; Returns: Json }
       open_adapt_reservation: {
         Args: { p_amount: number; p_request_id: string; p_user_id: string }
+        Returns: Json
+      }
+      open_credit_reservation: {
+        Args: {
+          p_amount: number
+          p_kind: string
+          p_request_id: string
+          p_user_id: string
+        }
         Returns: Json
       }
       reconcile_stale_credit_reservations: {
         Args: { p_older_than?: string }
         Returns: Json
       }
+      record_checkout_attempt: {
+        Args: { p_email_hash: string; p_ip_hash: string; p_outcome: string }
+        Returns: Json
+      }
+      refund_last_charge: { Args: { p_user_id: string }; Returns: Json }
+      reject_pending_purchase: {
+        Args: {
+          p_payment_id: string
+          p_purchase_id: string
+          p_status_detail: string
+        }
+        Returns: Json
+      }
+      renew_subscription: {
+        Args: { p_invoice: Json; p_subscription_id: string }
+        Returns: Json
+      }
       reverse_credit_reservation: { Args: { p_id: string }; Returns: Json }
       settle_credit_reservation: { Args: { p_id: string }; Returns: Json }
+      start_trial_for: { Args: { p_user_id: string }; Returns: boolean }
+      sync_subscription_status: {
+        Args: {
+          p_mp_preapproval_id: string
+          p_mp_status: string
+          p_next_payment_date: string
+          p_subscription_id: string
+        }
+        Returns: Json
+      }
+      trial_used_by_cpf: { Args: { p_cpf: string }; Returns: boolean }
     }
     Enums: {
       [_ in never]: never
@@ -596,12 +1011,12 @@ export type Tables<
   DefaultSchemaTableNameOrOptions extends
     | keyof (DefaultSchema["Tables"] & DefaultSchema["Views"])
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
         DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])
-    : never = never,
+    : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -625,11 +1040,11 @@ export type TablesInsert<
   DefaultSchemaTableNameOrOptions extends
     | keyof DefaultSchema["Tables"]
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
-    : never = never,
+    : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -650,11 +1065,11 @@ export type TablesUpdate<
   DefaultSchemaTableNameOrOptions extends
     | keyof DefaultSchema["Tables"]
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
-    : never = never,
+    : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -675,11 +1090,11 @@ export type Enums<
   DefaultSchemaEnumNameOrOptions extends
     | keyof DefaultSchema["Enums"]
     | { schema: keyof DatabaseWithoutInternals },
-  EnumName extends DefaultSchemaEnumNameOrOptions extends {
+  EnumName extends (DefaultSchemaEnumNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"]
-    : never = never,
+    : never) = never,
 > = DefaultSchemaEnumNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -692,11 +1107,11 @@ export type CompositeTypes<
   PublicCompositeTypeNameOrOptions extends
     | keyof DefaultSchema["CompositeTypes"]
     | { schema: keyof DatabaseWithoutInternals },
-  CompositeTypeName extends PublicCompositeTypeNameOrOptions extends {
+  CompositeTypeName extends (PublicCompositeTypeNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"]
-    : never = never,
+    : never) = never,
 > = PublicCompositeTypeNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }

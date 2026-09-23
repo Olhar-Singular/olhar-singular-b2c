@@ -17,8 +17,11 @@ ENV PATH="/root/.bun/bin:${PATH}"
 
 WORKDIR /app
 
-COPY package.json bunfig.toml ./
-RUN npm install
+# Lockfile + `npm ci`: deterministic install (same as CI). A lockless
+# `npm install` re-resolves the whole tree on every build and tripped the
+# npm 10.9 arborist crash "Cannot read properties of null (reading 'edgesOut')".
+COPY package.json package-lock.json bunfig.toml ./
+RUN npm ci
 
 EXPOSE 8080
 

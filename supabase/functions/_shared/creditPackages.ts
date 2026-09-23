@@ -1,39 +1,56 @@
-// Single source of truth for the credit packages that may be purchased.
-// Imported by the Stripe checkout edge function, which serves both payment
-// methods (card and Pix), so the allowed price list lives in exactly one place.
+// Extra credit packages, read from public.credit_packages.
+//
+// The packages used to be a hardcoded whitelist here, duplicated in the UI. The
+// table is now the single source of truth (prices change without a deploy); this
+// module only decides which rows may be sold to whom, kept pure so the decision
+// is unit-tested while the I/O stays in the edge function glue.
 
+/** Row shape of public.credit_packages as PostgREST returns it. */
+export interface CreditPackageRow {
+  id: string;
+  credits: number;
+  // numeric columns arrive as strings through PostgREST.
+  price_brl: number | string;
+  label: string;
+  active: boolean;
+  admin_only: boolean;
+}
+
+/** What the checkouts and payment builders work with. */
 export interface CreditPackage {
+  id: string;
   credits: number;
   amountBrl: number;
+  label: string;
+  adminOnly: boolean;
 }
 
-export const ALLOWED_PACKAGES: CreditPackage[] = [
-  { credits: 30, amountBrl: 9.9 },
-  { credits: 120, amountBrl: 29.9 },
-  { credits: 300, amountBrl: 59.9 },
-];
-
-// Real-payment smoke-test package, purchasable only by super-admins (the Stripe
-// checkout passes allowTest after verifying profiles.is_super_admin). Kept out of
-// ALLOWED_PACKAGES so regular users can never buy it.
-export const TEST_PACKAGE: CreditPackage = { credits: 1, amountBrl: 1.0 };
-
-export interface FindPackageOptions {
-  allowTest?: boolean;
+export interface SelectPackageOptions {
+  /** True only when the buyer is a super-admin (profiles.is_super_admin). */
+  allowAdminOnly?: boolean;
 }
 
-// Returns the matching package, or null when the credits/price pair is not a
-// whitelisted package. The price is compared with a sub-cent tolerance to absorb
-// floating-point drift coming from the client.
-export function findPackage(
-  credits?: number,
-  amountBrl?: number,
-  options?: FindPackageOptions,
+export function toCreditPackage(row: CreditPackageRow): CreditPackage {
+  return {
+    id: row.id,
+    credits: row.credits,
+    amountBrl: Number(row.price_brl),
+    label: row.label,
+    adminOnly: row.admin_only,
+  };
+}
+
+// Returns the sellable package with that id, or null when the id is not a
+// string, is unknown, is inactive, or is admin_only and the buyer is not a
+// super-admin. The price is never taken from the request: it comes from the row.
+export function selectPackage(
+  rows: CreditPackageRow[],
+  id: unknown,
+  options?: SelectPackageOptions,
 ): CreditPackage | null {
-  const candidates = options?.allowTest ? [...ALLOWED_PACKAGES, TEST_PACKAGE] : ALLOWED_PACKAGES;
-  return (
-    candidates.find(
-      (p) => p.credits === credits && Math.abs(p.amountBrl - (amountBrl ?? 0)) < 0.01,
-    ) ?? null
-  );
+  if (typeof id !== "string" || !id) return null;
+  const row = rows.find((r) => r.id === id);
+  if (!row || !row.active) return null;
+  if (row.admin_only && !options?.allowAdminOnly) return null;
+  return toCreditPackage(row);
 }

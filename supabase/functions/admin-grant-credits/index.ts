@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { authorizeSuperAdmin } from "../_shared/adminAuth.ts";
+import { logAdminAction } from "../_shared/adminAudit.ts";
 import { validateGrantInput } from "../_shared/adminGrantCredits.ts";
 
 const corsHeaders = {
@@ -57,6 +58,12 @@ serve(async (req) => {
       return json({ error: "internal_error" }, 500);
     }
 
+    await logAdminAction(supabase, {
+      actorId: auth.userId,
+      targetUserId: validated.input.userId,
+      action: "grant_credits",
+      payload: { amount: validated.input.amount },
+    });
     return json({ success: true, new_balance: data.new_balance }, 200);
   } catch (error) {
     console.error("admin-grant-credits unhandled error:", error);

@@ -2,7 +2,13 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { logAiUsage } from "../_shared/logAiUsage.ts";
 import { getAiConfig } from "../_shared/aiConfig.ts";
-import { chargeCredits, refundCredits, runCreditRpc, type CreditRpcResult } from "../_shared/credits.ts";
+import { runCreditRpc, type CreditRpcResult } from "../_shared/credits.ts";
+import {
+  interpretReservation,
+  reservationErrorResponse,
+  resolveRequestId,
+  type OpenReservationPayload,
+} from "../_shared/creditReservation.ts";
 import {
   buildExtractionMessages,
   parseExtractionResponse,
@@ -16,6 +22,13 @@ const corsHeaders = {
 };
 
 const EXTRACTION_COST = 5;
+
+function json(body: unknown, status = 200) {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { ...corsHeaders, "Content-Type": "application/json" },
+  });
+}
 
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
@@ -34,31 +47,7 @@ serve(async (req) => {
 
     const { data: { user }, error: authError } = await supabase.auth.getUser();
     if (authError || !user) {
-      return new Response(JSON.stringify({ error: "Não autorizado" }), {
-        status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-
-    // ── Credit check ──────────────────────────────────────────────────────────
-    const { data: profile, error: profileError } = await admin
-      .from("profiles")
-      .select("credit_balance, free_extraction_used")
-      .eq("id", user.id)
-      .single();
-
-    if (profileError || !profile) {
-      return new Response(JSON.stringify({ error: "Perfil não encontrado" }), {
-        status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-
-    const isFreeExtraction = !profile.free_extraction_used;
-
-    if (!isFreeExtraction && profile.credit_balance < EXTRACTION_COST) {
-      return new Response(
-        JSON.stringify({ error: "insufficient_credits", balance: profile.credit_balance }),
-        { status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+      return json({ error: "Não autorizado" }, 401);
     }
 
     // ── Parse request body ────────────────────────────────────────────────────
@@ -66,6 +55,7 @@ serve(async (req) => {
     let pdfFileName = "";
     let pageImages: string[] = [];
     let providedUploadId: string | null = null;
+    let rawRequestId: unknown = undefined;
 
     const contentType = req.headers.get("content-type") || "";
 
@@ -86,13 +76,62 @@ serve(async (req) => {
         const mimeType = file.type || "image/png";
         pageImages = [`data:${mimeType};base64,${base64}`];
       }
+      rawRequestId = formData.get("request_id") ?? undefined;
     } else {
       const body = await req.json();
       pdfText = body.pdfText || "";
       pdfFileName = body.pdfFileName || "";
       pageImages = body.pageImages || [];
       providedUploadId = body.uploadId || null;
+      rawRequestId = body.request_id;
     }
+
+    // ── Reserve + charge (one transaction, crash-safe) ────────────────────────
+    // Same model as adapt-activity: the reservation row is written before the
+    // money moves, so a dead isolate is reconciled by the job; plan bucket
+    // first, extras after; courtesy accounts come back as "exempt".
+    const requestId = resolveRequestId(rawRequestId, () => crypto.randomUUID());
+    if (!requestId.ok) {
+      return json({ error: "request_id inválido." }, 400);
+    }
+
+    const { data: openData, error: openError } = await admin.rpc("open_credit_reservation", {
+      p_request_id: requestId.id,
+      p_user_id: user.id,
+      p_amount: EXTRACTION_COST,
+      p_kind: "extract",
+    });
+    if (openError) {
+      console.error("open_credit_reservation error:", openError, "user:", user.id);
+      return json({ error: "Erro ao processar créditos." }, 500);
+    }
+
+    const charge = interpretReservation(openData as OpenReservationPayload | null);
+    const chargeError = reservationErrorResponse(charge, EXTRACTION_COST);
+    if (chargeError) {
+      if (charge.status === "error") console.error("open_credit_reservation failed for user:", user.id, openData);
+      // The question bank client keys on this exact error string for the paywall.
+      const body = chargeError.status === 402
+        ? { ...chargeError.body, error: "insufficient_credits" }
+        : chargeError.body;
+      return json(body, chargeError.status);
+    }
+
+    const creditsCharged = charge.status === "charged" ? charge.creditsCharged : 0;
+    const isExempt = charge.status === "exempt";
+
+    const reverseReservation = async () => {
+      try {
+        await runCreditRpc("reverse_credit_reservation", () =>
+          admin.rpc("reverse_credit_reservation", { p_id: requestId.id }) as unknown as Promise<{
+            data: CreditRpcResult | null;
+            error: unknown;
+          }>);
+      } catch (e) {
+        // The job picks the still-open reservation up on its next pass.
+        console.error("Extraction reversal failed for user:", user.id, "reservation:", requestId.id, e);
+      }
+    };
 
     // ── Register / update upload record ───────────────────────────────────────
     // The client creates the pdf_uploads row at upload time and passes its id
@@ -102,10 +141,7 @@ serve(async (req) => {
     if (providedUploadId) {
       await admin
         .from("pdf_uploads")
-        .update({
-          was_free: isFreeExtraction,
-          credits_spent: isFreeExtraction ? 0 : EXTRACTION_COST,
-        })
+        .update({ was_free: isExempt, credits_spent: creditsCharged })
         .eq("id", providedUploadId)
         .eq("user_id", user.id);
     } else {
@@ -115,68 +151,13 @@ serve(async (req) => {
           user_id: user.id,
           file_name: pdfFileName || "upload",
           file_path: "",
-          was_free: isFreeExtraction,
-          credits_spent: isFreeExtraction ? 0 : EXTRACTION_COST,
+          was_free: isExempt,
+          credits_spent: creditsCharged,
         })
         .select("id")
         .single();
       uploadId = uploadRecord?.id ?? null;
     }
-
-    // ── Deduct credits or claim the free extraction (atomic) ─────────────────
-    // claimFree wins the one-time free slot when available; on a lost race (or
-    // no free tier) it falls through to deduct. Decision logic is shared + tested.
-    const charge = await chargeCredits({
-      cost: EXTRACTION_COST,
-      claimFree: async () => {
-        if (!isFreeExtraction) return false;
-        const { data: claimed } = await admin
-          .from("profiles")
-          .update({ free_extraction_used: true })
-          .eq("id", user.id)
-          .eq("free_extraction_used", false)
-          .select("id");
-        return (claimed?.length ?? 0) > 0;
-      },
-      deduct: async () => {
-        const { data, error } = await admin.rpc("deduct_credits", {
-          p_user_id: user.id,
-          p_amount: EXTRACTION_COST,
-          p_type: "extract",
-          p_ref_id: uploadId,
-        });
-        return { data: data as CreditRpcResult | null, error };
-      },
-    });
-
-    // extract surfaces a single bespoke 402 for both insufficient and failure.
-    if (charge.status === "insufficient" || charge.status === "error") {
-      if (charge.status === "error" && charge.reason === "rpc") {
-        console.error("deduct_credits error:", charge.cause);
-      }
-      return new Response(
-        JSON.stringify({ error: "insufficient_credits", balance: profile.credit_balance }),
-        { status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" } },
-      );
-    }
-
-    const creditsCharged = charge.status === "charged" ? charge.creditsCharged : 0;
-
-    const refundIfNeeded = () =>
-      refundCredits({
-        creditsCharged,
-        grant: async (amount) => {
-          // Must go through runCreditRpc: supabase-js resolves (never rejects)
-          // on a DB error, so an unchecked rpc() hides a failed refund.
-          await runCreditRpc("grant_credits", () =>
-            admin.rpc("grant_credits", {
-              p_user_id: user.id,
-              p_amount: amount,
-              p_type: "refund",
-            }) as Promise<{ data: CreditRpcResult | null; error: unknown }>);
-        },
-        onError: (e) => console.error("Extraction refund failed for user:", user.id, e),
-      });
 
     // ── Build AI messages ─────────────────────────────────────────────────────
     const messages = buildExtractionMessages(pdfText, pdfFileName, pageImages);
@@ -184,31 +165,33 @@ serve(async (req) => {
     // ── Call Gemini ───────────────────────────────────────────────────────────
     const extractModel = ai.resolveModel("google/gemini-2.5-pro");
     const extractStartTime = Date.now();
-    const aiResponse = await fetch(`${ai.baseUrl}/chat/completions`, {
-      method: "POST",
-      headers: { Authorization: `Bearer ${ai.apiKey}`, "Content-Type": "application/json" },
-      body: JSON.stringify({
-        model: extractModel,
-        messages,
-        tools: [EXTRACTION_TOOL_SCHEMA],
-        tool_choice: { type: "function", function: { name: "save_questions" } },
-        max_tokens: 16384,
-      }),
-    });
+    let aiResponse: Response;
+    try {
+      aiResponse = await fetch(`${ai.baseUrl}/chat/completions`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${ai.apiKey}`, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          model: extractModel,
+          messages,
+          tools: [EXTRACTION_TOOL_SCHEMA],
+          tool_choice: { type: "function", function: { name: "save_questions" } },
+          max_tokens: 16384,
+        }),
+      });
+    } catch (e) {
+      console.error("AI gateway unreachable:", e);
+      await reverseReservation();
+      return json({ error: "Falha na extração por IA." }, 502);
+    }
 
     if (!aiResponse.ok) {
       const errText = await aiResponse.text();
       console.error("AI gateway error:", aiResponse.status, errText);
-      await refundIfNeeded();
+      await reverseReservation();
       if (aiResponse.status === 429) {
-        return new Response(
-          JSON.stringify({ error: "Limite de requisições IA atingido. Tente novamente em alguns minutos." }),
-          { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
+        return json({ error: "Limite de requisições IA atingido. Tente novamente em alguns minutos." }, 429);
       }
-      return new Response(JSON.stringify({ error: "Falha na extração por IA." }), {
-        status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      return json({ error: "Falha na extração por IA." }, 500);
     }
 
     const aiData = await aiResponse.json();
@@ -224,7 +207,14 @@ serve(async (req) => {
       metadata: { file_name: pdfFileName },
     }).catch(() => {});
 
-    const questions = parseExtractionResponse(aiData);
+    let questions: ReturnType<typeof parseExtractionResponse>;
+    try {
+      questions = parseExtractionResponse(aiData);
+    } catch (e) {
+      console.error("extraction parse failed:", e);
+      await reverseReservation();
+      return json({ error: "Falha na extração por IA." }, 500);
+    }
 
     // ── Update questions_extracted count ──────────────────────────────────────
     if (uploadId && questions.length > 0) {
@@ -234,15 +224,21 @@ serve(async (req) => {
         .eq("id", uploadId);
     }
 
-    return new Response(
-      JSON.stringify({ questions, source_file_name: pdfFileName, credits_charged: creditsCharged }),
-      { headers: { ...corsHeaders, "Content-Type": "application/json" } },
-    );
+    // The result exists: the charge is final. Settle BEFORE responding so the
+    // job never refunds a delivered extraction.
+    try {
+      await runCreditRpc("settle_credit_reservation", () =>
+        admin.rpc("settle_credit_reservation", { p_id: requestId.id }) as unknown as Promise<{
+          data: CreditRpcResult | null;
+          error: unknown;
+        }>);
+    } catch (e) {
+      console.error("Settle failed for user:", user.id, "reservation:", requestId.id, e);
+    }
+
+    return json({ questions, source_file_name: pdfFileName, credits_charged: creditsCharged });
   } catch (e) {
     console.error("extract-questions error:", e);
-    return new Response(
-      JSON.stringify({ error: e instanceof Error ? e.message : "Erro desconhecido" }),
-      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-    );
+    return json({ error: e instanceof Error ? e.message : "Erro desconhecido" }, 500);
   }
 });

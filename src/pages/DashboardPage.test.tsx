@@ -41,6 +41,12 @@ describe("DashboardPage", () => {
     expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent(/Professor/);
   });
 
+  it("reads 'Sem débito' for a courtesy account", () => {
+    setAuth({ profile: { full_name: "X", credit_balance: 0, access_kind: "exempt", plan_credits: 0, plan_period_end: null }, user: { id: "u1" } });
+    renderWithProviders(<DashboardPage />);
+    expect(screen.getByText("Sem débito")).toBeInTheDocument();
+  });
+
   it("displays the profile's credit balance", () => {
     setAuth({ profile: { full_name: "X", credit_balance: 42 }, user: { id: "u1" } });
     renderWithProviders(<DashboardPage />);

@@ -47,6 +47,7 @@ export interface MockAuthState {
   user?: { id: string; email?: string } | null;
   profile?: Record<string, unknown> | null;
   loading?: boolean;
+  profileLoading?: boolean;
   signOut?: ReturnType<typeof vi.fn>;
   refreshProfile?: ReturnType<typeof vi.fn>;
 }
@@ -57,6 +58,7 @@ export function buildAuthState(overrides: MockAuthState = {}) {
     user: overrides.user ?? null,
     profile: overrides.profile ?? null,
     loading: overrides.loading ?? false,
+    profileLoading: overrides.profileLoading ?? false,
     signOut: overrides.signOut ?? vi.fn(),
     refreshProfile: overrides.refreshProfile ?? vi.fn(),
   };
@@ -79,8 +81,10 @@ export function createQueryChain<T>(result: SupabaseQueryResult<T>): ChainStep {
     upsert: vi.fn().mockReturnThis(),
     eq: vi.fn().mockReturnThis(),
     neq: vi.fn().mockReturnThis(),
+    gt: vi.fn().mockReturnThis(),
     in: vi.fn().mockReturnThis(),
     is: vi.fn().mockReturnThis(),
+    not: vi.fn().mockReturnThis(),
     or: vi.fn().mockReturnThis(),
     order: vi.fn().mockReturnThis(),
     limit: vi.fn().mockReturnThis(),

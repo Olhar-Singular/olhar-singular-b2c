@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { Eye, EyeOff } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
@@ -16,8 +16,12 @@ import { Label } from "@/components/ui/label";
  */
 type Phase = "checking" | "ready" | "invalid";
 
+// Also the landing of the admin invite (?convite=1): same session mechanics,
+// but the copy says "create" and the new user is kept logged in afterwards.
 export default function ResetPasswordPage() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const invited = searchParams.get("convite") === "1";
   const [phase, setPhase] = useState<Phase>("checking");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -55,6 +59,14 @@ export default function ResetPasswordPage() {
         setError(parseAuthError(err.message));
         return;
       }
+      if (invited) {
+        // First password of an invited account: straight into the app, but any
+        // other session opened with this account dies here.
+        await supabase.auth.signOut({ scope: "others" });
+        toast.success("Senha criada! Bem-vindo à plataforma.");
+        navigate("/dashboard", { replace: true });
+        return;
+      }
       // The recovery session must not outlive the reset.
       await supabase.auth.signOut();
       toast.success("Senha redefinida! Entre com a nova senha.");
@@ -89,7 +101,10 @@ export default function ResetPasswordPage() {
   }
 
   return (
-    <AuthLayout title="Redefinir senha" description="Escolha uma nova senha para sua conta">
+    <AuthLayout
+      title={invited ? "Crie sua senha" : "Redefinir senha"}
+      description={invited ? "Você foi convidado para o Olhar Singular. Escolha a senha da sua conta." : "Escolha uma nova senha para sua conta"}
+    >
       {error && (
         <div
           role="alert"

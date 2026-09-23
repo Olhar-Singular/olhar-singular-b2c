@@ -24,9 +24,10 @@ describe("LandingHeader", () => {
     expect(screen.getByRole("link", { name: /FAQ/i })).toHaveAttribute("href", "#faq");
   });
 
-  it("has Entrar and Começar grátis CTAs pointing to /auth", () => {
+  it("has an Entrar CTA to /auth and an Assinar CTA to the checkout (no public signup)", () => {
     renderWithProviders(<LandingHeader />);
     expect(screen.getByRole("link", { name: /Entrar/i })).toHaveAttribute("href", "/auth");
-    expect(screen.getByRole("link", { name: /Começar grátis/i })).toHaveAttribute("href", "/auth?signup=1");
+    expect(screen.getByRole("link", { name: /^Assinar$/ })).toHaveAttribute("href", "/assinar");
+    expect(screen.queryByRole("link", { name: /Começar grátis/i })).toBeNull();
   });
 });

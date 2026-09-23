@@ -12,10 +12,11 @@ describe("HeroSection", () => {
     expect(h1.textContent?.length).toBeGreaterThan(0);
   });
 
-  it("primary CTA links to /auth?signup=1", () => {
+  it("primary CTA points to the pricing section (no public signup)", () => {
     renderWithProviders(<HeroSection />);
-    const link = screen.getByRole("link", { name: /Começar grátis/i });
-    expect(link).toHaveAttribute("href", "/auth?signup=1");
+    const link = screen.getByRole("link", { name: /Ver planos/i });
+    expect(link).toHaveAttribute("href", "#precos");
+    expect(screen.queryByRole("link", { name: /Começar grátis/i })).toBeNull();
   });
 
   it("secondary anchor links to #como-funciona", () => {
@@ -24,8 +25,9 @@ describe("HeroSection", () => {
     expect(anchor).toHaveAttribute("href", "#como-funciona");
   });
 
-  it("mentions 50 free credits in the badge", () => {
+  it("announces monthly plans and extra credits in the badge, never a free signup", () => {
     renderWithProviders(<HeroSection />);
-    expect(screen.getByText(/50 créditos grátis/i)).toBeInTheDocument();
+    expect(screen.getByText(/planos mensais e créditos avulsos/i)).toBeInTheDocument();
+    expect(screen.queryByText(/grátis/i)).toBeNull();
   });
 });

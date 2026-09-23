@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { authorizeSuperAdmin } from "../_shared/adminAuth.ts";
+import { logAdminAction } from "../_shared/adminAudit.ts";
 import { validateStatusInput, banDurationFor } from "../_shared/adminUserStatus.ts";
 
 const corsHeaders = {
@@ -50,6 +51,7 @@ serve(async (req) => {
       return json({ error: "internal_error" }, 500);
     }
 
+    await logAdminAction(supabase, { actorId: auth.userId, targetUserId: userId, action });
     return json({ success: true, userId, action, is_active: action === "unban" }, 200);
   } catch (error) {
     console.error("admin-user-status unhandled error:", error);

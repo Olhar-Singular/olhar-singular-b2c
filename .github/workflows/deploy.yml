@@ -41,6 +41,10 @@ jobs:
           VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
           VITE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.VITE_SUPABASE_PUBLISHABLE_KEY }}
           VITE_SUPABASE_PROJECT_ID: ${{ secrets.VITE_SUPABASE_PROJECT_ID }}
+          # Card Payment Brick (same MP application as ACCESS_TOKEN_MP_PROD).
+          VITE_MP_PUBLIC_KEY: ${{ secrets.VITE_MP_PUBLIC_KEY }}
+          # Optional: without it no analytics is injected.
+          VITE_GTM_ID: ${{ secrets.VITE_GTM_ID }}
 
   db-tests:
     name: Database tests (pgTAP)

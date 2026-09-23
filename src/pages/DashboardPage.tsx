@@ -2,6 +2,7 @@ import { Link } from "react-router-dom";
 import { Wand2, User, Coins, MessageSquare, ArrowRight, Lightbulb } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { useAuth } from "@/hooks/useAuth";
+import { useAccess } from "@/hooks/useAccess";
 
 const quickActions = [
   {
@@ -43,6 +44,7 @@ const tips = [
 
 export default function DashboardPage() {
   const { profile, user, signOut } = useAuth();
+  const access = useAccess();
 
   const displayName =
     profile?.full_name || user?.user_metadata?.full_name || "Professor(a)";
@@ -79,7 +81,7 @@ export default function DashboardPage() {
             <div>
               <p className="text-sm text-muted-foreground">Créditos disponíveis</p>
               <p className="text-3xl font-bold text-foreground tabular-nums">
-                {profile?.credit_balance ?? "—"}
+                {access ? (access.unlimited ? "Sem débito" : access.total) : "—"}
               </p>
             </div>
           </div>
@@ -87,7 +89,7 @@ export default function DashboardPage() {
             to="/creditos"
             className="text-sm text-primary font-medium hover:underline flex items-center gap-1"
           >
-            Comprar
+            Ver créditos
             <ArrowRight className="w-3.5 h-3.5" />
           </Link>
         </CardContent>

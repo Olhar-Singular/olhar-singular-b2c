@@ -23,14 +23,14 @@ export default function LandingPage() {
       <section className="py-16 lg:py-20 gradient-hero">
         <div className="max-w-2xl mx-auto px-4 text-center">
           <h2 className="text-3xl font-bold text-primary-foreground mb-4">
-            Comece a adaptar hoje, de graça
+            Comece a adaptar hoje
           </h2>
           <p className="text-primary-foreground/80 mb-8">
-            50 créditos grátis ao cadastrar. Sem cartão. Sem compromisso.
+            Planos mensais a partir de R$ 39,90 por mês. Cancele quando quiser.
           </p>
-          <Link to="/auth?signup=1">
+          <Link to="/assinar">
             <Button size="lg" className="bg-white text-primary hover:bg-white/90 font-semibold gap-2">
-              Começar grátis
+              Assinar agora
               <ArrowRight className="w-4 h-4" aria-hidden="true" />
             </Button>
           </Link>

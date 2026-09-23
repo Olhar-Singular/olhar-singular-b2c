@@ -1,6 +1,6 @@
 ---
 name: edge-fn-writer
-description: Use este agente pra criar uma edge function nova em `supabase/functions/<nome>/` ou modificar o scaffolding de uma existente (auth, CORS, logging de IA, config). Ele conhece o padrão compartilhado em `supabase/functions/_shared/` e garante consistência com as 10 functions já existentes. NÃO use pra debugging lógico de negócio dentro de uma function, apenas pra scaffolding/estrutura.
+description: Use este agente pra criar uma edge function nova em `supabase/functions/<nome>/` ou modificar o scaffolding de uma existente (auth, CORS, logging de IA, config). Ele conhece o padrão compartilhado em `supabase/functions/_shared/` e garante consistência com as functions já existentes (`subscribe`, `cancel-subscription`, `update-subscription-card`, `refund-last-charge` são o modelo mais recente: `index.ts` só monta `deps` e chama um `run*` puro de `_shared/`). NÃO use pra debugging lógico de negócio dentro de uma function, apenas pra scaffolding/estrutura.
 tools: Read, Write, Edit, Grep, Glob, Bash
 model: sonnet
 ---
@@ -19,16 +19,35 @@ supabase/functions/
 ├── _shared/             # LÓGICA EXTRAÍDA + TESTADA (cada *.ts tem *.test.ts):
 │   ├── aiConfig.ts      # getAiConfig() → { apiKey, baseUrl, resolveModel } (Google/Gemini via AI_API_KEY)
 │   ├── logAiUsage.ts    # logAiUsage() — grava uso de IA em ai_usage_logs
-│   ├── credits.ts       # chargeCredits() / chargeErrorResponse() / refundCredits() — débito de crédito
+│   ├── credits.ts       # chargeCredits() / chargeErrorResponse() — débito por balde (mode charged|exempt); runCreditRpc()
+│   ├── creditReservation.ts # interpretReservation()/reservationErrorResponse()/resolveRequestId() — reserva crash-safe
+│   ├── adminSetAccess.ts # validateSetAccessInput() — trial/exempt/legacy ou extendDays 7/14/30
 │   ├── creditGuard.ts   # guarda de saldo antes de operação cara
 │   ├── credits/Packages/adaptationCost.ts  # pacotes e cálculo de custo
 │   ├── adminAuth.ts     # checagem de super-admin
 │   ├── admin{Dashboard,GrantCredits,UserStatus}.ts  # core das functions admin
 │   ├── adapt{ActivityCore,ationPrompt}.ts  # core do adapt-activity
-│   ├── stripeEvents.ts  # parsing de webhooks Stripe (grant + falha async do Pix)
-│   ├── stripeCheckoutParams.ts # payload do Checkout Stripe (cartão)
+│   ├── creditPackages.ts # selectPackage(rows, id, { allowAdminOnly }) sobre linhas de credit_packages
+│   ├── purchaseGrant.ts # approvePurchaseAndGrant / rejectPendingPurchase → RPCs atômicas (webhook + cartão)
+│   ├── mpCardPayment.ts # body do POST /v1/payments (cartão via Brick), interpretação e maskPayer p/ logs
+│   ├── mpStatusDetail.ts # status_detail do MP → mensagem pt-BR
+│   ├── cardPaymentInput.ts # validação do body { packageId, card } do create-card-payment
 │   ├── mpPixPayment.ts  # body do POST /v1/payments (Pix) + extração do QR — Checkout Transparente
 │   ├── mpEvents.ts      # parsing do webhook Mercado Pago (grant/reject por status do pagamento)
+│   ├── mpPreapproval.ts # assinatura: body do POST /preapproval, interpretação, tópicos do webhook, shape do authorized_payment
+│   ├── subscribeFlow.ts # runSubscribe(input, deps): plano válido (ou o mais barato no trial), uma viva, trial_ends_at na linha, ativação otimista, pending, recusa, nunca repetir o POST
+│   ├── subscribeInput.ts # parseSubscribeInput / parseUpdateCardInput / parseCancelInput
+│   ├── subscriptionActions.ts # runCancelSubscription / runUpdateSubscriptionCard / handleSubscriptionWebhook (deps injetadas)
+│   ├── subscriptionActionDeps.ts # wiring Supabase+MP dos deps acima (compartilhado por cancel e update-card)
+│   ├── refundFlow.ts    # runRefundLastCharge(input, deps): MP primeiro, cancela o preapproval, depois confirm_refund
+│   ├── refundDeps.ts    # buildRefundDeps(admin, mpAccessToken, fetch, now): wiring das RPCs refund_last_charge/confirm_refund + MP
+│   ├── checkoutGuard.ts # normalizeEmail, hashIdentifier (HMAC), clientIp, decideCheckoutAccess (429/503), isValidCpf/extractCpf
+│   ├── accountProvision.ts # parseAccountInput + runAnonymousCheckout (rate limit, createUser, runSubscribe, CPF/termos, magic link só com pagamento)
+│   ├── setInitialPassword.ts # parsePasswordInput + runSetInitialPassword (senha, flag, revoga outras sessões)
+│   ├── mpHttp.ts        # mpRequest (base URL, bearer, JSON, X-Idempotency-Key, timeout 15s) + cancelPreapprovalAtMp; TODA chamada ao MP passa por aqui
+│   ├── analyticsEvents.ts # GA4 MP + Meta CAPI: builders puros + sendAnalyticsEvents (no-op sem secrets, nunca lança)
+│   ├── adminAudit.ts    # sanitizeAuditPayload + logAdminAction (admin_actions; nunca lança)
+│   ├── adminCreateUser.ts # validateCreateUserInput / inviteRedirect / validateChangeEmailInput
 │   ├── mpSignature.ts   # validateMpSignature() — HMAC do header x-signature
 │   └── sanitize.ts      # sanitize() — limpa strings antes de salvar
 └── <nome-da-function>/
@@ -148,16 +167,14 @@ Leia `_shared/credits.ts` pra ver `ChargeDeps`/`ChargeOutcome` atuais. O cliente
 
 ### 6. Se a function é admin-only
 
-Chame `is_super_admin(user.id)` via RPC antes de seguir:
+**Não existe RPC `is_super_admin` neste repo** (é herança do B2B). O flag é a coluna `profiles.is_super_admin` e o padrão é o helper testado `authorizeSuperAdmin` de `_shared/adminAuth.ts`, com o client service_role:
 
 ```typescript
-const { data: isSuperAdmin } = await supabase.rpc("is_super_admin", { user_id: user.id });
-if (!isSuperAdmin) {
-  return new Response(JSON.stringify({ error: "Forbidden" }), {
-    status: 403,
-    headers: { ...corsHeaders, "Content-Type": "application/json" },
-  });
-}
+import { authorizeSuperAdmin } from "../_shared/adminAuth.ts";
+
+const auth = await authorizeSuperAdmin(supabase, req.headers.get("Authorization"));
+if (!auth.ok) return json({ error: auth.error }, auth.status); // 401 / 403 / 500
+// auth.userId é o super-admin autenticado
 ```
 
 ## Fluxo obrigatório ao começar
@@ -186,7 +203,7 @@ if (!isSuperAdmin) {
 ## Resposta ao thread principal
 
 1. Caminho do arquivo criado (ou modificado)
-2. Lista de secrets/env vars que a function precisa (`SUPABASE_URL`, `SUPABASE_ANON_KEY`/`SUPABASE_SERVICE_ROLE_KEY`, `AI_API_KEY`, `STRIPE_*` conforme o caso — runtime local injeta os `SUPABASE_*`; demais vêm do `.env` raiz via `make fn-serve`)
+2. Lista de secrets/env vars que a function precisa (`SUPABASE_URL`, `SUPABASE_ANON_KEY`/`SUPABASE_SERVICE_ROLE_KEY`, `AI_API_KEY`, `ACCESS_TOKEN_MP_PROD`/`VERIFY_TOKEN_MP_PROD` conforme o caso — runtime local injeta os `SUPABASE_*`; demais vêm do `.env` raiz via `make fn-serve`)
 3. Comando pra deploy local: `make fn-serve` ou `supabase functions serve <nome>`
 4. Comando pra deploy remoto: `supabase functions deploy <nome>` ou `make fn-deploy-all`
 5. Action type escolhido (pra grep de duplicação)

@@ -5,6 +5,10 @@ project_id = "orientador-digital-b2c"
 # tela de nova senha nunca recebe a sessão de recovery.
 # Portas: 8080 (`make dev`) e 3000 (`make verify-adaptar`).
 [auth]
+# Sem cadastro público: contas nascem pelo checkout pago (assinatura) ou por
+# convite do admin. Em produção, o mesmo flag (disable_signup) é aplicado pela
+# Management API no deploy (spec de pagamentos, runbook).
+enable_signup = false
 additional_redirect_urls = [
   "http://localhost:8080/redefinir-senha",
   "http://localhost:3000/redefinir-senha",
@@ -46,10 +50,26 @@ content_path = "./supabase/templates/confirmation.html"
 subject = "Redefinir sua senha - Olhar Singular"
 content_path = "./supabase/templates/recovery.html"
 
-# Webhooks são chamados pelos provedores (Stripe / Mercado Pago) sem JWT do
-# Supabase. Sem isto o gateway rejeita a chamada com 401 antes da função rodar.
-[functions.stripe-webhook]
+# Convite criado pelo admin (auth.admin.inviteUserByEmail em admin-create-user).
+# O link cai em /redefinir-senha?convite=1, que vira "Crie sua senha" e mantém a
+# sessão. Em produção, aplicar via Dashboard (Auth → Email Templates → Invite user).
+[auth.email.template.invite]
+subject = "Seu convite para o Olhar Singular"
+content_path = "./supabase/templates/invite.html"
+
+# Link de acesso da conta criada pelo checkout (signInWithOtp em /assinar): entra
+# e cai em /definir-senha. Em produção, aplicar via Dashboard (Auth → Email
+# Templates → Magic Link).
+[auth.email.template.magic_link]
+subject = "Seu acesso ao Olhar Singular"
+content_path = "./supabase/templates/magic_link.html"
+
+# O webhook é chamado pelo Mercado Pago sem JWT do Supabase. Sem isto o gateway
+# rejeita a chamada com 401 antes da função rodar.
+[functions.mp-webhook]
 verify_jwt = false
 
-[functions.mp-webhook]
+# /assinar funciona sem sessão (a conta nasce do pagamento): o gateway não pode
+# exigir JWT. A função trata a Authorization como opcional e faz o rate limit.
+[functions.subscribe]
 verify_jwt = false

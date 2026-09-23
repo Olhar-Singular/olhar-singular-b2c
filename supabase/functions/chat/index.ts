@@ -110,7 +110,8 @@ serve(async (req) => {
         );
       }
 
-      // Deduct 3 credits for the new session (no free tier). The charge decision
+      // Deduct 3 credits for the new session (plan bucket first, then extras;
+      // courtesy accounts come back as "exempt" and proceed). The charge decision
       // lives in the shared, unit-tested chargeCredits; chat keeps its own copy.
       const charge = await chargeCredits({
         cost: SESSION_CREDIT_COST,

@@ -24,7 +24,8 @@ help:
 	@echo "    make lint               ESLint"
 	@echo "    make test               Vitest (single run)"
 	@echo "    make test-watch         Vitest (watch mode)"
-	@echo "    make typecheck          TypeScript check"
+	@echo "    make typecheck          TypeScript check (project references; checa pouco)"
+	@echo "    make typecheck-app      TypeScript check real do app (advisory, erros pré-existentes)"
 	@echo ""
 	@echo "  Supabase Local (roda no host via CLI)"
 	@echo "    make sb-start           Subir Supabase local (todos os serviços)"
@@ -53,6 +54,8 @@ help:
 	@echo "    make fn-deploy fn=<nome> Deploy de uma função específica"
 	@echo "    make fn-list            Listar funções deployadas"
 	@echo "    make fn-serve           Servir funções localmente (dev)"
+	@echo "    make fn-serve-mp-test   Servir funções com as credenciais de TESTE do Mercado Pago"
+	@echo "    make fn-check           Type-check das functions com Deno (via Docker)"
 	@echo "    make fn-new fn=<nome>   Criar nova edge function"
 	@echo ""
 	@echo "  Tipos TypeScript"
@@ -115,6 +118,13 @@ test-watch:
 .PHONY: typecheck
 typecheck:
 	$(EXEC) npm run typecheck
+
+# Type-check REAL do app (o `typecheck` acima resolve para files:[] e não checa
+# nada). Advisory: há erros pré-existentes (vi.fn sem generics em testes,
+# núcleo do Adaptar); acompanhe a contagem, não deixe subir.
+.PHONY: typecheck-app
+typecheck-app:
+	$(EXEC) sh -c 'npm run typecheck:app 2>&1 | tail -n 5; true' 
 
 # ─────────────────────────────────────────────
 #  SUPABASE — LOCAL (roda no host)
@@ -201,7 +211,9 @@ db-seed-test-user:
 # ─────────────────────────────────────────────
 #  EDGE FUNCTIONS
 # ─────────────────────────────────────────────
-FUNCTIONS := adapt-activity admin-dashboard admin-grant-credits admin-user-status chat create-checkout create-stripe-checkout extract-questions mp-webhook stripe-webhook
+# Derived from disk (every dir with an index.ts, except _shared), same rule the
+# CI deploy uses, so a new function is never forgotten here.
+FUNCTIONS := $(notdir $(patsubst %/,%,$(dir $(wildcard supabase/functions/*/index.ts))))
 
 .PHONY: fn-deploy-all
 fn-deploy-all:
@@ -224,6 +236,24 @@ fn-list:
 .PHONY: fn-serve
 fn-serve:
 	supabase functions serve --env-file .env
+
+# Serve the functions against the Mercado Pago TEST seller (the "STAGING" block
+# of .env): remaps the test credentials onto the names the functions read, in an
+# ephemeral env file removed on exit. Never mixes TEST and PROD credentials.
+.PHONY: fn-serve-mp-test
+fn-serve-mp-test:
+	@grep -vE '^(ACCESS_TOKEN_MP_PROD|VERIFY_TOKEN_MP_PROD|PUBLIC_KEY_MP_PROD)=' .env > .env.mp-test; \
+	 echo "ACCESS_TOKEN_MP_PROD=$$(grep -E '^ACCESS_TOKEN_MP=' .env | cut -d= -f2-)" >> .env.mp-test; \
+	 echo "VERIFY_TOKEN_MP_PROD=$$(grep -E '^VERIFY_TOKEN_MP=' .env | cut -d= -f2-)" >> .env.mp-test; \
+	 trap 'rm -f .env.mp-test' EXIT INT TERM; \
+	 supabase functions serve --env-file .env.mp-test
+
+# Type-check every function with Deno (there is no deno on the host nor in the
+# app container): the official image, read-only mount, one `deno check` per entry.
+.PHONY: fn-check
+fn-check:
+	docker run --rm -v "$(CURDIR)":/app:ro -w /app denoland/deno:2.1.4 deno \
+		check --no-lock --config supabase/functions/deno.json $(foreach f,$(FUNCTIONS),supabase/functions/$(f)/index.ts)
 
 .PHONY: fn-new
 fn-new:

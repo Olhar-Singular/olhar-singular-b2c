@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import type { Session, User } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
 import type { Database } from "@/integrations/supabase/types";
@@ -9,7 +9,10 @@ interface AuthContextValue {
   session: Session | null;
   user: User | null;
   profile: Profile | null;
+  /** Session still being resolved. */
   loading: boolean;
+  /** Session known, profile row not fetched yet (gates must wait, not deny). */
+  profileLoading: boolean;
   signOut: () => Promise<void>;
   refreshProfile: () => Promise<void>;
 }
@@ -20,14 +23,26 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
+  const [profileLoading, setProfileLoading] = useState(false);
 
   async function fetchProfile(userId: string) {
-    const { data } = await supabase
-      .from("profiles")
-      .select("*")
-      .eq("id", userId)
-      .single();
-    setProfile(data);
+    setProfileLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from("profiles")
+        .select("*")
+        .eq("id", userId)
+        .single();
+      // A transient failure keeps the profile we had: wiping it would collapse
+      // the access state (paywall, banners) right after a payment.
+      if (error) {
+        console.error("AuthContext: profile fetch failed", error.message);
+        return;
+      }
+      setProfile(data);
+    } finally {
+      setProfileLoading(false);
+    }
   }
 
   useEffect(() => {
@@ -41,7 +56,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       (_event, newSession) => {
         setSession(newSession);
         if (newSession?.user) {
-          fetchProfile(newSession.user.id);
+          // Deferred: awaiting a Supabase call inside the auth callback can
+          // deadlock the client (documented by Supabase); the next tick is fine.
+          const userId = newSession.user.id;
+          setTimeout(() => fetchProfile(userId), 0);
         } else {
           setProfile(null);
         }
@@ -51,22 +69,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return () => listener.subscription.unsubscribe();
   }, []);
 
-  async function signOut() {
+  // Stable identities: consumers key effects on refreshProfile, and the value
+  // object would otherwise re-render every useAuth() on each provider render.
+  const signOut = useCallback(async () => {
     await supabase.auth.signOut();
-  }
+  }, []);
 
-  async function refreshProfile() {
-    const userId = session?.user?.id;
-    if (userId) await fetchProfile(userId);
-  }
+  const sessionUserId = session?.user?.id;
+  const refreshProfile = useCallback(async () => {
+    if (sessionUserId) await fetchProfile(sessionUserId);
+  }, [sessionUserId]);
 
-  return (
-    <AuthContext.Provider
-      value={{ session, user: session?.user ?? null, profile, loading, signOut, refreshProfile }}
-    >
-      {children}
-    </AuthContext.Provider>
+  const value = useMemo(
+    () => ({ session, user: session?.user ?? null, profile, loading, profileLoading, signOut, refreshProfile }),
+    [session, profile, loading, profileLoading, signOut, refreshProfile],
   );
+
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
 
 export function useAuthContext() {

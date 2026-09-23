@@ -56,7 +56,7 @@ export function UserAccountMenu({ onLogout }: Props) {
         <DropdownMenuItem asChild>
           <Link to="/creditos">
             <Coins className="w-4 h-4 mr-2" />
-            Comprar créditos
+            Créditos e assinatura
           </Link>
         </DropdownMenuItem>
         <div className="flex items-center justify-between px-2 py-1.5 text-sm">

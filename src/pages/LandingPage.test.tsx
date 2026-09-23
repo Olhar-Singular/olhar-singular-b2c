@@ -1,7 +1,10 @@
 import { screen } from "@testing-library/react";
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import LandingPage from "./LandingPage";
 import { renderWithProviders } from "@/test/helpers";
+
+// The pricing grid falls back to the seeded catalogue while the query is loading.
+vi.mock("@/hooks/useSubscription", () => ({ usePlans: () => ({ data: undefined, isLoading: true }) }));
 
 function renderLanding() {
   return renderWithProviders(<LandingPage />);
@@ -15,24 +18,28 @@ describe("LandingPage", () => {
     expect(h1.textContent?.trim().length).toBeGreaterThan(0);
   });
 
-  it("each CTA 'Começar grátis' links to /auth?signup=1", () => {
+  it("has no public signup: every 'Ver planos' CTA points to the pricing section", () => {
     renderLanding();
-    const links = screen.getAllByRole("link", { name: /começar grátis/i });
+    const links = screen.getAllByRole("link", { name: /ver planos/i });
     expect(links.length).toBeGreaterThan(0);
-    links.forEach((l) => expect(l).toHaveAttribute("href", "/auth?signup=1"));
+    links.forEach((l) => expect(l).toHaveAttribute("href", "#precos"));
+    expect(screen.queryByRole("link", { name: /começar grátis/i })).toBeNull();
+    expect(screen.queryByRole("link", { name: /criar conta/i })).toBeNull();
   });
 
-  it("renders the three paid packages with prices", () => {
+  it("renders the three monthly plans with prices", () => {
     renderLanding();
-    expect(screen.getByText(/R\$\s*9,90/)).toBeInTheDocument();
-    expect(screen.getByText(/R\$\s*29,90/)).toBeInTheDocument();
-    expect(screen.getByText(/R\$\s*59,90/)).toBeInTheDocument();
+    // 39,90 also appears in the closing CTA, 59,90 also as an extra package.
+    expect(screen.getAllByText(/R\$\s*39,90/).length).toBeGreaterThan(0);
+    expect(screen.queryByText(/R\$\s*19,90/)).toBeNull();
+    expect(screen.getAllByText(/R\$\s*59,90/).length).toBeGreaterThan(0);
+    expect(screen.getByText(/R\$\s*99,90/)).toBeInTheDocument();
   });
 
-  it("advertises 50 free credits at signup", () => {
+  it("never promises free signup credits or credits that never expire", () => {
     renderLanding();
-    const matches = screen.getAllByText(/50 créditos grátis/i);
-    expect(matches.length).toBeGreaterThan(0);
+    expect(screen.queryByText(/50 créditos grátis/i)).toBeNull();
+    expect(screen.queryByText(/nunca expiram/i)).toBeNull();
   });
 
   it("footer carries pedagogical disclaimer", () => {

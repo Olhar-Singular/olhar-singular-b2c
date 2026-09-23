@@ -2,7 +2,15 @@ import { renderHook, waitFor, act } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { createElement } from "react";
-import { useAdminDashboard, useSetUserStatus, useGrantCredits } from "./useAdminDashboard";
+import {
+  useAdminDashboard,
+  useSetUserStatus,
+  useGrantCredits,
+  useSetAccess,
+  useCreateUser,
+  useChangeEmail,
+  useAdminCancelSubscription,
+} from "./useAdminDashboard";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { MSG_NETWORK } from "@/lib/utils/errors";
@@ -164,5 +172,206 @@ describe("useGrantCredits", () => {
     });
 
     expect(toast.error).toHaveBeenCalledWith(MSG_NETWORK);
+  });
+});
+
+describe("useSetAccess", () => {
+  it("invokes admin-set-access with a kind change, invalidates and toasts", async () => {
+    mockInvoke.mockResolvedValue({ data: { success: true }, error: null });
+    const { qc, wrapper } = makeWrapper();
+    const invalidateSpy = vi.spyOn(qc, "invalidateQueries");
+
+    const { result } = renderHook(() => useSetAccess(), { wrapper });
+    await act(async () => {
+      await result.current.mutateAsync({ userId: "u1", kind: "exempt" });
+    });
+
+    expect(mockInvoke).toHaveBeenCalledWith("admin-set-access", { body: { userId: "u1", kind: "exempt" } });
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ["admin", "dashboard"] });
+    expect(toast.success).toHaveBeenCalledWith("Acesso atualizado.");
+  });
+
+  it("toasts the number of days on a trial extension", async () => {
+    mockInvoke.mockResolvedValue({ data: { success: true }, error: null });
+    const { wrapper } = makeWrapper();
+
+    const { result } = renderHook(() => useSetAccess(), { wrapper });
+    await act(async () => {
+      await result.current.mutateAsync({ userId: "u1", extendDays: 14 });
+    });
+
+    expect(toast.success).toHaveBeenCalledWith("Teste estendido em 14 dias.");
+  });
+
+  it("translates the function's error codes to pt-BR", async () => {
+    mockInvoke.mockResolvedValue({
+      data: null,
+      error: Object.assign(new Error("Edge Function returned a non-2xx status code"), {
+        context: { json: () => Promise.resolve({ error: "trial_limit_reached" }) },
+      }),
+    });
+    const { wrapper } = makeWrapper();
+
+    const { result } = renderHook(() => useSetAccess(), { wrapper });
+    await act(async () => {
+      try {
+        await result.current.mutateAsync({ userId: "u1", extendDays: 30 });
+      } catch {
+        /* expected */
+      }
+    });
+
+    expect(toast.error).toHaveBeenCalledWith("O período de teste não pode passar de 90 dias no total.");
+  });
+
+  it("translates card_trial (extension blocked while the day-8 MP charge is live)", async () => {
+    mockInvoke.mockResolvedValue({
+      data: null,
+      error: Object.assign(new Error("Edge Function returned a non-2xx status code"), {
+        context: { json: () => Promise.resolve({ error: "card_trial" }) },
+      }),
+    });
+    const { wrapper } = makeWrapper();
+
+    const { result } = renderHook(() => useSetAccess(), { wrapper });
+    await act(async () => {
+      try {
+        await result.current.mutateAsync({ userId: "u1", extendDays: 7 });
+      } catch {
+        /* expected */
+      }
+    });
+
+    expect(toast.error).toHaveBeenCalledWith(
+      "Teste com cartão: a cobrança do 8º dia é fixa no Mercado Pago e não pode ser adiada. Conceda créditos extras ou cancele o teste.",
+    );
+  });
+
+  it("passes an unknown error message through", async () => {
+    mockInvoke.mockResolvedValue({ data: null, error: new Error("falhou") });
+    const { wrapper } = makeWrapper();
+
+    const { result } = renderHook(() => useSetAccess(), { wrapper });
+    await act(async () => {
+      try {
+        await result.current.mutateAsync({ userId: "u1", kind: "legacy" });
+      } catch {
+        /* expected */
+      }
+    });
+
+    expect(toast.error).toHaveBeenCalledWith("falhou");
+  });
+});
+
+function fnError(code: string) {
+  return Object.assign(new Error("Edge Function returned a non-2xx status code"), {
+    context: { json: () => Promise.resolve({ error: code }) },
+  });
+}
+
+describe("admin error translation", () => {
+  it("translates the raw codes of admin-user-status and admin-grant-credits", async () => {
+    mockInvoke.mockResolvedValue({ data: null, error: fnError("unauthorized") });
+    const { wrapper } = makeWrapper();
+    const status = renderHook(() => useSetUserStatus(), { wrapper });
+    await act(async () => {
+      try { await status.result.current.mutateAsync({ userId: "u1", action: "ban" }); } catch { /* expected */ }
+    });
+    expect(toast.error).toHaveBeenCalledWith("Sua sessão expirou. Entre de novo.");
+
+    mockInvoke.mockResolvedValue({ data: null, error: fnError("invalid_amount") });
+    const grant = renderHook(() => useGrantCredits(), { wrapper });
+    await act(async () => {
+      try { await grant.result.current.mutateAsync({ userId: "u1", amount: 0 }); } catch { /* expected */ }
+    });
+    expect(toast.error).toHaveBeenCalledWith("Informe uma quantidade de créditos válida.");
+  });
+});
+
+describe("useCreateUser", () => {
+  it("invokes admin-create-user, invalidates and toasts the e-mail", async () => {
+    mockInvoke.mockResolvedValue({ data: { success: true, userId: "n1", mode: "trial" }, error: null });
+    const { qc, wrapper } = makeWrapper();
+    const invalidateSpy = vi.spyOn(qc, "invalidateQueries");
+    const { result } = renderHook(() => useCreateUser(), { wrapper });
+    await act(async () => {
+      await result.current.mutateAsync({ email: "nova@x.com", fullName: "Nova", mode: "trial" });
+    });
+    expect(mockInvoke).toHaveBeenCalledWith("admin-create-user", { body: { email: "nova@x.com", fullName: "Nova", mode: "trial" } });
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ["admin", "dashboard"] });
+    expect(toast.success).toHaveBeenCalledWith("Convite enviado para nova@x.com.");
+  });
+
+  it("translates email_exists and passes unknown errors through", async () => {
+    mockInvoke.mockResolvedValue({ data: null, error: fnError("email_exists") });
+    const { wrapper } = makeWrapper();
+    const { result } = renderHook(() => useCreateUser(), { wrapper });
+    await act(async () => {
+      try { await result.current.mutateAsync({ email: "a@x.com", fullName: "A B", mode: "exempt" }); } catch { /* expected */ }
+    });
+    expect(toast.error).toHaveBeenCalledWith("Já existe uma conta com este e-mail.");
+
+    mockInvoke.mockResolvedValue({ data: null, error: new Error("falhou") });
+    await act(async () => {
+      try { await result.current.mutateAsync({ email: "a@x.com", fullName: "A B", mode: "exempt" }); } catch { /* expected */ }
+    });
+    expect(toast.error).toHaveBeenCalledWith("falhou");
+  });
+});
+
+describe("useChangeEmail", () => {
+  it("invokes admin-change-email, invalidates and toasts", async () => {
+    mockInvoke.mockResolvedValue({ data: { success: true }, error: null });
+    const { qc, wrapper } = makeWrapper();
+    const invalidateSpy = vi.spyOn(qc, "invalidateQueries");
+    const { result } = renderHook(() => useChangeEmail(), { wrapper });
+    await act(async () => {
+      await result.current.mutateAsync({ userId: "u1", email: "novo@x.com" });
+    });
+    expect(mockInvoke).toHaveBeenCalledWith("admin-change-email", { body: { userId: "u1", email: "novo@x.com" } });
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ["admin", "dashboard"] });
+    expect(toast.success).toHaveBeenCalledWith("E-mail atualizado.");
+  });
+
+  it("translates the function's error codes", async () => {
+    mockInvoke.mockResolvedValue({ data: null, error: fnError("cannot_change_self") });
+    const { wrapper } = makeWrapper();
+    const { result } = renderHook(() => useChangeEmail(), { wrapper });
+    await act(async () => {
+      try { await result.current.mutateAsync({ userId: "u1", email: "novo@x.com" }); } catch { /* expected */ }
+    });
+    expect(toast.error).toHaveBeenCalledWith("Você não pode alterar a própria conta por aqui.");
+
+    mockInvoke.mockResolvedValue({ data: null, error: new Error("falhou") });
+    await act(async () => {
+      try { await result.current.mutateAsync({ userId: "u1", email: "novo@x.com" }); } catch { /* expected */ }
+    });
+    expect(toast.error).toHaveBeenCalledWith("falhou");
+  });
+});
+
+describe("useAdminCancelSubscription", () => {
+  it("cancels on behalf of the user and refreshes the dashboard", async () => {
+    mockInvoke.mockResolvedValue({ data: { status: "cancelled", subscriptionId: "s1" }, error: null });
+    const { qc, wrapper } = makeWrapper();
+    const invalidateSpy = vi.spyOn(qc, "invalidateQueries");
+    const { result } = renderHook(() => useAdminCancelSubscription(), { wrapper });
+    await act(async () => {
+      await result.current.mutateAsync({ userId: "u1" });
+    });
+    expect(mockInvoke).toHaveBeenCalledWith("cancel-subscription", { body: { userId: "u1" } });
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ["admin", "dashboard"] });
+    expect(toast.success).toHaveBeenCalledWith(expect.stringMatching(/cancelada/));
+  });
+
+  it("toasts the provider refusal", async () => {
+    mockInvoke.mockResolvedValue({ data: null, error: new Error("MP fora") });
+    const { wrapper } = makeWrapper();
+    const { result } = renderHook(() => useAdminCancelSubscription(), { wrapper });
+    await act(async () => {
+      try { await result.current.mutateAsync({ userId: "u1" }); } catch { /* expected */ }
+    });
+    expect(toast.error).toHaveBeenCalledWith("MP fora");
   });
 });

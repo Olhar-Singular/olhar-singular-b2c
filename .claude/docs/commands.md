@@ -20,7 +20,8 @@ make build               # Build produção
 make lint                # ESLint
 make test                # Vitest (single run)
 make test-watch          # Vitest (watch mode)
-make typecheck           # TypeScript check
+make typecheck           # TypeScript check (project references: checa pouco)
+make typecheck-app       # TypeScript check real do app (advisory, erros pré-existentes)
 ```
 
 ## Supabase
@@ -37,6 +38,8 @@ make gen-types           # Gerar tipos TypeScript do schema local
 make gen-types-remote    # Gerar tipos do schema remoto
 make fn-deploy-all       # Deploy de todas as edge functions
 make fn-serve            # Servir funções localmente
+make fn-serve-mp-test    # Servir funções com as credenciais de TESTE do Mercado Pago (bloco STAGING)
+make fn-check            # Type-check das functions com Deno (imagem oficial via Docker)
 make test-db             # pgTAP (RPC/RLS) — exige Docker
 make verify-adaptar      # Sobe o ambiente real do fluxo "Adaptar" (Supabase+reset+seed+
                          #   .env.local+functions serve+dev no container) → localhost:3000

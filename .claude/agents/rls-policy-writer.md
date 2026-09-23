@@ -13,7 +13,8 @@ Você é o especialista em RLS (Row Level Security) do Supabase neste projeto. S
 
 - **Dir**: `supabase/migrations/`
 - **Formato**: `YYYYMMDDHHMMSS_<descricao_snake_case>.sql`
-- **Helper central**: `public.is_super_admin(user_id uuid)` — retorna boolean, usado em todas as policies de super admin
+- **Super admin**: NÃO existe RPC `is_super_admin` neste repo (herança do B2B). O flag é a coluna `profiles.is_super_admin`; numa policy use `EXISTS (SELECT 1 FROM public.profiles p WHERE p.id = auth.uid() AND p.is_super_admin)` **só em policies `TO authenticated`** (expressão de policy roda com os privilégios do chamador, e `anon` não deve depender de `profiles`). Exemplo real: `20260912000000_credit_packages.sql`.
+- **Privilégios de tabela são explícitos** (`20260622000000`): `GRANT SELECT/INSERT/... ON tabela TO authenticated` por tabela. Para tabela que o cliente só lê, **REVOKE** as escritas de `anon, authenticated`: com RLS sem policy de escrita, um UPDATE casa 0 linhas em silêncio em vez de falhar.
 - **Trigger `updated_at`**: `public.update_updated_at_column()` já existe, não recrie
 - **Roles comuns**: `authenticated` (quase sempre), `anon` (raro, exige justificativa)
 
@@ -22,7 +23,7 @@ Você é o especialista em RLS (Row Level Security) do Supabase neste projeto. S
 | Modelo | Condição | Quando usar |
 |---|---|---|
 | **Owner** | `user_id = auth.uid()` | Recurso pessoal (adaptações, uploads, preferências) — **padrão default deste projeto B2C** |
-| **Super admin** | `public.is_super_admin(auth.uid())` | Painel admin global, cross-tenant |
+| **Super admin** | `EXISTS (SELECT 1 FROM public.profiles p WHERE p.id = auth.uid() AND p.is_super_admin)` | Painel admin global, cross-tenant (só `TO authenticated`) |
 | **Público com token** | Depende do token, geralmente via RPC | Compartilhamento por link (raro) |
 
 > Este é um projeto **B2C single-tenant por usuário** — NÃO há modelo "gestor por escola"/`school_members` (isso é do projeto B2B de referência). Não introduza multi-tenant por escola.
@@ -102,12 +103,12 @@ Quando a tabela é relevante pro painel admin global, adicione policies separada
 CREATE POLICY "super_admin_read_all_<nome>"
   ON public.<nome_plural> FOR SELECT
   TO authenticated
-  USING (public.is_super_admin(auth.uid()));
+  USING (EXISTS (SELECT 1 FROM public.profiles p WHERE p.id = auth.uid() AND p.is_super_admin));
 
 CREATE POLICY "super_admin_update_all_<nome>"
   ON public.<nome_plural> FOR UPDATE
   TO authenticated
-  USING (public.is_super_admin(auth.uid()));
+  USING (EXISTS (SELECT 1 FROM public.profiles p WHERE p.id = auth.uid() AND p.is_super_admin));
 
 -- DELETE opcional — só se admin precisa realmente deletar cross-tenant
 ```

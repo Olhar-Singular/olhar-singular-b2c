@@ -1,7 +1,9 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { findPackage } from "../_shared/creditPackages.ts";
+import { selectPackage, type CreditPackageRow } from "../_shared/creditPackages.ts";
 import { buildPixPaymentBody, extractPixQr } from "../_shared/mpPixPayment.ts";
+import { maskPayer } from "../_shared/mpCardPayment.ts";
+import { mpRequest } from "../_shared/mpHttp.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -43,23 +45,31 @@ serve(async (req) => {
     }
 
     const body = await req.json();
-    const { credits, amountBrl } = body as { credits?: number; amountBrl?: number };
+    const { packageId } = body as { packageId?: unknown };
 
-    // The R$1 TEST_PACKAGE is only purchasable by super-admins; owner-based RLS
-    // lets the user client read its own profile.
-    const { data: profile } = await userClient
-      .from("profiles")
-      .select("is_super_admin")
-      .eq("id", user.id)
-      .maybeSingle();
+    // The package (and therefore the price) comes from the table, never from the
+    // request. The admin_only smoke package is sold only to super-admins;
+    // owner-based RLS lets the user client read its own profile.
+    const admin = createClient(supabaseUrl, serviceKey);
+    const [{ data: profile }, { data: rows, error: rowsError }] = await Promise.all([
+      userClient.from("profiles").select("is_super_admin").eq("id", user.id).maybeSingle(),
+      typeof packageId === "string"
+        ? admin.from("credit_packages").select("*").eq("id", packageId)
+        : Promise.resolve({ data: [], error: null }),
+    ]);
+    if (rowsError) {
+      console.error("create-pix-payment: read credit_packages:", rowsError);
+      return json({ error: "Erro ao carregar o pacote." }, 500);
+    }
 
-    const pkg = findPackage(credits, amountBrl, { allowTest: profile?.is_super_admin === true });
+    const pkg = selectPackage((rows ?? []) as CreditPackageRow[], packageId, {
+      allowAdminOnly: profile?.is_super_admin === true,
+    });
     if (!pkg) {
       return json({ error: "Pacote inválido." }, 400);
     }
 
     // Insert pending purchase record via service_role (RLS blocks authenticated inserts)
-    const admin = createClient(supabaseUrl, serviceKey);
     const { data: purchase, error: insertError } = await admin
       .from("credit_purchases")
       .insert({
@@ -82,35 +92,41 @@ serve(async (req) => {
     // pays from inside our page instead of being sent to the MP checkout (which
     // would demand a login). The purchase id doubles as the idempotency key —
     // one row, one charge, even if the request is retried.
-    const mpResp = await fetch("https://api.mercadopago.com/v1/payments", {
-      method: "POST",
-      headers: {
-        Authorization:       `Bearer ${mpAccessToken}`,
-        "Content-Type":      "application/json",
-        "X-Idempotency-Key": purchase.id,
-      },
-      body: JSON.stringify(
-        buildPixPaymentBody({
+    let mpResp;
+    try {
+      mpResp = await mpRequest("/v1/payments", {
+        method: "POST",
+        token: mpAccessToken,
+        idempotencyKey: purchase.id,
+        body: buildPixPaymentBody({
           pkg,
           purchaseId:      purchase.id,
           email:           user.email,
           notificationUrl: `${supabaseUrl}/functions/v1/mp-webhook`,
         }),
-      ),
-    });
+      });
+    } catch (e) {
+      console.error("create-pix-payment: MP unreachable", e instanceof Error ? e.message : e, "purchase:", purchase.id);
+      mpResp = { ok: false, status: 0, json: {} as Record<string, unknown> };
+    }
 
-    const payment = mpResp.ok ? await mpResp.json() : null;
+    const payment = mpResp.ok ? mpResp.json : null;
     const qr = payment ? extractPixQr(payment) : null;
 
     if (!qr) {
-      if (!mpResp.ok) console.error("MP payments error:", mpResp.status, await mpResp.text());
-      else console.error("MP payment without Pix QR:", payment?.id, payment?.status);
+      if (!mpResp.ok) {
+        // MP echoes submitted fields in validation errors; never log the payer raw.
+        console.error("MP payments error:", mpResp.status, maskPayer(mpResp.json));
+      } else {
+        console.error("MP payment without Pix QR:", payment?.id, payment?.status);
+      }
       // Close the row out so a failed attempt does not linger as payable.
-      await admin
+      const { error: closeError } = await admin
         .from("credit_purchases")
         .update({ status: "cancelled" })
         .eq("id", purchase.id)
         .eq("status", "pending");
+      if (closeError) console.error("create-pix-payment: could not close the failed purchase", purchase.id, closeError.message);
       return json({ error: "Erro ao gerar o Pix. Tente novamente." }, 502);
     }
 

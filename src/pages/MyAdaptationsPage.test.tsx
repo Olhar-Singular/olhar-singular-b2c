@@ -61,9 +61,9 @@ describe("MyAdaptationsPage (Atividade)", () => {
     expect(screen.getByText(/8 questões/i)).toBeInTheDocument();
   });
 
-  it("shows 'Gratuita' for zero-credit items", () => {
+  it("shows 'Sem débito' for zero-credit items", () => {
     renderPage();
-    expect(screen.getAllByText(/gratuita/i).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/sem débito/i).length).toBeGreaterThan(0);
   });
 
   it("does NOT render edit buttons (read-only)", () => {

@@ -52,7 +52,7 @@ function formatDate(iso: string): string {
 }
 
 function CreditsLabel({ n }: { n: number }) {
-  if (n === 0) return <span className="text-xs text-muted-foreground">Gratuita</span>;
+  if (n === 0) return <span className="text-xs text-muted-foreground">Sem débito</span>;
   return <span className="text-xs text-muted-foreground">{n} crédito{n !== 1 ? "s" : ""}</span>;
 }
 

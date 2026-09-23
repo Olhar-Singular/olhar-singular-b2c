@@ -61,12 +61,12 @@ describe("UserAccountMenu", () => {
     expect(screen.getByText("?")).toBeInTheDocument();
   });
 
-  it("opens to reveal 'Comprar créditos' linking to /creditos", async () => {
+  it("opens to reveal 'Créditos e assinatura' linking to /creditos", async () => {
     setAuth();
     renderWithProviders(<UserAccountMenu onLogout={vi.fn()} />);
     openMenu();
     await waitFor(() => {
-      const link = screen.getByRole("menuitem", { name: /Comprar créditos/i });
+      const link = screen.getByRole("menuitem", { name: /Créditos e assinatura/i });
       expect(link.closest("a")).toHaveAttribute("href", "/creditos");
     });
   });

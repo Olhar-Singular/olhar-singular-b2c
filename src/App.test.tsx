@@ -16,6 +16,9 @@ vi.mock("@/pages/LandingPage", () => ({ default: () => <div data-testid="landing
 vi.mock("@/pages/DashboardPage", () => ({ default: () => <div data-testid="dashboard-page" /> }));
 vi.mock("@/pages/BarrierProfilesPage", () => ({ default: () => <div data-testid="profiles-page" /> }));
 vi.mock("@/pages/CreditsPage", () => ({ default: () => <div data-testid="credits-page" /> }));
+vi.mock("@/components/common/SubscribeRoute", () => ({ SubscribeRoute: () => <div data-testid="subscribe-route" /> }));
+vi.mock("@/pages/SetPasswordPage", () => ({ default: () => <div data-testid="set-password-page" /> }));
+vi.mock("@/pages/LegalPage", () => ({ default: () => <div data-testid="legal-page" /> }));
 vi.mock("@/pages/AdaptarPage", () => ({ default: () => <div data-testid="adaptar-page" /> }));
 vi.mock("@/pages/EditAdaptationPage", () => ({ default: () => <div data-testid="edit-adaptation-page" /> }));
 vi.mock("@/pages/ChatPage", () => ({ default: () => <div data-testid="chat-page" /> }));
@@ -27,6 +30,7 @@ vi.mock("@/components/common/SuperAdminRoute", () => ({
   SuperAdminRoute: ({ children }: { children: React.ReactNode }) => <>{children}</>,
 }));
 vi.mock("@/components/ui/sonner", () => ({ Toaster: () => <div data-testid="toaster-stub" /> }));
+vi.mock("@/components/common/ConsentBanner", () => ({ ConsentBanner: () => <div data-testid="consent-banner" /> }));
 
 import App from "./App";
 
@@ -35,6 +39,12 @@ describe("App", () => {
     window.history.pushState({}, "", "/");
     render(<App />);
     await waitFor(() => expect(screen.getByTestId("landing-page")).toBeInTheDocument());
+  });
+
+  it("mounts the consent banner on every route", async () => {
+    window.history.pushState({}, "", "/");
+    render(<App />);
+    await waitFor(() => expect(screen.getByTestId("consent-banner")).toBeInTheDocument());
   });
 
   it("renders the auth page on /auth route", async () => {
@@ -49,14 +59,31 @@ describe("App", () => {
     await waitFor(() => expect(screen.getByTestId("layout-stub")).toBeInTheDocument());
   });
 
-  it("renders the layout stub on protected /admin route", async () => {
-    window.history.pushState({}, "", "/admin");
+  it("renders the subscribe route on /assinar without the protected layout", async () => {
+    window.history.pushState({}, "", "/assinar?plano=profissional");
     render(<App />);
-    await waitFor(() => expect(screen.getByTestId("layout-stub")).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByTestId("subscribe-route")).toBeInTheDocument());
+    expect(screen.queryByTestId("layout-stub")).toBeNull();
   });
 
-  it("renders payment confirmed copy on /creditos/sucesso", async () => {
-    window.history.pushState({}, "", "/creditos/sucesso");
+  it("renders the legal pages publicly", async () => {
+    for (const path of ["/termos", "/privacidade", "/reembolso"]) {
+      window.history.pushState({}, "", path);
+      const { unmount } = render(<App />);
+      await waitFor(() => expect(screen.getByTestId("legal-page")).toBeInTheDocument());
+      unmount();
+    }
+  });
+
+  it("renders the first-access password page on protected /definir-senha, outside the layout", async () => {
+    window.history.pushState({}, "", "/definir-senha");
+    render(<App />);
+    await waitFor(() => expect(screen.getByTestId("set-password-page")).toBeInTheDocument());
+    expect(screen.queryByTestId("layout-stub")).toBeNull();
+  });
+
+  it("renders the layout stub on protected /admin route", async () => {
+    window.history.pushState({}, "", "/admin");
     render(<App />);
     await waitFor(() => expect(screen.getByTestId("layout-stub")).toBeInTheDocument());
   });

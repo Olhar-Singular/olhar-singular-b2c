@@ -47,3 +47,6 @@ fixtures/
 prompts
 
 coverage
+# env efêmero do make fn-serve-mp-test
+.env.mp-test
+.vercel

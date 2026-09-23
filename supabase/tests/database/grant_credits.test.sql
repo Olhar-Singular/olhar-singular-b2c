@@ -1,6 +1,6 @@
 -- =============================================================================
 -- pgTAP: public.grant_credits
--- Verifies the credit-granting path used by the Stripe webhook, the signup
+-- Verifies the credit-granting path used by the Mercado Pago webhook, the signup
 -- bonus and refunds: balance increase, ledger row, type/amount guards.
 -- =============================================================================
 BEGIN;
