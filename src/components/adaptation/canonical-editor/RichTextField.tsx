@@ -122,7 +122,21 @@ export function RichTextField({
           disabled && "opacity-50 cursor-not-allowed",
           readOnly && "cursor-default"
         ),
-        ...(ariaLabel ? { "aria-label": ariaLabel } : {}),
+        // `role=textbox` anda junto do `aria-label` (achado 0217). Este campo é
+        // um `contenteditable` ANINHADO no `contenteditable` da folha: sem role
+        // o navegador o expõe como `generic`, e a ARIA proíbe nome acessível em
+        // `generic` — o leitor de tela descarta o rótulo e a folha inteira vira
+        // UM textbox gigante com regiões anônimas dentro. `aria-multiline=false`
+        // porque o valor é um parágrafo só; `aria-readonly` quando não editável,
+        // já que o role promete um campo e o `contenteditable` está desligado.
+        ...(ariaLabel
+          ? {
+              "aria-label": ariaLabel,
+              role: "textbox",
+              "aria-multiline": "false",
+              ...(disabled || readOnly ? { "aria-readonly": "true" } : {}),
+            }
+          : {}),
         "data-placeholder": placeholder,
       },
     },

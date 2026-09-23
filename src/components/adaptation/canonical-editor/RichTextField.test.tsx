@@ -234,6 +234,49 @@ describe("RichTextField — component", () => {
   });
 
   /**
+   * Regressão 0217: `aria-label` sozinho não nomeia nada aqui. O campo é um
+   * `contenteditable` ANINHADO no `contenteditable` da folha, e sem `role` o
+   * navegador o expõe como `generic` — a ARIA proíbe nome acessível em
+   * `generic`, então o leitor de tela descarta o rótulo e a folha vira um único
+   * textbox gigante com regiões anônimas dentro. O `role=textbox` é o que faz o
+   * "Alternativa d" chegar à tecnologia assistiva; `aria-multiline=false`
+   * porque o valor é um parágrafo só.
+   */
+  it("declares role=textbox alongside the ariaLabel so it is not exposed as generic", () => {
+    render(<RichTextField value={t("a")} onChange={vi.fn()} ariaLabel="Alternativa d" />);
+    const attrs = (capturedConfig as { editorProps?: { attributes?: Record<string, string> } })
+      .editorProps?.attributes;
+    expect(attrs?.role).toBe("textbox");
+    expect(attrs?.["aria-multiline"]).toBe("false");
+  });
+
+  it("omits role when there is no ariaLabel (nothing to name)", () => {
+    render(<RichTextField value={t("a")} onChange={vi.fn()} />);
+    const attrs = (capturedConfig as { editorProps?: { attributes?: Record<string, string> } })
+      .editorProps?.attributes;
+    expect(attrs?.role).toBeUndefined();
+    expect(attrs?.["aria-multiline"]).toBeUndefined();
+  });
+
+  it.each([
+    ["readOnly", { readOnly: true }],
+    ["disabled", { disabled: true }],
+  ])("marks the field aria-readonly when %s", (_name, props) => {
+    render(<RichTextField value={t("a")} onChange={vi.fn()} ariaLabel="Enunciado" {...props} />);
+    const attrs = (capturedConfig as { editorProps?: { attributes?: Record<string, string> } })
+      .editorProps?.attributes;
+    expect(attrs?.role).toBe("textbox");
+    expect(attrs?.["aria-readonly"]).toBe("true");
+  });
+
+  it("leaves the editable field without aria-readonly", () => {
+    render(<RichTextField value={t("a")} onChange={vi.fn()} ariaLabel="Enunciado" />);
+    const attrs = (capturedConfig as { editorProps?: { attributes?: Record<string, string> } })
+      .editorProps?.attributes;
+    expect(attrs?.["aria-readonly"]).toBeUndefined();
+  });
+
+  /**
    * Regressão (B8, mesma classe): este campo edita `answer.*`, `caption`,
    * `enunciado` e `instruction` — tudo que entra no documento canônico. O
    * `@tiptap/extension-color` cru aceita QUALQUER cor CSS, e o canônico só
