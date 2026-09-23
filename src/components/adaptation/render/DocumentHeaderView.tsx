@@ -53,17 +53,21 @@ export function DocumentHeaderView({ header }: { header: HeaderSettings }) {
           {header.school}
         </div>
       )}
-      <div
-        style={{
-          display: "flex",
-          justifyContent: "space-between",
-          marginTop: pt2px(HEADER_SPACING_PT.metaTop),
-          fontSize: pt2px(10),
-        }}
-      >
-        <span>{filled(header.teacher) ? `Professor(a): ${header.teacher}` : " "}</span>
-        <span>{filled(header.date) ? `Data: ${formatHeaderDateBR(header.date!)}` : " "}</span>
-      </div>
+      {/* Achado 0243: campo vazio não vira ` `; sem Professor(a) nem Data a
+          linha (e o `metaTop` dela) some, como já fazem o Word e o Copiar. */}
+      {(filled(header.teacher) || filled(header.date)) && (
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            marginTop: pt2px(HEADER_SPACING_PT.metaTop),
+            fontSize: pt2px(10),
+          }}
+        >
+          {filled(header.teacher) && <span>{`Professor(a): ${header.teacher}`}</span>}
+          {filled(header.date) && <span>{`Data: ${formatHeaderDateBR(header.date!)}`}</span>}
+        </div>
+      )}
     </div>
   );
 }

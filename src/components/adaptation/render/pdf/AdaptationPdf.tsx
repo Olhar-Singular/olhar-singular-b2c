@@ -42,8 +42,15 @@ export { FOOTER_BOTTOM_PT, pdfFooterLabel };
 /** Convert pixels (screen) to points (PDF). 1px = 72/96 pt. */
 const px2pt = (px: number): number => px * (72 / 96);
 
+/** Campo preenchido = existe e não é só espaço em branco. */
+const filled = (value?: string): boolean => value !== undefined && value.trim() !== "";
+
 export function PdfHeader({ header }: { header: HeaderSettings }) {
   if (!hasHeaderContent(header)) return null;
+  // Achado 0243: campo vazio não vira `<Text> </Text>`; sem Professor(a) nem
+  // Data a linha (e o `metaTop` dela) some, como já fazem o Word e o Copiar.
+  const hasTeacher = filled(header.teacher);
+  const hasDate = filled(header.date);
   return (
     <View
       style={{
@@ -63,25 +70,19 @@ export function PdfHeader({ header }: { header: HeaderSettings }) {
           {header.school}
         </Text>
       )}
-      <View
-        style={{
-          flexDirection: "row",
-          justifyContent: "space-between",
-          marginTop: HEADER_SPACING_PT.metaTop,
-          ...pdfTextSize(10),
-        }}
-      >
-        {header.teacher && header.teacher.trim() !== "" ? (
-          <Text>Professor(a): {header.teacher}</Text>
-        ) : (
-          <Text> </Text>
-        )}
-        {header.date && header.date.trim() !== "" ? (
-          <Text>Data: {formatHeaderDateBR(header.date)}</Text>
-        ) : (
-          <Text> </Text>
-        )}
-      </View>
+      {(hasTeacher || hasDate) && (
+        <View
+          style={{
+            flexDirection: "row",
+            justifyContent: "space-between",
+            marginTop: HEADER_SPACING_PT.metaTop,
+            ...pdfTextSize(10),
+          }}
+        >
+          {hasTeacher && <Text>Professor(a): {header.teacher}</Text>}
+          {hasDate && <Text>Data: {formatHeaderDateBR(header.date!)}</Text>}
+        </View>
+      )}
     </View>
   );
 }

@@ -35,6 +35,27 @@ describe("DocumentHeaderView", () => {
     expect(screen.getByTestId("preview-header")).toHaveTextContent("Data: sem data");
   });
 
+  it("drops the meta row entirely when teacher and date are blank (achado 0243)", () => {
+    // Paridade com Word/Copiar: campo vazio nao desenha `" "` nem a linha que o
+    // envolve, senao a regua (e o corpo) descem uma linha a toa.
+    render(<DocumentHeaderView header={{ title: "Prova", school: "Escola X" }} />);
+    const block = screen.getByTestId("preview-header") as HTMLElement;
+    expect(block.querySelectorAll("span")).toHaveLength(0);
+    expect(
+      Array.from(block.children).some(
+        (child) => (child as HTMLElement).style.justifyContent === "space-between",
+      ),
+    ).toBe(false);
+  });
+
+  it("keeps a single cell when only the teacher is filled (achado 0243)", () => {
+    render(<DocumentHeaderView header={{ teacher: "Ana" }} />);
+    const block = screen.getByTestId("preview-header") as HTMLElement;
+    const spans = Array.from(block.querySelectorAll("span"));
+    expect(spans).toHaveLength(1);
+    expect(spans[0]).toHaveTextContent("Professor(a): Ana");
+  });
+
   it("omits title and school when blank but keeps the block for the teacher row", () => {
     render(<DocumentHeaderView header={{ teacher: "Ana" }} />);
     const block = screen.getByTestId("preview-header");

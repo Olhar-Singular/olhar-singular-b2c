@@ -164,11 +164,28 @@ describe("PdfHeader", () => {
     );
   });
 
-  it("renders placeholder cells when teacher/date are blank but another field is set", () => {
-    const el = PdfHeader({ header: { title: "Prova" } });
-    expect(el).not.toBeNull();
-    const { types } = collect(el);
-    expect(types).toContain(Text);
+  it("drops the meta row entirely when teacher and date are blank (achado 0243)", () => {
+    // O placeholder `<Text> </Text>` desenhava a linha vazia e o `metaTop` dela,
+    // empurrando régua e corpo ~16pt para baixo, enquanto Word e Copiar não
+    // emitem linha nenhuma. Sem conteúdo, a linha não existe.
+    const el = PdfHeader({ header: { title: "Prova" } })!;
+    const children = (el.props as { children: unknown[] }).children.flat();
+    const metaRow = children.find(
+      (child) =>
+        isValidElement(child) &&
+        child.type === View &&
+        (child.props as { style?: { marginTop?: number } }).style?.marginTop === HEADER_SPACING_PT.metaTop,
+    );
+    expect(metaRow).toBeUndefined();
+    const { texts } = collect(el);
+    expect(texts).not.toContain(" ");
+  });
+
+  it("keeps the meta row with a single cell when only the teacher is filled (achado 0243)", () => {
+    const el = PdfHeader({ header: { teacher: "Ana" } })!;
+    const { text, texts } = collect(el);
+    expect(text).toContain("Professor(a): Ana");
+    expect(texts).not.toContain(" ");
   });
 });
 
