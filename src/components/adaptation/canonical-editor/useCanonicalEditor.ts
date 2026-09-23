@@ -116,6 +116,13 @@ export function useCanonicalEditor({
     extensions: [...buildCanonicalEditorExtensions(), ...(extraExtensions ?? [])],
     content: initialContentRef.current,
     editable: !disabled,
+    // A folha é a prévia do impresso, e `contenteditable` sem `spellcheck`
+    // herda `spellcheck=true`: o browser rabisca de vermelho cada palavra que o
+    // dicionário não conhece (texto vindo da IA, termos, nomes próprios, grafia
+    // sem acento do original). Nada disso existe no PDF — a tela divergia do
+    // arquivo sem que o produto tivesse pedido (achado 0219). Revisão
+    // ortográfica, se um dia existir, é escolha explícita do professor.
+    editorProps: { attributes: { spellcheck: "false" } },
     onSelectionUpdate: ({ editor }) => onSelectionUpdate?.(editor),
     onUpdate: ({ editor }) => {
       // Ordinary edits produce transient-invalid states (all blocks deleted, a

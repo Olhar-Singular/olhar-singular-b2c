@@ -137,6 +137,9 @@ export function RichTextField({
               ...(disabled || readOnly ? { "aria-readonly": "true" } : {}),
             }
           : {}),
+        // Corretor ortográfico desligado, igual à folha que hospeda este campo
+        // (achado 0219): o sublinhado vermelho ondulado não existe no PDF.
+        spellcheck: "false",
         "data-placeholder": placeholder,
       },
     },
