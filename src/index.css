@@ -358,12 +358,15 @@
   /* Document-level block spacing (Aparência, plano §6.5). Default 1rem = 16px,
      so a document without `pageStyle` renders exactly as before. */
   margin: var(--doc-block-spacing, 1rem) 0;
-  /* Sem padding VERTICAL: o rótulo do bloco é chrome e vive fora do fluxo
-     (::before absoluto acima do bloco). Reservar 1,75rem em cima e 0,5rem
-     embaixo em cada bloco de topo inflava a folha do Revisar em relação ao
-     PDF, que não tem esse espaço (achado 0102). Só o recuo horizontal do
-     filete permanece. */
-  padding: 0 1rem;
+  /* Sem padding NENHUM: o rótulo e o filete são chrome e vivem fora do fluxo
+     (::before e ::after absolutos). O padding VERTICAL caiu no achado 0102 —
+     1,75rem em cima e 0,5rem embaixo inflavam a folha do Revisar contra o PDF,
+     que não tem esse espaço. O HORIZONTAL caiu no 0206 pelo mesmo motivo, no
+     outro eixo: 1rem de cada lado estreitava a coluna em 32 px, então a mesma
+     frase quebrava em pontos diferentes na folha e no papel, e título e
+     parágrafo desalinhavam da imagem, da legenda e do ordinal da questão, que
+     nascem na margem de 40 pt. */
+  padding: 0;
   border-radius: 0.5rem;
 }
 
@@ -420,7 +423,10 @@
 .tiptap:not(.rich-text-field) > p::after {
   content: "";
   position: absolute;
-  left: 0;
+  /* Fora da caixa de conteúdo (achado 0206): dentro dela, o filete só existiria
+     às custas de um recuo do texto impresso. A folha reserva 40 pt de margem,
+     espaço de sobra para 1rem de chrome à esquerda. */
+  left: -1rem;
   top: 0;
   bottom: 0;
   width: 2px;
@@ -464,7 +470,8 @@
 .tiptap:not(.rich-text-field) > p::before {
   position: absolute;
   top: -0.85rem;
-  left: 1rem;
+  /* Alinhado com o texto do bloco, que não é mais empurrado (achado 0206). */
+  left: 0;
   line-height: 1;
   font-size: 0.5625rem;
   font-weight: 500;

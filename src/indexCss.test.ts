@@ -335,7 +335,8 @@ describe("index.css — filete do bloco de topo", () => {
 
     const rail = ruleBody(railSelector("p"));
     expect(rail).toMatch(/position:\s*absolute/);
-    expect(rail).toMatch(/left:\s*0/);
+    // O `left` mora fora da caixa de conteudo desde o achado 0206.
+    expect(rail).toMatch(/left:\s*-1rem/);
     expect(rail).toMatch(/top:\s*0/);
     expect(rail).toMatch(/bottom:\s*0/);
     expect(rail).toMatch(/width:\s*\dpx/);
@@ -708,5 +709,63 @@ describe("index.css — rotulo de tipo de bloco nao entra no nome acessivel", ()
       body,
       `content de <${tag}> sem alt vazio: o rotulo vaza para o accessible name`,
     ).toMatch(new RegExp(`content:\\s*"${label}"\\s*/\\s*"";`));
+  });
+});
+
+/**
+ * Coluna de texto do bloco de topo (achado 0206).
+ *
+ * `padding: 0 1rem` no bloco de topo estreitava a coluna do Revisar em 16 px de
+ * cada lado: a MESMA frase quebrava em pontos diferentes na folha e no papel, e
+ * dentro da propria folha titulo e paragrafo desalinhavam da imagem, da legenda
+ * e do ordinal da questao (esses nascem na margem de 40 pt). O padding vertical
+ * ja tinha caido pelo mesmo motivo no achado 0102 — mudava a altura; o
+ * horizontal muda a largura da linha, que e onde o texto quebra.
+ *
+ * O chrome continua: filete e rotulo sao absolutos e agora vivem FORA da caixa
+ * de conteudo (left negativo / 0), sem consumir largura de linha.
+ */
+describe("index.css — coluna de texto do bloco de topo", () => {
+  /** Valor `left` declarado na regra, em rem (px convertido a rem). */
+  function leftInRem(body: string): number {
+    const match = body.match(/left:\s*(-?[\d.]+)(rem|px)?\s*;/);
+    expect(match, `sem 'left' na regra: ${body}`).not.toBeNull();
+    const value = Number(match![1]);
+    return match![2] === "px" ? value / 16 : value;
+  }
+
+  it("nao paga recuo horizontal: a linha quebra onde quebra no PDF", () => {
+    // A regra e compartilhada pelos quatro blocos de topo; `ruleBody` casa pelo
+    // ultimo seletor da lista, entao `> p` e a porta de entrada dela.
+    const body = ruleBody(".tiptap:not(.rich-text-field) > p");
+    const declarations = [
+      ...body.matchAll(/(?:^|;|\n)\s*padding(-left|-right|-inline[a-z-]*)?\s*:\s*([^;]+);/g),
+    ];
+    for (const [, side, value] of declarations) {
+      const parts = value.trim().split(/\s+/);
+      // padding: A | A B | A B C | A B C D -> horizontais sao [1] e [3] ?? [1]
+      const horizontals = side
+        ? [value.trim()]
+        : [parts[1] ?? parts[0], parts[3] ?? parts[1] ?? parts[0]];
+      for (const px of horizontals) {
+        expect(
+          parseFloat(px),
+          `bloco de topo recua o texto impresso: padding${side ?? ""}: ${value.trim()}`,
+        ).toBe(0);
+      }
+    }
+  });
+
+  it("o filete vive fora da caixa de conteudo", () => {
+    expect(
+      leftInRem(ruleBody(railSelector("p"))),
+      "filete dentro da caixa: ou come largura de linha, ou sobrepoe o texto",
+    ).toBeLessThan(0);
+  });
+
+  it("o rotulo do bloco comeca na mesma vertical do texto", () => {
+    expect(
+      leftInRem(ruleBody(".tiptap:not(.rich-text-field) > p::before")),
+    ).toBe(0);
   });
 });
