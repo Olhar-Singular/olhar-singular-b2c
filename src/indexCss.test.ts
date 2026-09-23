@@ -681,3 +681,32 @@ describe("index.css — contraste da tinta secundaria (muted-foreground)", () =>
     expect(ratio).toBeGreaterThanOrEqual(4.5);
   });
 });
+
+/**
+ * Rotulo de tipo de bloco fora da arvore de acessibilidade (achado 0107).
+ *
+ * O rotulo cinza "TÍTULO"/"SEÇÃO"/"PARÁGRAFO" e chrome de EDICAO, desenhado por
+ * `content` de `::before` — e `content` entra no calculo do accessible name no
+ * Chrome. Resultado: o mesmo documento anunciava `heading "TÍTULO Atividade
+ * adaptada"` no Revisar e `heading "Atividade adaptada"` no Exportar (renderer
+ * read-only), e a navegacao por cabecalhos do leitor de tela ganhava palavras
+ * que nao existem no documento.
+ *
+ * A forma `content: "Título" / ""` mantem o rotulo na tela e publica texto
+ * alternativo VAZIO para a acessibilidade (CSS Generated Content, alt text).
+ */
+describe("index.css — rotulo de tipo de bloco nao entra no nome acessivel", () => {
+  it.each([
+    ["h1", "Título"],
+    // h2 divide a regra com h3 (o `ruleBody` casa o ultimo seletor da lista).
+    ["h3", "Seção"],
+    ["p", "Parágrafo"],
+  ])("<%s>: o rotulo '%s' declara texto alternativo vazio", (tag, label) => {
+    const body = ruleBody(`.tiptap:not(.rich-text-field) > ${tag}::before`);
+    expect(body, `rotulo '${label}' ausente em <${tag}>`).toContain(`"${label}"`);
+    expect(
+      body,
+      `content de <${tag}> sem alt vazio: o rotulo vaza para o accessible name`,
+    ).toMatch(new RegExp(`content:\\s*"${label}"\\s*/\\s*"";`));
+  });
+});

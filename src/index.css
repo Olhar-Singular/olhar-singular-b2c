@@ -451,7 +451,13 @@
 
 /* Discrete type label, pure CSS — no JS, so the coverage gate is unaffected.
    Fica ACIMA do bloco (top negativo), dentro da margem que já separa um bloco
-   do outro, para não empurrar o texto impresso. */
+   do outro, para não empurrar o texto impresso.
+
+   Cada rótulo publica texto alternativo VAZIO (`content: "X" / ""`, achado
+   0107): `content` de ::before entra no accessible name no Chrome, então o
+   mesmo h1 anunciava "TÍTULO Atividade adaptada" no Revisar e "Atividade
+   adaptada" no Exportar (renderer read-only). O rótulo é chrome de edição:
+   fica na tela, fora da árvore de acessibilidade. */
 .tiptap:not(.rich-text-field) > h1::before,
 .tiptap:not(.rich-text-field) > h2::before,
 .tiptap:not(.rich-text-field) > h3::before,
@@ -469,18 +475,18 @@
 }
 
 .tiptap:not(.rich-text-field) > h1::before {
-  content: "Título";
+  content: "Título" / "";
 }
 
 .tiptap:not(.rich-text-field) > h2::before,
 .tiptap:not(.rich-text-field) > h3::before {
-  content: "Seção";
+  content: "Seção" / "";
 }
 
 .tiptap:not(.rich-text-field) > p::before {
   /* Rótulo do TIPO canônico do nó (`paragraph`) — não da sua semântica: um
    * parágrafo de topo não é o campo `instruction` de uma questão. */
-  content: "Parágrafo";
+  content: "Parágrafo" / "";
 }
 
 /* Tipografia distinta por tipo de seção (Título / Seção).
