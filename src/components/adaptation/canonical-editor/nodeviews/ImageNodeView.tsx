@@ -1,8 +1,8 @@
 import { useRef, useState } from "react";
-import { AlignLeft, AlignCenter, AlignRight, Crop, ImageIcon, Trash2 } from "lucide-react";
+import { AlignLeft, AlignCenter, AlignRight, Captions, Crop, ImageIcon, Trash2 } from "lucide-react";
 import { NodeViewWrapper, type NodeViewProps } from "@tiptap/react";
 import { toast } from "sonner";
-import { FOLHA_BUTTON, FOLHA_GHOST, FOLHA_INPUT, FOLHA_SELECTED } from "../folhaChrome";
+import { FOLHA_BUTTON, FOLHA_GHOST, FOLHA_INPUT, FOLHA_RAIL, FOLHA_RAIL_HOST, FOLHA_SELECTED } from "../folhaChrome";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -133,10 +133,143 @@ export function ImageNodeView({ node, updateAttributes, deleteNode, editor, getP
 
   return (
     <NodeViewWrapper
-      className={cn("my-3 space-y-2", selected && FOLHA_SELECTED)}
+      /*
+        0113 — o chrome de edição não mora mais no fluxo do papel. Empilhado
+        (barra + campo de texto alternativo + cabeçalho da legenda) ele somava
+        ~144px que o Revisar desenhava e o arquivo não tem: era parte do papel
+        que media 1225px onde o Exportar media 825px. Desde o 0172 a folha
+        descontava a faixa da CONTAGEM de páginas, mas continuava esticando o
+        papel para caber o desenho (0183) — descontar conserta o número, não
+        devolve o espaço. Agora o chrome flutua no rail, como já fazem a
+        questão e a fórmula, e o bloco de imagem mede o que imprime.
+      */
+      className={cn(FOLHA_RAIL_HOST, selected && FOLHA_SELECTED)}
       data-testid="image-node"
       contentEditable={false}
     >
+      {/*
+        Rail de ações (ver FOLHA_RAIL): ancorado no vão acima do bloco, aceso
+        por hover ou foco. `flex-wrap` porque esta é a barra mais larga da
+        folha (três alinhamentos, trocar, recortar, legenda, excluir e o campo
+        de texto alternativo): sem isso ela estouraria a largura do papel em
+        vez de virar duas linhas.
+      */}
+      <div data-testid="image-controls" className={cn(FOLHA_RAIL, "max-w-full flex-wrap justify-end")}>
+        {ALIGNMENTS.map(({ value, Icon, label }) => (
+          <Button
+            key={value}
+            type="button"
+            variant="ghost"
+            size="icon"
+            className={cn("h-7 w-7", FOLHA_GHOST, alignment === value && "bg-surface-mesa-2 text-surface-ink")}
+            disabled={disabled}
+            onClick={() => updateAttributes({ alignment: value })}
+            title={label}
+            aria-label={label}
+          >
+            <Icon className="h-3.5 w-3.5" />
+          </Button>
+        ))}
+        <Button
+          ref={imageButtonRef}
+          type="button"
+          variant="outline"
+          size="sm"
+          className={cn("gap-1", FOLHA_BUTTON)}
+          disabled={disabled}
+          onClick={() => setModalOpen(true)}
+          aria-label="Trocar ou adicionar imagem"
+        >
+          {/*
+            0339 — o rótulo na face do botão é decoração: o nome programático
+            vem do `aria-label`. Como o chrome vive dentro do `contenteditable`,
+            texto visível aqui entrava no `value` do textbox da folha e era lido
+            como linha impressa da atividade.
+          */}
+          <ImageIcon className="h-3.5 w-3.5" /> <span aria-hidden="true">Trocar ou adicionar imagem</span>
+        </Button>
+        {canCropFromOriginal && (
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className={cn("gap-1", FOLHA_BUTTON)}
+            disabled={disabled || cropping}
+            onClick={() => setCropOpen(true)}
+            aria-label="Recortar do original"
+          >
+            {/* 0339 — idem: rótulo decorativo, nome vem do `aria-label`. */}
+            <Crop className="h-3.5 w-3.5" /> <span aria-hidden="true">Recortar do original</span>
+          </Button>
+        )}
+        {/*
+          Legenda: alternador. `null` esconde a legenda; qualquer array a mostra
+          na folha. Os dois estados moram no rail — o rótulo "LEGENDA" e o
+          cabeçalho que o hospedava saíram com o 0113: eram faixa de papel para
+          anunciar um texto que já se lê sozinho.
+        */}
+        {caption === null ? (
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className={cn("gap-1", FOLHA_GHOST)}
+            disabled={disabled}
+            onClick={() => updateAttributes({ caption: [] })}
+            aria-label="Adicionar legenda"
+          >
+            {/* 0339 — idem: rótulo decorativo, nome vem do `aria-label`. */}
+            <Captions className="h-3.5 w-3.5" /> <span aria-hidden="true">Legenda</span>
+          </Button>
+        ) : (
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            // 24x24 é o alvo mínimo do WCAG 2.5.8; o ícone continua 12px, o
+            // ganho vem do padding. 0342 — a tinta é a da folha (FOLHA_GHOST),
+            // não a do app: `text-muted-foreground` cai para ~2,3:1 no tema
+            // escuro sobre um papel que continua branco.
+            className={cn("h-6 w-6", FOLHA_GHOST, "hover:text-destructive")}
+            disabled={disabled}
+            onClick={() => updateAttributes({ caption: null })}
+            aria-label="Remover legenda"
+          >
+            <Trash2 className="h-3 w-3" />
+          </Button>
+        )}
+        <Button
+          ref={deleteButtonRef}
+          type="button"
+          variant="ghost"
+          size="sm"
+          className="gap-1 text-destructive hover:bg-surface-mesa hover:text-destructive"
+          disabled={disabled}
+          onClick={() => setConfirmDeleteOpen(true)}
+          aria-label="Excluir imagem"
+        >
+          <Trash2 className="h-3.5 w-3.5" />
+        </Button>
+        {/*
+          Texto alternativo: campo de acessibilidade da imagem (vai para o leitor
+          de tela, para o PDF e para o marcador `[Imagem: alt]` do Word). Não é
+          impresso, então vive no rail. O antigo rótulo "TEXTO ALTERNATIVO"
+          virou o placeholder: ele já era decorativo desde o 0337 (o nome vem do
+          `aria-label`) e custava uma faixa inteira de papel.
+        */}
+        <Input
+          value={alt}
+          disabled={disabled}
+          aria-label="Texto alternativo"
+          placeholder="Texto alternativo: descreva a imagem…"
+          /* 0342 — o `<Input>` cru pinta `border-input bg-background`: some
+             no papel (1,09:1) no tema claro e vira laje escura no tema
+             escuro. Chrome sobre a folha usa a paleta da folha. */
+          className={cn("h-8 w-56 text-xs", FOLHA_INPUT)}
+          onChange={(e) => updateAttributes({ alt: e.target.value })}
+        />
+      </div>
+
       <div className="flex flex-col gap-2">
         <div
           data-testid="image-align-container"
@@ -150,150 +283,8 @@ export function ImageNodeView({ node, updateAttributes, deleteNode, editor, getP
           />
         </div>
 
-        {/* Controls: hidden inside a non-expanded question card, always shown at top-level */}
-        <div data-testid="image-controls" className="flex flex-col gap-2">
-          {/*
-            0172 — barra de edição da imagem: ocupa faixa própria no fluxo e não
-            é impressa. Sem a marca, a folha do Revisar a media como papel e
-            desenhava folha que o arquivo não tem.
-          */}
-          <div data-folha-chrome="" className="flex flex-wrap items-center gap-1">
-            {ALIGNMENTS.map(({ value, Icon, label }) => (
-              <Button
-                key={value}
-                type="button"
-                variant="ghost"
-                size="icon"
-                className={cn(
-                  "h-7 w-7",
-                  FOLHA_GHOST,
-                  alignment === value && "bg-surface-mesa-2 text-surface-ink",
-                )}
-                disabled={disabled}
-                onClick={() => updateAttributes({ alignment: value })}
-                title={label}
-                aria-label={label}
-              >
-                <Icon className="h-3.5 w-3.5" />
-              </Button>
-            ))}
-            <Button
-              ref={imageButtonRef}
-              type="button"
-              variant="outline"
-              size="sm"
-              className={cn("gap-1", FOLHA_BUTTON)}
-              disabled={disabled}
-              onClick={() => setModalOpen(true)}
-              aria-label="Trocar ou adicionar imagem"
-            >
-              {/*
-                0339 — o rótulo na face do botão é decoração: o nome
-                programático vem do `aria-label`. Como o chrome vive dentro do
-                `contenteditable`, texto visível aqui entrava no `value` do
-                textbox da folha e era lido como linha impressa da atividade.
-              */}
-              <ImageIcon className="h-3.5 w-3.5" /> <span aria-hidden="true">Trocar ou adicionar imagem</span>
-            </Button>
-            {canCropFromOriginal && (
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className={cn("gap-1", FOLHA_BUTTON)}
-                disabled={disabled || cropping}
-                onClick={() => setCropOpen(true)}
-                aria-label="Recortar do original"
-              >
-                {/* 0339 — idem: rótulo decorativo, nome vem do `aria-label`. */}
-                <Crop className="h-3.5 w-3.5" /> <span aria-hidden="true">Recortar do original</span>
-              </Button>
-            )}
-            <Button
-              ref={deleteButtonRef}
-              type="button"
-              variant="ghost"
-              size="sm"
-              className="gap-1 text-destructive hover:bg-surface-mesa hover:text-destructive"
-              disabled={disabled}
-              onClick={() => setConfirmDeleteOpen(true)}
-              aria-label="Excluir imagem"
-            >
-              <Trash2 className="h-3.5 w-3.5" />
-            </Button>
-          </div>
-
-          {/*
-            Texto alternativo: é o campo de acessibilidade da imagem (vai para o
-            leitor de tela, para o PDF e para o marcador `[Imagem: alt]` do Word).
-            Fica no chrome, não na folha, porque não é impresso.
-          */}
-          <div data-folha-chrome="">
-            {/* 0172 — o campo de acessibilidade não vai para o papel. */}
-            {/*
-              0337 — rótulo decorativo: o nome programático do campo vem do
-              `aria-label` abaixo. Como o chrome vive dentro do
-              `contenteditable`, deixar o texto na árvore fazia "TEXTO
-              ALTERNATIVO" ser lido como conteúdo impresso da folha.
-            */}
-            <span
-              aria-hidden="true"
-              className="mb-1 block text-[10.5px] font-semibold uppercase tracking-wide text-surface-ink-faint"
-            >
-              Texto alternativo
-            </span>
-            <Input
-              value={alt}
-              disabled={disabled}
-              aria-label="Texto alternativo"
-              placeholder="Descreva a imagem para quem não a enxerga…"
-              /* 0342 — o `<Input>` cru pinta `border-input bg-background`: some
-                 no papel (1,09:1) no tema claro e vira laje escura no tema
-                 escuro. Chrome sobre a folha usa a paleta da folha. */
-              className={cn("h-8 text-xs", FOLHA_INPUT)}
-              onChange={(e) => updateAttributes({ alt: e.target.value })}
-            />
-          </div>
-
-          {/* Legenda: toggle — null = hidden, not-null = visible with trash in header */}
-          {caption === null ? (
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              /* 0172 — chrome: o botão de abrir a legenda não é impresso. */
-              data-folha-chrome=""
-              className="self-start text-xs text-surface-ink-faint hover:bg-surface-mesa hover:text-surface-ink"
-              disabled={disabled}
-              onClick={() => updateAttributes({ caption: [] })}
-              aria-label="Adicionar legenda"
-            >
-              {/* 0339 — idem: rótulo decorativo, nome vem do `aria-label`. */}
-              <span aria-hidden="true">+ Adicionar legenda</span>
-            </Button>
-          ) : (
-            <div>
-              {/* 0172 — cabeçalho da legenda (rótulo + lixeira): só edição. */}
-              <div data-folha-chrome="" className="mb-1 flex items-center justify-between">
-                {/* 0337 — idem: decoração, fora da árvore de acessibilidade. */}
-                <span aria-hidden="true" className="text-[10.5px] font-semibold uppercase tracking-wide text-surface-ink-faint">Legenda</span>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  // 24x24 é o alvo mínimo do WCAG 2.5.8; o ícone continua 12px,
-                  // o ganho vem do padding, sem engordar o chrome da folha.
-                  // 0342 — a tinta é a da folha (FOLHA_GHOST), não a do app:
-                  // `text-muted-foreground` cai para ~2,3:1 no tema escuro
-                  // sobre um papel que continua branco.
-                  className={cn("h-6 w-6", FOLHA_GHOST, "hover:text-destructive")}
-                  disabled={disabled}
-                  onClick={() => updateAttributes({ caption: null })}
-                  aria-label="Remover legenda"
-                >
-                  <Trash2 className="h-3 w-3" />
-                </Button>
-              </div>
+        {caption !== null && (
+          <div>
               {/*
                 A legenda é impressa junto da figura: a prévia alinha o `figure`
                 inteiro (text-center) e o PDF alinha a `View` inteira, então a
@@ -323,9 +314,8 @@ export function ImageNodeView({ node, updateAttributes, deleteNode, editor, getP
                   plain={true}
                 />
               </div>
-            </div>
-          )}
-        </div>
+          </div>
+        )}
       </div>
       <AlertDialog open={confirmDeleteOpen} onOpenChange={setConfirmDeleteOpen}>
         <AlertDialogContent

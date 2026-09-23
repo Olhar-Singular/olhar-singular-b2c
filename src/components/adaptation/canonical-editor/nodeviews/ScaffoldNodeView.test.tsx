@@ -111,18 +111,17 @@ describe("ScaffoldNodeView — tinta do documento no que é impresso", () => {
     expect(ordinal.className).not.toMatch(/text-xs/);
   });
   /*
-    0172 — "+ Passo" é chrome: ocupa faixa própria no fluxo do papel e não sai
-    no arquivo, então a folha do Revisar o desconta da altura medida. O rótulo,
-    os ordinais e os passos continuam sem marca: são impressos.
+    0172/0113 — a marca `data-folha-chrome` existe para a folha descontar da
+    altura medida uma faixa VERTICAL de chrome. Desde o 0113 o "+ Passo" e a
+    lixeira do bloco vivem no rail flutuante: não há faixa para descontar, e
+    marcar mesmo assim encolheria o papel abaixo do que o arquivo tem.
   */
-  it("marca o '+ Passo' como chrome, e nada do que é impresso (0172)", () => {
+  it("não marca nada como faixa de chrome, porque nenhuma sobrou no fluxo (0113)", () => {
     const { props } = makeProps(["a", "b"]);
     const { container } = render(<ScaffoldNodeView {...props} />);
-    const marcados = container.querySelectorAll("[data-folha-chrome]");
-    expect(marcados).toHaveLength(1);
-    expect(screen.getByText("Passo").closest("[data-folha-chrome]")).not.toBeNull();
-    expect(screen.getByTestId("scaffold-label").closest("[data-folha-chrome]")).toBeNull();
-    expect(screen.getByTestId("scaffold-step-ordinal-0").closest("[data-folha-chrome]")).toBeNull();
+    expect(container.querySelectorAll("[data-folha-chrome]")).toHaveLength(0);
+    expect(screen.getByTestId("scaffold-label").closest(".folha-rail")).toBeNull();
+    expect(screen.getByTestId("scaffold-step-ordinal-0").closest(".folha-rail")).toBeNull();
   });
 });
 
@@ -139,5 +138,46 @@ describe("ScaffoldNodeView — seleção do átomo (achado 0350)", () => {
     const wrapper = container.querySelector('[data-testid="scaffold-node"]')!;
     expect(wrapper.className).toMatch(/ring-2/);
     expect(wrapper.className).toMatch(/ring-surface-accent/);
+  });
+});
+
+/*
+  0113 — o cartão do andaime media 212px no Revisar contra 101px impressos: a
+  diferença era chrome empilhado no fluxo (a lixeira do bloco na faixa do
+  rótulo, o "+ Passo" numa faixa própria) mais a altura de input do app em cada
+  passo (`h-10` + `py-2` do shadcn contra uma linha de lista impressa). O
+  chrome vai para o rail flutuante, como na questão e na fórmula, e o campo do
+  passo passa a medir a linha que imprime.
+*/
+describe("ScaffoldNodeView — chrome de edição fora do fluxo da folha (0113)", () => {
+  it("leva a lixeira do bloco e o '+ Passo' para o rail flutuante", () => {
+    const { props } = makeProps(["a", "b"]);
+    const { container } = render(<ScaffoldNodeView {...props} />);
+    const rail = container.querySelector<HTMLElement>(".folha-rail");
+    expect(rail).not.toBeNull();
+    expect(rail!.className).toMatch(/absolute/);
+    expect(screen.getByRole("button", { name: "Excluir apoio" }).closest(".folha-rail")).toBe(rail);
+    expect(screen.getByText("Passo").closest(".folha-rail")).toBe(rail);
+  });
+
+  it("não deixa nenhuma faixa de chrome no fluxo do papel", () => {
+    const { props } = makeProps(["a", "b"]);
+    const { container } = render(<ScaffoldNodeView {...props} />);
+    expect(container.querySelectorAll("[data-folha-chrome]")).toHaveLength(0);
+  });
+
+  it("o campo do passo não carrega a altura de input do app", () => {
+    const { props } = makeProps(["a"]);
+    render(<ScaffoldNodeView {...props} />);
+    const campo = screen.getByLabelText("Passo 1");
+    expect(campo.className).toMatch(/h-auto/);
+    expect(campo.className).toMatch(/py-0/);
+  });
+
+  it("hospeda o rail no wrapper, que continua medindo o vão de sempre", () => {
+    const { props } = makeProps(["a"]);
+    const { getByTestId } = render(<ScaffoldNodeView {...props} />);
+    expect(getByTestId("scaffold-node").className).toMatch(/relative/);
+    expect(getByTestId("scaffold-node").className).toMatch(/my-3/);
   });
 });

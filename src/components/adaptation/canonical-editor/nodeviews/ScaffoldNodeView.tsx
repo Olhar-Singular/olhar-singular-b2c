@@ -24,7 +24,7 @@ import {
   SCAFFOLDING_RADIUS_PX,
 } from "@/components/adaptation/render/pageTokens";
 import { deleteNodeAndRefocus } from "./nodeViewUtils";
-import { FOLHA_SELECTED } from "../folhaChrome";
+import { FOLHA_BUTTON, FOLHA_GHOST, FOLHA_RAIL, FOLHA_RAIL_HOST, FOLHA_SELECTED } from "../folhaChrome";
 import { cn } from "@/lib/utils";
 
 export function ScaffoldNodeView({ node, updateAttributes, editor, deleteNode, getPos, selected }: NodeViewProps) {
@@ -33,7 +33,15 @@ export function ScaffoldNodeView({ node, updateAttributes, editor, deleteNode, g
 
   return (
     <NodeViewWrapper
-      className={cn("my-3 border p-3", selected && FOLHA_SELECTED)}
+      /*
+        0113 — o cartão media 212px no Revisar contra 101px impressos. A caixa,
+        o rótulo e os ordinais são papel (0149/0155/0160); a diferença toda era
+        chrome no fluxo: a lixeira do bloco na faixa do rótulo e o "+ Passo"
+        numa faixa própria. Os dois foram para o rail flutuante, como na questão
+        e na fórmula — o 0172 descontava o "+ Passo" da CONTAGEM de páginas, mas
+        o papel continuava esticando para caber o desenho (0183).
+      */
+      className={cn(FOLHA_RAIL_HOST, "border p-3", selected && FOLHA_SELECTED)}
       style={{
         backgroundColor: SCAFFOLDING_BG,
         borderColor: SCAFFOLDING_BORDER,
@@ -42,19 +50,23 @@ export function ScaffoldNodeView({ node, updateAttributes, editor, deleteNode, g
       data-testid="scaffold-node"
       contentEditable={false}
     >
-      <div className="mb-2 flex items-center justify-between">
-        <p
-          data-testid="scaffold-label"
-          className="font-semibold uppercase tracking-wide"
-          style={{ fontSize: "var(--doc-fs-caption, 0.833em)", color: DEFAULT_INK }}
+      {/* Rail de ações (ver FOLHA_RAIL): excluir o apoio e acrescentar passo. */}
+      <div className={FOLHA_RAIL}>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className={cn("gap-1", FOLHA_BUTTON)}
+          disabled={disabled}
+          onClick={() => updateAttributes({ items: addStep(items) })}
         >
-          {SCAFFOLDING_LABEL}
-        </p>
+          <Plus className="h-3.5 w-3.5" /> Passo
+        </Button>
         <Button
           type="button"
           variant="ghost"
           size="icon"
-          className="h-6 w-6 text-destructive hover:bg-surface-paper/60"
+          className="h-6 w-6 text-destructive hover:bg-surface-mesa hover:text-destructive"
           disabled={disabled}
           onClick={() => deleteNodeAndRefocus(deleteNode, editor, getPos)}
           title="Excluir apoio"
@@ -63,6 +75,13 @@ export function ScaffoldNodeView({ node, updateAttributes, editor, deleteNode, g
           <Trash2 className="h-3 w-3" />
         </Button>
       </div>
+      <p
+        data-testid="scaffold-label"
+        className="mb-2 font-semibold uppercase tracking-wide"
+        style={{ fontSize: "var(--doc-fs-caption, 0.833em)", color: DEFAULT_INK }}
+      >
+        {SCAFFOLDING_LABEL}
+      </p>
       <div className="flex flex-col gap-1.5">
         {items.map((item, index) => (
           <div key={index} className="flex items-center gap-2">
@@ -75,13 +94,22 @@ export function ScaffoldNodeView({ node, updateAttributes, editor, deleteNode, g
               onChange={(e) => updateAttributes({ items: setStep(items, index, e.target.value) })}
               placeholder="Passo"
               aria-label={`Passo ${index + 1}`}
-              className="border-surface-line bg-surface-paper text-surface-ink placeholder:text-surface-ink-faint"
+              /*
+                0113 — `h-10` + `py-2` do `<Input>` do app contra uma linha de
+                lista impressa: ~18px por passo que só existiam no Revisar. A
+                borda fica (é o que diz que dá para digitar ali, achado 0342);
+                a altura passa a ser a do texto.
+              */
+              className={cn(
+                "h-auto py-0",
+                "border-surface-line bg-surface-paper text-surface-ink placeholder:text-surface-ink-faint",
+              )}
             />
             <Button
               type="button"
               variant="ghost"
               size="icon"
-              className="h-7 w-7 text-surface-ink-soft hover:bg-surface-paper/60"
+              className={cn("h-6 w-6", FOLHA_GHOST)}
               disabled={disabled}
               onClick={() => updateAttributes({ items: removeStep(items, index) })}
               title="Remover passo"
@@ -91,24 +119,6 @@ export function ScaffoldNodeView({ node, updateAttributes, editor, deleteNode, g
             </Button>
           </div>
         ))}
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          /*
-            0172 — "+ Passo" é chrome de edição: ocupa faixa própria no fluxo e
-            não sai no arquivo, então não conta como papel impresso. A lixeira
-            do cabeçalho e a de cada passo ficam SEM marca de propósito: elas
-            dividem a linha com o rótulo e o passo impressos, e descontá-las
-            tiraria do papel a altura da própria linha impressa.
-          */
-          data-folha-chrome=""
-          className="self-start gap-1 border-surface-line bg-surface-paper text-surface-ink-soft hover:bg-surface-mesa hover:text-surface-ink"
-          disabled={disabled}
-          onClick={() => updateAttributes({ items: addStep(items) })}
-        >
-          <Plus className="h-3.5 w-3.5" /> Passo
-        </Button>
       </div>
     </NodeViewWrapper>
   );

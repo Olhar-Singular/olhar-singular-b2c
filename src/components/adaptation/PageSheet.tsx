@@ -61,6 +61,11 @@ const SHEET_WIDTH_PX = 794;
 /**
  * Marcador do chrome de EDIÇÃO desenhado dentro do papel (achado 0172).
  *
+ * Achado 0113: a marca vale só para chrome que ocupa FAIXA VERTICAL no fluxo.
+ * O chrome da imagem e o do andaime deixaram de ocupar (foram para o rail
+ * flutuante), e por isso deixaram de ser marcados: descontar uma faixa que o
+ * fluxo não somou encolheria o papel abaixo do que o arquivo tem.
+ *
  * A conta da folha é a mesma nas duas superfícies; o que muda é o que ela mede.
  * Na prévia o envelope medido é o renderizador de leitura — só o que vai para o
  * arquivo. No Revisar é o DOM do editor, que desenha DENTRO da folha uma barra

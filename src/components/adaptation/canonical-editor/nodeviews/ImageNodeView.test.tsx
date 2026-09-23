@@ -607,36 +607,19 @@ describe("ImageNodeView", () => {
     expect(screen.getByRole("button", { name: "Recortar do original" })).toBeInTheDocument();
   });
   /*
-    0172 — o chrome de edição da imagem (barra de alinhar/trocar/excluir, campo
-    de texto alternativo e cabeçalho da legenda) ocupa faixa vertical própria
-    DENTRO do papel e não sai no arquivo. Marcado, a folha do Revisar o desconta
-    da altura medida em vez de contá-lo como papel impresso e desenhar uma A4
-    que o PDF não tem. A legenda em si NÃO é marcada: ela é impressa.
+    0172/0113 — a marca `data-folha-chrome` significa "chrome que ocupa faixa
+    VERTICAL no papel": ela existe para a folha descontar da altura medida o
+    que não vai para o arquivo. Desde o 0113 o chrome da imagem não ocupa faixa
+    nenhuma (vive no rail flutuante), então não sobra o que marcar — e marcar
+    mesmo assim encolheria o papel abaixo do que o arquivo tem, porque a folha
+    subtrairia uma altura que o fluxo não somou.
   */
-  it("marca o chrome de edição para a folha não medi-lo como papel (0172)", () => {
+  it("não marca nada como faixa de chrome, porque nenhuma sobrou no fluxo (0113)", () => {
     const { props } = makeProps({ caption: [{ type: "text", text: "figura 1" }] });
     const { getByTestId } = render(<ImageNodeView {...props} />);
-    const marcados = getByTestId("image-node").querySelectorAll("[data-folha-chrome]");
-    expect(marcados).toHaveLength(3);
-    expect(
-      screen.getByRole("button", { name: "Trocar ou adicionar imagem" }).closest("[data-folha-chrome]"),
-    ).not.toBeNull();
-    expect(
-      screen.getByRole("textbox", { name: "Texto alternativo" }).closest("[data-folha-chrome]"),
-    ).not.toBeNull();
-    expect(
-      screen.getByRole("button", { name: "Remover legenda" }).closest("[data-folha-chrome]"),
-    ).not.toBeNull();
-    // A legenda é impressa: descontá-la tiraria papel que o arquivo usa.
-    expect(getByTestId("image-caption-text").closest("[data-folha-chrome]")).toBeNull();
-  });
-
-  it("marca o botão de abrir legenda como chrome (0172)", () => {
-    const { props } = makeProps({ caption: null });
-    render(<ImageNodeView {...props} />);
-    expect(
-      screen.getByRole("button", { name: "Adicionar legenda" }).getAttribute("data-folha-chrome"),
-    ).toBe("");
+    expect(getByTestId("image-node").querySelectorAll("[data-folha-chrome]")).toHaveLength(0);
+    // A legenda é impressa e continua no fluxo, fora do rail.
+    expect(getByTestId("image-caption-text").closest(".folha-rail")).toBeNull();
   });
 
   /**
@@ -738,5 +721,68 @@ describe("ImageNodeView — foco ao sair da confirmação sem excluir (achado 03
     await waitFor(() => expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument());
     expect(document.activeElement).not.toBe(trash);
     expect(focus).toHaveBeenCalledWith(7);
+  });
+});
+
+/*
+  0113 — resíduo do 0102. O chrome de edição da imagem (barra de alinhar /
+  trocar / excluir, campo de texto alternativo e o alternador da legenda)
+  ficava EMPILHADO no fluxo, dentro do papel: ~144px que a folha do Revisar
+  desenhava e o arquivo não tem. Desde o 0172 a folha descontava essa faixa da
+  CONTAGEM de páginas, mas continuava esticando o papel para caber o desenho
+  (achado 0183) — e era isso que fazia o Revisar medir 1225px contra 825px do
+  Exportar no mesmo documento.
+
+  A saída é a que a questão e a fórmula já usam: o chrome flutua no rail
+  (FOLHA_RAIL), fora do fluxo. Fora do fluxo não há faixa para descontar nem
+  para esticar, e por isso nada aqui leva mais `data-folha-chrome` — a marca
+  significa "chrome que ocupa faixa vertical no papel", e essa faixa deixou de
+  existir.
+*/
+describe("ImageNodeView — chrome de edição fora do fluxo da folha (0113)", () => {
+  it("leva barra, texto alternativo e alternador da legenda para o rail flutuante", () => {
+    const { props } = makeProps({ caption: [{ type: "text", text: "Figura 1" }] }, true, { file: pdfFile() });
+    const { container } = render(<ImageNodeView {...props} />);
+    const rail = container.querySelector<HTMLElement>(".folha-rail");
+    expect(rail).not.toBeNull();
+    expect(rail!.className).toMatch(/absolute/);
+    for (const name of [
+      "Alinhar à esquerda",
+      "Centralizar",
+      "Alinhar à direita",
+      "Trocar ou adicionar imagem",
+      "Recortar do original",
+      "Remover legenda",
+      "Excluir imagem",
+    ]) {
+      expect(screen.getByRole("button", { name }).closest(".folha-rail")).toBe(rail);
+    }
+    expect(screen.getByRole("textbox", { name: "Texto alternativo" }).closest(".folha-rail")).toBe(rail);
+  });
+
+  it("o botão de abrir a legenda também vive no rail", () => {
+    const { props } = makeProps({ caption: null });
+    const { container } = render(<ImageNodeView {...props} />);
+    expect(screen.getByRole("button", { name: "Adicionar legenda" }).closest(".folha-rail")).toBe(
+      container.querySelector(".folha-rail"),
+    );
+  });
+
+  it("não deixa nenhuma faixa de chrome no fluxo do papel", () => {
+    const { props } = makeProps({ caption: [{ type: "text", text: "Figura 1" }] });
+    const { container } = render(<ImageNodeView {...props} />);
+    expect(container.querySelectorAll("[data-folha-chrome]")).toHaveLength(0);
+  });
+
+  it("hospeda o rail no wrapper, que continua medindo o vão de sempre", () => {
+    const { getByTestId } = renderImage();
+    // FOLHA_RAIL_HOST: `group relative my-3` — o rail é ancorado nele.
+    expect(getByTestId("image-node").className).toMatch(/relative/);
+    expect(getByTestId("image-node").className).toMatch(/my-3/);
+  });
+
+  it("a legenda impressa continua no fluxo, sem cabeçalho de edição em volta", () => {
+    const { getByTestId } = renderImage({ caption: [{ type: "text", text: "Figura 1" }] });
+    expect(getByTestId("image-caption-text").closest(".folha-rail")).toBeNull();
   });
 });
