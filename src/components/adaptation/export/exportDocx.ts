@@ -62,7 +62,7 @@ import { indexToLetter } from "../render/letters";
 import { documentHasMath, everyBlock } from "./exportWarnings";
 import { perQuestionBreakFlags } from "../render/perQuestionBreaks";
 import { latexLayoutAtom } from "../render/mathAtom";
-import { DEFAULT_PANEL_SETTINGS, type PanelSettings } from "./panelSettings";
+import { DEFAULT_PANEL_SETTINGS, formatHeaderDateBR, type PanelSettings } from "./panelSettings";
 
 /** A docx section child. Tables are blocks too, not paragraphs. */
 export type DocxBlock = Paragraph | Table;
@@ -359,7 +359,10 @@ export function headerParagraphs(header: DocumentHeader): Paragraph[] {
     ["Título", header.title ?? ""],
     ["Escola", header.school ?? ""],
     ["Professor(a)", header.teacher ?? ""],
-    ["Data", header.date ?? ""],
+    // A data vai pelo MESMO formatador da prévia, do PDF e do "Copiar": sem ele,
+    // só o Word imprimia o valor cru do `<input type="date">` (2026-08-18) numa
+    // prova que nenhuma tela do app mostrou assim (achado 0133).
+    ["Data", header.date ? formatHeaderDateBR(header.date) : ""],
   ].filter(([, v]) => v) as [string, string][];
 
   if (lines.length === 0) return [];

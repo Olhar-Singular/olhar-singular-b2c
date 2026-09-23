@@ -179,6 +179,18 @@ describe("headerParagraphs", () => {
     expect(headerParagraphs({})).toHaveLength(0);
   });
 
+  // Achado 0133: a data saía crua do `<input type="date">` (ISO) só no Word,
+  // enquanto prévia, PDF e "Copiar" passam por `formatHeaderDateBR`.
+  it("formata a data em dd/mm/aaaa como as outras saídas", () => {
+    const paragraphs = headerParagraphs({ date: "2026-08-18" });
+    expect(docxText(paragraphs[0])).toBe("Data: 18/08/2026");
+  });
+
+  it("data em formato livre passa intacta", () => {
+    const paragraphs = headerParagraphs({ date: "18 de agosto" });
+    expect(docxText(paragraphs[0])).toBe("Data: 18 de agosto");
+  });
+
   it("o separador é o último parágrafo e não tem texto", () => {
     const paragraphs = headerParagraphs({ title: "T" });
     expect(paragraphs).toHaveLength(2);
