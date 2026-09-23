@@ -176,6 +176,24 @@ describe("BlockInserter", () => {
     }
   });
 
+  /*
+    Achado 0207: em ponteiro grosso (tablet/celular) não existe hover, então o
+    "+" ficava em `opacity: 0` na tela inteira — presente no DOM e clicável, mas
+    sem desenhar um pixel. O invólucro precisa de um gatilho que não dependa de
+    hover.
+  */
+  it("revela o + onde não há hover (achado 0207)", () => {
+    const { editor } = makeEditor();
+    render(<BlockInserter editor={editor} />);
+    const wrappers = screen
+      .getAllByRole("button", { name: "Inserir bloco" })
+      .map((b) => b.parentElement as HTMLElement);
+    expect(wrappers).toHaveLength(3);
+    for (const wrapper of wrappers) {
+      expect(wrapper.className).toContain("[@media(hover:none)]:opacity-100");
+    }
+  });
+
   it("recomputes positions on window resize", () => {
     const { editor, coordsAtPos } = makeEditor();
     render(<BlockInserter editor={editor} />);

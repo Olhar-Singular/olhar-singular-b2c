@@ -47,4 +47,16 @@ describe("BlockInserterMenu", () => {
     open(trailingGap);
     expect(screen.queryByRole("button", { name: "Quebra de página" })).not.toBeInTheDocument();
   });
+
+  /*
+    Achado 0207: 24x24 é o mínimo absoluto do WCAG 2.2 SC 2.5.8, sem folga, num
+    controle que no toque precisa ser acertado sem pista visual. O resto do
+    editor usa 28px.
+  */
+  it("usa alvo de toque de 28px no + (achado 0207)", () => {
+    render(<BlockInserterMenu gap={followingGap} onPick={vi.fn()} />);
+    const trigger = screen.getByRole("button", { name: "Inserir bloco" });
+    expect(trigger.className).toContain("h-7");
+    expect(trigger.className).toContain("w-7");
+  });
 });

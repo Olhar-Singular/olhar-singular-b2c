@@ -101,7 +101,9 @@ function markerElement(onRemove: () => void): HTMLElement {
   remove.setAttribute("aria-label", "Remover quebra de página");
   remove.className =
     "rounded p-0.5 leading-none text-surface-ink-faint opacity-0 transition-opacity " +
-    "hover:text-surface-ink group-hover:opacity-100 focus-visible:opacity-100";
+    "hover:text-surface-ink group-hover:opacity-100 focus-visible:opacity-100 " +
+    // Achado 0207: sem hover (toque) o controle nunca aparecia.
+    "[@media(hover:none)]:opacity-100";
   remove.textContent = "×";
   remove.addEventListener("click", (e) => {
     e.preventDefault();

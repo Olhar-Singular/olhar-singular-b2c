@@ -42,7 +42,7 @@ export function BlockInserterMenu({ gap, onPick }: Props) {
           type="button"
           size="icon"
           aria-label="Inserir bloco"
-          className="h-6 w-6 rounded-full bg-surface-accent text-white shadow-sm hover:bg-surface-accent-ink"
+          className="h-7 w-7 rounded-full bg-surface-accent text-white shadow-sm hover:bg-surface-accent-ink"
         >
           <Plus className="h-4 w-4" />
         </Button>

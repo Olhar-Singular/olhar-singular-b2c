@@ -117,7 +117,15 @@ export function BlockInserter({ editor }: { editor: Editor }) {
           style={{ top }}
         >
           <span className="h-px flex-1 bg-surface-accent opacity-0 transition-opacity group-hover:opacity-40" />
-          <span className="pointer-events-auto opacity-0 transition-opacity focus-within:opacity-100 group-hover:opacity-100">
+          <span
+            /*
+              Achado 0207: hover é a única forma de revelar o "+" em ponteiro
+              fino; em toque não existe hover e o botão ficava invisível na
+              folha inteira. `@media (hover: none)` dá a afordância permanente
+              a quem não tem ponteiro, sem poluir o desktop.
+            */
+            className="pointer-events-auto opacity-0 transition-opacity focus-within:opacity-100 group-hover:opacity-100 [@media(hover:none)]:opacity-100"
+          >
             <BlockInserterMenu gap={gap} onPick={(item) => handlePick(gap, item)} />
           </span>
           <span className="h-px flex-1 bg-surface-accent opacity-0 transition-opacity group-hover:opacity-40" />

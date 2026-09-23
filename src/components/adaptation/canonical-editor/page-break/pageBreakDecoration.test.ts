@@ -154,6 +154,16 @@ describe("buildPageBreakDecorations", () => {
     const next = state.apply(dispatch.mock.calls[0][0] as Transaction);
     expect(next.doc.child(1).attrs.style).toBeNull();
   });
+
+  /* Achado 0207: mesmo gatilho só-hover do inserter, no "x" da quebra. */
+  it("revela o remover onde não há hover (achado 0207)", () => {
+    const state = stateFor(docWithBreaks([1]));
+    const decos = buildPageBreakDecorations(state).find();
+    const view = { state, dispatch: vi.fn() } as unknown as EditorView;
+    const toDOM = (decos[0].type as unknown as { toDOM: (v: EditorView) => HTMLElement }).toDOM;
+    const remove = toDOM(view).querySelector("button")!;
+    expect(remove.className).toContain("[@media(hover:none)]:opacity-100");
+  });
 });
 
 describe("PageBreakMarker extension", () => {
