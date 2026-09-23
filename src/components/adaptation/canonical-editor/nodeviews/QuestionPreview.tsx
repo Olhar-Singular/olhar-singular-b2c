@@ -17,6 +17,7 @@ import type { QuestionAnswer, RichText } from "@/lib/adaptation/canonical/schema
 import { Button } from "@/components/ui/button";
 import { RichTextField } from "../RichTextField";
 import { AnswerPreview } from "../answer-editors/AnswerPreview";
+import { INK_MUTED } from "@/components/adaptation/render/pageTokens";
 
 interface QuestionPreviewProps {
   num: number | undefined;
@@ -99,7 +100,11 @@ export function QuestionPreview({
           (`shrink-0` + gap = 32px) e o Revisar divergia das outras duas
           superfícies (achado 0103). */}
       {instruction != null && instruction.length > 0 && (
-        <div contentEditable={false} className="group/instruction mt-2 flex items-start gap-1 italic text-surface-ink-soft" style={{ fontSize: "var(--doc-fs-instruction, 0.875em)" }} data-testid="question-instruction">
+        // A tinta vem do token de página (`INK_MUTED`), o mesmo que a prévia do
+        // Exportar e o PDF consomem (0307). `--sf-ink-soft` é cinza do CHROME da
+        // superfície e pintava o texto IMPRESSO com um cinza quente, divergente
+        // do papel (achado 0315).
+        <div contentEditable={false} className="group/instruction mt-2 flex items-start gap-1 italic" style={{ fontSize: "var(--doc-fs-instruction, 0.875em)", color: INK_MUTED }} data-testid="question-instruction">
           <div className="min-w-0">
             <RichTextField
               value={instruction}

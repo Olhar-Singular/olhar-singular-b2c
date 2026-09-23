@@ -2,6 +2,7 @@ import { describe, it, expect, vi } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 import type { RichText, QuestionAnswer } from "@/lib/adaptation/canonical/schema";
 import { QuestionPreview } from "./QuestionPreview";
+import { INK_MUTED } from "@/components/adaptation/render/pageTokens";
 
 // Stub RichTextField (used by the inline instruction AND, via AnswerPreview, by
 // the editable answer fields) so we can drive edits without ProseMirror.
@@ -31,6 +32,13 @@ vi.mock("../RichTextField", () => ({
     );
   },
 }));
+
+/** Normaliza uma cor CSS para o formato em que o jsdom a devolve. */
+function cssColor(value: string): string {
+  const probe = document.createElement("div");
+  probe.style.color = value;
+  return probe.style.color;
+}
 
 const mc: QuestionAnswer = {
   kind: "multipleChoice",
@@ -325,5 +333,16 @@ describe("QuestionPreview — vao interno do stem (achado 0171)", () => {
   it("marca o host do stem com a classe que o CSS usa para separar paragrafos", () => {
     setup();
     expect(screen.getByTestId("stem-slot").parentElement).toHaveClass("question-stem");
+  });
+});
+
+describe("QuestionPreview — tinta da instrução (achado 0315)", () => {
+  it("imprime a instrução no cinza secundário do documento, não no cinza do chrome", () => {
+    setup({ instruction: [{ type: "text", text: "Marque a alternativa correta." }] });
+    const instruction = screen.getByTestId("question-instruction");
+    // O mesmo token que a prévia do Exportar e o PDF consomem (0307): sem ele o
+    // Revisar saía com `--sf-ink-soft`, um cinza quente do chrome da superfície.
+    expect(instruction.style.color).toBe(cssColor(INK_MUTED));
+    expect(instruction.className).not.toContain("text-surface-ink-soft");
   });
 });
