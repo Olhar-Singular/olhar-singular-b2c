@@ -165,6 +165,15 @@ export default function CanonicalAdaptationWizard({ editMode }: Props = {}) {
    * "Salvo" over dropped keystrokes is exactly how B8 destroyed work.
    */
   const [captureFailure, setCaptureFailure] = useState<string | null>(null);
+  /*
+    Achado 0251: o degrau de zoom da folha do Revisar mora AQUI, e não dentro do
+    `PageSheet`, porque `renderStep()` desmonta o passo inteiro a cada troca de
+    passo. Guardado lá embaixo, ele voltava ao ajuste (42% em 390px) a cada ida
+    e volta ao Exportar — o vaivém do fim do fluxo — e o professor repagava os
+    três cliques do zoom, que é a única saída para ler o que está editando. 0 é
+    o ajuste: uma folha nunca ajustada continua abrindo cabendo na mesa.
+  */
+  const [reviewZoomIndex, setReviewZoomIndex] = useState(0);
   // Crash-mirror recovery: a surviving mirror newer than the loaded row means a
   // save was lost. We hold it here and prompt the user to recover it.
   const [pendingMirror, setPendingMirror] = useState<MirrorEntry | null>(null);
@@ -598,6 +607,8 @@ export default function CanonicalAdaptationWizard({ editMode }: Props = {}) {
             onNext={onNext}
             onPrev={onPrev}
             onCaptureFailure={setCaptureFailure}
+            zoomIndex={reviewZoomIndex}
+            onZoomIndexChange={setReviewZoomIndex}
             title={data.result.header?.title ?? ""}
             onTitleChange={handleTitleChange}
             subject={subject}

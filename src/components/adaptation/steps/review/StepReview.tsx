@@ -81,6 +81,13 @@ type Props = {
   /** Name typed for a folder that does not exist yet; created on save. */
   newFolder?: string;
   onNewFolderChange?: (name: string) => void;
+  /**
+   * Degrau de zoom da folha, guardado pelo wizard (achado 0251). O passo é
+   * desmontado a cada troca de passo, então a escolha do professor só sobrevive
+   * à ida ao Exportar se morar acima daqui.
+   */
+  zoomIndex?: number;
+  onZoomIndexChange?: (index: number) => void;
   /** Whether there is a persisted draft row to mark as saved. */
   canSave?: boolean;
   /** A save is in flight. */
@@ -140,6 +147,8 @@ export function StepReview({
   onFolderChange,
   newFolder = "",
   onNewFolderChange,
+  zoomIndex,
+  onZoomIndexChange,
   canSave = false,
   saving = false,
   onSave,
@@ -438,7 +447,11 @@ export function StepReview({
           >
             <SelectionBubble editor={editor} />
           </BubbleMenu>
-          <PageSheet pageStyle={pageStyle}>
+          <PageSheet
+            pageStyle={pageStyle}
+            zoomIndex={zoomIndex}
+            onZoomIndexChange={onZoomIndexChange}
+          >
             {/* `relative` ancora o overlay "+" (§6.4) sobre o conteúdo do editor. */}
             <div className="relative">
               <EditorContent editor={editor} />

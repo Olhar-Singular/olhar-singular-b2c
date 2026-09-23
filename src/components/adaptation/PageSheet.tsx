@@ -50,6 +50,18 @@ interface PageSheetProps {
    * `render` do `<Text fixed>` do react-pdf recebe `pageNumber`/`totalPages`.
    */
   footer?: (pageNumber: number, totalPages: number) => ReactNode;
+  /**
+   * Degrau de zoom guardado POR QUEM HOSPEDA a folha (achado 0251).
+   *
+   * A moldura se vira sozinha quando as duas props faltam. Elas existem porque
+   * o passo do wizard é desmontado a cada troca de passo: guardado só aqui, o
+   * degrau escolhido morria na ida ao Exportar e a folha reabria no ajuste —
+   * em 390px, os mesmos 42% ilegíveis de que o zoom é a única saída (0238).
+   * O índice é o da escada (0 = ajuste), não a escala: o piso depende da mesa,
+   * então guardar o degrau é o que mantém a escolha válida em qualquer largura.
+   */
+  zoomIndex?: number;
+  onZoomIndexChange?: (index: number) => void;
   children: ReactNode;
 }
 
@@ -137,6 +149,8 @@ export function PageSheet({
   pageStyle,
   paginated = false,
   footer,
+  zoomIndex: hostZoomIndex,
+  onZoomIndexChange,
   children,
 }: PageSheetProps) {
   /*
@@ -152,8 +166,13 @@ export function PageSheet({
   const [pageCount, setPageCount] = useState(1);
   /** Escala que faz a folha caber na mesa (o "ajustar à tela"). */
   const [fitScale, setFitScale] = useState(1);
-  /** Degrau de zoom escolhido pelo professor; 0 é o ajuste (achado 0238). */
-  const [zoomIndex, setZoomIndex] = useState(0);
+  /**
+   * Degrau de zoom escolhido pelo professor; 0 é o ajuste (achado 0238). Vale
+   * quando ninguém guarda a escolha por fora — com `zoomIndex`, quem hospeda a
+   * folha é a fonte da verdade e o degrau sobrevive à desmontagem (achado 0251).
+   */
+  const [ownZoomIndex, setOwnZoomIndex] = useState(0);
+  const zoomIndex = hostZoomIndex ?? ownZoomIndex;
   /**
    * Largura da MESA (a moldura visível), medida junto com a escala. O chrome da
    * prévia se alinha por ela, não pela folha: com a escala no piso a folha fica
@@ -231,6 +250,17 @@ export function PageSheet({
   */
   const zoomLadder = [fitScale, ...ZOOM_STEPS.filter((step) => step > fitScale + 0.01)];
   const canZoom = zoomLadder.length > 1;
+  /**
+   * Sobe ou desce um degrau (achado 0251). Enquanto ninguém guarda a escolha
+   * por fora, o estado local manda e a atualização é funcional — dois cliques
+   * no mesmo lote têm de andar dois degraus. Com `zoomIndex` vindo de fora,
+   * quem manda é o hospedeiro e aqui só se avisa.
+   */
+  const stepZoom = (delta: number) => {
+    const clamp = (index: number) => Math.min(zoomLadder.length - 1, Math.max(0, index));
+    if (hostZoomIndex === undefined) setOwnZoomIndex((prev) => clamp(prev + delta));
+    onZoomIndexChange?.(clamp(zoomIndex + delta));
+  };
   const scale = canZoom ? zoomLadder[Math.min(zoomIndex, zoomLadder.length - 1)] : fitScale;
 
   /*
@@ -632,7 +662,7 @@ export function PageSheet({
               aria-label="Diminuir zoom"
               aria-describedby={zoomValueId}
               disabled={zoomIndex === 0}
-              onClick={() => setZoomIndex((step) => Math.max(0, step - 1))}
+              onClick={() => stepZoom(-1)}
               className="h-7 w-7 rounded border border-surface-ink-soft bg-surface-paper text-surface-mesa-ink leading-none disabled:opacity-40"
             >
               −
@@ -656,9 +686,7 @@ export function PageSheet({
               aria-label="Aumentar zoom"
               aria-describedby={zoomValueId}
               disabled={zoomIndex >= zoomLadder.length - 1}
-              onClick={() =>
-                setZoomIndex((step) => Math.min(zoomLadder.length - 1, step + 1))
-              }
+              onClick={() => stepZoom(1)}
               className="h-7 w-7 rounded border border-surface-ink-soft bg-surface-paper text-surface-mesa-ink leading-none disabled:opacity-40"
             >
               +

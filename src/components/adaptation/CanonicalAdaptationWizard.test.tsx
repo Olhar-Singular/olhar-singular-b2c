@@ -245,6 +245,8 @@ vi.mock("./steps/review/StepReview", () => ({
     onNewFolderChange,
     canSave,
     onSave,
+    zoomIndex,
+    onZoomIndexChange,
   }: {
     document: CanonicalDocument;
     pageStyle?: unknown;
@@ -265,6 +267,8 @@ vi.mock("./steps/review/StepReview", () => ({
     onNewFolderChange?: (n: string) => void;
     canSave?: boolean;
     onSave?: () => void;
+    zoomIndex?: number;
+    onZoomIndexChange?: (index: number) => void;
   }) => (
     <div>
       <pre data-testid="review-doc">{JSON.stringify(document)}</pre>
@@ -309,6 +313,10 @@ vi.mock("./steps/review/StepReview", () => ({
       </button>
       <button data-testid="restore-capture" onClick={() => onCaptureFailure?.(null)}>
         restaurar captura
+      </button>
+      <pre data-testid="review-zoom">{String(zoomIndex ?? "undefined")}</pre>
+      <button data-testid="review-zoom-in" onClick={() => onZoomIndexChange?.((zoomIndex ?? 0) + 1)}>
+        Aumentar zoom
       </button>
       <button onClick={onRegenerate}>Regerar</button>
       <button aria-label="Voltar" onClick={onPrev}>Voltar</button>
@@ -412,6 +420,30 @@ describe("CanonicalAdaptationWizard", () => {
     // 3) the single document carries the edit
     const doc = JSON.parse(screen.getByTestId("review-doc").textContent!) as CanonicalDocument;
     expect((doc.blocks[0] as { content: { text: string }[] }).content[0].text).toBe("EDITADO");
+  });
+
+  /*
+    Achado 0251: o degrau de zoom era estado local do `PageSheet`, e o passo do
+    wizard é DESMONTADO a cada troca de passo. Em 390px a folha abre a 42% (o
+    ajuste do 0235/0240) e o zoom é, por desenho, a única saída para ler o que
+    se edita; ele custava 3 cliques e era cobrado de novo a cada ida e volta ao
+    Exportar — justamente o vaivém do fim do fluxo. A escolha sobe para o
+    wizard, ao lado do documento e da aparência, e sobrevive à troca de passo.
+  */
+  it("SSOT: o degrau de zoom do Revisar sobrevive à ida e volta ao Exportar (achado 0251)", () => {
+    renderWithProviders(<CanonicalAdaptationWizard />);
+    advanceToReview();
+
+    // Uma folha nunca ajustada abre no degrau do ajuste.
+    expect(screen.getByTestId("review-zoom")).toHaveTextContent("0");
+
+    fireEvent.click(screen.getByTestId("review-zoom-in"));
+    fireEvent.click(screen.getByTestId("review-zoom-in"));
+    expect(screen.getByTestId("review-zoom")).toHaveTextContent("2");
+
+    fireEvent.click(screen.getByRole("button", { name: /Avançar para exportação/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Voltar/i }));
+    expect(screen.getByTestId("review-zoom")).toHaveTextContent("2");
   });
 
   it("SSOT: a pageStyle change persists and survives navigating review ↔ export", () => {

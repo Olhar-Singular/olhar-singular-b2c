@@ -914,6 +914,41 @@ describe("PageSheet", () => {
       });
     });
 
+    /*
+      Achado 0251: a moldura guardava o degrau sozinha e o passo do wizard é
+      desmontado a cada troca de passo, então a escolha morria junto. Quem
+      hospeda a folha pode agora guardar o degrau por ela (e continua podendo
+      não guardar: sem as props a moldura segue se virando sozinha).
+    */
+    it("aceita que o degrau de zoom seja guardado por quem hospeda a folha (achado 0251)", () => {
+      withClientWidth(332, () => {
+        const onZoomIndexChange = vi.fn();
+        const { rerender } = render(
+          <PageSheet toolbar={null} zoomIndex={0} onZoomIndexChange={onZoomIndexChange}>
+            <span>x</span>
+          </PageSheet>,
+        );
+        act(() => {
+          screen.getByRole("button", { name: "Aumentar zoom" }).click();
+        });
+        expect(onZoomIndexChange).toHaveBeenCalledWith(1);
+
+        // Remontar a folha no degrau guardado reabre ampliada, não no ajuste.
+        rerender(
+          <PageSheet toolbar={null} zoomIndex={2} onZoomIndexChange={onZoomIndexChange}>
+            <span>x</span>
+          </PageSheet>,
+        );
+        expect(factorOf()).toBe(0.75);
+        expect(screen.getByTestId("page-zoom")).toHaveTextContent("75%");
+
+        act(() => {
+          screen.getByRole("button", { name: "Diminuir zoom" }).click();
+        });
+        expect(onZoomIndexChange).toHaveBeenLastCalledWith(1);
+      });
+    });
+
     it("não oferece zoom quando a folha já cabe em tamanho real", () => {
       withClientWidth(1200, () => {
         render(<PageSheet toolbar={null}><span>x</span></PageSheet>);
