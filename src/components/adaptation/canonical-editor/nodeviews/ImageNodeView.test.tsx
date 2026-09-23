@@ -260,6 +260,41 @@ describe("ImageNodeView", () => {
     expect(screen.getByRole("button", { name: "Centralizar" }).className).not.toMatch(/bg-surface-mesa-2/);
   });
 
+  /**
+   * 0316 — com a imagem ocupando toda a coluna, `justify-content` não tem folga
+   * para distribuir: o clique não movia a figura, só repintava o botão e
+   * empurrava a legenda (que herda o mesmo atributo desde o 0116). O grupo tem
+   * de dizer que, nesta largura, não há alinhamento possível.
+   */
+  it("desabilita o grupo de alinhamento quando a imagem ocupa a largura da folha (achado 0316)", () => {
+    const widthSpy = vi.spyOn(HTMLElement.prototype, "clientWidth", "get").mockReturnValue(687);
+    try {
+      const { props, updateAttributes } = makeProps({ width: 2400, caption: [{ type: "text", text: "Figura 1" }] });
+      render(<ImageNodeView {...props} />);
+      const centralizar = screen.getByRole("button", { name: "Centralizar" });
+      expect(centralizar).toBeDisabled();
+      expect(centralizar).toHaveAttribute("title", "A imagem já ocupa a largura da folha");
+      expect(screen.getByRole("button", { name: "Alinhar à esquerda" })).toBeDisabled();
+      expect(screen.getByRole("button", { name: "Alinhar à direita" })).toBeDisabled();
+      fireEvent.click(centralizar);
+      expect(updateAttributes).not.toHaveBeenCalled();
+    } finally {
+      widthSpy.mockRestore();
+    }
+  });
+
+  it("mantém o grupo de alinhamento ativo quando sobra folga na coluna (achado 0316)", () => {
+    const widthSpy = vi.spyOn(HTMLElement.prototype, "clientWidth", "get").mockReturnValue(687);
+    try {
+      renderImage({ width: 300 });
+      const centralizar = screen.getByRole("button", { name: "Centralizar" });
+      expect(centralizar).toBeEnabled();
+      expect(centralizar).toHaveAttribute("title", "Centralizar");
+    } finally {
+      widthSpy.mockRestore();
+    }
+  });
+
   it("sempre mostra os controles de alinhamento + trocar imagem", () => {
     const { props } = makeProps({ alignment: "left" });
     render(<ImageNodeView {...props} />);

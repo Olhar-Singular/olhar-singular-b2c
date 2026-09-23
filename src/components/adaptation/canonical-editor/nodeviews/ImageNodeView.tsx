@@ -1,4 +1,4 @@
-import { useId, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { AlignLeft, AlignCenter, AlignRight, Captions, Crop, ImageIcon, Trash2 } from "lucide-react";
 import { NodeViewWrapper, type NodeViewProps } from "@tiptap/react";
 import { toast } from "sonner";
@@ -16,6 +16,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import ImageResizer from "@/components/editor/ImageResizer";
+import { DEFAULT_IMAGE_WIDTH_PX } from "@/components/adaptation/render/pageTokens";
 import ImageManagerModal from "@/components/editor/ImageManagerModal";
 import PdfPreviewModal from "@/components/forms/PdfPreviewModal";
 import type { ImageItem } from "@/components/editor/imageManagerUtils";
@@ -73,6 +74,33 @@ export function ImageNodeView({ node, updateAttributes, deleteNode, editor, getP
   const disabled = !editor.isEditable;
   /** 0309 — o default `null` imprime como esquerda em todas as superfícies. */
   const resolvedAlignment = alignment ?? "left";
+
+  /*
+    0316 — o alinhamento é `justify-content` numa linha que vale a coluna de
+    texto: quando a imagem já ocupa a coluna inteira não sobra folga para
+    distribuir e o clique não move a figura. O botão ainda acendia (e a legenda,
+    que herda o mesmo atributo desde o 0116, pulava sozinha), então o único
+    retorno do clique afirmava um efeito que não aconteceu. Medimos a coluna e
+    apagamos o grupo enquanto não houver folga.
+  */
+  const alignContainerRef = useRef<HTMLDivElement>(null);
+  const [columnWidth, setColumnWidth] = useState(0);
+  useEffect(() => {
+    const el = alignContainerRef.current;
+    /* v8 ignore next -- guard: o ref está sempre preso ao contêiner depois da montagem */
+    if (!el) return;
+    const measure = () => setColumnWidth(el.clientWidth);
+    measure();
+    // A coluna muda de largura sem re-render deste nó (zoom da folha, janela,
+    // popover Formato), então observar é a única medida que não fica velha.
+    const observer = new ResizeObserver(measure);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+  /** Largura que a figura pede; `null` cai no default compartilhado das três superfícies. */
+  const requestedWidth = width ?? DEFAULT_IMAGE_WIDTH_PX;
+  const alignmentInert = columnWidth > 0 && requestedWidth >= columnWidth;
+  const ALIGNMENT_INERT_HINT = "A imagem já ocupa a largura da folha";
 
   // Only set for adaptações do "Adaptar direto do arquivo" (UploadedExamExtension,
   // configured per Revisar session) — absent for Banco de Questões adaptações
@@ -175,9 +203,9 @@ export function ImageNodeView({ node, updateAttributes, deleteNode, editor, getP
               os três apagados enquanto a imagem já estava à esquerda.
             */
             className={cn("h-7 w-7", FOLHA_GHOST, FOLHA_TOUCH_TARGET, resolvedAlignment === value && "bg-surface-mesa-2 text-surface-ink")}
-            disabled={disabled}
+            disabled={disabled || alignmentInert}
             onClick={() => updateAttributes({ alignment: value })}
-            title={label}
+            title={alignmentInert ? ALIGNMENT_INERT_HINT : label}
             /*
               0309 — escolha exclusiva precisa de estado programático: sem
               `aria-pressed` o leitor de tela anuncia três botões comuns e o
@@ -294,6 +322,7 @@ export function ImageNodeView({ node, updateAttributes, deleteNode, editor, getP
 
       <div className="flex flex-col gap-2">
         <div
+          ref={alignContainerRef}
           data-testid="image-align-container"
           className={cn("flex", alignment === "center" && "justify-center", alignment === "right" && "justify-end")}
         >
