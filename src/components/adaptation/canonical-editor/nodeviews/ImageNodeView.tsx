@@ -295,8 +295,14 @@ export function ImageNodeView({ node, updateAttributes, deleteNode, editor, getP
                 contêiner alinhado (o chrome de edição fica no meio), então o
                 alinhamento chega nela pelo text-align. Achado 0116.
               */}
+              {/*
+                0306 — `plain` herda tamanho e entrelinha, nunca cor: sem esta
+                classe a legenda saía em cor de corpo no Revisar, competindo com
+                o enunciado, enquanto a prévia e o PDF imprimem cinza secundário.
+              */}
               <div
                 data-testid="image-caption-text"
+                className="text-muted-foreground"
                 style={{ fontSize: "var(--doc-fs-caption, inherit)", textAlign: CAPTION_ALIGN[alignment ?? "left"] }}
               >
                 <RichTextField

@@ -478,6 +478,20 @@ describe("ImageNodeView", () => {
     expect(getByTestId("image-align-container").className).not.toContain("justify-end");
   });
 
+  // --- Legenda com cor de texto secundário (achado 0306) ---------------------
+
+  /**
+   * 0306 — depois de `plain={true}` (achado 0004) a legenda virou texto na folha,
+   * mas herdou a cor do corpo: no Revisar saía em rgb(34,32,28), igual ao
+   * enunciado, enquanto a prévia (`ImageBlockView`, figcaption
+   * `text-muted-foreground`) e o PDF imprimem cinza secundário. `plain` só herda
+   * tamanho e entrelinha, nunca cor, então a cor tem que vir do wrapper.
+   */
+  it("imprime a legenda em cinza secundário, como a prévia e o PDF", () => {
+    const { getByTestId } = renderImage({ caption: [{ type: "text", text: "cap" }] });
+    expect(getByTestId("image-caption-text").className).toContain("text-muted-foreground");
+  });
+
   // --- Legenda acompanha o alinhamento (achado 0116) -------------------------
 
   /**
