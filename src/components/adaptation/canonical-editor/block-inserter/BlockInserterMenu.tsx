@@ -19,6 +19,11 @@ import type { BlockGap } from "./topLevelGaps";
 
 type Props = {
   gap: BlockGap;
+  /**
+   * Nome acessível do "+" e do menu, dizendo onde a inserção cai (achado 0220).
+   * Vem do overlay, que é quem conhece o documento inteiro (`gapLabel`).
+   */
+  label: string;
   onPick: (item: InserterItem) => void;
 };
 
@@ -27,7 +32,7 @@ function isVisible(item: InserterItem, gap: BlockGap): boolean {
   return !item.needsFollowing || gap.followingPos != null;
 }
 
-export function BlockInserterMenu({ gap, onPick }: Props) {
+export function BlockInserterMenu({ gap, label, onPick }: Props) {
   const [open, setOpen] = useState(false);
 
   const pick = (item: InserterItem) => {
@@ -41,7 +46,7 @@ export function BlockInserterMenu({ gap, onPick }: Props) {
         <Button
           type="button"
           size="icon"
-          aria-label="Inserir bloco"
+          aria-label={label}
           className="h-7 w-7 rounded-full bg-surface-accent text-white shadow-sm hover:bg-surface-accent-ink"
         >
           <Plus className="h-4 w-4" />
@@ -49,7 +54,7 @@ export function BlockInserterMenu({ gap, onPick }: Props) {
       </PopoverTrigger>
       <PopoverContent
         align="center"
-        aria-label="Inserir bloco"
+        aria-label={label}
         className="w-72 space-y-3 border-surface-chrome-line bg-surface-chrome"
       >
         {INSERTER_SECTIONS.map((section) => {

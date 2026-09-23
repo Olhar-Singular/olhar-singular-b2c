@@ -19,6 +19,10 @@
  * de layout dividindo pela escala vigente (achado 0246); duas faixas nunca
  * dividem o mesmo retângulo.
  *
+ * Cada "+" recebe de `gapLabel` um nome acessível dizendo onde a inserção cai
+ * (achado 0220): como a camada é um overlay fora do fluxo, na ordem de foco os
+ * botões aparecem todos juntos no fim, longe do bloco que cada um toca.
+ *
  * The component must be placed inside a `position: relative` ancestor that wraps
  * the `EditorContent` (so `inset-0` lines the layer up with the editor DOM).
  */
@@ -26,11 +30,12 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { Editor } from "@tiptap/react";
 import { topLevelGaps, type BlockGap } from "./topLevelGaps";
+import { gapLabel } from "./gapLabel";
 import { runInserterAction } from "./insertAtPos";
 import { BlockInserterMenu } from "./BlockInserterMenu";
 import type { InserterItem } from "./blockInserterItems";
 
-type GapPosition = { gap: BlockGap; top: number };
+type GapPosition = { gap: BlockGap; top: number; label: string };
 
 /**
  * Altura da faixa de hover (`h-4`), em px. Serve de distância mínima entre duas
@@ -77,7 +82,7 @@ export function BlockInserter({ editor }: { editor: Editor }) {
     const next = topLevelGaps(editor.state.doc).map((gap) => {
       const top = Math.max((editor.view.coordsAtPos(gap.pos).top - base) / scale, floor);
       floor = top + ZONE_HEIGHT_PX;
-      return { gap, top };
+      return { gap, top, label: gapLabel(editor.state.doc, gap) };
     });
     setPositions(next);
   }, [editor]);
@@ -109,7 +114,7 @@ export function BlockInserter({ editor }: { editor: Editor }) {
 
   return (
     <div ref={layerRef} className="pointer-events-none absolute inset-0">
-      {positions.map(({ gap, top }) => (
+      {positions.map(({ gap, top, label }) => (
         <div
           key={gap.index}
           data-block-gap={gap.index}
@@ -126,7 +131,7 @@ export function BlockInserter({ editor }: { editor: Editor }) {
             */
             className="pointer-events-auto opacity-0 transition-opacity focus-within:opacity-100 group-hover:opacity-100 [@media(hover:none)]:opacity-100"
           >
-            <BlockInserterMenu gap={gap} onPick={(item) => handlePick(gap, item)} />
+            <BlockInserterMenu gap={gap} label={label} onPick={(item) => handlePick(gap, item)} />
           </span>
           <span className="h-px flex-1 bg-surface-accent opacity-0 transition-opacity group-hover:opacity-40" />
         </div>

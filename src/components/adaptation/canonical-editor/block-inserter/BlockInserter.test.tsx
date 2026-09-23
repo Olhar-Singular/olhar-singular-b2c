@@ -43,7 +43,7 @@ function makeEditor(tops: number[] = [10, 60, 110]) {
 /** Tops das faixas renderizadas, na ordem do DOM. */
 function zoneTops(): string[] {
   return screen
-    .getAllByRole("button", { name: "Inserir bloco" })
+    .getAllByRole("button", { name: /^Inserir bloco/ })
     .map((b) => (b.closest("[data-block-gap]") as HTMLElement).style.top);
 }
 
@@ -56,13 +56,33 @@ describe("BlockInserter", () => {
     const { editor } = makeEditor();
     render(<BlockInserter editor={editor} />);
     // 2 blocks → 2 leading gaps + 1 trailing = 3
-    expect(screen.getAllByRole("button", { name: "Inserir bloco" })).toHaveLength(3);
+    expect(screen.getAllByRole("button", { name: /^Inserir bloco/ })).toHaveLength(3);
+  });
+
+  /*
+    Achado 0220: os três "+" tinham o mesmo nome acessível ("Inserir bloco"),
+    então leitor de tela e navegação por teclado recebiam três controles
+    indistinguíveis, fora e depois da folha na ordem de foco. O nome agora diz
+    onde cada um insere.
+  */
+  it("dá a cada inserter um nome que diz onde ele insere (achado 0220)", () => {
+    const { editor } = makeEditor();
+    render(<BlockInserter editor={editor} />);
+    const names = screen
+      .getAllByRole("button", { name: /^Inserir bloco/ })
+      .map((b) => b.getAttribute("aria-label"));
+    expect(names).toEqual([
+      'Inserir bloco antes de parágrafo 1 "a"',
+      'Inserir bloco antes de parágrafo 2 "b"',
+      'Inserir bloco após parágrafo 2 "b"',
+    ]);
+    expect(new Set(names).size).toBe(names.length);
   });
 
   it("turns a pick into an editor action at the chosen gap", () => {
     const { editor } = makeEditor();
     render(<BlockInserter editor={editor} />);
-    fireEvent.click(screen.getAllByRole("button", { name: "Inserir bloco" })[0]);
+    fireEvent.click(screen.getAllByRole("button", { name: /^Inserir bloco/ })[0]);
     fireEvent.click(screen.getByRole("button", { name: "Parágrafo" }));
     expect(runInserterAction).toHaveBeenCalledTimes(1);
     const [calledEditor, gap, action] = vi.mocked(runInserterAction).mock.calls[0];
@@ -131,7 +151,7 @@ describe("BlockInserter", () => {
   it("não captura o clique na largura da faixa, só no alvo do + (achado 0180)", () => {
     const { editor } = makeEditor();
     render(<BlockInserter editor={editor} />);
-    const trigger = screen.getAllByRole("button", { name: "Inserir bloco" })[0];
+    const trigger = screen.getAllByRole("button", { name: /^Inserir bloco/ })[0];
     const zone = trigger.closest("[data-block-gap]") as HTMLElement;
     expect(zone.className).toContain("pointer-events-none");
     expect(zone.className).not.toContain("pointer-events-auto");
@@ -186,7 +206,7 @@ describe("BlockInserter", () => {
     const { editor } = makeEditor();
     render(<BlockInserter editor={editor} />);
     const wrappers = screen
-      .getAllByRole("button", { name: "Inserir bloco" })
+      .getAllByRole("button", { name: /^Inserir bloco/ })
       .map((b) => b.parentElement as HTMLElement);
     expect(wrappers).toHaveLength(3);
     for (const wrapper of wrappers) {
