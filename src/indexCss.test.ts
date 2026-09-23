@@ -653,3 +653,31 @@ describe("foco visivel dos campos da folha (WCAG 2.4.7)", () => {
     expect(classes).toContain("focus-visible:outline-ring");
   });
 });
+
+/**
+ * Contraste da tinta secundaria (--muted-foreground) — achado 0106.
+ *
+ * O contador "Passo N de 6" do wizard do Adaptar (`text-xs text-muted-foreground`)
+ * e o unico lugar em TEXTO que diz em que ponto do fluxo o usuario esta (o stepper
+ * acima e grafico). Com `--muted-foreground: 195 10% 45%` sobre o `--background`
+ * o par ficava em 4,23:1, abaixo do minimo da WCAG 1.4.3 para texto normal — e
+ * 12 px nao alcanca a excecao de texto grande.
+ */
+describe("index.css — contraste da tinta secundaria (muted-foreground)", () => {
+  it.each([
+    [":root", "background"],
+    [":root", "card"],
+    [":root", "popover"],
+    [":root", "muted"],
+    [".dark", "background"],
+    [".dark", "card"],
+    [".dark", "popover"],
+    [".dark", "muted"],
+  ])("%s: --muted-foreground atinge 4,5:1 sobre --%s", (selector, surface) => {
+    const ratio = contrastRatio(
+      token(selector, "muted-foreground"),
+      token(selector, surface),
+    );
+    expect(ratio).toBeGreaterThanOrEqual(4.5);
+  });
+});

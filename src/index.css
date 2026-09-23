@@ -97,7 +97,12 @@
     --secondary-foreground: 195 35% 28%;
 
     --muted: 40 15% 93%;
-    --muted-foreground: 195 10% 45%;
+    /* Tinta secundaria de TEXTO. Em 45% o par com o --background ficava em
+       4,23:1 (e 3,95:1 sobre o --muted), abaixo do minimo da WCAG 1.4.3 para
+       texto normal — e o contador "Passo N de 6" do wizard do Adaptar e 12 px,
+       longe da excecao de texto grande. Mesmo matiz, so a luminosidade menor:
+       >= 4,5:1 sobre --background, --card, --popover e --muted. Achado 0106. */
+    --muted-foreground: 195 10% 41%;
 
     --accent: 40 55% 50%;
     /* Tinta escura sobre o dourado (mesma escolha do tema escuro): com branco o
@@ -203,7 +208,10 @@
     --secondary: 195 18% 36%;
     --secondary-foreground: 195 20% 88%;
     --muted: 195 14% 27%;
-    --muted-foreground: 195 10% 65%;
+    /* Contraparte do tema claro: aqui a tinta SOBE de luminosidade, porque o
+       chrome escuro e que e o fundo. Em 65% o par com --card/--popover dava
+       4,17:1 e com --muted 3,88:1. >= 4,5:1 nas quatro superficies. Achado 0106. */
+    --muted-foreground: 195 10% 71%;
     --accent: 40 50% 55%;
     --accent-foreground: 195 30% 15%;
     --destructive: 0 55% 52%;
