@@ -94,22 +94,52 @@ describe("registerPdfFonts", () => {
   });
 
   /**
-   * Without a registered callback, @react-pdf/textkit falls back to its builtin
-   * hyphenator, whose dictionary is en-US: it splits Portuguese words and prints
-   * a trailing "-" at every line break, which the screen renderer never does
-   * (CanonicalRenderer uses `break-words`, no hyphen). Registering the identity
-   * callback turns hyphenation off and restores PDF↔screen parity.
+   * Regression (achado 0115): the identity callback (`(word) => [word]`) removed
+   * hyphens but also removed the ONLY break opportunity textkit has inside a word
+   * (`@react-pdf/textkit`: `const hyphenate = options.hyphenationCallback || builtinHyphenate`).
+   * A token wider than the content box then occupied a single line and every
+   * character past the margin was DROPPED from the PDF text layer — 1.200 chars
+   * on screen, 109 in the exported file, no console error.
+   *
+   * The callback now splits only tokens that no realistic line can hold, so a
+   * normal Portuguese word still comes back whole (no en-US syllable hyphens,
+   * which is what achado 0112 fixed) while a runaway token keeps every char.
    */
-  it("registers a hyphenation callback that disables hyphenation (identity)", async () => {
+  it("keeps normal words whole (no en-US syllable hyphenation — achado 0112)", async () => {
     const { registerPdfFonts } = await import("./registerFonts");
     registerPdfFonts();
 
     expect(mockRegisterHyphenationCallback).toHaveBeenCalledTimes(1);
     const callback = mockRegisterHyphenationCallback.mock.calls[0][0] as (word: string) => string[];
     expect(typeof callback).toBe("function");
-    // The word must come back whole — one part, no syllable split, no hyphen.
-    expect(callback("supercalifragilisticexpialidoso")).toEqual(["supercalifragilisticexpialidoso"]);
     expect(callback("orientador")).toEqual(["orientador"]);
+    expect(callback("supercalifragilistico")).toEqual(["supercalifragilistico"]);
+    expect(callback("")).toEqual([""]);
+  });
+
+  it("splits an unbreakable long token into parts so the PDF keeps every character (achado 0115)", async () => {
+    const { registerPdfFonts, UNBREAKABLE_WORD_THRESHOLD, WORD_CHUNK_SIZE } = await import("./registerFonts");
+    registerPdfFonts();
+
+    const callback = mockRegisterHyphenationCallback.mock.calls[0][0] as (word: string) => string[];
+    const token = "supercalifragilistico".repeat(58).slice(0, 1200); // 1.200 chars, no spaces
+    const parts = callback(token);
+
+    expect(parts.length).toBeGreaterThan(1); // there IS a break opportunity now
+    expect(parts.join("")).toBe(token); // and not a single character was lost
+    for (const part of parts) expect(part.length).toBeLessThanOrEqual(WORD_CHUNK_SIZE);
+    // A word right at the threshold is still emitted whole.
+    expect(callback("a".repeat(UNBREAKABLE_WORD_THRESHOLD))).toEqual(["a".repeat(UNBREAKABLE_WORD_THRESHOLD)]);
+    expect(callback("a".repeat(UNBREAKABLE_WORD_THRESHOLD + 1)).join("")).toBe(
+      "a".repeat(UNBREAKABLE_WORD_THRESHOLD + 1),
+    );
+  });
+
+  it("tolerates a null word (textkit types the callback argument as string | null)", async () => {
+    const { registerPdfFonts } = await import("./registerFonts");
+    registerPdfFonts();
+    const callback = mockRegisterHyphenationCallback.mock.calls[0][0] as (word: string | null) => string[];
+    expect(callback(null)).toEqual([""]);
   });
 });
 

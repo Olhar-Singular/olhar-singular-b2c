@@ -34,8 +34,10 @@ export function CanonicalRenderer({
   const numbers = questionNumbers(document.blocks);
   const breaks = perQuestionBreakFlags(document.blocks);
   // `break-words` keeps a long token without spaces (URL, OCR artifact) inside the
-  // A4 sheet, matching what the editor gets from prosemirror-view and what
-  // @react-pdf/renderer does on export. Without it the export preview clips it.
+  // A4 sheet, matching what the editor gets from prosemirror-view. The PDF wraps
+  // the same token via the hyphenation callback in pdf/registerFonts.ts (achado
+  // 0115) — same content, except textkit marks its break with a "-".
+  // Without it the export preview clips it.
   return (
     <div data-testid="canonical-renderer" className="space-y-3 break-words">
       {document.blocks.map((block, i) => (

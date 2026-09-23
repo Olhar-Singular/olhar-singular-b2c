@@ -22,18 +22,49 @@ import { Font } from "@react-pdf/renderer";
 
 let done = false;
 
+/**
+ * Longest token we assume a real line can still hold. No Portuguese word is
+ * wider than this in the sizes the document uses, so words up to here are
+ * emitted whole and never get a hyphen (that is what achado 0112 fixed).
+ */
+export const UNBREAKABLE_WORD_THRESHOLD = 30;
+
+/** Size of each piece a runaway token is cut into. Smaller = tighter to the margin. */
+export const WORD_CHUNK_SIZE = 8;
+
+/**
+ * Hyphenation callback (achado 0115).
+ *
+ * In `@react-pdf/textkit` this callback is the ONLY source of break
+ * opportunities inside a word (`options.hyphenationCallback || builtinHyphenate`).
+ * Returning `[word]` for everything, as the previous fix did, removed the
+ * en-US hyphens but also made a token wider than the content box unbreakable:
+ * textkit laid it on a single line and silently DROPPED every character past
+ * the right margin — the exported PDF lost 1.091 of 1.200 characters with no
+ * error anywhere.
+ *
+ * So: normal words (<= UNBREAKABLE_WORD_THRESHOLD) still come back whole, with
+ * no syllable split and no hyphen; a runaway token (URL colada, artefato de
+ * OCR) is cut into fixed chunks so the line breaker can wrap it and keep all
+ * its characters. textkit appends its own "-" at whatever chunk boundary it
+ * actually breaks on; losing content is never an acceptable alternative.
+ */
+export function hyphenateWord(word: string | null): string[] {
+  const value = word ?? "";
+  if (value.length <= UNBREAKABLE_WORD_THRESHOLD) return [value];
+
+  const parts: string[] = [];
+  for (let i = 0; i < value.length; i += WORD_CHUNK_SIZE) {
+    parts.push(value.slice(i, i + WORD_CHUNK_SIZE));
+  }
+  return parts;
+}
+
 export function registerPdfFonts(): void {
   if (done) return;
   done = true;
 
-  // Turn hyphenation OFF. Without a callback, @react-pdf/textkit falls back to
-  // its builtin hyphenator, which is loaded with en-US patterns: it splits
-  // Portuguese words at English syllable boundaries and prints a trailing "-"
-  // at every line break. The screen renderer never does that (CanonicalRenderer
-  // breaks with `break-words`, no hyphen), so the PDF diverged from the preview
-  // and students got hyphens suggesting syllable splits that do not exist.
-  // The identity callback returns the word as a single part = no break inserted.
-  Font.registerHyphenationCallback((word) => [word]);
+  Font.registerHyphenationCallback(hyphenateWord);
 
   Font.register({
     family: "Atkinson Hyperlegible",
