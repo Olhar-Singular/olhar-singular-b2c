@@ -183,6 +183,33 @@ describe("ImageResizer", () => {
   });
 
   /**
+   * 0308 — o teto de 800 era aplicado ao VALOR ABSOLUTO, então uma imagem que
+   * já vinha do documento com 2400 px caía para 800 no primeiro arraste para a
+   * direita: o gesto de aumentar encolhia, sem aviso e sem mudar nada na tela
+   * (a folha A4 desenha no máximo ~687 px). O clamp limita o que o arraste
+   * ACRESCENTA, nunca o que o documento já tinha.
+   */
+  it("não encolhe uma largura acima do teto quando o arraste é para aumentar", () => {
+    const onResize = vi.fn();
+    render(<ImageResizer src="https://x.png" alt="ilustração" initialWidth={2400} onResize={onResize} />);
+
+    drag(100, 900); // +800 para a direita
+
+    expect(onResize).toHaveBeenCalledTimes(1);
+    expect(onResize).toHaveBeenCalledWith(2400);
+    expect(screen.getByText("2400px")).toBeInTheDocument();
+  });
+
+  it("deixa encolher normalmente uma largura acima do teto", () => {
+    const onResize = vi.fn();
+    render(<ImageResizer src="https://x.png" alt="ilustração" initialWidth={2400} onResize={onResize} />);
+
+    drag(900, 0); // -900 para a esquerda
+
+    expect(onResize).toHaveBeenCalledWith(1500);
+  });
+
+  /**
    * 0337 — o indicador `{width}px` é decoração de edição escondida só por
    * `opacity-0`, e `opacity: 0` NÃO remove da árvore de acessibilidade. Como o
    * resizer mora dentro do `contenteditable` da folha, "2400px" entrava no

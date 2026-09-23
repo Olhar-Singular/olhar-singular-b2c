@@ -1,6 +1,9 @@
 import { useState, useCallback, useEffect, useRef } from "react";
 import { DEFAULT_IMAGE_WIDTH_PX } from "@/components/adaptation/render/pageTokens";
 
+/** Teto que o arraste pode ALCANÇAR por conta própria (ver 0308). */
+const MAX_DRAG_WIDTH_PX = 800;
+
 type Props = {
   src: string;
   /**
@@ -47,7 +50,17 @@ export default function ImageResizer({ src, alt, initialWidth, onResize }: Props
 
       const onMouseMove = (ev: MouseEvent) => {
         const delta = ev.clientX - startX.current;
-        const newWidth = Math.max(50, Math.min(800, startWidth.current + delta));
+        /**
+         * 0308 — o teto limita o que o ARRASTE acrescenta, nunca o que o
+         * documento já tinha. Aplicado ao valor absoluto, ele transformava o
+         * gesto de aumentar em perda de dado: uma imagem que vinha do documento
+         * com 2400px virava 800px no primeiro arraste para a direita, sem aviso
+         * e sem nada mudar na folha (a caixa A4 desenha no máximo ~687px). Se a
+         * largura de partida já passa do teto, crescer é no-op e só encolher
+         * tem efeito.
+         */
+        const ceiling = Math.max(MAX_DRAG_WIDTH_PX, startWidth.current);
+        const newWidth = Math.max(50, Math.min(ceiling, startWidth.current + delta));
         widthRef.current = newWidth;
         setWidth(newWidth);
       };
