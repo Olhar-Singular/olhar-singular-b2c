@@ -59,6 +59,22 @@ describe("BlockMathNodeView", () => {
     expect(button?.className).toMatch(/(^|\s)folha-touch-target(\s|$)/);
   });
 
+
+  // Achado 0312: campo do chrome do editor sem `id`/`name` — o Chrome levanta
+  // "A form field element should have an id or name attribute".
+  it("dá identidade de campo ao LaTeX e ao alt (achado 0312)", () => {
+    const { props } = makeProps();
+    render(<BlockMathNodeView {...props} />);
+    fireEvent.click(screen.getByTestId("blockmath-render"));
+    const latex = screen.getByLabelText("Expressão LaTeX") as HTMLInputElement;
+    const alt = screen.getByLabelText("Texto alternativo da fórmula") as HTMLInputElement;
+    expect(latex.id).not.toBe("");
+    expect(alt.id).not.toBe("");
+    expect(latex.id).not.toBe(alt.id);
+    expect(latex.getAttribute("name")).toBe("blockmath-latex");
+    expect(alt.getAttribute("name")).toBe("blockmath-alt");
+  });
+
   it("renders KaTeX html and enters edit mode on click", () => {
     const { props } = makeProps();
     render(<BlockMathNodeView {...props} />);

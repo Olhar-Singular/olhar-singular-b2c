@@ -34,6 +34,20 @@ describe("ScaffoldNodeView", () => {
     expect(updateAttributes).toHaveBeenCalledWith({ items: ["a", "b", ""] });
   });
 
+
+  // Achado 0312: cada passo é um campo; sem `id` distinto por passo não há
+  // identidade de campo nem âncora de rótulo, e o ordinal impresso ao lado
+  // ("1.") não leva o clique para o campo.
+  it("dá a cada passo um id próprio e um name (achado 0312)", () => {
+    const { props } = makeProps(["a", "b"]);
+    render(<ScaffoldNodeView {...props} />);
+    const first = screen.getByLabelText("Passo 1") as HTMLInputElement;
+    const second = screen.getByLabelText("Passo 2") as HTMLInputElement;
+    expect(first.id).not.toBe("");
+    expect(first.id).not.toBe(second.id);
+    expect(first.getAttribute("name")).toBe("scaffold-step");
+  });
+
   it("disables inputs when not editable", () => {
     const { props } = makeProps(["a"], false);
     render(<ScaffoldNodeView {...props} />);

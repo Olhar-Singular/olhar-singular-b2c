@@ -11,6 +11,7 @@
  * answer-lines config) is always available — there is no editor mode to hide it.
  */
 
+import { useId } from "react";
 import { Plus, Trash2, ArrowUp, ArrowDown } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { FOLHA_BUTTON } from "@/components/adaptation/canonical-editor/folhaChrome";
@@ -65,6 +66,13 @@ function IconButton({
 }
 
 export function AnswerEditor({ answer, onChange, disabled = false }: AnswerEditorProps) {
+  /**
+   * 0312 — os campos deste card não tinham `id`/`name`: o Chrome reporta "A
+   * form field element should have an id or name attribute" e os rótulos
+   * visíveis ("Lacuna N", "Linhas de resposta") eram `<span>`, então clicar no
+   * rótulo não levava o foco ao campo. O prefixo é único por card.
+   */
+  const fieldIdPrefix = useId();
   switch (answer.kind) {
     case "multipleChoice":
       return (
@@ -208,9 +216,13 @@ export function AnswerEditor({ answer, onChange, disabled = false }: AnswerEdito
         <div className="flex flex-col gap-2" data-testid="answer-fillBlank">
           {answer.gaps.map((gap, index) => (
             <div key={gap.id} className="flex items-center gap-2">
-              <span className="text-xs text-surface-ink-faint w-12">Lacuna {index + 1}</span>
+              <label htmlFor={`${fieldIdPrefix}-gap-${gap.id}`} className="text-xs text-surface-ink-faint w-12">
+                Lacuna {index + 1}
+              </label>
               {/* The gap answer is the answer key (plain text, not formattable). */}
               <Input
+                id={`${fieldIdPrefix}-gap-${gap.id}`}
+                name="fillblank-gap"
                 value={gap.answer}
                 disabled={disabled}
                 onChange={(e) => onChange(setGapAnswer(answer, gap.id, e.target.value))}
@@ -253,8 +265,12 @@ export function AnswerEditor({ answer, onChange, disabled = false }: AnswerEdito
     default:
       return (
         <div className="flex items-center gap-2" data-testid="answer-open">
-          <span className="text-xs text-surface-ink-faint">Linhas de resposta:</span>
+          <label htmlFor={`${fieldIdPrefix}-answer-lines`} className="text-xs text-surface-ink-faint">
+            Linhas de resposta:
+          </label>
           <Input
+            id={`${fieldIdPrefix}-answer-lines`}
+            name="open-answer-lines"
             type="number"
             min={0}
             className="w-20 border-surface-line-2 bg-surface-paper text-surface-ink"

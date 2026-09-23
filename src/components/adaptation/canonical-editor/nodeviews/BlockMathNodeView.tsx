@@ -14,7 +14,7 @@
  * chrome de edição não pode entrar no fluxo vertical da folha (achado 0405).
  */
 
-import { useState } from "react";
+import { useId, useState } from "react";
 import { Trash2 } from "lucide-react";
 import { NodeViewWrapper, type NodeViewProps } from "@tiptap/react";
 import { Input } from "@/components/ui/input";
@@ -25,6 +25,11 @@ import { deleteNodeAndRefocus, latexToHtml } from "./nodeViewUtils";
 import { useLatexDraft } from "./useLatexDraft";
 
 export function BlockMathNodeView({ node, updateAttributes, editor, deleteNode, getPos, selected }: NodeViewProps) {
+  // 0312 — identidade de campo: sem `id`/`name` o Chrome reporta "A form field
+  // element should have an id or name attribute" e o agente do usuário não
+  // trata o input como campo. `useId` não colide entre fórmulas da mesma folha.
+  const latexId = useId();
+  const altId = useId();
   const [editing, setEditing] = useState(false);
   const { latex, alt } = node.attrs as { latex: string; alt: string | null };
   const disabled = !editor.isEditable;
@@ -68,6 +73,8 @@ export function BlockMathNodeView({ node, updateAttributes, editor, deleteNode, 
       {open ? (
         <div className="flex flex-col gap-2 rounded-lg border border-border p-2">
           <Input
+            id={latexId}
+            name="blockmath-latex"
             value={draft.value}
             autoFocus
             onChange={(e) => draft.onChange(e.target.value)}
@@ -76,6 +83,8 @@ export function BlockMathNodeView({ node, updateAttributes, editor, deleteNode, 
             aria-label="Expressão LaTeX"
           />
           <Input
+            id={altId}
+            name="blockmath-alt"
             value={alt ?? ""}
             className={cn(draft.altStale && "border-destructive")}
             onChange={(e) => draft.onAltChange(e.target.value)}

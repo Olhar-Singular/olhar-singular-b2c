@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useId, useRef, useState } from "react";
 import { AlignLeft, AlignCenter, AlignRight, Captions, Crop, ImageIcon, Trash2 } from "lucide-react";
 import { NodeViewWrapper, type NodeViewProps } from "@tiptap/react";
 import { toast } from "sonner";
@@ -42,6 +42,11 @@ const CAPTION_ALIGN: Record<string, "left" | "center" | "right"> = {
 };
 
 export function ImageNodeView({ node, updateAttributes, deleteNode, editor, getPos, selected }: NodeViewProps) {
+  // 0312 — o campo precisa de identidade própria: sem `id`/`name` o Chrome
+  // reporta "A form field element should have an id or name attribute" e o
+  // agente do usuário não trata o input como campo. `useId` dá um id único por
+  // instância, então várias imagens na mesma folha não colidem.
+  const altId = useId();
   const [modalOpen, setModalOpen] = useState(false);
   // 0349 — o gatilho vive dentro do NodeViewWrapper `contentEditable={false}`:
   // o ProseMirror seleciona o nó no `mousedown` (com `preventDefault`), então o
@@ -273,6 +278,8 @@ export function ImageNodeView({ node, updateAttributes, deleteNode, editor, getP
           `aria-label`) e custava uma faixa inteira de papel.
         */}
         <Input
+          id={altId}
+          name="image-alt"
           value={alt}
           disabled={disabled}
           aria-label="Texto alternativo"

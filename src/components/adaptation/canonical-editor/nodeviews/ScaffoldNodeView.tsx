@@ -11,6 +11,7 @@
  * então nenhum dos dois usa token de chrome apagado (achado 0160).
  */
 
+import { useId } from "react";
 import { Plus, Trash2 } from "lucide-react";
 import { NodeViewWrapper, type NodeViewProps } from "@tiptap/react";
 import { Input } from "@/components/ui/input";
@@ -30,6 +31,10 @@ import { cn } from "@/lib/utils";
 export function ScaffoldNodeView({ node, updateAttributes, editor, deleteNode, getPos, selected }: NodeViewProps) {
   const items = node.attrs.items as string[];
   const disabled = !editor.isEditable;
+  // 0312 — identidade de campo: sem `id`/`name` o Chrome reporta "A form field
+  // element should have an id or name attribute". O prefixo é único por
+  // instância; o índice do passo completa o id dentro do apoio.
+  const stepIdPrefix = useId();
 
   return (
     <NodeViewWrapper
@@ -89,6 +94,8 @@ export function ScaffoldNodeView({ node, updateAttributes, editor, deleteNode, g
               {index + 1}.
             </span>
             <Input
+              id={`${stepIdPrefix}-${index}`}
+              name="scaffold-step"
               value={item}
               disabled={disabled}
               onChange={(e) => updateAttributes({ items: setStep(items, index, e.target.value) })}

@@ -18,7 +18,7 @@
  * the review sheet only, and the sheet has to compose exactly like the print.
  */
 
-import { useState } from "react";
+import { useId, useState } from "react";
 import { NodeViewWrapper, type NodeViewProps } from "@tiptap/react";
 import { Input } from "@/components/ui/input";
 import { FOLHA_BUTTON, FOLHA_SELECTED } from "../folhaChrome";
@@ -43,6 +43,11 @@ import { useLatexDraft } from "./useLatexDraft";
 export const ALT_STALE_MARK_CLASS = "inlinemath-alt-stale";
 
 export function InlineMathNodeView({ node, updateAttributes, editor, selected }: NodeViewProps) {
+  // 0312 — identidade de campo: sem `id`/`name` o Chrome reporta "A form field
+  // element should have an id or name attribute" e o agente do usuário não
+  // trata o input como campo. `useId` não colide entre fórmulas da mesma folha.
+  const latexId = useId();
+  const altId = useId();
   const [editing, setEditing] = useState(false);
   const { latex, alt } = node.attrs as { latex: string; alt: string | null };
   const disabled = !editor.isEditable;
@@ -60,6 +65,8 @@ export function InlineMathNodeView({ node, updateAttributes, editor, selected }:
       {editing && !disabled ? (
         <span className="inline-flex items-center gap-1 rounded border border-border px-1 align-middle">
           <Input
+            id={latexId}
+            name="inlinemath-latex"
             value={draft.value}
             autoFocus
             className="h-6 w-28 px-1 py-0 text-sm"
@@ -69,6 +76,8 @@ export function InlineMathNodeView({ node, updateAttributes, editor, selected }:
             aria-label="Expressão LaTeX inline"
           />
           <Input
+            id={altId}
+            name="inlinemath-alt"
             value={alt ?? ""}
             className={cn("h-6 w-32 px-1 py-0 text-sm", draft.altStale && "border-destructive")}
             onChange={(e) => draft.onAltChange(e.target.value)}

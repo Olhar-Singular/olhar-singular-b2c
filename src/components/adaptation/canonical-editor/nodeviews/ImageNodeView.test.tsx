@@ -133,6 +133,22 @@ function accessibleText(root: HTMLElement): string {
 }
 
 describe("ImageNodeView", () => {
+
+  /**
+   * Achado 0312: o Chrome reporta "A form field element should have an id or
+   * name attribute" no Revisar. Sem `id`/`name` o agente do usuário não trata
+   * o campo como campo (autofill, restauração de formulário) e não há âncora
+   * para um `<label for>`. O `id` tem de ser único por instância: a folha pode
+   * ter várias imagens.
+   */
+  it("dá identidade de campo ao texto alternativo (achado 0312)", () => {
+    const { container } = renderImage();
+    const input = screen.getByLabelText("Texto alternativo") as HTMLInputElement;
+    expect(input.id).not.toBe("");
+    expect(input.getAttribute("name")).toBe("image-alt");
+    expect(container.ownerDocument.querySelectorAll(`[id="${input.id}"]`)).toHaveLength(1);
+  });
+
   it("container da imagem é flat (sem borda de card)", () => {
     const { getByTestId } = renderImage();
     expect(getByTestId("image-node").className).not.toMatch(/rounded-xl|border border-border\/60/);

@@ -37,6 +37,21 @@ describe("InlineMathNodeView", () => {
     expect(screen.getByLabelText("Expressão LaTeX inline")).toBeInTheDocument();
   });
 
+
+  // Achado 0312: mesmo caso da fórmula em bloco, no chrome inline.
+  it("dá identidade de campo ao LaTeX e ao alt inline (achado 0312)", () => {
+    const { props } = makeProps();
+    render(<InlineMathNodeView {...props} />);
+    fireEvent.click(screen.getByTestId("inlinemath-render"));
+    const latex = screen.getByLabelText("Expressão LaTeX inline") as HTMLInputElement;
+    const alt = screen.getByLabelText("Texto alternativo da fórmula inline") as HTMLInputElement;
+    expect(latex.id).not.toBe("");
+    expect(alt.id).not.toBe("");
+    expect(latex.id).not.toBe(alt.id);
+    expect(latex.getAttribute("name")).toBe("inlinemath-latex");
+    expect(alt.getAttribute("name")).toBe("inlinemath-alt");
+  });
+
   it("edits the latex attr and closes edit mode", () => {
     const { props, updateAttributes } = makeProps();
     render(<InlineMathNodeView {...props} />);

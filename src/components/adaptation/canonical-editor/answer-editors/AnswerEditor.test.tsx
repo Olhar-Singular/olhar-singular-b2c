@@ -281,3 +281,35 @@ describe("AnswerEditor — structure + answer-key controls stay visible", () => 
     expect(screen.getByRole("spinbutton")).toBeInTheDocument();
   });
 });
+
+/**
+ * Achado 0312: os campos do card de resposta não tinham `id`/`name`, e os
+ * rótulos visíveis ("Lacuna N", "Linhas de resposta:") eram `<span>` — clicar
+ * neles não focava o campo e o Chrome reportava
+ * "A form field element should have an id or name attribute".
+ */
+describe("AnswerEditor — identidade e rótulo dos campos (achado 0312)", () => {
+  it("fillBlank: o ordinal da lacuna é um <label> que aponta para o campo", () => {
+    const answer: QuestionAnswer = {
+      kind: "fillBlank",
+      gaps: [
+        { id: "cccccccc-cccc-4ccc-8ccc-cccccccccccc", answer: "g1" },
+        { id: "dddddddd-dddd-4ddd-8ddd-dddddddddddd", answer: "g2" },
+      ],
+    };
+    render(<AnswerEditor answer={answer} onChange={vi.fn()} />);
+    const first = screen.getByLabelText("Lacuna 1") as HTMLInputElement;
+    const second = screen.getByLabelText("Lacuna 2") as HTMLInputElement;
+    expect(first.id).not.toBe("");
+    expect(first.id).not.toBe(second.id);
+    expect(first.getAttribute("name")).toBe("fillblank-gap");
+  });
+
+  it("open: 'Linhas de resposta' é um <label> que aponta para o campo", () => {
+    const answer: QuestionAnswer = { kind: "open", answerLines: 3 };
+    render(<AnswerEditor answer={answer} onChange={vi.fn()} />);
+    const input = screen.getByLabelText(/Linhas de resposta/) as HTMLInputElement;
+    expect(input.id).not.toBe("");
+    expect(input.getAttribute("name")).toBe("open-answer-lines");
+  });
+});
