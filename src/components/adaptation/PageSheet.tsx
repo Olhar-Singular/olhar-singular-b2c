@@ -248,6 +248,17 @@ export function PageSheet({
     const sheet = sheetRef.current;
     const measure = () => {
       /*
+        Achado 0135: o empurrão da quebra (no fim desta função) é ele próprio
+        fluxo, então toda medida começa DESFAZENDO o da passada anterior. Sem o
+        zeramento a régua seria medida já deslocada e cada remedida empilharia
+        mais uma folha em branco. Como a leitura logo abaixo força o layout, os
+        `cuts` saem sempre na geometria crua do conteúdo.
+      */
+      const marks = Array.from(sheet.querySelectorAll<HTMLElement>(".adaptar-page-break"));
+      marks.forEach((mark) => {
+        mark.style.marginBottom = "";
+      });
+      /*
         Achado 0123: a altura medida é a do CONTEÚDO, nunca a da folha. A folha
         passou a crescer até o fim da última página (abaixo), então medi-la aqui
         realimentaria a própria medição a cada layout: mais altura, mais páginas,
@@ -275,9 +286,7 @@ export function PageSheet({
       // `offsetHeight` é medida de layout: ignora o `scale` e já vem na geometria
       // do A4. `getBoundingClientRect`, abaixo, vem escalada — daí a divisão.
       const sheetTop = sheet.getBoundingClientRect().top;
-      const cuts = Array.from(sheet.querySelectorAll(".adaptar-page-break")).map(
-        (mark) => (mark.getBoundingClientRect().top - sheetTop) / scale,
-      );
+      const cuts = marks.map((mark) => (mark.getBoundingClientRect().top - sheetTop) / scale);
       /*
         Achado 0183: a mesma dobradura serve às duas alturas. O 0172 tirou o
         chrome do editor da CONTAGEM, e estava certo — o contador fala do
@@ -350,10 +359,11 @@ export function PageSheet({
         papel são as duas margens do fluxo mais N áreas úteis, e a virada N cai
         onde a área imprimível da página N acaba.
 
-        O conteúdo pós-quebra continua encostado na régua do `PageBreakMark` (que é
-        chrome de ~30px, não quebra de fluxo): empurrá-lo até o topo da folha
-        seguinte exigiria unificar editor/prévia/PDF numa única paginação, fora do
-        escopo desta correção.
+        Achado 0135: e o conteúdo pós-quebra é EMPURRADO até lá (abaixo). Até
+        então o papel tinha a altura certa e o desenho não: a questão 2 ficava
+        espremida no pé da folha 1, logo abaixo da régua, e a folha 2 saía
+        inteiramente em branco — o inverso exato do arquivo, na tela que existe
+        para mostrar o arquivo.
       */
       setPageCount(total);
       setDrawnExcess(drawnExcessPx);
@@ -366,6 +376,36 @@ export function PageSheet({
           (_, page) => PAGE_MARGIN_PX + (page + 1) * PAGE_CONTENT_HEIGHT_PX,
         ),
       );
+      /*
+        Achado 0135: a régua ganha, como margem inferior, o branco que falta até
+        o fim da folha em que ela caiu — é o `<View break>` do PDF traduzido para
+        o fluxo contínuo desta folha. Só na PRÉVIA: no Revisar a mesma classe
+        marca a quebra dentro do editor, e um salto rígido no meio da digitação
+        atrapalharia mais do que ajuda (a folha de lá é contínua de propósito).
+
+        `shift` acumula porque as réguas seguintes já são medidas cruas (o
+        zeramento no topo da função): sem somar o que as anteriores abriram, a
+        segunda quebra calcularia a virada da folha errada. O piso em 0 cobre a
+        régua que atravessa a virada — aí o branco que falta é negativo e puxar o
+        conteúdo para trás sobreporia o que já foi desenhado.
+
+        A contagem e a altura do papel acima NÃO mudam: elas já paginavam trecho
+        a trecho (achados 0121/0131/0157), que é exatamente o lugar para onde o
+        conteúdo passa a ser empurrado.
+      */
+      if (paginated) {
+        let shift = 0;
+        marks.forEach((mark, index) => {
+          const cut = cuts[index] + shift;
+          const markHeight = mark.getBoundingClientRect().height / scale;
+          const pageEnd =
+            PAGE_MARGIN_PX +
+            Math.ceil((cut - PAGE_MARGIN_PX) / PAGE_CONTENT_HEIGHT_PX) * PAGE_CONTENT_HEIGHT_PX;
+          const spacer = Math.max(0, pageEnd - (cut + markHeight));
+          mark.style.marginBottom = `${spacer}px`;
+          shift += spacer;
+        });
+      }
     };
     measure();
     /*
@@ -396,9 +436,8 @@ export function PageSheet({
     (achado 0131 — todo trecho entre quebras começa numa página nova; achado
     0157 — no fluxo contínuo desta folha o fim da página N é
     `PAGE_MARGIN_PX + N x PAGE_CONTENT_HEIGHT_PX`, não o múltiplo de A4).
-    Recortar o fluxo em folhas de verdade (empurrando o conteúdo pós-quebra para
-    o topo da folha seguinte) exigiria unificar editor/prévia/PDF numa única
-    paginação, fora do escopo desta correção.
+    Na prévia o conteúdo pós-quebra é empurrado até o topo da folha seguinte
+    (achado 0135), então a régua marca mesmo onde o papel vira.
   */
   const ruleColor = "hsl(var(--sf-line-2))";
   const pageRulesBackground = pageRules.length

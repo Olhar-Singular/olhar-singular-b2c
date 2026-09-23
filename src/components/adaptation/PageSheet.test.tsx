@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
 import { act, render, screen } from "@testing-library/react";
 import { PageSheet } from "./PageSheet";
-import { PAGE_CONTENT_HEIGHT_PX } from "./render/pageTokens";
+import { PAGE_CONTENT_HEIGHT_PX, PAGE_MARGIN_PX } from "./render/pageTokens";
 import { FOOTER_BOTTOM_PX } from "./render/footerLabel";
 
 describe("PageSheet", () => {
@@ -1120,6 +1120,97 @@ describe("PageSheet", () => {
       withHeights(1300, () => {
         renderFolha(true);
         expect(screen.getByTestId("page-count").textContent).toBe("1 página A4");
+      });
+    });
+  });
+
+  /*
+    Achado 0135: a contagem e o papel já eram os do arquivo, mas o conteúdo
+    posterior à régua continuava encostado nela, no pé da folha 1, enquanto a
+    folha 2 saía inteiramente em branco. Na prévia a quebra tem que empurrar o
+    fluxo até o topo da folha seguinte, como o `<View break>` do PDF.
+  */
+  describe("a quebra por questão empurra o fluxo para a folha seguinte (achado 0135)", () => {
+    const withLayout = (height: number, run: () => void) => {
+      const heightSpy = vi
+        .spyOn(HTMLElement.prototype, "offsetHeight", "get")
+        .mockReturnValue(height);
+      const rectSpy = vi
+        .spyOn(HTMLElement.prototype, "getBoundingClientRect")
+        .mockImplementation(function (this: HTMLElement) {
+          const top = Number(this.dataset.testTop ?? 0);
+          const markHeight = Number(this.dataset.testHeight ?? 0);
+          return {
+            top,
+            bottom: top + markHeight,
+            height: markHeight,
+            left: 0,
+            right: 0,
+            width: 0,
+            x: 0,
+            y: top,
+            toJSON: () => ({}),
+          } as DOMRect;
+        });
+      try {
+        run();
+      } finally {
+        heightSpy.mockRestore();
+        rectSpy.mockRestore();
+      }
+    };
+
+    const folha = (paginated: boolean, tops: readonly number[]) => (
+      <PageSheet paginated={paginated} toolbar={null}>
+        <span>questão 1</span>
+        {tops.map((top) => (
+          <div
+            key={top}
+            className="adaptar-page-break"
+            data-testid={`quebra-${top}`}
+            data-test-top={String(top)}
+            data-test-height="30"
+          />
+        ))}
+        <span>questão 2</span>
+      </PageSheet>
+    );
+
+    it("abre espaço até o fim da folha em que a régua caiu", () => {
+      withLayout(900, () => {
+        render(folha(true, [500]));
+        const mark = screen.getByTestId("quebra-500");
+        expect(Number.parseFloat(mark.style.marginBottom)).toBeCloseTo(
+          PAGE_MARGIN_PX + PAGE_CONTENT_HEIGHT_PX - (500 + 30),
+          2,
+        );
+      });
+    });
+
+    it("acumula o empurrão das réguas anteriores", () => {
+      withLayout(1400, () => {
+        render(folha(true, [500, 700]));
+        const primeiro = PAGE_MARGIN_PX + PAGE_CONTENT_HEIGHT_PX - (500 + 30);
+        expect(
+          Number.parseFloat(screen.getByTestId("quebra-700").style.marginBottom),
+        ).toBeCloseTo(
+          PAGE_MARGIN_PX + 2 * PAGE_CONTENT_HEIGHT_PX - (700 + primeiro + 30),
+          2,
+        );
+      });
+    });
+
+    it("não puxa o conteúdo para trás quando a régua atravessa a virada", () => {
+      withLayout(1200, () => {
+        render(folha(true, [1060]));
+        expect(screen.getByTestId("quebra-1060").style.marginBottom).toBe("0px");
+      });
+    });
+
+    it("não mexe no fluxo da folha do Revisar, que é contínua", () => {
+      withLayout(900, () => {
+        render(folha(false, [500]));
+        expect(screen.getByTestId("quebra-500").style.marginBottom).toBe("");
       });
     });
   });
