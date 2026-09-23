@@ -11,6 +11,7 @@ import {
   type OpenReservationPayload,
 } from "../_shared/creditReservation.ts";
 import { calcAdaptationCost } from "../_shared/adaptationCost.ts";
+import { validateAdaptActivityInput } from "../_shared/adaptActivityInput.ts";
 import {
   persistAdaptation,
   type AdaptationInsertClient,
@@ -82,8 +83,9 @@ serve(async (req) => {
     const body = await req.json();
     const { original_activity, activity_type, barriers, observation_notes, barrier_profile_id, fidelity_mode, expected_question_count } = body;
 
-    if (!original_activity || !activity_type || !barriers || !Array.isArray(barriers) || barriers.length === 0) {
-      return new Response(JSON.stringify({ error: "Campos obrigatórios ausentes: original_activity, activity_type, barriers." }), {
+    const inputCheck = validateAdaptActivityInput(body);
+    if (!inputCheck.ok) {
+      return new Response(JSON.stringify({ error: inputCheck.error }), {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
