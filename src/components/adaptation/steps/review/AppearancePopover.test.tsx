@@ -144,13 +144,14 @@ describe("AppearanceControls", () => {
     expect(valueEl.id).toBe("font-size-value");
     expect(valueEl).toHaveAttribute("aria-live", "polite");
     expect(valueEl).toHaveAttribute("aria-atomic", "true");
+    // Achado 0203: o valor continua sendo descrito, agora acompanhado da ajuda.
     expect(screen.getByRole("button", { name: "Aumentar tamanho do texto" })).toHaveAttribute(
       "aria-describedby",
-      "font-size-value",
+      "font-size-value font-size-help",
     );
     expect(screen.getByRole("button", { name: "Diminuir tamanho do texto" })).toHaveAttribute(
       "aria-describedby",
-      "font-size-value",
+      "font-size-value font-size-help",
     );
   });
 
@@ -173,6 +174,36 @@ describe("AppearanceControls", () => {
   it("exibe aviso de que o tamanho afeta toda a prova", () => {
     setupControls();
     expect(screen.getByText(/toda a prova/i)).toBeInTheDocument();
+  });
+
+  /*
+    Achado 0203: a ajuda sobre as fontes de acessibilidade ficava no rodapé do
+    popover, dois controles abaixo do select que ela descreve (colada em
+    "Espaçamento entre blocos"), e nenhum dos textos de ajuda estava ligado ao
+    controle por `aria-describedby` — leitor de tela ouvia só "Fonte, caixa de
+    combinação".
+  */
+  it("ancora a ajuda das fontes logo abaixo do select Fonte e a liga por aria-describedby", () => {
+    setupControls();
+    const select = screen.getByLabelText("Fonte");
+    const help = screen.getByText(/fontes de acessibilidade/i);
+    expect(select.nextElementSibling).toBe(help);
+    expect(help.id).toBe("appearance-font-help");
+    expect(select).toHaveAttribute("aria-describedby", "appearance-font-help");
+  });
+
+  it("liga a ajuda do tamanho aos botões do stepper por aria-describedby", () => {
+    setupControls();
+    const help = screen.getByText(/toda a prova/i);
+    expect(help.id).toBe("font-size-help");
+    expect(screen.getByRole("button", { name: "Aumentar tamanho do texto" })).toHaveAttribute(
+      "aria-describedby",
+      "font-size-value font-size-help",
+    );
+    expect(screen.getByRole("button", { name: "Diminuir tamanho do texto" })).toHaveAttribute(
+      "aria-describedby",
+      "font-size-value font-size-help",
+    );
   });
 });
 

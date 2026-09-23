@@ -58,6 +58,7 @@ function Stepper({
   label,
   display,
   testId,
+  helpId,
   canDecrease,
   canIncrease,
   onDecrease,
@@ -66,11 +67,18 @@ function Stepper({
   label: string;
   display: string;
   testId: string;
+  /**
+   * Achado 0203: id do parágrafo de ajuda que descreve este controle. Entra no
+   * `aria-describedby` dos dois botões junto do valor, para que o leitor de
+   * tela anuncie a explicação — e não só o número.
+   */
+  helpId?: string;
   canDecrease: boolean;
   canIncrease: boolean;
   onDecrease: () => void;
   onIncrease: () => void;
 }) {
+  const describedBy = helpId ? `${testId} ${helpId}` : testId;
   return (
     <div className="flex items-center justify-between">
       <span className="text-sm text-surface-ink">{label}</span>
@@ -81,7 +89,7 @@ function Stepper({
           variant="outline"
           className="h-7 w-7 border-surface-line-2 bg-surface-paper text-surface-ink hover:bg-surface-mesa"
           aria-label={`Diminuir ${label.toLowerCase()}`}
-          aria-describedby={testId}
+          aria-describedby={describedBy}
           disabled={!canDecrease}
           onClick={onDecrease}
         >
@@ -102,7 +110,7 @@ function Stepper({
           variant="outline"
           className="h-7 w-7 border-surface-line-2 bg-surface-paper text-surface-ink hover:bg-surface-mesa"
           aria-label={`Aumentar ${label.toLowerCase()}`}
-          aria-describedby={testId}
+          aria-describedby={describedBy}
           disabled={!canIncrease}
           onClick={onIncrease}
         >
@@ -137,6 +145,7 @@ export function AppearanceControls({ value, onChange }: Props) {
         <select
           id="appearance-font"
           className="flex h-9 w-full rounded-md border border-surface-line-2 bg-surface-paper px-3 py-1 text-sm text-surface-ink"
+          aria-describedby="appearance-font-help"
           value={value.fontFamily ?? ""}
           onChange={(e) => onChange({ fontFamily: e.target.value === "" ? undefined : e.target.value })}
         >
@@ -151,19 +160,30 @@ export function AppearanceControls({ value, onChange }: Props) {
             </optgroup>
           ))}
         </select>
+        {/*
+          Achado 0203: esta ajuda descreve o SELECT, então mora colada nele.
+          No rodapé do popover ela ficava dois controles abaixo, encostada em
+          "Espaçamento entre blocos", e quem lia de cima para baixo associava a
+          frase ao controle errado.
+        */}
+        <p id="appearance-font-help" className="text-xs text-surface-ink-soft">
+          As fontes de acessibilidade ajudam leitores com dislexia e baixa visão. A escolha vale
+          para a folha e para o PDF.
+        </p>
       </div>
 
       <Stepper
         label="Tamanho do texto"
         display={`${sizePx}px`}
         testId="font-size-value"
+        helpId="font-size-help"
         canDecrease={sizePx > FONT_SIZE_MIN_PX}
         canIncrease={sizePx < FONT_SIZE_MAX_PX}
         onDecrease={() => stepFontSize(-1)}
         onIncrease={() => stepFontSize(1)}
       />
 
-      <p className="text-xs text-surface-ink-soft">
+      <p id="font-size-help" className="text-xs text-surface-ink-soft">
         Altera o tamanho de toda a prova — enunciados, instruções e alternativas.
       </p>
 
@@ -176,11 +196,6 @@ export function AppearanceControls({ value, onChange }: Props) {
         onDecrease={() => stepSpacing(-SPACING_STEP_PX)}
         onIncrease={() => stepSpacing(SPACING_STEP_PX)}
       />
-
-      <p className="text-xs text-surface-ink-soft">
-        As fontes de acessibilidade ajudam leitores com dislexia e baixa visão. A escolha vale
-        para a folha e para o PDF.
-      </p>
     </div>
   );
 }
