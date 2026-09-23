@@ -10,6 +10,7 @@
  */
 
 import type { HeaderSettings } from "@/components/adaptation/export/panelSettings";
+import { BASE_LINE_HEIGHT } from "./pageTokens";
 
 /**
  * Distância (pt) entre a base da folha e o rodapé fixo. Menor que
@@ -23,6 +24,18 @@ export const FOOTER_BOTTOM_PX = FOOTER_BOTTOM_PT * (96 / 72);
 
 /** Corpo do rodapé em pt (PDF) — a tela converte com a mesma razão. */
 export const FOOTER_FONT_SIZE_PT = 8;
+
+/**
+ * Altura de UMA linha do rodapé, em pt (corpo x entrelinha base).
+ *
+ * Não é enfeite de layout: é o que trava a caixa do `<Text fixed render>` no
+ * PDF. O `@react-pdf` só executa a função `render` na hora de pintar, então na
+ * MEDIDA o texto vira uma caixa fantasma de milhares de pontos — e o `bottom`
+ * do elemento absoluto resolve contra ela, jogando o rodapé ~7.777 pt abaixo do
+ * papel, fora do box de toda página (por isso o `fixed` também não repetia:
+ * achado 0170, que corrige o diagnóstico do `0120`).
+ */
+export const FOOTER_LINE_HEIGHT_PT = FOOTER_FONT_SIZE_PT * BASE_LINE_HEIGHT;
 
 /** Tinta do rodapé, a mesma nas duas superfícies. */
 export const FOOTER_COLOR = "#555555";

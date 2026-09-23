@@ -23,10 +23,16 @@ import {
 import { PdfBlock } from "./PdfBlock";
 import { questionNumbers } from "../questionNumbering";
 import { perQuestionBreakFlags } from "../perQuestionBreaks";
-import { pageTokensToPdf, pdfTextSize, RULE_WIDTH_PT } from "../pageTokens";
+import { BASE_LINE_HEIGHT, pageTokensToPdf, pdfTextSize, RULE_WIDTH_PT } from "../pageTokens";
 import { HEADER_SPACING_PT } from "../headerSpacing";
 import { resolvePageStyle, resolveElementFontSizes } from "../pageStyle";
-import { FOOTER_BOTTOM_PT, FOOTER_COLOR, FOOTER_FONT_SIZE_PT, pdfFooterLabel } from "../footerLabel";
+import {
+  FOOTER_BOTTOM_PT,
+  FOOTER_COLOR,
+  FOOTER_FONT_SIZE_PT,
+  FOOTER_LINE_HEIGHT_PT,
+  pdfFooterLabel,
+} from "../footerLabel";
 
 // Reexportados de `../footerLabel` (achado 0242): o texto e a medida do rodapé
 // passaram a ser compartilhados com a prévia do Exportar, que não pode importar
@@ -96,6 +102,14 @@ export function PdfPageFooter({ header }: { header: HeaderSettings }) {
         right: 0,
         textAlign: "center",
         fontSize: FOOTER_FONT_SIZE_PT,
+        // Entrelinha própria + altura máxima de UMA linha (achado 0170). O
+        // `@react-pdf` só executa `render` na hora de pintar, então mede este
+        // `<Text>` como uma caixa fantasma de milhares de pontos; o `bottom`
+        // resolvia contra ela e o rodapé era pintado ~7.777 pt abaixo do papel
+        // (fora do box de toda página, por isso o `fixed` também não repetia).
+        // Travar a altura devolve o `bottom` à caixa da página.
+        lineHeight: BASE_LINE_HEIGHT,
+        maxHeight: FOOTER_LINE_HEIGHT_PT,
         color: FOOTER_COLOR,
       }}
       render={({ pageNumber, totalPages }) => pdfFooterLabel(header, pageNumber, totalPages)}

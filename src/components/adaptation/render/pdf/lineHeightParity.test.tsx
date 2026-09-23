@@ -46,8 +46,8 @@ function stylesOf(node: ReactElement): Styleish[] {
  * `AdaptationPdf.test`) e devolve os estilos que declaram `fontSize`.
  *
  * O rodapé fica de fora: é um `<Text fixed render>` de uma linha só,
- * posicionado em absoluto, e mexer no `lineHeight` dele é justamente o que o
- * achado `0120` mostra ser capaz de sumir com o rodapé do arquivo.
+ * posicionado em absoluto, com entrelinha E altura próprias — quem trava a
+ * colocação dele é `footerPlacement.test.tsx` (achado 0170).
  */
 function sizedStyles(node: unknown, out: Styleish[] = []): Styleish[] {
   if (node === null || node === undefined || typeof node !== "object") return out;

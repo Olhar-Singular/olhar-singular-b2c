@@ -576,8 +576,10 @@ export const DEFAULT_INK = "#22201C";
  * token do mesmo jeito.
  *
  * Fora deste helper fica só o rodapé: é um `<Text fixed render>` de uma linha
- * posicionado em absoluto, e o `0120` mostra que o `lineHeight` dele é capaz
- * de sumir com o rodapé do arquivo.
+ * posicionado em absoluto, e a razão sozinha não basta lá — ele precisa também
+ * da altura travada (`FOOTER_LINE_HEIGHT_PT`), senão o `bottom` resolve contra
+ * a caixa fantasma que o `render` mede e o rodapé é pintado fora do papel
+ * (achado 0170, que corrige o diagnóstico do `0120`).
  */
 export function pdfTextSize(fontSize: number) {
   return { fontSize, lineHeight: BASE_LINE_HEIGHT } as const;
