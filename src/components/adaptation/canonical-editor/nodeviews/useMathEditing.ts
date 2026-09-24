@@ -18,7 +18,15 @@
  *   O botão da fórmula não existe no DOM enquanto o editor está aberto: ele
  *   *monta* quando o editor fecha, e `autoFocus` é exatamente o gancho de
  *   montagem. Um `focus()` imperativo dependeria de a ref já estar preenchida
- *   no efeito. Fechar pelo "Pronto" é um gesto de mouse e não recoloca o foco.
+ *   no efeito.
+ *
+ * Achado 0417: o "Pronto" fechava sem devolver o foco, no pressuposto de que
+ * fechar ali era sempre gesto de mouse. Não é: o "Pronto" é um botão, e quem
+ * chega nele pelo teclado é justamente quem paga o preço — ele é o próprio
+ * elemento que some, então o navegador manda o foco para o `BODY` e a próxima
+ * tabulação recomeça do topo da página. Por isso as duas saídas devolvem o
+ * foco; `returnFocus` distingue só a primeira montagem, em que ninguém editou
+ * nada e roubar o foco seria o erro oposto.
  */
 
 import { useState, type KeyboardEvent } from "react";
@@ -26,7 +34,7 @@ import { useState, type KeyboardEvent } from "react";
 export interface MathEditing {
   /** O chrome de edição está aberto. */
   editing: boolean;
-  /** `autoFocus` do gatilho: verdadeiro só quando a saída foi pelo Escape. */
+  /** `autoFocus` do gatilho: falso só antes da primeira edição. */
   returnFocus: boolean;
   /** onClick do gatilho da fórmula. */
   open: () => void;
@@ -50,7 +58,7 @@ export function useMathEditing(onEscape: () => void): MathEditing {
     returnFocus,
     open: () => setEditing(true),
     close: () => {
-      setReturnFocus(false);
+      setReturnFocus(true);
       setEditing(false);
     },
     onKeyDown: (event: KeyboardEvent) => {

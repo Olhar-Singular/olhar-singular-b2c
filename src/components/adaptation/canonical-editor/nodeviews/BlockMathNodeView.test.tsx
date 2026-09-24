@@ -415,11 +415,21 @@ describe("BlockMathNodeView — Escape fecha o editor (achado 0416)", () => {
     expect((screen.getByLabelText("Expressão LaTeX") as HTMLInputElement).value).toBe("x^2");
   });
 
-  it("não rouba o foco quando o editor fecha pelo Pronto", () => {
+});
+
+// Achado 0417: idem na fórmula em bloco, pelo mesmo desenho de estado.
+describe("BlockMathNodeView — Pronto devolve o foco à fórmula (achado 0417)", () => {
+  it("foca o gatilho da fórmula ao fechar pelo Pronto", () => {
     const { props } = makeProps();
     render(<BlockMathNodeView {...props} />);
     fireEvent.click(screen.getByTestId("blockmath-render"));
     fireEvent.click(screen.getByText("Pronto"));
+    expect(screen.getByTestId("blockmath-render")).toHaveFocus();
+  });
+
+  it("não foca a fórmula na primeira montagem, antes de qualquer edição", () => {
+    const { props } = makeProps();
+    render(<BlockMathNodeView {...props} />);
     expect(screen.getByTestId("blockmath-render")).not.toHaveFocus();
   });
 });

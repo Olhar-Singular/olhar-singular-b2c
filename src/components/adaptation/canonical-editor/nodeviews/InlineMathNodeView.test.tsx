@@ -369,11 +369,22 @@ describe("InlineMathNodeView — Escape fecha o editor (achado 0416)", () => {
     expect((screen.getByLabelText("Expressão LaTeX inline") as HTMLInputElement).value).toBe("x^2");
   });
 
-  it("não rouba o foco quando o editor fecha pelo Pronto", () => {
+});
+
+// Achado 0417: "Pronto" é o próprio elemento que some — sem devolver o foco ao
+// gatilho o navegador o joga no BODY e quem edita pelo teclado perde a posição.
+describe("InlineMathNodeView — Pronto devolve o foco à fórmula (achado 0417)", () => {
+  it("foca o gatilho da fórmula ao fechar pelo Pronto", () => {
     const { props } = makeProps();
     render(<InlineMathNodeView {...props} />);
     fireEvent.click(screen.getByTestId("inlinemath-render"));
     fireEvent.click(screen.getByText("Pronto"));
+    expect(screen.getByTestId("inlinemath-render")).toHaveFocus();
+  });
+
+  it("não foca a fórmula na primeira montagem, antes de qualquer edição", () => {
+    const { props } = makeProps();
+    render(<InlineMathNodeView {...props} />);
     expect(screen.getByTestId("inlinemath-render")).not.toHaveFocus();
   });
 });
