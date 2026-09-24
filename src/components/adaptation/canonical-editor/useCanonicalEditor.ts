@@ -122,7 +122,18 @@ export function useCanonicalEditor({
     // sem acento do original). Nada disso existe no PDF — a tela divergia do
     // arquivo sem que o produto tivesse pedido (achado 0219). Revisão
     // ortográfica, se um dia existir, é escolha explícita do professor.
-    editorProps: { attributes: { spellcheck: "false" } },
+    // `aria-label`: o ProseMirror expõe a folha como um textbox multilinha cujo
+    // valor é o documento inteiro. Sem nome, quem chega nela pelo teclado ouve
+    // só "campo de texto, multilinha" e o despejo do conteúdo, sem saber que
+    // aquilo é a atividade adaptada nem distinguir a folha das outras paradas do
+    // passo (achado 0410, WCAG 4.1.2). Os campos aninhados já se nomeiam por
+    // `RichTextField`; o container que os contém, não.
+    editorProps: {
+      attributes: {
+        spellcheck: "false",
+        "aria-label": "Atividade adaptada, editor do documento",
+      },
+    },
     onSelectionUpdate: ({ editor }) => onSelectionUpdate?.(editor),
     onUpdate: ({ editor }) => {
       // Ordinary edits produce transient-invalid states (all blocks deleted, a
