@@ -18,7 +18,15 @@ import { useId } from "react";
 import { Trash2 } from "lucide-react";
 import { NodeViewWrapper, type NodeViewProps } from "@tiptap/react";
 import { Input } from "@/components/ui/input";
-import { FOLHA_BUTTON, FOLHA_RAIL, FOLHA_RAIL_HOST, FOLHA_SELECTED, FOLHA_TOUCH_TARGET } from "../folhaChrome";
+import {
+  FOLHA_BUTTON,
+  FOLHA_GHOST,
+  FOLHA_INPUT,
+  FOLHA_RAIL,
+  FOLHA_RAIL_HOST,
+  FOLHA_SELECTED,
+  FOLHA_TOUCH_TARGET,
+} from "../folhaChrome";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { deleteNodeAndRefocus, latexToHtml } from "./nodeViewUtils";
@@ -61,7 +69,7 @@ export function BlockMathNodeView({ node, updateAttributes, editor, deleteNode, 
             type="button"
             variant="ghost"
             size="icon"
-            className={cn("h-7 w-7 text-destructive", FOLHA_TOUCH_TARGET)}
+            className={cn(FOLHA_GHOST, "h-7 w-7 text-destructive hover:text-destructive", FOLHA_TOUCH_TARGET)}
             disabled={disabled}
             onClick={() => deleteNodeAndRefocus(deleteNode, editor, getPos, "Fórmula excluída")}
             title="Excluir fórmula"
@@ -73,7 +81,12 @@ export function BlockMathNodeView({ node, updateAttributes, editor, deleteNode, 
       )}
 
       {open ? (
-        <div className="flex flex-col gap-2 rounded-lg border border-border p-2" onKeyDown={editing.onKeyDown}>
+        <div
+          // 0423 — a caixa vive SOBRE o papel: paleta da folha, nunca os tokens
+          // do app (que invertem no tema escuro). Ver folhaChrome.
+          className="flex flex-col gap-2 rounded-lg border border-surface-line-2 bg-surface-paper p-2"
+          onKeyDown={editing.onKeyDown}
+        >
           {/* Prévia ao vivo (achado 0421): abrir o editor trocava a fórmula
               tipografada pelo LaTeX cru, então uma chave fora do lugar — que o
               KaTeX não recusa (`throwOnError: false`), só pinta de vermelho —
@@ -95,6 +108,7 @@ export function BlockMathNodeView({ node, updateAttributes, editor, deleteNode, 
             autoFocus
             onChange={(e) => draft.onChange(e.target.value)}
             onBlur={draft.onBlur}
+            className={FOLHA_INPUT}
             placeholder="LaTeX"
             aria-label="Expressão LaTeX"
           />
@@ -102,7 +116,7 @@ export function BlockMathNodeView({ node, updateAttributes, editor, deleteNode, 
             id={altId}
             name="blockmath-alt"
             value={alt ?? ""}
-            className={cn(draft.altStale && "border-destructive")}
+            className={cn(FOLHA_INPUT, draft.altStale && "border-destructive")}
             onChange={(e) => draft.onAltChange(e.target.value)}
             placeholder="Texto alternativo"
             aria-label="Texto alternativo da fórmula"
@@ -122,7 +136,7 @@ export function BlockMathNodeView({ node, updateAttributes, editor, deleteNode, 
               type="button"
               variant="ghost"
               size="sm"
-              className="text-destructive"
+              className={cn(FOLHA_GHOST, "text-destructive hover:text-destructive")}
               onClick={() => deleteNodeAndRefocus(deleteNode, editor, getPos, "Fórmula excluída")}
               title="Excluir fórmula"
               aria-label="Excluir fórmula"
@@ -156,7 +170,7 @@ export function BlockMathNodeView({ node, updateAttributes, editor, deleteNode, 
           <button
             type="button"
             className={cn(
-              "absolute -inset-y-2 inset-x-0 rounded-lg focus-visible:outline-offset-0 hover:outline hover:outline-1 hover:outline-border",
+              "absolute -inset-y-2 inset-x-0 rounded-lg focus-visible:outline-offset-0 hover:outline hover:outline-1 hover:outline-surface-ink-soft",
               // Outline não entra no fluxo vertical da folha (achado 0405).
               draft.altStale && "outline outline-1 outline-destructive"
             )}

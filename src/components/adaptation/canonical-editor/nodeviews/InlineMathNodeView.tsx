@@ -21,7 +21,7 @@
 import { useId } from "react";
 import { NodeViewWrapper, type NodeViewProps } from "@tiptap/react";
 import { Input } from "@/components/ui/input";
-import { FOLHA_BUTTON, FOLHA_SELECTED } from "../folhaChrome";
+import { FOLHA_BUTTON, FOLHA_INPUT, FOLHA_SELECTED } from "../folhaChrome";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { inlineLatexToHtml } from "./nodeViewUtils";
@@ -87,7 +87,11 @@ export function InlineMathNodeView({ node, updateAttributes, editor, selected }:
       contentEditable={false}
     >
       {editing.editing && !disabled ? (
-        <span className="inline-flex items-center gap-1 rounded border border-border px-1 align-middle" onKeyDown={editing.onKeyDown}>
+        <span
+          // 0423 — mesma paleta da caixa em bloco: a folha não segue o tema do app.
+          className="inline-flex items-center gap-1 rounded border border-surface-line-2 bg-surface-paper px-1 align-middle"
+          onKeyDown={editing.onKeyDown}
+        >
           {/* Prévia ao vivo (achado 0421): ver o comentário gêmeo no
               BlockMathNodeView. Aqui ela vem ANTES dos campos, no lugar que a
               fórmula ocupava no parágrafo, e em modo inline — mesmo motor e
@@ -103,7 +107,7 @@ export function InlineMathNodeView({ node, updateAttributes, editor, selected }:
             name="inlinemath-latex"
             value={draft.value}
             autoFocus
-            className="h-6 max-w-full px-1 py-0 text-sm"
+            className={cn("h-6 max-w-full px-1 py-0 text-sm", FOLHA_INPUT)}
             style={{ width: inlineFieldWidth(draft.value) }}
             onChange={(e) => draft.onChange(e.target.value)}
             onBlur={draft.onBlur}
@@ -114,7 +118,7 @@ export function InlineMathNodeView({ node, updateAttributes, editor, selected }:
             id={altId}
             name="inlinemath-alt"
             value={alt ?? ""}
-            className={cn("h-6 max-w-full px-1 py-0 text-sm", draft.altStale && "border-destructive")}
+            className={cn("h-6 max-w-full px-1 py-0 text-sm", FOLHA_INPUT, draft.altStale && "border-destructive")}
             style={{ width: inlineFieldWidth(alt ?? "") }}
             onChange={(e) => draft.onAltChange(e.target.value)}
             placeholder="Texto alternativo"
@@ -135,7 +139,10 @@ export function InlineMathNodeView({ node, updateAttributes, editor, selected }:
         <button
           type="button"
           className={cn(
-            "-mx-0.5 rounded px-0.5 align-middle hover:bg-accent",
+            // 0423 — `--accent` é dourado saturado nos dois temas: o realce do
+            // hover acendia um bloco dourado no meio do papel. O chrome da folha
+            // recua para o cinza quente da paleta `--sf-*`.
+            "-mx-0.5 rounded px-0.5 align-middle hover:bg-surface-mesa",
             // Aviso de descrição desatualizada: tinta DO PRÓPRIO gatilho, não
             // decoração herdada (achado 0437) — ver ALT_STALE_MARK_CLASS.
             draft.altStale && ALT_STALE_MARK_CLASS

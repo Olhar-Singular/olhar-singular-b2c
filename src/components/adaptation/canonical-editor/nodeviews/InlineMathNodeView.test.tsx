@@ -456,3 +456,54 @@ describe("InlineMathNodeView — prévia ao vivo (achado 0421)", () => {
     expect(screen.getByTestId("inlinemath-preview").innerHTML).toContain("y_{1}");
   });
 });
+
+/**
+ * Achado 0423 — mesma raiz no widget inline: caixa em `border-border`, campos
+ * `<Input>` crus (tokens do app) e, pior, `hover:bg-accent` no gatilho —
+ * `--accent` é dourado saturado nos dois temas, então passar o mouse numa
+ * fórmula acendia um bloco dourado no meio do papel, enquanto o resto do chrome
+ * da folha usa o cinza quente `hover:bg-surface-mesa`.
+ */
+describe("InlineMathNodeView — chrome do editor na paleta da folha (achado 0423)", () => {
+  it("pinta a caixa do editor inline com a paleta da folha", () => {
+    const { props } = makeProps();
+    render(<InlineMathNodeView {...props} />);
+    fireEvent.click(screen.getByTestId("inlinemath-render"));
+    const box = screen.getByTestId("inlinemath-preview").parentElement;
+    expect(box?.className).toContain("border-surface-line-2");
+    expect(box?.className).toContain("bg-surface-paper");
+    expect(box?.className).not.toMatch(/(^|\s)border-border(\s|$)/);
+  });
+
+  it("pinta os dois campos inline com a paleta da folha", () => {
+    const { props } = makeProps();
+    render(<InlineMathNodeView {...props} />);
+    fireEvent.click(screen.getByTestId("inlinemath-render"));
+    for (const name of ["Expressão LaTeX inline", "Texto alternativo da fórmula inline"]) {
+      const field = screen.getByLabelText(name);
+      expect(field.className).toContain("bg-surface-paper");
+      expect(field.className).toContain("text-surface-ink");
+      expect(field.className).toContain("placeholder:text-surface-ink-soft");
+      expect(field.className).not.toMatch(/(^|\s)(border-input|bg-background)(\s|$)/);
+      expect(field.className).not.toMatch(/placeholder:text-muted-foreground/);
+    }
+  });
+
+  it("mantém a borda vermelha do alt desatualizado", () => {
+    const { props } = makeProps({ latex: "x^2", alt: "descrição antiga" });
+    render(<InlineMathNodeView {...props} />);
+    fireEvent.click(screen.getByTestId("inlinemath-render"));
+    fireEvent.change(screen.getByLabelText("Expressão LaTeX inline"), { target: { value: "y^3" } });
+    const alt = screen.getByLabelText("Texto alternativo da fórmula inline");
+    expect(alt.className).toContain("border-destructive");
+    expect(alt.className).not.toContain("border-surface-ink-soft");
+  });
+
+  it("não acende dourado ao passar o mouse na fórmula impressa", () => {
+    const { props } = makeProps();
+    render(<InlineMathNodeView {...props} />);
+    const trigger = screen.getByTestId("inlinemath-render");
+    expect(trigger.className).toContain("hover:bg-surface-mesa");
+    expect(trigger.className).not.toMatch(/hover:bg-accent(\s|$)/);
+  });
+});

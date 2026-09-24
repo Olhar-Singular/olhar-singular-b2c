@@ -457,3 +457,75 @@ describe("BlockMathNodeView — prévia ao vivo (achado 0421)", () => {
     expect(screen.getByTestId("blockmath-preview").innerHTML).toContain("\\frac{1}{n^2");
   });
 });
+
+/**
+ * Achado 0423 — o editor de fórmula era o último chrome da folha pintado com os
+ * tokens do app (`border-border` na caixa, `border-input`/`bg-background` dos
+ * `<Input>` crus, `hover:bg-accent` do ghost, `hover:outline-border` da moldura).
+ * A folha é papel e é SEMPRE clara (`index.css`: os `--sf-*` não têm override no
+ * `.dark`), então no tema escuro os campos viravam lajes verde-petróleo sobre o
+ * papel branco; no claro o fundo ficava a 1,09:1 e a borda a 1,33:1 contra o
+ * papel, abaixo dos 3:1 de 1.4.11. Mesma raiz do 0342, agora nas fórmulas.
+ */
+describe("BlockMathNodeView — chrome do editor na paleta da folha (achado 0423)", () => {
+  function openEditor() {
+    const { props } = makeProps();
+    const view = render(<BlockMathNodeView {...props} />);
+    fireEvent.click(screen.getByTestId("blockmath-render"));
+    return view;
+  }
+
+  it("pinta a caixa do editor com a paleta da folha", () => {
+    openEditor();
+    const box = screen.getByTestId("blockmath-preview").parentElement;
+    expect(box?.className).toContain("border-surface-line-2");
+    expect(box?.className).toContain("bg-surface-paper");
+    expect(box?.className).not.toMatch(/(^|\s)border-border(\s|$)/);
+  });
+
+  it("pinta os dois campos com a paleta da folha", () => {
+    openEditor();
+    for (const name of ["Expressão LaTeX", "Texto alternativo da fórmula"]) {
+      const field = screen.getByLabelText(name);
+      expect(field.className).toContain("bg-surface-paper");
+      expect(field.className).toContain("text-surface-ink");
+      expect(field.className).toContain("placeholder:text-surface-ink-soft");
+      expect(field.className).not.toMatch(/(^|\s)(border-input|bg-background)(\s|$)/);
+      expect(field.className).not.toMatch(/placeholder:text-muted-foreground/);
+    }
+  });
+
+  it("continua marcando o alt desatualizado em vermelho, por cima da borda da folha", () => {
+    const { props } = makeProps({ latex: "x^2", alt: "descrição antiga" });
+    render(<BlockMathNodeView {...props} />);
+    fireEvent.click(screen.getByTestId("blockmath-render"));
+    fireEvent.change(screen.getByLabelText("Expressão LaTeX"), { target: { value: "y^3" } });
+    const alt = screen.getByLabelText("Texto alternativo da fórmula");
+    expect(alt.className).toContain("border-destructive");
+    expect(alt.className).not.toContain("border-surface-ink-soft");
+  });
+
+  it("apaga o dourado do app das duas lixeiras, usando o hover da folha", () => {
+    const { props } = makeProps();
+    const { container } = render(<BlockMathNodeView {...props} />);
+    const railTrash = container.querySelector('[data-role="blockmath-rail"] button');
+    expect(railTrash?.className).toContain("hover:bg-surface-mesa");
+    expect(railTrash?.className).not.toMatch(/hover:bg-accent(\s|$)/);
+    fireEvent.click(screen.getByTestId("blockmath-render"));
+    const editorTrash = screen.getByRole("button", { name: "Excluir fórmula" });
+    expect(editorTrash.className).toContain("hover:bg-surface-mesa");
+    expect(editorTrash.className).not.toMatch(/hover:bg-accent(\s|$)/);
+    // A lixeira segue vermelha: a tinta da folha não pode apagar a semântica.
+    expect(editorTrash.className).toContain("text-destructive");
+  });
+
+  it("desenha a moldura de hover da fórmula com contraste sobre o papel", () => {
+    const { props } = makeProps();
+    render(<BlockMathNodeView {...props} />);
+    const trigger = screen.getByTestId("blockmath-render");
+    // `--border` dá 1,33:1 contra o papel; o limite de um componente precisa
+    // de 3:1 (WCAG 2.2 AA, 1.4.11) — `--sf-ink-soft`.
+    expect(trigger.className).toContain("hover:outline-surface-ink-soft");
+    expect(trigger.className).not.toMatch(/hover:outline-border(\s|$)/);
+  });
+});
