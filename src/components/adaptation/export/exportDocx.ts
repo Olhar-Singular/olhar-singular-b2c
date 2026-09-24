@@ -10,6 +10,8 @@
  * `docxContentBlocks`   — pure document + PanelSettings → docx blocks, já com as
  *                         quebras de página (switch do painel e `style.pageBreakBefore`).
  * `docxSectionProperties` — margem da página derivada de `PAGE_MARGIN_PT`.
+ * `docxFooter`          — rodapé repetido em toda página (título · escola ·
+ *                         "Página X de Y" pelos campos do Word).
  * `downloadDocx`        — side-effecting blob + DOM download (v8 ignore).
  *
  * Presentation mirrors the PDF (`render/pdf/PdfAnswer`, `PdfLeafBlocks`,
@@ -37,6 +39,8 @@ import {
   Tab,
   TabStopType,
   TabStopPosition,
+  Footer,
+  PageNumber,
 } from "docx";
 import type {
   CanonicalDocument,
@@ -72,6 +76,12 @@ import { perQuestionBreakFlags } from "../render/perQuestionBreaks";
 import { latexLayoutAtom } from "../render/mathAtom";
 import { DEFAULT_PANEL_SETTINGS, formatHeaderDateBR, type PanelSettings } from "./panelSettings";
 import { HEADER_SPACING_PT } from "../render/headerSpacing";
+import {
+  FOOTER_COLOR,
+  FOOTER_FONT_SIZE_PT,
+  FOOTER_SEPARATOR,
+  footerPrefixParts,
+} from "../render/footerLabel";
 
 /** A docx section child. Tables are blocks too, not paragraphs. */
 export type DocxBlock = Paragraph | Table;
@@ -707,6 +717,43 @@ export function docxSectionProperties(): {
   return { page: { margin: { top: margin, right: margin, bottom: margin, left: margin } } };
 }
 
+/**
+ * O rodapé de TODA página do .docx.
+ *
+ * Achado 0334: a seção ia sem `footers`, então o Word era a única das três
+ * saídas em que a folha sai sem nada que a identifique nem diga quantas são —
+ * exatamente a saída que o professor imprime em lote. O `PdfPageFooter` e a
+ * prévia já desenham esse pé.
+ *
+ * O texto não pode ser a string do `pdfFooterLabel`: quem pagina o .docx é o
+ * Word, então os números vão como CAMPOS (`PAGE` / `NUMPAGES`) que ele resolve
+ * ao abrir. O prefixo título/escola, esse sim, reusa `footerPrefixParts`, a
+ * mesma regra de descarte de vazios das outras superfícies.
+ *
+ * Mora fora de `downloadDocx` (que é `v8 ignore` pelos efeitos de DOM) para
+ * nascer com teste, como `documentRunStyle` e `docxSectionProperties`.
+ */
+export function docxFooter(header: DocumentHeader): Footer {
+  const style = { size: Math.round(FOOTER_FONT_SIZE_PT * 2), color: FOOTER_COLOR.slice(1) };
+  const prefix = footerPrefixParts(header).map(
+    (part) => new TextRun({ ...style, text: `${part}${FOOTER_SEPARATOR}` }),
+  );
+  return new Footer({
+    children: [
+      new Paragraph({
+        alignment: AlignmentType.CENTER,
+        children: [
+          ...prefix,
+          new TextRun({ ...style, text: "Página " }),
+          new TextRun({ ...style, children: [PageNumber.CURRENT] }),
+          new TextRun({ ...style, text: " de " }),
+          new TextRun({ ...style, children: [PageNumber.TOTAL_PAGES] }),
+        ],
+      }),
+    ],
+  });
+}
+
 /* v8 ignore start */
 export async function downloadDocx(
   document: CanonicalDocument,
@@ -721,6 +768,7 @@ export async function downloadDocx(
     sections: [
       {
         properties: docxSectionProperties(),
+        footers: { default: docxFooter(header) },
         children: [...headerParagraphs(header), ...contentParagraphs],
       },
     ],

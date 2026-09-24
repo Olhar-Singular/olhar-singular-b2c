@@ -52,9 +52,25 @@ export function pdfFooterLabel(
   pageNumber: number,
   totalPages: number,
 ): string {
-  const parts = [header.title, header.school]
+  return [...footerPrefixParts(header), `Página ${pageNumber} de ${totalPages}`].join(
+    FOOTER_SEPARATOR,
+  );
+}
+
+/** Separador entre título, escola e a numeração. */
+export const FOOTER_SEPARATOR = " · ";
+
+/**
+ * Título e escola do rodapé, já sem os campos em branco (que sobrariam como
+ * separador solto).
+ *
+ * Existe separado de `pdfFooterLabel` porque o rodapé do .docx não pode ser uma
+ * string: o "Página X de Y" do Word são CAMPOS que só ele resolve ao paginar
+ * (achado 0334). O prefixo, esse sim, é o mesmo texto nas três saídas — e é uma
+ * regra só, não uma segunda cópia dela.
+ */
+export function footerPrefixParts(header: HeaderSettings): string[] {
+  return [header.title, header.school]
     .map((part) => part?.trim() ?? "")
     .filter((part) => part !== "");
-  parts.push(`Página ${pageNumber} de ${totalPages}`);
-  return parts.join(" · ");
 }

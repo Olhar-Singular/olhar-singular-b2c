@@ -11,6 +11,7 @@ import {
   docxExportWarnings,
   documentRunStyle,
   docxSectionProperties,
+  docxFooter,
 } from "./exportDocx";
 import {
   HEADING_PT,
@@ -21,6 +22,7 @@ import {
   ELEMENT_FONT_RATIOS,
   BASE_FONT_PT,
 } from "../render/pageTokens";
+import { pdfFooterLabel } from "../render/footerLabel";
 import type {
   Block,
   Inline,
@@ -1209,5 +1211,46 @@ describe("0333 · legenda da imagem no Word sai no corpo de legenda", () => {
     const props = docxRunProps(legenda);
     expect(props.some((p) => p.key === "w:sz" && p.val === 36)).toBe(true);
     expect(props.some((p) => p.key === "w:sz" && p.val === captionHalfPoints)).toBe(false);
+  });
+});
+
+// Achado 0334: a seção do .docx ia sem `footers`, então o Word era a única das
+// três saídas sem rodapé — nem título/escola, nem "Página X de Y" — justamente
+// na saída que o professor imprime em lote.
+describe("docxFooter", () => {
+  /** Instruções de campo (`w:instrText`) que o parágrafo emite. */
+  const fieldInstructions = (node: unknown): string[] => {
+    const parts: string[] = [];
+    const walk = (o: unknown): void => {
+      if (Array.isArray(o)) return o.forEach(walk);
+      if (o === null || typeof o !== "object") return;
+      const n = o as { rootKey?: string; root?: unknown };
+      if (n.rootKey === "w:instrText" && Array.isArray(n.root)) {
+        for (const p of n.root) if (typeof p === "string") parts.push(p);
+      }
+      Object.values(o as Record<string, unknown>).forEach(walk);
+    };
+    walk(node);
+    return parts;
+  };
+
+  it("numera a página com os campos do Word, não com texto fixo", () => {
+    const instructions = fieldInstructions(docxFooter({}));
+    expect(instructions).toContain("PAGE");
+    expect(instructions).toContain("NUMPAGES");
+    expect(docxText(docxFooter({}))).toContain("Página ");
+    expect(docxText(docxFooter({}))).toContain(" de ");
+  });
+
+  it("prefixa título e escola com o mesmo separador do PDF e da prévia", () => {
+    // O texto é o mesmo do PDF/prévia; só os números saem daqui, porque no Word
+    // quem os resolve é o campo, na hora de paginar.
+    const header = { title: "Prova", school: "Escola X" };
+    expect(pdfFooterLabel(header, 1, 2)).toBe("Prova · Escola X · Página 1 de 2");
+    expect(docxText(docxFooter(header))).toBe("Prova · Escola X · Página  de ");
+  });
+
+  it("descarta título e escola em branco, sem separador solto", () => {
+    expect(docxText(docxFooter({ title: "  ", school: "" }))).toBe("Página  de ");
   });
 });
