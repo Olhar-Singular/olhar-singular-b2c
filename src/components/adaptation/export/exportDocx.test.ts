@@ -32,6 +32,32 @@ import type {
 
 const id = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, "0")}`;
 const text = (t: string): Inline[] => [{ type: "text", text: t }];
+
+/** Atributos do primeiro nó com esse `rootKey` (ex.: `w:jc`, `w:spacing`). */
+function docxNodeAttrs(node: unknown, rootKey: string): Record<string, unknown> | undefined {
+  let found: Record<string, unknown> | undefined;
+  const walk = (o: unknown): void => {
+    if (Array.isArray(o)) return o.forEach(walk);
+    if (o === null || typeof o !== "object") return;
+    const n = o as { rootKey?: string; root?: unknown };
+    if (n.rootKey === rootKey && Array.isArray(n.root)) {
+      const attr = n.root.find((c) => (c as { rootKey?: string }).rootKey === "_attr") as
+        | { root?: Record<string, { value?: unknown }> }
+        | undefined;
+      if (attr?.root) {
+        found ??= Object.fromEntries(
+          Object.entries(attr.root)
+            .filter(([, v]) => v?.value !== undefined)
+            .map(([k, v]) => [k, v.value]),
+        );
+      }
+    }
+    Object.values(o as Record<string, unknown>).forEach(walk);
+  };
+  walk(node);
+  return found;
+}
+
 /** Tinta do documento na forma que o docx aceita (hex cru, sem `#`). */
 const DOCX_INK_HEX = pageTokensToPdf().color.replace("#", "");
 
@@ -1030,31 +1056,6 @@ describe("0166 · o Word imprime na mesma tinta das outras superfícies", () => 
  * tudo por `nodeStyleToPdf` e a tela por `nodeStyleToCss`.
  */
 describe("0134 · o Word carrega a formatação por nó", () => {
-  /** Atributos do primeiro nó com esse `rootKey` (ex.: `w:jc`, `w:spacing`). */
-  function docxNodeAttrs(node: unknown, rootKey: string): Record<string, unknown> | undefined {
-    let found: Record<string, unknown> | undefined;
-    const walk = (o: unknown): void => {
-      if (Array.isArray(o)) return o.forEach(walk);
-      if (o === null || typeof o !== "object") return;
-      const n = o as { rootKey?: string; root?: unknown };
-      if (n.rootKey === rootKey && Array.isArray(n.root)) {
-        const attr = n.root.find((c) => (c as { rootKey?: string }).rootKey === "_attr") as
-          | { root?: Record<string, { value?: unknown }> }
-          | undefined;
-        if (attr?.root) {
-          found ??= Object.fromEntries(
-            Object.entries(attr.root)
-              .filter(([, v]) => v?.value !== undefined)
-              .map(([k, v]) => [k, v.value]),
-          );
-        }
-      }
-      Object.values(o as Record<string, unknown>).forEach(walk);
-    };
-    walk(node);
-    return found;
-  }
-
   it("o run inline sai na cor e no corpo que a tela e o PDF mostram", () => {
     const runs = richTextToRuns([
       { type: "text", text: "Palavra em destaque", color: "#DC2626", fontSize: 18 },
@@ -1252,5 +1253,60 @@ describe("docxFooter", () => {
 
   it("descarta título e escola em branco, sem separador solto", () => {
     expect(docxText(docxFooter({ title: "  ", school: "" }))).toBe("Página  de ");
+  });
+});
+
+/**
+ * Achado 0343: `ImageBlock.alignment` (o campo que os botões "Alinhar à
+ * esquerda / Centralizar / Alinhar à direita" do chrome da imagem gravam) vive
+ * FORA do `NodeStyle` e o `case "image"` do Word nunca o lia — a folha, a
+ * prévia e o PDF alinhavam a figura e a legenda, e o .docx saía sem um `<w:jc>`
+ * sequer.
+ */
+describe("0343 · alinhamento da imagem chega ao Word", () => {
+  it("leva `alignment` do bloco para os dois parágrafos (marcação e legenda)", () => {
+    const paragraphs = blockToDocxParagraphs(
+      {
+        id: id(343),
+        type: "image",
+        src: "https://e.com/a.png",
+        alt: "figura larga de apoio",
+        alignment: "right",
+        caption: text("Figura 1 - esquema largo de apoio"),
+      },
+      1,
+    );
+    expect(paragraphs).toHaveLength(2);
+    paragraphs.forEach((p) => expect(docxNodeAttrs(p, "w:jc")).toEqual({ val: "right" }));
+  });
+
+  it("centraliza a marcação mesmo sem legenda", () => {
+    const [marcacao] = blockToDocxParagraphs(
+      { id: id(344), type: "image", src: "https://e.com/a.png", alignment: "center" },
+      1,
+    );
+    expect(docxNodeAttrs(marcacao, "w:jc")).toEqual({ val: "center" });
+  });
+
+  it("sem `alignment` segue sem `w:jc` (o default do Word já é à esquerda)", () => {
+    const [marcacao] = blockToDocxParagraphs(
+      { id: id(345), type: "image", src: "https://e.com/a.png" },
+      1,
+    );
+    expect(docxNodeAttrs(marcacao, "w:jc")).toBeUndefined();
+  });
+
+  it("o alinhamento da imagem vence o `align` do NodeStyle, como no PDF", () => {
+    const [marcacao] = blockToDocxParagraphs(
+      {
+        id: id(346),
+        type: "image",
+        src: "https://e.com/a.png",
+        alignment: "right",
+        style: { align: "left" },
+      },
+      1,
+    );
+    expect(docxNodeAttrs(marcacao, "w:jc")).toEqual({ val: "right" });
   });
 });

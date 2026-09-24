@@ -413,9 +413,16 @@ export function blockToDocxParagraphs(block: Block, number: number): DocxBlock[]
       // instead of finding a hole where a figure used to be.
       const label = block.alt?.trim() ? `[Imagem: ${block.alt.trim()}]` : "[Imagem]";
       const hasCaption = block.caption !== undefined && block.caption.length > 0;
+      // `ImageBlock.alignment` vive FORA do `NodeStyle` e é o que os botões de
+      // alinhar do chrome da imagem gravam; o Word era a única superfície que o
+      // descartava (achado 0343). Como no PDF (`IMAGE_ALIGN` em PdfLeafBlocks),
+      // ele vence o `align` do bloco e vale para a marcação e para a legenda.
+      const imagePara: ParagraphStyle = block.alignment
+        ? { ...para, alignment: ALIGNMENT[block.alignment] }
+        : para;
       const paragraphs: DocxBlock[] = [
         new Paragraph({
-          ...para,
+          ...imagePara,
           ...(hasCaption ? {} : spacing),
           children: [new TextRun({ ...run, text: label, italics: true })],
         }),
@@ -427,7 +434,7 @@ export function blockToDocxParagraphs(block: Block, number: number): DocxBlock[]
           // corpo do enunciado e deixava de se ler como legenda (achado 0333).
           // O tamanho que a professora escolheu no bloco continua vencendo.
           new Paragraph({
-            ...para,
+            ...imagePara,
             ...spacing,
             children: richTextToRuns(block.caption!, { ...run, size: run.size ?? CAPTION_SIZE }),
           }),
