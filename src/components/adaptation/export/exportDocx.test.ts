@@ -212,6 +212,16 @@ describe("headerParagraphs", () => {
     expect(headerParagraphs({ title: "T", school: "E", teacher: "P", date: "D" })).toHaveLength(4);
   });
 
+  it("mantém a linha de Professor(a) quando não há data", () => {
+    // A linha é UMA só, com a parada de tabulação à direita reservando o lugar
+    // da data (achado 0142). Preencher só um dos dois campos é o caso comum —
+    // a prova vai com o nome do professor e a data escrita à mão na impressão.
+    const paras = headerParagraphs({ teacher: "Prof. Alexandre" });
+    expect(paras).toHaveLength(2); // a linha Professor(a)/Data + o separador
+    expect(docxText(paras[0])).toContain("Professor(a): Prof. Alexandre");
+    expect(docxText(paras[0])).not.toContain("Data:");
+  });
+
   // Achado 0426: o separador entre cabeçalho e conteúdo era emitido SEMPRE, então
   // com os campos em branco (o estado padrão do Passo 6) o .docx abria com um
   // parágrafo vazio no topo — o PDF e a prévia começam colados na margem.
