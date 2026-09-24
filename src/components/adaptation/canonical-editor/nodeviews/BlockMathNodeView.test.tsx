@@ -179,6 +179,28 @@ describe("BlockMathNodeView", () => {
     expect(trigger.contains(math)).toBe(false);
   });
 
+  /**
+   * Achado 0414 — o overlay do 0405 nasceu com `-inset-2`, que alarga o alvo nos
+   * QUATRO lados. Vertical é vão (`my-3`), mas horizontal sai da coluna de texto:
+   * a moldura de hover e o anel de foco eram desenhados 8px DENTRO da margem do
+   * papel, e o clique no branco ao lado da fórmula abria o editor de LaTeX.
+   * O alargamento fica só na vertical; o anel de foco não usa offset.
+   */
+  it("não alarga o alvo além da coluna de texto (achado 0414)", () => {
+    const { props } = makeProps();
+    render(<BlockMathNodeView {...props} />);
+    const trigger = screen.getByTestId("blockmath-render");
+
+    // nada que empurre o alvo para fora da coluna, nos dois eixos de uma vez
+    expect(trigger.className).not.toMatch(/(^|\s)-inset-\d/);
+    expect(trigger.className).not.toMatch(/(^|\s)-inset-x-\d/);
+    // a largura é exatamente a do bloco; só a altura ganha folga
+    expect(trigger.className).toMatch(/(^|\s)inset-x-0(\s|$)/);
+    expect(trigger.className).toMatch(/(^|\s)-inset-y-2(\s|$)/);
+    // o anel global (`:focus-visible { outline-offset-2 }`) também vazaria
+    expect(trigger.className).toMatch(/(^|\s)focus-visible:outline-offset-0(\s|$)/);
+  });
+
   it("espelha o espaçamento do impresso: my-3 no wrapper, sem chrome no meio", () => {
     const { props } = makeProps();
     render(<BlockMathNodeView {...props} />);

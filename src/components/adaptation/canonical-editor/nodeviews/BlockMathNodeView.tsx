@@ -130,12 +130,17 @@ export function BlockMathNodeView({ node, updateAttributes, editor, deleteNode, 
               bloqueava o colapso da margem do `.katex-display` com o `my-3` do
               wrapper — 47px de papel a mais que o impresso
               (`render/blocks/BlockMathView`, um div `my-3 text-center`).
-              `-inset-2` alarga o alvo e `outline` desenha a moldura sem ocupar
-              fluxo. */}
+              O alvo ganha folga só na VERTICAL (`-inset-y-2`, que cai no vão
+              `my-3`); na horizontal ele termina na coluna de texto
+              (`inset-x-0`), porque a fórmula já é `block` e ocupa a coluna
+              inteira — `-inset-2` desenhava a moldura e recebia clique dentro
+              da margem do papel (achado 0414). O anel global de foco
+              (`:focus-visible { outline-offset-2 }`) vazaria pelo mesmo motivo,
+              daí o `outline-offset-0`. `outline` desenha sem ocupar fluxo. */}
           <button
             type="button"
             className={cn(
-              "absolute -inset-2 rounded-lg hover:outline hover:outline-1 hover:outline-border",
+              "absolute -inset-y-2 inset-x-0 rounded-lg focus-visible:outline-offset-0 hover:outline hover:outline-1 hover:outline-border",
               // Outline não entra no fluxo vertical da folha (achado 0405).
               draft.altStale && "outline outline-1 outline-destructive"
             )}
