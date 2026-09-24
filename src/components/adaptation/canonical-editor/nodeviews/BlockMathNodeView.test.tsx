@@ -377,3 +377,49 @@ describe("BlockMathNodeView — seleção do átomo (achado 0350)", () => {
     expect(wrapper.className).toMatch(/ring-surface-accent/);
   });
 });
+
+// Achado 0416: mesma falta de saída por teclado na fórmula em bloco, cujo alvo
+// de clique é largo — abrir o editor sem querer é fácil.
+describe("BlockMathNodeView — Escape fecha o editor (achado 0416)", () => {
+  it("fecha o editor, segura o Escape e devolve o foco à fórmula", () => {
+    const { props } = makeProps();
+    render(<BlockMathNodeView {...props} />);
+    fireEvent.click(screen.getByTestId("blockmath-render"));
+
+    const subiu = vi.fn();
+    document.addEventListener("keydown", subiu);
+    fireEvent.keyDown(screen.getByLabelText("Expressão LaTeX"), { key: "Escape" });
+    document.removeEventListener("keydown", subiu);
+
+    expect(screen.queryByLabelText("Expressão LaTeX")).not.toBeInTheDocument();
+    expect(subiu).not.toHaveBeenCalled();
+    expect(screen.getByTestId("blockmath-render")).toHaveFocus();
+  });
+
+  it("ignora as demais teclas dentro do editor", () => {
+    const { props } = makeProps();
+    render(<BlockMathNodeView {...props} />);
+    fireEvent.click(screen.getByTestId("blockmath-render"));
+    fireEvent.keyDown(screen.getByLabelText("Expressão LaTeX"), { key: "a" });
+    expect(screen.getByLabelText("Expressão LaTeX")).toBeInTheDocument();
+  });
+
+  it("não leva o rascunho vazio embora ao sair por Escape", () => {
+    const { props } = makeProps();
+    render(<BlockMathNodeView {...props} />);
+    fireEvent.click(screen.getByTestId("blockmath-render"));
+    fireEvent.change(screen.getByLabelText("Expressão LaTeX"), { target: { value: "" } });
+    fireEvent.keyDown(screen.getByLabelText("Expressão LaTeX"), { key: "Escape" });
+
+    fireEvent.click(screen.getByTestId("blockmath-render"));
+    expect((screen.getByLabelText("Expressão LaTeX") as HTMLInputElement).value).toBe("x^2");
+  });
+
+  it("não rouba o foco quando o editor fecha pelo Pronto", () => {
+    const { props } = makeProps();
+    render(<BlockMathNodeView {...props} />);
+    fireEvent.click(screen.getByTestId("blockmath-render"));
+    fireEvent.click(screen.getByText("Pronto"));
+    expect(screen.getByTestId("blockmath-render")).not.toHaveFocus();
+  });
+});

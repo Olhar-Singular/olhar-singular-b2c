@@ -18,7 +18,7 @@
  * the review sheet only, and the sheet has to compose exactly like the print.
  */
 
-import { useId, useState } from "react";
+import { useId } from "react";
 import { NodeViewWrapper, type NodeViewProps } from "@tiptap/react";
 import { Input } from "@/components/ui/input";
 import { FOLHA_BUTTON, FOLHA_SELECTED } from "../folhaChrome";
@@ -26,6 +26,7 @@ import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { inlineLatexToHtml } from "./nodeViewUtils";
 import { useLatexDraft } from "./useLatexDraft";
+import { useMathEditing } from "./useMathEditing";
 
 /**
  * Marca visual de "descrição desatualizada" na fórmula inline (achado 0437).
@@ -48,12 +49,13 @@ export function InlineMathNodeView({ node, updateAttributes, editor, selected }:
   // trata o input como campo. `useId` não colide entre fórmulas da mesma folha.
   const latexId = useId();
   const altId = useId();
-  const [editing, setEditing] = useState(false);
   const { latex, alt } = node.attrs as { latex: string; alt: string | null };
   const disabled = !editor.isEditable;
   // Latex vazio é irrepresentável e o alt não sobrevive à troca da fórmula
   // (achado 0436) — ver useLatexDraft.
   const draft = useLatexDraft(latex, alt, updateAttributes);
+  // Escape fecha o editor e devolve o foco à fórmula (achado 0416).
+  const editing = useMathEditing(draft.onBlur);
 
   return (
     <NodeViewWrapper
@@ -62,8 +64,8 @@ export function InlineMathNodeView({ node, updateAttributes, editor, selected }:
       data-testid="inlinemath-node"
       contentEditable={false}
     >
-      {editing && !disabled ? (
-        <span className="inline-flex items-center gap-1 rounded border border-border px-1 align-middle">
+      {editing.editing && !disabled ? (
+        <span className="inline-flex items-center gap-1 rounded border border-border px-1 align-middle" onKeyDown={editing.onKeyDown}>
           <Input
             id={latexId}
             name="inlinemath-latex"
@@ -91,7 +93,7 @@ export function InlineMathNodeView({ node, updateAttributes, editor, selected }:
               Descrição desatualizada
             </span>
           )}
-          <Button type="button" size="sm" variant="outline" className={cn("h-6 px-1.5 text-xs", FOLHA_BUTTON)} onClick={() => setEditing(false)}>
+          <Button type="button" size="sm" variant="outline" className={cn("h-6 px-1.5 text-xs", FOLHA_BUTTON)} onClick={editing.close}>
             Pronto
           </Button>
         </span>
@@ -105,7 +107,8 @@ export function InlineMathNodeView({ node, updateAttributes, editor, selected }:
             draft.altStale && ALT_STALE_MARK_CLASS
           )}
           disabled={disabled}
-          onClick={() => setEditing(true)}
+          autoFocus={editing.returnFocus}
+          onClick={editing.open}
           title={draft.altStale ? "Editar fórmula — descrição desatualizada" : "Editar fórmula"}
           aria-label={
             draft.altStale

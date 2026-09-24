@@ -14,7 +14,7 @@
  * chrome de edição não pode entrar no fluxo vertical da folha (achado 0405).
  */
 
-import { useId, useState } from "react";
+import { useId } from "react";
 import { Trash2 } from "lucide-react";
 import { NodeViewWrapper, type NodeViewProps } from "@tiptap/react";
 import { Input } from "@/components/ui/input";
@@ -23,6 +23,7 @@ import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { deleteNodeAndRefocus, latexToHtml } from "./nodeViewUtils";
 import { useLatexDraft } from "./useLatexDraft";
+import { useMathEditing } from "./useMathEditing";
 
 export function BlockMathNodeView({ node, updateAttributes, editor, deleteNode, getPos, selected }: NodeViewProps) {
   // 0312 — identidade de campo: sem `id`/`name` o Chrome reporta "A form field
@@ -30,14 +31,15 @@ export function BlockMathNodeView({ node, updateAttributes, editor, deleteNode, 
   // trata o input como campo. `useId` não colide entre fórmulas da mesma folha.
   const latexId = useId();
   const altId = useId();
-  const [editing, setEditing] = useState(false);
   const { latex, alt } = node.attrs as { latex: string; alt: string | null };
   const disabled = !editor.isEditable;
   // Latex vazio é irrepresentável e o alt não sobrevive à troca da fórmula
   // (achado 0436) — ver useLatexDraft.
   const draft = useLatexDraft(latex, alt, updateAttributes);
+  // Escape fecha o editor e devolve o foco à fórmula (achado 0416).
+  const editing = useMathEditing(draft.onBlur);
 
-  const open = editing && !disabled;
+  const open = editing.editing && !disabled;
 
   return (
     <NodeViewWrapper
@@ -71,7 +73,7 @@ export function BlockMathNodeView({ node, updateAttributes, editor, deleteNode, 
       )}
 
       {open ? (
-        <div className="flex flex-col gap-2 rounded-lg border border-border p-2">
+        <div className="flex flex-col gap-2 rounded-lg border border-border p-2" onKeyDown={editing.onKeyDown}>
           <Input
             id={latexId}
             name="blockmath-latex"
@@ -99,7 +101,7 @@ export function BlockMathNodeView({ node, updateAttributes, editor, deleteNode, 
             </span>
           )}
           <div className="flex items-center gap-2">
-            <Button type="button" size="sm" variant="outline" className={cn(FOLHA_BUTTON)} onClick={() => setEditing(false)}>
+            <Button type="button" size="sm" variant="outline" className={cn(FOLHA_BUTTON)} onClick={editing.close}>
               Pronto
             </Button>
             <Button
@@ -145,7 +147,8 @@ export function BlockMathNodeView({ node, updateAttributes, editor, deleteNode, 
               draft.altStale && "outline outline-1 outline-destructive"
             )}
             disabled={disabled}
-            onClick={() => setEditing(true)}
+            autoFocus={editing.returnFocus}
+            onClick={editing.open}
             title={draft.altStale ? "Editar fórmula — descrição desatualizada" : "Editar fórmula"}
             aria-label={
               draft.altStale

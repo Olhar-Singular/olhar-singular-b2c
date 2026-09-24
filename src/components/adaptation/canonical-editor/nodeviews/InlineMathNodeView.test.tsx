@@ -330,3 +330,50 @@ describe("InlineMathNodeView — seleção do átomo (achado 0350)", () => {
     expect(wrapper.className).toMatch(/ring-surface-accent/);
   });
 });
+
+// Achado 0416: o editor de fórmula era a única superfície transitória do
+// Revisar sem saída por teclado — quem abria sem querer só saía no mouse.
+describe("InlineMathNodeView — Escape fecha o editor (achado 0416)", () => {
+  it("fecha o editor, segura o Escape e devolve o foco à fórmula", () => {
+    const { props } = makeProps();
+    render(<InlineMathNodeView {...props} />);
+    fireEvent.click(screen.getByTestId("inlinemath-render"));
+
+    // O Escape não pode subir: no Revisar ele fecha o wizard inteiro.
+    const subiu = vi.fn();
+    document.addEventListener("keydown", subiu);
+    fireEvent.keyDown(screen.getByLabelText("Expressão LaTeX inline"), { key: "Escape" });
+    document.removeEventListener("keydown", subiu);
+
+    expect(screen.queryByLabelText("Expressão LaTeX inline")).not.toBeInTheDocument();
+    expect(subiu).not.toHaveBeenCalled();
+    expect(screen.getByTestId("inlinemath-render")).toHaveFocus();
+  });
+
+  it("ignora as demais teclas dentro do editor", () => {
+    const { props } = makeProps();
+    render(<InlineMathNodeView {...props} />);
+    fireEvent.click(screen.getByTestId("inlinemath-render"));
+    fireEvent.keyDown(screen.getByLabelText("Expressão LaTeX inline"), { key: "a" });
+    expect(screen.getByLabelText("Expressão LaTeX inline")).toBeInTheDocument();
+  });
+
+  it("não leva o rascunho vazio embora ao sair por Escape", () => {
+    const { props } = makeProps();
+    render(<InlineMathNodeView {...props} />);
+    fireEvent.click(screen.getByTestId("inlinemath-render"));
+    fireEvent.change(screen.getByLabelText("Expressão LaTeX inline"), { target: { value: "" } });
+    fireEvent.keyDown(screen.getByLabelText("Expressão LaTeX inline"), { key: "Escape" });
+
+    fireEvent.click(screen.getByTestId("inlinemath-render"));
+    expect((screen.getByLabelText("Expressão LaTeX inline") as HTMLInputElement).value).toBe("x^2");
+  });
+
+  it("não rouba o foco quando o editor fecha pelo Pronto", () => {
+    const { props } = makeProps();
+    render(<InlineMathNodeView {...props} />);
+    fireEvent.click(screen.getByTestId("inlinemath-render"));
+    fireEvent.click(screen.getByText("Pronto"));
+    expect(screen.getByTestId("inlinemath-render")).not.toHaveFocus();
+  });
+});
