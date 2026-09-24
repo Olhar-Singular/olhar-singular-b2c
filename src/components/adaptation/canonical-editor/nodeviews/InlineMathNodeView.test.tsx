@@ -434,3 +434,25 @@ describe("InlineMathNodeView — campos acompanham o conteúdo (achado 0418)", (
     expect(field).toHaveClass("max-w-full");
   });
 });
+
+// Achado 0421: mesma cegueira no widget inline — a expressão sumia do
+// parágrafo e sobravam os campos com o LaTeX cru.
+describe("InlineMathNodeView — prévia ao vivo (achado 0421)", () => {
+  it("mostra a fórmula renderizada enquanto o editor está aberto", () => {
+    const { props } = makeProps();
+    render(<InlineMathNodeView {...props} />);
+    fireEvent.click(screen.getByTestId("inlinemath-render"));
+    const preview = screen.getByTestId("inlinemath-preview");
+    expect(preview).toBeInTheDocument();
+    expect(preview.innerHTML).toContain("x^2");
+    expect(renderLatexToHtml).toHaveBeenCalledWith("x^2", false);
+  });
+
+  it("acompanha o que está sendo digitado, tecla a tecla", () => {
+    const { props } = makeProps();
+    render(<InlineMathNodeView {...props} />);
+    fireEvent.click(screen.getByTestId("inlinemath-render"));
+    fireEvent.change(screen.getByLabelText("Expressão LaTeX inline"), { target: { value: "y_{1}" } });
+    expect(screen.getByTestId("inlinemath-preview").innerHTML).toContain("y_{1}");
+  });
+});

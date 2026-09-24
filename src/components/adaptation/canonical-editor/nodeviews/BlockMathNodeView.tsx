@@ -74,6 +74,20 @@ export function BlockMathNodeView({ node, updateAttributes, editor, deleteNode, 
 
       {open ? (
         <div className="flex flex-col gap-2 rounded-lg border border-border p-2" onKeyDown={editing.onKeyDown}>
+          {/* Prévia ao vivo (achado 0421): abrir o editor trocava a fórmula
+              tipografada pelo LaTeX cru, então uma chave fora do lugar — que o
+              KaTeX não recusa (`throwOnError: false`), só pinta de vermelho —
+              só aparecia depois de fechar. Sai de `draft.value`, que acompanha
+              cada tecla, pelo MESMO `latexToHtml` da folha, para que o que se
+              vê aqui seja o que será impresso. É eco visual do campo ao lado:
+              `aria-hidden`, para o leitor de tela não anunciar a fórmula duas
+              vezes enquanto o professor digita. */}
+          <span
+            data-testid="blockmath-preview"
+            aria-hidden="true"
+            className="block overflow-x-auto text-center"
+            dangerouslySetInnerHTML={{ __html: latexToHtml(draft.value) }}
+          />
           <Input
             id={latexId}
             name="blockmath-latex"

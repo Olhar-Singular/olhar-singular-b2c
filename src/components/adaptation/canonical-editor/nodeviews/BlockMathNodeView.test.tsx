@@ -433,3 +433,27 @@ describe("BlockMathNodeView — Pronto devolve o foco à fórmula (achado 0417)"
     expect(screen.getByTestId("blockmath-render")).not.toHaveFocus();
   });
 });
+
+// Achado 0421: abrir o editor trocava a fórmula tipografada pelo LaTeX cru —
+// o professor digitava às cegas e só via o resultado (inclusive o trecho em
+// vermelho do KaTeX) depois de fechar.
+describe("BlockMathNodeView — prévia ao vivo (achado 0421)", () => {
+  it("mostra a fórmula renderizada enquanto o editor está aberto", () => {
+    const { props } = makeProps();
+    render(<BlockMathNodeView {...props} />);
+    fireEvent.click(screen.getByTestId("blockmath-render"));
+    const preview = screen.getByTestId("blockmath-preview");
+    expect(preview).toBeInTheDocument();
+    expect(preview.innerHTML).toContain("x^2");
+    // Mesmo motor e mesmo display mode da folha: a prévia não pode divergir.
+    expect(renderLatexToHtml).toHaveBeenCalledWith("x^2", true);
+  });
+
+  it("acompanha o que está sendo digitado, tecla a tecla", () => {
+    const { props } = makeProps();
+    render(<BlockMathNodeView {...props} />);
+    fireEvent.click(screen.getByTestId("blockmath-render"));
+    fireEvent.change(screen.getByLabelText("Expressão LaTeX"), { target: { value: "\\frac{1}{n^2" } });
+    expect(screen.getByTestId("blockmath-preview").innerHTML).toContain("\\frac{1}{n^2");
+  });
+});

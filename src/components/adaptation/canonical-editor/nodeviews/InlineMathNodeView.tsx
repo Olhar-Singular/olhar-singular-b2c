@@ -88,6 +88,16 @@ export function InlineMathNodeView({ node, updateAttributes, editor, selected }:
     >
       {editing.editing && !disabled ? (
         <span className="inline-flex items-center gap-1 rounded border border-border px-1 align-middle" onKeyDown={editing.onKeyDown}>
+          {/* Prévia ao vivo (achado 0421): ver o comentário gêmeo no
+              BlockMathNodeView. Aqui ela vem ANTES dos campos, no lugar que a
+              fórmula ocupava no parágrafo, e em modo inline — mesmo motor e
+              mesmo display mode do que a folha imprime. */}
+          <span
+            data-testid="inlinemath-preview"
+            aria-hidden="true"
+            className="max-w-full overflow-x-auto"
+            dangerouslySetInnerHTML={{ __html: inlineLatexToHtml(draft.value) }}
+          />
           <Input
             id={latexId}
             name="inlinemath-latex"
