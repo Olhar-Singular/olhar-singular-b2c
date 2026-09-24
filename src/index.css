@@ -510,12 +510,23 @@
  * diferente no PDF (HeadingBlockView/ParagraphBlockView e PdfLeafBlocks não
  * centralizam nem italicizam). */
 .tiptap:not(.rich-text-field) > h1 {
-  font-size: 1.5rem;
+  /* O tamanho do titulo vem do corpo do documento, pelo token de pagina
+     `--doc-fs-heading1` que `pageTokensToCss` publica (achado 0412). Era
+     absoluto, entao o controle "Tamanho do texto" do popover Formato movia o
+     corpo e deixava o titulo parado: no teto da escala o titulo saia MENOR que
+     o texto que ele encabeca. O fallback mantem o tamanho de antes para uma
+     folha renderizada sem os tokens. */
+  font-size: var(--doc-fs-heading1, 1.5rem);
   font-weight: 700;
+}
+.tiptap:not(.rich-text-field) > h2 {
+  font-size: var(--doc-fs-heading2, 1.25rem);
+}
+.tiptap:not(.rich-text-field) > h3 {
+  font-size: var(--doc-fs-heading3, 1.125rem);
 }
 .tiptap:not(.rich-text-field) > h2,
 .tiptap:not(.rich-text-field) > h3 {
-  font-size: 1.2rem;
   font-weight: 700;
   color: hsl(var(--primary));
   background-color: hsl(var(--primary) / 0.06);

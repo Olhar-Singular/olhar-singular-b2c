@@ -42,7 +42,6 @@ import {
   INK_MUTED,
   RULE_COLOR,
   RULE_WIDTH_PT,
-  HEADING_PT,
   BASE_FONT_PT,
   pdfTextSize,
 } from "../pageTokens";
@@ -57,11 +56,26 @@ type ImageBlock = Extract<Block, { type: "image" }>;
 type ScaffoldingBlock = Extract<Block, { type: "scaffolding" }>;
 type DividerBlock = Extract<Block, { type: "divider" }>;
 
-// Screen heading sizes (text-2xl/xl/lg = 24/20/18px) converted px→pt for parity.
-// Vive em pageTokens porque o Word lê o mesmo valor (achado 0164).
-const HEADING_SIZE = HEADING_PT;
+/**
+ * Corpo do título, em pt. Vem de `elementSizes` — o mesmo resolvedor que
+ * alimenta as `--doc-fs-heading*` da tela —, e não mais da constante
+ * `HEADING_PT`, que era absoluta e não acompanhava o "Tamanho do texto" do
+ * popover Formato (achado 0412). `HEADING_PT` continua sendo a PROPORÇÃO de
+ * origem (via `HEADING_FONT_RATIOS`) e o valor que o Word lê (achado 0164).
+ */
+function headingSizePt(level: 1 | 2 | 3, elementSizes: ElementFontSizesPt): number {
+  return level === 1 ? elementSizes.heading1 : level === 2 ? elementSizes.heading2 : elementSizes.heading3;
+}
 
-export function PdfHeading({ block, blockGap = 12 }: { block: HeadingBlock; blockGap?: number }) {
+export function PdfHeading({
+  block,
+  blockGap = 12,
+  elementSizes = DEFAULT_ELEMENT_SIZES,
+}: {
+  block: HeadingBlock;
+  blockGap?: number;
+  elementSizes?: ElementFontSizesPt;
+}) {
   // Extract marginBottom from nodeStyleToPdf (spacingAfter) and fall back to blockGap.
   // Other text styles (fontSize, fontWeight, textAlign, color, fontFamily) stay on
   // the inner <Text> so they apply to the text content, not the layout container.
@@ -70,8 +84,8 @@ export function PdfHeading({ block, blockGap = 12 }: { block: HeadingBlock; bloc
   const marginBottom = nodeMarginBottom ?? blockGap;
   return (
     <View style={{ marginBottom }}>
-      <Text style={{ ...pdfTextSize(HEADING_SIZE[block.level]), fontWeight: "bold", ...textStyle }}>
-        <PdfRichText content={block.content} fontSize={HEADING_SIZE[block.level]} />
+      <Text style={{ ...pdfTextSize(headingSizePt(block.level, elementSizes)), fontWeight: "bold", ...textStyle }}>
+        <PdfRichText content={block.content} fontSize={headingSizePt(block.level, elementSizes)} />
       </Text>
     </View>
   );

@@ -184,7 +184,7 @@ export function AppearanceControls({ value, onChange }: Props) {
       />
 
       <p id="font-size-help" className="text-xs text-surface-ink-soft">
-        Altera o tamanho de toda a prova — enunciados, instruções e alternativas.
+        Altera o tamanho de toda a prova: títulos, enunciados, instruções e alternativas.
       </p>
 
       <Stepper

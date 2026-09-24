@@ -499,8 +499,34 @@ export const ELEMENT_FONT_RATIOS = {
   caption: 10 / BASE_FONT_PT,
 } as const;
 
+/**
+ * Mesma ideia para o TÍTULO, um ratio por nível sobre o corpo do documento
+ * (achado 0412). Os valores derivam de `HEADING_PT` no base de 12pt (1.5 /
+ * 1.25 / 1.125), então o papel de um documento no tamanho padrão não se move.
+ *
+ * Vive numa constante separada porque título NÃO é sobrescritível por
+ * documento: `pageStyle.elementFontSizes` (schema canônico) tem as quatro
+ * chaves de corpo e continua com elas. Aqui só existe a proporção.
+ *
+ * Antes o tamanho do título era escrito à mão uma vez por superfície — `1.5rem`
+ * no CSS da folha, `text-2xl/xl/lg` na prévia do Exportar e `HEADING_PT` no PDF
+ * — e nenhuma das três lia `pageStyle.fontSize`. Como só o corpo se movia, a
+ * partir de 25px de corpo o título saía MENOR que o texto que ele encabeça, nas
+ * três superfícies ao mesmo tempo, justo para quem sobe a letra por baixa
+ * visão.
+ */
+export const HEADING_FONT_RATIOS: Record<1 | 2 | 3, number> = {
+  1: HEADING_PT[1] / BASE_FONT_PT,
+  2: HEADING_PT[2] / BASE_FONT_PT,
+  3: HEADING_PT[3] / BASE_FONT_PT,
+};
+
 /** Tamanhos por elemento já resolvidos, em pt. Toda chave presente (sem buracos). */
-export type ElementFontSizesPt = { [K in keyof typeof ELEMENT_FONT_RATIOS]: number };
+export type ElementFontSizesPt = { [K in keyof typeof ELEMENT_FONT_RATIOS]: number } & {
+  heading1: number;
+  heading2: number;
+  heading3: number;
+};
 
 /**
  * Resolve os tamanhos por elemento (pt) de um documento.
@@ -520,6 +546,9 @@ export function resolveElementFontSizes(resolved: ResolvedPageStyle): ElementFon
     instruction: derive("instruction"),
     alternative: derive("alternative"),
     caption: derive("caption"),
+    heading1: resolved.fontSize * HEADING_FONT_RATIOS[1],
+    heading2: resolved.fontSize * HEADING_FONT_RATIOS[2],
+    heading3: resolved.fontSize * HEADING_FONT_RATIOS[3],
   };
 }
 
@@ -700,6 +729,13 @@ export function pageTokensToCss(resolved: ResolvedPageStyle = DEFAULT_RESOLVED):
     ["--doc-fs-instruction"]: px(efs.instruction),
     ["--doc-fs-alternative"]: px(efs.alternative),
     ["--doc-fs-caption"]: px(efs.caption),
+    /* Título por nível. Como o `<h1>` da folha do Revisar não tem NodeView
+       nosso (o schema Tiptap só emite a tag), o `index.css` é que consome
+       estes tokens; a prévia do Exportar lê os mesmos, e o PDF lê os pt
+       equivalentes de `elementSizes` (achado 0412). */
+    ["--doc-fs-heading1"]: px(efs.heading1),
+    ["--doc-fs-heading2"]: px(efs.heading2),
+    ["--doc-fs-heading3"]: px(efs.heading3),
     /* Tamanho da fórmula (KaTeX). Como a divisória, o `.katex` não tem NodeView
        nosso — a folha de estilo da biblioteca é que o dimensiona —, então a
        folha publica o token aqui e `index.css` o aplica (achado 0424). */

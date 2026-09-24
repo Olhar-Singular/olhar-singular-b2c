@@ -40,7 +40,7 @@ function dispatch(
 ) {
   switch (block.type) {
     case "heading":
-      return <PdfHeading block={block} blockGap={blockGap} />;
+      return <PdfHeading block={block} blockGap={blockGap} elementSizes={elementSizes} />;
     case "paragraph":
       return <PdfParagraph block={block} blockGap={blockGap} baseFontSize={baseFontSize} />;
     case "blockMath":

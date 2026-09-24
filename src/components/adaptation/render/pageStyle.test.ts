@@ -5,7 +5,7 @@ import {
   ELEMENT_FONT_RATIOS,
   PAGE_STYLE_DEFAULTS,
 } from "./pageStyle";
-import { BASE_FONT_PT } from "./pageTokens";
+import { BASE_FONT_PT, HEADING_FONT_RATIOS } from "./pageTokens";
 
 describe("resolvePageStyle", () => {
   it("returns the defaults when given nothing", () => {
@@ -72,6 +72,10 @@ describe("resolveElementFontSizes", () => {
       instruction: 12 * ELEMENT_FONT_RATIOS.instruction,
       alternative: 12,
       caption: 12 * ELEMENT_FONT_RATIOS.caption,
+      // Título por nível (achado 0412): mesma derivação, ratio de HEADING_PT.
+      heading1: 12 * HEADING_FONT_RATIOS[1],
+      heading2: 12 * HEADING_FONT_RATIOS[2],
+      heading3: 12 * HEADING_FONT_RATIOS[3],
     });
   });
 
