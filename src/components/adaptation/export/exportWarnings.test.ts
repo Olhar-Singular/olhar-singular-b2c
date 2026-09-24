@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { copyExportWarnings, pdfExportWarnings } from "./exportWarnings";
+import { copyExportWarnings, MATH_LOSS_WARNING, pdfExportWarnings } from "./exportWarnings";
 import type { CanonicalDocument } from "@/lib/adaptation/canonical/schema";
 
 const id = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, "0")}`;
@@ -20,7 +20,7 @@ describe("pdfExportWarnings", () => {
 
   it("avisa quando há fórmula de bloco (o PDF imprime o LaTeX cru)", () => {
     const warnings = pdfExportWarnings(doc([{ id: id(1), type: "blockMath", latex: "a^2" }]));
-    expect(warnings).toHaveLength(1);
+    expect(warnings).toHaveLength(2);
     expect(warnings[0]).toMatch(/LaTeX/i);
   });
 
@@ -41,7 +41,7 @@ describe("pdfExportWarnings", () => {
         },
       ]),
     );
-    expect(warnings).toHaveLength(1);
+    expect(warnings).toHaveLength(2);
   });
 
   it("avisa que o itálico sai reto quando a fonte não tem face itálica (Lexend)", () => {
@@ -76,7 +76,7 @@ describe("pdfExportWarnings", () => {
     const warnings = pdfExportWarnings(doc([{ id: id(1), type: "blockMath", latex: "a^2" }]), {
       fontFamily: "lexend",
     });
-    expect(warnings).toHaveLength(2);
+    expect(warnings).toHaveLength(3);
   });
   it("avisa que o texto alternativo da imagem não chega ao PDF", () => {
     const warnings = pdfExportWarnings(
@@ -120,7 +120,7 @@ describe("pdfExportWarnings", () => {
         { id: id(2), type: "blockMath", latex: "a^2" },
       ]),
     );
-    expect(warnings).toHaveLength(2);
+    expect(warnings).toHaveLength(3);
     expect(warnings[0]).toMatch(/texto alternativo/i);
     expect(warnings[1]).toMatch(/LaTeX/i);
   });
@@ -141,7 +141,8 @@ describe("copyExportWarnings (0411)", () => {
 
   it("avisa da fórmula com a MESMA frase do PDF (é o mesmo texto entregue)", () => {
     const mathDoc = doc([{ id: id(1), type: "blockMath", latex: "a^2" }]);
-    expect(copyExportWarnings(mathDoc)).toEqual(pdfExportWarnings(mathDoc));
+    expect(copyExportWarnings(mathDoc)).toEqual([MATH_LOSS_WARNING]);
+    expect(pdfExportWarnings(mathDoc)).toContain(MATH_LOSS_WARNING);
   });
 
   it("pega inline math em qualquer campo RichText", () => {
@@ -158,5 +159,38 @@ describe("copyExportWarnings (0411)", () => {
         doc([{ id: id(1), type: "image", src: "https://exemplo.com/figura.png", alt: "figura" }]),
       ),
     ).toEqual([]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 0415 — a fórmula sai em Courier, não na fonte escolhida no popover "Formato",
+// e o diálogo só falava do LaTeX. O professor que escolheu OpenDyslexic recebia
+// a prova com a matemática em monoespaçada sem nenhum aviso.
+// ---------------------------------------------------------------------------
+
+describe("aviso de tipografia da fórmula (0415)", () => {
+  const mathDoc = doc([{ id: id(1), type: "blockMath", latex: "a^2" }]);
+
+  it("o PDF avisa que a fórmula não segue a fonte nem o corpo do documento", () => {
+    const warnings = pdfExportWarnings(mathDoc, { fontFamily: "opendyslexic" });
+    expect(warnings.join(" ")).toMatch(/monoespaçada/i);
+    expect(warnings.join(" ")).toMatch(/fonte/i);
+  });
+
+  it("avisa mesmo sem pageStyle: a fonte da fórmula é fixa de qualquer jeito", () => {
+    expect(pdfExportWarnings(mathDoc).join(" ")).toMatch(/monoespaçada/i);
+  });
+
+  it("documento sem fórmula não ganha aviso de tipografia", () => {
+    expect(
+      pdfExportWarnings(
+        doc([{ id: id(1), type: "paragraph", content: [{ type: "text", text: "olá" }] }]),
+        { fontFamily: "opendyslexic" },
+      ).join(" "),
+    ).not.toMatch(/monoespaçada/i);
+  });
+
+  it("a cópia NÃO herda o aviso: texto puro não carrega tipografia nenhuma", () => {
+    expect(copyExportWarnings(mathDoc).join(" ")).not.toMatch(/monoespaçada/i);
   });
 });

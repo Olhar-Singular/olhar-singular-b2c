@@ -72,7 +72,12 @@ import {
   RULE_WIDTH_PT,
 } from "../render/pageTokens";
 import { indexToLetter } from "../render/letters";
-import { documentHasMath, everyBlock } from "./exportWarnings";
+import {
+  documentHasMath,
+  everyBlock,
+  MATH_LOSS_WARNING,
+  MATH_TYPOGRAPHY_WARNING,
+} from "./exportWarnings";
 import { perQuestionBreakFlags } from "../render/perQuestionBreaks";
 import { latexLayoutAtom, readableMathText } from "../render/mathAtom";
 import { DEFAULT_PANEL_SETTINGS, formatHeaderDateBR, type PanelSettings } from "./panelSettings";
@@ -634,7 +639,10 @@ export function docxExportWarnings(
   // A varredura de math (inline em qualquer campo RichText, mais blockMath) é
   // a mesma do PDF e mora em `exportWarnings`.
   if (documentHasMath(document)) {
-    warnings.push("As fórmulas saem como texto LaTeX, sem formatação matemática.");
+    warnings.push(MATH_LOSS_WARNING);
+    // A fonte da fórmula é `MATH_FONT`, constante, e não a do documento: a
+    // mesma perda do PDF, e a mesma frase (achado 0415).
+    warnings.push(MATH_TYPOGRAPHY_WARNING);
   }
 
   const family = pageStyle?.fontFamily;

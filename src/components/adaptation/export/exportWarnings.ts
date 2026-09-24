@@ -93,6 +93,25 @@ function richTextsOf(block: Block): RichText[] {
 export const MATH_LOSS_WARNING =
   "As fórmulas saem como texto LaTeX, sem formatação matemática.";
 
+/**
+ * A outra metade da perda da fórmula, que o diálogo calava (achado 0415).
+ *
+ * A fórmula é o único conteúdo do documento que não passa pelo mapa de
+ * `fontFamily.ts`: o PDF carimba `Courier` (`mathPdfStyle`) e o Word
+ * `Courier New` (`MATH_FONT`), por constante, num corpo próprio
+ * (`mathPdfFontSizePt`). Quem escolheu OpenDyslexic no popover "Formato"
+ * recebia a prova com o texto na fonte pedida e a matemática em monoespaçada,
+ * sem nada avisando. Enquanto a projeção continuar sendo LaTeX cru (a
+ * rasterização é o TODO de `mathToPdfText`), o mínimo é o aviso dizer a
+ * verdade inteira.
+ *
+ * Vale só para os dois ARQUIVOS: o "Copiar" entrega texto puro e não tem
+ * tipografia a perder.
+ */
+export const MATH_TYPOGRAPHY_WARNING =
+  "A fórmula também não usa a fonte do documento: sai em monoespaçada e num " +
+  "corpo próprio, mesmo que você tenha escolhido outra fonte no Formato.";
+
 export function documentHasMath(document: CanonicalDocument): boolean {
   const blocks = everyBlock(document.blocks);
   // As duas varreduras acontecem antes do `||`: curto-circuitar no blockMath
@@ -131,6 +150,7 @@ export function pdfExportWarnings(
 
   if (documentHasMath(document)) {
     warnings.push(MATH_LOSS_WARNING);
+    warnings.push(MATH_TYPOGRAPHY_WARNING);
   }
 
   // A folha mostra o itálico porque o navegador sintetiza a inclinação; o PDF

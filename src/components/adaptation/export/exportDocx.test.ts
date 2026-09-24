@@ -1406,3 +1406,27 @@ describe("Word imprime a descrição legível da fórmula (achado 0401)", () => 
     );
   });
 });
+
+/**
+ * 0415 — os runs de fórmula saem com `w:ascii="Courier New"`, ignorando a fonte
+ * do documento, e o diálogo do Word só falava do LaTeX.
+ */
+describe("aviso de tipografia da fórmula no Word (0415)", () => {
+  const doc = (blocks: Block[]): CanonicalDocument => ({ schemaVersion: 1, blocks });
+
+  it("avisa que a fórmula não segue a fonte nem o corpo do documento", () => {
+    expect(
+      docxExportWarnings(doc([{ id: id(140), type: "blockMath", latex: "x" }]), {
+        fontFamily: "opendyslexic",
+      }).join(" "),
+    ).toMatch(/monoespaçada/i);
+  });
+
+  it("documento sem fórmula não ganha o aviso", () => {
+    expect(
+      docxExportWarnings(doc([{ id: id(141), type: "paragraph", content: text("oi") }]), {
+        fontFamily: "opendyslexic",
+      }).join(" "),
+    ).not.toMatch(/monoespaçada/i);
+  });
+});
