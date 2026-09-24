@@ -138,13 +138,28 @@ export function BlockMathNodeView({ node, updateAttributes, editor, deleteNode, 
           {/* Achado 0436: o alt caiu junto com a fórmula que ele descrevia; o
               professor precisa ver isso, não descobrir depois. */}
           {draft.altStale && (
-            <span role="status" data-testid="blockmath-alt-stale" className="text-xs text-surface-danger">
+            // 0439 — ver o gêmeo no InlineMathNodeView: texto puro dentro do
+            // `contenteditable` entrava no texto acessível da folha. Vira
+            // decoração; o aviso é anunciado pelo `aria-label` do gatilho.
+            <span
+              aria-hidden="true"
+              data-testid="blockmath-alt-stale"
+              className="text-xs text-surface-danger"
+            >
               Descrição desatualizada: reescreva o texto alternativo.
             </span>
           )}
           <div className="flex items-center gap-2">
-            <Button type="button" size="sm" variant="outline" className={cn(FOLHA_BUTTON)} onClick={editing.close}>
-              Pronto
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              className={cn(FOLHA_BUTTON)}
+              onClick={editing.close}
+              // 0439 — rótulo decorativo, nome pelo `aria-label` (molde 0339).
+              aria-label="Concluir edição da fórmula"
+            >
+              <span aria-hidden="true">Pronto</span>
             </Button>
             <Button
               type="button"

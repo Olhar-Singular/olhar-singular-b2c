@@ -137,12 +137,32 @@ export function InlineMathNodeView({ node, updateAttributes, editor, selected }:
           {/* Achado 0436: zerar o alt em silêncio trocaria uma mentira por um
               buraco — o professor vê que a descrição ficou para trás. */}
           {draft.altStale && (
-            <span role="status" data-testid="inlinemath-alt-stale" className="text-xs text-surface-danger">
+            // 0439 — o aviso é texto puro DENTRO do `contenteditable`: ele
+            // entrava no `value` acessível da folha, no meio da frase, como se
+            // fosse linha impressa da atividade (o PDF não imprime nada disso).
+            // Vira decoração; quem anuncia a pendência é o `aria-label` do
+            // gatilho, que desde o 0436 diz "(descrição desatualizada)".
+            <span
+              aria-hidden="true"
+              data-testid="inlinemath-alt-stale"
+              className="text-xs text-surface-danger"
+            >
               Descrição desatualizada
             </span>
           )}
-          <Button type="button" size="sm" variant="outline" className={cn("h-6 px-1.5 text-xs", FOLHA_BUTTON)} onClick={editing.close}>
-            Pronto
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            className={cn("h-6 px-1.5 text-xs", FOLHA_BUTTON)}
+            onClick={editing.close}
+            // 0439 — molde do 0339: o rótulo na face do botão é decoração e o
+            // nome programático vem do `aria-label`. `aria-hidden` no container
+            // esconderia um controle focável, e tirar o widget do
+            // `contenteditable` é refatoração ampla (ver 0405/0423).
+            aria-label="Concluir edição da fórmula"
+          >
+            <span aria-hidden="true">Pronto</span>
           </Button>
         </span>
       ) : (

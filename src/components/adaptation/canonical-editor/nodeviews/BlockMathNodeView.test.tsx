@@ -616,3 +616,34 @@ describe("BlockMathNodeView — texto acessível da fórmula (achado 0438)", () 
     expect(texto.split("x^2").length - 1).toBe(1);
   });
 });
+
+/**
+ * Texto que a tecnologia assistiva colhe do subtree, ignorando o que está
+ * marcado como decorativo (`aria-hidden="true"`). Mesmo molde do
+ * `ImageNodeView.test.tsx` (achado 0339).
+ */
+function accessibleTextBlock(root: HTMLElement): string {
+  const clone = root.cloneNode(true) as HTMLElement;
+  clone.querySelectorAll('[aria-hidden="true"]').forEach((n) => n.remove());
+  return clone.textContent ?? "";
+}
+
+/**
+ * Achado 0439 — gêmeo do caso inline, com o agravante de que aqui o editor
+ * ocupa o lugar da fórmula no fluxo vertical da folha.
+ */
+describe("BlockMathNodeView — chrome do editor fora do texto da folha (achado 0439)", () => {
+  it("não vaza o rótulo do Pronto nem o aviso de alt desatualizado", () => {
+    const { props } = makeProps({ latex: "x^2", alt: "x ao quadrado" });
+    const { getByTestId } = render(<BlockMathNodeView {...props} />);
+    fireEvent.click(screen.getByTestId("blockmath-render"));
+    fireEvent.change(screen.getByLabelText("Expressão LaTeX"), { target: { value: "y^3" } });
+    expect(screen.getByTestId("blockmath-alt-stale")).toBeInTheDocument();
+
+    const acessivel = accessibleTextBlock(getByTestId("blockmath-node"));
+    expect(acessivel).not.toMatch(/Pronto/i);
+    expect(acessivel).not.toMatch(/Descrição desatualizada/i);
+
+    expect(screen.getByRole("button", { name: "Concluir edição da fórmula" })).toBeInTheDocument();
+  });
+});

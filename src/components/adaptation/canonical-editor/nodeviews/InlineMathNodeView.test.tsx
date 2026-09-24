@@ -584,3 +584,41 @@ describe("InlineMathNodeView — texto acessível da fórmula (achado 0438)", ()
     expect(texto.split("x^2").length - 1).toBe(1);
   });
 });
+
+/**
+ * Texto que a tecnologia assistiva colhe do subtree, ignorando o que está
+ * marcado como decorativo (`aria-hidden="true"`). Mesmo molde do
+ * `ImageNodeView.test.tsx` (achado 0339).
+ */
+function accessibleText(root: HTMLElement): string {
+  const clone = root.cloneNode(true) as HTMLElement;
+  clone.querySelectorAll('[aria-hidden="true"]').forEach((n) => n.remove());
+  return clone.textContent ?? "";
+}
+
+/**
+ * Achado 0439 — mesma família da 0337/0339, agora no editor de fórmula: o
+ * widget é renderizado DENTRO do `contenteditable` da folha, então o rótulo na
+ * face do "Pronto" e o aviso de descrição desatualizada entravam no `value`
+ * acessível do textbox da folha, no meio da frase, como se fossem conteúdo
+ * impresso da atividade (o PDF não imprime nenhum dos dois).
+ */
+describe("InlineMathNodeView — chrome do editor fora do texto da folha (achado 0439)", () => {
+  it("não vaza o rótulo do Pronto nem o aviso de alt desatualizado", () => {
+    const { props } = makeProps({ latex: "x^2", alt: "x ao quadrado" });
+    const { getByTestId } = render(<InlineMathNodeView {...props} />);
+    fireEvent.click(screen.getByTestId("inlinemath-render"));
+    fireEvent.change(screen.getByLabelText("Expressão LaTeX inline"), {
+      target: { value: "y^3" },
+    });
+    // o aviso está de pé (é o cenário do 0436)
+    expect(screen.getByTestId("inlinemath-alt-stale")).toBeInTheDocument();
+
+    const acessivel = accessibleText(getByTestId("inlinemath-node"));
+    expect(acessivel).not.toMatch(/Pronto/i);
+    expect(acessivel).not.toMatch(/Descrição desatualizada/i);
+
+    // o controle não perdeu nome programático
+    expect(screen.getByRole("button", { name: "Concluir edição da fórmula" })).toBeInTheDocument();
+  });
+});
