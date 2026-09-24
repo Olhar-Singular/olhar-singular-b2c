@@ -53,7 +53,7 @@ export function DocumentHeaderView({ header }: { header: HeaderSettings }) {
           {header.school}
         </div>
       )}
-      {/* Achado 0243: campo vazio não vira ` `; sem Professor(a) nem Data a
+      {/* Achado 0243: campo vazio não vira um nbsp (U+00A0); sem Professor(a) nem Data a
           linha (e o `metaTop` dela) some, como já fazem o Word e o Copiar. */}
       {(filled(header.teacher) || filled(header.date)) && (
         <div
