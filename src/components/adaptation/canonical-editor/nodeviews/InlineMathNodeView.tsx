@@ -71,6 +71,7 @@ export function InlineMathNodeView({ node, updateAttributes, editor, selected }:
   // trata o input como campo. `useId` não colide entre fórmulas da mesma folha.
   const latexId = useId();
   const altId = useId();
+  const errorId = useId();
   const { latex, alt } = node.attrs as { latex: string; alt: string | null };
   const disabled = !editor.isEditable;
   // Latex vazio é irrepresentável e o alt não sobrevive à troca da fórmula
@@ -107,13 +108,22 @@ export function InlineMathNodeView({ node, updateAttributes, editor, selected }:
             name="inlinemath-latex"
             value={draft.value}
             autoFocus
-            className={cn("h-6 max-w-full px-1 py-0 text-sm", FOLHA_INPUT)}
+            className={cn("h-6 max-w-full px-1 py-0 text-sm", FOLHA_INPUT, draft.error && "border-destructive")}
             style={{ width: inlineFieldWidth(draft.value) }}
             onChange={(e) => draft.onChange(e.target.value)}
             onBlur={draft.onBlur}
             placeholder="LaTeX"
             aria-label="Expressão LaTeX inline"
+            aria-invalid={draft.error ? "true" : undefined}
+            aria-describedby={draft.error ? errorId : undefined}
           />
+          {/* Achado 0434: ver o gêmeo no BlockMathNodeView — LaTeX que não
+              parseia fica no rascunho e a razão do KaTeX é dita em texto. */}
+          {draft.error && (
+            <span id={errorId} role="alert" data-testid="inlinemath-latex-error" className="text-xs text-surface-danger">
+              Fórmula inválida: {draft.error}
+            </span>
+          )}
           <Input
             id={altId}
             name="inlinemath-alt"

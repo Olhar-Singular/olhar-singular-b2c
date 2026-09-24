@@ -274,17 +274,20 @@ describe("BlockMathNodeView", () => {
     expect(updateAttributes).toHaveBeenCalledWith({ latex: "y^3 = 8", alt: null });
   });
 
-  it("descarta o alt também quando o LaTeX novo é inválido (achado 0436)", () => {
+  // O caso original deste teste era um LaTeX QUEBRADO, que desde o 0434 não
+  // chega mais ao nó (fica no rascunho do campo). A regra do 0436 vale para
+  // toda fórmula que o documento consegue representar — é o que se exercita.
+  it("descarta o alt também quando a fórmula nova é de outra forma (achado 0436)", () => {
     const { props, updateAttributes } = makeProps({ latex: "x^2", alt: "x ao quadrado" });
     render(<BlockMathNodeView {...props} />);
     fireEvent.click(screen.getByTestId("blockmath-render"));
 
     fireEvent.change(screen.getByLabelText("Expressão LaTeX"), {
-      target: { value: "\\frac{1}{ \\unknowncmd{x" },
+      target: { value: "\\frac{1}{ \\sqrt{x}}" },
     });
 
     expect(updateAttributes).toHaveBeenCalledWith({
-      latex: "\\frac{1}{ \\unknowncmd{x",
+      latex: "\\frac{1}{ \\sqrt{x}}",
       alt: null,
     });
   });
@@ -527,5 +530,56 @@ describe("BlockMathNodeView — chrome do editor na paleta da folha (achado 0423
     // de 3:1 (WCAG 2.2 AA, 1.4.11) — `--sf-ink-soft`.
     expect(trigger.className).toContain("hover:outline-surface-ink-soft");
     expect(trigger.className).not.toMatch(/hover:outline-border(\s|$)/);
+  });
+});
+
+/**
+ * Achado 0434 — o campo aceitava qualquer coisa e, pior, gravava cada tecla no
+ * documento canônico: uma chave que nunca fecha atravessava o schema, o
+ * autosave e o PDF (onde LaTeX cru sai como texto, indistinguível de fórmula
+ * boa). O único sinal era o vermelho do `katex-error`, que não é texto e não é
+ * anunciado — WCAG 3.3.1 exige o erro DESCRITO.
+ */
+describe("BlockMathNodeView — LaTeX inválido (achado 0434)", () => {
+  function typeLatex(value: string, attrs: Record<string, unknown> = {}) {
+    const made = makeProps(attrs);
+    render(<BlockMathNodeView {...made.props} />);
+    fireEvent.click(screen.getByTestId("blockmath-render"));
+    fireEvent.change(screen.getByLabelText("Expressão LaTeX"), { target: { value } });
+    return made;
+  }
+
+  it("não comita no nó o LaTeX que não parseia", () => {
+    const { updateAttributes } = typeLatex("\\frac{1{");
+    expect(updateAttributes).not.toHaveBeenCalled();
+  });
+
+  it("marca o campo como inválido e descreve o erro em texto anunciado", () => {
+    typeLatex("\\frac{1{");
+    const input = screen.getByLabelText("Expressão LaTeX");
+    expect(input).toHaveAttribute("aria-invalid", "true");
+    const alert = screen.getByRole("alert");
+    expect(alert).toHaveTextContent(/inválida/i);
+    expect(input.getAttribute("aria-describedby")).toBe(alert.id);
+  });
+
+  it("deixa o rascunho na tela para o professor consertar", () => {
+    typeLatex("\\frac{1{");
+    expect(screen.getByLabelText("Expressão LaTeX")).toHaveValue("\\frac{1{");
+  });
+
+  it("volta a comitar assim que a expressão fecha", () => {
+    const { updateAttributes } = typeLatex("\\frac{1{");
+    fireEvent.change(screen.getByLabelText("Expressão LaTeX"), { target: { value: "\\frac{1}{2}" } });
+    expect(updateAttributes).toHaveBeenCalledWith({ latex: "\\frac{1}{2}" });
+    const input = screen.getByLabelText("Expressão LaTeX");
+    expect(input).not.toHaveAttribute("aria-invalid");
+    expect(screen.queryByRole("alert")).toBeNull();
+  });
+
+  it("devolve a fórmula commitada quando o campo perde o foco inválido", () => {
+    typeLatex("\\frac{1{");
+    fireEvent.blur(screen.getByLabelText("Expressão LaTeX"));
+    expect(screen.getByLabelText("Expressão LaTeX")).toHaveValue("x^2");
   });
 });

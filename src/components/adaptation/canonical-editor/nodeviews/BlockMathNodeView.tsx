@@ -39,6 +39,7 @@ export function BlockMathNodeView({ node, updateAttributes, editor, deleteNode, 
   // trata o input como campo. `useId` não colide entre fórmulas da mesma folha.
   const latexId = useId();
   const altId = useId();
+  const errorId = useId();
   const { latex, alt } = node.attrs as { latex: string; alt: string | null };
   const disabled = !editor.isEditable;
   // Latex vazio é irrepresentável e o alt não sobrevive à troca da fórmula
@@ -108,10 +109,23 @@ export function BlockMathNodeView({ node, updateAttributes, editor, deleteNode, 
             autoFocus
             onChange={(e) => draft.onChange(e.target.value)}
             onBlur={draft.onBlur}
-            className={FOLHA_INPUT}
+            className={cn(FOLHA_INPUT, draft.error && "border-destructive")}
             placeholder="LaTeX"
             aria-label="Expressão LaTeX"
+            aria-invalid={draft.error ? "true" : undefined}
+            aria-describedby={draft.error ? errorId : undefined}
           />
+          {/* Achado 0434: o vermelho do `katex-error` na prévia é cor, não
+              mensagem — não é anunciado e some no PDF, que imprime LaTeX cru.
+              A razão vem do próprio KaTeX e é dita em texto (WCAG 3.3.1).
+              O "Pronto" continua habilitado de propósito: o valor inválido nem
+              chegou ao nó, então fechar só descarta o rascunho — travar a saída
+              prenderia o professor na caixa. */}
+          {draft.error && (
+            <span id={errorId} role="alert" data-testid="blockmath-latex-error" className="text-xs text-surface-danger">
+              Fórmula inválida: {draft.error}
+            </span>
+          )}
           <Input
             id={altId}
             name="blockmath-alt"

@@ -212,8 +212,14 @@ describe("InlineMathNodeView", () => {
     expect(updateAttributes).toHaveBeenCalledWith({ latex: "y^3 = 8", alt: null });
   });
 
-  /** Achado 0436 — o caso do LaTeX inválido é o mesmo defeito, só visível a olho nu. */
-  it("descarta o alt também quando o LaTeX novo é inválido", () => {
+  /**
+   * Achado 0436 — trocar a fórmula derruba o alt mesmo quando a troca é
+   * invisível a olho nu. O caso que este teste cobria era um LaTeX QUEBRADO,
+   * que desde o 0434 não chega mais ao nó: o rascunho fica no campo e nem o
+   * `latex` nem o `alt` são tocados. A regra do 0436 continua valendo para toda
+   * fórmula que o documento consegue representar — é o que este caso exercita.
+   */
+  it("descarta o alt também quando a fórmula nova é de outra forma", () => {
     const { props, updateAttributes } = makeProps({
       latex: "x^2 + 2x + 1 = 0",
       alt: "x ao quadrado mais 2x mais 1 igual a zero",
@@ -222,11 +228,11 @@ describe("InlineMathNodeView", () => {
     fireEvent.click(screen.getByTestId("inlinemath-render"));
 
     fireEvent.change(screen.getByLabelText("Expressão LaTeX inline"), {
-      target: { value: "\\frac{1}{ \\unknowncmd{x" },
+      target: { value: "\\frac{1}{ \\sqrt{x}}" },
     });
 
     expect(updateAttributes).toHaveBeenCalledWith({
-      latex: "\\frac{1}{ \\unknowncmd{x",
+      latex: "\\frac{1}{ \\sqrt{x}}",
       alt: null,
     });
   });
@@ -505,5 +511,43 @@ describe("InlineMathNodeView — chrome do editor na paleta da folha (achado 042
     const trigger = screen.getByTestId("inlinemath-render");
     expect(trigger.className).toContain("hover:bg-surface-mesa");
     expect(trigger.className).not.toMatch(/hover:bg-accent(\s|$)/);
+  });
+});
+
+/** Achado 0434 — mesma raiz no widget inline. Ver o gêmeo em BlockMathNodeView. */
+describe("InlineMathNodeView — LaTeX inválido (achado 0434)", () => {
+  function typeLatex(value: string, attrs: Record<string, unknown> = {}) {
+    const made = makeProps(attrs);
+    render(<InlineMathNodeView {...made.props} />);
+    fireEvent.click(screen.getByTestId("inlinemath-render"));
+    fireEvent.change(screen.getByLabelText("Expressão LaTeX inline"), { target: { value } });
+    return made;
+  }
+
+  it("não comita no nó o LaTeX que não parseia", () => {
+    const { updateAttributes } = typeLatex("\\frac{1{");
+    expect(updateAttributes).not.toHaveBeenCalled();
+  });
+
+  it("marca o campo como inválido e descreve o erro em texto anunciado", () => {
+    typeLatex("\\frac{1{");
+    const input = screen.getByLabelText("Expressão LaTeX inline");
+    expect(input).toHaveAttribute("aria-invalid", "true");
+    const alert = screen.getByRole("alert");
+    expect(alert).toHaveTextContent(/inválida/i);
+    expect(input.getAttribute("aria-describedby")).toBe(alert.id);
+  });
+
+  it("volta a comitar assim que a expressão fecha", () => {
+    const { updateAttributes } = typeLatex("\\frac{1{");
+    fireEvent.change(screen.getByLabelText("Expressão LaTeX inline"), { target: { value: "\\frac{1}{2}" } });
+    expect(updateAttributes).toHaveBeenCalledWith({ latex: "\\frac{1}{2}" });
+    expect(screen.queryByRole("alert")).toBeNull();
+  });
+
+  it("não derruba o alt por causa de uma fórmula que nem existe no nó", () => {
+    const { updateAttributes } = typeLatex("\\frac{1{", { latex: "x^2", alt: "x ao quadrado" });
+    expect(updateAttributes).not.toHaveBeenCalled();
+    expect(screen.getByLabelText("Texto alternativo da fórmula inline")).toHaveValue("x ao quadrado");
   });
 });

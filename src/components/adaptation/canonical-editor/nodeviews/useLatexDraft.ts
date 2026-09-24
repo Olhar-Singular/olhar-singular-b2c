@@ -19,9 +19,19 @@
  * não herda o que descrevia o antigo*. Commitar um `latex` diferente derruba o
  * `alt` e acende `altStale`, para que a NodeView avise o professor na folha —
  * zerar em silêncio trocaria uma mentira por um buraco.
+ *
+ * Achado 0434: o único critério para commitar era `length > 0`, então LaTeX que
+ * não parseia entrava no nó a cada tecla — atravessava o schema, o autosave e o
+ * PDF, onde a fórmula sai como LaTeX cru e a quebrada fica idêntica à boa. O
+ * motivo documentado acima vale igual aqui: rascunho que o documento não pode
+ * representar mora no estado local. Quem sabe dizer se representa é o próprio
+ * KaTeX (`latexParseError`), e a razão que ele dá vira texto na tela — a cor
+ * vermelha do `katex-error` não é mensagem de erro (WCAG 3.3.1).
  */
 
 import { useEffect, useState } from "react";
+
+import { latexParseError } from "@/lib/domain/latexValidation";
 
 export interface LatexDraft {
   /** Value to bind to the input. */
@@ -36,6 +46,8 @@ export interface LatexDraft {
   altStale: boolean;
   /** Nome acessível do nó: nunca um `alt` que descreve a fórmula anterior. */
   accessibleName: string;
+  /** Razão pela qual o rascunho não parseia, ou `null`. Nada foi commitado. */
+  error: string | null;
 }
 
 export function useLatexDraft(
@@ -52,13 +64,18 @@ export function useLatexDraft(
     setDraft(latex);
   }, [latex]);
 
+  const error = latexParseError(draft);
+
   return {
     value: draft,
     altStale,
+    error,
     accessibleName: altStale ? latex : alt ?? latex,
     onChange: (next: string) => {
       setDraft(next);
       if (next.length === 0) return;
+      // Achado 0434: o nó só recebe o que o KaTeX consegue ler.
+      if (latexParseError(next) !== null) return;
       if (alt !== null && next !== latex) {
         updateAttributes({ latex: next, alt: null });
         setAltStale(true);
@@ -67,7 +84,9 @@ export function useLatexDraft(
       updateAttributes({ latex: next });
     },
     onBlur: () => {
-      if (draft.length === 0) setDraft(latex);
+      // Sair do campo com rascunho vazio OU quebrado devolve a fórmula que está
+      // no nó: o que nunca foi commitado não sobrevive à saída (achado 0434).
+      if (draft.length === 0 || error !== null) setDraft(latex);
     },
     onAltChange: (next: string) => {
       updateAttributes({ alt: next || null });
