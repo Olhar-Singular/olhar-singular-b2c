@@ -247,6 +247,19 @@
     @apply outline-2 outline-offset-2 outline-ring rounded-sm;
   }
 
+  /* Achado 0422: Input/Textarea (src/components/ui, gerados e protegidos)
+     terminam com `focus-visible:outline-none focus-visible:ring-0`, que compila
+     para `.focus-visible\:outline-none:focus-visible`, especificidade (0,2,0),
+     acima dos (0,1,0) da regra global acima. O campo focado ficava so com
+     `border-ring/40`: 1,4:1 contra o estado de repouso, longe dos 3:1 que o
+     WCAG 2.4.13 pede. Como os componentes nao podem ser editados, o anel volta
+     daqui, com (0,2,1); o `:root` existe so para vencer o utilitario. Sem
+     `rounded-sm`: o campo ja e `rounded-md` e achatar a borda seria regressao. */
+  :root input:focus-visible,
+  :root textarea:focus-visible {
+    @apply outline-2 outline-offset-2 outline-ring;
+  }
+
   /* Skip to content link */
   .skip-to-content {
     @apply absolute -top-full left-4 z-[100] bg-primary text-primary-foreground px-4 py-2 rounded-b-lg font-medium text-sm transition-all;

@@ -842,3 +842,81 @@ describe("index.css — alvo de toque do chrome da folha (achado 0236)", () => {
     ).toMatch(/margin-top:\s*calc\(2\.5rem\s*\/\s*var\(--folha-scale/);
   });
 });
+
+/**
+ * Anel de foco dos campos de texto compartilhados (achado 0422).
+ *
+ * `src/components/ui/input.tsx` e `textarea.tsx` (arquivos gerados, protegidos)
+ * terminam com `focus-visible:outline-none focus-visible:ring-0`, que compila
+ * para `.focus-visible\:outline-none:focus-visible`, especificidade (0,2,0),
+ * acima dos (0,1,0) da regra global `:focus-visible`. O unico indicador de foco
+ * virava `border-ring/40`: 1,4:1 contra o estado de repouso, longe dos 3:1 do
+ * WCAG 2.4.13. Como os componentes nao podem ser editados, o anel volta pelo
+ * CSS global, num seletor com especificidade suficiente para vencer (0,2,0).
+ */
+describe("index.css — anel de foco de input/textarea (achado 0422)", () => {
+  /** Especificidade (ids, classes/pseudo-classes, elementos) de um seletor composto. */
+  function specificity(selector: string): [number, number, number] {
+    // `\:` dentro do nome da classe nao e pseudo-classe: neutraliza os escapes.
+    const s = selector.replace(/\\./g, "x");
+    const ids = s.match(/#[\w-]+/g)?.length ?? 0;
+    const classes =
+      (s.match(/\.[\w-]+/g)?.length ?? 0) +
+      (s.match(/\[[^\]]+\]/g)?.length ?? 0) +
+      (s.match(/(?<!:):[\w-]+(?:\([^)]*\))?/g)?.length ?? 0);
+    const elements = s.match(/(?:^|[\s>+~])[a-zA-Z][\w-]*/g)?.length ?? 0;
+    return [ids, classes, elements];
+  }
+
+  function beats(a: number[], b: number[]): boolean {
+    for (let i = 0; i < 3; i += 1) {
+      if (a[i] !== b[i]) return a[i] > b[i];
+    }
+    return false;
+  }
+
+  /** Regra (seletor + corpo) cujo seletor termina em `alvo`. */
+  function regraDe(alvo: string): { seletor: string; corpo: string } {
+    const semComentarios = css.replace(/\/\*[\s\S]*?\*\//g, "");
+    const regras = [...semComentarios.matchAll(/([^{}]+)\{([^{}]*)\}/g)];
+    const regra = regras.find((m) =>
+      m[1].split(",").some((s) => s.trim().endsWith(alvo)),
+    );
+    expect(regra, `nenhuma regra CSS alcanca ${alvo}`).toBeDefined();
+    const seletor = regra![1]
+      .split(",")
+      .map((s) => s.trim())
+      .find((s) => s.endsWith(alvo))!;
+    return { seletor, corpo: regra![2] };
+  }
+
+  // Especificidade da regra que o componente gerado injeta nos utilitarios.
+  const utilitario = specificity(".focus-visible\\:outline-none:focus-visible");
+
+  const alvos = ["input:focus-visible", "textarea:focus-visible"];
+
+  it("mede (0,2,0) para o utilitario que suprime o anel", () => {
+    expect(utilitario).toEqual([0, 2, 0]);
+  });
+
+  it.each(alvos)("repoe o anel do projeto em %s", (alvo) => {
+    const { corpo } = regraDe(alvo);
+    expect(corpo).toMatch(/outline-2/);
+    expect(corpo).toMatch(/outline-offset-2/);
+    expect(corpo).toMatch(/outline-ring/);
+  });
+
+  it.each(alvos)("vence focus-visible:outline-none em %s", (alvo) => {
+    const { seletor } = regraDe(alvo);
+    expect(
+      beats(specificity(seletor), utilitario),
+      `${seletor} nao vence (0,2,0)`,
+    ).toBe(true);
+  });
+
+  it("nao arredonda o campo de novo ao repor o anel", () => {
+    // A regra global traz `rounded-sm`; herdar isso aqui achataria o
+    // `rounded-md` do proprio Input.
+    expect(regraDe("input:focus-visible").corpo).not.toMatch(/rounded-sm/);
+  });
+});
