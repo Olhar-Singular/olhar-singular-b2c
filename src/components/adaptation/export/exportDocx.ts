@@ -74,7 +74,7 @@ import {
 import { indexToLetter } from "../render/letters";
 import { documentHasMath, everyBlock } from "./exportWarnings";
 import { perQuestionBreakFlags } from "../render/perQuestionBreaks";
-import { latexLayoutAtom } from "../render/mathAtom";
+import { latexLayoutAtom, readableMathText } from "../render/mathAtom";
 import { DEFAULT_PANEL_SETTINGS, formatHeaderDateBR, type PanelSettings } from "./panelSettings";
 import { HEADER_SPACING_PT } from "../render/headerSpacing";
 import {
@@ -249,10 +249,15 @@ export function nodeStyleToDocx(style?: NodeStyle): {
 export function richTextToRuns(nodes: Inline[], inherited: RunStyle = {}): TextRun[] {
   return nodes.map((node) => {
     if (node.type === "inlineMath") {
-      // Word has no KaTeX. Emitting the LaTeX source keeps the content visible
-      // (the PDF makes the same pragmatic projection); dropping it was silent
-      // data loss in the middle of a sentence.
-      return new TextRun({ ...inherited, text: latexLayoutAtom(node.latex), font: MATH_FONT });
+      // Word has no KaTeX. Com `alt` preenchido sai a descrição legível, a
+      // mesma regra das views de tela e do PDF (achado 0401); sem ela sai o
+      // LaTeX, que ao menos mantém o conteúdo visível — dropá-lo era perda
+      // silenciosa de dado no meio da frase.
+      return new TextRun({
+        ...inherited,
+        text: readableMathText(node) ?? latexLayoutAtom(node.latex),
+        font: MATH_FONT,
+      });
     }
     // Cor e corpo do próprio run vencem o herdado, validados pela MESMA paleta
     // que a tela (`textRunStyle`) e o PDF (`marksToPdfStyle`) usam. Ignorá-los
@@ -410,7 +415,13 @@ export function blockToDocxParagraphs(block: Block, number: number): DocxBlock[]
           alignment: AlignmentType.CENTER,
           ...para,
           ...spacing,
-          children: [new TextRun({ ...run, text: latexLayoutAtom(block.latex), font: MATH_FONT })],
+          children: [
+            new TextRun({
+              ...run,
+              text: readableMathText(block) ?? latexLayoutAtom(block.latex),
+              font: MATH_FONT,
+            }),
+          ],
         }),
       ];
 

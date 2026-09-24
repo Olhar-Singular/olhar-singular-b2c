@@ -45,7 +45,7 @@ export function PdfMath({ block, blockGap = 12 }: { block: BlockMathBlock; block
   return (
     <View style={{ marginVertical: marginBottom, alignItems }}>
       <View>
-        {mathBlockLines(block.latex).map((line, i) => (
+        {mathBlockLines(block.latex, block.alt).map((line, i) => (
           <Text key={i} style={{ ...MATH_PDF_STYLE, textAlign: "left", ...textStyle }}>
             {line}
           </Text>

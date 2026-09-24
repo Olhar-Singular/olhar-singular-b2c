@@ -76,3 +76,28 @@ describe("mathBlockLines — a fórmula em bloco quebra equilibrada (achados 043
     expect(lines).toEqual(["x".repeat(alvo), "x".repeat(semEspaco.length - alvo)]);
   });
 });
+
+describe("math no PDF imprime a descrição legível quando existe (achado 0401)", () => {
+  const BLOCO =
+    "\\int_{0}^{1} \\frac{x^2 + 1}{\\sqrt{x^3 + 2x}}\\,dx = \\sum_{n=1}^{\\infty} \\frac{1}{n^2}";
+  const ALT = "integral de 0 a 1 de x ao quadrado mais 1 sobre raiz de x ao cubo mais 2x";
+
+  it("inline: o alt vence o LaTeX cru", () => {
+    expect(mathToPdfText("(x+1)^2 = 0", "x mais 1, ao quadrado, igual a zero")).toBe(
+      "x mais 1, ao quadrado, igual a zero",
+    );
+  });
+
+  it("inline: sem alt continua saindo o LaTeX costurado", () => {
+    expect(mathToPdfText("(x+1)^2 = 0")).toBe("(x+1)^2\u00a0=\u00a00");
+    expect(mathToPdfText("(x+1)^2 = 0", "  ")).toBe("(x+1)^2\u00a0=\u00a00");
+  });
+
+  it("bloco: o alt sai como texto natural, numa linha só e com espaços quebráveis", () => {
+    expect(mathBlockLines(BLOCO, ALT)).toEqual([ALT]);
+  });
+
+  it("bloco: sem alt continua quebrando o LaTeX pela coluna", () => {
+    expect(mathBlockLines(BLOCO).length).toBeGreaterThan(1);
+  });
+});

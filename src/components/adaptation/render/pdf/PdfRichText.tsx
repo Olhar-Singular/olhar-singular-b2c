@@ -17,7 +17,7 @@ export function PdfRichText({ content }: { content: RichText }) {
         if (run.type === "inlineMath") {
           return (
             <Text key={i} style={MATH_PDF_INLINE_STYLE}>
-              {mathToPdfText(run.latex)}
+              {mathToPdfText(run.latex, run.alt)}
             </Text>
           );
         }

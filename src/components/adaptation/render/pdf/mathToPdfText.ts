@@ -16,7 +16,7 @@ import {
   PAGE_MARGIN_PT,
   pdfTextSize,
 } from "../pageTokens";
-import { latexLayoutAtom } from "../mathAtom";
+import { latexLayoutAtom, readableMathText } from "../mathAtom";
 
 /** Largura da folha A4 do `@react-pdf`, em pontos. */
 const A4_WIDTH_PT = 595.28;
@@ -40,7 +40,11 @@ export const MATH_PDF_MAX_ATOM_CHARS = Math.floor(
 );
 
 /**
- * Return the LaTeX source to display for a math node in the PDF.
+ * Return the text to display for a math node in the PDF.
+ *
+ * Com `alt` preenchido o papel imprime a descrição legível, como as views de
+ * tela já fazem (achado 0401): ela é texto em linguagem natural, então viaja
+ * quebrável e sem a costura do LaTeX. Sem `alt`, segue o LaTeX cru.
  *
  * Os espaços saem inquebráveis (`latexLayoutAtom`): sem isso o textkit trata
  * cada espaço do LaTeX como ponto de quebra e parte a fórmula no meio, ao
@@ -48,7 +52,9 @@ export const MATH_PDF_MAX_ATOM_CHARS = Math.floor(
  * `MATH_PDF_MAX_ATOM_CHARS`: passando disso ele não caberia em linha nenhuma e o
  * textkit descartaria o excedente em silêncio (achado 0427).
  */
-export function mathToPdfText(latex: string): string {
+export function mathToPdfText(latex: string, alt?: string): string {
+  const readable = readableMathText({ latex, alt });
+  if (readable) return readable;
   return latexLayoutAtom(latex, MATH_PDF_MAX_ATOM_CHARS);
 }
 
@@ -71,6 +77,9 @@ function balancedCut(rest: string, target: number): { end: number; next: number 
 /**
  * Quebra o LaTeX do bloco em linhas EQUILIBRADAS que cabem na coluna útil.
  *
+ * Com `alt` preenchido não há LaTeX a quebrar: a descrição legível sai inteira
+ * numa linha e o textkit a quebra como prosa (achado 0401).
+ *
  * Existe porque `alignItems: "center"` só centra uma caixa que ENCOLHE ao
  * conteúdo: quando o `<Text>` é mais largo que a coluna, o Yoga clampa a caixa
  * na coluna inteira, o textkit quebra dentro dela e as linhas nascem na margem
@@ -92,7 +101,9 @@ function balancedCut(rest: string, target: number): { end: number; next: number 
  * de cada linha os espaços saem inquebráveis, para que o textkit não quebre de
  * novo.
  */
-export function mathBlockLines(latex: string): string[] {
+export function mathBlockLines(latex: string, alt?: string): string[] {
+  const readable = readableMathText({ latex, alt });
+  if (readable) return [readable];
   const lines: string[] = [];
   let rest = latex.trim();
   while (rest.length > MATH_PDF_MAX_ATOM_CHARS) {

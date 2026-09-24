@@ -35,3 +35,21 @@ export function latexLayoutAtom(latex: string, maxAtomChars = Infinity): string 
   if (latex.length > maxAtomChars) return latex;
   return latex.replace(/\s/g, MATH_NBSP);
 }
+
+/**
+ * A descrição legível da fórmula, quando o nó traz uma.
+ *
+ * Todo nó de math carrega um `alt` em português, e as duas views de tela já
+ * imprimem `alt ?? latex`. As superfícies de ARQUIVO descartavam o campo e
+ * entregavam LaTeX cru ao aluno, numa folha cuja razão de existir é remover
+ * barreira de leitura (achado 0401). Enquanto o math não for tipografado de
+ * verdade no PDF/Word, o fallback impresso é esta descrição; o LaTeX fica para
+ * quem não tem `alt`.
+ *
+ * Devolve `null` (e não `""`) para o nó sem descrição, para que quem chama
+ * escolha explicitamente o caminho do LaTeX, que tem costura e quebra próprias.
+ */
+export function readableMathText(node: { latex: string; alt?: string }): string | null {
+  const alt = node.alt?.trim();
+  return alt ? alt : null;
+}

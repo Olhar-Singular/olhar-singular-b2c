@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { latexLayoutAtom, MATH_NBSP } from "./mathAtom";
+import { latexLayoutAtom, readableMathText, MATH_NBSP } from "./mathAtom";
 
 describe("latexLayoutAtom", () => {
   it("troca os espaços do LaTeX por espaço inquebrável", () => {
@@ -33,5 +33,22 @@ describe("latexLayoutAtom com teto de largura (achado 0427)", () => {
   it("costura a fórmula do tamanho exato do teto", () => {
     const latex = "a ".repeat(25).trim(); // 49 caracteres
     expect(latexLayoutAtom(latex, 49)).not.toContain(" ");
+  });
+});
+
+describe("readableMathText — a descrição legível da fórmula (achado 0401)", () => {
+  it("devolve o alt quando o nó tem um", () => {
+    expect(readableMathText({ latex: "\\frac{1}{n^2}", alt: "um sobre n ao quadrado" })).toBe(
+      "um sobre n ao quadrado",
+    );
+  });
+
+  it("apara o alt antes de imprimir", () => {
+    expect(readableMathText({ latex: "x^2", alt: "  x ao quadrado \n" })).toBe("x ao quadrado");
+  });
+
+  it("devolve null quando não há alt, ou quando ele é só espaço", () => {
+    expect(readableMathText({ latex: "x^2" })).toBeNull();
+    expect(readableMathText({ latex: "x^2", alt: "   " })).toBeNull();
   });
 });

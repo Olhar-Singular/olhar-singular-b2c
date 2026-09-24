@@ -1378,3 +1378,31 @@ describe("documentRunStyle — idioma", () => {
     expect(documentRunStyle({ fontSize: 14 }).language).toEqual({ value: "pt-BR" });
   });
 });
+
+describe("Word imprime a descrição legível da fórmula (achado 0401)", () => {
+  it("inlineMath com alt sai como texto legível, não como LaTeX", () => {
+    const runs = richTextToRuns([
+      { type: "text", text: "vale " },
+      { type: "inlineMath", latex: "x^2 + 1", alt: "x ao quadrado mais 1" },
+    ]);
+    expect(docxText(runs)).toContain("x ao quadrado mais 1");
+    expect(docxText(runs)).not.toContain("^");
+  });
+
+  it("blockMath com alt sai como texto legível", () => {
+    expect(
+      blockText({
+        id: id(220),
+        type: "blockMath",
+        latex: "\\frac{1}{2} = 0.5",
+        alt: "um meio igual a zero vírgula cinco",
+      }),
+    ).toContain("um meio igual a zero vírgula cinco");
+  });
+
+  it("sem alt continua saindo o LaTeX costurado", () => {
+    expect(blockText({ id: id(221), type: "blockMath", latex: "\\frac{1}{2} = 0.5" })).toContain(
+      "\\frac{1}{2}\u00a0=\u00a00.5",
+    );
+  });
+});
