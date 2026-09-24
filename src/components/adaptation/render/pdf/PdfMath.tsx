@@ -5,6 +5,10 @@
  *
  * Layout note: the outer <View> carries block spacing so Yoga can account for
  * it correctly when mixed with <View> siblings (same reason as PdfParagraph).
+ * O vão vai SÓ abaixo, como em todo bloco de texto do renderer: o Yoga não
+ * colapsa margens, então um `marginVertical` fazia a junta anterior à fórmula
+ * valer 2 × blockGap e `spacingAfter` ("depois deste bloco") empurrar também o
+ * bloco anterior (achado 0407).
  *
  * `blockGap` (in pt) is the doc-level default inter-block gap resolved from
  * pageStyle. A per-block `style.spacingAfter` overrides it.
@@ -53,7 +57,7 @@ export function PdfMath({
   const marginBottom = nodeMarginBottom ?? blockGap;
   const alignItems = nodeTextAlign ? BOX_ALIGN[nodeTextAlign as keyof typeof BOX_ALIGN] : "center";
   return (
-    <View style={{ marginVertical: marginBottom, alignItems }}>
+    <View style={{ marginBottom, alignItems }}>
       <View>
         {mathBlockLines(block.latex, block.alt, fontSize).map((line, i) => (
           <Text key={i} style={{ ...mathPdfStyle(fontSize), textAlign: "left", ...textStyle }}>
