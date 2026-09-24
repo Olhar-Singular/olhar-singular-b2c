@@ -27,7 +27,7 @@ src/components/adaptation/render/pdf/
 ├── PdfRichText.tsx       # runs de RichText → <Text> (marks + cor allowlistada; inlineMath = LaTeX mono)
 ├── richTextPdf.ts        # PURO: marksToPdfStyle(marks,color) → Style react-pdf
 ├── nodeStyleToPdf.ts     # PURO: NodeStyle → Style + pageBreakBefore(); valida cor via isAllowedColor
-├── mathToPdfText.ts      # PURO: latex → texto (v1 = LaTeX cru em monospace) + MATH_PDF_STYLE
+├── mathToPdfText.ts      # PURO: latex → texto (v1 = LaTeX cru em monospace) + mathPdfStyle(corpoDoContexto)
 └── *.test.ts(x)          # AdaptationPdf, mappers, parity, nodeStyleToPdf, richTextPdf, mathToPdfText
 ```
 

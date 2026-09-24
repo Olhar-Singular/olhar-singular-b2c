@@ -25,7 +25,8 @@
 import { View, Text } from "@react-pdf/renderer";
 import type { Block } from "@/lib/adaptation/canonical/schema";
 import { nodeStyleToPdf } from "./nodeStyleToPdf";
-import { mathBlockLines, MATH_PDF_STYLE } from "./mathToPdfText";
+import { mathBlockLines, mathPdfStyle } from "./mathToPdfText";
+import { BASE_FONT_PT } from "../pageTokens";
 
 type BlockMathBlock = Extract<Block, { type: "blockMath" }>;
 
@@ -37,7 +38,16 @@ const BOX_ALIGN = {
   justify: "flex-start",
 } as const;
 
-export function PdfMath({ block, blockGap = 12 }: { block: BlockMathBlock; blockGap?: number }) {
+export function PdfMath({
+  block,
+  blockGap = 12,
+  fontSize = BASE_FONT_PT,
+}: {
+  block: BlockMathBlock;
+  blockGap?: number;
+  /** Corpo do documento (pt): a fórmula escala com ele, como na tela (achado 0402). */
+  fontSize?: number;
+}) {
   const nodeStyle = nodeStyleToPdf(block.style);
   const { marginBottom: nodeMarginBottom, textAlign: nodeTextAlign, ...textStyle } = nodeStyle;
   const marginBottom = nodeMarginBottom ?? blockGap;
@@ -45,8 +55,8 @@ export function PdfMath({ block, blockGap = 12 }: { block: BlockMathBlock; block
   return (
     <View style={{ marginVertical: marginBottom, alignItems }}>
       <View>
-        {mathBlockLines(block.latex, block.alt).map((line, i) => (
-          <Text key={i} style={{ ...MATH_PDF_STYLE, textAlign: "left", ...textStyle }}>
+        {mathBlockLines(block.latex, block.alt, fontSize).map((line, i) => (
+          <Text key={i} style={{ ...mathPdfStyle(fontSize), textAlign: "left", ...textStyle }}>
             {line}
           </Text>
         ))}

@@ -11,8 +11,9 @@
  */
 
 import {
-  MATH_PDF_FONT_SIZE_PT,
+  BASE_FONT_PT,
   MATH_PDF_INLINE_LINE_HEIGHT,
+  mathPdfFontSizePt,
   PAGE_MARGIN_PT,
   pdfTextSize,
 } from "../pageTokens";
@@ -34,10 +35,19 @@ const COURIER_ADVANCE_EM = 0.6;
  *
  * O teto mede a coluna de texto do documento. Colunas mais estreitas (alternativa
  * de múltipla escolha, caixa do andaime) continuam fora desta conta.
+ *
+ * Depende do corpo do contexto porque a fórmula depende (achado 0402): num
+ * documento maior cabem menos caracteres por linha.
  */
-export const MATH_PDF_MAX_ATOM_CHARS = Math.floor(
-  (A4_WIDTH_PT - 2 * PAGE_MARGIN_PT) / (COURIER_ADVANCE_EM * MATH_PDF_FONT_SIZE_PT),
-);
+export function mathPdfMaxAtomChars(contextFontSizePt: number = BASE_FONT_PT): number {
+  return Math.floor(
+    (A4_WIDTH_PT - 2 * PAGE_MARGIN_PT) /
+      (COURIER_ADVANCE_EM * mathPdfFontSizePt(contextFontSizePt)),
+  );
+}
+
+/** O teto no tamanho BASE, para quem renderiza um nó solto. */
+export const MATH_PDF_MAX_ATOM_CHARS = mathPdfMaxAtomChars();
 
 /**
  * Return the text to display for a math node in the PDF.
@@ -52,10 +62,14 @@ export const MATH_PDF_MAX_ATOM_CHARS = Math.floor(
  * `MATH_PDF_MAX_ATOM_CHARS`: passando disso ele não caberia em linha nenhuma e o
  * textkit descartaria o excedente em silêncio (achado 0427).
  */
-export function mathToPdfText(latex: string, alt?: string): string {
+export function mathToPdfText(
+  latex: string,
+  alt?: string,
+  contextFontSizePt: number = BASE_FONT_PT,
+): string {
   const readable = readableMathText({ latex, alt });
   if (readable) return readable;
-  return latexLayoutAtom(latex, MATH_PDF_MAX_ATOM_CHARS);
+  return latexLayoutAtom(latex, mathPdfMaxAtomChars(contextFontSizePt));
 }
 
 /**
@@ -64,8 +78,8 @@ export function mathToPdfText(latex: string, alt?: string): string {
  * Devolve o fim da linha e por onde continuar (o espaço usado na quebra é
  * consumido). Sem nenhum espaço no trecho que cabe, corta no seco no alvo.
  */
-function balancedCut(rest: string, target: number): { end: number; next: number } {
-  const head = rest.slice(0, MATH_PDF_MAX_ATOM_CHARS + 1);
+function balancedCut(rest: string, target: number, maxChars: number): { end: number; next: number } {
+  const head = rest.slice(0, maxChars + 1);
   let best = -1;
   for (let i = 0; i < head.length; i += 1) {
     if (!/\s/.test(head[i])) continue;
@@ -101,45 +115,61 @@ function balancedCut(rest: string, target: number): { end: number; next: number 
  * de cada linha os espaços saem inquebráveis, para que o textkit não quebre de
  * novo.
  */
-export function mathBlockLines(latex: string, alt?: string): string[] {
+export function mathBlockLines(
+  latex: string,
+  alt?: string,
+  contextFontSizePt: number = BASE_FONT_PT,
+): string[] {
   const readable = readableMathText({ latex, alt });
   if (readable) return [readable];
+  const maxChars = mathPdfMaxAtomChars(contextFontSizePt);
   const lines: string[] = [];
   let rest = latex.trim();
-  while (rest.length > MATH_PDF_MAX_ATOM_CHARS) {
-    const target = Math.ceil(rest.length / Math.ceil(rest.length / MATH_PDF_MAX_ATOM_CHARS));
-    const { end, next } = balancedCut(rest, target);
+  while (rest.length > maxChars) {
+    const target = Math.ceil(rest.length / Math.ceil(rest.length / maxChars));
+    const { end, next } = balancedCut(rest, target, maxChars);
     lines.push(rest.slice(0, end));
     rest = rest.slice(next).trimStart();
   }
   lines.push(rest);
-  return lines.map((line) => latexLayoutAtom(line, MATH_PDF_MAX_ATOM_CHARS));
+  return lines.map((line) => latexLayoutAtom(line, maxChars));
 }
 
 /**
  * Shared monospace style for math LaTeX text in the PDF.
  *
- * O tamanho não é escolhido aqui: vem de `MATH_PDF_FONT_SIZE_PT`, a razão de
- * tinta publicada em `pageTokens` já compensada pela caixa alta da Courier. Era
+ * O tamanho não é escolhido aqui: vem de `mathPdfFontSizePt`, a razão de
+ * tinta publicada em `pageTokens` já compensada pela caixa alta da Courier. O corpo do contexto entra como argumento para
+ * que a fórmula escale junto com o documento (achado 0402). Era
  * um `11` literal, que com a métrica desta família dava 0,74x a tinta do corpo
  * enquanto a folha do Revisar mostrava 1,12x — a proporção invertia entre a tela
  * e o papel (achado 0424).
  */
-export const MATH_PDF_STYLE = {
-  fontFamily: "Courier",
-  ...pdfTextSize(MATH_PDF_FONT_SIZE_PT),
-} as const;
+export function mathPdfStyle(contextFontSizePt: number = BASE_FONT_PT) {
+  return {
+    fontFamily: "Courier",
+    ...pdfTextSize(mathPdfFontSizePt(contextFontSizePt)),
+  } as const;
+}
+
+/** O estilo no tamanho BASE, para quem renderiza um nó solto. */
+export const MATH_PDF_STYLE = mathPdfStyle();
 
 /**
  * Estilo do run de fórmula INLINE, dentro de uma linha de texto do corpo.
  *
- * Mesma tinta do bloco (`MATH_PDF_FONT_SIZE_PT`, achado 0424), mas o avanço da
+ * Mesma tinta do bloco (`mathPdfFontSizePt`, achado 0424), mas o avanço da
  * linha é o do CORPO: o textkit dimensiona a linha pelo run mais alto, e com a
  * razão cheia ao lado do corpo inflado da Courier o parágrafo inteiro avançava
  * 23,62 pt no papel contra 17,89 pt na folha do Revisar (achado 0430). A caixa
  * da fórmula é um átomo dentro da linha, não um segundo corpo de texto.
  */
-export const MATH_PDF_INLINE_STYLE = {
-  ...MATH_PDF_STYLE,
-  lineHeight: MATH_PDF_INLINE_LINE_HEIGHT,
-} as const;
+export function mathPdfInlineStyle(contextFontSizePt: number = BASE_FONT_PT) {
+  return {
+    ...mathPdfStyle(contextFontSizePt),
+    lineHeight: MATH_PDF_INLINE_LINE_HEIGHT,
+  } as const;
+}
+
+/** O estilo inline no tamanho BASE, para quem renderiza um run solto. */
+export const MATH_PDF_INLINE_STYLE = mathPdfInlineStyle();

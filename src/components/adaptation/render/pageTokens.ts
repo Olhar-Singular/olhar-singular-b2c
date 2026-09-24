@@ -579,9 +579,21 @@ export const MATH_FONT_SIZE_EM =
  * Tamanho da fórmula no PDF, em pt: a mesma razão de tinta, compensada pela
  * caixa alta da Courier. Se a família da fórmula um dia for a do resto do
  * documento, a compensação some sozinha e sobra só `MATH_INK_RATIO`.
+ *
+ * É FUNÇÃO do corpo do contexto, não constante: a razão foi assinada num corpo
+ * de 12 pt e virou carimbo, então subir o texto no popover "Formato" escalava a
+ * folha do Revisar (o KaTeX é dimensionado em `em`) e deixava a fórmula do papel
+ * parada no tamanho de 12 pt — um documento de 21 pt saía com a matemática a
+ * 57% da tinta do corpo, dentro da mesma frase (achado 0402). O contexto é o
+ * corpo de quem hospeda o run (enunciado, instrução, legenda ou o corpo do
+ * documento), como na tela, onde o `em` do KaTeX mede o mesmo pai.
  */
-export const MATH_PDF_FONT_SIZE_PT =
-  (BASE_FONT_PT * MATH_INK_RATIO * CAP_HEIGHT_EM.body) / CAP_HEIGHT_EM.mathPdf;
+export function mathPdfFontSizePt(contextFontSizePt: number = BASE_FONT_PT): number {
+  return (contextFontSizePt * MATH_INK_RATIO * CAP_HEIGHT_EM.body) / CAP_HEIGHT_EM.mathPdf;
+}
+
+/** A mesma razão no tamanho BASE — o valor histórico, para quem renderiza solto. */
+export const MATH_PDF_FONT_SIZE_PT = mathPdfFontSizePt();
 
 /**
  * Razão de entrelinha do run de fórmula INLINE no PDF.
@@ -602,6 +614,8 @@ export const MATH_PDF_FONT_SIZE_PT =
  */
 export const MATH_PDF_INLINE_LINE_HEIGHT =
   (BASE_FONT_PT * BASE_LINE_HEIGHT) / MATH_PDF_FONT_SIZE_PT;
+// Vale em qualquer corpo: tamanho e avanço escalam juntos, então a razão entre
+// eles é a mesma em 12 pt e em 21 pt (achado 0402).
 
 /**
  * Tinta do corpo do documento (título, parágrafo, enunciado e alternativas:

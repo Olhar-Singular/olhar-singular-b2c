@@ -29,6 +29,7 @@ import {
   ANSWER_LINE_DASH_SPACE_PT,
   ANSWER_ITEM_GAP_PT,
   alternativeMarkerColumnPt,
+  BASE_FONT_PT,
   pdfTextSize,
 } from "../pageTokens";
 
@@ -107,9 +108,12 @@ const DEFAULT_ELEMENT_SIZES = resolveElementFontSizes(resolvePageStyle());
 export function PdfAnswer({
   answer,
   elementSizes = DEFAULT_ELEMENT_SIZES,
+  baseFontSize = BASE_FONT_PT,
 }: {
   answer: QuestionAnswer;
   elementSizes?: ElementFontSizesPt;
+  /** Corpo do documento (pt): contexto da fórmula nas células da tabela (0402). */
+  baseFontSize?: number;
 }) {
   // Alternatives / items / cells all read at the "alternative" size, which
   // follows the document font size (see resolveElementFontSizes).
@@ -134,7 +138,7 @@ export function PdfAnswer({
               <Text style={MARKER}>{indexToLetter(i)})</Text>
               <View style={FLEX}>
                 <Text style={itemStyle}>
-                  <PdfRichText content={alt.content} />
+                  <PdfRichText content={alt.content} fontSize={elementSizes.alternative} />
                 </Text>
               </View>
             </View>
@@ -149,7 +153,7 @@ export function PdfAnswer({
               <Text style={TF_MARKER}>(  ) V  (  ) F</Text>
               <View style={FLEX}>
                 <Text style={itemStyle}>
-                  <PdfRichText content={item.content} />
+                  <PdfRichText content={item.content} fontSize={elementSizes.alternative} />
                 </Text>
               </View>
             </View>
@@ -164,7 +168,7 @@ export function PdfAnswer({
               <Text style={MARKER}>[ ]</Text>
               <View style={FLEX}>
                 <Text style={itemStyle}>
-                  <PdfRichText content={item.content} />
+                  <PdfRichText content={item.content} fontSize={elementSizes.alternative} />
                 </Text>
               </View>
             </View>
@@ -178,13 +182,13 @@ export function PdfAnswer({
             <View key={pair.id} style={ROW}>
               <View style={FLEX}>
                 <Text style={itemStyle}>
-                  <PdfRichText content={pair.left} />
+                  <PdfRichText content={pair.left} fontSize={elementSizes.alternative} />
                 </Text>
               </View>
               <Text style={{ marginHorizontal: 6, flexShrink: 0 }}>↔</Text>
               <View style={FLEX}>
                 <Text style={itemStyle}>
-                  <PdfRichText content={pair.right} />
+                  <PdfRichText content={pair.right} fontSize={elementSizes.alternative} />
                 </Text>
               </View>
             </View>
@@ -199,7 +203,7 @@ export function PdfAnswer({
               <Text style={MARKER}>____</Text>
               <View style={FLEX}>
                 <Text style={itemStyle}>
-                  <PdfRichText content={item.content} />
+                  <PdfRichText content={item.content} fontSize={elementSizes.alternative} />
                 </Text>
               </View>
             </View>
@@ -229,7 +233,7 @@ export function PdfAnswer({
               {header.map((c, i) => (
                 <View key={i} style={cell}>
                   <Text style={{ fontWeight: "bold" }}>
-                    <PdfRichText content={c} />
+                    <PdfRichText content={c} fontSize={baseFontSize} />
                   </Text>
                 </View>
               ))}
@@ -240,7 +244,7 @@ export function PdfAnswer({
               {row.map((c, i) => (
                 <View key={i} style={cell}>
                   <Text>
-                    <PdfRichText content={c} />
+                    <PdfRichText content={c} fontSize={baseFontSize} />
                   </Text>
                 </View>
               ))}

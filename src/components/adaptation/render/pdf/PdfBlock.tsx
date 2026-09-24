@@ -42,9 +42,9 @@ function dispatch(
     case "heading":
       return <PdfHeading block={block} blockGap={blockGap} />;
     case "paragraph":
-      return <PdfParagraph block={block} blockGap={blockGap} />;
+      return <PdfParagraph block={block} blockGap={blockGap} baseFontSize={baseFontSize} />;
     case "blockMath":
-      return <PdfMath block={block} blockGap={blockGap} />;
+      return <PdfMath block={block} blockGap={blockGap} fontSize={baseFontSize} />;
     case "image":
       return <PdfImage block={block} blockGap={blockGap} elementSizes={elementSizes} />;
     case "scaffolding":
@@ -75,7 +75,10 @@ export function PdfBlock({
   number?: number;
   blockGap?: number;
   elementSizes?: ElementFontSizesPt;
-  /** Corpo do documento (pt), repassado à questão para derivar a coluna do número. */
+  /**
+   * Corpo do documento (pt). A questão deriva dele a coluna do número; o
+   * parágrafo e a fórmula, o tamanho da matemática impressa (achado 0402).
+   */
   baseFontSize?: number;
 }) {
   const node = dispatch(block, number, blockGap, elementSizes, baseFontSize);

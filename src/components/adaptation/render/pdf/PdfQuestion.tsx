@@ -85,7 +85,7 @@ export function PdfQuestion({
       <View style={{ marginBottom: 4 }}>
         <Text style={{ ...pdfTextSize(elementSizes.stem) }}>
           {prefix}
-          <PdfRichText content={block.enunciado!} />
+          <PdfRichText content={block.enunciado!} fontSize={elementSizes.stem} />
         </Text>
       </View>
     ) : null;
@@ -132,6 +132,7 @@ export function PdfQuestion({
       number={stemNumbers[i]}
       blockGap={QUESTION_INNER_GAP_PT}
       elementSizes={elementSizes}
+      baseFontSize={baseFontSize}
     />
   ));
 
@@ -139,7 +140,7 @@ export function PdfQuestion({
     enunciadoLeads || paragraphLeads ? (
       <View style={{ paddingLeft: numberColumn }}>
         {enunciadoLeads ? enunciadoView(numberRun) : null}
-        {paragraphLeads ? <PdfParagraph block={leadingStem} blockGap={QUESTION_INNER_GAP_PT} numberPrefix={numberRun} /> : null}
+        {paragraphLeads ? <PdfParagraph block={leadingStem} blockGap={QUESTION_INNER_GAP_PT} numberPrefix={numberRun} baseFontSize={baseFontSize} /> : null}
         {paragraphLeads ? stemBlocks.slice(1) : stemBlocks}
         {position === "below" && enunciadoView()}
       </View>
@@ -161,12 +162,12 @@ export function PdfQuestion({
       {block.instruction && (
         <View style={{ marginBottom: 4 }}>
           <Text style={{ fontStyle: "italic", color: INK_MUTED, ...pdfTextSize(elementSizes.instruction) }}>
-            <PdfRichText content={block.instruction} />
+            <PdfRichText content={block.instruction} fontSize={elementSizes.instruction} />
           </Text>
         </View>
       )}
 
-      <PdfAnswer answer={block.answer} elementSizes={elementSizes} />
+      <PdfAnswer answer={block.answer} elementSizes={elementSizes} baseFontSize={baseFontSize} />
     </View>
   );
 }

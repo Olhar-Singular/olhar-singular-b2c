@@ -43,6 +43,7 @@ import {
   RULE_COLOR,
   RULE_WIDTH_PT,
   HEADING_PT,
+  BASE_FONT_PT,
   pdfTextSize,
 } from "../pageTokens";
 import { resolveElementFontSizes, resolvePageStyle, type ElementFontSizesPt } from "../pageStyle";
@@ -70,7 +71,7 @@ export function PdfHeading({ block, blockGap = 12 }: { block: HeadingBlock; bloc
   return (
     <View style={{ marginBottom }}>
       <Text style={{ ...pdfTextSize(HEADING_SIZE[block.level]), fontWeight: "bold", ...textStyle }}>
-        <PdfRichText content={block.content} />
+        <PdfRichText content={block.content} fontSize={HEADING_SIZE[block.level]} />
       </Text>
     </View>
   );
@@ -86,10 +87,13 @@ export function PdfParagraph({
   block,
   blockGap = 12,
   numberPrefix,
+  baseFontSize = BASE_FONT_PT,
 }: {
   block: ParagraphBlock;
   blockGap?: number;
   numberPrefix?: ReactNode;
+  /** Corpo do documento (pt), herdado do <Page>: é o contexto da fórmula inline (0402). */
+  baseFontSize?: number;
 }) {
   const nodeStyle = nodeStyleToPdf(block.style);
   const { marginBottom: nodeMarginBottom, ...textStyle } = nodeStyle;
@@ -98,7 +102,7 @@ export function PdfParagraph({
     <View style={{ marginBottom }}>
       <Text style={textStyle}>
         {numberPrefix}
-        <PdfRichText content={block.content} />
+        <PdfRichText content={block.content} fontSize={baseFontSize} />
       </Text>
     </View>
   );
@@ -162,7 +166,7 @@ export function PdfImage({
       />
       {block.caption && (
         <Text style={{ ...pdfTextSize(elementSizes.caption), color: INK_MUTED, marginTop: 2 }}>
-          <PdfRichText content={block.caption} />
+          <PdfRichText content={block.caption} fontSize={elementSizes.caption} />
         </Text>
       )}
     </View>
