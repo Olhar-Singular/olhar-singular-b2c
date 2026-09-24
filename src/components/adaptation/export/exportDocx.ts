@@ -55,6 +55,7 @@ import {
 } from "@/lib/adaptation/canonical/fontFamily";
 import {
   BASE_FONT_PT,
+  ELEMENT_FONT_RATIOS,
   DEFAULT_FONT_FAMILY_TOKEN,
   DEFAULT_INK,
   SCAFFOLDING_BG,
@@ -92,8 +93,8 @@ const SUB_SIZE = 21;
  * enquanto edita (achado 0166).
  */
 const DOCX_INK = DEFAULT_INK.slice(1);
-/** Caption size in half-points (10pt) — the sheet's `caption` element size. */
-const CAPTION_SIZE = 20;
+/** Caption size in half-points — the sheet's `caption` element size (10pt). */
+const CAPTION_SIZE = Math.round(ELEMENT_FONT_RATIOS.caption * BASE_FONT_PT * 2);
 
 /**
  * Moldura + fundo da caixa do andaime, com os tokens compartilhados das outras
@@ -411,7 +412,15 @@ export function blockToDocxParagraphs(block: Block, number: number): DocxBlock[]
       ];
       if (hasCaption) {
         paragraphs.push(
-          new Paragraph({ ...para, ...spacing, children: richTextToRuns(block.caption!, run) }),
+          // A legenda é texto secundário, como na folha, na prévia e no PDF
+          // (`ELEMENT_FONT_RATIOS.caption`): sem tamanho próprio ela saía no
+          // corpo do enunciado e deixava de se ler como legenda (achado 0333).
+          // O tamanho que a professora escolheu no bloco continua vencendo.
+          new Paragraph({
+            ...para,
+            ...spacing,
+            children: richTextToRuns(block.caption!, { ...run, size: run.size ?? CAPTION_SIZE }),
+          }),
         );
       }
       return paragraphs;

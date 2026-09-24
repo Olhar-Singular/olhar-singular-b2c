@@ -18,6 +18,8 @@ import {
   RULE_COLOR,
   RULE_WIDTH_PT,
   pageTokensToPdf,
+  ELEMENT_FONT_RATIOS,
+  BASE_FONT_PT,
 } from "../render/pageTokens";
 import type {
   Block,
@@ -1165,5 +1167,47 @@ describe("docxSectionProperties", () => {
   it("não usa a margem de 1 polegada que a lib docx aplica por default", () => {
     const { margin } = docxSectionProperties().page;
     Object.values(margin).forEach((side) => expect(side).not.toBe(1440));
+  });
+});
+
+/**
+ * Achado 0333: a legenda da imagem era o único texto secundário que o Word
+ * imprimia no corpo do documento. A folha, a prévia e o PDF a desenham em
+ * `ELEMENT_FONT_RATIOS.caption` (10pt no corpo padrão); o run da legenda saía
+ * sem `<w:sz>` nenhum, do mesmo tamanho do enunciado, e a única pista de que
+ * aquela linha é legenda sumia no arquivo aberto.
+ */
+describe("0333 · legenda da imagem no Word sai no corpo de legenda", () => {
+  const captionHalfPoints = Math.round(ELEMENT_FONT_RATIOS.caption * BASE_FONT_PT * 2);
+
+  it("emite a legenda no tamanho de elemento que as outras superfícies usam", () => {
+    const [, legenda] = blockToDocxParagraphs(
+      {
+        id: id(333),
+        type: "image",
+        src: "https://e.com/a.png",
+        alt: "figura",
+        caption: text("Figura 1 - esquema largo de apoio"),
+      },
+      1,
+    ) as [unknown, unknown];
+    const props = docxRunProps(legenda);
+    expect(props.some((p) => p.key === "w:sz" && p.val === captionHalfPoints)).toBe(true);
+  });
+
+  it("não carimba o tamanho de legenda por cima do que a professora escolheu no bloco", () => {
+    const [, legenda] = blockToDocxParagraphs(
+      {
+        id: id(334),
+        type: "image",
+        src: "https://e.com/a.png",
+        caption: text("Figura 1"),
+        style: { fontSize: 24 }, // px → 18pt → 36 meios-pontos
+      },
+      1,
+    ) as [unknown, unknown];
+    const props = docxRunProps(legenda);
+    expect(props.some((p) => p.key === "w:sz" && p.val === 36)).toBe(true);
+    expect(props.some((p) => p.key === "w:sz" && p.val === captionHalfPoints)).toBe(false);
   });
 });
