@@ -85,6 +85,14 @@ function richTextsOf(block: Block): RichText[] {
  * par de associação, uma célula de tabela. Olhar só parágrafo/título deixava o
  * LaTeX chegar ao arquivo sem nenhum aviso.
  */
+/**
+ * A mesma frase serve ao PDF, ao Word e ao "Copiar": a perda é uma só (o LaTeX
+ * cru no lugar da fórmula tipografada). Uma constante impede que uma das
+ * superfícies passe a descrever a perda de outro jeito.
+ */
+export const MATH_LOSS_WARNING =
+  "As fórmulas saem como texto LaTeX, sem formatação matemática.";
+
 export function documentHasMath(document: CanonicalDocument): boolean {
   const blocks = everyBlock(document.blocks);
   // As duas varreduras acontecem antes do `||`: curto-circuitar no blockMath
@@ -122,7 +130,7 @@ export function pdfExportWarnings(
   }
 
   if (documentHasMath(document)) {
-    warnings.push("As fórmulas saem como texto LaTeX, sem formatação matemática.");
+    warnings.push(MATH_LOSS_WARNING);
   }
 
   // A folha mostra o itálico porque o navegador sintetiza a inclinação; o PDF
@@ -136,4 +144,21 @@ export function pdfExportWarnings(
   }
 
   return warnings;
+}
+
+/**
+ * O que o "Copiar" não carrega fiel (0411).
+ *
+ * `documentToPlainText` emite o LaTeX cru, byte a byte o mesmo que o PDF
+ * imprime — mas o botão da cópia era o único do grupo que entregava essa perda
+ * calado, com um toast de sucesso, enquanto os dois vizinhos abriam um diálogo.
+ * Quem copia é justamente quem vai colar num e-mail ou no Docs e imprimir sem
+ * revisar. A frase é a mesma do PDF de propósito: é a mesma perda.
+ *
+ * A cópia é texto puro, então nada aqui fala de imagem ou de fonte: o `alt`
+ * nunca foi prometido e não há tipografia a perder.
+ */
+export function copyExportWarnings(document: CanonicalDocument): string[] {
+  if (!documentHasMath(document)) return [];
+  return [MATH_LOSS_WARNING];
 }

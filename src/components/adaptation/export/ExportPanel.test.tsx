@@ -636,3 +636,74 @@ describe("estado vazio do título espelha o Revisar (0185)", () => {
     expect(screen.queryByText("Sem nome")).not.toBeInTheDocument();
   });
 });
+
+// ---------------------------------------------------------------------------
+// 0411 — o "Copiar" entrega o mesmo LaTeX cru do PDF e era o único calado
+// ---------------------------------------------------------------------------
+
+describe("aviso antes de copiar (0411)", () => {
+  const mathDoc: CanonicalDocument = {
+    schemaVersion: 1,
+    blocks: [
+      { id: id(1), type: "paragraph", content: [{ type: "inlineMath", latex: "E = mc^2" }] },
+      { id: id(2), type: "blockMath", latex: "a^2 + b^2 = c^2" },
+    ],
+  };
+
+  it("não escreve na área de transferência antes de avisar da fórmula", async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.assign(navigator, { clipboard: { writeText } });
+    const { toast } = await import("sonner");
+    render(<ExportPanel document={mathDoc} onDownload={vi.fn()} />);
+
+    fireEvent.click(screen.getByRole("button", { name: /Copiar/i }));
+
+    expect(await screen.findByText(/não vai no texto copiado/i)).toBeInTheDocument();
+    expect(screen.getByText(/fórmulas saem como texto LaTeX/i)).toBeInTheDocument();
+    expect(writeText).not.toHaveBeenCalled();
+    expect(toast.success).not.toHaveBeenCalled();
+  });
+
+  it("confirmar copia de verdade e só então diz que copiou", async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.assign(navigator, { clipboard: { writeText } });
+    const { toast } = await import("sonner");
+    render(<ExportPanel document={mathDoc} onDownload={vi.fn()} />);
+
+    fireEvent.click(screen.getByRole("button", { name: /Copiar/i }));
+    fireEvent.click(await screen.findByRole("button", { name: /Copiar mesmo assim/i }));
+
+    await waitFor(() => expect(writeText).toHaveBeenCalled());
+    expect(writeText.mock.calls[0][0]).toContain("a^2 + b^2 = c^2");
+    await waitFor(() =>
+      expect(toast.success).toHaveBeenCalledWith("Copiado para a área de transferência!"),
+    );
+  });
+
+  it("cancelar não copia nada", async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.assign(navigator, { clipboard: { writeText } });
+    const { toast } = await import("sonner");
+    render(<ExportPanel document={mathDoc} onDownload={vi.fn()} />);
+
+    fireEvent.click(screen.getByRole("button", { name: /Copiar/i }));
+    fireEvent.click(await screen.findByRole("button", { name: /Cancelar/i }));
+
+    await waitFor(() =>
+      expect(screen.queryByText(/não vai no texto copiado/i)).not.toBeInTheDocument(),
+    );
+    expect(writeText).not.toHaveBeenCalled();
+    expect(toast.success).not.toHaveBeenCalled();
+  });
+
+  it("documento sem fórmula copia em um clique, sem diálogo", async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.assign(navigator, { clipboard: { writeText } });
+    render(<ExportPanel document={document} onDownload={vi.fn()} />);
+
+    fireEvent.click(screen.getByRole("button", { name: /Copiar/i }));
+
+    await waitFor(() => expect(writeText).toHaveBeenCalled());
+    expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
+  });
+});

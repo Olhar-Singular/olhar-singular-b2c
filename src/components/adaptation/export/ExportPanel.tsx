@@ -29,7 +29,7 @@ import type { CanonicalDocument, DocumentHeader, PageStyle } from "@/lib/adaptat
 import { documentToPlainText } from "@/lib/adaptation/canonical/plainText";
 import { downloadPdf } from "./exportPdf";
 import { downloadDocx, docxExportWarnings } from "./exportDocx";
-import { documentHasMath, pdfExportWarnings } from "./exportWarnings";
+import { copyExportWarnings, documentHasMath, pdfExportWarnings } from "./exportWarnings";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -42,7 +42,26 @@ import {
 } from "@/components/ui/alert-dialog";
 import { type PanelSettings } from "./panelSettings";
 
-type ExportWarning = { format: "pdf" | "word"; warnings: string[] };
+type ExportWarning = { format: "pdf" | "word" | "copy"; warnings: string[] };
+
+/** Cabeçalho e rótulo de confirmação de cada saída que pode perder conteúdo. */
+const WARNING_COPY = {
+  pdf: {
+    title: "O que não vai para o PDF",
+    intro: "O arquivo será gerado, mas estes itens não saem como aparecem na prévia:",
+    confirm: "Baixar mesmo assim",
+  },
+  word: {
+    title: "O que não vai para o Word",
+    intro: "O arquivo será gerado, mas estes itens não saem como aparecem na prévia:",
+    confirm: "Baixar mesmo assim",
+  },
+  copy: {
+    title: "O que não vai no texto copiado",
+    intro: "O texto será copiado, mas estes itens não saem como aparecem na prévia:",
+    confirm: "Copiar mesmo assim",
+  },
+} as const;
 
 type Props = {
   document: CanonicalDocument;
@@ -126,7 +145,7 @@ export function ExportPanel({
   const setField = (key: keyof DocumentHeader, value: string) =>
     onHeaderChange({ ...header, [key]: value });
 
-  const handleCopy = async () => {
+  const runCopy = async () => {
     try {
       // O "Copiar" recebe as MESMAS opções que o PDF (`runPdfExport`) e o Word:
       // sem elas era a única saída que descartava o cabeçalho recém-digitado e
@@ -138,6 +157,22 @@ export function ExportPanel({
     } catch {
       toast.error("Erro ao copiar.");
     }
+  };
+
+  /**
+   * 0411 — o "Copiar" entrega o MESMO LaTeX cru que o PDF (o
+   * `documentToPlainText` emite `node.latex`), e era o único botão do grupo que
+   * fazia isso calado, com um toast de sucesso, enquanto os dois vizinhos
+   * abriam um diálogo bloqueante sobre a mesma perda. Quem copia é justamente
+   * quem vai colar em outro lugar e imprimir sem revisar.
+   */
+  const handleCopy = async () => {
+    const warnings = copyExportWarnings(document);
+    if (warnings.length > 0) {
+      openPending({ format: "copy", warnings });
+      return;
+    }
+    await runCopy();
   };
 
   const runPdfExport = async () => {
@@ -191,8 +226,14 @@ export function ExportPanel({
     // formato dele (e não um default) evita que um estado indefinido escolha
     // sozinho a exportação Word.
     const { format } = pending;
-    restoreFocusRef.current = format;
     setPending(null);
+    if (format === "copy") {
+      // O botão "Copiar" nunca fica desabilitado, então o Radix devolve o foco
+      // a ele sozinho: nada a restaurar à mão aqui.
+      void runCopy();
+      return;
+    }
+    restoreFocusRef.current = format;
     if (format === "pdf") void runPdfExport();
     else void runWordExport();
   };
@@ -301,17 +342,13 @@ export function ExportPanel({
         {shown !== null && (
           <AlertDialogContent>
             <AlertDialogHeader>
-              <AlertDialogTitle>
-                {shown.format === "pdf" ? "O que não vai para o PDF" : "O que não vai para o Word"}
-              </AlertDialogTitle>
+              <AlertDialogTitle>{WARNING_COPY[shown.format].title}</AlertDialogTitle>
               <AlertDialogDescription asChild>
                 <div>
                   {/* A referência é sempre a prévia, a única superfície que o professor
                       tem na tela. Comparar com o PDF mentiria quando há fórmula: os dois
                       formatos imprimem o mesmo LaTeX cru. */}
-                  <p className="mb-2">
-                    O arquivo será gerado, mas estes itens não saem como aparecem na prévia:
-                  </p>
+                  <p className="mb-2">{WARNING_COPY[shown.format].intro}</p>
                   <ul className="list-disc space-y-1 pl-5 text-left">
                     {shown.warnings.map((warning) => (
                       <li key={warning}>{warning}</li>
@@ -327,7 +364,9 @@ export function ExportPanel({
             </AlertDialogHeader>
             <AlertDialogFooter className="flex-col">
               <AlertDialogCancel>Cancelar</AlertDialogCancel>
-              <AlertDialogAction onClick={confirmPending}>Baixar mesmo assim</AlertDialogAction>
+              <AlertDialogAction onClick={confirmPending}>
+                {WARNING_COPY[shown.format].confirm}
+              </AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>
         )}

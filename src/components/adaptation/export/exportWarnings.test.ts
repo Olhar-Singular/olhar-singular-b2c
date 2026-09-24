@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { pdfExportWarnings } from "./exportWarnings";
+import { copyExportWarnings, pdfExportWarnings } from "./exportWarnings";
 import type { CanonicalDocument } from "@/lib/adaptation/canonical/schema";
 
 const id = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, "0")}`;
@@ -123,5 +123,40 @@ describe("pdfExportWarnings", () => {
     expect(warnings).toHaveLength(2);
     expect(warnings[0]).toMatch(/texto alternativo/i);
     expect(warnings[1]).toMatch(/LaTeX/i);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 0411 — o "Copiar" entrega o mesmo LaTeX cru do PDF; a varredura é a mesma
+// ---------------------------------------------------------------------------
+
+describe("copyExportWarnings (0411)", () => {
+  it("documento sem fórmula copia sem nada a dizer", () => {
+    expect(
+      copyExportWarnings(
+        doc([{ id: id(1), type: "paragraph", content: [{ type: "text", text: "olá" }] }]),
+      ),
+    ).toEqual([]);
+  });
+
+  it("avisa da fórmula com a MESMA frase do PDF (é o mesmo texto entregue)", () => {
+    const mathDoc = doc([{ id: id(1), type: "blockMath", latex: "a^2" }]);
+    expect(copyExportWarnings(mathDoc)).toEqual(pdfExportWarnings(mathDoc));
+  });
+
+  it("pega inline math em qualquer campo RichText", () => {
+    const warnings = copyExportWarnings(
+      doc([{ id: id(1), type: "paragraph", content: [{ type: "inlineMath", latex: "E = mc^2" }] }]),
+    );
+    expect(warnings).toHaveLength(1);
+    expect(warnings[0]).toMatch(/LaTeX/i);
+  });
+
+  it("não herda o aviso de imagem do PDF: a cópia é texto, não carrega figura nenhuma", () => {
+    expect(
+      copyExportWarnings(
+        doc([{ id: id(1), type: "image", src: "https://exemplo.com/figura.png", alt: "figura" }]),
+      ),
+    ).toEqual([]);
   });
 });
