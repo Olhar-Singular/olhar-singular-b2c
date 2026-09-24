@@ -17,13 +17,15 @@ export function RichTextView({ content }: { content: RichText }) {
       {content.map((run, i) => {
         if (run.type === "inlineMath") {
           return (
-            <span
-              key={i}
-              data-testid="inline-math"
-              role="math"
-              aria-label={run.alt ?? run.latex}
-              dangerouslySetInnerHTML={{ __html: renderLatexToHtml(run.latex) }}
-            />
+            <span key={i} data-testid="inline-math" role="math" aria-label={run.alt ?? run.latex}>
+              {/* Achado 0438: o subtree do KaTeX é decoração e sai do texto do
+                  documento; a descrição entra no lugar dele, como texto. */}
+              <span className="sr-only">{run.alt ?? run.latex}</span>
+              <span
+                aria-hidden="true"
+                dangerouslySetInnerHTML={{ __html: renderLatexToHtml(run.latex) }}
+              />
+            </span>
           );
         }
         const className = marksToClassName(run.marks);

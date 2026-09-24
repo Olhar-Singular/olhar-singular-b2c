@@ -166,8 +166,13 @@ export function BlockMathNodeView({ node, updateAttributes, editor, deleteNode, 
             aria-label={draft.accessibleName}
             data-testid="blockmath-math"
             className="block text-center"
-            dangerouslySetInnerHTML={{ __html: latexToHtml(latex) }}
-          />
+          >
+            {/* Achado 0438: ver o gêmeo no InlineMathNodeView — o subtree do
+                KaTeX é decoração e a descrição do professor entra como texto do
+                documento, que é por onde o leitor de tela percorre a folha. */}
+            <span className="sr-only">{draft.accessibleName}</span>
+            <span aria-hidden="true" dangerouslySetInnerHTML={{ __html: latexToHtml(latex) }} />
+          </span>
           {/* Overlay: o alvo de clique e a moldura de hover são chrome e vivem
               FORA do fluxo vertical (achado 0405). Antes o botão embrulhava a
               fórmula com `p-2` + `border` e, por ter padding/borda, ainda

@@ -169,12 +169,17 @@ export function InlineMathNodeView({ node, updateAttributes, editor, selected }:
           data-alt-stale={draft.altStale ? "true" : undefined}
           data-testid="inlinemath-render"
         >
-          <span
-            role="math"
-            aria-label={draft.accessibleName}
-            data-testid="inlinemath-math"
-            dangerouslySetInnerHTML={{ __html: inlineLatexToHtml(latex) }}
-          />
+          <span role="math" aria-label={draft.accessibleName} data-testid="inlinemath-math">
+            {/* Achado 0438: a folha é UM textbox multiline e o leitor de tela a
+                percorre pelo texto renderizado. As duas árvores do KaTeX
+                (MathML + LaTeX cru da `<annotation>` + fallback HTML) despejam
+                a notação nesse texto; o `aria-label` resolve só o NOME do nó.
+                O subtree vira decoração e a descrição entra como texto. O
+                `aria-hidden` cai sobre conteúdo NÃO focável — o botão que abre
+                o editor fica de fora, com nome próprio (cf. 0337/0339). */}
+            <span className="sr-only">{draft.accessibleName}</span>
+            <span aria-hidden="true" dangerouslySetInnerHTML={{ __html: inlineLatexToHtml(latex) }} />
+          </span>
         </button>
       )}
     </NodeViewWrapper>

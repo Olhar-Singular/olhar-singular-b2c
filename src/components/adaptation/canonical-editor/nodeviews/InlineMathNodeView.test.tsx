@@ -551,3 +551,36 @@ describe("InlineMathNodeView — LaTeX inválido (achado 0434)", () => {
     expect(screen.getByLabelText("Texto alternativo da fórmula inline")).toHaveValue("x ao quadrado");
   });
 });
+
+/**
+ * Achado 0438: o subtree do KaTeX é decoração e vazava para o texto do
+ * documento (MathML + LaTeX cru da `<annotation>` + fallback HTML). Num
+ * `contenteditable` o `value` do textbox é o texto renderizado, e é por ele que
+ * o leitor de tela percorre a folha: o `alt` do professor precisa estar AÍ, não
+ * só como nome do nó. Um teste que só olhasse o `aria-label` passa com o
+ * defeito de pé, que foi o que aconteceu depois do 0006.
+ */
+describe("InlineMathNodeView — texto acessível da fórmula (achado 0438)", () => {
+  /** Texto que a tecnologia assistiva colhe, ignorando o decorativo. */
+  const accessibleText = (root: HTMLElement) => {
+    const clone = root.cloneNode(true) as HTMLElement;
+    clone.querySelectorAll('[aria-hidden="true"]').forEach((n) => n.remove());
+    return clone.textContent ?? "";
+  };
+
+  it("põe o alt no fluxo de leitura e tira a notação de lá", () => {
+    const { props } = makeProps({ latex: "x^2", alt: "x ao quadrado" });
+    render(<InlineMathNodeView {...props} />);
+    const texto = accessibleText(screen.getByTestId("inlinemath-math"));
+    expect(texto).toContain("x ao quadrado");
+    expect(texto).not.toContain("x^2");
+  });
+
+  it("cai no LaTeX uma vez só quando não há alt", () => {
+    const { props } = makeProps({ latex: "x^2", alt: null });
+    const texto = accessibleText(
+      render(<InlineMathNodeView {...props} />).getByTestId("inlinemath-math") as HTMLElement
+    );
+    expect(texto.split("x^2").length - 1).toBe(1);
+  });
+});

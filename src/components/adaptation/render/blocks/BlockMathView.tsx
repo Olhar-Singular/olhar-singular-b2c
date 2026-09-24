@@ -18,8 +18,15 @@ export function BlockMathView({ block }: { block: BlockMathBlock }) {
       aria-label={block.alt ?? block.latex}
       className="my-3 text-center"
       style={nodeStyleToCss(block.style)}
-      dangerouslySetInnerHTML={{ __html: renderLatexToHtml(block.latex, true) }}
-    />
+    >
+      {/* Achado 0438: o subtree do KaTeX é decoração e sai do texto do
+          documento; a descrição entra no lugar dele, como texto. */}
+      <span className="sr-only">{block.alt ?? block.latex}</span>
+      <div
+        aria-hidden="true"
+        dangerouslySetInnerHTML={{ __html: renderLatexToHtml(block.latex, true) }}
+      />
+    </div>
   );
 }
 
