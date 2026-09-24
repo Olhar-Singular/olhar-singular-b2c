@@ -10,6 +10,7 @@ import {
   headerParagraphs,
   docxExportWarnings,
   documentRunStyle,
+  documentMetadata,
   docxSectionProperties,
   docxFooter,
 } from "./exportDocx";
@@ -60,6 +61,7 @@ function docxNodeAttrs(node: unknown, rootKey: string): Record<string, unknown> 
 
 /** Tinta do documento na forma que o docx aceita (hex cru, sem `#`). */
 const DOCX_INK_HEX = pageTokensToPdf().color.replace("#", "");
+const PT_BR = { value: "pt-BR" };
 
 describe("docxFileName", () => {
   it("retorna nome padrão quando o cabeçalho não tem título", () => {
@@ -842,8 +844,18 @@ describe("documentRunStyle", () => {
    * três superfícies.
    */
   it("sem pageStyle, cai no mesmo default das outras superfícies (Arial 12pt)", () => {
-    expect(documentRunStyle()).toEqual({ font: "Arial", size: 24, color: DOCX_INK_HEX });
-    expect(documentRunStyle({})).toEqual({ font: "Arial", size: 24, color: DOCX_INK_HEX });
+    expect(documentRunStyle()).toEqual({
+      font: "Arial",
+      size: 24,
+      color: DOCX_INK_HEX,
+      language: PT_BR,
+    });
+    expect(documentRunStyle({})).toEqual({
+      font: "Arial",
+      size: 24,
+      color: DOCX_INK_HEX,
+      language: PT_BR,
+    });
   });
 
   it("traduz o token de fonte para o nome que o Word entende", () => {
@@ -851,11 +863,13 @@ describe("documentRunStyle", () => {
       font: "OpenDyslexic",
       size: 24,
       color: DOCX_INK_HEX,
+      language: PT_BR,
     });
     expect(documentRunStyle({ fontFamily: "serif" })).toEqual({
       font: "Times New Roman",
       size: 24,
       color: DOCX_INK_HEX,
+      language: PT_BR,
     });
   });
 
@@ -864,6 +878,7 @@ describe("documentRunStyle", () => {
       font: "Comic Sans MS",
       size: 24,
       color: DOCX_INK_HEX,
+      language: PT_BR,
     });
   });
 
@@ -872,11 +887,13 @@ describe("documentRunStyle", () => {
       font: "Arial",
       size: 28,
       color: DOCX_INK_HEX,
+      language: PT_BR,
     });
     expect(documentRunStyle({ fontSize: 10.5 })).toEqual({
       font: "Arial",
       size: 21,
       color: DOCX_INK_HEX,
+      language: PT_BR,
     });
   });
 
@@ -885,6 +902,7 @@ describe("documentRunStyle", () => {
       font: "Arial",
       size: 25,
       color: DOCX_INK_HEX,
+      language: PT_BR,
     });
   });
 
@@ -893,6 +911,7 @@ describe("documentRunStyle", () => {
       font: "Lexend",
       size: 32,
       color: DOCX_INK_HEX,
+      language: PT_BR,
     });
   });
 });
@@ -1308,5 +1327,54 @@ describe("0343 · alinhamento da imagem chega ao Word", () => {
       1,
     );
     expect(docxNodeAttrs(marcacao, "w:jc")).toEqual({ val: "right" });
+  });
+});
+
+describe("documentMetadata", () => {
+  /**
+   * Achado 0344: o `new Document(...)` ia sem nenhum metadado, então o `.docx`
+   * saía assinado "Un-named" (o default da lib `docx`, texto VISÍVEL na janela
+   * Propriedades do Word, na coluna Autor do Explorer e no card do Drive) e sem
+   * `<dc:title>` — o mesmo defeito que a 0310 consertou no PDF.
+   */
+  it("grava o título do cabeçalho como título do documento", () => {
+    expect(documentMetadata({ title: "  Prova de Ciências  " }).title).toBe("Prova de Ciências");
+  });
+
+  it("sem título no cabeçalho, usa o mesmo rótulo do PDF", () => {
+    expect(documentMetadata({}).title).toBe("Atividade adaptada");
+    expect(documentMetadata({ title: "   " }).title).toBe("Atividade adaptada");
+  });
+
+  it("assina com o professor do cabeçalho, nunca com o 'Un-named' da lib", () => {
+    const meta = documentMetadata({ teacher: "  Ana Lima  " });
+    expect(meta.creator).toBe("Ana Lima");
+    expect(meta.lastModifiedBy).toBe("Ana Lima");
+  });
+
+  it("sem professor, assina com o nome do produto", () => {
+    const meta = documentMetadata({});
+    expect(meta.creator).toBe("Olhar Singular");
+    expect(meta.lastModifiedBy).toBe("Olhar Singular");
+    expect(JSON.stringify(meta)).not.toContain("Un-named");
+  });
+
+  it("descreve a origem do arquivo", () => {
+    expect(documentMetadata({}).description).toBe(
+      "Atividade adaptada no Olhar Singular.",
+    );
+  });
+});
+
+describe("documentRunStyle — idioma", () => {
+  /**
+   * Achado 0344: sem `w:lang` o Word trata o documento com o idioma da
+   * instalação — corretor e hifenização erram o português inteiro e o leitor de
+   * tela lê pt-BR com a pronúncia de outro idioma (WCAG 3.1.1). O PDF já sai
+   * com `language="pt-BR"` (achado 0310).
+   */
+  it("marca o corpo inteiro como pt-BR", () => {
+    expect(documentRunStyle().language).toEqual({ value: "pt-BR" });
+    expect(documentRunStyle({ fontSize: 14 }).language).toEqual({ value: "pt-BR" });
   });
 });

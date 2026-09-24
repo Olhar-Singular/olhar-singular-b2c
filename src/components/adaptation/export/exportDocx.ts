@@ -6,7 +6,8 @@
  *                         pure canonical→docx mapping, exported for direct unit tests.
  * `docxExportWarnings`  — what will NOT survive the trip to Word (shown BEFORE the
  *                         download, so "Word gerado!" never covers a silent loss).
- * `documentRunStyle`    — pure pageStyle → docx run mapping (font + half-points + ink).
+ * `documentRunStyle`    — pure pageStyle → docx run mapping (font + half-points + ink + idioma).
+ * `documentMetadata`    — pure header → metadados do arquivo (título, autor, descrição).
  * `docxContentBlocks`   — pure document + PanelSettings → docx blocks, já com as
  *                         quebras de página (switch do painel e `style.pageBreakBefore`).
  * `docxSectionProperties` — margem da página derivada de `PAGE_MARGIN_PT`.
@@ -162,6 +163,12 @@ const HEADER_RULE = {
     },
   },
 } as const;
+
+/** Identidade do produto que assina o arquivo exportado (achado 0344). */
+const PRODUCT_NAME = "Olhar Singular";
+
+/** Idioma do documento inteiro, o mesmo que o PDF declara (achado 0344). */
+const DOCUMENT_LANGUAGE = "pt-BR";
 
 /** Pontos → twips (1/20 pt), a unidade de espaçamento do OOXML. */
 const ptToTwip = (pt: number): number => Math.round(pt * 20);
@@ -649,6 +656,7 @@ export function documentRunStyle(pageStyle?: PageStyle): {
   font: string;
   size: number;
   color: string;
+  language: { value: string };
 } {
   return {
     font: fontFamilyToDocx(pageStyle?.fontFamily ?? DEFAULT_FONT_FAMILY_TOKEN),
@@ -657,6 +665,42 @@ export function documentRunStyle(pageStyle?: PageStyle): {
     // Sem `color` o `<w:rPrDefault>` saía sem `<w:color>` e o corpo herdava o
     // preto do Word, contra `DEFAULT_INK` nas outras superfícies (achado 0166).
     color: DOCX_INK,
+    // Achado 0344: sem `w:lang` o arquivo saía sem idioma nenhum, e o Word
+    // aplicava o da instalação — corretor ortográfico e hifenização errando o
+    // português inteiro, e o leitor de tela lendo pt-BR com a pronúncia de
+    // outro idioma (WCAG 3.1.1). O PDF já sai marcado (achado 0310).
+    language: { value: DOCUMENT_LANGUAGE },
+  };
+}
+
+/**
+ * Os metadados do `.docx` (`docProps/core.xml`).
+ *
+ * Achado 0344: o `new Document(...)` ia só com `styles` e `sections`, então o
+ * arquivo saía assinado **"Un-named"** — o default da lib `docx`, e texto
+ * VISÍVEL: é o "Autor" da janela Propriedades do Word, da coluna Autor do
+ * Explorer e do card do arquivo no Drive/Teams. Sem `<dc:title>`, o Word e o
+ * leitor de tela anunciam o arquivo pelo nome do arquivo, embora o documento já
+ * tenha título. Mesmo defeito que a 0310 consertou no PDF, na outra superfície.
+ *
+ * Mora fora de `downloadDocx` (que é `v8 ignore` pelos efeitos de DOM) para
+ * nascer com teste, como `documentRunStyle` e `docxSectionProperties`.
+ */
+export function documentMetadata(header: DocumentHeader): {
+  title: string;
+  creator: string;
+  lastModifiedBy: string;
+  description: string;
+} {
+  // Mesmo fallback que o `<Document title>` do PDF usa (AdaptationPdf.tsx).
+  const title = header.title?.trim() || "Atividade adaptada";
+  // Quem assina é o professor do cabeçalho; sem ele, o produto. Nunca a lib.
+  const creator = header.teacher?.trim() || PRODUCT_NAME;
+  return {
+    title,
+    creator,
+    lastModifiedBy: creator,
+    description: `Atividade adaptada no ${PRODUCT_NAME}.`,
   };
 }
 
@@ -771,6 +815,7 @@ export async function downloadDocx(
   const contentParagraphs = docxContentBlocks(document, settings);
 
   const doc = new Document({
+    ...documentMetadata(header),
     styles: { default: { document: { run: documentRunStyle(pageStyle) } } },
     sections: [
       {
