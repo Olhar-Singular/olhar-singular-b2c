@@ -320,7 +320,7 @@ vi.mock("./steps/review/StepReview", () => ({
       </button>
       <button onClick={onRegenerate}>Regerar</button>
       <button aria-label="Voltar" onClick={onPrev}>Voltar</button>
-      <button aria-label="Avançar para exportação" onClick={onNext}>Exportar</button>
+      <button onClick={onNext}>Exportar</button>
     </div>
   ),
 }));
@@ -413,7 +413,7 @@ describe("CanonicalAdaptationWizard", () => {
     expect(screen.getByTestId("edit-content")).toHaveTextContent("EDITADO");
 
     // 2) go to export, then back to review — the edit is still there
-    fireEvent.click(screen.getByRole("button", { name: /Avançar para exportação/i }));
+    fireEvent.click(screen.getByRole("button", { name: /^Exportar$/i }));
     fireEvent.click(screen.getByRole("button", { name: /Voltar/i }));
     expect(screen.getByTestId("edit-content")).toHaveTextContent("EDITADO");
 
@@ -441,7 +441,7 @@ describe("CanonicalAdaptationWizard", () => {
     fireEvent.click(screen.getByTestId("review-zoom-in"));
     expect(screen.getByTestId("review-zoom")).toHaveTextContent("2");
 
-    fireEvent.click(screen.getByRole("button", { name: /Avançar para exportação/i }));
+    fireEvent.click(screen.getByRole("button", { name: /^Exportar$/i }));
     fireEvent.click(screen.getByRole("button", { name: /Voltar/i }));
     expect(screen.getByTestId("review-zoom")).toHaveTextContent("2");
   });
@@ -460,7 +460,7 @@ describe("CanonicalAdaptationWizard", () => {
     );
 
     // it survives a round-trip to export and back (single source of truth)
-    fireEvent.click(screen.getByRole("button", { name: /Avançar para exportação/i }));
+    fireEvent.click(screen.getByRole("button", { name: /^Exportar$/i }));
     fireEvent.click(screen.getByRole("button", { name: /Voltar/i }));
     expect(screen.getByTestId("review-pagestyle")).toHaveTextContent(
       JSON.stringify({ fontFamily: "lexend", fontSize: 14 }),
@@ -470,7 +470,7 @@ describe("CanonicalAdaptationWizard", () => {
   it("SSOT: a manual header title persists and survives navigating export ↔ review", () => {
     renderWithProviders(<CanonicalAdaptationWizard />);
     advanceToReview();
-    fireEvent.click(screen.getByRole("button", { name: /Avançar para exportação/i }));
+    fireEvent.click(screen.getByRole("button", { name: /^Exportar$/i }));
 
     // Type a title in the real ExportPanel — it is controlled by the wizard, so
     // it only reflects (and persists) if the change is lifted into result.header.
@@ -479,7 +479,7 @@ describe("CanonicalAdaptationWizard", () => {
 
     // It survives a round-trip to review and back (single source of truth).
     fireEvent.click(screen.getByRole("button", { name: /Voltar/i }));
-    fireEvent.click(screen.getByRole("button", { name: /Avançar para exportação/i }));
+    fireEvent.click(screen.getByRole("button", { name: /^Exportar$/i }));
     expect((screen.getByLabelText(TITLE_FIELD_LABEL) as HTMLInputElement).value).toBe("Prova Final");
   });
 
@@ -512,7 +512,7 @@ describe("CanonicalAdaptationWizard", () => {
   it("Nova adaptação tranca de novo os passos do documento anterior", async () => {
     renderWithProviders(<CanonicalAdaptationWizard />);
     advanceToReview();
-    fireEvent.click(screen.getByRole("button", { name: /Avançar para exportação/i }));
+    fireEvent.click(screen.getByRole("button", { name: /^Exportar$/i }));
     await act(async () => {
       fireEvent.click(screen.getByRole("button", { name: /Nova adaptação/i }));
     });
@@ -771,7 +771,7 @@ describe("CanonicalAdaptationWizard", () => {
     Object.assign(navigator, { clipboard: { writeText } });
     renderWithProviders(<CanonicalAdaptationWizard />);
     advanceToReview();
-    fireEvent.click(screen.getByRole("button", { name: /Avançar para exportação/i }));
+    fireEvent.click(screen.getByRole("button", { name: /^Exportar$/i }));
 
     fireEvent.click(screen.getByRole("button", { name: /Copiar/i }));
     expect(writeText).toHaveBeenCalledWith("gerado");
@@ -783,7 +783,7 @@ describe("CanonicalAdaptationWizard", () => {
   it("export step navigates back to review with Voltar", () => {
     renderWithProviders(<CanonicalAdaptationWizard />);
     advanceToReview();
-    fireEvent.click(screen.getByRole("button", { name: /Avançar para exportação/i }));
+    fireEvent.click(screen.getByRole("button", { name: /^Exportar$/i }));
     fireEvent.click(screen.getByRole("button", { name: /Voltar/i }));
     expect(screen.getByTestId("edit-content")).toBeInTheDocument();
   });
@@ -816,7 +816,7 @@ describe("CanonicalAdaptationWizard", () => {
     renderWithProviders(<CanonicalAdaptationWizard />);
     advanceToReview();
     await waitFor(() => expect(adoptedDraftId()).toBe("srv-1"));
-    fireEvent.click(screen.getByRole("button", { name: /Avançar para exportação/i }));
+    fireEvent.click(screen.getByRole("button", { name: /^Exportar$/i }));
     fireEvent.click(screen.getByRole("button", { name: /Salvar/i }));
     await waitFor(() =>
       expect(mockMarkReady).toHaveBeenCalledWith({
@@ -838,7 +838,7 @@ describe("CanonicalAdaptationWizard", () => {
     renderWithProviders(<CanonicalAdaptationWizard />);
     advanceToReview();
     await waitFor(() => expect(adoptedDraftId()).toBe("srv-1"));
-    fireEvent.click(screen.getByRole("button", { name: /Avançar para exportação/i }));
+    fireEvent.click(screen.getByRole("button", { name: /^Exportar$/i }));
     fireEvent.click(screen.getByRole("button", { name: /Salvar/i }));
     await waitFor(() =>
       expect(mockMarkReady).toHaveBeenCalledWith({
@@ -855,7 +855,7 @@ describe("CanonicalAdaptationWizard", () => {
     renderWithProviders(<CanonicalAdaptationWizard />);
     advanceToReview();
     await waitFor(() => expect(adoptedDraftId()).toBe("srv-1"));
-    fireEvent.click(screen.getByRole("button", { name: /Avançar para exportação/i }));
+    fireEvent.click(screen.getByRole("button", { name: /^Exportar$/i }));
     fireEvent.click(screen.getByRole("button", { name: /Salvar/i }));
     await waitFor(() =>
       expect(mockMarkReady).toHaveBeenCalledWith({
@@ -873,7 +873,7 @@ describe("CanonicalAdaptationWizard", () => {
     renderWithProviders(<CanonicalAdaptationWizard />);
     advanceToReview();
     await waitFor(() => expect(adoptedDraftId()).toBe("srv-1"));
-    fireEvent.click(screen.getByRole("button", { name: /Avançar para exportação/i }));
+    fireEvent.click(screen.getByRole("button", { name: /^Exportar$/i }));
     fireEvent.click(screen.getByRole("button", { name: /Salvar/i }));
     await waitFor(() => expect(mockMarkReady).toHaveBeenCalled());
     expect(toast.error).toHaveBeenCalledWith(
@@ -1131,7 +1131,7 @@ describe("CanonicalAdaptationWizard", () => {
     renderWithProviders(<CanonicalAdaptationWizard />);
     advanceToReview();
     await waitFor(() => expect(adoptedDraftId()).toBe("srv-1"));
-    fireEvent.click(screen.getByRole("button", { name: /Avançar para exportação/i }));
+    fireEvent.click(screen.getByRole("button", { name: /^Exportar$/i }));
     fireEvent.click(screen.getByRole("button", { name: /Salvar/i }));
     await waitFor(() =>
       expect(mockMarkReady).toHaveBeenCalledWith(
@@ -1154,7 +1154,7 @@ describe("CanonicalAdaptationWizard", () => {
     renderWithProviders(<CanonicalAdaptationWizard />);
     advanceToReview();
     await waitFor(() => expect(adoptedDraftId()).toBe("srv-1"));
-    fireEvent.click(screen.getByRole("button", { name: /Avançar para exportação/i }));
+    fireEvent.click(screen.getByRole("button", { name: /^Exportar$/i }));
     fireEvent.click(screen.getByRole("button", { name: /Nova adaptação/i }));
 
     // Back at step 1 with no draft at all — nothing of the old row survives.
@@ -1178,7 +1178,7 @@ describe("CanonicalAdaptationWizard", () => {
     renderWithProviders(<CanonicalAdaptationWizard />);
     advanceToReview();
     await waitFor(() => expect(adoptedDraftId()).toBe("srv-1"));
-    fireEvent.click(screen.getByRole("button", { name: /Avançar para exportação/i }));
+    fireEvent.click(screen.getByRole("button", { name: /^Exportar$/i }));
     fireEvent.click(screen.getByRole("button", { name: /Salvar/i }));
 
     await waitFor(() => expect(toast.error).toHaveBeenCalled());
@@ -1194,7 +1194,7 @@ describe("CanonicalAdaptationWizard", () => {
     renderWithProviders(<CanonicalAdaptationWizard />);
     advanceToReview();
     await waitFor(() => expect(adoptedDraftId()).toBe("srv-1"));
-    fireEvent.click(screen.getByRole("button", { name: /Avançar para exportação/i }));
+    fireEvent.click(screen.getByRole("button", { name: /^Exportar$/i }));
     fireEvent.click(screen.getByRole("button", { name: /Salvar/i }));
 
     await waitFor(() => expect(mockFlush).toHaveBeenCalled());
@@ -1213,7 +1213,7 @@ describe("CanonicalAdaptationWizard", () => {
     renderWithProviders(<CanonicalAdaptationWizard />);
     advanceToReview();
     await waitFor(() => expect(adoptedDraftId()).toBe("srv-1"));
-    fireEvent.click(screen.getByRole("button", { name: /Avançar para exportação/i }));
+    fireEvent.click(screen.getByRole("button", { name: /^Exportar$/i }));
     fireEvent.click(screen.getByRole("button", { name: /Salvar/i }));
 
     await waitFor(() => expect(mockSyncUpdatedAt).toHaveBeenCalledWith("2026-12-31T00:00:00Z"));
@@ -1326,7 +1326,7 @@ describe("CanonicalAdaptationWizard — navigation guard", () => {
     renderWithProviders(<CanonicalAdaptationWizard />);
     advanceToReview();
     await waitFor(() => expect(adoptedDraftId()).toBe("srv-1"));
-    fireEvent.click(screen.getByRole("button", { name: /Avançar para exportação/i }));
+    fireEvent.click(screen.getByRole("button", { name: /^Exportar$/i }));
     fireEvent.click(screen.getByRole("button", { name: /Salvar/i }));
     await waitFor(() => expect(mockMarkReady).toHaveBeenCalled());
     expect(mockNavGuard).toHaveBeenLastCalledWith(false);
@@ -1816,7 +1816,7 @@ describe("CanonicalAdaptationWizard — navigation guard", () => {
       advanceToReview();
       await waitFor(() => expect(adoptedDraftId()).toBe("srv-1"));
       fireEvent.click(screen.getByTestId("edit-content"));
-      fireEvent.click(screen.getByRole("button", { name: /Avançar para exportação/i }));
+      fireEvent.click(screen.getByRole("button", { name: /^Exportar$/i }));
       mockFlush.mockClear();
 
       fireEvent.click(screen.getByRole("button", { name: /Nova adaptação/i }));
@@ -1898,7 +1898,7 @@ describe("CanonicalAdaptationWizard — navigation guard", () => {
       fireEvent.click(within(dialog).getByRole("button", { name: /^Regerar$/i }));
       await waitFor(() => expect(screen.getByTestId("do-generate")).toBeInTheDocument());
       fireEvent.click(screen.getByTestId("do-generate"));
-      fireEvent.click(screen.getByRole("button", { name: /Avançar para exportação/i }));
+      fireEvent.click(screen.getByRole("button", { name: /^Exportar$/i }));
       fireEvent.click(screen.getByRole("button", { name: /Nova adaptação/i }));
       await waitFor(() => expect(screen.getByTestId("pick-type")).toBeInTheDocument());
 
@@ -1913,7 +1913,7 @@ describe("CanonicalAdaptationWizard — navigation guard", () => {
       renderWithProviders(<CanonicalAdaptationWizard />);
       advanceToReview();
       await waitFor(() => expect(adoptedDraftId()).toBe("srv-1"));
-      fireEvent.click(screen.getByRole("button", { name: /Avançar para exportação/i }));
+      fireEvent.click(screen.getByRole("button", { name: /^Exportar$/i }));
 
       fireEvent.click(screen.getByRole("button", { name: /Nova adaptação/i }));
 

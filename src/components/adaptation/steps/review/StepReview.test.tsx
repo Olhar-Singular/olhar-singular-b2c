@@ -284,7 +284,7 @@ describe("StepReview", () => {
     const props = setup();
     fireEvent.click(screen.getByRole("button", { name: /Regerar/i }));
     fireEvent.click(screen.getByRole("button", { name: /Voltar/i }));
-    fireEvent.click(screen.getByRole("button", { name: /Avançar para exportação/i }));
+    fireEvent.click(screen.getByRole("button", { name: /^Exportar$/i }));
     expect(props.onRegenerate).toHaveBeenCalled();
     expect(props.onPrev).toHaveBeenCalled();
     expect(props.onNext).toHaveBeenCalled();
@@ -759,7 +759,7 @@ describe("StepReview", () => {
   describe("barra de ações do passo (0156)", () => {
     it("gruda a barra no pé do quadro, com fundo opaco e separação", () => {
       setup();
-      const bar = screen.getByLabelText("Avançar para exportação").parentElement!.parentElement!;
+      const bar = screen.getByRole("button", { name: /^Exportar$/i }).parentElement!.parentElement!;
       expect(bar.className).toMatch(/(?:^|\s)sticky(?:\s|$)/);
       expect(bar.className).toMatch(/(?:^|\s)bottom-0(?:\s|$)/);
       expect(bar.className).toMatch(/(?:^|\s)bg-surface-chrome(?:\s|$)/);
@@ -771,6 +771,28 @@ describe("StepReview", () => {
       setup();
       const bar = screen.getByLabelText("Voltar").parentElement!;
       expect(bar.className).toMatch(/(?:^|\s)sticky(?:\s|$)/);
+    });
+  });
+  // Achado 0409: WCAG 2.5.3 (Label in Name). O botão imprime "Exportar" e se
+  // anunciava como "Avançar para exportação": quem usa comando de voz dizia
+  // "clicar em Exportar" e não acertava alvo nenhum, porque a palavra impressa
+  // não aparecia no nome acessível.
+  describe("nome acessível do CTA do passo (0409)", () => {
+    it("anuncia o botão de exportar começando pelo rótulo impresso", () => {
+      setup();
+      const printed = "Exportar";
+      const button = screen
+        .getAllByRole("button")
+        .find((b) => b.textContent?.trim().startsWith(printed))!;
+      expect(button).toBeDefined();
+      const accessibleName = button.getAttribute("aria-label") ?? button.textContent!.trim();
+      expect(accessibleName.startsWith(printed)).toBe(true);
+    });
+
+    it("aciona onNext quando buscado pelo rótulo visível", () => {
+      const props = setup();
+      fireEvent.click(screen.getByRole("button", { name: /^Exportar/i }));
+      expect(props.onNext).toHaveBeenCalled();
     });
   });
 });

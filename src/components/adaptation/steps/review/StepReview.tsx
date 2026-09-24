@@ -495,7 +495,7 @@ export function StepReview({
               {saving ? "Salvando…" : "Salvar adaptação"}
             </span>
           </Button>
-          <Button onClick={onNext} aria-label="Avançar para exportação" className="shrink-0">
+          <Button onClick={onNext} className="shrink-0">
             Exportar <ArrowRight className="w-4 h-4 ml-2" />
           </Button>
         </div>
