@@ -72,6 +72,7 @@ export function InlineMathNodeView({ node, updateAttributes, editor, selected }:
   const latexId = useId();
   const altId = useId();
   const errorId = useId();
+  const altErrorId = useId();
   const { latex, alt } = node.attrs as { latex: string; alt: string | null };
   const disabled = !editor.isEditable;
   // Latex vazio é irrepresentável e o alt não sobrevive à troca da fórmula
@@ -133,6 +134,10 @@ export function InlineMathNodeView({ node, updateAttributes, editor, selected }:
             onChange={(e) => draft.onAltChange(e.target.value)}
             placeholder="Texto alternativo"
             aria-label="Texto alternativo da fórmula inline"
+            // 0443 — ver o gêmeo no BlockMathNodeView: o aviso passa a ser dito
+            // pelo campo, não só desenhado ao lado dele.
+            aria-invalid={draft.altStale ? "true" : undefined}
+            aria-describedby={draft.altStale ? altErrorId : undefined}
           />
           {/* Achado 0436: zerar o alt em silêncio trocaria uma mentira por um
               buraco — o professor vê que a descrição ficou para trás. */}
@@ -142,7 +147,11 @@ export function InlineMathNodeView({ node, updateAttributes, editor, selected }:
             // fosse linha impressa da atividade (o PDF não imprime nada disso).
             // Vira decoração; quem anuncia a pendência é o `aria-label` do
             // gatilho, que desde o 0436 diz "(descrição desatualizada)".
+            // 0443 — oculto para a folha (0439), visível para a descrição do
+            // campo: referência direta por `aria-describedby` atravessa o
+            // `aria-hidden`.
             <span
+              id={altErrorId}
               aria-hidden="true"
               data-testid="inlinemath-alt-stale"
               className="text-xs text-surface-danger"

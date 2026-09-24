@@ -647,3 +647,44 @@ describe("BlockMathNodeView — chrome do editor fora do texto da folha (achado 
     expect(screen.getByRole("button", { name: "Concluir edição da fórmula" })).toBeInTheDocument();
   });
 });
+
+/**
+ * Achado 0443 — o aviso de descrição desatualizada existia só como pixel: borda
+ * vermelha e texto ao lado, sem nenhuma relação programática com o campo.
+ */
+describe("BlockMathNodeView — aviso de alt desatualizado ligado ao campo (achado 0443)", () => {
+  function staleAlt() {
+    const made = makeProps({ latex: "x^2", alt: "x ao quadrado" });
+    render(<BlockMathNodeView {...made.props} />);
+    fireEvent.click(screen.getByTestId("blockmath-render"));
+    fireEvent.change(screen.getByLabelText("Expressão LaTeX"), { target: { value: "y^3" } });
+    return made;
+  }
+
+  it("marca o campo do alt como inválido e o descreve pelo aviso", () => {
+    staleAlt();
+    const input = screen.getByRole("textbox", { name: /texto alternativo/i });
+    const aviso = screen.getByTestId("blockmath-alt-stale");
+    expect(input).toHaveAttribute("aria-invalid", "true");
+    expect(aviso.id).toBeTruthy();
+    expect(input.getAttribute("aria-describedby")).toBe(aviso.id);
+    expect(aviso).toHaveTextContent(/descrição desatualizada/i);
+  });
+
+  it("não usa o id do erro de LaTeX para descrever o alt", () => {
+    staleAlt();
+    fireEvent.change(screen.getByLabelText("Expressão LaTeX"), { target: { value: "\\frac{1{" } });
+    const alt = screen.getByRole("textbox", { name: /texto alternativo/i });
+    const latex = screen.getByLabelText("Expressão LaTeX");
+    expect(alt.getAttribute("aria-describedby")).not.toBe(latex.getAttribute("aria-describedby"));
+  });
+
+  it("solta o campo assim que o professor reescreve a descrição", () => {
+    staleAlt();
+    const input = screen.getByRole("textbox", { name: /texto alternativo/i });
+    fireEvent.change(input, { target: { value: "y ao cubo" } });
+    const depois = screen.getByRole("textbox", { name: /texto alternativo/i });
+    expect(depois).not.toHaveAttribute("aria-invalid");
+    expect(depois).not.toHaveAttribute("aria-describedby");
+  });
+});

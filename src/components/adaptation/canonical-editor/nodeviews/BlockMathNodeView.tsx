@@ -40,6 +40,7 @@ export function BlockMathNodeView({ node, updateAttributes, editor, deleteNode, 
   const latexId = useId();
   const altId = useId();
   const errorId = useId();
+  const altErrorId = useId();
   const { latex, alt } = node.attrs as { latex: string; alt: string | null };
   const disabled = !editor.isEditable;
   // Latex vazio é irrepresentável e o alt não sobrevive à troca da fórmula
@@ -134,6 +135,10 @@ export function BlockMathNodeView({ node, updateAttributes, editor, deleteNode, 
             onChange={(e) => draft.onAltChange(e.target.value)}
             placeholder="Texto alternativo"
             aria-label="Texto alternativo da fórmula"
+            // 0443 — a borda vermelha é cor pura: sem `aria-invalid` o campo se
+            // anuncia válido e o aviso ao lado fica sem dono (WCAG 1.4.1/3.3.1).
+            aria-invalid={draft.altStale ? "true" : undefined}
+            aria-describedby={draft.altStale ? altErrorId : undefined}
           />
           {/* Achado 0436: o alt caiu junto com a fórmula que ele descrevia; o
               professor precisa ver isso, não descobrir depois. */}
@@ -141,7 +146,11 @@ export function BlockMathNodeView({ node, updateAttributes, editor, deleteNode, 
             // 0439 — ver o gêmeo no InlineMathNodeView: texto puro dentro do
             // `contenteditable` entrava no texto acessível da folha. Vira
             // decoração; o aviso é anunciado pelo `aria-label` do gatilho.
+            // 0443 — `aria-hidden` mantém o aviso fora do texto da folha (0439)
+            // SEM tirá-lo da descrição: nó referenciado direto por
+            // `aria-describedby` entra no cálculo do nome/descrição mesmo oculto.
             <span
+              id={altErrorId}
               aria-hidden="true"
               data-testid="blockmath-alt-stale"
               className="text-xs text-surface-danger"
