@@ -43,6 +43,28 @@ import { useMathEditing } from "./useMathEditing";
  */
 export const ALT_STALE_MARK_CLASS = "inlinemath-alt-stale";
 
+/**
+ * Largura do campo, em `ch`, acompanhando o valor que ele guarda (achado 0418).
+ *
+ * As larguras eram constantes (`w-28` no LaTeX, `w-32` no alt) e menores que o
+ * conteúdo típico: o alt é frase em português ("x ao quadrado mais 2x mais 1
+ * igual a zero", 41 caracteres) e era editado por uma janela de ~17, rolando
+ * com as setas, sem nunca aparecer inteiro — logo no campo que vira o nome
+ * acessível da fórmula para o leitor de tela. Encolher não preservava nada: o
+ * widget já quebra a composição da linha de qualquer jeito.
+ *
+ * O piso evita o campo sumir quando está vazio; o teto evita que um alt muito
+ * longo estoure a coluna de texto da folha (o `max-w-full` fecha a conta na
+ * viewport estreita).
+ */
+const FIELD_MIN_CH = 12;
+const FIELD_MAX_CH = 48;
+
+export function inlineFieldWidth(value: string): string {
+  const desired = value.length + 2;
+  return `${Math.min(Math.max(desired, FIELD_MIN_CH), FIELD_MAX_CH)}ch`;
+}
+
 export function InlineMathNodeView({ node, updateAttributes, editor, selected }: NodeViewProps) {
   // 0312 — identidade de campo: sem `id`/`name` o Chrome reporta "A form field
   // element should have an id or name attribute" e o agente do usuário não
@@ -71,7 +93,8 @@ export function InlineMathNodeView({ node, updateAttributes, editor, selected }:
             name="inlinemath-latex"
             value={draft.value}
             autoFocus
-            className="h-6 w-28 px-1 py-0 text-sm"
+            className="h-6 max-w-full px-1 py-0 text-sm"
+            style={{ width: inlineFieldWidth(draft.value) }}
             onChange={(e) => draft.onChange(e.target.value)}
             onBlur={draft.onBlur}
             placeholder="LaTeX"
@@ -81,7 +104,8 @@ export function InlineMathNodeView({ node, updateAttributes, editor, selected }:
             id={altId}
             name="inlinemath-alt"
             value={alt ?? ""}
-            className={cn("h-6 w-32 px-1 py-0 text-sm", draft.altStale && "border-destructive")}
+            className={cn("h-6 max-w-full px-1 py-0 text-sm", draft.altStale && "border-destructive")}
+            style={{ width: inlineFieldWidth(alt ?? "") }}
             onChange={(e) => draft.onAltChange(e.target.value)}
             placeholder="Texto alternativo"
             aria-label="Texto alternativo da fórmula inline"

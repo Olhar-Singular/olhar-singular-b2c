@@ -388,3 +388,49 @@ describe("InlineMathNodeView — Pronto devolve o foco à fórmula (achado 0417)
     expect(screen.getByTestId("inlinemath-render")).not.toHaveFocus();
   });
 });
+
+// Achado 0418: largura fixa (w-28 / w-32) cortava o valor dos campos — o alt,
+// que é frase em português, era editado por uma janela de ~17 caracteres.
+describe("InlineMathNodeView — campos acompanham o conteúdo (achado 0418)", () => {
+  function widthInCh(el: HTMLElement) {
+    const width = el.style.width;
+    expect(width).toMatch(/ch$/);
+    return Number.parseFloat(width);
+  }
+
+  it("dá ao alt longo largura suficiente para ler a frase inteira", () => {
+    const alt = "x ao quadrado mais 2x mais 1 igual a zero";
+    const { props } = makeProps({ latex: "x^2 + 2x + 1 = 0", alt });
+    render(<InlineMathNodeView {...props} />);
+    fireEvent.click(screen.getByTestId("inlinemath-render"));
+    const field = screen.getByLabelText("Texto alternativo da fórmula inline");
+    expect(field).not.toHaveClass("w-32");
+    expect(widthInCh(field)).toBeGreaterThanOrEqual(alt.length);
+  });
+
+  it("dá ao LaTeX largura proporcional à expressão", () => {
+    const latex = "\\frac{-b \\pm \\sqrt{b^2-4ac}}{2a}";
+    const { props } = makeProps({ latex, alt: "x" });
+    render(<InlineMathNodeView {...props} />);
+    fireEvent.click(screen.getByTestId("inlinemath-render"));
+    const field = screen.getByLabelText("Expressão LaTeX inline");
+    expect(field).not.toHaveClass("w-28");
+    expect(widthInCh(field)).toBeGreaterThanOrEqual(latex.length);
+  });
+
+  it("mantém um piso de largura com o campo vazio", () => {
+    const { props } = makeProps({ latex: "x", alt: "" });
+    render(<InlineMathNodeView {...props} />);
+    fireEvent.click(screen.getByTestId("inlinemath-render"));
+    expect(widthInCh(screen.getByLabelText("Texto alternativo da fórmula inline"))).toBeGreaterThanOrEqual(12);
+  });
+
+  it("mantém um teto de largura para não estourar a coluna de texto", () => {
+    const { props } = makeProps({ latex: "x", alt: "a".repeat(300) });
+    render(<InlineMathNodeView {...props} />);
+    fireEvent.click(screen.getByTestId("inlinemath-render"));
+    const field = screen.getByLabelText("Texto alternativo da fórmula inline");
+    expect(widthInCh(field)).toBeLessThanOrEqual(48);
+    expect(field).toHaveClass("max-w-full");
+  });
+});
