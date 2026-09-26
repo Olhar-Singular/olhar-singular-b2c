@@ -65,7 +65,8 @@ vi.mock("@/lib/utils/docx-utils", () => ({
   isDocxFile: vi.fn().mockResolvedValue(false),
 }));
 
-vi.mock("@/lib/utils/fileValidation", () => ({
+vi.mock("@/lib/utils/fileValidation", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/utils/fileValidation")>()),
   detectFileType: vi.fn().mockReturnValue("pdf"),
 }));
 
@@ -1599,6 +1600,67 @@ describe("QuestionBankPage", () => {
     // After rename, the uploaded file name used in the path must contain the new name
     const callArgs = storageUploadSpy.mock.calls[0];
     expect(callArgs[0]).toContain("prova__1_.pdf");
+  });
+
+  // ── handleFileSelect: Storage rejection and declared type ────────────────
+
+  const DOCX_MIME = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+
+  it("upload: when Storage rejects the file, shows a toast and creates no history row", async () => {
+    const { toast } = await import("sonner");
+    const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    storageUploadSpy.mockResolvedValueOnce({
+      data: null,
+      error: { message: "mime type application/x-foo is not supported", statusCode: "415" },
+    });
+    render(<QuestionBankPage />, { wrapper });
+    fireEvent.click(screen.getByRole("tab", { name: /Provas/i }));
+    const input = document.querySelector("input[data-upload-input]") as HTMLInputElement;
+    fireEvent.change(input, { target: { files: [new File(["pdf"], "prova.pdf", { type: "application/pdf" })] } });
+    await waitFor(() => {
+      expect(toast.error).toHaveBeenCalledWith(
+        "Não foi possível enviar o arquivo. Confira se é um PDF ou DOCX de até 10 MB e tente novamente.",
+      );
+    });
+    expect(pdfUploadsInsertSpy).not.toHaveBeenCalled();
+    expect(screen.queryByRole("button", { name: /Extrair com IA/i })).not.toBeInTheDocument();
+    consoleSpy.mockRestore();
+  });
+
+  it("upload: declares application/pdf when the browser leaves file.type empty", async () => {
+    render(<QuestionBankPage />, { wrapper });
+    fireEvent.click(screen.getByRole("tab", { name: /Provas/i }));
+    const input = document.querySelector("input[data-upload-input]") as HTMLInputElement;
+    fireEvent.change(input, { target: { files: [new File(["pdf"], "prova.pdf", { type: "" })] } });
+    await waitFor(() => expect(storageUploadSpy).toHaveBeenCalled());
+    const sent = storageUploadSpy.mock.calls[0][1] as File;
+    expect(sent.type).toBe("application/pdf");
+    expect(sent.name).toBe("prova.pdf");
+  });
+
+  it("upload: declares the DOCX type when the browser reports a generic type", async () => {
+    const { detectFileType } = await import("@/lib/utils/fileValidation");
+    (detectFileType as ReturnType<typeof vi.fn>).mockReturnValueOnce("docx");
+    render(<QuestionBankPage />, { wrapper });
+    fireEvent.click(screen.getByRole("tab", { name: /Provas/i }));
+    const input = document.querySelector("input[data-upload-input]") as HTMLInputElement;
+    fireEvent.change(input, {
+      target: { files: [new File(["docx"], "prova.docx", { type: "application/octet-stream" })] },
+    });
+    await waitFor(() => expect(storageUploadSpy).toHaveBeenCalled());
+    const sent = storageUploadSpy.mock.calls[0][1] as File;
+    expect(sent.type).toBe(DOCX_MIME);
+    expect(sent.name).toBe("prova.docx");
+  });
+
+  it("upload: sends the browser's File untouched when it already carries the canonical type", async () => {
+    render(<QuestionBankPage />, { wrapper });
+    fireEvent.click(screen.getByRole("tab", { name: /Provas/i }));
+    const input = document.querySelector("input[data-upload-input]") as HTMLInputElement;
+    const file = new File(["pdf"], "prova.pdf", { type: "application/pdf" });
+    fireEvent.change(input, { target: { files: [file] } });
+    await waitFor(() => expect(storageUploadSpy).toHaveBeenCalled());
+    expect(storageUploadSpy.mock.calls[0][1]).toBe(file);
   });
 
   // ── handleExtract: docx branch ────────────────────────────────────────────
