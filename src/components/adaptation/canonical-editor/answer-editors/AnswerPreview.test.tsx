@@ -101,6 +101,16 @@ describe("AnswerPreview — checkbox", () => {
     fireEvent.change(screen.getByLabelText("Opção 1"), { target: { value: "x" } });
     expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ kind: "checkbox" }));
   });
+
+  // Regressão 0356: a folha do Revisar diagramava os itens em duas colunas a
+  // partir de 640px, enquanto a prévia do Exportar, o PDF e o Word imprimem um
+  // item por linha. O bloco dobrava de altura na impressão.
+  it("lays the items out in a single column, like the printed surfaces", () => {
+    render(<AnswerPreview answer={answer} onChange={vi.fn()} />);
+    const container = screen.getByTestId("answer-preview-checkbox");
+    expect(container.className).not.toMatch(/grid-cols-2/);
+    expect(container.className).toMatch(/\bflex-col\b/);
+  });
 });
 
 describe("AnswerPreview — trueFalse", () => {

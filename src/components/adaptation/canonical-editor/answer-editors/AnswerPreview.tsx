@@ -103,7 +103,7 @@ export function AnswerPreview({ answer, onChange, disabled = false }: AnswerPrev
 
     case "checkbox":
       return (
-        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 sm:gap-x-7" data-testid="answer-preview-checkbox">
+        <div className="flex flex-col gap-2" data-testid="answer-preview-checkbox">
           {answer.items.map((item, i) => (
             <div key={item.id} className="flex min-w-0 items-start gap-2.5">
               <Bullet />
