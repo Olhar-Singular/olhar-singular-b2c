@@ -156,6 +156,26 @@ export function mathPdfStyle(contextFontSizePt: number = BASE_FONT_PT) {
 export const MATH_PDF_STYLE = mathPdfStyle();
 
 /**
+ * O estilo do nó de math EM BLOCO, decidido pelo que o papel vai IMPRIMIR.
+ *
+ * Com `alt` o que sai não é fórmula, é prosa em português (achado 0401), e as
+ * duas justificativas da monoespaçada caem: o corpo próprio existia para
+ * compensar a métrica da Courier (achado 0424) e sobre prosa só deixava a frase
+ * maior que o parágrafo ao redor; a costura de espaços inquebráveis e a quebra
+ * por contagem de caracteres existiam porque LaTeX não pode quebrar no meio
+ * (achados 0425 e 0427), e prosa quebra como qualquer frase. No papel a mesma
+ * linha trocava de tipografia no meio de si mesma (achado 0191). A descrição
+ * sai então no corpo do CONTEXTO e na fonte do documento, que ela herda do
+ * `<Page>`.
+ */
+export function mathPdfBlockStyle(
+  node: { latex: string; alt?: string },
+  contextFontSizePt: number,
+) {
+  return readableMathText(node) ? pdfTextSize(contextFontSizePt) : mathPdfStyle(contextFontSizePt);
+}
+
+/**
  * Estilo do run de fórmula INLINE, dentro de uma linha de texto do corpo.
  *
  * Mesma tinta do bloco (`mathPdfFontSizePt`, achado 0424), mas o avanço da
@@ -173,3 +193,17 @@ export function mathPdfInlineStyle(contextFontSizePt: number = BASE_FONT_PT) {
 
 /** O estilo inline no tamanho BASE, para quem renderiza um run solto. */
 export const MATH_PDF_INLINE_STYLE = mathPdfInlineStyle();
+
+/**
+ * O estilo do run de math INLINE, pela mesma regra do bloco (achado 0191).
+ *
+ * Com `alt` o run é texto do parágrafo: estilo vazio, para que ele herde do
+ * `<Text>` hospedeiro exatamente a fonte e o corpo das palavras ao lado — era
+ * dentro de uma frase que a troca de tipografia mais aparecia.
+ */
+export function mathPdfInlineStyleFor(
+  node: { latex: string; alt?: string },
+  contextFontSizePt: number,
+) {
+  return readableMathText(node) ? {} : mathPdfInlineStyle(contextFontSizePt);
+}

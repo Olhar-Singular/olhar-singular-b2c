@@ -29,7 +29,7 @@
 import { View, Text } from "@react-pdf/renderer";
 import type { Block } from "@/lib/adaptation/canonical/schema";
 import { nodeStyleToPdf } from "./nodeStyleToPdf";
-import { mathBlockLines, mathPdfStyle } from "./mathToPdfText";
+import { mathBlockLines, mathPdfBlockStyle } from "./mathToPdfText";
 import { BASE_FONT_PT } from "../pageTokens";
 
 type BlockMathBlock = Extract<Block, { type: "blockMath" }>;
@@ -60,7 +60,10 @@ export function PdfMath({
     <View style={{ marginBottom, alignItems }}>
       <View>
         {mathBlockLines(block.latex, block.alt, fontSize).map((line, i) => (
-          <Text key={i} style={{ ...mathPdfStyle(fontSize), textAlign: "left", ...textStyle }}>
+          <Text
+            key={i}
+            style={{ ...mathPdfBlockStyle(block, fontSize), textAlign: "left", ...textStyle }}
+          >
             {line}
           </Text>
         ))}

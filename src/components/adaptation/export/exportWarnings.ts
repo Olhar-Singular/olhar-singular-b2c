@@ -156,7 +156,9 @@ export function mathLossWarnings(document: CanonicalDocument): string[] {
  * verdade inteira.
  *
  * Vale só para os dois ARQUIVOS: o "Copiar" entrega texto puro e não tem
- * tipografia a perder.
+ * tipografia a perder — e, dentro deles, só para o LaTeX CRU
+ * (`documentHasRawMath`): desde o 0191 a fórmula com descrição sai na fonte e
+ * no corpo do documento, como a prosa que ela é.
  */
 export const MATH_TYPOGRAPHY_WARNING =
   "A fórmula também não usa a fonte do documento: sai em monoespaçada e num " +
@@ -164,6 +166,17 @@ export const MATH_TYPOGRAPHY_WARNING =
 
 export function documentHasMath(document: CanonicalDocument): boolean {
   return mathNodes(document).length > 0;
+}
+
+/**
+ * Se o arquivo ainda vai imprimir LaTeX CRU em algum lugar (achado 0191).
+ *
+ * É o que o aviso de tipografia descreve. A fórmula com descrição sai como
+ * frase em português, na fonte e no corpo do documento, e para ela não há
+ * monoespaçada a declarar; basta um nó sem `alt` para a perda voltar a existir.
+ */
+export function documentHasRawMath(document: CanonicalDocument): boolean {
+  return mathNodes(document).some((node) => readableMathText(node) === null);
 }
 
 /**
@@ -241,7 +254,9 @@ export function pdfExportWarnings(
 
   if (documentHasMath(document)) {
     warnings.push(...mathLossWarnings(document));
-    warnings.push(MATH_TYPOGRAPHY_WARNING);
+    // Só onde sobra LaTeX cru: a fórmula com descrição já sai na tipografia do
+    // documento (achado 0191).
+    if (documentHasRawMath(document)) warnings.push(MATH_TYPOGRAPHY_WARNING);
   }
 
   // A folha mostra o itálico porque o navegador sintetiza a inclinação; o PDF
