@@ -229,6 +229,26 @@ export const ALTERNATIVE_MARKER_COLUMN_PT = 22;
 export const ALTERNATIVE_MARKER_GAP_PX = 8;
 
 /**
+ * Marcador de verdadeiro/falso impresso para o aluno assinalar, e o vão entre
+ * ele e a afirmação. Ponto único do texto e do vão, na família do
+ * `ALTERNATIVE_MARKER_GAP_PX` (achado 0359).
+ *
+ * O vão adotado é o das duas telas (`gap-3` = 12px na folha do Revisar e na
+ * prévia do Exportar); quem se move é o PDF, que imprimia 1,99pt e colava o `F`
+ * na primeira palavra da afirmação.
+ *
+ * A LARGURA da coluna não é token nenhum de propósito: era a constante de 60pt
+ * do `PdfAnswer`, calibrada contra um glifo que mede 58,008pt na base de 12pt —
+ * 2pt de folga para um texto que escala com o "Tamanho do texto" do popover
+ * Formato e com a família escolhida, exatamente o que o achado 0182 corrigiu no
+ * marcador de alternativa. A coluna passa a ser o próprio conteúdo do marcador
+ * (`flexShrink: 0` + `marginRight`), então ela acompanha fonte e corpo sem
+ * precisar de calibragem.
+ */
+export const TRUE_FALSE_MARKER_TEXT = "(  ) V  (  ) F";
+export const TRUE_FALSE_MARKER_GAP_PX = 12;
+
+/**
  * Coluna do NÚMERO da questão: distância do x do rótulo ("1.") ao x do
  * enunciado, e o vão entre os dois (achado 0175).
  *
@@ -411,6 +431,9 @@ export const ANSWER_ITEM_GAP_PT = ANSWER_ITEM_GAP_PX / PT_TO_PX;
 
 /** `ALTERNATIVE_MARKER_GAP_PX` na unidade do PDF (pt), pela mesma razão 72/96. */
 export const ALTERNATIVE_MARKER_GAP_PT = ALTERNATIVE_MARKER_GAP_PX / PT_TO_PX;
+
+/** `TRUE_FALSE_MARKER_GAP_PX` na unidade do PDF (pt), pela mesma razão 72/96. */
+export const TRUE_FALSE_MARKER_GAP_PT = TRUE_FALSE_MARKER_GAP_PX / PT_TO_PX;
 
 /** `QUESTION_NUMBER_GAP_PX` na unidade do PDF (pt), pela mesma razão 72/96. */
 export const QUESTION_NUMBER_GAP_PT = QUESTION_NUMBER_GAP_PX / PT_TO_PX;

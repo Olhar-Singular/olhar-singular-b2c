@@ -34,6 +34,8 @@ import {
   BASE_FONT_PT,
   pdfTextSize,
   TABLE_CELL_PADDING_PT,
+  TRUE_FALSE_MARKER_GAP_PT,
+  TRUE_FALSE_MARKER_TEXT,
   RULE_WIDTH_PT,
 } from "../pageTokens";
 
@@ -59,7 +61,13 @@ const markerStyle = (fontSizePt: number) =>
 const FLEX = { flexGrow: 1, flexShrink: 1, flexBasis: 0 } as const;
 
 // Marcador de verdadeiro/falso para o aluno assinalar — não revela o valor.
-const TF_MARKER = { width: 60, flexShrink: 0 } as const;
+// A coluna é o próprio conteúdo do marcador mais o vão das duas telas, em vez
+// da constante de 60pt de antes (achado 0359): o glifo mede 58,008pt na base de
+// 12pt, sobravam 1,99pt e o `F` colava na primeira palavra da afirmação; acima
+// do padrão do popover Formato o texto passava da caixa e quebrava, como no
+// achado 0182. Sem `width`, o Yoga mede o marcador (uma linha) e `flexShrink: 0`
+// garante que ele não ceda — a coluna escala sozinha com corpo e família.
+const TF_MARKER = { marginRight: TRUE_FALSE_MARKER_GAP_PT, flexShrink: 0 } as const;
 
 /**
  * Painter mínimo do `Canvas` do @react-pdf (o pacote tipa como `any`): só os
@@ -217,7 +225,7 @@ export function PdfAnswer({
         <View>
           {answer.items.map((item) => (
             <View key={item.id} style={ROW}>
-              <Text style={TF_MARKER}>(  ) V  (  ) F</Text>
+              <Text style={TF_MARKER}>{TRUE_FALSE_MARKER_TEXT}</Text>
               <View style={FLEX}>
                 <Text style={itemStyle}>
                   <PdfRichText content={item.content} fontSize={elementSizes.alternative} />
