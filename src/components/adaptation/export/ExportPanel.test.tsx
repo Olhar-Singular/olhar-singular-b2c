@@ -752,3 +752,66 @@ describe("foco depois de desistir do aviso (0361)", () => {
     await waitFor(() => expect(globalThis.document.activeElement).toBe(trigger));
   });
 });
+
+// ---------------------------------------------------------------------------
+// 0360 — a exportação DIRETA (documento sem imagem e sem fórmula, que não abre
+// aviso nenhum) também larga o foco no BODY: `setExporting(true)` desabilita o
+// próprio gatilho focado no mesmo commit. É o caminho mais comum do produto, e
+// a correção do 0419 só cobriu quem passa pelo diálogo.
+// ---------------------------------------------------------------------------
+
+describe("foco depois de exportar sem aviso (0360)", () => {
+  /**
+   * O jsdom NÃO tira o foco de um elemento que vira `disabled` — o navegador
+   * tira, e é exatamente daí que vem o bug. O helper reproduz esse passo: clica
+   * no gatilho e, enquanto a geração corre com o botão desabilitado, faz o que
+   * o navegador faria (jogar o foco no `<body>`). Sem isso o teste passa verde
+   * num bug real.
+   */
+  const clickAndLoseFocusLikeTheBrowser = (trigger: HTMLElement) => {
+    trigger.focus();
+    fireEvent.click(trigger);
+    expect(trigger).toBeDisabled();
+    // `body.focus()` só move o foco no jsdom se o body for focável; o
+    // `tabIndex` é do teste, não do produto, e sai logo em seguida.
+    globalThis.document.body.tabIndex = -1;
+    globalThis.document.body.focus();
+    globalThis.document.body.removeAttribute("tabindex");
+    expect(globalThis.document.activeElement).toBe(globalThis.document.body);
+  };
+
+  it("devolve o foco ao botão 'Exportar PDF' quando a geração termina", async () => {
+    const onDownload = vi.fn().mockResolvedValue(undefined);
+    render(<ExportPanel document={document} onDownload={onDownload} />);
+
+    const trigger = screen.getByRole("button", { name: /Exportar PDF/i });
+    clickAndLoseFocusLikeTheBrowser(trigger);
+
+    await waitFor(() => expect(onDownload).toHaveBeenCalled());
+    await waitFor(() => expect(globalThis.document.activeElement).toBe(trigger));
+  });
+
+  it("devolve o foco ao botão 'Exportar Word' quando a geração termina", async () => {
+    const onDownloadWord = vi.fn().mockResolvedValue(undefined);
+    render(
+      <ExportPanel document={document} onDownload={vi.fn()} onDownloadWord={onDownloadWord} />,
+    );
+
+    const trigger = screen.getByRole("button", { name: /Exportar Word/i });
+    clickAndLoseFocusLikeTheBrowser(trigger);
+
+    await waitFor(() => expect(onDownloadWord).toHaveBeenCalled());
+    await waitFor(() => expect(globalThis.document.activeElement).toBe(trigger));
+  });
+
+  it("devolve o foco ao botão 'Exportar PDF' mesmo quando a geração falha", async () => {
+    const onDownload = vi.fn().mockRejectedValue(new Error("boom"));
+    render(<ExportPanel document={document} onDownload={onDownload} />);
+
+    const trigger = screen.getByRole("button", { name: /Exportar PDF/i });
+    clickAndLoseFocusLikeTheBrowser(trigger);
+
+    await waitFor(() => expect(onDownload).toHaveBeenCalled());
+    await waitFor(() => expect(globalThis.document.activeElement).toBe(trigger));
+  });
+});

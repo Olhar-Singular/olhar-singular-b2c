@@ -176,6 +176,11 @@ export function ExportPanel({
   };
 
   const runPdfExport = async () => {
+    // 0360 — armar a restauração AQUI (e não só no caminho do diálogo) cobre
+    // também a exportação direta, que é o caso normal: documento sem imagem e
+    // sem fórmula baixa sem aviso nenhum, e `setExporting(true)` desabilita o
+    // próprio botão focado, jogando o foco do teclado no `<body>`.
+    restoreFocusRef.current = "pdf";
     setExporting(true);
     try {
       await onDownload(document, { header, pageBreakPerQuestion }, pageStyle);
@@ -197,6 +202,9 @@ export function ExportPanel({
   };
 
   const runWordExport = async () => {
+    // 0360 — mesma armação do PDF: o caminho direto também precisa devolver o
+    // foco ao gatilho quando a geração termina.
+    restoreFocusRef.current = "word";
     setExportingWord(true);
     try {
       // As MESMAS opções que o PDF recebe: sem o `pageBreakPerQuestion` o Word
@@ -233,7 +241,6 @@ export function ExportPanel({
       void runCopy();
       return;
     }
-    restoreFocusRef.current = format;
     if (format === "pdf") void runPdfExport();
     else void runWordExport();
   };
