@@ -417,12 +417,14 @@ describe("removeGap", () => {
     expect(next.gaps[0].id).toBe(fillBlank.gaps[1].id);
   });
 
-  it("keeps at least one gap", () => {
+  // Achado 0503: com a lacuna impressa sincronizada, remover a última é
+  // coerente — `buildAnswer` já nasce com `gaps: []` ao trocar o tipo.
+  it("permite remover a última lacuna", () => {
     const single: Extract<QuestionAnswer, { kind: "fillBlank" }> = {
       kind: "fillBlank",
       gaps: [fillBlank.gaps[0]],
     };
-    expect(removeGap(single, single.gaps[0].id)).toBe(single);
+    expect(removeGap(single, single.gaps[0].id).gaps).toEqual([]);
   });
 
   it("returns unchanged for non-fillBlank", () => {

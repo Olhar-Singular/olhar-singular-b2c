@@ -43,7 +43,12 @@ import type { QuestionAnswer, RichText } from "@/lib/adaptation/canonical/schema
 import { newId } from "@/lib/adaptation/canonical/ids";
 import { deleteNodeAndRefocus, questionOrdinal } from "./nodeViewUtils";
 import { canMoveUp, canMoveDown, type MoveDirection } from "./blockMove";
-import { buildMoveTransaction, buildStemImagesTransaction } from "./blockTransactions";
+import {
+  buildAddGapTransaction,
+  buildMoveTransaction,
+  buildRemoveGapTransaction,
+  buildStemImagesTransaction,
+} from "./blockTransactions";
 import { useQuestionCard } from "./questionCardState";
 import { QuestionPreview } from "./QuestionPreview";
 import { QuestionCard } from "./QuestionCard";
@@ -194,6 +199,25 @@ export function QuestionNodeView({ node, updateAttributes, editor, getPos, delet
     }
   };
 
+  /**
+   * Achado 0503: o card mexia só em `answer.gaps[]`. Como a lacuna impressa é o
+   * `___` do enunciado (conteúdo vivo do Tiptap), adicionar deixava gabarito
+   * sobrando e remover a lacuna do meio deslocava todos os gabaritos seguintes,
+   * sem nada na folha denunciando. Aqui o enunciado recebe a outra metade da
+   * operação — e o Cancelar do card restaura o stem pelo snapshot, então a
+   * edição continua descartável inteira.
+   */
+  const dispatchStemTr = (build: (pos: number) => ReturnType<typeof buildAddGapTransaction>) => {
+    const currentPos = getPos();
+    /* v8 ignore next -- defensive type-narrow; o card só existe com a questão no doc */
+    if (typeof currentPos !== "number") return;
+    const tr = build(currentPos);
+    if (tr) editor.view.dispatch(tr);
+  };
+  const handleGapAdded = () => dispatchStemTr((p) => buildAddGapTransaction(editor.state, p));
+  const handleGapRemoved = (index: number) =>
+    dispatchStemTr((p) => buildRemoveGapTransaction(editor.state, p, index));
+
   const onAnswerChange = (next: QuestionAnswer) => updateAttributes({ answer: next });
   const onInstructionChange = (next: RichText | null) => updateAttributes({ instruction: next });
 
@@ -266,6 +290,8 @@ export function QuestionNodeView({ node, updateAttributes, editor, getPos, delet
           disabled={disabled}
           onCommit={handleCommit}
           onCancel={handleCancel}
+          onGapAdded={handleGapAdded}
+          onGapRemoved={handleGapRemoved}
           stem={<NodeViewContent />}
         />
       ) : (

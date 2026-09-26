@@ -22,9 +22,13 @@ vi.mock("@/components/editor/ImageManagerModal", () => ({
 
 const buildMoveTransaction = vi.fn();
 const buildStemImagesTransaction = vi.fn();
+const buildAddGapTransaction = vi.fn();
+const buildRemoveGapTransaction = vi.fn();
 vi.mock("./blockTransactions", () => ({
   buildMoveTransaction: (...args: unknown[]) => buildMoveTransaction(...args),
   buildStemImagesTransaction: (...args: unknown[]) => buildStemImagesTransaction(...args),
+  buildAddGapTransaction: (...args: unknown[]) => buildAddGapTransaction(...args),
+  buildRemoveGapTransaction: (...args: unknown[]) => buildRemoveGapTransaction(...args),
 }));
 
 const canMoveUp = vi.fn();
@@ -883,5 +887,51 @@ describe("QuestionNodeView — foco ao sair da confirmação sem excluir (achado
     render(<QuestionNodeView {...props} />);
     fireEvent.click(screen.getByLabelText("Adicionar imagem à questão"));
     expect(modalRestoreFocusRef?.current).toBe(screen.getByLabelText("Adicionar imagem à questão"));
+  });
+});
+
+/**
+ * Achado 0503: `+ Lacuna` e `Remover lacuna` mexiam só no gabarito; o `___`
+ * impresso no enunciado ficava para trás, e remover a lacuna do meio deslocava
+ * silenciosamente todos os gabaritos seguintes.
+ */
+describe("QuestionNodeView — lacuna impressa x gabarito (achado 0503)", () => {
+  const fb: QuestionAnswer = {
+    kind: "fillBlank",
+    gaps: [
+      { id: "cccccccc-cccc-4ccc-8ccc-cccccccccccc", answer: "evaporacao" },
+      { id: "dddddddd-dddd-4ddd-8ddd-dddddddddddd", answer: "condensacao" },
+    ],
+  };
+
+  it("+ Lacuna insere o ___ correspondente no enunciado", () => {
+    const { props, dispatch } = makeProps(fb);
+    const tr = { add: true };
+    buildAddGapTransaction.mockReturnValue(tr);
+    render(<QuestionNodeView {...props} />);
+    fireEvent.click(screen.getByLabelText("Editar questão"));
+    fireEvent.click(screen.getByText("Lacuna"));
+    expect(buildAddGapTransaction).toHaveBeenCalledWith(props.editor.state, 100);
+    expect(dispatch).toHaveBeenCalledWith(tr);
+  });
+
+  it("Remover lacuna apaga o ___ daquela posição no enunciado", () => {
+    const { props, dispatch } = makeProps(fb);
+    const tr = { remove: true };
+    buildRemoveGapTransaction.mockReturnValue(tr);
+    render(<QuestionNodeView {...props} />);
+    fireEvent.click(screen.getByLabelText("Editar questão"));
+    fireEvent.click(screen.getAllByTitle("Remover lacuna")[1]);
+    expect(buildRemoveGapTransaction).toHaveBeenCalledWith(props.editor.state, 100, 1);
+    expect(dispatch).toHaveBeenCalledWith(tr);
+  });
+
+  it("não despacha nada quando o enunciado não comporta a lacuna", () => {
+    const { props, dispatch } = makeProps(fb);
+    buildAddGapTransaction.mockReturnValue(null);
+    render(<QuestionNodeView {...props} />);
+    fireEvent.click(screen.getByLabelText("Editar questão"));
+    fireEvent.click(screen.getByText("Lacuna"));
+    expect(dispatch).not.toHaveBeenCalled();
   });
 });

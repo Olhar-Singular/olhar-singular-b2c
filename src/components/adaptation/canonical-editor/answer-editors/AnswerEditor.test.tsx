@@ -145,7 +145,7 @@ describe("AnswerEditor — ordering", () => {
 });
 
 describe("AnswerEditor — fillBlank", () => {
-  const answer: QuestionAnswer = {
+  const answer: Extract<QuestionAnswer, { kind: "fillBlank" }> = {
     kind: "fillBlank",
     gaps: [
       { id: "cccccccc-cccc-4ccc-8ccc-cccccccccccc", answer: "g1" },
@@ -167,6 +167,38 @@ describe("AnswerEditor — fillBlank", () => {
         gaps: expect.arrayContaining([expect.objectContaining({ answer: "n" })]),
       })
     );
+  });
+
+  /**
+   * Achado 0503: `+ Lacuna` / `Remover lacuna` mexiam só em `gaps[]`, e o `___`
+   * impresso no enunciado ficava para trás — gabarito a mais, ou deslocado.
+   */
+  it("avisa o enunciado ao adicionar e ao remover uma lacuna, com o índice removido", () => {
+    const onGapAdded = vi.fn();
+    const onGapRemoved = vi.fn();
+    render(
+      <AnswerEditor answer={answer} onChange={vi.fn()} onGapAdded={onGapAdded} onGapRemoved={onGapRemoved} />
+    );
+    fireEvent.click(screen.getByText("Lacuna"));
+    expect(onGapAdded).toHaveBeenCalledTimes(1);
+    fireEvent.click(screen.getAllByTitle("Remover lacuna")[1]);
+    expect(onGapRemoved).toHaveBeenCalledWith(1);
+  });
+
+  it("segue funcionando sem os avisos de enunciado (card fora do editor)", () => {
+    const onChange = vi.fn();
+    render(<AnswerEditor answer={answer} onChange={onChange} />);
+    fireEvent.click(screen.getByText("Lacuna"));
+    fireEvent.click(screen.getAllByTitle("Remover lacuna")[0]);
+    expect(onChange).toHaveBeenCalledTimes(2);
+  });
+
+  it("deixa remover a última lacuna (buildAnswer nasce com gaps vazio)", () => {
+    const onChange = vi.fn();
+    const single: QuestionAnswer = { kind: "fillBlank", gaps: [answer.gaps[0]] };
+    render(<AnswerEditor answer={single} onChange={onChange} />);
+    fireEvent.click(screen.getByTitle("Remover lacuna"));
+    expect(onChange).toHaveBeenCalledWith({ kind: "fillBlank", gaps: [] });
   });
 });
 

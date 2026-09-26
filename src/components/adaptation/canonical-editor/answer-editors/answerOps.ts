@@ -164,9 +164,14 @@ export function addGap(answer: QuestionAnswer, generate: Generate = newId): Ques
   return { ...answer, gaps: [...answer.gaps, { id: generate(), answer: "" }] };
 }
 
+/**
+ * Achado 0503: remover a última lacuna é permitido. O enunciado perde o `___`
+ * correspondente junto (quem edita no editor canônico sincroniza os dois), e
+ * `buildAnswer` já cria a resposta fillBlank com `gaps: []` — recusar aqui
+ * apenas contradizia o estado inicial.
+ */
 export function removeGap(answer: QuestionAnswer, id: string): QuestionAnswer {
   if (answer.kind !== "fillBlank") return answer;
-  if (answer.gaps.length <= 1) return answer;
   return { ...answer, gaps: answer.gaps.filter((g) => g.id !== id) };
 }
 

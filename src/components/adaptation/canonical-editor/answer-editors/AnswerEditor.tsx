@@ -45,6 +45,14 @@ interface AnswerEditorProps {
   answer: QuestionAnswer;
   onChange: (answer: QuestionAnswer) => void;
   disabled?: boolean;
+  /**
+   * Achado 0503: a lacuna impressa (`___` no enunciado) e a entrada do gabarito
+   * são coisas separadas. Estes dois avisos deixam o dono do enunciado inserir
+   * ou apagar o `___` correspondente; sem eles o card só mexe no gabarito (é o
+   * caso de quem renderiza o AnswerEditor fora do editor canônico).
+   */
+  onGapAdded?: () => void;
+  onGapRemoved?: (index: number) => void;
 }
 
 function IconButton({
@@ -65,7 +73,13 @@ function IconButton({
   );
 }
 
-export function AnswerEditor({ answer, onChange, disabled = false }: AnswerEditorProps) {
+export function AnswerEditor({
+  answer,
+  onChange,
+  disabled = false,
+  onGapAdded,
+  onGapRemoved,
+}: AnswerEditorProps) {
   /**
    * 0312 — os campos deste card não tinham `id`/`name`: o Chrome reporta "A
    * form field element should have an id or name attribute" e os rótulos
@@ -229,12 +243,29 @@ export function AnswerEditor({ answer, onChange, disabled = false }: AnswerEdito
                 placeholder="Resposta"
                 className="border-surface-line-2 bg-surface-paper text-surface-ink"
               />
-              <IconButton onClick={() => onChange(removeGap(answer, gap.id))} title="Remover lacuna" disabled={disabled}>
+              <IconButton
+                onClick={() => {
+                  onChange(removeGap(answer, gap.id));
+                  onGapRemoved?.(index);
+                }}
+                title="Remover lacuna"
+                disabled={disabled}
+              >
                 <Trash2 className="w-3.5 h-3.5" />
               </IconButton>
             </div>
           ))}
-          <Button type="button" variant="outline" size="sm" className={cn("self-start gap-1", FOLHA_BUTTON)} onClick={() => onChange(addGap(answer))} disabled={disabled}>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className={cn("self-start gap-1", FOLHA_BUTTON)}
+            onClick={() => {
+              onChange(addGap(answer));
+              onGapAdded?.();
+            }}
+            disabled={disabled}
+          >
             <Plus className="w-3.5 h-3.5" /> Lacuna
           </Button>
         </div>

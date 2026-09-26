@@ -55,6 +55,14 @@ interface QuestionCardProps {
   ) => void;
   /** Called on Cancelar — the parent is responsible for restoring stem content. */
   onCancel: () => void;
+  /**
+   * Achado 0503: o gabarito de uma questão de lacunas vive no `answer` (aqui,
+   * bufferizado), mas a lacuna impressa é o `___` do enunciado, que é conteúdo
+   * vivo do Tiptap. O card avisa quem manda no enunciado para os dois andarem
+   * juntos; sem os avisos ele volta a mexer só no gabarito.
+   */
+  onGapAdded?: () => void;
+  onGapRemoved?: (index: number) => void;
   stem: React.ReactNode;
 }
 
@@ -76,6 +84,8 @@ export function QuestionCard({
   disabled,
   onCommit,
   onCancel,
+  onGapAdded,
+  onGapRemoved,
   stem,
 }: QuestionCardProps) {
   const [localAnswer, setLocalAnswer] = useState<QuestionAnswer>(answer);
@@ -301,7 +311,13 @@ export function QuestionCard({
         </div>
 
         <div contentEditable={false}>
-          <AnswerEditor answer={localAnswer} disabled={disabled} onChange={setLocalAnswer} />
+          <AnswerEditor
+            answer={localAnswer}
+            disabled={disabled}
+            onChange={setLocalAnswer}
+            onGapAdded={onGapAdded}
+            onGapRemoved={onGapRemoved}
+          />
         </div>
       </div>
 

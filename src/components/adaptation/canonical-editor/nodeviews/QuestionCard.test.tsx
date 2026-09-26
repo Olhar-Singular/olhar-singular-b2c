@@ -66,6 +66,22 @@ describe("QuestionCard", () => {
     expect(screen.getByText("Imagem / Conteúdo")).toBeInTheDocument();
   });
 
+  // Achado 0503: o card é quem sabe da lacuna impressa — ele repassa os avisos
+  // de `+ Lacuna` / `Remover lacuna` para quem manda no enunciado.
+  it("repassa os avisos de lacuna ao dono do enunciado", () => {
+    const onGapAdded = vi.fn();
+    const onGapRemoved = vi.fn();
+    setup({
+      answer: { kind: "fillBlank", gaps: [{ id: "cccccccc-cccc-4ccc-8ccc-cccccccccccc", answer: "g1" }] },
+      onGapAdded,
+      onGapRemoved,
+    });
+    fireEvent.click(screen.getByText("Lacuna"));
+    expect(onGapAdded).toHaveBeenCalledTimes(1);
+    fireEvent.click(screen.getAllByTitle("Remover lacuna")[0]);
+    expect(onGapRemoved).toHaveBeenCalledWith(0);
+  });
+
   it("renders the full AnswerEditor (structure controls visible)", () => {
     setup();
     expect(screen.getByTestId("answer-multipleChoice")).toBeInTheDocument();
