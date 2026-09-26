@@ -432,6 +432,34 @@ describe("InlineMathNodeView — campos acompanham o conteúdo (achado 0418)", (
     expect(widthInCh(screen.getByLabelText("Texto alternativo da fórmula inline"))).toBeGreaterThanOrEqual(12);
   });
 
+  // Achado 0260: a largura amarrada ao valor colapsava para o piso no MESMO
+  // frame em que a troca do LaTeX zera o alt (achado 0436) — o campo encolhia
+  // justamente quando o produto pede que a descrição seja reescrita. Precisa do
+  // nó com estado: é o `alt` de volta como `null` que dispara o colapso.
+  it("não encolhe o alt para o piso quando a troca do LaTeX o invalida (achado 0260)", () => {
+    function Harness() {
+      const [attrs, setAttrs] = useState<{ latex: string; alt: string | null }>({
+        latex: "x^2 + 2x + 1 = 0",
+        alt: "x ao quadrado mais 2x mais 1 igual a zero",
+      });
+      const props = {
+        node: { attrs },
+        updateAttributes: (patch: Record<string, unknown>) =>
+          setAttrs((prev) => ({ ...prev, ...patch })),
+        editor: { isEditable: true },
+      } as unknown as NodeViewProps;
+      return <InlineMathNodeView {...props} />;
+    }
+    render(<Harness />);
+    fireEvent.click(screen.getByTestId("inlinemath-render"));
+    const field = screen.getByLabelText("Texto alternativo da fórmula inline");
+    fireEvent.change(screen.getByLabelText("Expressão LaTeX inline"), { target: { value: "y^3 - 5y = 12" } });
+
+    expect(screen.getByTestId("inlinemath-alt-stale")).toBeInTheDocument();
+    expect((field as HTMLInputElement).value).toBe("");
+    expect(widthInCh(field)).toBeGreaterThanOrEqual(36);
+  });
+
   it("mantém um teto de largura para não estourar a coluna de texto", () => {
     const { props } = makeProps({ latex: "x", alt: "a".repeat(300) });
     render(<InlineMathNodeView {...props} />);
