@@ -182,6 +182,22 @@ describe("pdf-utils — parsePdf", () => {
     expect(pages[0].getViewport).toHaveBeenCalledWith({ scale: 3.0 });
   });
 
+  // pdf.js 6 renders into the `canvas` itself; `canvasContext` survives only as
+  // a backwards-compat path. The white background is what keeps the JPEG
+  // sent to the extraction model from going black on transparent pages.
+  it("hands pdf.js the canvas (not a 2D context) with a white background", async () => {
+    const page = makePage("hello world");
+    singlePage(page);
+
+    await parsePdf(fakeFile());
+
+    const params = page.render.mock.calls[0][0];
+    expect(params).not.toHaveProperty("canvasContext");
+    expect(params.canvas).toMatchObject({ width: 100, height: 200 });
+    expect(params.viewport).toEqual({ width: 100, height: 200 });
+    expect(params.background).toBe("#FFFFFF");
+  });
+
   it("only renders the first 8 pages even when document has more", async () => {
     const pages = Array.from({ length: 12 }, () => makePage("p"));
     getDocument.mockReturnValue({
@@ -230,6 +246,20 @@ describe("pdf-utils — renderPdfPage", () => {
     expect(dataUrl).toContain("data:image/jpeg");
     expect(page.getViewport).toHaveBeenCalledWith({ scale: 1.5 });
     expect(page.cleanup).toHaveBeenCalled();
+  });
+
+  it("hands pdf.js the canvas (not a 2D context) with a white background", async () => {
+    const page = makePage("t");
+    getDocument.mockReturnValue({
+      promise: Promise.resolve({ numPages: 1, getPage: () => Promise.resolve(page) }),
+    });
+
+    await renderPdfPage(fakeFile(), 1);
+
+    const params = page.render.mock.calls[0][0];
+    expect(params).not.toHaveProperty("canvasContext");
+    expect(params.canvas).toMatchObject({ width: 100, height: 200 });
+    expect(params.background).toBe("#FFFFFF");
   });
 
   it("uses default scale 1.5 when omitted", async () => {

@@ -22,6 +22,23 @@ const MAX_TEXT_CHARS = 50000;
 const MAX_IMAGE_PAGES = 8;
 const RENDER_SCALE = 3.0;
 
+type PdfPage = Awaited<ReturnType<pdfjsLib.PDFDocumentProxy["getPage"]>>;
+
+/**
+ * Rasterises one page to a JPEG data URL. pdf.js 6 draws straight into the
+ * `canvas` (the old `canvasContext` param is only a backwards-compat path) and
+ * paints `background` before the page content, so JPEG never ends up with
+ * black where the PDF is transparent.
+ */
+async function renderPageToJpeg(page: PdfPage, scale: number, quality: number): Promise<string> {
+  const viewport = page.getViewport({ scale });
+  const canvas = document.createElement("canvas");
+  canvas.width = viewport.width;
+  canvas.height = viewport.height;
+  await page.render({ canvas, viewport, background: "#FFFFFF" }).promise;
+  return canvas.toDataURL("image/jpeg", quality);
+}
+
 export async function parsePdf(
   file: File,
   onProgress?: (page: number, total: number) => void
@@ -53,15 +70,7 @@ export async function parsePdf(
     fullText += `\n--- Página ${i} ---\n${pageText}`;
 
     if (pageImages.length < MAX_IMAGE_PAGES) {
-      const viewport = page.getViewport({ scale: RENDER_SCALE });
-      const canvas = document.createElement("canvas");
-      canvas.width = viewport.width;
-      canvas.height = viewport.height;
-      const ctx = canvas.getContext("2d")!;
-      ctx.fillStyle = "#FFFFFF";
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
-      await page.render({ canvasContext: ctx, viewport }).promise;
-      pageImages.push(canvas.toDataURL("image/jpeg", 0.85));
+      pageImages.push(await renderPageToJpeg(page, RENDER_SCALE, 0.85));
       pagesProcessed.push(i);
     }
 
@@ -80,15 +89,7 @@ export async function renderPdfPage(file: File, pageNumber: number, scale = 1.5)
   const arrayBuffer = await file.arrayBuffer();
   const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
   const page = await pdf.getPage(pageNumber);
-  const viewport = page.getViewport({ scale });
-  const canvas = document.createElement("canvas");
-  canvas.width = viewport.width;
-  canvas.height = viewport.height;
-  const ctx = canvas.getContext("2d")!;
-  ctx.fillStyle = "#FFFFFF";
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
-  await page.render({ canvasContext: ctx, viewport }).promise;
-  const dataUrl = canvas.toDataURL("image/jpeg", 0.9);
+  const dataUrl = await renderPageToJpeg(page, scale, 0.9);
   page.cleanup();
   return dataUrl;
 }
