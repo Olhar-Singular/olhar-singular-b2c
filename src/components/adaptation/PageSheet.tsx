@@ -520,11 +520,24 @@ export function PageSheet({
       setSheetHeight(
         2 * PAGE_MARGIN_PX + Math.max(total * PAGE_CONTENT_HEIGHT_PX, content.offsetHeight),
       );
+      /*
+        Achado 0198: a régua só é desenhada onde o fluxo de fato vira, ou seja,
+        na PRÉVIA, a única superfície em que o empurrão do 0135/0701 é aplicado.
+        No Revisar o fluxo é contínuo de propósito (nada é deslocado e o DOM do
+        editor não marca bloco nenhum), então a linha caía num múltiplo da área
+        útil que nenhum arquivo usa: no meio de uma tabela que a prévia manda
+        inteira para a folha seguinte e que o PDF parte noutro ponto. Afirmar um
+        corte que o papel não faz é pior que não marcar nada: o professor
+        editava acreditando que a tabela sairia partida ali. O piso do papel em
+        folhas inteiras (0151/0157) continua valendo nas duas superfícies.
+      */
       setPageRules(
-        Array.from(
-          { length: total - 1 },
-          (_, page) => PAGE_MARGIN_PX + (page + 1) * PAGE_CONTENT_HEIGHT_PX,
-        ),
+        paginated
+          ? Array.from(
+              { length: total - 1 },
+              (_, page) => PAGE_MARGIN_PX + (page + 1) * PAGE_CONTENT_HEIGHT_PX,
+            )
+          : [],
       );
       /*
         Achado 0135: a régua ganha, como margem inferior, o branco que falta até

@@ -424,7 +424,26 @@ describe("PageSheet", () => {
       expect(screen.getByTestId("page-sheet").style.minHeight).toBe("1123px");
     });
 
-    it("cresce em folhas inteiras e marca a virada também no Revisar (achado 0151)", () => {
+    /*
+      Achado 0198: a folha do Revisar é contínua de propósito (o 0135 e o 0701
+      só empurram o fluxo na prévia), então a régua desenhada nela marcava um
+      pixel da conta, não uma virada do papel: ela caía no meio de uma tabela
+      que o arquivo nunca parte ali (a prévia manda a questão inteira para a
+      folha 2, o PDF vira noutro ponto). Sem os blocos marcados no DOM do editor
+      não há como saber onde o papel vira nesta superfície, e uma linha que
+      afirma um corte inexistente é pior que linha nenhuma.
+    */
+    it("não afirma virada no Revisar, que não vira o conteúdo (achado 0198)", () => {
+      withHeight(1500, () => {
+        render(<PageSheet toolbar={null}><span>x</span></PageSheet>);
+        const sheet = screen.getByTestId("page-sheet");
+        expect(sheet.style.backgroundImage).toBe("none");
+        // O papel continua crescendo em folhas inteiras (achado 0151).
+        expect(sheet.style.minHeight).toBe("2139.34px");
+      });
+    });
+
+    it("cresce em folhas inteiras também no Revisar (achado 0151)", () => {
       // O piso do 0329 fechou só a metade de baixo: passando de uma página o
       // papel do Revisar crescia num valor qualquer (1,21 folha nos pixels do
       // achado) e não havia nenhuma marca de onde a página 1 termina.
@@ -433,7 +452,8 @@ describe("PageSheet", () => {
         const sheet = screen.getByTestId("page-sheet");
         // 2 áreas úteis + as duas margens do fluxo contínuo (achado 0157).
         expect(sheet.style.minHeight).toBe("2139.34px");
-        expect(sheet.style.backgroundImage).toContain("1069.67px");
+        // Sem régua: o fluxo do Revisar não vira (achado 0198).
+        expect(sheet.style.backgroundImage).toBe("none");
         // Continua sem paginar de verdade: nenhum contador de folhas.
         expect(screen.queryByTestId("page-count")).toBeNull();
       });
@@ -452,7 +472,6 @@ describe("PageSheet", () => {
         const sheet = screen.getByTestId("page-sheet");
         // 1070,7px cabem na A4 inteira, mas não nos 1016,34px de área útil.
         expect(sheet.style.minHeight).toBe("2139.34px");
-        expect(sheet.style.backgroundImage).toContain("1069.67px");
       });
     });
 
@@ -476,7 +495,8 @@ describe("PageSheet", () => {
     */
     it("não desenha folha em branco: papel e régua seguem a área útil (achado 0157)", () => {
       withHeight(1058, () => {
-        render(<PageSheet toolbar={null}><span>x</span></PageSheet>);
+        // Na prévia, que é onde a régua sobrevive ao 0198.
+        render(<PageSheet paginated toolbar={null}><span>x</span></PageSheet>);
         const sheet = screen.getByTestId("page-sheet");
         // 2 folhas de área útil + as DUAS margens do fluxo contínuo, não 2 x 1123.
         expect(sheet.style.minHeight).toBe("2139.34px");
@@ -757,7 +777,8 @@ describe("PageSheet", () => {
         // A imagem do bloco carregou: o conteúdo passa da área útil da página.
         resize(1500);
         expect(sheet.style.minHeight).toBe("2139.34px");
-        expect(sheet.style.backgroundImage).toContain("1069.67px");
+        // Sem régua no Revisar (achado 0198): o papel é que responde pela medida.
+        expect(sheet.style.backgroundImage).toBe("none");
         expect(sheet.parentElement!.style.height).toBe("2139.34px");
       });
     });
