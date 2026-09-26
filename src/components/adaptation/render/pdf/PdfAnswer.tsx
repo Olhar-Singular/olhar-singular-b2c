@@ -387,42 +387,58 @@ export function PdfAnswer({
         // ter a mesma altura de linha (achado 0607).
         padding: TABLE_CELL_PADDING_PT,
       } as const;
+      // Altura de uma linha de uma só linha de texto: corpo x entrelinha, mais
+      // o recuo das duas bordas da célula e o fio que ela desenha embaixo.
+      const rowHeightPt = baseFontSize * BASE_LINE_HEIGHT + 2 * TABLE_CELL_PADDING_PT + RULE_WIDTH_PT;
       return (
-        <View
-          style={{
-            borderTopWidth: RULE_WIDTH_PT,
-            borderLeftWidth: RULE_WIDTH_PT,
-            borderColor: "#999999",
-          }}
-        >
-          {header && (
-            // `wrap={false}`: sem isso o react-pdf fatia a linha na virada de
-            // página e deixa a moldura numa folha e o texto na outra (0602).
-            // `fixed`: no react-pdf só o que é fixo reaparece a cada folha em
-            // que o pai continua — é o que repete o cabeçalho e evita a página
-            // com linhas de dados sem rótulo de coluna (0603).
-            <View fixed wrap={false} style={{ flexDirection: "row" }}>
-              {header.map((c, i) => (
-                <View key={i} style={cell}>
-                  <Text style={{ fontWeight: "bold" }}>
-                    <PdfRichText content={c} fontSize={baseFontSize} />
-                  </Text>
-                </View>
-              ))}
-            </View>
-          )}
-          {body.map((row, r) => (
-            <View key={r} wrap={false} style={{ flexDirection: "row" }}>
-              {row.map((c, i) => (
-                <View key={i} style={cell}>
-                  <Text>
-                    <PdfRichText content={c} fontSize={baseFontSize} />
-                  </Text>
-                </View>
-              ))}
-            </View>
-          ))}
-        </View>
+        <>
+          {/*
+            Fio invisível de altura zero que exige, ANTES da tabela, papel para
+            o cabeçalho MAIS uma linha de dados (achado 0193). Sem ele o `fixed`
+            do cabeçalho desenha a faixa de rótulos sozinha no pé da folha (o
+            corpo não cabe e desce) e a repete na folha seguinte. O
+            `minPresenceAhead` é ignorado em nó `fixed` e não quebra um nó que
+            já vai ser fatiado, então ele mora aqui, num irmão de altura zero
+            imediatamente acima da tabela: é esse irmão que o react-pdf empurra
+            para a folha seguinte, levando a tabela inteira junto.
+          */}
+          <View minPresenceAhead={2 * rowHeightPt + RULE_WIDTH_PT} />
+          <View
+            style={{
+              borderTopWidth: RULE_WIDTH_PT,
+              borderLeftWidth: RULE_WIDTH_PT,
+              borderColor: "#999999",
+            }}
+          >
+            {header && (
+              // `wrap={false}`: sem isso o react-pdf fatia a linha na virada de
+              // página e deixa a moldura numa folha e o texto na outra (0602).
+              // `fixed`: no react-pdf só o que é fixo reaparece a cada folha em
+              // que o pai continua — é o que repete o cabeçalho e evita a página
+              // com linhas de dados sem rótulo de coluna (0603).
+              <View fixed wrap={false} style={{ flexDirection: "row" }}>
+                {header.map((c, i) => (
+                  <View key={i} style={cell}>
+                    <Text style={{ fontWeight: "bold" }}>
+                      <PdfRichText content={c} fontSize={baseFontSize} />
+                    </Text>
+                  </View>
+                ))}
+              </View>
+            )}
+            {body.map((row, r) => (
+              <View key={r} wrap={false} style={{ flexDirection: "row" }}>
+                {row.map((c, i) => (
+                  <View key={i} style={cell}>
+                    <Text>
+                      <PdfRichText content={c} fontSize={baseFontSize} />
+                    </Text>
+                  </View>
+                ))}
+              </View>
+            ))}
+          </View>
+        </>
       );
     }
   }

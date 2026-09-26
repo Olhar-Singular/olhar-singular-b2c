@@ -223,9 +223,11 @@ describe("PdfAnswer", () => {
   });
 
   it("draws collapsed table borders — container top/left, cells right/bottom (no doubled lines)", () => {
-    const el = PdfAnswer({
+    const root = PdfAnswer({
       answer: { kind: "table", rows: [[rt("H1"), rt("H2")], [rt("a"), rt("b")]] },
     }) as ReactElement;
+    // A tabela vem num fragmento: [fio de presença mínima (0193), tabela].
+    const el = (root.props.children as ReactElement[])[1];
     const container = el.props.style as { borderTopWidth?: number; borderLeftWidth?: number };
     // A espessura é `RULE_WIDTH_PT`, o traço estrutural do documento — o mesmo
     // 1px que a prévia desenha, para as duas medirem a mesma linha (0607).

@@ -42,7 +42,9 @@ const TABLE: Extract<QuestionAnswer, { kind: "table" }> = {
 
 /** Estilo da primeira célula do cabeçalho na árvore react-pdf de PdfAnswer. */
 function headerCellStyle(node: ReactElement): Record<string, number | string> {
-  const rows = (node.props as { children: ReactElement[] }).children;
+  // A tabela vem num fragmento: [fio de presença mínima (0193), tabela].
+  const table = (node.props as { children: ReactElement[] }).children[1];
+  const rows = (table.props as { children: ReactElement[] }).children;
   const cells = (rows[0].props as { children: ReactElement[] }).children;
   return (cells[0].props as { style: Record<string, number | string> }).style;
 }
