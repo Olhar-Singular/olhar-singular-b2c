@@ -29,6 +29,7 @@ import { StepReview } from "./steps/review/StepReview";
 import { StepExportCanonical } from "./steps/export/StepExportCanonical";
 import {
   INITIAL_WIZARD_DATA,
+  activeUploadedExam,
   setResult,
   setDocument,
   setPageStyle,
@@ -106,7 +107,7 @@ export default function CanonicalAdaptationWizard({ editMode }: Props = {}) {
   const [isGenerating, setIsGenerating] = useState(false);
   // Upload-direto-de-prova only: true while StepUploadExam is parsing a file
   // locally (no AI, no network — pdf-utils/docx-utils only; AI extraction is
-  // deferred to "Gerar", bundled with the paid adapt-activity call). Blocks
+  // deferred to "Gerar", charged there right before adapt-activity). Blocks
   // navigation the same way isGenerating does, but there is no credit at stake
   // here — the dialog wording differs.
   const [isUploading, setIsUploading] = useState(false);
@@ -550,6 +551,7 @@ export default function CanonicalAdaptationWizard({ editMode }: Props = {}) {
   }, [draftId, currentUpdatedAt, flush, markReady, handleConflict, syncUpdatedAt, subject, folderId, newFolder, createFolder]);
 
   const renderStep = () => {
+    const uploadedExam = activeUploadedExam(data);
     switch (currentKey) {
       case "activity_type":
         return (
@@ -634,8 +636,10 @@ export default function CanonicalAdaptationWizard({ editMode }: Props = {}) {
             saving={markReady.isPending}
             onSave={handleSave}
             originalExam={
-              data.uploadedExam
-                ? { file: data.uploadedExam.file, pageImages: data.uploadedExam.pageImages, userId: user?.id ?? null }
+              // Only the file this adaptation was generated from; one left
+              // attached after switching to paste/bank is not "the original".
+              uploadedExam
+                ? { file: uploadedExam.file, pageImages: uploadedExam.pageImages, userId: user?.id ?? null }
                 : null
             }
           />

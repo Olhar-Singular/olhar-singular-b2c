@@ -19,7 +19,8 @@ import {
   calcAdaptationCost,
   getComplexityTier,
 } from "@/lib/domain/barriers";
-import type { WizardData, BarrierItem } from "@/lib/adaptation/wizard/wizardState";
+import { EXTRACTION_COST } from "@/lib/domain/extractionCost";
+import { activeUploadedExam, type WizardData, type BarrierItem } from "@/lib/adaptation/wizard/wizardState";
 import { BarrierProfileForm } from "@/components/forms/BarrierProfileForm";
 import type { BarrierProfileFormValues } from "@/components/forms/BarrierProfileForm";
 
@@ -50,7 +51,12 @@ export function StepBarrierSelection({ data, updateData, onNext, onPrev }: Props
   const access = computeAccess(profile, new Date());
   const isExempt = access?.unlimited ?? false;
   const creditCost = calcAdaptationCost(activeDimensions);
-  const affordable = canAfford(access, creditCost);
+  // An attached file is read by AI at "Gerar" before the adaptation, and that
+  // reading is charged on its own. Same rule StepGenerate uses (the mode
+  // decides), so the cost shown here is the one charged there.
+  const extractionCost = activeUploadedExam(data) ? EXTRACTION_COST : 0;
+  const totalCost = creditCost + extractionCost;
+  const affordable = canAfford(access, totalCost);
   const complexityTier = getComplexityTier(activeDimensions);
 
   const handleProfileChange = useCallback((profileId: string) => {
@@ -204,10 +210,15 @@ export function StepBarrierSelection({ data, updateData, onNext, onPrev }: Props
             <Coins className={`w-4 h-4 shrink-0 ${affordable ? "text-amber-600" : "text-destructive"}`} />
             <p className={`text-sm ${affordable ? "text-amber-800" : "text-destructive"}`}>
               Esta adaptação consumirá{" "}
-              <strong>{creditCost} créditos</strong>
+              <strong>{totalCost} créditos</strong>
               <span className={`ml-1 ${affordable ? "text-amber-600" : ""}`}>
                 (complexidade {COMPLEXITY_LABELS[complexityTier]})
               </span>
+              {extractionCost > 0 && (
+                <span className="block mt-1">
+                  Inclui {extractionCost} créditos pela leitura do arquivo enviado.
+                </span>
+              )}
               {!affordable && (
                 <span className="block mt-1">
                   Seus créditos acabaram.{" "}

@@ -780,6 +780,24 @@ describe("QuestionBankPage", () => {
     });
   });
 
+  it("Provas tab extraction: explains insufficient credits instead of showing the raw code", async () => {
+    const { toast } = await import("sonner");
+    invokeSpy.mockResolvedValue({
+      data: null,
+      error: { context: { status: 402, json: async () => ({ error: "insufficient_credits", balance: 2 }) } },
+    });
+    render(<QuestionBankPage />, { wrapper });
+    fireEvent.click(screen.getByRole("tab", { name: /Provas/i }));
+    const input = document.querySelector("input[data-upload-input]") as HTMLInputElement;
+    fireEvent.change(input, { target: { files: [new File(["x"], "f.pdf", { type: "application/pdf" })] } });
+    await waitFor(() => screen.getByRole("button", { name: /Extrair com IA/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Extrair com IA/i }));
+    await waitFor(() => {
+      expect(toast.error).toHaveBeenCalledWith("Créditos insuficientes para extrair as questões.");
+    });
+    expect(toast.error).not.toHaveBeenCalledWith("insufficient_credits");
+  });
+
   // ── Provas tab — exam history ─────────────────────────────────────────────
 
   it("exam history shows pdf_uploads list", async () => {

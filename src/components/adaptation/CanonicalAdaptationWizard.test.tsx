@@ -939,6 +939,34 @@ describe("CanonicalAdaptationWizard", () => {
     );
   });
 
+  it("passes originalExam=null when a file is still attached but the adaptation came from the bank/paste mode", () => {
+    renderWithProviders(
+      <CanonicalAdaptationWizard
+        editMode={{
+          adaptationId: "edit-1",
+          initialData: {
+            activityType: "prova",
+            activityText: "1) Colada",
+            activityInputMode: "bank",
+            uploadedExam: {
+              fileName: "abandonada.pdf",
+              fileType: "pdf",
+              text: "1) Q1",
+              pageImages: [],
+              file: new File(["x"], "abandonada.pdf", { type: "application/pdf" }),
+            },
+            selectedQuestions: [],
+            barriers: [],
+            barrierProfileId: null,
+            result: makeResult(),
+          },
+          initialUpdatedAt: "2026-01-01T00:00:00Z",
+        }}
+      />,
+    );
+    expect(screen.getByTestId("review-original-exam")).toHaveTextContent("null");
+  });
+
   it("falls back to userId=null when uploadedExam is set but there is no authenticated user yet", () => {
     vi.mocked(useAuth).mockReturnValueOnce({ user: null } as never);
     renderWithProviders(

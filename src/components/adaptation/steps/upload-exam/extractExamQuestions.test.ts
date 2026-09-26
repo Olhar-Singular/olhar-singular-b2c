@@ -23,28 +23,76 @@ vi.mock("@/lib/utils/extraction-utils", () => ({
   dataUrlToBlob: vi.fn(() => new Blob(["x"], { type: "image/png" })),
 }));
 
-const pdfExam: UploadedExam = {
-  fileName: "prova.pdf",
-  fileType: "pdf",
-  text: "1) Q1",
-  pageImages: [],
-  file: new File(["pdf-bytes"], "prova.pdf", { type: "application/pdf" }),
-};
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+// A fresh object per test: a successful extraction is remembered per attached
+// file (object identity), and must not leak from one test into the next.
+let pdfExam: UploadedExam;
 
 beforeEach(() => {
+  pdfExam = {
+    fileName: "prova.pdf",
+    fileType: "pdf",
+    text: "1) Q1",
+    pageImages: [],
+    file: new File(["pdf-bytes"], "prova.pdf", { type: "application/pdf" }),
+  };
   vi.clearAllMocks();
   storageUploadMock.mockResolvedValue({ error: null });
   storageGetPublicUrlMock.mockReturnValue({ data: { publicUrl: "https://bucket.example/img.png" } });
 });
 
 describe("extractExamQuestions", () => {
-  it("invokes extract-exam-for-adaptation with the locally-parsed payload", async () => {
+  it("invokes extract-exam-for-adaptation with the locally-parsed payload and a request_id", async () => {
     invokeMock.mockResolvedValueOnce({ data: { questions: [{ text: "Q1" }] }, error: null });
     await extractExamQuestions(pdfExam, "user-1");
     expect(invokeMock).toHaveBeenCalledWith("extract-exam-for-adaptation", {
-      body: { pdfText: "1) Q1", pdfFileName: "prova.pdf", pageImages: [] },
+      body: { pdfText: "1) Q1", pdfFileName: "prova.pdf", pageImages: [], request_id: expect.stringMatching(UUID) },
       signal: undefined,
     });
+  });
+
+  it("uses a FRESH request_id per attempt (a retry is a new charge, not a replay)", async () => {
+    invokeMock.mockResolvedValueOnce({ data: null, error: { message: "boom" } });
+    await expect(extractExamQuestions(pdfExam, "user-1")).rejects.toThrow();
+    invokeMock.mockResolvedValueOnce({ data: { questions: [{ text: "Q1" }] }, error: null });
+    await extractExamQuestions(pdfExam, "user-1");
+    expect(invokeMock).toHaveBeenCalledTimes(2);
+    expect(invokeMock.mock.calls[0][1].body.request_id).not.toBe(invokeMock.mock.calls[1][1].body.request_id);
+  });
+
+  it("reports insufficient credits (402) as a result, not an error", async () => {
+    const fnError = Object.assign(new Error("Edge Function returned a non-2xx status code"), {
+      context: { status: 402, json: async () => ({ error: "Créditos insuficientes.", reason: "insufficient_credits" }) },
+    });
+    invokeMock.mockResolvedValueOnce({ data: null, error: fnError });
+    await expect(extractExamQuestions(pdfExam, "user-1")).resolves.toEqual({ status: "insufficient_credits" });
+  });
+
+  it("reuses a successful extraction of the same file instead of paying for it again", async () => {
+    // "Tentar novamente" after a failed adaptation, the >12-question detour and
+    // "Regerar" all come back here with the same attached file.
+    invokeMock.mockResolvedValueOnce({ data: { questions: [{ text: "Q1" }] }, error: null });
+    const first = await extractExamQuestions(pdfExam, "user-1");
+    const second = await extractExamQuestions(pdfExam, "user-1");
+    expect(invokeMock).toHaveBeenCalledTimes(1);
+    expect(first).toEqual({ status: "ok", questions: [{ text: "Q1", options: null, image_url: null }], charged: true });
+    expect(second).toEqual({ status: "ok", questions: [{ text: "Q1", options: null, image_url: null }], charged: false });
+  });
+
+  it("extracts again (and charges) for a newly attached file", async () => {
+    invokeMock.mockResolvedValue({ data: { questions: [{ text: "Q1" }] }, error: null });
+    await extractExamQuestions(pdfExam, "user-1");
+    await extractExamQuestions({ ...pdfExam }, "user-1");
+    expect(invokeMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("does not remember an empty extraction: trying again runs a new one", async () => {
+    invokeMock
+      .mockResolvedValueOnce({ data: { questions: [] }, error: null })
+      .mockResolvedValueOnce({ data: { questions: [{ text: "Q1" }] }, error: null });
+    await expect(extractExamQuestions(pdfExam, "user-1")).resolves.toEqual({ status: "empty" });
+    await expect(extractExamQuestions(pdfExam, "user-1")).resolves.toMatchObject({ status: "ok", charged: true });
   });
 
   it("forwards an AbortSignal when given one", async () => {
@@ -69,6 +117,7 @@ describe("extractExamQuestions", () => {
         { text: "Primeira", options: null, image_url: null },
         { text: "Segunda", options: ["X", "Y"], image_url: null },
       ],
+      charged: true,
     });
   });
 
@@ -118,6 +167,7 @@ describe("extractExamQuestions", () => {
     expect(result).toEqual({
       status: "ok",
       questions: [{ text: "Com figura", options: null, image_url: "https://bucket.example/img.png" }],
+      charged: true,
     });
   });
 
@@ -138,6 +188,7 @@ describe("extractExamQuestions", () => {
     expect(result).toEqual({
       status: "ok",
       questions: [{ text: "Com figura docx", options: null, image_url: "https://bucket.example/img.png" }],
+      charged: true,
     });
   });
 
@@ -157,6 +208,7 @@ describe("extractExamQuestions", () => {
     expect(result).toEqual({
       status: "ok",
       questions: [{ text: "Com figura", options: null, image_url: null }],
+      charged: true,
     });
   });
 
@@ -170,6 +222,7 @@ describe("extractExamQuestions", () => {
     expect(result).toEqual({
       status: "ok",
       questions: [{ text: "Sem figura válida", options: null, image_url: null }],
+      charged: true,
     });
   });
 });

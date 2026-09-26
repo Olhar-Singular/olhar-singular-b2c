@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   interpretReservation,
+  requireRequestId,
   reservationErrorResponse,
   resolveRequestId,
 } from "./creditReservation";
@@ -157,5 +158,26 @@ describe("resolveRequestId", () => {
     expect(resolveRequestId("not-a-uuid", () => "generated")).toEqual({ ok: false });
     expect(resolveRequestId(42, () => "generated")).toEqual({ ok: false });
     expect(resolveRequestId("", () => "generated")).toEqual({ ok: false });
+  });
+});
+
+describe("requireRequestId", () => {
+  it("accepts (and lowercases) a uuid sent by the client", () => {
+    expect(requireRequestId("AA000000-0000-4000-8000-000000000001")).toEqual({
+      ok: true,
+      id: "aa000000-0000-4000-8000-000000000001",
+    });
+  });
+
+  it("refuses a missing id: every caller of such an endpoint already sends one", () => {
+    // Generating one here would charge a request that has no replay protection.
+    expect(requireRequestId(undefined)).toEqual({ ok: false });
+    expect(requireRequestId(null)).toEqual({ ok: false });
+  });
+
+  it("refuses a malformed id", () => {
+    expect(requireRequestId("not-a-uuid")).toEqual({ ok: false });
+    expect(requireRequestId(42)).toEqual({ ok: false });
+    expect(requireRequestId("")).toEqual({ ok: false });
   });
 });

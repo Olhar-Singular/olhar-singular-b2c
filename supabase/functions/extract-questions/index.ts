@@ -6,22 +6,22 @@ import { runCreditRpc, type CreditRpcResult } from "../_shared/credits.ts";
 import {
   interpretReservation,
   reservationErrorResponse,
-  resolveRequestId,
   type OpenReservationPayload,
 } from "../_shared/creditReservation.ts";
 import {
   buildExtractionMessages,
   parseExtractionResponse,
+  validateQuestionBankExtractionRequest,
+  EXTRACTION_COST,
   EXTRACTION_TOOL_SCHEMA,
 } from "../_shared/examExtractionCore.ts";
+import { errorResponse } from "../_shared/publicError.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers":
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
-
-const EXTRACTION_COST = 5;
 
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
@@ -51,19 +51,14 @@ serve(async (req) => {
     }
 
     // ── Parse request body ────────────────────────────────────────────────────
-    let pdfText = "";
-    let pdfFileName = "";
-    let pageImages: string[] = [];
-    let providedUploadId: string | null = null;
-    let rawRequestId: unknown = undefined;
-
+    let fields: unknown;
     const contentType = req.headers.get("content-type") || "";
 
     if (contentType.includes("multipart/form-data")) {
       const formData = await req.formData();
       const file = formData.get("file") as File | null;
+      const multipart: Record<string, unknown> = { request_id: formData.get("request_id") ?? undefined };
       if (file) {
-        pdfFileName = file.name || "upload";
         const buf = await file.arrayBuffer();
         const bytes = new Uint8Array(buf);
         let binary = "";
@@ -74,29 +69,35 @@ serve(async (req) => {
         }
         const base64 = btoa(binary);
         const mimeType = file.type || "image/png";
-        pageImages = [`data:${mimeType};base64,${base64}`];
+        multipart.pdfFileName = file.name || "upload";
+        multipart.pageImages = [`data:${mimeType};base64,${base64}`];
       }
-      rawRequestId = formData.get("request_id") ?? undefined;
+      fields = multipart;
     } else {
-      const body = await req.json();
-      pdfText = body.pdfText || "";
-      pdfFileName = body.pdfFileName || "";
-      pageImages = body.pageImages || [];
-      providedUploadId = body.uploadId || null;
-      rawRequestId = body.request_id;
+      try {
+        fields = await req.json();
+      } catch {
+        return json({ error: "Requisição inválida." }, 400);
+      }
     }
+
+    // Validated BEFORE any charge (same bounds and image allowlist as the
+    // Adaptar upload), so a malformed or oversized request costs nothing. The
+    // request_id stays optional here: missing is generated, malformed refused.
+    const input = validateQuestionBankExtractionRequest(fields, () => crypto.randomUUID());
+    if (!input.ok) {
+      return json({ error: input.error }, 400);
+    }
+    const { pdfText, pdfFileName, pageImages, requestId } = input.value;
+    const rawUploadId = (fields as Record<string, unknown>).uploadId;
+    const providedUploadId = typeof rawUploadId === "string" && rawUploadId ? rawUploadId : null;
 
     // ── Reserve + charge (one transaction, crash-safe) ────────────────────────
     // Same model as adapt-activity: the reservation row is written before the
     // money moves, so a dead isolate is reconciled by the job; plan bucket
     // first, extras after; courtesy accounts come back as "exempt".
-    const requestId = resolveRequestId(rawRequestId, () => crypto.randomUUID());
-    if (!requestId.ok) {
-      return json({ error: "request_id inválido." }, 400);
-    }
-
     const { data: openData, error: openError } = await admin.rpc("open_credit_reservation", {
-      p_request_id: requestId.id,
+      p_request_id: requestId,
       p_user_id: user.id,
       p_amount: EXTRACTION_COST,
       p_kind: "extract",
@@ -123,13 +124,13 @@ serve(async (req) => {
     const reverseReservation = async () => {
       try {
         await runCreditRpc("reverse_credit_reservation", () =>
-          admin.rpc("reverse_credit_reservation", { p_id: requestId.id }) as unknown as Promise<{
+          admin.rpc("reverse_credit_reservation", { p_id: requestId }) as unknown as Promise<{
             data: CreditRpcResult | null;
             error: unknown;
           }>);
       } catch (e) {
         // The job picks the still-open reservation up on its next pass.
-        console.error("Extraction reversal failed for user:", user.id, "reservation:", requestId.id, e);
+        console.error("Extraction reversal failed for user:", user.id, "reservation:", requestId, e);
       }
     };
 
@@ -228,17 +229,16 @@ serve(async (req) => {
     // job never refunds a delivered extraction.
     try {
       await runCreditRpc("settle_credit_reservation", () =>
-        admin.rpc("settle_credit_reservation", { p_id: requestId.id }) as unknown as Promise<{
+        admin.rpc("settle_credit_reservation", { p_id: requestId }) as unknown as Promise<{
           data: CreditRpcResult | null;
           error: unknown;
         }>);
     } catch (e) {
-      console.error("Settle failed for user:", user.id, "reservation:", requestId.id, e);
+      console.error("Settle failed for user:", user.id, "reservation:", requestId, e);
     }
 
     return json({ questions, source_file_name: pdfFileName, credits_charged: creditsCharged });
   } catch (e) {
-    console.error("extract-questions error:", e);
-    return json({ error: e instanceof Error ? e.message : "Erro desconhecido" }, 500);
+    return errorResponse(e, { label: "extract-questions error:", headers: corsHeaders });
   }
 });

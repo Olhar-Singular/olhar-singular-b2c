@@ -1,11 +1,13 @@
 import { describe, it, expect } from "vitest";
 import {
   INITIAL_WIZARD_DATA,
+  activeUploadedExam,
   setDocument,
   setPageStyle,
   setHeader,
   setResult,
   clearResult,
+  type UploadedExam,
   type WizardData,
 } from "./wizardState";
 import { validateDocument } from "@/lib/adaptation/canonical/validate";
@@ -139,5 +141,31 @@ describe("setHeader", () => {
     const withResult = setResult(INITIAL_WIZARD_DATA, result);
     setHeader(withResult, { teacher: "Ana" });
     expect(withResult.result?.header).toBeUndefined();
+  });
+});
+
+describe("activeUploadedExam", () => {
+  const exam: UploadedExam = {
+    fileName: "prova.pdf",
+    fileType: "pdf",
+    text: "1) Q1",
+    pageImages: [],
+    file: new File(["x"], "prova.pdf", { type: "application/pdf" }),
+  };
+
+  it("returns the attached file while the teacher is in the upload mode", () => {
+    expect(activeUploadedExam({ ...INITIAL_WIZARD_DATA, activityInputMode: "upload", uploadedExam: exam })).toBe(exam);
+  });
+
+  it("ignores a file left attached after the teacher went back to paste/pick questions", () => {
+    // "Voltar" on the upload screen and re-picking the activity type both flip
+    // the mode to "bank" and keep the file around: generating must follow the
+    // mode, or the abandoned file is read (and charged) instead of the text.
+    expect(activeUploadedExam({ ...INITIAL_WIZARD_DATA, activityInputMode: "bank", uploadedExam: exam })).toBeNull();
+  });
+
+  it("returns null in the upload mode when no file is attached", () => {
+    expect(activeUploadedExam({ ...INITIAL_WIZARD_DATA, activityInputMode: "upload", uploadedExam: null })).toBeNull();
+    expect(activeUploadedExam({ ...INITIAL_WIZARD_DATA, activityInputMode: "upload", uploadedExam: undefined })).toBeNull();
   });
 });

@@ -40,6 +40,7 @@ import {
 import { toast } from "sonner";
 import { useAuthContext } from "@/contexts/AuthContext";
 import { canAfford, computeAccess } from "@/lib/domain/access";
+import { EXTRACTION_COST } from "@/lib/domain/extractionCost";
 import { useQuestions, useDeleteQuestion, useQuestionStats, useInsertQuestions } from "@/hooks/useQuestionBank";
 import { validateExtractedQuestions } from "@/lib/domain/questionParser";
 import { supabase } from "@/integrations/supabase/client";
@@ -55,8 +56,6 @@ import ManualQuestionEditor from "@/components/forms/ManualQuestionEditor";
 import PdfPreviewModal from "@/components/forms/PdfPreviewModal";
 import { SUBJECTS, normalizeSubject } from "@/lib/utils/constants";
 import "katex/dist/katex.min.css";
-
-const EXTRACTION_COST = 5;
 
 const DIFFICULTY_LABEL: Record<string, string> = {
   facil: "Fácil",
@@ -344,7 +343,8 @@ export default function QuestionBankPage() {
         let errMsg = "Falha na extração.";
         try {
           const body = await context?.json();
-          if (body?.error) errMsg = body.error;
+          if (context?.status === 402) errMsg = "Créditos insuficientes para extrair as questões.";
+          else if (body?.error) errMsg = body.error;
         } catch {
           // corpo já consumido ou não-JSON — mantém o fallback
         }
