@@ -6,6 +6,7 @@
  */
 
 import type { QuestionAnswer } from "@/lib/adaptation/canonical/schema";
+import { ORDERING_MARKER_TEXT } from "../pageTokens";
 import { RichTextView } from "../RichTextView";
 
 type OrderingAnswer = Extract<QuestionAnswer, { kind: "ordering" }>;
@@ -15,7 +16,7 @@ export function OrderingView({ answer }: { answer: OrderingAnswer }) {
     <ul data-testid="answer-ordering" className="space-y-1">
       {answer.items.map((item) => (
         <li key={item.id} className="flex items-start gap-2">
-          <span className="shrink-0 font-medium">____</span>
+          <span className="shrink-0 font-medium">{ORDERING_MARKER_TEXT}</span>
           <span className="flex-1">
             <RichTextView content={item.content} />
           </span>

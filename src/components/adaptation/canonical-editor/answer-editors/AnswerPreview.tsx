@@ -22,6 +22,7 @@ import {
   ANSWER_ITEM_GAP_PX,
   ALTERNATIVE_MARKER_GAP_PX,
   INK_MUTED,
+  ORDERING_MARKER_TEXT,
   TRUE_FALSE_MARKER_GAP_PX,
   TRUE_FALSE_MARKER_TEXT,
 } from "@/components/adaptation/render/pageTokens";
@@ -159,8 +160,11 @@ export function AnswerPreview({ answer, onChange, disabled = false }: AnswerPrev
             <div key={item.id} className="flex min-w-0 items-center gap-2.5">
               <span
                 data-testid="preview-order-box"
-                className="h-6 w-6 shrink-0 rounded-[5px] border-[1.5px] border-surface-ink-faint"
-              />
+                className="shrink-0 font-medium"
+                aria-label="Escreva a ordem"
+              >
+                {ORDERING_MARKER_TEXT}
+              </span>
               <PreviewField
                 value={item.content}
                 disabled={disabled}

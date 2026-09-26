@@ -249,6 +249,17 @@ export const TRUE_FALSE_MARKER_TEXT = "(  ) V  (  ) F";
 export const TRUE_FALSE_MARKER_GAP_PX = 12;
 
 /**
+ * Marcador do espaço onde o aluno escreve a ordem, na questão de Ordenação.
+ * Ponto único das quatro superfícies (achado 0448): a prévia do Exportar, o PDF
+ * e o Word já imprimiam `____`, mas a folha do Revisar desenhava um quadrado
+ * vazado, ou seja, o mesmo traço da caixa de seleção. Os dois desenhos pedem
+ * coisas diferentes do aluno (marcar × escrever o número), e o professor decide
+ * a atividade olhando a folha que o passo Revisar promete ser a prévia do
+ * impresso. Vence o `____`, que é o que o papel entrega.
+ */
+export const ORDERING_MARKER_TEXT = "____";
+
+/**
  * Caixa do checkbox: lado, espessura e raio da borda, em px de tela. Ponto único
  * das QUATRO superfícies, na família de `ANSWER_LINE_*` — a caixa é, como a
  * pauta, um traço que o documento imprime para o aluno marcar (achado 0358).

@@ -5,6 +5,7 @@ import { AnswerPreview } from "./AnswerPreview";
 import { ALTERNATIVE_MARKER_CLASS } from "@/components/adaptation/render/answers/markerColumn";
 import {
   INK_MUTED,
+  ORDERING_MARKER_TEXT,
   TRUE_FALSE_MARKER_GAP_PX,
   TRUE_FALSE_MARKER_TEXT,
 } from "@/components/adaptation/render/pageTokens";
@@ -178,6 +179,16 @@ describe("AnswerPreview — ordering", () => {
     expect(screen.queryByTitle("Mover para cima")).not.toBeInTheDocument();
     fireEvent.change(screen.getByLabelText("Item 1"), { target: { value: "z" } });
     expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ kind: "ordering" }));
+  });
+
+  it("desenha o espaço de numerar como o mesmo `____` das superfícies impressas", () => {
+    render(<AnswerPreview answer={answer} onChange={vi.fn()} />);
+    const marks = screen.getAllByTestId("preview-order-box");
+    expect(marks).toHaveLength(2);
+    for (const mark of marks) {
+      expect(mark).toHaveTextContent(ORDERING_MARKER_TEXT);
+      expect(mark.className).not.toMatch(/border/);
+    }
   });
 });
 
