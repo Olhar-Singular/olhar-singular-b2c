@@ -105,3 +105,45 @@ describe("célula de tabela — paridade entre a folha do Revisar e a prévia", 
     }
   });
 });
+
+/**
+ * Contrato da GRADE DE COLUNAS da tabela (achado 0195).
+ *
+ * O PDF (`flexBasis: 0` + `flexGrow: 1`) e o Word (`columnWidths` iguais)
+ * dividem a largura útil em partes iguais. As duas telas usavam o layout
+ * automático do `<table>`, que dimensiona cada coluna pelo conteúdo mais
+ * largo: a mesma tabela de 4 colunas saía com 4% / 48% / 18% / 30% na tela e
+ * 25% em cada coluna no papel. O professor encurta uma coluna na tela e o
+ * aluno recebe outra grade — e a linha que quebra a mais no papel realimenta
+ * o erro de contagem de folhas.
+ *
+ * Aqui a regra é uma só nas quatro superfícies: colunas iguais. Nas telas isso
+ * é `table-layout: fixed`, que é exatamente o equivalente em CSS do
+ * `flexBasis: 0` do PDF.
+ */
+describe("grade de colunas da tabela — mesma regra nas quatro superfícies", () => {
+  function tableOf(el: HTMLElement) {
+    return el.querySelector("table") as HTMLTableElement;
+  }
+
+  it("divide a largura em colunas iguais na prévia do Exportar", () => {
+    const { container } = render(<TableView answer={TABLE} />);
+    expect(tableOf(container).style.tableLayout).toBe("fixed");
+  });
+
+  it("divide a largura em colunas iguais na folha do Revisar", () => {
+    const { container } = render(<AnswerPreview answer={TABLE} onChange={() => {}} />);
+    const table = tableOf(container);
+    expect(table.style.tableLayout).toBe("fixed");
+    // Largura mínima por célula voltaria a tirar a coluna da parte igual.
+    for (const cell of table.querySelectorAll("th, td")) {
+      expect((cell as HTMLTableCellElement).className).not.toMatch(/\bmin-w-/);
+    }
+  });
+
+  it("mantém a coluna do PDF em parte igual, a regra que as telas passam a seguir", () => {
+    const style = headerCellStyle(PdfAnswer({ answer: TABLE }) as ReactElement);
+    expect(style.flexBasis).toBe(0);
+    expect(style.flexGrow).toBe(1);
+  });
+});

@@ -15,6 +15,14 @@ import { TABLE_CELL_PADDING_PX, RULE_WIDTH_PX, BASE_LINE_HEIGHT } from "../pageT
 
 type TableAnswer = Extract<QuestionAnswer, { kind: "table" }>;
 
+/**
+ * Achado 0195: sem `table-layout: fixed` o browser dimensiona cada coluna pelo
+ * conteúdo mais largo, enquanto o PDF (`flexBasis: 0`) e o Word (`columnWidths`
+ * iguais) dividem a largura útil em partes iguais. A grade da tela precisa ser
+ * a do papel, senão o professor ajusta uma proporção que o aluno não recebe.
+ */
+const TABLE_STYLE: CSSProperties = { tableLayout: "fixed" };
+
 const CELL_STYLE: CSSProperties = {
   padding: `${TABLE_CELL_PADDING_PX}px`,
   borderWidth: `${RULE_WIDTH_PX}px`,
@@ -24,7 +32,7 @@ const CELL_STYLE: CSSProperties = {
 export function TableView({ answer }: { answer: TableAnswer }) {
   const [header, ...body] = answer.rows;
   return (
-    <table data-testid="answer-table" className="w-full border-collapse">
+    <table data-testid="answer-table" style={TABLE_STYLE} className="w-full border-collapse">
       {header && (
         <thead>
           <tr>

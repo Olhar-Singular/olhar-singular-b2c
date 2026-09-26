@@ -69,6 +69,8 @@ function PreviewField(props: ComponentProps<typeof RichTextField>) {
  * próprio (`p-1.5`, 6px contra 4px) e a mesma tabela saía até 73% mais alta
  * aqui — e é NESTA tela que o professor decide se a atividade cabe na folha.
  */
+const TABLE_LAYOUT_STYLE: CSSProperties = { tableLayout: "fixed" };
+
 const TABLE_CELL_STYLE: CSSProperties = {
   padding: `${TABLE_CELL_PADDING_PX}px`,
   borderWidth: `${RULE_WIDTH_PX}px`,
@@ -235,7 +237,14 @@ export function AnswerPreview({ answer, onChange, disabled = false }: AnswerPrev
       // imprime, então a folha na tela continua igual ao papel.
       const [header, ...body] = answer.rows;
       return (
-        <table className="w-full border-collapse" data-testid="answer-preview-table">
+        <table
+          className="w-full border-collapse"
+          // Achado 0195: colunas em partes iguais, a mesma grade do PDF e do
+          // Word. Com o layout automático a tela mostrava uma proporção
+          // (conteúdo mais largo manda) que o arquivo não reproduz.
+          style={TABLE_LAYOUT_STYLE}
+          data-testid="answer-preview-table"
+        >
           {header && (
             <thead>
               <tr>
@@ -244,7 +253,7 @@ export function AnswerPreview({ answer, onChange, disabled = false }: AnswerPrev
                     key={ci}
                     scope="col"
                     style={TABLE_CELL_STYLE}
-                    className="min-w-[60px] border border-surface-line-2 text-left align-top font-semibold"
+                    className="border border-surface-line-2 text-left align-top font-semibold"
                   >
                     <PreviewField
                       value={cell}
@@ -265,7 +274,7 @@ export function AnswerPreview({ answer, onChange, disabled = false }: AnswerPrev
                   <td
                     key={ci}
                     style={TABLE_CELL_STYLE}
-                    className="min-w-[60px] border border-surface-line-2 align-top"
+                    className="border border-surface-line-2 align-top"
                   >
                     <PreviewField
                       value={cell}
