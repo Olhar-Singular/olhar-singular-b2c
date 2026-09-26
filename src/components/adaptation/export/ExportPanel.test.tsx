@@ -707,3 +707,48 @@ describe("aviso antes de copiar (0411)", () => {
     expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
   });
 });
+
+// ---------------------------------------------------------------------------
+// 0361 — desistir do aviso (Escape ou "Cancelar") também não pode largar o foco
+// no BODY. Só o caminho de confirmar (0419) devolvia o gatilho; quem lê que a
+// fórmula não sobrevive e decide NÃO baixar é justamente quem precisa voltar ao
+// documento, e era jogado para o topo da página.
+// ---------------------------------------------------------------------------
+
+describe("foco depois de desistir do aviso (0361)", () => {
+  it("devolve o foco ao botão 'Exportar PDF' ao cancelar", async () => {
+    render(<ExportPanel document={mathDocument} onDownload={vi.fn()} />);
+
+    const trigger = screen.getByRole("button", { name: /Exportar PDF/i });
+    trigger.focus();
+    fireEvent.click(trigger);
+    fireEvent.click(await screen.findByRole("button", { name: /Cancelar/i }));
+
+    await waitFor(() => expect(globalThis.document.activeElement).toBe(trigger));
+  });
+
+  it("devolve o foco ao botão 'Exportar PDF' ao fechar com Escape", async () => {
+    render(<ExportPanel document={mathDocument} onDownload={vi.fn()} />);
+
+    const trigger = screen.getByRole("button", { name: /Exportar PDF/i });
+    trigger.focus();
+    fireEvent.click(trigger);
+    const dialog = await screen.findByRole("alertdialog");
+    fireEvent.keyDown(dialog, { key: "Escape", code: "Escape" });
+
+    await waitFor(() => expect(globalThis.document.activeElement).toBe(trigger));
+  });
+
+  it("devolve o foco ao botão 'Exportar Word' ao cancelar", async () => {
+    render(
+      <ExportPanel document={lossyDocument} onDownload={vi.fn()} onDownloadWord={vi.fn()} />,
+    );
+
+    const trigger = screen.getByRole("button", { name: /Exportar Word/i });
+    trigger.focus();
+    fireEvent.click(trigger);
+    fireEvent.click(await screen.findByRole("button", { name: /Cancelar/i }));
+
+    await waitFor(() => expect(globalThis.document.activeElement).toBe(trigger));
+  });
+});

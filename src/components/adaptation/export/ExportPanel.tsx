@@ -340,7 +340,30 @@ export function ExportPanel({
 
       <AlertDialog open={pending !== null} onOpenChange={(open) => !open && setPending(null)}>
         {shown !== null && (
-          <AlertDialogContent>
+          <AlertDialogContent
+            /*
+              0361 — o diálogo é aberto por estado, sem `AlertDialogTrigger`:
+              o `triggerRef` do Radix fica `null` e, ao fechar, o foco cai no
+              `<body>`. Só o caminho de confirmar devolvia o gatilho (0419, via
+              `restoreFocusRef`); quem lê que a fórmula não sobrevive e decide
+              NÃO baixar era jogado para o topo da página, a dezenas de
+              tabulações do botão que acabou de apertar. Aqui tratamos as saídas
+              de desistir (`Escape` e "Cancelar"), que não desabilitam o gatilho
+              e portanto podem focá-lo já.
+            */
+            onCloseAutoFocus={(event) => {
+              // No caminho de confirmar o gatilho fica `disabled` no mesmo
+              // commit: focar aqui é no-op e quem devolve o foco é o efeito
+              // acima, quando a geração termina (0419). O "Copiar" nunca
+              // desabilita e o Radix já o devolve sozinho.
+              if (shown.format === "copy") return;
+              event.preventDefault();
+              // O Radix dispara este evento num timeout: o painel inteiro pode
+              // já ter desmontado (troca de passo, navegação), e aí não há
+              // gatilho para focar.
+              (shown.format === "pdf" ? pdfTriggerRef : wordTriggerRef).current?.focus();
+            }}
+          >
             <AlertDialogHeader>
               <AlertDialogTitle>{WARNING_COPY[shown.format].title}</AlertDialogTitle>
               <AlertDialogDescription asChild>
