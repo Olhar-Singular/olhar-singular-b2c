@@ -7,6 +7,7 @@ import { PdfQuestion } from "./PdfQuestion";
 import { PdfHeading, PdfParagraph, PdfImage, PdfScaffolding } from "./PdfLeafBlocks";
 import { PdfMath } from "./PdfMath";
 import { PdfRichText } from "./PdfRichText";
+import { RULE_WIDTH_PT } from "../pageTokens";
 import type { Block, QuestionAnswer } from "@/lib/adaptation/canonical/schema";
 import {
   resolvePageStyle,
@@ -224,8 +225,10 @@ describe("PdfAnswer", () => {
       answer: { kind: "table", rows: [[rt("H1"), rt("H2")], [rt("a"), rt("b")]] },
     }) as ReactElement;
     const container = el.props.style as { borderTopWidth?: number; borderLeftWidth?: number };
-    expect(container.borderTopWidth).toBe(1);
-    expect(container.borderLeftWidth).toBe(1);
+    // A espessura é `RULE_WIDTH_PT`, o traço estrutural do documento — o mesmo
+    // 1px que a prévia desenha, para as duas medirem a mesma linha (0607).
+    expect(container.borderTopWidth).toBe(RULE_WIDTH_PT);
+    expect(container.borderLeftWidth).toBe(RULE_WIDTH_PT);
     const headerRow = (el.props.children as unknown[])[0] as ReactElement;
     const headerCell = (headerRow.props.children as ReactElement[])[0];
     const cell = headerCell.props.style as {
@@ -233,8 +236,8 @@ describe("PdfAnswer", () => {
       borderBottomWidth?: number;
       borderWidth?: number;
     };
-    expect(cell.borderRightWidth).toBe(1);
-    expect(cell.borderBottomWidth).toBe(1);
+    expect(cell.borderRightWidth).toBe(RULE_WIDTH_PT);
+    expect(cell.borderBottomWidth).toBe(RULE_WIDTH_PT);
     expect(cell.borderWidth).toBeUndefined();
   });
 

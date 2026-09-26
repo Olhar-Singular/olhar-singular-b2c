@@ -153,6 +153,27 @@ export const ANSWER_LINE_GAP_PX = 18;
 export const ANSWER_LINE_WIDTH_PX = RULE_WIDTH_PX;
 
 /**
+ * Recuo interno da CÉLULA de uma tabela de resposta, em px de tela. Ponto único
+ * das duas superfícies impressas — a prévia do Exportar e o PDF —, na mesma
+ * família de `SCAFFOLDING_PADDING_PX` (achado 0607).
+ *
+ * A célula era o último bloco com dois box models escritos à mão: a prévia usava
+ * `text-sm` (14px, entrelinha 20px) com `px-2 py-1`, e o PDF, `padding: 3` (3pt)
+ * com o CORPO do documento (12pt x `BASE_LINE_HEIGHT` = 22,4px). A linha da
+ * prévia media ~29px contra ~31,7px do papel, quase 9% a menos por linha. Como a
+ * contagem de folhas da prévia mede o próprio DOM, uma tabela de 31 linhas cabia
+ * na conta da tela ("1 página A4", rodapé "Página 1 de 1") e saía do arquivo com
+ * duas — e é justamente aí que a virada dentro da tabela chega ao professor sem
+ * nenhum aviso na tela.
+ *
+ * O valor é o que o papel já imprimia (3pt = 4px): quem se move é a prévia, que
+ * passa a medir a caixa do PDF. O corpo e a entrelinha deixam de ser escritos na
+ * célula e passam a vir do documento nas duas superfícies, então o popover
+ * "Formato" escala a tabela igual nas duas.
+ */
+export const TABLE_CELL_PADDING_PX = 4;
+
+/**
  * Cadência do tracejado da pauta: comprimento do traço e do vão, em px de tela.
  * Ponto único das TRÊS superfícies, fechando a família de `ANSWER_LINE_COLOR`
  * (cor), `ANSWER_LINE_GAP_PX` (passo) e `ANSWER_LINE_WIDTH_PX` (espessura).
@@ -378,6 +399,9 @@ export const ANSWER_LINE_DASH_PT = ANSWER_LINE_DASH_PX / PT_TO_PX;
 
 /** `ANSWER_LINE_DASH_SPACE_PX` na unidade do PDF (pt), pela mesma razão 72/96. */
 export const ANSWER_LINE_DASH_SPACE_PT = ANSWER_LINE_DASH_SPACE_PX / PT_TO_PX;
+
+/** `TABLE_CELL_PADDING_PX` na unidade do PDF (pt), pela mesma razão 72/96. */
+export const TABLE_CELL_PADDING_PT = TABLE_CELL_PADDING_PX / PT_TO_PX;
 
 /** `RULE_WIDTH_PX` na unidade do PDF (pt), pela mesma razão 72/96. */
 export const RULE_WIDTH_PT = RULE_WIDTH_PX / PT_TO_PX;

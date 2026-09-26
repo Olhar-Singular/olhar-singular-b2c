@@ -14,6 +14,7 @@ import { pdf } from "@react-pdf/renderer";
 import layoutDocument from "@react-pdf/layout";
 import FontStore from "@react-pdf/font";
 import { AdaptationPdf } from "./AdaptationPdf";
+import { RULE_WIDTH_PT } from "../pageTokens";
 import type { CanonicalDocument, QuestionAnswer, RichText } from "@/lib/adaptation/canonical/schema";
 
 const id = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, "0")}`;
@@ -34,7 +35,8 @@ function paintedLines(node: Node): number {
 }
 
 const isCell = (node: Node) =>
-  node.style?.borderRightWidth === 1 && node.style?.borderBottomWidth === 1;
+  node.style?.borderRightWidth === RULE_WIDTH_PT &&
+  node.style?.borderBottomWidth === RULE_WIDTH_PT;
 
 /** Linhas de tabela desenhadas: uma `View` em linha cujos filhos são células. */
 function tableRows(node: Node, out: Node[] = []): Node[] {

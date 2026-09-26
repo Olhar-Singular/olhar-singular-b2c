@@ -33,6 +33,8 @@ import {
   alternativeMarkerColumnPt,
   BASE_FONT_PT,
   pdfTextSize,
+  TABLE_CELL_PADDING_PT,
+  RULE_WIDTH_PT,
 } from "../pageTokens";
 
 // O vão entre itens vem de pageTokens para o papel imprimir o mesmo passo que as
@@ -294,13 +296,22 @@ export function PdfAnswer({
         flexGrow: 1,
         flexShrink: 1,
         flexBasis: 0,
-        borderRightWidth: 1,
-        borderBottomWidth: 1,
+        borderRightWidth: RULE_WIDTH_PT,
+        borderBottomWidth: RULE_WIDTH_PT,
         borderColor: "#999999",
-        padding: 3,
+        // Recuo e traço vêm de pageTokens: a prévia do Exportar mede o próprio
+        // DOM para contar as folhas, então a célula das duas superfícies precisa
+        // ter a mesma altura de linha (achado 0607).
+        padding: TABLE_CELL_PADDING_PT,
       } as const;
       return (
-        <View style={{ borderTopWidth: 1, borderLeftWidth: 1, borderColor: "#999999" }}>
+        <View
+          style={{
+            borderTopWidth: RULE_WIDTH_PT,
+            borderLeftWidth: RULE_WIDTH_PT,
+            borderColor: "#999999",
+          }}
+        >
           {header && (
             // `wrap={false}`: sem isso o react-pdf fatia a linha na virada de
             // página e deixa a moldura numa folha e o texto na outra (0602).
