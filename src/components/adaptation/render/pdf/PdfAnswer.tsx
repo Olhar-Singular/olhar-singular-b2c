@@ -31,6 +31,7 @@ import {
   ANSWER_ITEM_GAP_PT,
   BASE_LINE_HEIGHT,
   alternativeMarkerColumnPt,
+  ALTERNATIVE_MARKER_GAP_PT,
   BASE_FONT_PT,
   pdfTextSize,
   TABLE_CELL_PADDING_PT,
@@ -72,6 +73,19 @@ const FLEX = { flexGrow: 1, flexShrink: 1, flexBasis: 0 } as const;
 // achado 0182. Sem `width`, o Yoga mede o marcador (uma linha) e `flexShrink: 0`
 // garante que ele não ceda — a coluna escala sozinha com corpo e família.
 const TF_MARKER = { marginRight: TRUE_FALSE_MARKER_GAP_PT, flexShrink: 0 } as const;
+
+// Marcador da ORDENAÇÃO: coluna própria, medida pelo glifo que ele imprime, em
+// vez da coluna do `a)` (achado 0449). `alternativeMarkerColumnPt` é calibrada
+// para o ordinal da alternativa — 22pt na base de 12pt, dos quais só 16pt são
+// glifo. O `____` avança 0,5em por `_`, ou seja 24pt na mesma base: mais largo
+// que a coluna inteira. Com `flexShrink: 0` a caixa não cedia, o texto
+// transbordava para dentro da coluna do conteúdo e o vão sumia — o papel
+// imprimia `____Evaporacao`, com o traço por baixo das primeiras letras, sem
+// fim visível para o aluno escrever o número. Como a coluna escala com o corpo
+// mas a proporção 24/22 não muda, valia em TODO tamanho de texto. A solução é a
+// do marcador V/F (achado 0359): sem `width`, o Yoga mede o próprio marcador e
+// o vão vem do `marginRight`, então a coluna escala sozinha com corpo e família.
+const ORDERING_MARKER = { marginRight: ALTERNATIVE_MARKER_GAP_PT, flexShrink: 0 } as const;
 
 /**
  * Painter mínimo do `Canvas` do @react-pdf (o pacote tipa como `any`): só os
@@ -339,7 +353,7 @@ export function PdfAnswer({
         <View>
           {answer.items.map((item) => (
             <View key={item.id} style={ROW}>
-              <Text style={MARKER}>____</Text>
+              <Text style={{ ...itemStyle, ...ORDERING_MARKER }}>____</Text>
               <View style={FLEX}>
                 <Text style={itemStyle}>
                   <PdfRichText content={item.content} fontSize={elementSizes.alternative} />
