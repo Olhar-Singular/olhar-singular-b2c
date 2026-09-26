@@ -686,6 +686,16 @@ describe("QuestionNodeView — card open / commit / cancel", () => {
     expect((props.node as unknown as { toJSON: ReturnType<typeof vi.fn> }).toJSON).toHaveBeenCalled();
   });
 
+  // Achado 0363: abrir o card pelo teclado desmontava o lápis que recebeu o
+  // Enter e ninguém assumia o foco, que caía no <body>.
+  it("não larga o foco no <body> ao abrir o card (achado 0363)", () => {
+    const { props } = makeProps(mc);
+    render(<QuestionNodeView {...props} />);
+    fireEvent.click(screen.getByLabelText("Editar questão"));
+    expect(document.activeElement).not.toBe(document.body);
+    expect(screen.getByTestId("question-card")).toContainElement(document.activeElement as HTMLElement);
+  });
+
   it("Concluir writes the local answer + instruction + enunciado to the document via updateAttributes", () => {
     const { props, updateAttributes } = makeProps(mc);
     render(<QuestionNodeView {...props} />);

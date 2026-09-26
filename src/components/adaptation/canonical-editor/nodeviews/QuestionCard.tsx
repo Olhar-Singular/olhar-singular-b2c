@@ -15,7 +15,7 @@
  * editable text — nested editors (RichTextField) re-enable editing on themselves.
  */
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { AlignStartVertical, AlignEndVertical, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -98,10 +98,34 @@ export function QuestionCard({
   const showInstruction = localInstruction != null || adding;
   const currentLabel = QUESTION_KINDS.find((k) => k.kind === localAnswer.kind)!.label;
 
+  /**
+   * Achado 0363: o card nasce no lugar do rail, então o botão "Editar questão"
+   * que recebeu o clique (ou o Enter) é desmontado no mesmo commit. Como nenhum
+   * controle do card reivindicava o foco, o navegador o devolvia ao `<body>`:
+   * o card abria com quinze controles novos e nenhum anel na tela, e o leitor
+   * de tela não anunciava nada. O primeiro controle do card (o número da
+   * questão) assume o foco na montagem; quando ele está desabilitado, quem
+   * assume é o próprio card, que carrega o nome acessível da questão.
+   */
+  const numberInputRef = useRef<HTMLInputElement>(null);
+  const cardRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (disabled) cardRef.current?.focus();
+    else numberInputRef.current?.focus();
+    // Só na montagem: depois disso quem manda no foco é o professor.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const cardName = `Questão ${customNumber ?? num?.toString() ?? ""}, editar estrutura`.replace(" ,", "");
+
   return (
     <div
       data-testid="question-card"
-      className="my-0.5 overflow-hidden rounded-[10px] border border-surface-accent bg-surface-paper shadow-[0_8px_28px_rgba(44,90,160,0.13)]"
+      ref={cardRef}
+      tabIndex={-1}
+      role="group"
+      aria-label={cardName}
+      className="my-0.5 overflow-hidden rounded-[10px] border border-surface-accent bg-surface-paper shadow-[0_8px_28px_rgba(44,90,160,0.13)] focus:outline-none focus-visible:ring-2 focus-visible:ring-surface-accent"
     >
       <div
         contentEditable={false}
@@ -111,6 +135,7 @@ export function QuestionCard({
           Questão{" "}
           <input
             type="text"
+            ref={numberInputRef}
             aria-label="Número da questão"
             data-testid="question-number-input"
             value={localCustomNumber ?? (num?.toString() ?? "")}

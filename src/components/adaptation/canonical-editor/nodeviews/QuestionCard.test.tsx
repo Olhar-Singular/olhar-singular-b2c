@@ -406,4 +406,17 @@ describe("QuestionCard", () => {
     setup({ num: 1, disabled: true });
     expect(screen.getByLabelText("Número da questão")).toBeDisabled();
   });
+  // Achado 0363: o card monta no lugar do rail, e o botão que recebeu o Enter
+  // ("Editar questão") é desmontado no mesmo commit. Sem ninguém reivindicar o
+  // foco, o navegador devolve ao <body> e o usuário de teclado fica sem
+  // indicação nenhuma de onde está.
+  it("leva o foco para o primeiro controle do card ao abrir (achado 0363)", () => {
+    setup({ num: 2 });
+    expect(document.activeElement).toBe(screen.getByLabelText("Número da questão"));
+  });
+
+  it("leva o foco para o próprio card quando o número não é editável (achado 0363)", () => {
+    setup({ num: 2, disabled: true });
+    expect(document.activeElement).toBe(screen.getByTestId("question-card"));
+  });
 });
