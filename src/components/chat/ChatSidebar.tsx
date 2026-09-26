@@ -17,19 +17,21 @@ type Props = {
 export default function ChatSidebar({ sessions, activeSessionId, onSelectSession, onNewSession }: Props) {
   return (
     <div className="flex flex-col h-full border-r border-border w-64 shrink-0">
-      <div className="p-3 flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <span className="text-sm font-semibold text-foreground">Conversas</span>
-          <Badge variant="secondary" className="text-xs">{sessions.length}/{MAX_SESSIONS}</Badge>
+      {/* Title + badge + button do not fit side by side in w-64, so the
+          button gets its own full-width row instead of spilling past the border. */}
+      <div className="p-3 space-y-2">
+        <div className="flex items-center justify-between gap-2">
+          <span className="min-w-0 truncate text-sm font-semibold text-foreground">Conversas</span>
+          <Badge variant="secondary" className="shrink-0 text-xs">{sessions.length}/{MAX_SESSIONS}</Badge>
         </div>
         <Button
           size="sm"
           variant="outline"
           onClick={onNewSession}
           disabled={sessions.length >= MAX_SESSIONS}
-          className="h-7 px-2 text-xs"
+          className="w-full"
         >
-          <MessageSquarePlus className="w-3.5 h-3.5 mr-1" />
+          <MessageSquarePlus className="w-4 h-4" />
           Nova conversa
         </Button>
       </div>

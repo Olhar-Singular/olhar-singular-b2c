@@ -29,6 +29,16 @@ describe("ChatSidebar", () => {
     expect(screen.getByRole("button", { name: /nova conversa/i })).toBeInTheDocument();
   });
 
+  it("stacks Nova conversa below the title row so it fits the fixed-width sidebar", () => {
+    render(<ChatSidebar sessions={[]} activeSessionId={null} onSelectSession={vi.fn()} onNewSession={vi.fn()} />);
+    const button = screen.getByRole("button", { name: "Nova conversa" });
+    const titleRow = screen.getByText("Conversas").parentElement;
+    // Title + badge + button do not fit side by side in w-64: the button used to
+    // spill ~13px past the sidebar border. It gets its own full-width row instead.
+    expect(titleRow).not.toContainElement(button);
+    expect(button).toHaveClass("w-full");
+  });
+
   it("shows session count badge", () => {
     render(<ChatSidebar sessions={sessions} activeSessionId={null} onSelectSession={vi.fn()} onNewSession={vi.fn()} />);
     expect(screen.getByText("2/10")).toBeInTheDocument();
