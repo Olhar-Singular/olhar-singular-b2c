@@ -1,4 +1,5 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import type { Session, User } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
 import type { Database } from "@/integrations/supabase/types";
@@ -24,6 +25,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
   const [profileLoading, setProfileLoading] = useState(false);
+  const queryClient = useQueryClient();
+  const userIdRef = useRef<string | null>(null);
 
   async function fetchProfile(userId: string) {
     setProfileLoading(true);
@@ -47,6 +50,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
+      userIdRef.current = data.session?.user?.id ?? null;
       setSession(data.session);
       if (data.session?.user) fetchProfile(data.session.user.id);
       setLoading(false);
@@ -54,6 +58,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     const { data: listener } = supabase.auth.onAuthStateChange(
       (_event, newSession) => {
+        // Query keys are not scoped by user, so one account's cached data must
+        // not outlive its session (shared school computers).
+        const nextUserId = newSession?.user?.id ?? null;
+        if (userIdRef.current && userIdRef.current !== nextUserId) queryClient.clear();
+        userIdRef.current = nextUserId;
         setSession(newSession);
         if (newSession?.user) {
           // Deferred: awaiting a Supabase call inside the auth callback can
@@ -67,7 +76,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     );
 
     return () => listener.subscription.unsubscribe();
-  }, []);
+  }, [queryClient]);
 
   // Stable identities: consumers key effects on refreshProfile, and the value
   // object would otherwise re-render every useAuth() on each provider render.
