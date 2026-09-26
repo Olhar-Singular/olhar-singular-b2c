@@ -55,8 +55,6 @@ export default defineConfig({
   resolve: {
     alias: [
       { find: "@", replacement: path.resolve(__dirname, "./src") },
-      // Map Deno ESM URL imports to local node_modules during Vitest runs
-      { find: /^https:\/\/esm\.sh\/@supabase\/supabase-js@2$/, replacement: "@supabase/supabase-js" },
     ],
   },
 });
