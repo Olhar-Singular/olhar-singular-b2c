@@ -248,8 +248,20 @@ describe("StepExportCanonical", () => {
     const bar = screen.getByRole("button", { name: /Nova adaptação/i }).parentElement!;
     expect(bar.className).toMatch(/(?:^|\s)sticky(?:\s|$)/);
     expect(bar.className).toMatch(/(?:^|\s)bottom-0(?:\s|$)/);
-    expect(bar.className).toMatch(/(?:^|\s)bg-surface-chrome(?:\s|$)/);
     expect(bar.className).toMatch(/(?:^|\s)border-t(?:\s|$)/);
     expect(bar.className).toMatch(/(?:^|\s)z-\d+(?:\s|$)/);
+  });
+
+  // Achado 0504: a barra e chrome do app (fica FORA do PageSheet), mas estava
+  // pintada com os tokens da folha (--sf-*), que nao tem override no `.dark`
+  // de proposito. No tema escuro ela virava uma faixa creme acesa no rodape de
+  // uma pagina escura. Tem que usar token do app, que inverte com o tema.
+  it("pinta a barra de ações com token do app, não da folha (0504)", () => {
+    renderStep({});
+    const bar = screen.getByRole("button", { name: /Nova adaptação/i }).parentElement!;
+    expect(bar.className).not.toMatch(/(?:^|\s)bg-surface-chrome(?:\s|$)/);
+    expect(bar.className).not.toMatch(/(?:^|\s)border-surface-chrome-line(?:\s|$)/);
+    expect(bar.className).toMatch(/(?:^|\s)bg-card(?:\s|$)/);
+    expect(bar.className).toMatch(/(?:^|\s)border-border(?:\s|$)/);
   });
 });

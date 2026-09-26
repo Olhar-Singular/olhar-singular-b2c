@@ -102,8 +102,12 @@ export function StepExportCanonical({
       </PageSheet>
 
       {/* Mesma barra, mesmo achado 0156: num documento de 2.944px os CTAs do
-          passo só apareciam depois de rolar a prévia inteira. */}
-      <div className="sticky bottom-0 z-10 flex justify-between gap-2 border-t border-surface-chrome-line bg-surface-chrome px-2 py-3">
+          passo só apareciam depois de rolar a prévia inteira.
+          Achado 0504: esta barra fica FORA do `PageSheet` — é chrome do app,
+          não folha. Com os tokens `--sf-*` (que não têm override no `.dark`,
+          por desenho: o papel é branco nos dois temas) ela virava uma faixa
+          creme acesa no rodapé de uma página escura. Tokens do app, então. */}
+      <div className="sticky bottom-0 z-10 flex justify-between gap-2 border-t border-border bg-card px-2 py-3">
         <Button variant="outline" onClick={onPrev}>
           <ArrowLeft className="w-4 h-4 mr-2" /> Voltar
         </Button>
