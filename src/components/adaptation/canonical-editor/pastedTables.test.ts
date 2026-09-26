@@ -55,3 +55,43 @@ describe("flattenPastedTables", () => {
     expect(flattenPastedTables(html)).toEqual({ html, tables: 0 });
   });
 });
+
+describe("flattenPastedTables com células no formato do Word", () => {
+  const wordCell = (text: string) => `<td><p class="MsoNormal">${text}<o:p></o:p></p></td>`;
+  const wordTable =
+    "<table class=MsoTableGrid><tbody>\n" +
+    `<tr>${wordCell("A1")}${wordCell("B1")}</tr>\n` +
+    `<tr>${wordCell("A2")}${wordCell("B2")}</tr>\n` +
+    "</tbody></table>";
+
+  const reparse = (html: string) =>
+    Array.from(new DOMParser().parseFromString(html, "text/html").body.querySelectorAll("p"));
+
+  it("reduz a célula ao conteúdo inline em vez de aninhar um bloco no parágrafo", () => {
+    const result = flattenPastedTables(wordTable);
+
+    expect(result.tables).toBe(1);
+    const aninhados = reparse(result.html).flatMap((p) =>
+      Array.from(p.querySelectorAll("*")).filter((node) => node.tagName === "P"),
+    );
+    expect(aninhados).toEqual([]);
+    expect(reparse(result.html).map((p) => p.textContent)).toEqual([
+      `A1${CELL_SEPARATOR}B1`,
+      `A2${CELL_SEPARATOR}B2`,
+    ]);
+  });
+
+  it("separa por espaço os vários blocos de uma mesma célula e ignora bloco vazio", () => {
+    const result = flattenPastedTables(
+      "<table><tr><td><p>a</p><p>b</p></td><td><p>   </p>c</td></tr></table>",
+    );
+
+    expect(reparse(result.html).map((p) => p.textContent)).toEqual([`a b${CELL_SEPARATOR}c`]);
+  });
+
+  it("apara o espaço das bordas da célula e mantém a célula vazia como separador", () => {
+    const result = flattenPastedTables("<table><tr><td>  A  </td><td></td><td>B</td></tr></table>");
+
+    expect(result.html).toBe(`<div><p>A${CELL_SEPARATOR}${CELL_SEPARATOR}B</p></div>`);
+  });
+});
