@@ -193,6 +193,44 @@ describe("AnswerEditor — fillBlank", () => {
     expect(onChange).toHaveBeenCalledTimes(2);
   });
 
+  /**
+   * Achado 0502: a IA gravava `tip` e `alternatives` na lacuna e nenhuma superfície
+   * lia — nem a folha, nem o PDF, nem o card. O card passa a ser o leitor/editor.
+   */
+  it("mostra e edita a dica e as outras respostas aceitas da lacuna", () => {
+    const onChange = vi.fn();
+    const comExtras: QuestionAnswer = {
+      kind: "fillBlank",
+      gaps: [{ ...answer.gaps[0], tip: "comeca com E", alternatives: ["evaporação"] }],
+    };
+    render(<AnswerEditor answer={comExtras} onChange={onChange} />);
+
+    const dica = screen.getByLabelText("Dica da lacuna 1") as HTMLInputElement;
+    const outras = screen.getByLabelText("Outras respostas aceitas na lacuna 1") as HTMLInputElement;
+    expect(dica.value).toBe("comeca com E");
+    expect(outras.value).toBe("evaporação");
+
+    fireEvent.change(dica, { target: { value: "comeca com C" } });
+    expect(onChange).toHaveBeenCalledWith(
+      expect.objectContaining({
+        gaps: [expect.objectContaining({ tip: "comeca com C" })],
+      })
+    );
+
+    fireEvent.change(outras, { target: { value: "evaporação, EVAPORACAO" } });
+    expect(onChange).toHaveBeenCalledWith(
+      expect.objectContaining({
+        gaps: [expect.objectContaining({ alternatives: ["evaporação", "EVAPORACAO"] })],
+      })
+    );
+  });
+
+  it("deixa os campos extras vazios quando a lacuna não tem dica nem alternativas", () => {
+    render(<AnswerEditor answer={answer} onChange={vi.fn()} />);
+    expect((screen.getByLabelText("Dica da lacuna 2") as HTMLInputElement).value).toBe("");
+    expect((screen.getByLabelText("Outras respostas aceitas na lacuna 2") as HTMLInputElement).value).toBe("");
+  });
+
   it("deixa remover a última lacuna (buildAnswer nasce com gaps vazio)", () => {
     const onChange = vi.fn();
     const single: QuestionAnswer = { kind: "fillBlank", gaps: [answer.gaps[0]] };

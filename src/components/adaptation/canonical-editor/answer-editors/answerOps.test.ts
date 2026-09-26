@@ -17,6 +17,8 @@ import {
   setOrderingContent,
   reorderOrdering,
   setGapAnswer,
+  setGapTip,
+  setGapAlternatives,
   addGap,
   removeGap,
   setAnswerLines,
@@ -429,6 +431,46 @@ describe("removeGap", () => {
 
   it("returns unchanged for non-fillBlank", () => {
     expect(removeGap(mc, "x")).toBe(mc);
+  });
+});
+
+/**
+ * Achado 0502: `tip` e `alternatives` entravam no canônico pela IA e ficavam sem
+ * leitor nem editor. Agora o card os edita — string vazia apaga o campo, para o
+ * documento não guardar `tip: ""`.
+ */
+describe("setGapTip", () => {
+  it("sets the tip of the targeted gap", () => {
+    const next = setGapTip(fillBlank, fillBlank.gaps[0].id, "comeca com E");
+    expect(next.gaps[0].tip).toBe("comeca com E");
+    expect(next.gaps[1].tip).toBeUndefined();
+  });
+
+  it("drops the field when the tip is blank", () => {
+    const withTip = setGapTip(fillBlank, fillBlank.gaps[0].id, "dica");
+    const next = setGapTip(withTip, fillBlank.gaps[0].id, "   ");
+    expect(next.gaps[0]).not.toHaveProperty("tip");
+  });
+
+  it("returns unchanged for non-fillBlank", () => {
+    expect(setGapTip(mc, "x", "d")).toBe(mc);
+  });
+});
+
+describe("setGapAlternatives", () => {
+  it("splits the comma-separated list, trimming and dropping empties", () => {
+    const next = setGapAlternatives(fillBlank, fillBlank.gaps[0].id, " evaporação , ,EVAPORACAO ");
+    expect(next.gaps[0].alternatives).toEqual(["evaporação", "EVAPORACAO"]);
+  });
+
+  it("drops the field when nothing is left", () => {
+    const withAlts = setGapAlternatives(fillBlank, fillBlank.gaps[0].id, "a");
+    const next = setGapAlternatives(withAlts, fillBlank.gaps[0].id, " , ");
+    expect(next.gaps[0]).not.toHaveProperty("alternatives");
+  });
+
+  it("returns unchanged for non-fillBlank", () => {
+    expect(setGapAlternatives(mc, "x", "a")).toBe(mc);
   });
 });
 

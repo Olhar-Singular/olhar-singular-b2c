@@ -159,6 +159,44 @@ export function setGapAnswer(answer: QuestionAnswer, id: string, value: string):
   };
 }
 
+/**
+ * Achado 0502: `tip` e `alternatives` chegavam da IA e nenhuma superfície os lia
+ * nem os editava. O card passa a editá-los; texto em branco apaga o campo, para
+ * não gravar `tip: ""` / `alternatives: []` no documento canônico.
+ */
+export function setGapTip(answer: QuestionAnswer, id: string, value: string): QuestionAnswer {
+  if (answer.kind !== "fillBlank") return answer;
+  return {
+    ...answer,
+    gaps: answer.gaps.map((gap) => {
+      if (gap.id !== id) return gap;
+      const next = { ...gap };
+      if (value.trim() === "") delete next.tip;
+      else next.tip = value;
+      return next;
+    }),
+  };
+}
+
+/** Lista separada por vírgula, como o professor digita no card. */
+export function setGapAlternatives(answer: QuestionAnswer, id: string, value: string): QuestionAnswer {
+  if (answer.kind !== "fillBlank") return answer;
+  const list = value
+    .split(",")
+    .map((item) => item.trim())
+    .filter((item) => item !== "");
+  return {
+    ...answer,
+    gaps: answer.gaps.map((gap) => {
+      if (gap.id !== id) return gap;
+      const next = { ...gap };
+      if (list.length === 0) delete next.alternatives;
+      else next.alternatives = list;
+      return next;
+    }),
+  };
+}
+
 export function addGap(answer: QuestionAnswer, generate: Generate = newId): QuestionAnswer {
   if (answer.kind !== "fillBlank") return answer;
   return { ...answer, gaps: [...answer.gaps, { id: generate(), answer: "" }] };

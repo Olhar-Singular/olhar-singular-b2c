@@ -35,6 +35,8 @@ import {
   setOrderingContent,
   reorderOrdering,
   setGapAnswer,
+  setGapTip,
+  setGapAlternatives,
   addGap,
   removeGap,
   setAnswerLines,
@@ -229,30 +231,57 @@ export function AnswerEditor({
       return (
         <div className="flex flex-col gap-2" data-testid="answer-fillBlank">
           {answer.gaps.map((gap, index) => (
-            <div key={gap.id} className="flex items-center gap-2">
-              <label htmlFor={`${fieldIdPrefix}-gap-${gap.id}`} className="text-xs text-surface-ink-faint w-12">
-                Lacuna {index + 1}
-              </label>
-              {/* The gap answer is the answer key (plain text, not formattable). */}
-              <Input
-                id={`${fieldIdPrefix}-gap-${gap.id}`}
-                name="fillblank-gap"
-                value={gap.answer}
-                disabled={disabled}
-                onChange={(e) => onChange(setGapAnswer(answer, gap.id, e.target.value))}
-                placeholder="Resposta"
-                className="border-surface-line-2 bg-surface-paper text-surface-ink"
-              />
-              <IconButton
-                onClick={() => {
-                  onChange(removeGap(answer, gap.id));
-                  onGapRemoved?.(index);
-                }}
-                title="Remover lacuna"
-                disabled={disabled}
-              >
-                <Trash2 className="w-3.5 h-3.5" />
-              </IconButton>
+            <div key={gap.id} className="flex flex-col gap-1">
+              <div className="flex items-center gap-2">
+                <label htmlFor={`${fieldIdPrefix}-gap-${gap.id}`} className="text-xs text-surface-ink-faint w-12">
+                  Lacuna {index + 1}
+                </label>
+                {/* The gap answer is the answer key (plain text, not formattable). */}
+                <Input
+                  id={`${fieldIdPrefix}-gap-${gap.id}`}
+                  name="fillblank-gap"
+                  value={gap.answer}
+                  disabled={disabled}
+                  onChange={(e) => onChange(setGapAnswer(answer, gap.id, e.target.value))}
+                  placeholder="Resposta"
+                  className="border-surface-line-2 bg-surface-paper text-surface-ink"
+                />
+                <IconButton
+                  onClick={() => {
+                    onChange(removeGap(answer, gap.id));
+                    onGapRemoved?.(index);
+                  }}
+                  title="Remover lacuna"
+                  disabled={disabled}
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                </IconButton>
+              </div>
+              {/*
+                Achado 0502: a IA grava `tip` e `alternatives` na lacuna e nenhuma
+                superfície os mostrava. Aqui o professor finalmente os vê e edita —
+                é ele quem corrige à mão e precisa da forma acentuada.
+              */}
+              <div className="flex items-center gap-2 pl-14">
+                <Input
+                  name="fillblank-gap-tip"
+                  aria-label={`Dica da lacuna ${index + 1}`}
+                  value={gap.tip ?? ""}
+                  disabled={disabled}
+                  onChange={(e) => onChange(setGapTip(answer, gap.id, e.target.value))}
+                  placeholder="Dica (opcional)"
+                  className="h-8 text-xs border-surface-line-2 bg-surface-paper text-surface-ink"
+                />
+                <Input
+                  name="fillblank-gap-alternatives"
+                  aria-label={`Outras respostas aceitas na lacuna ${index + 1}`}
+                  value={(gap.alternatives ?? []).join(", ")}
+                  disabled={disabled}
+                  onChange={(e) => onChange(setGapAlternatives(answer, gap.id, e.target.value))}
+                  placeholder="Outras respostas aceitas (separadas por vírgula)"
+                  className="h-8 text-xs border-surface-line-2 bg-surface-paper text-surface-ink"
+                />
+              </div>
             </div>
           ))}
           <Button
