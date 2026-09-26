@@ -475,6 +475,37 @@ describe("B15 · conteúdo que precisa chegar ao Word", () => {
     for (const cell of ["Animal", "Som", "gato", "mia"]) expect(out).toContain(cell);
   });
 
+  it("table marca o cabeçalho para repetir e protege a linha da quebra", () => {
+    // Achado 0603: sem `tblHeader` o Word deixa a página seguinte com linhas de
+    // dados órfãs, sem rótulo de coluna; sem `cantSplit` ele ainda parte a linha
+    // ao meio da virada (mesmo sintoma do 0602 no lado do PDF).
+    const table = blockToDocxParagraphs(
+      q({
+        kind: "table",
+        rows: [
+          [text("Animal"), text("Som")],
+          [text("gato"), text("mia")],
+        ],
+      }),
+      1,
+    ).find((b) => b instanceof Table) as Table;
+    const [header, body] = (table as unknown as { root: TableRow[] }).root.filter(
+      (n) => (n as unknown as { rootKey?: string }).rootKey === "w:tr",
+    );
+    // `w:tblHeader`/`w:cantSplit` são tags sem atributo — basta existirem.
+    const has = (node: unknown, rootKey: string): boolean => {
+      if (Array.isArray(node)) return node.some((n) => has(n, rootKey));
+      if (node === null || typeof node !== "object") return false;
+      if ((node as { rootKey?: string }).rootKey === rootKey) return true;
+      return Object.values(node as Record<string, unknown>).some((v) => has(v, rootKey));
+    };
+    expect(has(header, "w:tblHeader")).toBe(true);
+    expect(has(header, "w:cantSplit")).toBe(true);
+    // linha de dados: não é cabeçalho, mas também não se parte
+    expect(has(body, "w:tblHeader")).toBe(false);
+    expect(has(body, "w:cantSplit")).toBe(true);
+  });
+
   it("stem com blocos não-parágrafo (imagem, fórmula) não é descartado", () => {
     const out = blockText(
       q({ kind: "open" }, {

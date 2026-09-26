@@ -304,7 +304,10 @@ export function PdfAnswer({
           {header && (
             // `wrap={false}`: sem isso o react-pdf fatia a linha na virada de
             // página e deixa a moldura numa folha e o texto na outra (0602).
-            <View wrap={false} style={{ flexDirection: "row" }}>
+            // `fixed`: no react-pdf só o que é fixo reaparece a cada folha em
+            // que o pai continua — é o que repete o cabeçalho e evita a página
+            // com linhas de dados sem rótulo de coluna (0603).
+            <View fixed wrap={false} style={{ flexDirection: "row" }}>
               {header.map((c, i) => (
                 <View key={i} style={cell}>
                   <Text style={{ fontWeight: "bold" }}>

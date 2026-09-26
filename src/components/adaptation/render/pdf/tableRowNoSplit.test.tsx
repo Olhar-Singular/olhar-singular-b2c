@@ -80,7 +80,9 @@ describe("PdfAnswer — linha de tabela indivisível entre páginas", () => {
     // A linha fatiada vira duas: um pedaço com parte das células no fim de uma
     // folha (a moldura vazia) e o resto no topo da seguinte.
     const drawn = tableRows(root);
-    expect(drawn.length).toBe(rows.length);
+    // `>=` e não `===`: o cabeçalho é `fixed` e reaparece em toda folha em que a
+    // tabela continua (0603), então há uma linha desenhada a mais por página.
+    expect(drawn.length).toBeGreaterThanOrEqual(rows.length);
     for (const row of drawn) {
       expect((row.children ?? []).length).toBe(rows[0].length);
       expect(paintedLines(row)).toBe(rows[0].length);

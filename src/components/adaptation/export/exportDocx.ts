@@ -354,6 +354,14 @@ function answerToDocx(
       if (!header) return [];
       const row = (cells: RichText[], bold: boolean) =>
         new TableRow({
+          // `tableHeader` é o que faz o Word repetir a primeira linha no topo de
+          // cada página em que a tabela continua (negrito não repete nada);
+          // `cantSplit` impede que a linha seja partida ao meio pela virada de
+          // folha, o mesmo contrato do `wrap={false}` no PDF (0602/0603).
+          // `tableHeader: false` ainda emite a tag (a lib só checa `undefined`),
+          // o que marcaria TODA linha como cabeçalho — daí o spread condicional.
+          ...(bold ? { tableHeader: true } : {}),
+          cantSplit: true,
           children: cells.map(
             (cell) =>
               new TableCell({
