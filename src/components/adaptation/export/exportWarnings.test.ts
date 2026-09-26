@@ -194,3 +194,69 @@ describe("aviso de tipografia da fórmula (0415)", () => {
     expect(copyExportWarnings(mathDoc).join(" ")).not.toMatch(/monoespaçada/i);
   });
 });
+
+// ---------------------------------------------------------------------------
+// 0444 — as fontes built-in do PDF só carregam a CP1252. Um caractere de fora
+// dela (uma seta, um sinal de diferente, um emoji) não estoura: sai trocado por
+// outro glifo, calado. O professor precisa saber ANTES de baixar o arquivo.
+// ---------------------------------------------------------------------------
+
+describe("aviso de caractere fora da CP1252 (0444)", () => {
+  const withText = (text: string) =>
+    doc([{ id: id(1), type: "paragraph", content: [{ type: "text", text }] }]);
+
+  it("lista o caractere que a fonte padrão não tem", () => {
+    const warning = pdfExportWarnings(withText("Se 3 → 9, então 4 → ?")).join(" ");
+    expect(warning).toMatch(/→/);
+    expect(warning).toMatch(/acentuad|CP1252|fonte/i);
+  });
+
+  it("não repete o mesmo caractere duas vezes", () => {
+    const warning = pdfExportWarnings(withText("≠ ≠ ≠")).join(" ");
+    expect(warning.match(/≠/g)).toHaveLength(1);
+  });
+
+  it("acento, cedilha e travessão passam: estão na CP1252", () => {
+    expect(pdfExportWarnings(withText("Cão – ações “aspas” e reticências…"))).toEqual([]);
+  });
+
+  it("varre o texto das respostas, não só o dos parágrafos", () => {
+    const warning = pdfExportWarnings(
+      doc([
+        {
+          id: id(1),
+          type: "question",
+          number: 1,
+          stem: [{ id: id(2), type: "paragraph", content: [{ type: "text", text: "Relacione" }] }],
+          answer: {
+            kind: "matching",
+            pairs: [
+              {
+                id: id(3),
+                left: [{ type: "text", text: "Peixe ✓" }],
+                right: [{ type: "text", text: "Rio" }],
+              },
+            ],
+          },
+        },
+      ]),
+    ).join(" ");
+    expect(warning).toMatch(/✓/);
+  });
+
+  it("fonte de acessibilidade embutida não recebe o aviso da CP1252", () => {
+    expect(
+      pdfExportWarnings(withText("Se 3 → 9"), { fontFamily: "opendyslexic" }).join(" "),
+    ).not.toMatch(/→/);
+  });
+
+  it("uma fonte clássica cai numa built-in e recebe o aviso", () => {
+    expect(pdfExportWarnings(withText("Se 3 → 9"), { fontFamily: "georgia" }).join(" ")).toMatch(
+      /→/,
+    );
+  });
+
+  it("o Word não herda o aviso: a fonte é resolvida na máquina de quem abre", () => {
+    expect(copyExportWarnings(withText("Se 3 → 9"))).toEqual([]);
+  });
+});

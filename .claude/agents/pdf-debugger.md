@@ -60,6 +60,13 @@ src/components/adaptation/render/pdf/
 - **Cor "sumindo"**: caiu no filtro `isAllowedColor` (não está na paleta do documento).
 - **Math "literal"**: é o comportamento v1 (LaTeX cru) — não é bug, é o TODO de fidelidade.
 - **Quebra de página inesperada**: revise `pageBreakBefore` e o prop `break`.
+- **Glifo trocado no arquivo (0444)**: as fontes padrão do PDF são as built-in Type 1, com
+  encoding WinAnsi (**CP1252**) e sem tabela Unicode. Pedir um caractere de fora dela (seta,
+  sinal matemático, emoji) **não levanta erro**: o byte que sobra vira OUTRO caractere no
+  papel. Nenhum mapper deve escrever esse glifo por conta própria (o elo da associação é
+  DESENHADO num `Canvas`, ver `paintMatchingLink`); o que vem do professor é varrido por
+  `pdfUnsupportedCharacters` (`export/exportWarnings.ts`) e avisado antes do download. Só as
+  TTF de `registerFonts.ts` (atkinson/lexend/opendyslexic) escapam da CP1252.
 
 ## Regras ao mexer
 

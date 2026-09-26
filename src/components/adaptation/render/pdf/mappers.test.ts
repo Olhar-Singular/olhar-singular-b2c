@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { Children, isValidElement, type ReactElement, type ReactNode } from "react";
-import { View, Text, Image } from "@react-pdf/renderer";
+import { View, Text, Image, Canvas } from "@react-pdf/renderer";
 import { PdfBlock } from "./PdfBlock";
 import { PdfAnswer } from "./PdfAnswer";
 import { PdfQuestion } from "./PdfQuestion";
@@ -71,6 +71,28 @@ function textNodes(node: unknown, found: ReactElement[] = []): ReactElement[] {
   return found;
 }
 
+/** Todo <Canvas> da árvore (o elo desenhado da associação, a pauta da aberta). */
+function canvasNodes(node: unknown, found: ReactElement[] = []): ReactElement[] {
+  if (node === null || node === undefined || typeof node === "boolean") return found;
+  if (Array.isArray(node)) {
+    node.forEach((c) => canvasNodes(c, found));
+    return found;
+  }
+  if (isValidElement(node)) {
+    const el = node as ReactElement;
+    if (el.type === (Canvas as unknown)) {
+      found.push(el);
+      return found;
+    }
+    if (typeof el.type === "function") {
+      canvasNodes((el.type as (p: unknown) => unknown)(el.props), found);
+      return found;
+    }
+    canvasNodes((el.props as { children?: unknown }).children, found);
+  }
+  return found;
+}
+
 /** O <Text> mais externo cujo texto plano contém `needle`. */
 function textWith(node: unknown, needle: string): ReactElement {
   const hit = textNodes(node).find((t) => textOf(t).includes(needle));
@@ -132,15 +154,17 @@ describe("PdfAnswer", () => {
     expect(txt).not.toContain("[x]");
   });
 
-  it("renders matching pairs with a connector", () => {
-    const txt = textOf(
-      PdfAnswer({
-        answer: { kind: "matching", pairs: [{ id: id(1), left: rt("BR"), right: rt("Brasília") }] },
-      }),
-    );
+  it("renders matching pairs with a DRAWN connector, never a glyph (0444)", () => {
+    const el = PdfAnswer({
+      answer: { kind: "matching", pairs: [{ id: id(1), left: rt("BR"), right: rt("Brasília") }] },
+    });
+    const txt = textOf(el);
     expect(txt).toContain("BR");
     expect(txt).toContain("Brasília");
-    expect(txt).toContain("↔");
+    // A seta é desenhada num <Canvas>: as fontes built-in do PDF (CP1252) não
+    // têm o glifo e o trocavam por aspas no arquivo do aluno.
+    expect(txt).not.toContain("↔");
+    expect(canvasNodes(el)).toHaveLength(1);
   });
 
   it("renders ordering items in array order without position sort or numbering", () => {

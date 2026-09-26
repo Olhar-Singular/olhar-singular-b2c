@@ -18,6 +18,7 @@ import type {
   PageStyle,
   RichText,
 } from "@/lib/adaptation/canonical/schema";
+import { documentToPlainText } from "@/lib/adaptation/canonical/plainText";
 
 /** Walk every block, including question stems (which nest). */
 export function everyBlock(blocks: Block[]): Block[] {
@@ -124,6 +125,54 @@ export function documentHasMath(document: CanonicalDocument): boolean {
 }
 
 /**
+ * As fontes PADRÃO do PDF são as built-in Type 1, que só carregam a CP1252
+ * (0444).
+ *
+ * Nenhuma delas é embutida no arquivo e nenhuma tem tabela Unicode: pedir um
+ * caractere de fora da CP1252 não levanta erro, o byte que sobra na codificação
+ * vira OUTRO caractere. O professor via a seta na folha, via a seta na prévia e
+ * o aluno recebia aspas. Só as três fontes de acessibilidade (arquivos TTF
+ * registrados em `render/pdf/registerFonts.ts`) escapam disso.
+ */
+const PDF_BUILTIN_FAMILIES = new Set(["Helvetica", "Times-Roman", "Courier"]);
+
+/**
+ * Os 27 caracteres que a CP1252 acomoda na faixa 0x80-0x9F, onde a Latin-1 tem
+ * controles: aspas curvas, travessões, reticências, bullet, marca registrada.
+ * Fora deles a tabela é ASCII imprimível mais a Latin-1 alta (acentos).
+ */
+const WINANSI_HIGH_CODES = new Set([
+  0x20ac, 0x201a, 0x0192, 0x201e, 0x2026, 0x2020, 0x2021, 0x02c6, 0x2030, 0x0160,
+  0x2039, 0x0152, 0x017d, 0x2018, 0x2019, 0x201c, 0x201d, 0x2022, 0x2013, 0x2014,
+  0x02dc, 0x2122, 0x0161, 0x203a, 0x0153, 0x017e, 0x0178,
+]);
+
+function isWinAnsi(character: string): boolean {
+  // `charCodeAt` e não `codePointAt`: fora do BMP ele devolve o SUBSTITUTO
+  // alto, que também não está na CP1252 (um emoji continua sendo reprovado) e
+  // dispensa o ramo de fallback que nenhum caractere alcança.
+  const code = character.charCodeAt(0);
+  if (code >= 0x20 && code <= 0x7e) return true;
+  if (code >= 0xa0 && code <= 0xff) return true;
+  return WINANSI_HIGH_CODES.has(code);
+}
+
+/**
+ * Os caracteres do documento que a fonte built-in do PDF não representa, sem
+ * repetição e na ordem em que aparecem.
+ *
+ * A varredura usa a MESMA projeção textual do botão "Copiar": ela já percorre
+ * todo campo que vira texto no papel (enunciado, instrução, alternativa, par de
+ * associação, célula, cabeçalho), então nenhum campo novo do schema pode
+ * escapar daqui sem escapar de lá junto. As quebras de linha que a projeção
+ * insere não são conteúdo e saem da conta.
+ */
+export function pdfUnsupportedCharacters(document: CanonicalDocument): string[] {
+  const text = documentToPlainText(document).replace(/\s/g, "");
+  return [...new Set([...text].filter((character) => !isWinAnsi(character)))];
+}
+
+/**
  * O que o PDF não carrega fiel.
  *
  * Mostrado ANTES do download, do mesmo jeito que o Word já fazia. Enquanto o
@@ -161,6 +210,21 @@ export function pdfExportWarnings(
       `A fonte ${fontFamilyToPdf(family)} não tem versão itálica: no PDF os trechos em ` +
         "itálico (inclusive as instruções das questões) saem retos.",
     );
+  }
+
+  // O caractere que a folha mostra tem que ser o caractere que o arquivo
+  // imprime. Enquanto o PDF não embute uma fonte com cobertura Unicode para
+  // TODO documento, o mínimo é nomear, antes do download, o que vai sair
+  // trocado (0444).
+  if (!family || PDF_BUILTIN_FAMILIES.has(fontFamilyToPdf(family))) {
+    const unsupported = pdfUnsupportedCharacters(document);
+    if (unsupported.length > 0) {
+      warnings.push(
+        `A fonte padrão do PDF não tem estes caracteres: ${unsupported.join(" ")}. ` +
+          "No arquivo eles saem trocados por outro símbolo. Troque-os por texto " +
+          "(acentos e travessão funcionam) ou escolha uma fonte de acessibilidade no Formato.",
+      );
+    }
   }
 
   return warnings;

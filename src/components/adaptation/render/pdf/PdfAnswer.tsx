@@ -6,7 +6,8 @@
  *   - multipleChoice: alternativas com letras a)/b)/…, SEM ✔ na correta
  *   - trueFalse: afirmação + marcadores vazios "(  ) V  (  ) F", SEM revelar o valor
  *   - checkbox: [ ] para TODOS os itens, SEM [x]
- *   - matching: left ↔ right — mantido (pareamento é a estrutura, não o gabarito)
+ *   - matching: left e right ligados por uma seta DESENHADA (pareamento é a
+ *                estrutura, não o gabarito) — ver `paintMatchingLink` (0444)
  *   - ordering: array na ordem original (SEM sort por position, SEM numeração)
  *                marcador ____ para o aluno escrever a ordem
  *   - fillBlank: <View/> vazio — as lacunas vivem inline no enunciado
@@ -28,6 +29,7 @@ import {
   ANSWER_LINE_DASH_PT,
   ANSWER_LINE_DASH_SPACE_PT,
   ANSWER_ITEM_GAP_PT,
+  BASE_LINE_HEIGHT,
   alternativeMarkerColumnPt,
   BASE_FONT_PT,
   pdfTextSize,
@@ -89,6 +91,69 @@ function paintAnswerLine(painter: AnswerLinePainter, availableWidth: number): nu
     .stroke();
   return null;
 }
+
+/**
+ * O elo da associação é DESENHADO, não escrito (achado 0444).
+ *
+ * As fontes padrão do `@react-pdf` são as built-in Type 1 do PDF, com encoding
+ * WinAnsi (CP1252). A seta dupla da associação (U+2194) não existe nessa
+ * tabela: pedir o glifo não levanta erro nenhum, o byte que sobra na
+ * codificação vira outro caractere e o aluno recebia `Peixe " Rio`. A tela e o
+ * Word imprimem o `\u2194` porque resolvem a fonte na máquina de quem lê; o PDF
+ * carrega a sua. Com o `Canvas` o traço vale em qualquer fonte, inclusive nas
+ * built-in, e o papel volta a mostrar o que a folha mostra.
+ */
+type MatchingLinkPainter = {
+  lineWidth: (width: number) => MatchingLinkPainter;
+  strokeColor: (color: string) => MatchingLinkPainter;
+  moveTo: (x: number, y: number) => MatchingLinkPainter;
+  lineTo: (x: number, y: number) => MatchingLinkPainter;
+  stroke: () => MatchingLinkPainter;
+};
+
+/** Comprimento da seta, proporcional ao corpo do item. */
+const matchingLinkWidthPt = (fontSizePt: number) => fontSizePt * 0.9;
+/** Tamanho de cada ponta, em fração do comprimento. */
+const MATCHING_LINK_HEAD_RATIO = 0.31;
+
+function paintMatchingLink(
+  painter: MatchingLinkPainter,
+  availableWidth: number,
+  availableHeight: number,
+): null {
+  const y = availableHeight / 2;
+  // A ponta escala com a largura RECEBIDA (e não com o token) para o desenho
+  // continuar proporcional se o Yoga entregar menos espaço que o pedido.
+  const head = availableWidth * MATCHING_LINK_HEAD_RATIO;
+  painter
+    .lineWidth(ANSWER_LINE_WIDTH_PT)
+    .strokeColor(ANSWER_LINE_COLOR)
+    .moveTo(0, y)
+    .lineTo(availableWidth, y)
+    .stroke()
+    .moveTo(head, y - head)
+    .lineTo(0, y)
+    .lineTo(head, y + head)
+    .stroke()
+    .moveTo(availableWidth - head, y - head)
+    .lineTo(availableWidth, y)
+    .lineTo(availableWidth - head, y + head)
+    .stroke();
+  return null;
+}
+
+/**
+ * A caixa da seta ocupa a altura de UMA linha do item (corpo x entrelinha), com
+ * a mesma folga lateral que o glifo tinha, para o par continuar alinhado pelo
+ * topo como as duas colunas de texto.
+ */
+const matchingLinkStyle = (fontSizePt: number) =>
+  ({
+    width: matchingLinkWidthPt(fontSizePt),
+    height: fontSizePt * BASE_LINE_HEIGHT,
+    marginHorizontal: 6,
+    flexShrink: 0,
+  }) as const;
 
 // Largura e altura explícitas: sem elas o @react-pdf mede o `Canvas` chamando o
 // `paint` com um contexto de medição e a linha colapsa.
@@ -185,7 +250,10 @@ export function PdfAnswer({
                   <PdfRichText content={pair.left} fontSize={elementSizes.alternative} />
                 </Text>
               </View>
-              <Text style={{ marginHorizontal: 6, flexShrink: 0 }}>↔</Text>
+              <Canvas
+                style={matchingLinkStyle(elementSizes.alternative)}
+                paint={paintMatchingLink}
+              />
               <View style={FLEX}>
                 <Text style={itemStyle}>
                   <PdfRichText content={pair.right} fontSize={elementSizes.alternative} />
