@@ -214,6 +214,32 @@ describe("BlockInserter", () => {
     }
   });
 
+  /*
+    Achado 0608: o "+" ganhou afordância permanente em ponteiro grosso (0207) e
+    alvo de toque contra-escalado (0236). Somados, viraram um círculo azul opaco
+    de até 57px de layout desenhado no MEIO da coluna, em repouso, sobre a
+    primeira linha do bloco seguinte — e, sendo o único `pointer-events-auto` da
+    faixa, o toque nessas palavras abria o menu em vez de pôr o cursor. O alvo
+    tem de morar FORA da coluna de texto (na goteira da folha), não entre as
+    duas linhas-guia.
+  */
+  it("ancora o + fora da coluna de texto, na goteira (achado 0608)", () => {
+    const { editor } = makeEditor();
+    render(<BlockInserter editor={editor} />);
+    const triggers = screen.getAllByRole("button", { name: /^Inserir bloco/ });
+    for (const trigger of triggers) {
+      const wrapper = trigger.parentElement as HTMLElement;
+      // Fora do fluxo da faixa e recuado para além da borda da coluna.
+      expect(wrapper.className).toContain("absolute");
+      expect(wrapper.className).toContain("right-full");
+      // E nenhum pedaço da faixa continua reservando espaço ao lado do alvo:
+      // a linha-guia é uma só, contínua, atrás do texto (decorativa).
+      const zone = trigger.closest("[data-block-gap]") as HTMLElement;
+      expect(zone.contains(wrapper)).toBe(true);
+      expect(zone.querySelectorAll("span.flex-1")).toHaveLength(1);
+    }
+  });
+
   it("recomputes positions on window resize", () => {
     const { editor, coordsAtPos } = makeEditor();
     render(<BlockInserter editor={editor} />);
