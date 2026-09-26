@@ -302,7 +302,9 @@ export function PdfAnswer({
       return (
         <View style={{ borderTopWidth: 1, borderLeftWidth: 1, borderColor: "#999999" }}>
           {header && (
-            <View style={{ flexDirection: "row" }}>
+            // `wrap={false}`: sem isso o react-pdf fatia a linha na virada de
+            // página e deixa a moldura numa folha e o texto na outra (0602).
+            <View wrap={false} style={{ flexDirection: "row" }}>
               {header.map((c, i) => (
                 <View key={i} style={cell}>
                   <Text style={{ fontWeight: "bold" }}>
@@ -313,7 +315,7 @@ export function PdfAnswer({
             </View>
           )}
           {body.map((row, r) => (
-            <View key={r} style={{ flexDirection: "row" }}>
+            <View key={r} wrap={false} style={{ flexDirection: "row" }}>
               {row.map((c, i) => (
                 <View key={i} style={cell}>
                   <Text>
