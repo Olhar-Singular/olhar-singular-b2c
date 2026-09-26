@@ -142,7 +142,21 @@ export function QuestionCard({
             onChange={(e) => setLocalCustomNumber(e.target.value.trim() || null)}
             placeholder={num?.toString() ?? ""}
             disabled={disabled}
-            className="inline-block w-8 bg-transparent text-center outline-none border-b border-surface-accent focus:border-surface-accent-ink disabled:opacity-60"
+            /**
+             * Achado 0368: o campo media 32 x 19 px. A largura de 32 px basta
+             * para "1" ou "1a", mas a altura era só a da linha de 13 px do
+             * `<span>` que o envolve: abaixo dos 24 px que o WCAG 2.5.8 pede
+             * para o alvo, e este é o primeiro controle que o Tab encontra
+             * quando o card abre (achado 0363). `h-6` dá os 24 px sem mexer no
+             * `py-2.5` do cabeçalho.
+             *
+             * O `outline-none` deixava o foco visível por conta de um fio de
+             * 1 px trocando de tom (`border-b`). O anel segue o mesmo padrão do
+             * 0212/0422: `focus-visible:outline` é quem declara o
+             * `outline-style` no Tailwind 3. Sem ele, `-2`/`-offset`/`-ring`
+             * só dão largura, offset e cor, e nada chega à tela.
+             */
+            className="inline-block h-6 w-8 bg-transparent text-center border-b border-surface-accent focus:border-surface-accent-ink focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ring disabled:opacity-60"
           />
         </span>
         <Select

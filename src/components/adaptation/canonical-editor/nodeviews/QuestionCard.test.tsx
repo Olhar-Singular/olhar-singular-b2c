@@ -419,4 +419,33 @@ describe("QuestionCard", () => {
     setup({ num: 2, disabled: true });
     expect(document.activeElement).toBe(screen.getByTestId("question-card"));
   });
+
+  // Achado 0368: o campo media 32x19px (w-8 sem altura propria, herdando a linha
+  // de 13px do <span>), abaixo do minimo de 24px do WCAG 2.5.8, e o unico sinal
+  // de foco era um fio de 1px trocando de tom, porque a classe zerava o outline.
+  describe("alvo e foco do número da questão (achado 0368)", () => {
+    const classesDoCampo = () => {
+      setup({ num: 2 });
+      return screen.getByLabelText("Número da questão").className.split(/\s+/);
+    };
+
+    it("tem altura de alvo de pelo menos 24px", () => {
+      const alturaEmPx = (token: string) => {
+        const m = /^(?:min-)?h-(\d+(?:\.\d+)?)$/.exec(token);
+        if (m) return Number(m[1]) * 4;
+        const arbitraria = /^(?:min-)?h-\[(\d+(?:\.\d+)?)(px|rem)\]$/.exec(token);
+        if (arbitraria) return Number(arbitraria[1]) * (arbitraria[2] === "rem" ? 16 : 1);
+        return 0;
+      };
+      const maior = Math.max(0, ...classesDoCampo().map(alturaEmPx));
+      expect(maior).toBeGreaterThanOrEqual(24);
+    });
+
+    it("não zera o outline e pinta um anel de foco de pelo menos 2px", () => {
+      const classes = classesDoCampo();
+      expect(classes).not.toContain("outline-none");
+      expect(classes).toContain("focus-visible:outline");
+      expect(classes).toContain("focus-visible:outline-2");
+    });
+  });
 });
