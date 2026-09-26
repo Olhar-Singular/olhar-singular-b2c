@@ -569,6 +569,26 @@
   border-color: var(--doc-rule-color, #767676);
 }
 
+/* O vão do filete no editor (achado 0188). O preflight do Tailwind zera a
+   margem de `hr` e a regra de espaçamento dos blocos de topo só mira
+   `h1, h2, h3, p`: o divisor era o único bloco sem vão próprio na folha do
+   Revisar, colado no bloco seguinte, enquanto a prévia e o PDF reservavam o vão
+   de bloco. Aqui a margem COLAPSA com a do vizinho, que é o que mantém um vão
+   só — a mesma conta que a prévia faz com `rowGap` e o PDF com `marginBottom`.
+   Os resets de ponta são os do achado 0186: vão é ENTRE blocos, e a folha já
+   aplica o padding da margem impressa. */
+.tiptap:not(.rich-text-field) > hr[data-type="divider"] {
+  margin: var(--doc-block-spacing, 1rem) 0;
+}
+
+.tiptap:not(.rich-text-field) > hr[data-type="divider"]:first-child {
+  margin-top: 0;
+}
+
+.tiptap:not(.rich-text-field) > hr[data-type="divider"]:last-child {
+  margin-bottom: 0;
+}
+
 /* Fórmula na folha: o `.katex` não tem NodeView nosso, então o tamanho vinha da
    folha de estilo que a própria biblioteca traz (`font-size: 1.21em`), escolhido
    por ninguém deste produto. Na tela isso desenhava a fórmula 1,12x a tinta do

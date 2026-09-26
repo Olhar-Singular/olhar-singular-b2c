@@ -12,7 +12,11 @@ export function DividerView({ block }: { block: DividerBlock }) {
   return (
     <hr
       data-testid="divider"
-      className="my-4"
+      /* Sem margem própria: o vão vem do `rowGap: var(--doc-block-spacing)` do
+         `CanonicalRenderer`. O `my-4` daqui era SOMADO a esse gap (gap de flex
+         não colapsa com margem), então a prévia abria 32 px de cada lado do
+         filete onde o papel imprime 16, e era o único vão do documento surdo ao
+         controle "Espaçamento" do Formato (achado 0188). */
       /* Cor pelo token de página (`RULE_COLOR`), não pelo `border-border` do
          chrome do app: aquele token dava 1,33:1 sobre o papel e a divisória
          sumia na impressão, além de divergir do traço do PDF (achado 0148). */
