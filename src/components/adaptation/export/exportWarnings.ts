@@ -2,10 +2,11 @@
  * O que cada formato de exportação NÃO carrega fiel.
  *
  * Mora fora de `exportDocx`/`exportPdf` porque a mesma varredura do documento
- * serve aos dois: a perda de fórmula é do Word E do PDF (o `mathToPdfText` v1
- * imprime o LaTeX cru em monoespaçada). O defeito que isto fecha não é a
- * limitação, é o silêncio: a prévia do passo Exportar mostra a fórmula
- * tipografada pelo KaTeX e o arquivo entrega `a^2 + b^2 = c^2`.
+ * serve aos dois: a perda de fórmula é do Word E do PDF (com descrição, o
+ * arquivo imprime a descrição por extenso; sem ela, o LaTeX cru, sempre em
+ * monoespaçada). O defeito que isto fecha não é a limitação, é o silêncio: a
+ * prévia do passo Exportar mostra a fórmula tipografada pelo KaTeX e o arquivo
+ * entrega outra coisa.
  */
 
 import {
@@ -19,6 +20,7 @@ import type {
   RichText,
 } from "@/lib/adaptation/canonical/schema";
 import { documentToPlainText } from "@/lib/adaptation/canonical/plainText";
+import { readableMathText } from "../render/mathAtom";
 
 /** Walk every block, including question stems (which nest). */
 export function everyBlock(blocks: Block[]): Block[] {
@@ -87,12 +89,59 @@ function richTextsOf(block: Block): RichText[] {
  * LaTeX chegar ao arquivo sem nenhum aviso.
  */
 /**
- * A mesma frase serve ao PDF, ao Word e ao "Copiar": a perda é uma só (o LaTeX
- * cru no lugar da fórmula tipografada). Uma constante impede que uma das
- * superfícies passe a descrever a perda de outro jeito.
+ * A perda da fórmula SEM descrição: o LaTeX cru no lugar da fórmula
+ * tipografada. Vale para o PDF, o Word e o "Copiar" — este último sempre, já
+ * que `documentToPlainText` projeta o LaTeX mesmo quando o nó tem `alt`.
  */
 export const MATH_LOSS_WARNING =
   "As fórmulas saem como texto LaTeX, sem formatação matemática.";
+
+/**
+ * A perda da fórmula COM descrição (achado 0190).
+ *
+ * Desde o achado 0401 os dois ARQUIVOS imprimem o `alt` do nó quando ele
+ * existe — e ele quase sempre existe, porque a IA preenche o campo. O diálogo,
+ * porém, seguia prometendo LaTeX cru: quem lia baixava achando que receberia
+ * `a^2 + b^2 = c^2` para corrigir à mão e recebia uma frase em português, que é
+ * uma decisão pedagógica bem diferente e justamente a perda que o aviso existe
+ * para declarar.
+ */
+export const MATH_ALT_LOSS_WARNING =
+  "As fórmulas que têm descrição saem como essa descrição por extenso, em português, " +
+  "no lugar da fórmula tipografada.";
+
+/** Todo nó de fórmula do documento, inline ou de bloco, com o `alt` que carrega. */
+function mathNodes(document: CanonicalDocument): { latex: string; alt?: string }[] {
+  const blocks = everyBlock(document.blocks);
+  const blockNodes = blocks
+    .filter((block) => block.type === "blockMath")
+    .map((block) => ({ latex: block.latex, alt: block.alt }));
+  const inlineNodes = blocks
+    .flatMap(richTextsOf)
+    .flatMap((rich) => rich.filter((inline) => inline.type === "inlineMath"))
+    .map((inline) => ({ latex: inline.latex, alt: inline.alt }));
+  return [...blockNodes, ...inlineNodes];
+}
+
+/**
+ * O que os ARQUIVOS perdem da fórmula, decidido pela MESMA função que decide a
+ * projeção (`readableMathText`).
+ *
+ * Texto e projeção saem do mesmo ponto de propósito: foi a divergência entre os
+ * dois que produziu o 0190, quando só a projeção mudou. Documento misto declara
+ * as duas perdas, porque as duas acontecem no mesmo arquivo.
+ */
+export function mathLossWarnings(document: CanonicalDocument): string[] {
+  const nodes = mathNodes(document);
+  const warnings: string[] = [];
+  if (nodes.some((node) => readableMathText(node) !== null)) {
+    warnings.push(MATH_ALT_LOSS_WARNING);
+  }
+  if (nodes.some((node) => readableMathText(node) === null)) {
+    warnings.push(MATH_LOSS_WARNING);
+  }
+  return warnings;
+}
 
 /**
  * A outra metade da perda da fórmula, que o diálogo calava (achado 0415).
@@ -114,14 +163,7 @@ export const MATH_TYPOGRAPHY_WARNING =
   "corpo próprio, mesmo que você tenha escolhido outra fonte no Formato.";
 
 export function documentHasMath(document: CanonicalDocument): boolean {
-  const blocks = everyBlock(document.blocks);
-  // As duas varreduras acontecem antes do `||`: curto-circuitar no blockMath
-  // deixaria o caminho do inline sem exercício.
-  const hasBlockMath = blocks.some((block) => block.type === "blockMath");
-  const hasInlineMath = blocks
-    .flatMap(richTextsOf)
-    .some((rich) => rich.some((inline) => inline.type === "inlineMath"));
-  return hasBlockMath || hasInlineMath;
+  return mathNodes(document).length > 0;
 }
 
 /**
@@ -198,7 +240,7 @@ export function pdfExportWarnings(
   }
 
   if (documentHasMath(document)) {
-    warnings.push(MATH_LOSS_WARNING);
+    warnings.push(...mathLossWarnings(document));
     warnings.push(MATH_TYPOGRAPHY_WARNING);
   }
 
@@ -233,11 +275,13 @@ export function pdfExportWarnings(
 /**
  * O que o "Copiar" não carrega fiel (0411).
  *
- * `documentToPlainText` emite o LaTeX cru, byte a byte o mesmo que o PDF
- * imprime — mas o botão da cópia era o único do grupo que entregava essa perda
+ * `documentToPlainText` emite o LaTeX cru SEMPRE, inclusive para o nó que tem
+ * descrição (ao contrário do PDF e do Word, achado 0190) — mas o botão da cópia
+ * era o único do grupo que entregava essa perda
  * calado, com um toast de sucesso, enquanto os dois vizinhos abriam um diálogo.
  * Quem copia é justamente quem vai colar num e-mail ou no Docs e imprimir sem
- * revisar. A frase é a mesma do PDF de propósito: é a mesma perda.
+ * revisar. A frase é a do LaTeX cru porque é isso que a cópia entrega, com ou
+ * sem descrição no nó.
  *
  * A cópia é texto puro, então nada aqui fala de imagem ou de fonte: o `alt`
  * nunca foi prometido e não há tipografia a perder.

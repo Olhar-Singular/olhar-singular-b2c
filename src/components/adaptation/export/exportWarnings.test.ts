@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { copyExportWarnings, MATH_LOSS_WARNING, pdfExportWarnings } from "./exportWarnings";
+import { docxExportWarnings } from "./exportDocx";
 import type { CanonicalDocument } from "@/lib/adaptation/canonical/schema";
 
 const id = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, "0")}`;
@@ -258,5 +259,67 @@ describe("aviso de caractere fora da CP1252 (0444)", () => {
 
   it("o Word não herda o aviso: a fonte é resolvida na máquina de quem abre", () => {
     expect(copyExportWarnings(withText("Se 3 → 9"))).toEqual([]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 0190 — desde que o math passou a imprimir o `alt` (0401), o aviso continuava
+// prometendo LaTeX cru. Quem lia decidia baixar achando que ia receber
+// `a^2+b^2=c^2` para corrigir à mão, e recebia uma frase em português.
+// ---------------------------------------------------------------------------
+
+describe("aviso de perda da fórmula segue a projeção real (0190)", () => {
+  const comAlt = doc([
+    { id: id(1), type: "blockMath", latex: "a^2 + b^2 = c^2", alt: "teorema de pitágoras" },
+  ]);
+
+  it("com descrição, o PDF avisa da descrição e NÃO promete LaTeX", () => {
+    const warnings = pdfExportWarnings(comAlt);
+    expect(warnings.join(" ")).toMatch(/descrição/i);
+    expect(warnings).not.toContain(MATH_LOSS_WARNING);
+  });
+
+  it("com descrição, o Word avisa da descrição e NÃO promete LaTeX", () => {
+    const warnings = docxExportWarnings(comAlt);
+    expect(warnings.join(" ")).toMatch(/descrição/i);
+    expect(warnings).not.toContain(MATH_LOSS_WARNING);
+  });
+
+  it("sem descrição segue valendo o LaTeX cru", () => {
+    const semAlt = doc([{ id: id(1), type: "blockMath", latex: "a^2" }]);
+    expect(pdfExportWarnings(semAlt)).toContain(MATH_LOSS_WARNING);
+    expect(pdfExportWarnings(semAlt).join(" ")).not.toMatch(/descrição/i);
+  });
+
+  it("documento misto declara as duas perdas", () => {
+    const misto = doc([
+      { id: id(1), type: "blockMath", latex: "a^2", alt: "a ao quadrado" },
+      {
+        id: id(2),
+        type: "paragraph",
+        content: [{ type: "inlineMath", latex: "E = mc^2" }],
+      },
+    ]);
+    const warnings = pdfExportWarnings(misto);
+    expect(warnings.join(" ")).toMatch(/descrição/i);
+    expect(warnings).toContain(MATH_LOSS_WARNING);
+  });
+
+  it("inline com descrição também conta como perda de descrição", () => {
+    const warnings = pdfExportWarnings(
+      doc([
+        {
+          id: id(1),
+          type: "paragraph",
+          content: [{ type: "inlineMath", latex: "E = mc^2", alt: "E igual a m c ao quadrado" }],
+        },
+      ]),
+    );
+    expect(warnings.join(" ")).toMatch(/descrição/i);
+    expect(warnings).not.toContain(MATH_LOSS_WARNING);
+  });
+
+  it('o "Copiar" continua entregando LaTeX cru mesmo com descrição', () => {
+    expect(copyExportWarnings(comAlt)).toEqual([MATH_LOSS_WARNING]);
   });
 });

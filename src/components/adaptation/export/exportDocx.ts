@@ -75,7 +75,7 @@ import { indexToLetter } from "../render/letters";
 import {
   documentHasMath,
   everyBlock,
-  MATH_LOSS_WARNING,
+  mathLossWarnings,
   MATH_TYPOGRAPHY_WARNING,
 } from "./exportWarnings";
 import { perQuestionBreakFlags } from "../render/perQuestionBreaks";
@@ -647,7 +647,7 @@ export function docxExportWarnings(
   // A varredura de math (inline em qualquer campo RichText, mais blockMath) é
   // a mesma do PDF e mora em `exportWarnings`.
   if (documentHasMath(document)) {
-    warnings.push(MATH_LOSS_WARNING);
+    warnings.push(...mathLossWarnings(document));
     // A fonte da fórmula é `MATH_FONT`, constante, e não a do documento: a
     // mesma perda do PDF, e a mesma frase (achado 0415).
     warnings.push(MATH_TYPOGRAPHY_WARNING);
