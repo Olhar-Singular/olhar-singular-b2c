@@ -11,7 +11,7 @@
  */
 
 import { Fragment, type ComponentProps } from "react";
-import type { QuestionAnswer } from "@/lib/adaptation/canonical/schema";
+import type { QuestionAnswer, RichText } from "@/lib/adaptation/canonical/schema";
 import { indexToLetter } from "@/components/adaptation/render/letters";
 import { ALTERNATIVE_MARKER_CLASS } from "@/components/adaptation/render/answers/markerColumn";
 import {
@@ -53,6 +53,22 @@ function Bullet() {
  */
 function PreviewField(props: ComponentProps<typeof RichTextField>) {
   return <RichTextField {...props} plain />;
+}
+
+/**
+ * Rótulo acessível de uma célula do corpo da tabela. Cita o nome da coluna
+ * (o texto do cabeçalho) para que o leitor de tela diga o que o valor é, e não
+ * só a coordenada. Cabeçalho sem texto puro (só fórmula, ou vazio) volta para a
+ * coordenada, que é sempre inequívoca.
+ */
+function tableCellLabel(header: RichText | undefined, rowIndex: number, colIndex: number): string {
+  const name = (header ?? [])
+    .map((node) => (node.type === "text" ? node.text : ""))
+    .join("")
+    .trim();
+  return name
+    ? `Célula, ${name}, linha ${rowIndex + 1}`
+    : `Célula linha ${rowIndex + 1} coluna ${colIndex + 1}`;
 }
 
 export function AnswerPreview({ answer, onChange, disabled = false }: AnswerPreviewProps) {
@@ -178,20 +194,48 @@ export function AnswerPreview({ answer, onChange, disabled = false }: AnswerPrev
         </div>
       );
 
-    case "table":
+    case "table": {
+      // rows[0] é cabeçalho — mesma leitura da prévia (TableView), do PDF
+      // (PdfAnswer) e do Word (exportDocx). Aqui isso precisa ser visível E
+      // semântico: sem <th scope="col"> o leitor de tela anuncia a tabela sem
+      // nome de coluna, e sem peso o professor edita sem saber qual linha vira
+      // cabeçalho no arquivo. O peso (font-semibold, sem fundo) é o que o PDF
+      // imprime, então a folha na tela continua igual ao papel.
+      const [header, ...body] = answer.rows;
       return (
         <table className="w-full border-collapse" data-testid="answer-preview-table">
+          {header && (
+            <thead>
+              <tr>
+                {header.map((cell, ci) => (
+                  <th
+                    key={ci}
+                    scope="col"
+                    className="min-w-[60px] border border-surface-line-2 p-1.5 text-left align-top font-semibold"
+                  >
+                    <PreviewField
+                      value={cell}
+                      disabled={disabled}
+                      onChange={(rt) => onChange(setTableCell(answer, 0, ci, rt))}
+                      placeholder="Cabeçalho"
+                      ariaLabel={`Cabeçalho da coluna ${ci + 1}`}
+                    />
+                  </th>
+                ))}
+              </tr>
+            </thead>
+          )}
           <tbody>
-            {answer.rows.map((row, ri) => (
+            {body.map((row, ri) => (
               <tr key={ri}>
                 {row.map((cell, ci) => (
                   <td key={ci} className="min-w-[60px] border border-surface-line-2 p-1.5 align-top">
                     <PreviewField
                       value={cell}
                       disabled={disabled}
-                      onChange={(rt) => onChange(setTableCell(answer, ri, ci, rt))}
+                      onChange={(rt) => onChange(setTableCell(answer, ri + 1, ci, rt))}
                       placeholder="Célula"
-                      ariaLabel={`Célula linha ${ri + 1} coluna ${ci + 1}`}
+                      ariaLabel={tableCellLabel(header?.[ci], ri, ci)}
                     />
                   </td>
                 ))}
@@ -200,6 +244,7 @@ export function AnswerPreview({ answer, onChange, disabled = false }: AnswerPrev
           </tbody>
         </table>
       );
+    }
 
     case "fillBlank":
       return null;

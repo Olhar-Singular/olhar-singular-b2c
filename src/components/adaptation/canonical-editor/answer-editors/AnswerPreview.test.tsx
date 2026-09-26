@@ -170,14 +170,84 @@ describe("AnswerPreview — matching", () => {
 });
 
 describe("AnswerPreview — table", () => {
-  const answer: QuestionAnswer = { kind: "table", rows: [[t("a"), t("b")]] };
+  const answer: QuestionAnswer = {
+    kind: "table",
+    rows: [
+      [t("Substância"), t("Estado")],
+      [t("Água"), t("Líquido")],
+    ],
+  };
 
   it("renders editable cells in a grid", () => {
     const onChange = vi.fn();
     render(<AnswerPreview answer={answer} onChange={onChange} />);
-    expect(screen.getByLabelText("Célula linha 1 coluna 1")).toBeInTheDocument();
-    fireEvent.change(screen.getByLabelText("Célula linha 1 coluna 2"), { target: { value: "z" } });
+    expect(screen.getByLabelText("Cabeçalho da coluna 1")).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText("Célula, Estado, linha 1"), { target: { value: "z" } });
     expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ kind: "table" }));
+  });
+
+  // 0604: as outras três superfícies (prévia, PDF, Word) tratam rows[0] como
+  // cabeçalho; a de edição desenhava tudo em <td> com o mesmo peso, então o
+  // professor editava sem ver qual linha vira cabeçalho no arquivo.
+  it("renders rows[0] as a real header row, like the preview / PDF / Word", () => {
+    render(<AnswerPreview answer={answer} onChange={vi.fn()} />);
+    const table = screen.getByTestId("answer-preview-table");
+    expect(table.tHead).not.toBeNull();
+    const headers = table.querySelectorAll("th");
+    expect(headers).toHaveLength(2);
+    for (const th of headers) {
+      expect(th).toHaveAttribute("scope", "col");
+      expect(th.className).toContain("font-semibold");
+    }
+    expect(table.querySelectorAll("tbody tr")).toHaveLength(1);
+  });
+
+  it("names the column in each body cell label so a screen reader says what the value is", () => {
+    render(<AnswerPreview answer={answer} onChange={vi.fn()} />);
+    expect(screen.getByLabelText("Célula, Substância, linha 1")).toBeInTheDocument();
+    expect(screen.getByLabelText("Célula, Estado, linha 1")).toBeInTheDocument();
+  });
+
+  it("falls back to the column number when the header cell has no plain text", () => {
+    const mathHeader: QuestionAnswer = {
+      kind: "table",
+      rows: [
+        [[{ type: "inlineMath", latex: "x^2", alt: "x ao quadrado" }], []],
+        [t("1"), t("2")],
+      ],
+    };
+    render(<AnswerPreview answer={mathHeader} onChange={vi.fn()} />);
+    expect(screen.getByLabelText("Célula linha 1 coluna 1")).toBeInTheDocument();
+    expect(screen.getByLabelText("Célula linha 1 coluna 2")).toBeInTheDocument();
+  });
+
+  it("renders a header-only table without an empty body", () => {
+    render(<AnswerPreview answer={{ kind: "table", rows: [[t("só")]] }} onChange={vi.fn()} />);
+    const table = screen.getByTestId("answer-preview-table");
+    expect(table.querySelectorAll("th")).toHaveLength(1);
+    expect(table.querySelectorAll("tbody tr")).toHaveLength(0);
+  });
+
+  it("edits the header row in place, writing back to rows[0]", () => {
+    const onChange = vi.fn();
+    render(<AnswerPreview answer={answer} onChange={onChange} />);
+    fireEvent.change(screen.getByLabelText("Cabeçalho da coluna 2"), { target: { value: "Fase" } });
+    expect(onChange).toHaveBeenCalledWith(
+      expect.objectContaining({ rows: [[t("Substância"), t("Fase")], [t("Água"), t("Líquido")]] })
+    );
+  });
+
+  it("labels by coordinate a body cell whose column has no header", () => {
+    const ragged: QuestionAnswer = { kind: "table", rows: [[t("A")], [t("1"), t("2")]] };
+    render(<AnswerPreview answer={ragged} onChange={vi.fn()} />);
+    expect(screen.getByLabelText("Célula linha 1 coluna 2")).toBeInTheDocument();
+  });
+
+  it("renders nothing structural when there are no rows", () => {
+    render(<AnswerPreview answer={{ kind: "table", rows: [] }} onChange={vi.fn()} />);
+    const table = screen.getByTestId("answer-preview-table");
+    expect(table.tHead).toBeNull();
+    expect(table.querySelectorAll("tr")).toHaveLength(0);
   });
 });
 
