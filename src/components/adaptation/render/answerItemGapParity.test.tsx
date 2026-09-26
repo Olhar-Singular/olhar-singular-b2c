@@ -17,6 +17,10 @@ import type { ReactElement } from "react";
 import type { QuestionAnswer } from "@/lib/adaptation/canonical/schema";
 import { ANSWER_ITEM_GAP_PX, ANSWER_ITEM_GAP_PT } from "./pageTokens";
 import { MultipleChoiceView } from "./answers/MultipleChoiceView";
+import { CheckboxView } from "./answers/CheckboxView";
+import { TrueFalseView } from "./answers/TrueFalseView";
+import { OrderingView } from "./answers/OrderingView";
+import { MatchingView } from "./answers/MatchingView";
 import { PdfAnswer } from "./pdf/PdfAnswer";
 import { AnswerPreview } from "../canonical-editor/answer-editors/AnswerPreview";
 
@@ -57,6 +61,75 @@ describe("itens de resposta — paridade de espaçamento entre as três superfí
 
   it("espaça as alternativas do PDF pelo equivalente em pt de ANSWER_ITEM_GAP_PX", () => {
     expect(firstRowStyle(PdfAnswer({ answer: MC }) as ReactElement).marginBottom).toBe(
+      ANSWER_ITEM_GAP_PT,
+    );
+  });
+});
+
+/**
+ * Achado 0196: a unificação do 0313 só alcançou a múltipla escolha. Nos demais
+ * tipos cada superfície trazia o vão escrito à mão numa classe do Tailwind
+ * (`gap-2.5` = 10px no Revisar, `space-y-2` = 8px na prévia, `space-y-1` = 4px
+ * na ordenação), e o PDF — que já aplica `ANSWER_ITEM_GAP_PT` a todos os tipos
+ * pelo `ROW` — ficava sozinho. O passo diferente é cumulativo e muda a régua de
+ * virada de folha: quem conta páginas A4 é a geometria do DOM.
+ */
+
+const CHECKBOX: Extract<QuestionAnswer, { kind: "checkbox" }> = {
+  kind: "checkbox",
+  items: [
+    { id: "c1", content: [], checked: false },
+    { id: "c2", content: [], checked: false },
+  ],
+};
+
+const TRUE_FALSE: Extract<QuestionAnswer, { kind: "trueFalse" }> = {
+  kind: "trueFalse",
+  items: [
+    { id: "t1", content: [], value: true },
+    { id: "t2", content: [], value: false },
+  ],
+};
+
+const ORDERING: Extract<QuestionAnswer, { kind: "ordering" }> = {
+  kind: "ordering",
+  items: [
+    { id: "o1", content: [], position: 0 },
+    { id: "o2", content: [], position: 1 },
+  ],
+};
+
+const MATCHING: Extract<QuestionAnswer, { kind: "matching" }> = {
+  kind: "matching",
+  pairs: [
+    { id: "p1", left: [], right: [] },
+    { id: "p2", left: [], right: [] },
+  ],
+};
+
+const ITEM_ANSWERS: Array<[string, QuestionAnswer, ReactElement]> = [
+  ["multipleChoice", MC, <MultipleChoiceView answer={MC} />],
+  ["checkbox", CHECKBOX, <CheckboxView answer={CHECKBOX} />],
+  ["trueFalse", TRUE_FALSE, <TrueFalseView answer={TRUE_FALSE} />],
+  ["ordering", ORDERING, <OrderingView answer={ORDERING} />],
+  ["matching", MATCHING, <MatchingView answer={MATCHING} />],
+];
+
+describe("todos os tipos com lista de itens usam o mesmo vão nas três superfícies", () => {
+  it.each(ITEM_ANSWERS)("%s: folha do Revisar", (kind, answer) => {
+    render(<AnswerPreview answer={answer} onChange={() => {}} />);
+    expect(screen.getByTestId(`answer-preview-${kind}`).style.rowGap).toBe(
+      `${ANSWER_ITEM_GAP_PX}px`,
+    );
+  });
+
+  it.each(ITEM_ANSWERS)("%s: prévia do Exportar", (kind, _answer, view) => {
+    render(view);
+    expect(screen.getByTestId(`answer-${kind}`).style.rowGap).toBe(`${ANSWER_ITEM_GAP_PX}px`);
+  });
+
+  it.each(ITEM_ANSWERS)("%s: PDF", (_kind, answer) => {
+    expect(firstRowStyle(PdfAnswer({ answer }) as ReactElement).marginBottom).toBe(
       ANSWER_ITEM_GAP_PT,
     );
   });

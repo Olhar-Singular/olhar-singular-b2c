@@ -4,13 +4,18 @@
  */
 
 import type { QuestionAnswer } from "@/lib/adaptation/canonical/schema";
+import { ANSWER_ITEM_GAP_PX } from "../pageTokens";
 import { RichTextView } from "../RichTextView";
 
 type MatchingAnswer = Extract<QuestionAnswer, { kind: "matching" }>;
 
 export function MatchingView({ answer }: { answer: MatchingAnswer }) {
   return (
-    <ul data-testid="answer-matching" className="space-y-2">
+    <ul
+      data-testid="answer-matching"
+      className="flex flex-col"
+      style={{ rowGap: `${ANSWER_ITEM_GAP_PX}px` }}
+    >
       {answer.pairs.map((pair) => (
         <li key={pair.id} className="flex items-center gap-2">
           <span className="flex-1">

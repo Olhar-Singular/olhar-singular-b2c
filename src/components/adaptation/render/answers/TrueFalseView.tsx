@@ -6,6 +6,7 @@
 
 import type { QuestionAnswer } from "@/lib/adaptation/canonical/schema";
 import {
+  ANSWER_ITEM_GAP_PX,
   TRUE_FALSE_MARKER_GAP_PX,
   TRUE_FALSE_MARKER_TEXT,
 } from "@/components/adaptation/render/pageTokens";
@@ -15,7 +16,11 @@ type TrueFalseAnswer = Extract<QuestionAnswer, { kind: "trueFalse" }>;
 
 export function TrueFalseView({ answer }: { answer: TrueFalseAnswer }) {
   return (
-    <ul data-testid="answer-trueFalse" className="space-y-2">
+    <ul
+      data-testid="answer-trueFalse"
+      className="flex flex-col"
+      style={{ rowGap: `${ANSWER_ITEM_GAP_PX}px` }}
+    >
       {answer.items.map((item) => (
         <li
           key={item.id}

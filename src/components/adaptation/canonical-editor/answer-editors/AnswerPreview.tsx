@@ -125,7 +125,11 @@ export function AnswerPreview({ answer, onChange, disabled = false }: AnswerPrev
 
     case "checkbox":
       return (
-        <div className="flex flex-col gap-2" data-testid="answer-preview-checkbox">
+        <div
+          className="flex flex-col"
+          style={{ rowGap: `${ANSWER_ITEM_GAP_PX}px` }}
+          data-testid="answer-preview-checkbox"
+        >
           {answer.items.map((item, i) => (
             <div key={item.id} className="flex min-w-0 items-start gap-2.5">
               <Bullet />
@@ -143,7 +147,11 @@ export function AnswerPreview({ answer, onChange, disabled = false }: AnswerPrev
 
     case "trueFalse":
       return (
-        <div className="flex flex-col gap-2.5" data-testid="answer-preview-trueFalse">
+        <div
+          className="flex flex-col"
+          style={{ rowGap: `${ANSWER_ITEM_GAP_PX}px` }}
+          data-testid="answer-preview-trueFalse"
+        >
           {answer.items.map((item, i) => (
             <div
               key={item.id}
@@ -173,7 +181,11 @@ export function AnswerPreview({ answer, onChange, disabled = false }: AnswerPrev
 
     case "ordering":
       return (
-        <div className="flex flex-col gap-2.5" data-testid="answer-preview-ordering">
+        <div
+          className="flex flex-col"
+          style={{ rowGap: `${ANSWER_ITEM_GAP_PX}px` }}
+          data-testid="answer-preview-ordering"
+        >
           {answer.items.map((item, i) => (
             <div key={item.id} className="flex min-w-0 items-center gap-2.5">
               <span
@@ -197,7 +209,11 @@ export function AnswerPreview({ answer, onChange, disabled = false }: AnswerPrev
 
     case "matching":
       return (
-        <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-x-4 gap-y-2.5" data-testid="answer-preview-matching">
+        <div
+          className="grid grid-cols-[1fr_auto_1fr] items-center gap-x-4"
+          style={{ rowGap: `${ANSWER_ITEM_GAP_PX}px` }}
+          data-testid="answer-preview-matching"
+        >
           {answer.pairs.map((pair, i) => (
             <Fragment key={pair.id}>
               <PreviewField
