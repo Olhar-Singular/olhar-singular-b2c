@@ -3,6 +3,15 @@ import { createClient } from "@supabase/supabase-js";
 import { logAiUsage } from "../_shared/logAiUsage.ts";
 import { getAiConfig } from "../_shared/aiConfig.ts";
 import { chargeCredits, type CreditRpcResult } from "../_shared/credits.ts";
+import {
+  admitTurn,
+  buildAiContext,
+  parseUserTurn,
+  sessionTitle,
+  TURN_IN_FLIGHT_MESSAGE,
+  type ChatMessage,
+} from "../_shared/chatTurn.ts";
+import { errorResponse } from "../_shared/publicError.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -12,8 +21,6 @@ const corsHeaders = {
 
 const MAX_SESSIONS = 10;
 const SESSION_CREDIT_COST = 3;
-const MAX_EXCHANGES_PER_SESSION = 20;
-const AI_CONTEXT_WINDOW = 10;
 
 const SYSTEM_PROMPT = `Você é ISA (Inteligência de Suporte à Aprendizagem), assistente pedagógico do Olhar Singular — uma ferramenta de apoio para professores, pedagogos e terapeutas.
 
@@ -37,7 +44,12 @@ Você pode:
 
 Sempre finalize com: "A decisão final é sempre do profissional."`;
 
-type ChatMessage = { role: "user" | "assistant"; content: string };
+function json(body: unknown, status = 200) {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { ...corsHeaders, "Content-Type": "application/json" },
+  });
+}
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -47,10 +59,7 @@ serve(async (req) => {
   try {
     const authHeader = req.headers.get("Authorization");
     if (!authHeader?.startsWith("Bearer ")) {
-      return new Response(JSON.stringify({ error: "Não autorizado." }), {
-        status: 401,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      return json({ error: "Não autorizado." }, 401);
     }
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
@@ -62,29 +71,30 @@ serve(async (req) => {
     });
     const { data: { user }, error: authError } = await userClient.auth.getUser();
     if (authError || !user) {
-      return new Response(JSON.stringify({ error: "Não autorizado." }), {
-        status: 401,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      return json({ error: "Não autorizado." }, 401);
     }
 
     const admin = createClient(supabaseUrl, supabaseServiceKey);
 
     const body = await req.json();
     const { messages, session_id } = body as {
-      messages?: ChatMessage[];
+      messages?: unknown;
       session_id?: string;
     };
 
-    if (!messages || !Array.isArray(messages) || messages.length === 0) {
-      return new Response(JSON.stringify({ error: "Campo 'messages' obrigatório e não pode estar vazio." }), {
-        status: 400,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+    // Only the LAST element of `messages` is read, as the new user turn; the
+    // rest of what the client sends is ignored. Validated before any charge.
+    const parsed = parseUserTurn(messages);
+    if (!parsed.ok) {
+      return json({ error: parsed.error }, 400);
     }
+    const turn = parsed.turn;
 
     let activeSessionId: string;
-    let sessionTitle: string | undefined;
+    let title: string | undefined;
+    // The stored transcript before this turn: the AI context is built on it,
+    // it is what gets persisted, and a failed turn puts it back.
+    let history: ChatMessage[] = [];
 
     if (!session_id) {
       // ── New session flow ─────────────────────────────────────────────────
@@ -95,18 +105,15 @@ serve(async (req) => {
 
       if (countError) {
         console.error("count sessions error:", countError);
-        return new Response(JSON.stringify({ error: "Erro interno." }), {
-          status: 500,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
+        return json({ error: "Erro interno." }, 500);
       }
 
       if ((count ?? 0) >= MAX_SESSIONS) {
-        return new Response(
-          JSON.stringify({
+        return json(
+          {
             error: `Limite de ${MAX_SESSIONS} conversas atingido. Exclua uma conversa antiga para iniciar uma nova.`,
-          }),
-          { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          },
+          429,
         );
       }
 
@@ -127,175 +134,194 @@ serve(async (req) => {
       });
 
       if (charge.status === "insufficient") {
-        return new Response(
-          JSON.stringify({ error: "Créditos insuficientes.", balance: charge.balance ?? 0 }),
-          { status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
+        return json({ error: "Créditos insuficientes.", balance: charge.balance ?? 0 }, 402);
       }
       if (charge.status === "error") {
         if (charge.reason === "rpc") console.error("deduct_credits error:", charge.cause);
-        return new Response(
-          JSON.stringify({
+        return json(
+          {
             error: charge.reason === "rpc"
               ? "Erro ao verificar créditos."
               : "Erro interno ao processar créditos.",
-          }),
-          { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          },
+          500,
         );
       }
 
-      // Title: first 60 chars of first user message
-      const firstUserMsg = messages.find((m) => m.role === "user");
-      sessionTitle = (firstUserMsg?.content ?? "Nova conversa").slice(0, 60);
+      title = sessionTitle(turn);
 
+      // The row is born holding the turn, like a claimed one (see below).
       const { data: newSession, error: insertError } = await admin
         .from("chat_sessions")
-        .insert({ user_id: user.id, title: sessionTitle, messages: [] })
+        .insert({ user_id: user.id, title, messages: [turn] })
         .select("id")
         .single();
 
       if (insertError || !newSession) {
         console.error("insert session error:", insertError);
-        return new Response(JSON.stringify({ error: "Erro ao criar sessão." }), {
-          status: 500,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
+        return json({ error: "Erro ao criar sessão." }, 500);
       }
 
       activeSessionId = newSession.id;
     } else {
       // ── Existing session flow ─────────────────────────────────────────────
+      // Read through the user's client: RLS is what proves the session is theirs.
       const { data: existing, error: sessionError } = await userClient
         .from("chat_sessions")
-        .select("id")
+        .select("id, messages, updated_at")
         .eq("id", session_id)
         .single();
 
       if (sessionError || !existing) {
-        return new Response(JSON.stringify({ error: "Sessão não encontrada ou sem permissão." }), {
-          status: 403,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
+        return json({ error: "Sessão não encontrada ou sem permissão." }, 403);
+      }
+
+      // Exchange limit and "a turn is still in flight" come from the STORED
+      // transcript, never from the client's copy.
+      const admission = admitTurn(
+        { messages: existing.messages, updatedAt: existing.updated_at },
+        Date.now(),
+      );
+      if (!admission.ok) {
+        return json({ error: admission.error }, admission.status);
+      }
+      history = admission.history;
+
+      // Claim the turn BEFORE paying for the AI. The write only lands while the
+      // row is still the one just read (the BEFORE UPDATE trigger bumps
+      // updated_at on every write), so of two concurrent requests only one gets
+      // through, and every later one sees the pending turn and is refused.
+      const { data: claimed, error: claimError } = await admin
+        .from("chat_sessions")
+        .update({ messages: [...history, turn] })
+        .eq("id", session_id)
+        .eq("updated_at", existing.updated_at)
+        .select("id")
+        .maybeSingle();
+
+      if (claimError) {
+        console.error("claim turn error:", claimError, "session:", session_id);
+        return json({ error: "Erro interno." }, 500);
+      }
+      if (!claimed) {
+        return json({ error: TURN_IN_FLIGHT_MESSAGE }, 409);
       }
 
       activeSessionId = session_id;
     }
 
-    // ── Enforce exchange limit ────────────────────────────────────────────
-    const completedExchanges = messages.filter((m) => m.role === "assistant").length;
-    if (completedExchanges >= MAX_EXCHANGES_PER_SESSION) {
-      return new Response(
-        JSON.stringify({ error: "Limite de mensagens atingido. Inicie uma nova conversa." }),
-        { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
+    // A turn that gets no reply is taken back, so the session neither keeps it
+    // unanswered nor stays blocked until the in-flight window runs out.
+    const releaseTurn = async () => {
+      const { error } = await admin
+        .from("chat_sessions")
+        .update({ messages: history })
+        .eq("id", activeSessionId);
+      if (error) console.error("release turn error:", error, "session:", activeSessionId);
+    };
+    const failTurn = async (status: number, message: string) => {
+      await releaseTurn();
+      return json({ error: message }, status);
+    };
 
-    // ── Call Gemini Flash ─────────────────────────────────────────────────
-    const ai = getAiConfig();
-    const modelName = ai.resolveModel("google/gemini-2.5-flash");
-
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 60_000);
-    const aiStartTime = Date.now();
-
-    let aiResponse: Response;
     try {
-      aiResponse = await fetch(`${ai.baseUrl}/chat/completions`, {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${ai.apiKey}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
+      // ── Call Gemini Flash ───────────────────────────────────────────────
+      const ai = getAiConfig();
+      const modelName = ai.resolveModel("google/gemini-2.5-flash");
+
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 60_000);
+      const aiStartTime = Date.now();
+
+      let aiResponse: Response;
+      try {
+        aiResponse = await fetch(`${ai.baseUrl}/chat/completions`, {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${ai.apiKey}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            model: modelName,
+            messages: [
+              { role: "system", content: SYSTEM_PROMPT },
+              ...buildAiContext(history, turn),
+            ],
+            max_tokens: 2000,
+          }),
+          signal: controller.signal,
+        });
+      } catch (fetchErr: unknown) {
+        const isTimeout = (fetchErr as { name?: string })?.name === "AbortError";
+        logAiUsage({
+          user_id: user.id,
+          action_type: "chat",
           model: modelName,
-          messages: [
-            { role: "system", content: SYSTEM_PROMPT },
-            ...messages.slice(-AI_CONTEXT_WINDOW),
-          ],
-          max_tokens: 2000,
-        }),
-        signal: controller.signal,
-      });
-    } catch (fetchErr: unknown) {
-      const isTimeout = (fetchErr as { name?: string })?.name === "AbortError";
-      logAiUsage({
-        user_id: user.id,
-        action_type: "chat",
-        model: modelName,
-        request_duration_ms: Date.now() - aiStartTime,
-        status: isTimeout ? "timeout" : "error",
-        error_message: isTimeout ? "Timeout after 60s" : (fetchErr as Error)?.message,
-      }).catch(() => {});
-      throw new Error(isTimeout ? "A IA demorou demais. Tente novamente." : "Falha na conexão com a IA.");
-    } finally {
-      clearTimeout(timeoutId);
-    }
-
-    const aiDuration = Date.now() - aiStartTime;
-
-    if (!aiResponse.ok) {
-      const errText = await aiResponse.text();
-      console.error("AI error:", aiResponse.status, errText);
-      logAiUsage({
-        user_id: user.id,
-        action_type: "chat",
-        model: modelName,
-        request_duration_ms: aiDuration,
-        status: "error",
-        error_message: `HTTP ${aiResponse.status}: ${errText.slice(0, 200)}`,
-      }).catch(() => {});
-      if (aiResponse.status === 429) {
-        return new Response(
-          JSON.stringify({ error: "Limite de requisições excedido. Tente novamente em alguns minutos." }),
-          { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          request_duration_ms: Date.now() - aiStartTime,
+          status: isTimeout ? "timeout" : "error",
+          error_message: isTimeout ? "Timeout after 60s" : (fetchErr as Error)?.message,
+        }).catch(() => {});
+        return await failTurn(
+          isTimeout ? 504 : 502,
+          isTimeout ? "A IA demorou demais. Tente novamente." : "Falha na conexão com a IA.",
         );
+      } finally {
+        clearTimeout(timeoutId);
       }
-      return new Response(JSON.stringify({ error: "Erro ao conectar com a IA." }), {
-        status: 500,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+
+      const aiDuration = Date.now() - aiStartTime;
+
+      if (!aiResponse.ok) {
+        const errText = await aiResponse.text();
+        console.error("AI error:", aiResponse.status, errText);
+        logAiUsage({
+          user_id: user.id,
+          action_type: "chat",
+          model: modelName,
+          request_duration_ms: aiDuration,
+          status: "error",
+          error_message: `HTTP ${aiResponse.status}: ${errText.slice(0, 200)}`,
+        }).catch(() => {});
+        if (aiResponse.status === 429) {
+          return await failTurn(429, "Limite de requisições excedido. Tente novamente em alguns minutos.");
+        }
+        return await failTurn(500, "Erro ao conectar com a IA.");
+      }
+
+      const aiData = await aiResponse.json();
+      const reply: string = aiData.choices?.[0]?.message?.content || "";
+
+      if (!reply) {
+        return await failTurn(500, "Resposta vazia da IA.");
+      }
+
+      logAiUsage({
+        user_id: user.id,
+        action_type: "chat",
+        model: modelName,
+        input_tokens: aiData.usage?.prompt_tokens || 0,
+        output_tokens: aiData.usage?.completion_tokens || 0,
+        request_duration_ms: aiDuration,
+        status: "success",
+      }).catch(() => {});
+
+      // ── Persist: stored history + this exchange (never the client's copy) ──
+      const { error: persistError } = await admin
+        .from("chat_sessions")
+        .update({ messages: [...history, turn, { role: "assistant", content: reply }] })
+        .eq("id", activeSessionId);
+      if (persistError) {
+        // The reply is still delivered; the pending turn expires on its own.
+        console.error("persist messages error:", persistError, "session:", activeSessionId);
+      }
+
+      return json({ reply, session_id: activeSessionId, ...(title ? { title } : {}) });
+    } catch (inner) {
+      // Backstop: an unexpected failure after the claim must not leave the turn behind.
+      await releaseTurn();
+      throw inner;
     }
-
-    const aiData = await aiResponse.json();
-    const reply: string = aiData.choices?.[0]?.message?.content || "";
-
-    if (!reply) {
-      return new Response(JSON.stringify({ error: "Resposta vazia da IA." }), {
-        status: 500,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-
-    logAiUsage({
-      user_id: user.id,
-      action_type: "chat",
-      model: modelName,
-      input_tokens: aiData.usage?.prompt_tokens || 0,
-      output_tokens: aiData.usage?.completion_tokens || 0,
-      request_duration_ms: aiDuration,
-      status: "success",
-    }).catch(() => {});
-
-    // ── Persist updated messages ──────────────────────────────────────────
-    const updatedMessages: ChatMessage[] = [
-      ...messages,
-      { role: "assistant", content: reply },
-    ];
-
-    await admin
-      .from("chat_sessions")
-      .update({ messages: updatedMessages })
-      .eq("id", activeSessionId);
-
-    return new Response(
-      JSON.stringify({ reply, session_id: activeSessionId, ...(sessionTitle ? { title: sessionTitle } : {}) }),
-      { headers: { ...corsHeaders, "Content-Type": "application/json" } }
-    );
   } catch (e) {
-    console.error("chat error:", e);
-    return new Response(
-      JSON.stringify({ error: e instanceof Error ? e.message : "Erro desconhecido." }),
-      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-    );
+    return errorResponse(e, { label: "chat error:", headers: corsHeaders });
   }
 });

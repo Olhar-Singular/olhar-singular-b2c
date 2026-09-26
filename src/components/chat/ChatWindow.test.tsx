@@ -2,6 +2,7 @@ import { render, screen, fireEvent } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, it, expect, vi } from "vitest";
 import ChatWindow from "./ChatWindow";
+import { MAX_CHAT_MESSAGE_CHARS } from "@/lib/domain/chatLimits";
 import type { ChatMessage } from "@/types/chat";
 
 const messages: ChatMessage[] = [
@@ -107,5 +108,52 @@ describe("ChatWindow", () => {
       <ChatWindow messages={messages} onSend={noop} isPending={true} />,
     );
     expect(container.querySelector(".animate-spin")).not.toBeNull();
+  });
+
+  // The chat edge function refuses a turn longer than MAX_CHAT_MESSAGE_CHARS
+  // (400): the input stops the teacher before, instead of after the round trip.
+  describe("limite de tamanho da mensagem", () => {
+    it("caps the input at the length the server accepts", () => {
+      render(<ChatWindow messages={[]} onSend={noop} isPending={false} />);
+      expect(screen.getByPlaceholderText(/mensagem/i)).toHaveAttribute(
+        "maxLength",
+        String(MAX_CHAT_MESSAGE_CHARS),
+      );
+    });
+
+    it("does not send a message over the limit that got past the cap", () => {
+      // A programmatic value skips maxLength; submit must still refuse it.
+      const onSend = vi.fn();
+      render(<ChatWindow messages={[]} onSend={onSend} isPending={false} />);
+      const input = screen.getByPlaceholderText(/mensagem/i);
+      fireEvent.change(input, { target: { value: "a".repeat(MAX_CHAT_MESSAGE_CHARS + 1) } });
+      expect(screen.getByRole("button", { name: /enviar/i })).toBeDisabled();
+      fireEvent.keyDown(input, { key: "Enter" });
+      expect(onSend).not.toHaveBeenCalled();
+    });
+
+    it("sends a message exactly at the limit", () => {
+      const onSend = vi.fn();
+      render(<ChatWindow messages={[]} onSend={onSend} isPending={false} />);
+      const input = screen.getByPlaceholderText(/mensagem/i);
+      const atLimit = "a".repeat(MAX_CHAT_MESSAGE_CHARS);
+      fireEvent.change(input, { target: { value: atLimit } });
+      fireEvent.keyDown(input, { key: "Enter" });
+      expect(onSend).toHaveBeenCalledWith(atLimit);
+    });
+
+    it("shows a character counter tied to the input only when nearing the limit", () => {
+      render(<ChatWindow messages={[]} onSend={noop} isPending={false} />);
+      const input = screen.getByPlaceholderText(/mensagem/i);
+
+      fireEvent.change(input, { target: { value: "curta" } });
+      expect(screen.queryByText(`5/${MAX_CHAT_MESSAGE_CHARS}`)).not.toBeInTheDocument();
+      expect(input).not.toHaveAttribute("aria-describedby");
+
+      const near = MAX_CHAT_MESSAGE_CHARS - 100;
+      fireEvent.change(input, { target: { value: "a".repeat(near) } });
+      const counter = screen.getByText(`${near}/${MAX_CHAT_MESSAGE_CHARS}`);
+      expect(input).toHaveAttribute("aria-describedby", counter.id);
+    });
   });
 });
