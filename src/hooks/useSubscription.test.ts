@@ -20,17 +20,21 @@ import {
 import { supabase } from "@/integrations/supabase/client";
 import { createQueryChain } from "@/test/helpers";
 
-const { mockRefreshProfile } = vi.hoisted(() => ({ mockRefreshProfile: vi.fn() }));
+const { mockRefreshProfile, authUser } = vi.hoisted(() => ({
+  mockRefreshProfile: vi.fn(),
+  authUser: { current: { id: "u1", email: "nova@example.com" } as { id: string; email?: string } },
+}));
 
 vi.mock("@/integrations/supabase/client", () => ({
   supabase: {
     from: vi.fn(),
     functions: { invoke: vi.fn() },
+    auth: { signInWithPassword: vi.fn() },
   },
 }));
 
 vi.mock("@/hooks/useAuth", () => ({
-  useAuth: () => ({ user: { id: "u1" }, refreshProfile: mockRefreshProfile }),
+  useAuth: () => ({ user: authUser.current, refreshProfile: mockRefreshProfile }),
 }));
 
 vi.mock("sonner", () => ({ toast: { error: vi.fn(), success: vi.fn(), warning: vi.fn() } }));
@@ -261,6 +265,10 @@ describe("useSubscribe (anonymous funnel)", () => {
 });
 
 describe("useSetInitialPassword", () => {
+  beforeEach(() => {
+    vi.mocked(supabase.auth.signInWithPassword).mockResolvedValue({ data: {}, error: null } as never);
+  });
+
   it("invokes set-initial-password and refreshes the profile", async () => {
     mockInvoke.mockResolvedValue({ data: { ok: true }, error: null });
     const { result } = renderHook(() => useSetInitialPassword(), { wrapper });
@@ -282,8 +290,47 @@ describe("useSetInitialPassword", () => {
     expect(mockRefreshProfile).toHaveBeenCalled();
   });
 
+  it("signs in again with the new password, since the admin change revokes every session", async () => {
+    mockInvoke.mockResolvedValue({ data: { ok: true }, error: null });
+    vi.mocked(supabase.auth.signInWithPassword).mockResolvedValue({ data: {}, error: null } as never);
+    const { result } = renderHook(() => useSetInitialPassword(), { wrapper });
+    let outcome: unknown;
+    await act(async () => {
+      outcome = await result.current.mutateAsync({ password: "secret1" });
+    });
+    expect(supabase.auth.signInWithPassword).toHaveBeenCalledWith({ email: "nova@example.com", password: "secret1" });
+    expect(outcome).toEqual({ ok: true, sessionRenewed: true });
+  });
+
+  it("reports a session it could not renew instead of failing the saved password", async () => {
+    mockInvoke.mockResolvedValue({ data: { ok: true }, error: null });
+    vi.mocked(supabase.auth.signInWithPassword).mockResolvedValue({ data: {}, error: new Error("x") } as never);
+    const { result } = renderHook(() => useSetInitialPassword(), { wrapper });
+    let outcome: unknown;
+    await act(async () => {
+      outcome = await result.current.mutateAsync({ password: "secret1" });
+    });
+    expect(outcome).toEqual({ ok: true, sessionRenewed: false });
+    expect(mockRefreshProfile).toHaveBeenCalled();
+  });
+
+  it("does not renew a session without an e-mail to sign in with", async () => {
+    authUser.current = { id: "u1" };
+    mockInvoke.mockResolvedValue({ data: { ok: true }, error: null });
+    vi.mocked(supabase.auth.signInWithPassword).mockResolvedValue({ data: {}, error: new Error("missing email") } as never);
+    const { result } = renderHook(() => useSetInitialPassword(), { wrapper });
+    let outcome: unknown;
+    await act(async () => {
+      outcome = await result.current.mutateAsync({ password: "secret1" });
+    });
+    authUser.current = { id: "u1", email: "nova@example.com" };
+    expect(supabase.auth.signInWithPassword).toHaveBeenCalledWith({ email: "", password: "secret1" });
+    expect(outcome).toEqual({ ok: true, sessionRenewed: false });
+  });
+
   it("toasts on failure and leaves the profile alone", async () => {
     const { toast } = await import("sonner");
+    vi.mocked(supabase.auth.signInWithPassword).mockClear();
     mockInvoke.mockResolvedValue({ data: null, error: new Error("falha") });
     const { result } = renderHook(() => useSetInitialPassword(), { wrapper });
     await act(async () => {
@@ -291,6 +338,7 @@ describe("useSetInitialPassword", () => {
     });
     expect(toast.error).toHaveBeenCalled();
     expect(mockRefreshProfile).not.toHaveBeenCalled();
+    expect(supabase.auth.signInWithPassword).not.toHaveBeenCalled();
   });
 });
 

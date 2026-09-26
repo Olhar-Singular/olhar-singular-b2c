@@ -208,12 +208,19 @@ const PASSWORD_FALLBACK = "Não foi possível definir a senha. Tente de novo.";
 // First access of an account born from a payment. The server clears
 // must_set_password; refreshProfile lets ProtectedRoute release the user.
 export function useSetInitialPassword() {
-  const { refreshProfile } = useAuth();
+  const { user, refreshProfile } = useAuth();
   return useMutation({
     mutationFn: async (input: { password: string }) => {
       const { data, error } = await supabase.functions.invoke("set-initial-password", { body: input });
       if (error) throw new Error(await parseInvokeError(error, PASSWORD_FALLBACK));
-      return data as { ok: true; flagCleared?: boolean };
+      // The admin password change revokes every session of the user, this one
+      // included: without a fresh sign-in the old token still reads tables but
+      // every edge function answers 401.
+      const { error: signInError } = await supabase.auth.signInWithPassword({
+        email: user?.email ?? "",
+        password: input.password,
+      });
+      return { ...(data as { ok: true; flagCleared?: boolean }), sessionRenewed: !signInError };
     },
     onSuccess: (data) => {
       refreshProfile();
