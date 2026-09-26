@@ -249,6 +249,41 @@ export const TRUE_FALSE_MARKER_TEXT = "(  ) V  (  ) F";
 export const TRUE_FALSE_MARKER_GAP_PX = 12;
 
 /**
+ * Caixa do checkbox: lado, espessura e raio da borda, em px de tela. Ponto único
+ * das QUATRO superfícies, na família de `ANSWER_LINE_*` — a caixa é, como a
+ * pauta, um traço que o documento imprime para o aluno marcar (achado 0358).
+ *
+ * O marcador era o último que cada superfície resolvia sozinha, e as duas que o
+ * professor consegue conferir eram justamente as que concordavam: quadrado
+ * vazado de 17px na folha do Revisar e de 16px na prévia do Exportar. O PDF e o
+ * Word emitiam o TEXTO `[ ]`, ou seja, dois colchetes finos e baixos (~13px de
+ * traço medidos no papel) onde as telas mostram uma caixa fechada — alvo menor e
+ * menos legível para marcar com X, exatamente o contrário do que o produto
+ * precisa entregar a um aluno com barreira de aprendizagem.
+ *
+ * O valor adotado é o MAIOR dos dois da tela (17px, o da folha do Revisar), pela
+ * razão de `ANSWER_LINE_GAP_PX`: encolher o alvo seria piorar a acessibilidade.
+ * Quem mais se move é o papel, que passa a DESENHAR a caixa (`Canvas`, como a
+ * pauta desde o achado 0154) em vez de escrevê-la com glifos.
+ */
+export const CHECKBOX_BOX_PX = 17;
+
+/** Espessura da borda da caixa, par de `CHECKBOX_BOX_PX`. */
+export const CHECKBOX_BOX_BORDER_PX = 1.5;
+
+/** Raio do canto da caixa, par de `CHECKBOX_BOX_PX`. */
+export const CHECKBOX_BOX_RADIUS_PX = 4;
+
+/**
+ * Tinta da borda da caixa: a mesma da pauta, `ANSWER_LINE_COLOR`. As duas telas
+ * também discordavam aqui (`border-surface-ink-faint` na folha do Revisar contra
+ * `border-border` na prévia), e nenhuma das duas era token de documento — eram
+ * tokens do CHROME do app, que inclusive invertem no tema escuro sobre um papel
+ * que continua branco (mesmo motivo de `FOLHA_*`, achado 0342).
+ */
+export const CHECKBOX_BOX_COLOR = ANSWER_LINE_COLOR;
+
+/**
  * Coluna do NÚMERO da questão: distância do x do rótulo ("1.") ao x do
  * enunciado, e o vão entre os dois (achado 0175).
  *
@@ -434,6 +469,15 @@ export const ALTERNATIVE_MARKER_GAP_PT = ALTERNATIVE_MARKER_GAP_PX / PT_TO_PX;
 
 /** `TRUE_FALSE_MARKER_GAP_PX` na unidade do PDF (pt), pela mesma razão 72/96. */
 export const TRUE_FALSE_MARKER_GAP_PT = TRUE_FALSE_MARKER_GAP_PX / PT_TO_PX;
+
+/** `CHECKBOX_BOX_PX` na unidade do PDF (pt), pela mesma razão 72/96. */
+export const CHECKBOX_BOX_PT = CHECKBOX_BOX_PX / PT_TO_PX;
+
+/** `CHECKBOX_BOX_BORDER_PX` na unidade do PDF (pt), pela mesma razão 72/96. */
+export const CHECKBOX_BOX_BORDER_PT = CHECKBOX_BOX_BORDER_PX / PT_TO_PX;
+
+/** `CHECKBOX_BOX_RADIUS_PX` na unidade do PDF (pt), pela mesma razão 72/96. */
+export const CHECKBOX_BOX_RADIUS_PT = CHECKBOX_BOX_RADIUS_PX / PT_TO_PX;
 
 /** `QUESTION_NUMBER_GAP_PX` na unidade do PDF (pt), pela mesma razão 72/96. */
 export const QUESTION_NUMBER_GAP_PT = QUESTION_NUMBER_GAP_PX / PT_TO_PX;

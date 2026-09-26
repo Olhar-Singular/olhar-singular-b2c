@@ -431,7 +431,9 @@ describe("B15 · conteúdo que precisa chegar ao Word", () => {
     );
     expect(out).toContain("alfa");
     expect(out).toContain("beta");
-    expect(out).toContain("[ ]");
+    // A caixa deixou de ser texto e virou borda de run (achado 0358); a
+    // paridade com as outras superfícies é guardada por checkboxBoxParity.
+    expect(out).not.toContain("[");
     expect(out).not.toContain("[x]");
   });
 

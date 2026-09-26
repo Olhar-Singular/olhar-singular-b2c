@@ -14,6 +14,7 @@ import { Fragment, type ComponentProps } from "react";
 import type { QuestionAnswer, RichText } from "@/lib/adaptation/canonical/schema";
 import { indexToLetter } from "@/components/adaptation/render/letters";
 import { ALTERNATIVE_MARKER_CLASS } from "@/components/adaptation/render/answers/markerColumn";
+import { CheckboxBox } from "@/components/adaptation/render/CheckboxBox";
 import {
   ANSWER_LINE_COLOR,
   ANSWER_LINE_GAP_PX,
@@ -39,14 +40,13 @@ interface AnswerPreviewProps {
   disabled?: boolean;
 }
 
+/**
+ * A caixa do checkbox é a MESMA das outras três superfícies (achado 0358): a
+ * medida, a espessura e a tinta vêm de `pageTokens` via `CheckboxBox`; aqui
+ * fica só o `data-testid` histórico da folha.
+ */
 function Bullet() {
-  return (
-    <span
-      data-testid="preview-bullet"
-      data-shape="square"
-      className="mt-1 h-[17px] w-[17px] shrink-0 rounded-[4px] border-[1.5px] border-surface-ink-faint"
-    />
-  );
+  return <CheckboxBox testId="preview-bullet" />;
 }
 
 /**

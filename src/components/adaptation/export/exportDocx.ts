@@ -70,6 +70,8 @@ import {
   PAGE_MARGIN_PT,
   RULE_COLOR,
   RULE_WIDTH_PT,
+  CHECKBOX_BOX_BORDER_PT,
+  CHECKBOX_BOX_COLOR,
 } from "../render/pageTokens";
 import { indexToLetter } from "../render/letters";
 import {
@@ -293,6 +295,39 @@ export function richTextToRuns(nodes: Inline[], inherited: RunStyle = {}): TextR
 type InheritedStyle = { paragraph: ParagraphStyle; run: RunStyle };
 const NO_STYLE: InheritedStyle = { paragraph: {}, run: {} };
 
+/**
+ * A caixa do checkbox é DESENHADA no Word, como no PDF (achado 0358): uma borda
+ * de run (`w:bdr`) em volta de espaços inquebráveis, em vez do texto `[ ]` que
+ * o arquivo trazia — dois colchetes finos onde as telas mostram um quadrado
+ * fechado, alvo menor para o aluno marcar com X.
+ *
+ * A borda de run é o único traço do OOXML que acompanha o corpo do documento
+ * sem posicionamento absoluto: a altura sai da linha e a largura, dos espaços.
+ * Por isso a caixa do Word é QUADRADA POR APROXIMAÇÃO (três espaços no corpo
+ * escolhido), enquanto PDF e telas leem o lado exato de `CHECKBOX_BOX_PX`. A
+ * espessura e a tinta são as mesmas das outras superfícies; a unidade da borda
+ * no OOXML é o oitavo de ponto, daí o `* 8`, como em `DIVIDER_RULE`.
+ */
+const CHECKBOX_BOX_TEXT = "\u00a0\u00a0\u00a0";
+const CHECKBOX_BOX_BORDER = {
+  style: BorderStyle.SINGLE,
+  size: Math.round(CHECKBOX_BOX_BORDER_PT * 8),
+  color: CHECKBOX_BOX_COLOR.slice(1),
+  space: 0,
+} as const;
+
+function checkboxRow(content: RichText, style: InheritedStyle = NO_STYLE): Paragraph {
+  return new Paragraph({
+    ...style.paragraph,
+    indent: { left: ANSWER_INDENT },
+    children: [
+      new TextRun({ ...style.run, text: CHECKBOX_BOX_TEXT, border: CHECKBOX_BOX_BORDER }),
+      new TextRun({ ...style.run, text: " " }),
+      ...richTextToRuns(content, style.run),
+    ],
+  });
+}
+
 /** An answer row: an empty marker plus the item's content. */
 function answerRow(marker: string, content: RichText, style: InheritedStyle = NO_STYLE): Paragraph {
   return new Paragraph({
@@ -333,8 +368,8 @@ function answerToDocx(
     case "trueFalse":
       return answer.items.map((item) => answerRow("(  ) V  (  ) F", item.content, style));
     case "checkbox":
-      // [ ] for every item, never [x] — `checked` is the answer key.
-      return answer.items.map((item) => answerRow("[ ]", item.content, style));
+      // Caixa vazia para todo item, nunca marcada — `checked` é o gabarito.
+      return answer.items.map((item) => checkboxRow(item.content, style));
     case "matching":
       return answer.pairs.map(
         (pair) =>

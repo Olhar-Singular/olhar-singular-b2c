@@ -139,20 +139,22 @@ describe("PdfAnswer", () => {
     expect(txt).not.toContain("(F)");
   });
 
-  it("renders checkbox with [ ] for all items — never reveals [x]", () => {
-    const txt = textOf(
-      PdfAnswer({
-        answer: {
-          kind: "checkbox",
-          items: [
-            { id: id(1), content: rt("y"), checked: true },
-            { id: id(2), content: rt("n"), checked: false },
-          ],
-        },
-      }),
-    );
-    expect(txt).toContain("[ ]");
+  it("renders checkbox with a DRAWN empty box per item — never reveals the key (0358)", () => {
+    const el = PdfAnswer({
+      answer: {
+        kind: "checkbox",
+        items: [
+          { id: id(1), content: rt("y"), checked: true },
+          { id: id(2), content: rt("n"), checked: false },
+        ],
+      },
+    });
+    const txt = textOf(el);
+    // A caixa é desenhada num <Canvas>, como a pauta: escrita, ela imprimia o
+    // colchete `[ ]` onde as duas telas mostram um quadrado fechado.
+    expect(txt).not.toContain("[");
     expect(txt).not.toContain("[x]");
+    expect(canvasNodes(el)).toHaveLength(2);
   });
 
   it("renders matching pairs with a DRAWN connector, never a glyph (0444)", () => {

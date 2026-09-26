@@ -5,7 +5,7 @@
  * Gabarito (chave de respostas) está OCULTO — espelha AnswerPreview (D5):
  *   - multipleChoice: alternativas com letras a)/b)/…, SEM ✔ na correta
  *   - trueFalse: afirmação + marcadores vazios "(  ) V  (  ) F", SEM revelar o valor
- *   - checkbox: [ ] para TODOS os itens, SEM [x]
+ *   - checkbox: caixa vazia DESENHADA para TODOS os itens, SEM marca (0358)
  *   - matching: left e right ligados por uma seta DESENHADA (pareamento é a
  *                estrutura, não o gabarito) — ver `paintMatchingLink` (0444)
  *   - ordering: array na ordem original (SEM sort por position, SEM numeração)
@@ -37,6 +37,10 @@ import {
   TRUE_FALSE_MARKER_GAP_PT,
   TRUE_FALSE_MARKER_TEXT,
   RULE_WIDTH_PT,
+  CHECKBOX_BOX_PT,
+  CHECKBOX_BOX_BORDER_PT,
+  CHECKBOX_BOX_RADIUS_PT,
+  CHECKBOX_BOX_COLOR,
 } from "../pageTokens";
 
 // O vão entre itens vem de pageTokens para o papel imprimir o mesmo passo que as
@@ -153,6 +157,61 @@ function paintMatchingLink(
 }
 
 /**
+ * A caixa do checkbox é DESENHADA, como a pauta e o elo da associação (0358).
+ *
+ * Escrita, ela virava o texto `[ ]`: o aluno recebia no papel dois colchetes
+ * finos onde as duas telas mostram um quadrado fechado de 17px — alvo menor
+ * para marcar com X, e a única superfície que o professor NÃO consegue conferir
+ * antes de imprimir. O traço é inserido meia espessura para dentro para a caixa
+ * medir o lado do token de ponta a ponta, e não meia borda a mais de cada lado.
+ */
+function paintCheckboxBox(
+  painter: CheckboxBoxPainter,
+  availableWidth: number,
+  availableHeight: number,
+): null {
+  const inset = CHECKBOX_BOX_BORDER_PT / 2;
+  painter
+    .lineWidth(CHECKBOX_BOX_BORDER_PT)
+    .strokeColor(CHECKBOX_BOX_COLOR)
+    .roundedRect(
+      inset,
+      inset,
+      availableWidth - CHECKBOX_BOX_BORDER_PT,
+      availableHeight - CHECKBOX_BOX_BORDER_PT,
+      CHECKBOX_BOX_RADIUS_PT,
+    )
+    .stroke();
+  return null;
+}
+
+type CheckboxBoxPainter = {
+  lineWidth: (width: number) => CheckboxBoxPainter;
+  strokeColor: (color: string) => CheckboxBoxPainter;
+  roundedRect: (x: number, y: number, w: number, h: number, r: number) => CheckboxBoxPainter;
+  stroke: () => CheckboxBoxPainter;
+};
+
+/** Largura e altura explícitas, pelo mesmo motivo de `ANSWER_LINE_STYLE`. */
+const CHECKBOX_BOX_STYLE = {
+  width: CHECKBOX_BOX_PT,
+  height: CHECKBOX_BOX_PT,
+  flexShrink: 0,
+} as const;
+
+/**
+ * A caixa ocupa a coluna do marcador (a mesma de `a)`), centrada na altura de
+ * UMA linha do item para acompanhar o corpo escolhido no popover "Formato" —
+ * como o `mt-1` das duas telas faz no corpo padrão.
+ */
+const checkboxMarkerStyle = (fontSizePt: number) =>
+  ({
+    width: alternativeMarkerColumnPt(fontSizePt),
+    flexShrink: 0,
+    paddingTop: Math.max(0, (fontSizePt * BASE_LINE_HEIGHT - CHECKBOX_BOX_PT) / 2),
+  }) as const;
+
+/**
  * A caixa da seta ocupa a altura de UMA linha do item (corpo x entrelinha), com
  * a mesma folga lateral que o glifo tinha, para o par continuar alinhado pelo
  * topo como as duas colunas de texto.
@@ -240,7 +299,9 @@ export function PdfAnswer({
         <View>
           {answer.items.map((item) => (
             <View key={item.id} style={ROW}>
-              <Text style={MARKER}>[ ]</Text>
+              <View style={checkboxMarkerStyle(elementSizes.alternative)}>
+                <Canvas style={CHECKBOX_BOX_STYLE} paint={paintCheckboxBox} />
+              </View>
               <View style={FLEX}>
                 <Text style={itemStyle}>
                   <PdfRichText content={item.content} fontSize={elementSizes.alternative} />
