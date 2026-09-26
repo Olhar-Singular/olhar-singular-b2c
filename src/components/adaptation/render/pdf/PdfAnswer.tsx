@@ -4,7 +4,7 @@
  *
  * Gabarito (chave de respostas) está OCULTO — espelha AnswerPreview (D5):
  *   - multipleChoice: alternativas com letras a)/b)/…, SEM ✔ na correta
- *   - trueFalse: afirmação + marcadores vazios "(  ) V  (  ) F", SEM revelar o valor
+ *   - trueFalse: afirmação + marcadores vazios "( ) V ( ) F", SEM revelar o valor
  *   - checkbox: caixa vazia DESENHADA para TODOS os itens, SEM marca (0358)
  *   - matching: left e right ligados por uma seta DESENHADA (pareamento é a
  *                estrutura, não o gabarito) — ver `paintMatchingLink` (0444)

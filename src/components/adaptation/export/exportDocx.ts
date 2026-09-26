@@ -72,6 +72,8 @@ import {
   RULE_WIDTH_PT,
   CHECKBOX_BOX_BORDER_PT,
   CHECKBOX_BOX_COLOR,
+  TRUE_FALSE_MARKER_TEXT,
+  ORDERING_MARKER_TEXT,
 } from "../render/pageTokens";
 import { indexToLetter } from "../render/letters";
 import {
@@ -366,7 +368,7 @@ function answerToDocx(
         answerRow(`${indexToLetter(i)})`, alternative.content, style),
       );
     case "trueFalse":
-      return answer.items.map((item) => answerRow("(  ) V  (  ) F", item.content, style));
+      return answer.items.map((item) => answerRow(TRUE_FALSE_MARKER_TEXT, item.content, style));
     case "checkbox":
       // Caixa vazia para todo item, nunca marcada — `checked` é o gabarito.
       return answer.items.map((item) => checkboxRow(item.content, style));
@@ -385,7 +387,7 @@ function answerToDocx(
       );
     case "ordering":
       // Authored order, NOT sorted by `position` — sorting would reveal the answer.
-      return answer.items.map((item) => answerRow("____", item.content, style));
+      return answer.items.map((item) => answerRow(ORDERING_MARKER_TEXT, item.content, style));
     case "fillBlank":
       // The gaps live inline in the stem; there is no separate answer to show
       // (same contract as PdfAnswer, which renders an empty view here).

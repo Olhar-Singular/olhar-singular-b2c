@@ -23,6 +23,8 @@ import {
   pageTokensToPdf,
   ELEMENT_FONT_RATIOS,
   BASE_FONT_PT,
+  TRUE_FALSE_MARKER_TEXT,
+  ORDERING_MARKER_TEXT,
 } from "../render/pageTokens";
 import { pdfFooterLabel } from "../render/footerLabel";
 import type {
@@ -416,7 +418,7 @@ describe("B15 · conteúdo que precisa chegar ao Word", () => {
     expect(out).toContain("O céu é azul.");
     expect(out).toContain("Peixes voam.");
     // marcador vazio para o aluno, igual ao PDF
-    expect(out).toContain("(  ) V");
+    expect(out).toContain("( ) V");
     expect(out).not.toMatch(/\bV\)\s*✔|correta/i);
   });
 
@@ -463,6 +465,32 @@ describe("B15 · conteúdo que precisa chegar ao Word", () => {
     expect(out).toContain("primeiro");
     // ordem original preservada (sem sort — o sort seria o gabarito)
     expect(out.indexOf("segundo")).toBeLessThan(out.indexOf("primeiro"));
+  });
+
+  it("0199 · o marcador de V/F do Word é o MESMO token das outras superfícies", () => {
+    // O token não pode trazer espaço duplo: HTML (`white-space: normal`) e
+    // `@react-pdf` colapsam espaço consecutivo, e o run do `docx` escreve o
+    // texto literal — o espaço duplo dava ao Word um marcador mais largo, com
+    // a afirmação começando noutro ponto.
+    expect(TRUE_FALSE_MARKER_TEXT).not.toMatch(/ {2}/);
+    const out = blockText(
+      q({
+        kind: "trueFalse",
+        items: [{ id: id(37), content: text("O céu é azul."), value: true }],
+      }),
+    );
+    expect(out).toContain(TRUE_FALSE_MARKER_TEXT);
+    expect(out).not.toMatch(/\( {2}\)/);
+  });
+
+  it("0199 · o marcador de ordenação do Word é o MESMO token das outras superfícies", () => {
+    const out = blockText(
+      q({
+        kind: "ordering",
+        items: [{ id: id(38), content: text("passo"), position: 0 }],
+      }),
+    );
+    expect(out).toContain(ORDERING_MARKER_TEXT);
   });
 
   it("table emite todas as células", () => {

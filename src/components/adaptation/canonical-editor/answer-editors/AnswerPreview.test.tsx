@@ -146,7 +146,7 @@ describe("AnswerPreview — trueFalse", () => {
   });
 
   // Achado 0357: a folha do Revisar desenhava dois círculos vazados V/F, enquanto
-  // a prévia do Exportar, o PDF e o Word imprimem "(  ) V  (  ) F". Círculo é o
+  // a prévia do Exportar, o PDF e o Word imprimem "( ) V ( ) F". Círculo é o
   // desenho de escolha única (rádio) e as afirmações do V/F são independentes —
   // o marcador da folha passa a ser o MESMO texto do papel, do mesmo token.
   it("imprime o marcador do papel, sem círculo de escolha única", () => {

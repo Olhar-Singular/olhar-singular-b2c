@@ -1,6 +1,6 @@
 /**
  * TrueFalseView — read-only render of true/false statements.
- * Answer key is hidden: blank "(  ) V  (  ) F" markers shown instead of the
+ * Answer key is hidden: blank "( ) V ( ) F" markers shown instead of the
  * authored value. Mirrors PdfAnswer (trueFalse).
  */
 

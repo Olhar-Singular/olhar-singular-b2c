@@ -245,7 +245,14 @@ export const ALTERNATIVE_MARKER_GAP_PX = 8;
  * (`flexShrink: 0` + `marginRight`), então ela acompanha fonte e corpo sem
  * precisar de calibragem.
  */
-export const TRUE_FALSE_MARKER_TEXT = "(  ) V  (  ) F";
+/*
+ * Espaço SIMPLES de propósito (achado 0199): HTML (`white-space: normal`) e o
+ * `@react-pdf` colapsam espaço consecutivo, então só o run do `docx` honrava o
+ * espaço duplo — o Word saía com um marcador mais largo e a afirmação começando
+ * noutro ponto. A folga da caixa que o aluno marca é largura declarada
+ * (`TRUE_FALSE_MARKER_GAP_PX` / `_PT`), nunca caractere de espaço.
+ */
+export const TRUE_FALSE_MARKER_TEXT = "( ) V ( ) F";
 export const TRUE_FALSE_MARKER_GAP_PX = 12;
 
 /**

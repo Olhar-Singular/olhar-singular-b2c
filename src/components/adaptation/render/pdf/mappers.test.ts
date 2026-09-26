@@ -116,7 +116,7 @@ describe("PdfAnswer", () => {
     expect(txt).not.toContain("✔");
   });
 
-  it("renders trueFalse without revealing the value — shows (  ) V and (  ) F markers", () => {
+  it("renders trueFalse without revealing the value — shows ( ) V and ( ) F markers", () => {
     const txt = textOf(
       PdfAnswer({
         answer: {
@@ -132,8 +132,8 @@ describe("PdfAnswer", () => {
     expect(txt).toContain("afirmação verdadeira");
     expect(txt).toContain("afirmação falsa");
     // The empty V/F markers must be present.
-    expect(txt).toContain("(  ) V");
-    expect(txt).toContain("(  ) F");
+    expect(txt).toContain("( ) V");
+    expect(txt).toContain("( ) F");
     // Must NOT reveal the authored value.
     expect(txt).not.toContain("(V)");
     expect(txt).not.toContain("(F)");
