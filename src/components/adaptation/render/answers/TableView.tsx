@@ -29,10 +29,21 @@ const CELL_STYLE: CSSProperties = {
   lineHeight: BASE_LINE_HEIGHT,
 };
 
+/**
+ * `data-folha-tabela` (achado 0262): a folha da prévia repete o cabeçalho desta
+ * tabela no topo de cada página em que ela continua, como o PDF (linha `fixed`)
+ * e o .docx (`tblHeader`) fazem. Quem sabe onde a página vira é `PageSheet`;
+ * aqui só se diz qual tabela é impressa.
+ */
 export function TableView({ answer }: { answer: TableAnswer }) {
   const [header, ...body] = answer.rows;
   return (
-    <table data-testid="answer-table" style={TABLE_STYLE} className="w-full border-collapse">
+    <table
+      data-testid="answer-table"
+      data-folha-tabela=""
+      style={TABLE_STYLE}
+      className="w-full border-collapse"
+    >
       {header && (
         <thead>
           <tr>

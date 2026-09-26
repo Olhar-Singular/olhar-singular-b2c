@@ -111,6 +111,72 @@ const CHROME_SELECTOR = "[data-folha-chrome]";
  */
 const BLOCK_SELECTOR = "[data-folha-bloco]";
 
+/**
+ * Tabela impressa, marcada pelo renderizador de leitura (achado 0262).
+ *
+ * O arquivo repete o cabeçalho no topo de cada folha em que a tabela continua:
+ * no PDF a linha de cabeçalho é `fixed` e no .docx ela leva `tblHeader`. O
+ * `<thead>` do HTML só se repete em impressão de verdade, e esta folha não é
+ * impressão — é um fluxo contínuo paginado por régua desenhada. Sem repetir
+ * aqui, a tela que existe para mostrar o arquivo mostrava a tabela sem rótulo
+ * de coluna depois da virada, e a contagem de folhas não reservava a altura que
+ * o cabeçalho gasta em cada folha nova (o mesmo mecanismo do 0607, por outra
+ * fonte de altura).
+ */
+const TABLE_SELECTOR = "[data-folha-tabela]";
+
+/** Marca a cópia do cabeçalho que esta folha injeta na virada (achado 0262). */
+const REPEATED_HEADER_ATTR = "data-folha-thead-repetido";
+
+/**
+ * Põe uma cópia do cabeçalho antes da primeira linha de cada folha em que a
+ * tabela continua, e tira as que sobraram. Devolve `true` quando mexeu no DOM —
+ * o cabeçalho repetido é FLUXO, então a paginação precisa correr de novo com
+ * ele dentro (é a altura que o contador não somava).
+ *
+ * Idempotente de propósito: se as âncoras já são as que deviam ser, não toca em
+ * nada e devolve `false`, senão a remedida nunca convergiria.
+ */
+const syncRepeatedTableHeaders = (sheet: HTMLElement, scale: number) => {
+  const sheetTop = sheet.getBoundingClientRect().top;
+  // Folha em que o topo do elemento cai, na mesma geometria não escalada em que
+  // as réguas são desenhadas (`PAGE_MARGIN_PX + N x PAGE_CONTENT_HEIGHT_PX`).
+  const pageOf = (el: HTMLElement) =>
+    Math.floor(
+      ((el.getBoundingClientRect().top - sheetTop) / scale - PAGE_MARGIN_PX) /
+        PAGE_CONTENT_HEIGHT_PX,
+    );
+  let changed = false;
+  sheet.querySelectorAll<HTMLElement>(TABLE_SELECTOR).forEach((table) => {
+    const header = table.querySelector<HTMLElement>("thead > tr");
+    const body = table.querySelector<HTMLElement>("tbody");
+    if (!header || !body) return;
+    const clones = Array.from(
+      body.querySelectorAll<HTMLElement>(`:scope > tr[${REPEATED_HEADER_ATTR}]`),
+    );
+    const rows = Array.from(body.querySelectorAll<HTMLElement>(":scope > tr")).filter(
+      (row) => !row.hasAttribute(REPEATED_HEADER_ATTR),
+    );
+    let page = pageOf(header);
+    const anchors: HTMLElement[] = [];
+    rows.forEach((row) => {
+      const rowPage = pageOf(row);
+      if (rowPage > page) anchors.push(row);
+      page = Math.max(page, rowPage);
+    });
+    const current = clones.map((clone) => clone.nextElementSibling);
+    if (current.length === anchors.length && anchors.every((el, i) => current[i] === el)) return;
+    clones.forEach((clone) => clone.remove());
+    anchors.forEach((anchor) => {
+      const clone = header.cloneNode(true) as HTMLElement;
+      clone.setAttribute(REPEATED_HEADER_ATTR, "");
+      body.insertBefore(clone, anchor);
+    });
+    changed = true;
+  });
+  return changed;
+};
+
 /** Os marcados que não estão dentro de outro marcado do mesmo tipo. */
 const topLevel = (content: HTMLElement, selector: string) =>
   Array.from(content.querySelectorAll<HTMLElement>(selector))
@@ -301,7 +367,7 @@ export function PageSheet({
       vale 1) e o contador de folhas.
     */
     const sheet = sheetRef.current;
-    const measure = () => {
+    const layoutPass = () => {
       /*
         Achado 0135: o empurrão da quebra (no fim desta função) é ele próprio
         fluxo, então toda medida começa DESFAZENDO o da passada anterior. Sem o
@@ -559,6 +625,24 @@ export function PageSheet({
           if (kind === "break") el.style.marginBottom = `${spacer}px`;
           else el.style.marginTop = `${spacer}px`;
         });
+      }
+      /*
+        Achado 0262: só com o fluxo já empurrado dá para saber em que folha cada
+        linha da tabela caiu — é sobre ESTA geometria que o cabeçalho repetido é
+        posicionado. Só na PRÉVIA, pela mesma razão do 0198: no Revisar o fluxo
+        é contínuo de propósito e nada ali vira folha.
+      */
+      return paginated && syncRepeatedTableHeaders(sheet, scale);
+    };
+    /*
+      Achado 0262: o cabeçalho repetido é fluxo, e fluxo muda a paginação que
+      acabou de posicioná-lo. Então a passada se repete até parar de mexer no
+      DOM (no máximo três: a primeira insere, a segunda reconta com ele dentro,
+      a terceira absorve a virada que a inserção tenha criado).
+    */
+    const measure = () => {
+      for (let pass = 0; pass < 3; pass += 1) {
+        if (!layoutPass()) break;
       }
     };
     measure();

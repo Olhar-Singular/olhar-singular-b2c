@@ -1564,4 +1564,159 @@ describe("PageSheet", () => {
       });
     });
   });
+
+  /*
+    Achado 0262: o cabeçalho da tabela se repete no topo de cada folha em que
+    ela continua no PDF (linha `fixed`) e no .docx (`tblHeader`), e a prévia
+    desenhava um `<thead>` só. A tela que promete mostrar o arquivo mostrava
+    uma tabela sem rótulo de coluna depois da virada — e, pior, não reservava a
+    altura que o cabeçalho repetido gasta em cada folha nova, então a contagem
+    de folhas ficava sistematicamente curta (o mecanismo do 0607).
+  */
+  describe("a prévia repete o cabeçalho da tabela, como o arquivo (achado 0262)", () => {
+    const withTabela = (
+      height: (repetidos: number) => number,
+      run: () => void,
+    ) => {
+      const heightSpy = vi
+        .spyOn(HTMLElement.prototype, "offsetHeight", "get")
+        .mockImplementation(() =>
+          height(document.querySelectorAll("[data-folha-thead-repetido]").length),
+        );
+      const rectSpy = vi
+        .spyOn(HTMLElement.prototype, "getBoundingClientRect")
+        .mockImplementation(function (this: HTMLElement) {
+          const top = Number(this.dataset.testTop ?? 0);
+          const bottom = Number(this.dataset.testBottom ?? top);
+          return {
+            top,
+            bottom,
+            height: bottom - top,
+            left: 0,
+            right: 0,
+            width: 0,
+            x: 0,
+            y: top,
+            toJSON: () => ({}),
+          } as DOMRect;
+        });
+      try {
+        run();
+      } finally {
+        heightSpy.mockRestore();
+        rectSpy.mockRestore();
+      }
+    };
+
+    // Fim da área imprimível da folha 1: a linha que começa depois disso já é
+    // conteúdo da folha 2.
+    const VIRADA = PAGE_MARGIN_PX + PAGE_CONTENT_HEIGHT_PX;
+
+    const tabela = (
+      <table data-folha-tabela="" data-testid="tabela">
+        <thead>
+          <tr data-test-top={PAGE_MARGIN_PX} data-test-bottom={PAGE_MARGIN_PX + 40}>
+            <th>Aluno</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr data-testid="linha-1" data-test-top={PAGE_MARGIN_PX + 40} data-test-bottom={PAGE_MARGIN_PX + 80}>
+            <td>Ana</td>
+          </tr>
+          <tr data-testid="linha-2" data-test-top={VIRADA - 40} data-test-bottom={VIRADA}>
+            <td>Bruno</td>
+          </tr>
+          <tr data-testid="linha-3" data-test-top={VIRADA + 10} data-test-bottom={VIRADA + 50}>
+            <td>Carla</td>
+          </tr>
+        </tbody>
+      </table>
+    );
+
+    const corpo = () =>
+      Array.from(screen.getByTestId("tabela").querySelectorAll("tbody > tr"));
+
+    it("desenha o cabeçalho de novo na folha em que a tabela continua", () => {
+      withTabela(() => 900, () => {
+        render(<PageSheet paginated toolbar={null}>{tabela}</PageSheet>);
+        const linhas = corpo();
+        const repetido = linhas[2];
+        expect(repetido.hasAttribute("data-folha-thead-repetido")).toBe(true);
+        expect(repetido.textContent).toBe("Aluno");
+        expect(repetido.querySelectorAll("th")).toHaveLength(1);
+        // Imediatamente antes da primeira linha da folha 2, e em nenhum outro lugar.
+        expect(linhas[3]).toBe(screen.getByTestId("linha-3"));
+        expect(
+          screen.getByTestId("tabela").querySelectorAll("[data-folha-thead-repetido]"),
+        ).toHaveLength(1);
+      });
+    });
+
+    it("conta a folha que a altura do cabeçalho repetido empurra", () => {
+      // 2.000px de fluxo cabem em 2 folhas; os 40px do cabeçalho repetido
+      // passam do pé da segunda e compram a terceira.
+      withTabela((repetidos) => 2000 + 40 * repetidos, () => {
+        render(<PageSheet paginated toolbar={null}>{tabela}</PageSheet>);
+        expect(screen.getByTestId("page-count")).toHaveTextContent("3 páginas A4");
+      });
+    });
+
+    it("não repete nada enquanto a tabela cabe numa folha só", () => {
+      withTabela(() => 900, () => {
+        render(
+          <PageSheet paginated toolbar={null}>
+            <table data-folha-tabela="" data-testid="tabela">
+              <thead>
+                <tr data-test-top={PAGE_MARGIN_PX} data-test-bottom={PAGE_MARGIN_PX + 40}>
+                  <th>Aluno</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr data-test-top={PAGE_MARGIN_PX + 40} data-test-bottom={PAGE_MARGIN_PX + 80}>
+                  <td>Ana</td>
+                </tr>
+              </tbody>
+            </table>
+          </PageSheet>,
+        );
+        expect(
+          screen.getByTestId("tabela").querySelectorAll("[data-folha-thead-repetido]"),
+        ).toHaveLength(0);
+      });
+    });
+
+    it("ignora a tabela sem cabeçalho ou sem corpo", () => {
+      withTabela(() => 900, () => {
+        render(
+          <PageSheet paginated toolbar={null}>
+            <table data-folha-tabela="" data-testid="sem-cabecalho">
+              <tbody>
+                <tr data-test-top={VIRADA + 10} data-test-bottom={VIRADA + 50}>
+                  <td>Ana</td>
+                </tr>
+              </tbody>
+            </table>
+            <table data-folha-tabela="" data-testid="sem-corpo">
+              <thead>
+                <tr data-test-top={PAGE_MARGIN_PX} data-test-bottom={PAGE_MARGIN_PX + 40}>
+                  <th>Aluno</th>
+                </tr>
+              </thead>
+            </table>
+          </PageSheet>,
+        );
+        expect(document.querySelectorAll("[data-folha-thead-repetido]")).toHaveLength(0);
+      });
+    });
+
+    it("não repete na folha do Revisar, que é contínua (achado 0198)", () => {
+      withTabela(() => 900, () => {
+        render(<PageSheet toolbar={null}>{tabela}</PageSheet>);
+        expect(
+          screen.getByTestId("tabela").querySelectorAll("[data-folha-thead-repetido]"),
+        ).toHaveLength(0);
+      });
+    });
+  });
+
 });
