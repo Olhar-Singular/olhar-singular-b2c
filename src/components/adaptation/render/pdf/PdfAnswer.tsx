@@ -238,6 +238,40 @@ const matchingLinkStyle = (fontSizePt: number) =>
     flexShrink: 0,
   }) as const;
 
+/** O `Canvas` preenche a caixa do elo; a caixa é quem tem medida. */
+const MATCHING_LINK_CANVAS = { width: "100%", height: "100%" } as const;
+
+/**
+ * O separador na CAMADA DE TEXTO (achado 0194).
+ *
+ * O desenho continua sendo a tinta: ele vale em qualquer família, inclusive nas
+ * de acessibilidade (Atkinson e Lexend não trazem U+2194). Mas `Canvas` só
+ * emite operadores de caminho, nunca um `Tj`, então o arquivo saía sem NADA
+ * entre os dois termos: `pdftotext` devolvia `Peixe` e `Rio` colados, e o
+ * leitor de tela sobre o PDF perdia o único sinal de que os dois formam um par.
+ * Num produto para aluno com barreira de aprendizagem, o PDF é justamente o
+ * arquivo com mais chance de passar por leitura assistida.
+ *
+ * Então o caractere viaja junto, invisível (`opacity: 0`, como a camada de
+ * texto de um OCR) e fora do fluxo, para não mudar nem a tinta nem a medida do
+ * par. A família é fixa em Liberation Sans, e não a da folha: é o que garante
+ * que o glifo exista na fonte embutida e que o `ToUnicode` devolva o caractere
+ * certo mesmo quando o professor escolhe Lexend.
+ */
+const MATCHING_LINK_CHAR = "↔";
+const MATCHING_LINK_TEXT_FAMILY = "Liberation Sans";
+const matchingLinkTextStyle = (fontSizePt: number) =>
+  ({
+    ...pdfTextSize(fontSizePt),
+    fontFamily: MATCHING_LINK_TEXT_FAMILY,
+    position: "absolute",
+    top: 0,
+    left: 0,
+    width: "100%",
+    textAlign: "center",
+    opacity: 0,
+  }) as const;
+
 // Largura e altura explícitas: sem elas o @react-pdf mede o `Canvas` chamando o
 // `paint` com um contexto de medição e a linha colapsa.
 const ANSWER_LINE_STYLE = {
@@ -335,10 +369,12 @@ export function PdfAnswer({
                   <PdfRichText content={pair.left} fontSize={elementSizes.alternative} />
                 </Text>
               </View>
-              <Canvas
-                style={matchingLinkStyle(elementSizes.alternative)}
-                paint={paintMatchingLink}
-              />
+              <View style={matchingLinkStyle(elementSizes.alternative)}>
+                <Canvas style={MATCHING_LINK_CANVAS} paint={paintMatchingLink} />
+                <Text style={matchingLinkTextStyle(elementSizes.alternative)}>
+                  {MATCHING_LINK_CHAR}
+                </Text>
+              </View>
               <View style={FLEX}>
                 <Text style={itemStyle}>
                   <PdfRichText content={pair.right} fontSize={elementSizes.alternative} />

@@ -157,16 +157,17 @@ describe("PdfAnswer", () => {
     expect(canvasNodes(el)).toHaveLength(2);
   });
 
-  it("renders matching pairs with a DRAWN connector, never a glyph (0444)", () => {
+  it("renders matching pairs with a DRAWN connector plus a text-layer glyph (0444/0194)", () => {
     const el = PdfAnswer({
       answer: { kind: "matching", pairs: [{ id: id(1), left: rt("BR"), right: rt("Brasília") }] },
     });
     const txt = textOf(el);
     expect(txt).toContain("BR");
     expect(txt).toContain("Brasília");
-    // A seta é desenhada num <Canvas>: as fontes built-in do PDF (CP1252) não
-    // têm o glifo e o trocavam por aspas no arquivo do aluno.
-    expect(txt).not.toContain("↔");
+    // A tinta do elo é o <Canvas> (0444): o traço vale em qualquer família,
+    // inclusive nas de acessibilidade, que não trazem o glifo. O caractere
+    // viaja junto, invisível, só para existir na camada de texto (0194).
+    expect(txt).toContain("↔");
     expect(canvasNodes(el)).toHaveLength(1);
   });
 

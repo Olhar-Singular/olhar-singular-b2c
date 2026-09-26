@@ -88,7 +88,12 @@ describe("PdfAnswer — nenhum glifo fora da CP1252 chega ao papel", () => {
     );
 
     expect(text).toContain("Peixe");
-    const foreign = [...text].filter((ch) => !isWinAnsi(ch.codePointAt(0) ?? 0));
+    // O `↔` da camada de texto invisível (achado 0194) é a única exceção: ele
+    // não é tinta, viaja em Liberation Sans (que tem o glifo) e existe só para
+    // `pdftotext` e o leitor de tela acharem o elo entre os dois termos. Quem
+    // IMPRIME o elo continua sendo o desenho, testado logo abaixo.
+    const painted = text.replaceAll("\u2194", "");
+    const foreign = [...painted].filter((ch) => !isWinAnsi(ch.codePointAt(0) ?? 0));
     expect(foreign).toEqual([]);
   });
 });
