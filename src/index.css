@@ -601,6 +601,27 @@
   font-size: var(--doc-fs-math, 1.21em);
 }
 
+/* O vão da fórmula em bloco (achado 0189). O subtree do KaTeX é decoração
+   (mesma leitura do achado 0438) e a folha de estilo da biblioteca traz
+   `margin: 1em 0` no `.katex-display`, vão escolhido por ninguém deste produto.
+   Na folha do Revisar ele colapsava para fora do NodeViewWrapper e sumia (certo
+   por acidente, e travado em 16 px: surdo ao controle "Espaçamento" do popover
+   Formato); na prévia do Exportar ficava contido, porque item de flex estabelece
+   contexto de formatação próprio, e a fórmula media 32 px a mais que na folha;
+   no PDF não existe (`PdfMath` gasta só `marginBottom`, achado 0407). A dupla
+   classe só sobe a especificidade acima da regra da biblioteca. */
+.katex-display.katex-display {
+  margin: 0;
+}
+
+/* Zerado o vão da biblioteca, o vão da fórmula de topo no editor passa a vir do
+   documento, como em título, parágrafo e divisória (0188) — e a margem COLAPSA
+   com a do vizinho, que é o que mantém um vão só. Os resets de ponta são os do
+   achado 0187, que já miram qualquer `[data-node-view-wrapper]` extremo. */
+.tiptap:not(.rich-text-field) > [data-testid="blockmath-node"] {
+  margin: var(--doc-block-spacing, 1rem) 0;
+}
+
 /* Keep top-level question cards spaced consistently with the new containers
  * (margin only — the card already has its own border; do NOT double-border). */
 .tiptap:not(.rich-text-field) > [data-type="question"] {
