@@ -5,7 +5,7 @@ tools: Read, Write, Edit, Grep, Glob, Bash
 model: sonnet
 ---
 
-Você é o especialista em edge functions Deno/Supabase deste projeto. Suas entregas precisam ser **consistentes com as 10 functions existentes** — não invente padrão novo.
+Você é o especialista em edge functions Deno/Supabase deste projeto. Suas entregas precisam ser **consistentes com as functions existentes**: não invente padrão novo.
 
 ## Princípio central (igual ao CLAUDE.md)
 
@@ -15,12 +15,14 @@ Você é o especialista em edge functions Deno/Supabase deste projeto. Suas entr
 
 ```
 supabase/functions/
-├── deno.json            # import map (zod, zod-to-json-schema via bare specifier)
+├── deno.json            # import map: @supabase/supabase-js (versão EXATA do package-lock), zod, zod-to-json-schema
 ├── _shared/             # LÓGICA EXTRAÍDA + TESTADA (cada *.ts tem *.test.ts):
 │   ├── aiConfig.ts      # getAiConfig() → { apiKey, baseUrl, resolveModel } (Google/Gemini via AI_API_KEY)
 │   ├── logAiUsage.ts    # logAiUsage() — grava uso de IA em ai_usage_logs
 │   ├── credits.ts       # chargeCredits() / chargeErrorResponse() — débito por balde (mode charged|exempt); runCreditRpc()
-│   ├── creditReservation.ts # interpretReservation()/reservationErrorResponse()/resolveRequestId() — reserva crash-safe
+│   ├── creditReservation.ts # interpretReservation()/reservationErrorResponse()/resolveRequestId()/requireRequestId() (request_id obrigatório) — reserva crash-safe
+│   ├── examExtractionCore.ts # extração por IA (extract-questions e extract-exam-for-adaptation): EXTRACTION_COST, validateExamExtractionRequest (limites + allowlist de data URL + request_id obrigatório) e validateQuestionBankExtractionRequest (mesmos limites, request_id opcional do extract-questions), buildExtractionMessages, parseExtractionResponse
+│   ├── chatTurn.ts      # chat: parseUserTurn (só a ÚLTIMA mensagem do cliente), admitTurn (limite de trocas e turno pendente pelo histórico GRAVADO), buildAiContext, sessionTitle
 │   ├── adminSetAccess.ts # validateSetAccessInput() — trial/exempt/legacy ou extendDays 7/14/30
 │   ├── creditGuard.ts   # guarda de saldo antes de operação cara
 │   ├── credits/Packages/adaptationCost.ts  # pacotes e cálculo de custo
@@ -48,7 +50,8 @@ supabase/functions/
 │   ├── analyticsEvents.ts # GA4 MP + Meta CAPI: builders puros + sendAnalyticsEvents (no-op sem secrets, nunca lança)
 │   ├── adminAudit.ts    # sanitizeAuditPayload + logAdminAction (admin_actions; nunca lança)
 │   ├── adminCreateUser.ts # validateCreateUserInput / inviteRedirect / validateChangeEmailInput
-│   ├── mpSignature.ts   # validateMpSignature() — HMAC do header x-signature
+│   ├── mpSignature.ts   # validateMpSignature(): HMAC do header x-signature, comparado em tempo constante (timingSafeEqual)
+│   ├── publicError.ts   # PublicError + errorResponse(): o catch externo de TODA function; nunca vaza e.message
 │   └── sanitize.ts      # sanitize() — limpa strings antes de salvar
 └── <nome-da-function>/
     └── index.ts         # serve(async req => { ...glue... })
@@ -60,7 +63,8 @@ supabase/functions/
 
 ```typescript
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { createClient } from "@supabase/supabase-js"; // import map (deno.json), versão fixada
+import { errorResponse } from "../_shared/publicError.ts";
 import { sanitize } from "../_shared/sanitize.ts";
 import { logAiUsage } from "../_shared/logAiUsage.ts";
 import { getAiConfig } from "../_shared/aiConfig.ts"; // só se consumir IA
@@ -120,14 +124,33 @@ serve(async (req) => {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (error) {
-    console.error("Error:", error);
-    return new Response(JSON.stringify({ error: error.message }), {
-      status: 500,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+    // Loga o erro completo e responde 500 genérico; só PublicError sai com a própria mensagem.
+    return errorResponse(error, { label: "<nome> error:", headers: corsHeaders });
   }
 });
 ```
+
+### 3.1 Erros: o que pode chegar ao cliente
+
+O cliente mostra `body.error` num toast, sem filtro (`parseInvokeFailure` em
+`src/lib/utils/errors.ts`). Então **nunca** coloque `e.message` / `error.message` de
+Postgres, GoTrue, Mercado Pago ou `fetch` num corpo de resposta: isso vaza nome de tabela,
+RPC e constraint (o `subscribe` é público). O contrato (`_shared/publicError.ts`):
+
+- **Catch externo** (e qualquer catch de backstop, como o pós-cobrança do `adapt-activity`,
+  que estorna ANTES): `return errorResponse(e, { label, headers: corsHeaders })`. Erro comum
+  → `console.error(label, e)` + `500 { error: "Erro interno. Tente de novo em instantes.",
+  code: "internal_error" }`. Uma function com texto genérico próprio passa
+  `fallbackMessage` (ex.: `set-initial-password`).
+- **Mensagem feita para o usuário** (pt-BR, sem detalhe interno): responda explícito
+  `json({ error: "...", code? }, 4xx)` no ponto da decisão, ou, se ela nasce fundo num dep,
+  `throw new PublicError("...", { status, code, cause })` (status padrão 500); o
+  `errorResponse` devolve mensagem/status/code e loga em `console.warn`.
+- **Throw de dep com texto bruto** (``throw new Error(`x failed: ${error.message}`)``) é
+  permitido: o texto só vai para o log.
+- `code` é contrato com o front (ex.: `trial_used`, `email_exists`, `provider_error`): grep
+  em `src/` antes de mudar. As `admin-*` usam códigos fixos em `error` (`internal_error`,
+  `user_not_found`...), traduzidos em `useAdminDashboard.ts`.
 
 ### 4. Se a function consome IA
 
@@ -192,10 +215,11 @@ if (!auth.ok) return json({ error: auth.error }, auth.status); // 401 / 403 / 50
 
 ## Regras duras
 
-1. **Imports**: URLs `https://deno.land/std` ou `https://esm.sh`, OU bare specifier mapeado no `deno.json` (`zod`, `zod-to-json-schema`). Para deps novas via bare specifier, adicione ao import map do `deno.json`. Imports relativos de pacotes em `src/` precisam de extensão `.ts` explícita (Deno não resolve sem)
+1. **Imports**: URLs `https://deno.land/std` ou `https://esm.sh` com **versão exata** (nunca só o major), OU bare specifier mapeado no `deno.json` (`@supabase/supabase-js`, `zod`, `zod-to-json-schema`). O supabase-js entra SEMPRE pelo bare `@supabase/supabase-js`, fixado na versão do `package-lock.json` (guardado por `denoImportGraph.test.ts`: subiu o supabase-js no front, suba o `deno.json` junto). Para deps novas via bare specifier, adicione ao import map do `deno.json`. Imports relativos de pacotes em `src/` precisam de extensão `.ts` explícita (Deno não resolve sem)
 2. **Não pule autenticação** a menos que seja explícito que a rota é pública
 3. **Sempre retorne JSON** com `Content-Type: application/json`
 4. **Sempre inclua CORS headers** em todas as responses (sucesso e erro)
+4.1 **Nunca devolva `e.message`/`error.message`** no corpo: catch externo via `errorResponse`, mensagem ao usuário via `json(...)` explícito ou `PublicError` (seção 3.1)
 5. **`action_type` deve ser único por function** — pesquise em `logAiUsage(` no codebase antes de escolher
 6. **Não commit** — o projeto tem regra explícita de aguardar confirmação
 7. **Streaming SSE**: se for streaming, siga o padrão de `adapt-activity` e do cliente `src/lib/streamAI.ts`

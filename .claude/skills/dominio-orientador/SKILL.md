@@ -17,10 +17,10 @@ Plataforma educacional B2C. **Educadores adaptam atividades pedagógicas (provas
 
 | Fluxo | Página | Hook(s) | Edge function | Resumo |
 |-------|--------|---------|---------------|--------|
-| **Adaptar** | `AdaptarPage`, `EditAdaptationPage`, `MyAdaptationsPage` | `useAdaptations`, `useAdaptationDraft` | `adapt-activity` | Wizard: Tipo → Atividade → Barreiras → Gerar (IA) → **Revisar** (superfície única Tiptap canônico: edição inline + card da questão + Aparência) → Exportar PDF. A **edge function** grava a linha em `adaptations` (draft) e o cliente só a atualiza por autosave. |
+| **Adaptar** | `AdaptarPage`, `EditAdaptationPage`, `MyAdaptationsPage` | `useAdaptations`, `useAdaptationDraft` | `adapt-activity`, `extract-exam-for-adaptation` (upload direto) | Wizard: Tipo → Atividade → Barreiras → Gerar (IA) → **Revisar** (superfície única Tiptap canônico: edição inline + card da questão + Aparência) → Exportar PDF. A **edge function** grava a linha em `adaptations` (draft) e o cliente só a atualiza por autosave. No upload direto, o Gerar primeiro **lê o arquivo com IA (cobrado à parte, ver gotcha de reserva)** e só então adapta. |
 | **Perfis de barreira** | `BarrierProfilesPage` | `useBarrierProfiles` | — | Perfis (aluno + barreiras) reutilizados no passo "Barreiras". |
 | **Banco de questões** | `QuestionBankPage` | `useQuestionBank` | `extract-questions` | Extrai questões de PDF de prova. |
-| **Chat** | `ChatPage` | `useChatSessions`, `useSendMessage` | `chat` | Orientação pedagógica via IA. |
+| **Chat** | `ChatPage` | `useChatSessions`, `useSendMessage` | `chat` | Orientação pedagógica via IA. 3 créditos por conversa nova (máx. 10 conversas), até 20 trocas por conversa; mensagem de até 4000 caracteres (`src/lib/domain/chatLimits.ts`, espelhado em `_shared/chatTurn.ts`). Ver gotcha do chat. |
 | **Créditos** | `CreditsPage` | `useCredits` | `create-card-payment`, `create-pix-payment`, `mp-webhook` | Compra sem sair da página: cartão pelo Card Payment Brick (`components/payments/MpCardBrick` + `components/credits/CardPaymentDialog`), Pix pelo QR (`components/credits/PixPaymentDialog`). Pacotes vêm da tabela `credit_packages` (`usePackages`). RPCs `deduct_credits`/`grant_credits`/`approve_purchase_and_grant`. |
 | **Assinatura** | `SubscribePage` (`/assinar?plano=`, `/assinar?trial=1` (só anônimo), **pública**: `SubscribeRoute` escolhe `Layout` com sessão ou `PublicShell` anônimo; anônimo passa por `components/subscribe/AccountStep` antes do Brick), `SetPasswordPage` (`/definir-senha`, forçada pelo `ProtectedRoute` enquanto `must_set_password`), `LegalPage` (`/termos`, `/privacidade`, `/reembolso`), `CreditsPage` (seção "Sua assinatura": `components/credits/SubscriptionCard`), `LandingPage` (`PricingSection` lê `usePlans`) | `useSubscription` (`usePlans`, `useSubscription`, `useSubscribe`, `useCancelSubscription`, `useUpdateSubscriptionCard`, `useSetInitialPassword`, `useLastCharge`, `useRefundLastCharge`) | `subscribe` (`verify_jwt = false`), `set-initial-password`, `cancel-subscription`, `update-subscription-card`, `mp-webhook` (tópicos `subscription_*`), `refund-last-charge` | Plano mensal via MP Assinaturas (`POST /preapproval` com o token do Brick). Tabelas `plans` (seed, RLS pública), `subscriptions` (uma viva por usuário), `subscription_invoices`. RPCs `activate_subscription` (otimista), `renew_subscription`, `clawback_subscription`, `mark_subscription_past_due`, `cancel_subscription_local`, `sync_subscription_status`, `trial_used_by_cpf`, `refund_last_charge`, `confirm_refund`. Helpers puros da UI em `lib/domain/subscriptionUi.ts` (inclui `canRefundLastCharge`). |
 | **Admin** | `AdminPage` (abas Usuários / Assinaturas e receita / Custos de IA), `DashboardPage` | `useAdminDashboard` (`useCreateUser`, `useChangeEmail`, `useAdminCancelSubscription`, `useSetAccess`, `useGrantCredits`, `useSetUserStatus`), `useHistory` | `admin-dashboard`, `admin-create-user`, `admin-change-email`, `admin-set-access`, `admin-grant-credits`, `admin-user-status`, `cancel-subscription` (com `userId`) | Painel super-admin. Contas novas fora do checkout nascem só por **convite** (`CreateUserDialog` → `inviteUserByEmail` com `access_kind` trial|exempt; link em `/redefinir-senha?convite=1`). `AccessMenu` altera acesso, estende teste, troca e-mail e cancela assinatura. Toda ação grava em **`admin_actions`** (`_shared/adminAudit.ts`, payload sem e-mail/CPF). `admin-dashboard` devolve `users[].subscription` (viva ou a mais recente, com `trial_ends_at`/`first_payment_confirmed`/`last_charge` do teste com cartão) e `subscriptions { by_status, mrr_brl, live }`; estados "Inadimplente" (`past_due`) e "Teste (cartão)" (`trial_card`, distinto de "Teste (convite)" = `trial`) em `lib/utils/adminAccess.ts` (`isCardTrialUser`, `formatLastCharge`). Num teste com cartão ainda vivo, `AccessMenu` bloqueia "Estender" (o débito do 8º dia é fixo no MP; `admin_extend_trial` devolve `card_trial`). |
@@ -30,9 +30,9 @@ Plataforma educacional B2C. **Educadores adaptam atividades pedagógicas (provas
 ## Onde mora a lógica
 
 - `src/lib/adaptation/` — núcleo do Adaptar: documento **canônico** (`canonical/`: DSL, blocos, cores) + schema **Tiptap** (`tiptap/`). **Compartilhado** entre editor (browser) e edge function (Deno). Antes de mexer: skill `validate-adaptar`.
-- `src/lib/domain/` — parsers, tipos e limites (`questionParser`, `QuestionType`, `SUBJECTS`, `activityLimits`).
+- `src/lib/domain/` — parsers, tipos e limites (`questionParser`, `QuestionType`, `SUBJECTS`, `activityLimits`, `chatLimits`, `extractionCost`).
 - `src/components/adaptation/render/pdf/` — geração de PDF (`@react-pdf/renderer`, math/LaTeX, fontes). **ÁREA FRÁGIL** → agente `pdf-debugger`.
-- `supabase/functions/_shared/` — lógica testável das edge functions (o `index.ts` é só glue HTTP).
+- `supabase/functions/_shared/`: lógica testável das edge functions (o `index.ts` é só glue HTTP). Erro que sai para o cliente passa por `_shared/publicError.ts` (`errorResponse` no catch externo: loga e responde 500 genérico; só `PublicError` ou um `json({ error })` explícito carregam texto ao usuário), porque o front mostra `body.error` cru no toast. supabase-js entra pelo import map (`deno.json`), fixado na versão do `package-lock.json`.
 - `supabase/migrations/` — schema, RPCs de crédito, RLS (owner-based; super-admin cross-tenant).
 
 ## Gotchas de dados (mordem)
@@ -232,8 +232,29 @@ Plataforma educacional B2C. **Educadores adaptam atividades pedagógicas (provas
   encerrado / créditos esgotados com CTA para `/creditos`. Ban do Auth é só ação disciplinar.
 - **Cobrança do Adaptar (e da extração) é por RESERVA, não por débito solto** (migrations
   `20260723140633_credit_reservations` e `20260913000001_consume_credits`): `adapt-activity` chama
-  **`open_adapt_reservation`** e `extract-questions` chama **`open_credit_reservation(kind 'extract')`**
-  (reserva + débito por balde **na mesma transação**, gravando `plan_charged`/`extra_charged` e
+  **`open_adapt_reservation`**; `extract-questions` (banco de questões) e `extract-exam-for-adaptation`
+  (upload direto do Adaptar) chamam **`open_credit_reservation(kind 'extract')`**, os dois com o mesmo
+  `EXTRACTION_COST` (5, `_shared/examExtractionCore.ts`, espelhado em `src/lib/domain/extractionCost.ts`
+  com sync test). **A leitura do arquivo no upload direto NÃO é mais grátis nem "embutida" na
+  adaptação**: era uma chamada ao Gemini 2.5 Pro sem cobrança nem limite, que qualquer conta, mesmo
+  com saldo 0, podia repetir em loop. Hoje ela valida o body **antes** de cobrar
+  (`validateExamExtractionRequest`: texto até 100k chars, até 20 imagens, 20M chars somados, só data
+  URL `data:image/(png|jpeg|webp);base64`, e `request_id` **obrigatório**), cobra, estorna em falha do
+  gateway e liquida no sucesso (mesmo vazio: a IA rodou). O `extract-questions` passa pelos mesmos
+  limites antes de cobrar via `validateQuestionBankExtractionRequest`, com uma diferença: lá o
+  `request_id` segue **opcional** (a `QuestionBankPage` não manda; ausente é gerado, malformado é 400). `buildExtractionMessages` também descarta
+  imagem fora da allowlist (uma URL http viraria fetch do provedor por nossa conta) e o
+  `docx-utils` só extrai PNG/JPEG/WEBP. No cliente, `extractExamQuestions` manda um `request_id` novo
+  por tentativa, devolve `insufficient_credits` no 402 (o `StepGenerate` mostra a mesma tela de
+  créditos do adapt) e **reaproveita a extração paga do mesmo arquivo** (WeakMap por objeto
+  `UploadedExam`): "Tentar novamente" após falha do adapt, o desvio das >12 questões e o Regerar não
+  cobram de novo. **Quem decide se há leitura do arquivo é o MODO, não a presença do arquivo**:
+  `activeUploadedExam(data)` (`wizardState.ts`) só devolve o `uploadedExam` com
+  `activityInputMode === "upload"`. "Voltar" no upload e trocar o tipo voltam o modo para `bank` mas
+  mantêm o arquivo anexado; decidir pela presença lia (e cobrava) o arquivo abandonado no lugar do
+  texto colado. `StepGenerate`, o custo do passo Barreiras (que soma os 5) e o `originalExam` da
+  Revisar passam todos por esse helper, então o custo mostrado é o cobrado.
+  (Reserva + débito por balde **na mesma transação**, gravando `plan_charged`/`extra_charged` e
   `period_end_at_open`); estorno volta ao balde de origem, e a parte do plano só volta se o MESMO
   período ainda estiver ativo (senão é descartada, nunca vira extra). Só existem duas saídas —
   `settle_credit_reservation` logo antes do 200, ou `reverse_credit_reservation` em qualquer
@@ -244,6 +265,21 @@ Plataforma educacional B2C. **Educadores adaptam atividades pedagógicas (provas
   quando a extensão existe; senão roda à mão). Nunca debite direto no fluxo Adaptar — o débito
   sem reserva é justamente o bug que isso corrige. Cobertura: pgTAP `credit_reservations.test.sql`
   + `free_adaptation_claim.test.sql`; decisões puras em `_shared/creditReservation.ts`.
+- **Chat: o histórico que vale é o GRAVADO, nunca o que o cliente manda** (`_shared/chatTurn.ts`).
+  O `ChatPage` ainda envia a conversa inteira em `messages` (contrato mantido), mas o `chat` só lê
+  a **última** entrada, que precisa ser `{ role: "user", content }` não vazia e com até 4000
+  caracteres (400 senão, antes de qualquer cobrança). O limite de 20 trocas conta as respostas do
+  assistente em `chat_sessions.messages`, o contexto da IA (últimos 10 turnos) sai desse histórico
+  e é ele + a troca nova que se grava. Antes, contar o array do cliente deixava reusar um
+  `session_id` pago (3 créditos) com um histórico falso curto para sempre, com prompt de qualquer
+  tamanho e turnos `assistant`/`system` forjados. **Um turno por vez por conversa**: o `chat`
+  grava o turno do usuário ANTES de chamar a IA com um UPDATE condicional em `updated_at` (o
+  mesmo token otimista das adaptações); quem chega com um turno pendente há menos de 2 min
+  (`TURN_IN_FLIGHT_TTL_MS`) leva 409, e um turno pendente mais velho (isolate morreu) é
+  descartado. Falha da IA devolve o histórico ao estado anterior. **Pendência de RLS**: a policy
+  de `chat_sessions` ainda dá INSERT/UPDATE ao `authenticated` (migration `20260420000002`), então
+  o usuário consegue zerar o próprio `messages` ou criar conversa sem pagar direto pelo PostgREST;
+  o cliente só lê a tabela, e fechar isso exige migration revogando INSERT/UPDATE.
 - **Toda RPC de dinheiro passa por `runCreditRpc` (`_shared/credits.ts`)**: supabase-js
   **resolve** (não rejeita) em erro de banco, então `await client.rpc("grant_credits", …)` sem
   ler `{ error }` parece sucesso — o try/catch do refund nunca dispara, o `onError` vira código
