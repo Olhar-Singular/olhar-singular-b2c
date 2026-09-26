@@ -58,7 +58,17 @@ export function MetadataDrawer({
           event.preventDefault();
           trigger.focus();
         }}
-        className="w-[400px] max-w-[92vw] overflow-y-auto border-surface-chrome-line bg-surface-chrome sm:max-w-[400px]"
+        className={[
+          "w-[400px] max-w-[92vw] overflow-y-auto border-surface-chrome-line bg-surface-chrome sm:max-w-[400px]",
+          // 0367 — o botão de fechar é injetado pelo `SheetContent` (shadcn,
+          // `src/components/ui/*` é protegido) sem padding nem tamanho: a caixa era
+          // a do ícone, 16 x 16, abaixo dos 24 x 24 CSS px do WCAG 2.2 SC 2.5.8 (AA).
+          // Quem consome cresce o alvo: ele é o único filho DIRETO `<button>` do
+          // content, e o `-m-1` devolve o `p-1` ao posicionamento, para o ícone
+          // continuar onde estava — cresce a caixa, não o desenho.
+          "[&>button]:-m-1 [&>button]:flex [&>button]:min-h-[24px] [&>button]:min-w-[24px]",
+          "[&>button]:items-center [&>button]:justify-center [&>button]:p-1",
+        ].join(" ")}
       >
         <SheetHeader>
           <SheetTitle className="flex items-center gap-2 text-surface-ink">

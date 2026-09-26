@@ -118,3 +118,26 @@ describe("MetadataDrawer — devolução de foco ao gatilho (0349)", () => {
     expect(document.activeElement).not.toBe(screen.getByRole("button", { name: "Sobre" }));
   });
 });
+
+/**
+ * 0367 — o botão de fechar vem do `SheetContent` (shadcn, arquivo protegido) sem
+ * padding nem tamanho: a caixa era a do ícone, 16 x 16, abaixo dos 24 x 24 CSS px
+ * do WCAG 2.2 SC 2.5.8 (AA). A gaveta cresce o alvo de quem consome.
+ */
+describe("MetadataDrawer — alvo de toque do botão de fechar (0367)", () => {
+  it("cresce o botão injetado pelo Sheet até o piso de 24 x 24", () => {
+    setup();
+    const dialog = screen.getByRole("dialog");
+    const close = screen.getByRole("button", { name: "Close" });
+    // o alvo alcançado pelas utilitárias `[&>button]:*` é filho DIRETO do content
+    expect(close.parentElement).toBe(dialog);
+    for (const cls of [
+      "[&>button]:min-h-[24px]",
+      "[&>button]:min-w-[24px]",
+      "[&>button]:p-1",
+      "[&>button]:-m-1",
+    ]) {
+      expect(dialog).toHaveClass(cls);
+    }
+  });
+});
