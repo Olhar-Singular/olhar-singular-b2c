@@ -3,6 +3,7 @@ import { createClient } from "@supabase/supabase-js";
 import { authorizeSuperAdmin } from "../_shared/adminAuth.ts";
 import { logAdminAction } from "../_shared/adminAudit.ts";
 import { validateStatusInput, banDurationFor } from "../_shared/adminUserStatus.ts";
+import { errorResponse } from "../_shared/publicError.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -54,7 +55,6 @@ serve(async (req) => {
     await logAdminAction(supabase, { actorId: auth.userId, targetUserId: userId, action });
     return json({ success: true, userId, action, is_active: action === "unban" }, 200);
   } catch (error) {
-    console.error("admin-user-status unhandled error:", error);
-    return json({ error: "internal_error" }, 500);
+    return errorResponse(error, { label: "admin-user-status unhandled error:", headers: corsHeaders });
   }
 });

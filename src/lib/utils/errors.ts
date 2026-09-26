@@ -55,7 +55,11 @@ export interface InvokeFailure {
 
 /**
  * For supabase.functions.invoke() errors: reads the real JSON body (message + code)
- * before falling back to parseEdgeFnError. The message is always user-safe.
+ * before falling back to parseEdgeFnError. The message is user-safe by the edge
+ * functions' contract: `error` carries pt-BR text written for the user (or, in
+ * the admin-* functions, a fixed code useAdminDashboard translates), and any
+ * unexpected failure is answered with a generic message and logged server-side
+ * (supabase/functions/_shared/publicError.ts).
  */
 export async function parseInvokeFailure(err: unknown, fallback: string): Promise<InvokeFailure> {
   if (err instanceof Error && err.message.toLowerCase() !== SUPABASE_GENERIC_INVOKE_MSG) {

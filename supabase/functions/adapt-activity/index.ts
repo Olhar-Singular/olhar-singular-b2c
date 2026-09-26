@@ -36,6 +36,7 @@ import {
   type PromptBarrier,
 } from "../_shared/adaptationPrompt.ts";
 import { aiActivityJsonSchema } from "../../../src/lib/adaptation/canonical/ai.ts";
+import { errorResponse } from "../_shared/publicError.ts";
 
 // Max total attempts at getting a valid structured response (1 initial + 2 reasks).
 const MAX_ATTEMPTS = 3;
@@ -407,8 +408,9 @@ serve(async (req) => {
       return await failure(502, "Não foi possível gerar uma adaptação válida. Tente novamente.");
     } catch (inner) {
       // Backstop: any unexpected error after the charge must still refund.
-      console.error("adapt-activity post-charge error:", inner);
-      return await failure(500, inner instanceof Error ? inner.message : "Erro desconhecido");
+      // Its message is internal (DB/network text): logged, never sent.
+      await reverseReservation();
+      return errorResponse(inner, { label: "adapt-activity post-charge error:", headers: corsHeaders });
     }
   } catch (e) {
     // This outer catch is only reachable for errors that occur BEFORE or DURING
@@ -417,10 +419,6 @@ serve(async (req) => {
     // still `open` and the reconciliation job will reverse it — which is exactly
     // the safety net that also covers this isolate dying outright.
     // Do NOT move any post-charge code above this boundary.
-    console.error("adapt-activity error:", e);
-    return new Response(
-      JSON.stringify({ error: e instanceof Error ? e.message : "Erro desconhecido" }),
-      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },
-    );
+    return errorResponse(e, { label: "adapt-activity error:", headers: corsHeaders });
   }
 });

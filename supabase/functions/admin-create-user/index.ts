@@ -3,6 +3,7 @@ import { createClient } from "@supabase/supabase-js";
 import { authorizeSuperAdmin } from "../_shared/adminAuth.ts";
 import { inviteRedirect, validateCreateUserInput } from "../_shared/adminCreateUser.ts";
 import { logAdminAction } from "../_shared/adminAudit.ts";
+import { errorResponse } from "../_shared/publicError.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -77,7 +78,6 @@ serve(async (req) => {
     console.info("admin-create-user:", auth.userId, "->", data.user.id, mode);
     return json({ success: true, userId: data.user.id, mode }, 200);
   } catch (error) {
-    console.error("admin-create-user unhandled error:", error);
-    return json({ error: "internal_error" }, 500);
+    return errorResponse(error, { label: "admin-create-user unhandled error:", headers: corsHeaders });
   }
 });

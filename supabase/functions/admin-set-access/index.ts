@@ -3,6 +3,7 @@ import { createClient } from "@supabase/supabase-js";
 import { authorizeSuperAdmin } from "../_shared/adminAuth.ts";
 import { validateSetAccessInput } from "../_shared/adminSetAccess.ts";
 import { logAdminAction } from "../_shared/adminAudit.ts";
+import { errorResponse } from "../_shared/publicError.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -71,7 +72,6 @@ serve(async (req) => {
     console.info("admin-set-access:", auth.userId, "->", input.userId, input.action);
     return json({ success: true, ...data }, 200);
   } catch (error) {
-    console.error("admin-set-access unhandled error:", error);
-    return json({ error: "internal_error" }, 500);
+    return errorResponse(error, { label: "admin-set-access unhandled error:", headers: corsHeaders });
   }
 });

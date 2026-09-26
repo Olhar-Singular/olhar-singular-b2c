@@ -3,6 +3,7 @@ import { createClient } from "@supabase/supabase-js";
 import { authorizeSuperAdmin } from "../_shared/adminAuth.ts";
 import { logAdminAction } from "../_shared/adminAudit.ts";
 import { validateGrantInput } from "../_shared/adminGrantCredits.ts";
+import { errorResponse } from "../_shared/publicError.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -66,7 +67,6 @@ serve(async (req) => {
     });
     return json({ success: true, new_balance: data.new_balance }, 200);
   } catch (error) {
-    console.error("admin-grant-credits unhandled error:", error);
-    return json({ error: "internal_error" }, 500);
+    return errorResponse(error, { label: "admin-grant-credits unhandled error:", headers: corsHeaders });
   }
 });

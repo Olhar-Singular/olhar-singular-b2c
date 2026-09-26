@@ -7,6 +7,7 @@ import { cancelPreapprovalAtMp, mpRequest } from "../_shared/mpHttp.ts";
 import { clientIp, hashIdentifier } from "../_shared/checkoutGuard.ts";
 import { parseAccountInput, runAnonymousCheckout, type CheckoutDeps } from "../_shared/accountProvision.ts";
 import { dispatchAnalytics, readAnalyticsConfig, sendAnalyticsEvents, type AttributionLike } from "../_shared/analyticsEvents.ts";
+import { errorResponse } from "../_shared/publicError.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -346,7 +347,7 @@ serve(async (req) => {
       ...(result.trialEndsAt ? { trialEndsAt: result.trialEndsAt } : {}),
     });
   } catch (e) {
-    console.error("subscribe error:", e);
-    return json({ error: e instanceof Error ? e.message : "Erro desconhecido." }, 500);
+    // The deps above throw with raw Postgres/GoTrue text: logged, never sent.
+    return errorResponse(e, { label: "subscribe error:", headers: corsHeaders });
   }
 });

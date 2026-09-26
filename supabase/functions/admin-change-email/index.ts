@@ -3,6 +3,7 @@ import { createClient } from "@supabase/supabase-js";
 import { authorizeSuperAdmin } from "../_shared/adminAuth.ts";
 import { validateChangeEmailInput } from "../_shared/adminCreateUser.ts";
 import { logAdminAction } from "../_shared/adminAudit.ts";
+import { errorResponse } from "../_shared/publicError.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -61,7 +62,6 @@ serve(async (req) => {
     console.info("admin-change-email:", auth.userId, "->", userId);
     return json({ success: true }, 200);
   } catch (error) {
-    console.error("admin-change-email unhandled error:", error);
-    return json({ error: "internal_error" }, 500);
+    return errorResponse(error, { label: "admin-change-email unhandled error:", headers: corsHeaders });
   }
 });

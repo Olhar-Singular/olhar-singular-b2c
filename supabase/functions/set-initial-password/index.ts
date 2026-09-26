@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "@supabase/supabase-js";
 import { parsePasswordInput, runSetInitialPassword } from "../_shared/setInitialPassword.ts";
+import { errorResponse } from "../_shared/publicError.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -68,8 +69,11 @@ serve(async (req) => {
 
     return json({ ok: true, flagCleared: outcome.flagCleared });
   } catch (e) {
-    console.error("set-initial-password error:", e instanceof Error ? e.message : e);
     // GoTrue's messages are English and can mention the password rule; keep it generic.
-    return json({ error: "Não foi possível definir a senha. Tente de novo." }, 500);
+    return errorResponse(e, {
+      label: "set-initial-password error:",
+      headers: corsHeaders,
+      fallbackMessage: "Não foi possível definir a senha. Tente de novo.",
+    });
   }
 });

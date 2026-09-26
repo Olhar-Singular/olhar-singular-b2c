@@ -4,6 +4,7 @@ import { selectPackage, type CreditPackageRow } from "../_shared/creditPackages.
 import { buildPixPaymentBody, extractPixQr } from "../_shared/mpPixPayment.ts";
 import { maskPayer } from "../_shared/mpCardPayment.ts";
 import { mpRequest } from "../_shared/mpHttp.ts";
+import { errorResponse } from "../_shared/publicError.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -147,7 +148,6 @@ serve(async (req) => {
       ticketUrl:    qr.ticketUrl,
     });
   } catch (e) {
-    console.error("create-pix-payment error:", e);
-    return json({ error: e instanceof Error ? e.message : "Erro desconhecido." }, 500);
+    return errorResponse(e, { label: "create-pix-payment error:", headers: corsHeaders });
   }
 });

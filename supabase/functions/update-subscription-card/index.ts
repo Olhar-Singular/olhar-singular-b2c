@@ -3,6 +3,7 @@ import { createClient } from "@supabase/supabase-js";
 import { parseUpdateCardInput } from "../_shared/subscribeInput.ts";
 import { runUpdateSubscriptionCard } from "../_shared/subscriptionActions.ts";
 import { buildSubscriptionActionDeps } from "../_shared/subscriptionActionDeps.ts";
+import { errorResponse } from "../_shared/publicError.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -61,7 +62,6 @@ serve(async (req) => {
 
     return json({ status: "updated", subscriptionId: result.subscriptionId });
   } catch (e) {
-    console.error("update-subscription-card error:", e);
-    return json({ error: e instanceof Error ? e.message : "Erro desconhecido." }, 500);
+    return errorResponse(e, { label: "update-subscription-card error:", headers: corsHeaders });
   }
 });

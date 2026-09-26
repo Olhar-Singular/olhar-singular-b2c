@@ -11,6 +11,7 @@ import { parseSubscriptionNotification } from "../_shared/mpPreapproval.ts";
 import { handleSubscriptionWebhook, type SubscriptionWebhookDeps } from "../_shared/subscriptionActions.ts";
 import { dispatchAnalytics, readAnalyticsConfig, sendAnalyticsEvents, type AnalyticsEvent, type AttributionLike } from "../_shared/analyticsEvents.ts";
 import { cancelPreapprovalAtMp, mpRequest } from "../_shared/mpHttp.ts";
+import { errorResponse } from "../_shared/publicError.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -223,7 +224,7 @@ serve(async (req) => {
 
     return json({ received: true, credits_granted: result.credits });
   } catch (e) {
-    console.error("mp-webhook error:", e);
-    return json({ error: e instanceof Error ? e.message : "Erro desconhecido." }, 500);
+    // Public endpoint: the detail stays in the logs. Still a 500, so MP retries.
+    return errorResponse(e, { label: "mp-webhook error:", headers: corsHeaders });
   }
 });

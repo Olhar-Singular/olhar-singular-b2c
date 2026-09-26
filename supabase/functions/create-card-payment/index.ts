@@ -7,6 +7,7 @@ import { statusDetailMessage } from "../_shared/mpStatusDetail.ts";
 import { approvePurchaseAndGrant, rejectPendingPurchase } from "../_shared/purchaseGrant.ts";
 import { dispatchAnalytics, readAnalyticsConfig, sendAnalyticsEvents } from "../_shared/analyticsEvents.ts";
 import { mpRequest, MpTimeoutError } from "../_shared/mpHttp.ts";
+import { errorResponse } from "../_shared/publicError.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -179,7 +180,6 @@ serve(async (req) => {
     }
     return json({ status: "pending", purchaseId: purchase.id });
   } catch (e) {
-    console.error("create-card-payment error:", e);
-    return json({ error: e instanceof Error ? e.message : "Erro desconhecido." }, 500);
+    return errorResponse(e, { label: "create-card-payment error:", headers: corsHeaders });
   }
 });

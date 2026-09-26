@@ -3,6 +3,7 @@ import { createClient } from "@supabase/supabase-js";
 import { runRefundLastCharge } from "../_shared/refundFlow.ts";
 import { buildRefundDeps } from "../_shared/refundDeps.ts";
 import { dispatchAnalytics, readAnalyticsConfig, sendAnalyticsEvents } from "../_shared/analyticsEvents.ts";
+import { errorResponse } from "../_shared/publicError.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -66,7 +67,6 @@ serve(async (req) => {
 
     return json({ amountBrl: result.amountBrl, refundedAt: result.refundedAt, subscriptionId: result.subscriptionId });
   } catch (e) {
-    console.error("refund-last-charge error:", e);
-    return json({ error: e instanceof Error ? e.message : "Erro desconhecido." }, 500);
+    return errorResponse(e, { label: "refund-last-charge error:", headers: corsHeaders });
   }
 });
