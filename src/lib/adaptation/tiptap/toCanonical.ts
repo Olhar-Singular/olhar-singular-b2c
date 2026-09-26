@@ -81,7 +81,12 @@ export function pmToInline(node: PMNode): Inline {
         const px = parseFloat(fs);
         if (!isNaN(px) && px > 0) {
           // Convert px → pt (96px = 72pt) and clean up floating-point noise.
-          fontSize = +(px * (72 / 96)).toFixed(10);
+          // Round in pt, not in px: the px value may itself be rounded (the
+          // paste rule emits `18.6667px` for Word's `14.0pt`), so keeping ten
+          // decimals here would preserve the noise (14.000025) instead of
+          // removing it. Three decimals are finer than any size a document can
+          // express and coarse enough to absorb the round-trip error.
+          fontSize = +(px * (72 / 96)).toFixed(3);
         }
       }
     }
