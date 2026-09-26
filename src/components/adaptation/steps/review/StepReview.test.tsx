@@ -477,6 +477,32 @@ describe("StepReview", () => {
       expect(field.className).not.toMatch(/(?:^|\s)focus:ring-0(?:\s|$)/);
     });
 
+    // Achado 0801: de `sm` para cima o defeito do 0227 voltava intacto. Em
+    // 768 px o grupo da direita (`shrink-0`, com rótulo textual nos dois
+    // selects) pedia 624,6 px dos ~689 px úteis da barra e o campo do nome
+    // caía no seu piso de padding: 18 px, com o selo "Sem nome" cortado por
+    // baixo do select de pasta. O 0227 travou só a presença das classes de
+    // breakpoint, e como o jsdom não faz layout o defeito passou verde.
+    // O que falta é um piso de largura em px: com ele, e como a barra é
+    // `flex-wrap`, o grupo da direita quebra para a linha de baixo em vez de
+    // espremer o nome — em qualquer largura, não só num breakpoint chutado.
+    it("garante largura mínima real ao nome nas larguras intermediárias (0801)", () => {
+      setup({ title: "" });
+      const nameGroup = screen.getByLabelText(TITLE_FIELD_LABEL).parentElement!;
+      const bar = nameGroup.parentElement!;
+      // O piso só serve se a barra puder quebrar em duas linhas.
+      expect(bar.className).toMatch(/(?:^|\s)flex-wrap(?:\s|$)/);
+      // A partir de `sm` o nome deixa de ser `min-w-0` (o contrário de um
+      // piso) e passa a exigir uma largura absoluta.
+      const floor = /(?:^|\s)sm:min-w-\[(\d+(?:\.\d+)?)(px|rem)\]/.exec(nameGroup.className);
+      expect(floor).not.toBeNull();
+      const px = floor![2] === "rem" ? Number(floor![1]) * 16 : Number(floor![1]);
+      // 624,6 px do grupo da direita + 12 px de gap deixam ~52 px em 768 px:
+      // o piso precisa ser largo o bastante para forçar a quebra ali e ainda
+      // caber o campo (~176 px) ao lado do selo "Sem nome" (~72 px).
+      expect(px).toBeGreaterThanOrEqual(240);
+    });
+
     it("mantém o selo 'Sem nome' na mesma linha do campo, sem transbordar (0227)", () => {
       setup({ title: "" });
       const nameGroup = screen.getByLabelText(TITLE_FIELD_LABEL).parentElement!;

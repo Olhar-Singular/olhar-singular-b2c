@@ -255,8 +255,17 @@ export function StepReview({
           dos controles é `shrink-0` e, dividindo a mesma linha em 390 px, não
           sobrava largura nenhuma — o campo ia a 0 px e o selo transbordava por
           baixo dos selects opacos (achado 0227).
+
+          De `sm` para cima o mesmo mecanismo continuava vivo (achado 0801): em
+          768 px o grupo da direita pede 624,6 px dos ~689 px úteis da barra e o
+          campo caía no piso do próprio padding, 18 px, com o selo cortado por
+          baixo do select de pasta. `min-w-0` é o contrário de um piso, então a
+          partir de `sm` ele dá lugar a uma largura mínima absoluta: como a
+          barra é `flex-wrap`, o grupo dos controles quebra para a linha de
+          baixo assim que as duas metades não cabem — sem depender de adivinhar
+          em qual breakpoint isso acontece.
         */}
-        <div className="flex min-w-0 basis-full items-center gap-2 sm:flex-1 sm:basis-0">
+        <div className="flex min-w-0 basis-full items-center gap-2 sm:min-w-[16rem] sm:flex-1 sm:basis-0">
           {/*
             Achado 0250: este campo escreve no MESMO `header.title` que o campo
             "Título" do passo Exportar — nomear aqui também imprime o título na
