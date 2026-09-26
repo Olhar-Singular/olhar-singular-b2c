@@ -107,9 +107,10 @@ describe("AdaptationPdf", () => {
     expect(el.props.children.props.style.padding).toBe(40);
     expect(el.props.children.props.style.fontSize).toBe(12);
     // Sem fonte no pageStyle, o <Page> cai no token default — a MESMA família
-    // que a folha da tela resolve (achado 0007), e a mesma que o built-in do
-    // @react-pdf já imprimia.
-    expect(el.props.children.props.style.fontFamily).toBe("Helvetica");
+    // que a folha da tela resolve (achado 0007). Desde a 0445 ela é um arquivo
+    // que viaja dentro do PDF (Liberation Sans, métrica da Arial/Helvetica que
+    // o built-in imprimia), e não mais o built-in não embutido.
+    expect(el.props.children.props.style.fontFamily).toBe("Liberation Sans");
   });
 
   it("does NOT use settings.fontFamily for the <Page> style (font now comes from pageStyle)", () => {

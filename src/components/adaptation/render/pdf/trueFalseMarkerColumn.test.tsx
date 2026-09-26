@@ -15,7 +15,7 @@
 import { describe, it, expect } from "vitest";
 import { pdf } from "@react-pdf/renderer";
 import layoutDocument from "@react-pdf/layout";
-import FontStore from "@react-pdf/font";
+import { createPdfFontStore } from "@/test/pdfFontStore";
 import { AdaptationPdf } from "./AdaptationPdf";
 import { TRUE_FALSE_MARKER_GAP_PT, TRUE_FALSE_MARKER_TEXT } from "../pageTokens";
 import type { CanonicalDocument } from "@/lib/adaptation/canonical/schema";
@@ -58,7 +58,7 @@ async function layout(fontSize: number): Promise<Painted[]> {
   inst.updateContainer(AdaptationPdf({ document, pageStyle: { fontSize } }));
   const laidOut = (await layoutDocument(
     (inst as unknown as { container: { document: unknown } }).container.document,
-    new (FontStore as unknown as { new (): unknown })() as never,
+    createPdfFontStore() as never,
   )) as Node;
   return paintedLines(laidOut);
 }

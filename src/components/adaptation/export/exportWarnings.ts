@@ -180,16 +180,22 @@ export function documentHasRawMath(document: CanonicalDocument): boolean {
 }
 
 /**
- * As fontes PADRÃO do PDF são as built-in Type 1, que só carregam a CP1252
- * (0444).
+ * As famílias CLÁSSICAS do PDF cobrem pouco mais que a CP1252 (0444).
  *
- * Nenhuma delas é embutida no arquivo e nenhuma tem tabela Unicode: pedir um
- * caractere de fora da CP1252 não levanta erro, o byte que sobra na codificação
- * vira OUTRO caractere. O professor via a seta na folha, via a seta na prévia e
- * o aluno recebia aspas. Só as três fontes de acessibilidade (arquivos TTF
- * registrados em `render/pdf/registerFonts.ts`) escapam disso.
+ * Enquanto elas eram as built-in Type 1 do @react-pdf, o motivo era o encoding:
+ * pedir um caractere de fora da CP1252 não levantava erro, o byte que sobrava
+ * na codificação virava OUTRO caractere — o professor via a seta na folha, via
+ * a seta na prévia e o aluno recebia aspas. Desde a 0445 elas são arquivos
+ * embutidos (Liberation), então o caractere ausente sai em branco em vez de
+ * trocado; o repertório, porém, continua latim + pontuação, sem dingbat
+ * (`✓`, `☐`) nem emoji. Só as três fontes de acessibilidade têm a cobertura
+ * larga, então o aviso segue conservador para as clássicas até a 0444 medir a
+ * cobertura real de cada arquivo.
+ *
+ * O teste é por TOKEN, não pelo nome da família no PDF: `mono` ainda cai numa
+ * built-in e as outras já não caem, mas o limite de repertório é o mesmo.
  */
-const PDF_BUILTIN_FAMILIES = new Set(["Helvetica", "Times-Roman", "Courier"]);
+const PDF_CLASSIC_TOKENS = new Set(["sans", "serif", "mono", "georgia", "arial"]);
 
 /**
  * Os 27 caracteres que a CP1252 acomoda na faixa 0x80-0x9F, onde a Latin-1 tem
@@ -273,7 +279,7 @@ export function pdfExportWarnings(
   // imprime. Enquanto o PDF não embute uma fonte com cobertura Unicode para
   // TODO documento, o mínimo é nomear, antes do download, o que vai sair
   // trocado (0444).
-  if (!family || PDF_BUILTIN_FAMILIES.has(fontFamilyToPdf(family))) {
+  if (!family || PDF_CLASSIC_TOKENS.has(family)) {
     const unsupported = pdfUnsupportedCharacters(document);
     if (unsupported.length > 0) {
       warnings.push(

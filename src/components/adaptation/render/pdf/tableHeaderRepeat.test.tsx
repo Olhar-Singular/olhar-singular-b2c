@@ -13,7 +13,7 @@
 import { describe, it, expect } from "vitest";
 import { pdf } from "@react-pdf/renderer";
 import layoutDocument from "@react-pdf/layout";
-import FontStore from "@react-pdf/font";
+import { createPdfFontStore } from "@/test/pdfFontStore";
 import { AdaptationPdf } from "./AdaptationPdf";
 import type { CanonicalDocument, QuestionAnswer, RichText } from "@/lib/adaptation/canonical/schema";
 
@@ -71,7 +71,7 @@ async function layout(answer: QuestionAnswer): Promise<Node> {
   inst.updateContainer(AdaptationPdf({ document: doc }));
   return (await layoutDocument(
     (inst as unknown as { container: { document: unknown } }).container.document,
-    new (FontStore as unknown as { new (): unknown })() as never,
+    createPdfFontStore() as never,
   )) as Node;
 }
 

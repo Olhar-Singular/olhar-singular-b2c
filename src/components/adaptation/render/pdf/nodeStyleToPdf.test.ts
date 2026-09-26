@@ -7,7 +7,7 @@ describe("nodeStyleToPdf", () => {
     expect(nodeStyleToPdf(undefined)).toEqual({});
   });
 
-  it("maps every supported field (logical token → built-in family)", () => {
+  it("maps every supported field (logical token → família embutida)", () => {
     expect(
       nodeStyleToPdf({
         fontFamily: "serif",
@@ -17,7 +17,7 @@ describe("nodeStyleToPdf", () => {
         spacingAfter: 12,
       }),
     ).toEqual({
-      fontFamily: "Times-Roman",
+      fontFamily: "Liberation Serif",
       fontSize: 10.5,      // 14px → 10.5pt
       // O corpo próprio vem acompanhado da razão de entrelinha: sem ela o
       // react-pdf congelaria o 1,4 do <Page> em 16,8pt absolutos (achado 0429).

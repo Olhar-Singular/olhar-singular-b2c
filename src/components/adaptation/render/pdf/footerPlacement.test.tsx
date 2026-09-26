@@ -19,7 +19,7 @@
 import { describe, it, expect } from "vitest";
 import { pdf } from "@react-pdf/renderer";
 import layoutDocument from "@react-pdf/layout";
-import FontStore from "@react-pdf/font";
+import { createPdfFontStore } from "@/test/pdfFontStore";
 import { AdaptationPdf } from "./AdaptationPdf";
 import { PAGE_HEIGHT_PT } from "../pageTokens";
 import { FOOTER_BOTTOM_PT, FOOTER_LINE_HEIGHT_PT } from "../footerLabel";
@@ -66,7 +66,7 @@ async function layoutFooters(): Promise<Box[]> {
   inst.updateContainer(AdaptationPdf({ document: longDocument, settings }));
   const layout = await layoutDocument(
     (inst as unknown as { container: { document: LayoutNode } }).container.document,
-    new (FontStore as unknown as { new (): unknown })() as never,
+    createPdfFontStore() as never,
   );
   const boxes = footerBoxes(layout);
   if (boxes.length === 0) throw new Error("no fixed footer box in computed layout");

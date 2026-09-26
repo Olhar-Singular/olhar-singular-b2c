@@ -1,12 +1,28 @@
 /**
- * registerPdfFonts — idempotent Font.register calls for the accessibility
- * font families used by the canonical document (`pageStyle.fontFamily`).
+ * registerPdfFonts — idempotent Font.register calls for every font family the
+ * canonical document can print (`pageStyle.fontFamily`).
  *
- * The classic @react-pdf built-ins (Helvetica / Times-Roman / Courier) need no
- * registration. Only the three a11y families shipped in `public/fonts/` need it:
+ * All of them ship in `public/fonts/` and therefore travel INSIDE the exported
+ * PDF. That is the whole point (achado 0445): a @react-pdf built-in is a Type 1
+ * font the file references but does not carry, so `pdffonts` reports `emb: no`
+ * and the school's printer substitutes whatever it has — different metrics,
+ * different line breaks, a "1 page" preview that comes out as 2.
+ *
+ * Accessibility families:
  *   - "Atkinson Hyperlegible" (Regular, Bold, Italic, BoldItalic)
  *   - "Lexend"                (Regular, Bold)
  *   - "OpenDyslexic"          (Regular, Bold, Italic)
+ *
+ * Classic families (Liberation, SIL OFL 1.1 — see `LICENSE-Liberation.txt`;
+ * built by `scripts/build-classic-fonts.py`):
+ *   - "Liberation Sans"  (Arial/Helvetica metrics)      ← tokens sans, arial
+ *   - "Liberation Serif" (Times New Roman/Times metrics) ← tokens serif, georgia
+ * Being metric-compatible with the built-ins they replace, they reflow nothing
+ * in documents already saved.
+ *
+ * The one family still NOT registered is Courier (token `mono`): it is what the
+ * PDF draws formulas in, and the cap-height compensation in `pageTokens.ts`
+ * (achados 0424/0429) is calibrated on the built-in's metric.
  *
  * Every family registers all four weight/style combinations: @react-pdf does
  * NOT fall back across variants — rendering an unregistered one rejects the
@@ -60,13 +76,45 @@ export function hyphenateWord(word: string | null): string[] {
   return parts;
 }
 
-export function registerPdfFonts(): void {
-  if (done) return;
-  done = true;
+/** Uma variante peso × estilo de uma família, como o @react-pdf a registra. */
+export type PdfFontVariant = {
+  src: string;
+  fontWeight: "normal" | "bold";
+  fontStyle: "normal" | "italic";
+};
 
-  Font.registerHyphenationCallback(hyphenateWord);
+/** Uma família e as suas quatro variantes. */
+export type PdfFontRegistration = { family: string; fonts: PdfFontVariant[] };
 
-  Font.register({
+/**
+ * Toda família que o documento pode imprimir, com o arquivo de cada variante.
+ *
+ * É uma CONSTANTE, e não uma sequência de chamadas soltas, porque o teste
+ * precisa da mesma lista para montar um `FontStore` próprio (o layout real do
+ * react-pdf roda sobre uma instância nova, que não enxerga o registro global) —
+ * ver `src/test/pdfFontStore.ts`. Lista e registro divergirem devolveria o
+ * "Could not resolve font" só na exportação de verdade.
+ */
+export const PDF_FONT_REGISTRATIONS: PdfFontRegistration[] = [
+  {
+    family: "Liberation Sans",
+    fonts: [
+      { src: "/fonts/LiberationSans-Regular.ttf", fontWeight: "normal", fontStyle: "normal" },
+      { src: "/fonts/LiberationSans-Bold.ttf", fontWeight: "bold", fontStyle: "normal" },
+      { src: "/fonts/LiberationSans-Italic.ttf", fontWeight: "normal", fontStyle: "italic" },
+      { src: "/fonts/LiberationSans-BoldItalic.ttf", fontWeight: "bold", fontStyle: "italic" },
+    ],
+  },
+  {
+    family: "Liberation Serif",
+    fonts: [
+      { src: "/fonts/LiberationSerif-Regular.ttf", fontWeight: "normal", fontStyle: "normal" },
+      { src: "/fonts/LiberationSerif-Bold.ttf", fontWeight: "bold", fontStyle: "normal" },
+      { src: "/fonts/LiberationSerif-Italic.ttf", fontWeight: "normal", fontStyle: "italic" },
+      { src: "/fonts/LiberationSerif-BoldItalic.ttf", fontWeight: "bold", fontStyle: "italic" },
+    ],
+  },
+  {
     family: "Atkinson Hyperlegible",
     fonts: [
       { src: "/fonts/AtkinsonHyperlegible-Regular.ttf", fontWeight: "normal", fontStyle: "normal" },
@@ -74,9 +122,8 @@ export function registerPdfFonts(): void {
       { src: "/fonts/AtkinsonHyperlegible-Italic.ttf", fontWeight: "normal", fontStyle: "italic" },
       { src: "/fonts/AtkinsonHyperlegible-BoldItalic.ttf", fontWeight: "bold", fontStyle: "italic" },
     ],
-  });
-
-  Font.register({
+  },
+  {
     family: "Lexend",
     fonts: [
       { src: "/fonts/Lexend-Regular.ttf", fontWeight: "normal", fontStyle: "normal" },
@@ -85,9 +132,8 @@ export function registerPdfFonts(): void {
       { src: "/fonts/Lexend-Regular.ttf", fontWeight: "normal", fontStyle: "italic" },
       { src: "/fonts/Lexend-Bold.ttf", fontWeight: "bold", fontStyle: "italic" },
     ],
-  });
-
-  Font.register({
+  },
+  {
     family: "OpenDyslexic",
     fonts: [
       { src: "/fonts/OpenDyslexic-Regular.ttf", fontWeight: "normal", fontStyle: "normal" },
@@ -96,5 +142,16 @@ export function registerPdfFonts(): void {
       // No BoldItalic file ships — map bold+italic to the Bold file.
       { src: "/fonts/OpenDyslexic-Bold.ttf", fontWeight: "bold", fontStyle: "italic" },
     ],
-  });
+  },
+];
+
+export function registerPdfFonts(): void {
+  if (done) return;
+  done = true;
+
+  Font.registerHyphenationCallback(hyphenateWord);
+
+  for (const registration of PDF_FONT_REGISTRATIONS) {
+    Font.register(registration);
+  }
 }

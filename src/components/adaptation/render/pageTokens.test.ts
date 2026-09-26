@@ -39,7 +39,7 @@ describe("pageTokens", () => {
       fontSize: 12,
       lineHeight: 1.4,
       color: "#22201C",
-      fontFamily: "Helvetica",
+      fontFamily: "Liberation Sans",
     });
   });
 
@@ -71,12 +71,12 @@ describe("pageTokens — parametrizado por pageStyle (Fase 4a)", () => {
   it("pageTokensToPdf aplica fontSize em pt e mapeia o fontFamily do token", () => {
     const pdf = pageTokensToPdf({ fontFamily: "serif", fontSize: 13, blockSpacing: 20 });
     expect(pdf.fontSize).toBe(13);
-    expect(pdf.fontFamily).toBe("Times-Roman");
+    expect(pdf.fontFamily).toBe("Liberation Serif");
   });
 
   it("pageTokensToPdf sem fontFamily emite a família do token default (o built-in de antes)", () => {
     const pdf = pageTokensToPdf({ fontFamily: undefined, fontSize: 12, blockSpacing: 16 });
-    expect(pdf.fontFamily).toBe("Helvetica");
+    expect(pdf.fontFamily).toBe("Liberation Sans");
   });
 });
 
@@ -96,8 +96,8 @@ describe("pageTokens — paridade de fonte sem override (achado 0007)", () => {
     expect(pdf.fontFamily).toBe(fontFamilyToPdf(DEFAULT_FONT_FAMILY_TOKEN));
   });
 
-  it("mantém o PDF no built-in Helvetica (o default não muda o que já era impresso)", () => {
-    expect(pageTokensToPdf().fontFamily).toBe("Helvetica");
+  it("mantém o PDF na métrica da Helvetica, agora embutida (o default não reflui nada)", () => {
+    expect(pageTokensToPdf().fontFamily).toBe("Liberation Sans");
   });
 
   it("um override explícito continua vencendo o default nas duas superfícies", () => {
