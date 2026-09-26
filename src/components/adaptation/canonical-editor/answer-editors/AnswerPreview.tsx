@@ -21,6 +21,7 @@ import {
   ANSWER_LINE_WIDTH_PX,
   ANSWER_ITEM_GAP_PX,
   ALTERNATIVE_MARKER_GAP_PX,
+  INK_MUTED,
   TRUE_FALSE_MARKER_GAP_PX,
   TRUE_FALSE_MARKER_TEXT,
 } from "@/components/adaptation/render/pageTokens";
@@ -184,7 +185,15 @@ export function AnswerPreview({ answer, onChange, disabled = false }: AnswerPrev
                 placeholder="Coluna A"
                 ariaLabel={`Coluna A, par ${i + 1}`}
               />
-              <span className="text-surface-ink-faint">↔</span>
+              {/*
+                O `↔` é o único sinal de que existe tarefa aqui ("ligue um lado
+                ao outro"), e saía em `--sf-ink-faint`: 2,45:1 sobre o papel
+                branco, abaixo dos 3:1 da WCAG 1.4.11, e token do CHROME do app
+                sobre uma folha que é branca nos dois temas. A tinta vem de
+                `INK_MUTED` (5,3:1), o token de documento que a prévia do
+                Exportar já mostra (achado 0447).
+              */}
+              <span style={{ color: INK_MUTED }}>↔</span>
               <PreviewField
                 value={pair.right}
                 disabled={disabled}

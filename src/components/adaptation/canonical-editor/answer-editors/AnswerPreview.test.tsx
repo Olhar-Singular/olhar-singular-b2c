@@ -4,6 +4,7 @@ import type { RichText, QuestionAnswer } from "@/lib/adaptation/canonical/schema
 import { AnswerPreview } from "./AnswerPreview";
 import { ALTERNATIVE_MARKER_CLASS } from "@/components/adaptation/render/answers/markerColumn";
 import {
+  INK_MUTED,
   TRUE_FALSE_MARKER_GAP_PX,
   TRUE_FALSE_MARKER_TEXT,
 } from "@/components/adaptation/render/pageTokens";
@@ -196,6 +197,13 @@ describe("AnswerPreview — matching", () => {
     fireEvent.change(screen.getByLabelText("Coluna A, par 1"), { target: { value: "L" } });
     fireEvent.change(screen.getByLabelText("Coluna B, par 1"), { target: { value: "R" } });
     expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ kind: "matching" }));
+  });
+
+  it("inks the arrow with the document token, not the faint chrome ink (achado 0447)", () => {
+    render(<AnswerPreview answer={answer} onChange={vi.fn()} />);
+    const arrow = screen.getByText("↔");
+    expect(arrow.className).not.toContain("text-surface-ink-faint");
+    expect(arrow).toHaveStyle({ color: INK_MUTED });
   });
 });
 
