@@ -13,6 +13,7 @@ import {
   documentMetadata,
   docxSectionProperties,
   docxFooter,
+  DOCX_CONTENT_WIDTH_TWIPS,
 } from "./exportDocx";
 import {
   HEADING_PT,
@@ -506,6 +507,33 @@ describe("B15 · conteúdo que precisa chegar ao Word", () => {
     // linha de dados: não é cabeçalho, mas também não se parte
     expect(has(body, "w:tblHeader")).toBe(false);
     expect(has(body, "w:cantSplit")).toBe(true);
+  });
+
+  it("table declara a grade com a largura útil da página dividida pelas colunas", () => {
+    // Achado 0605: sem `columnWidths` a lib emite `<w:gridCol w:w="100"/>` (1,76mm)
+    // por coluna, uma grade que não descreve o próprio conteúdo.
+    const table = blockToDocxParagraphs(
+      q({
+        kind: "table",
+        rows: [
+          [text("Animal"), text("Som")],
+          [text("gato"), text("mia"), text("extra")],
+        ],
+      }),
+      1,
+    ).find((b) => b instanceof Table) as Table;
+    const grid = (table as unknown as { root: unknown[] }).root.find(
+      (n) => (n as { rootKey?: string }).rootKey === "w:tblGrid",
+    ) as { root: unknown[] };
+    const widths = grid.root
+      .filter((n) => (n as { rootKey?: string }).rootKey === "w:gridCol")
+      .map((n) => Number(docxNodeAttrs(n, "w:gridCol")?.width));
+    // 3 colunas (a linha mais larga manda), somando a largura útil em twips.
+    expect(widths).toHaveLength(3);
+    expect(widths.reduce((a, b) => a + b, 0)).toBe(DOCX_CONTENT_WIDTH_TWIPS);
+    // divisão igual, a menos do resto que fecha a soma na última coluna
+    expect(Math.max(...widths) - Math.min(...widths)).toBeLessThanOrEqual(1);
+    expect(widths.every((w) => w > 1000)).toBe(true);
   });
 
   it("stem com blocos não-parágrafo (imagem, fórmula) não é descartado", () => {

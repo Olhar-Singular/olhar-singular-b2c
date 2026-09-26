@@ -415,9 +415,24 @@ function answerToDocx(
               }),
           ),
         });
+      // Achado 0605: sem `columnWidths` a lib emite `<w:gridCol w:w="100"/>`
+      // (100 twips = 1,76mm) por coluna, uma grade que não descreve o próprio
+      // conteúdo — o Word salva no autofit e disfarça, mas quem respeita a grade
+      // declarada (conversores, Google Docs, layout fixo) desenha colunas de
+      // 1,76mm. A grade vai com a largura útil da folha dividida igualmente,
+      // pelo número de colunas da linha MAIS LARGA (é quantas `gridCol` o
+      // arquivo precisa ter).
+      const columns = Math.max(...answer.rows.map((cells) => cells.length));
+      const column = Math.floor(DOCX_CONTENT_WIDTH_TWIPS / columns);
+      const columnWidths = Array.from({ length: columns }, (_, i) =>
+        // O resto da divisão vai na última coluna: a soma tem que fechar com a
+        // largura útil, senão a grade volta a descrever uma folha que não existe.
+        i === columns - 1 ? DOCX_CONTENT_WIDTH_TWIPS - column * (columns - 1) : column,
+      );
       return [
         new Table({
           width: { size: 100, type: WidthType.PERCENTAGE },
+          columnWidths,
           rows: [row(header, true), ...body.map((cells) => row(cells, false))],
         }),
       ];
@@ -840,6 +855,14 @@ export function docxContentBlocks(
  * Mora fora de `downloadDocx` (que é `v8 ignore` pelos efeitos de DOM) para
  * nascer com teste, como `documentRunStyle` e `docxContentBlocks`.
  */
+/**
+ * Largura útil da folha A4 no .docx, em twips (1pt = 20 twips).
+ *
+ * A4 tem 595pt de largura (o mesmo `size="A4"` do react-pdf) e `PAGE_MARGIN_PT`
+ * sai de cada lado, a margem que `docxSectionProperties` escreve na seção.
+ */
+export const DOCX_CONTENT_WIDTH_TWIPS = Math.round((595 - 2 * PAGE_MARGIN_PT) * 20);
+
 export function docxSectionProperties(): {
   page: { margin: { top: number; right: number; bottom: number; left: number } };
 } {
