@@ -287,8 +287,13 @@ export function PdfAnswer({
       // Simulate border-collapse (Yoga has none): the container draws the top+left
       // edges, each cell draws its right+bottom — so every interior line is drawn
       // once instead of doubled.
+      // `flexBasis: 0` is what keeps ONE column grid: with the default `auto`,
+      // Yoga sizes each cell from its own content and every row — an
+      // independent flex container — lands on its own widths (zig-zag borders).
       const cell = {
         flexGrow: 1,
+        flexShrink: 1,
+        flexBasis: 0,
         borderRightWidth: 1,
         borderBottomWidth: 1,
         borderColor: "#999999",
