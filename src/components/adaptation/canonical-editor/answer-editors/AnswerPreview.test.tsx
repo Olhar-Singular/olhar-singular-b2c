@@ -3,6 +3,10 @@ import { render, screen, fireEvent } from "@testing-library/react";
 import type { RichText, QuestionAnswer } from "@/lib/adaptation/canonical/schema";
 import { AnswerPreview } from "./AnswerPreview";
 import { ALTERNATIVE_MARKER_CLASS } from "@/components/adaptation/render/answers/markerColumn";
+import {
+  TRUE_FALSE_MARKER_GAP_PX,
+  TRUE_FALSE_MARKER_TEXT,
+} from "@/components/adaptation/render/pageTokens";
 
 // Mock RichTextField as a plain textbox keyed by ariaLabel, so we can drive the
 // inline content edits without the real ProseMirror editor.
@@ -123,8 +127,7 @@ describe("AnswerPreview — trueFalse", () => {
     const onChange = vi.fn();
     render(<AnswerPreview answer={answer} onChange={onChange} />);
     expect(screen.getByLabelText("Afirmação 1")).toBeInTheDocument();
-    expect(screen.getByText("V")).toBeInTheDocument();
-    expect(screen.getByText("F")).toBeInTheDocument();
+    expect(screen.getByText(TRUE_FALSE_MARKER_TEXT, { collapseWhitespace: false })).toBeInTheDocument();
     expect(screen.queryByTitle("Alternar Verdadeiro/Falso")).not.toBeInTheDocument();
     fireEvent.change(screen.getByLabelText("Afirmação 1"), { target: { value: "y" } });
     expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ kind: "trueFalse" }));
@@ -138,6 +141,23 @@ describe("AnswerPreview — trueFalse", () => {
     expect(row.firstElementChild?.textContent).toMatch(/V.*F/);
     // V/F must NOT be the last element — that would mean content pushed it to the right edge.
     expect(row.lastElementChild?.textContent).not.toMatch(/V.*F/);
+  });
+
+  // Achado 0357: a folha do Revisar desenhava dois círculos vazados V/F, enquanto
+  // a prévia do Exportar, o PDF e o Word imprimem "(  ) V  (  ) F". Círculo é o
+  // desenho de escolha única (rádio) e as afirmações do V/F são independentes —
+  // o marcador da folha passa a ser o MESMO texto do papel, do mesmo token.
+  it("imprime o marcador do papel, sem círculo de escolha única", () => {
+    const { container } = render(<AnswerPreview answer={answer} onChange={vi.fn()} />);
+    const marker = screen.getByText(TRUE_FALSE_MARKER_TEXT, { collapseWhitespace: false });
+    expect(marker).toBeInTheDocument();
+    expect(container.querySelector(".rounded-full")).toBeNull();
+  });
+
+  it("deixa o vão do token entre o marcador e a afirmação", () => {
+    render(<AnswerPreview answer={answer} onChange={vi.fn()} />);
+    const row = screen.getByTestId("answer-preview-trueFalse").firstElementChild as HTMLElement;
+    expect(row.style.columnGap).toBe(`${TRUE_FALSE_MARKER_GAP_PX}px`);
   });
 });
 

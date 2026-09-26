@@ -20,6 +20,8 @@ import {
   ANSWER_LINE_WIDTH_PX,
   ANSWER_ITEM_GAP_PX,
   ALTERNATIVE_MARKER_GAP_PX,
+  TRUE_FALSE_MARKER_GAP_PX,
+  TRUE_FALSE_MARKER_TEXT,
 } from "@/components/adaptation/render/pageTokens";
 import { RichTextField } from "../RichTextField";
 import {
@@ -123,16 +125,17 @@ export function AnswerPreview({ answer, onChange, disabled = false }: AnswerPrev
       return (
         <div className="flex flex-col gap-2.5" data-testid="answer-preview-trueFalse">
           {answer.items.map((item, i) => (
-            <div key={item.id} className="flex min-w-0 items-start gap-3">
-              <span className="flex shrink-0 items-center gap-3 pt-0.5 text-sm text-surface-ink-soft">
-                <span className="flex items-center gap-1">
-                  <span className="h-[17px] w-[17px] rounded-full border-[1.5px] border-surface-ink-faint" />
-                  <span>V</span>
-                </span>
-                <span className="flex items-center gap-1">
-                  <span className="h-[17px] w-[17px] rounded-full border-[1.5px] border-surface-ink-faint" />
-                  <span>F</span>
-                </span>
+            <div
+              key={item.id}
+              className="flex min-w-0 items-start"
+              style={{ columnGap: `${TRUE_FALSE_MARKER_GAP_PX}px` }}
+            >
+              <span
+                data-testid="preview-true-false-marker"
+                className="shrink-0 font-medium"
+                aria-label="Marque Verdadeiro ou Falso"
+              >
+                {TRUE_FALSE_MARKER_TEXT}
               </span>
               <div className="min-w-0 flex-1">
                 <PreviewField
