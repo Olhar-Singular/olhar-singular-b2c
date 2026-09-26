@@ -76,6 +76,14 @@
 
 @layer base {
   :root {
+    /* Declara o esquema para o NAVEGADOR, nao so para os tokens: barra de
+       rolagem, calendario do input[type=date], autofill, caret e ::selection
+       sao pintados por ele a partir daqui. Sem isso o tema escuro trocava as
+       cores do app e deixava todo controle nativo claro. A folha do PageSheet
+       mantem o seu [color-scheme:light] de proposito (papel e branco nos dois
+       temas), agora como decisao explicita, nao como padrao herdado. */
+    color-scheme: light;
+
     --background: 40 20% 96%;
     --foreground: 195 35% 12%;
 
@@ -187,6 +195,10 @@
      tokens are INTENTIONALLY not overridden here — see the comment on :root's
      --sf-* block: the page sheet stays paper-white regardless of this theme. */
   .dark {
+    /* Contraparte do :root: avisa o navegador para pintar de escuro o que ele
+       desenha sozinho (rolagem, calendario nativo, autofill, caret). */
+    color-scheme: dark;
+
     --background: 195 18% 20%;
     --foreground: 40 12% 88%;
     --card: 195 18% 25%;

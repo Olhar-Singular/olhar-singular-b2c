@@ -920,3 +920,35 @@ describe("index.css — anel de foco de input/textarea (achado 0422)", () => {
     expect(regraDe("input:focus-visible").corpo).not.toMatch(/rounded-sm/);
   });
 });
+
+/**
+ * Esquema de cor nativo da raiz (achado 0505 da caca autonoma).
+ *
+ * O tema escuro so trocava cores de tokens. Como nenhuma superficie acima da
+ * folha declarava `color-scheme`, o NAVEGADOR continuava pintando de claro tudo
+ * que desenha sozinho: barra de rolagem, calendario do input[type=date] do
+ * Exportar, autofill, caret e ::selection. A folha do `PageSheet` ja se protegia
+ * com `[color-scheme:light]` (papel e branco nos dois temas); a raiz nunca se
+ * declarou. Declarar nos dois lados torna o `light` da folha uma decisao de
+ * verdade em vez de coincidencia com o padrao do navegador.
+ */
+describe("index.css — color-scheme da raiz", () => {
+  it(":root declara color-scheme: light", () => {
+    expect(themeBody(":root")).toMatch(/color-scheme\s*:\s*light\s*;/);
+  });
+
+  it(".dark declara color-scheme: dark", () => {
+    expect(themeBody(".dark")).toMatch(/color-scheme\s*:\s*dark\s*;/);
+  });
+});
+
+describe("index.html — meta color-scheme", () => {
+  const html = readFileSync(path.resolve(__dirname, "../index.html"), "utf8");
+
+  it("anuncia os dois esquemas antes de o React montar", () => {
+    const meta = html.match(/<meta\s+name="color-scheme"\s+content="([^"]+)"/);
+    expect(meta, "meta color-scheme ausente no index.html").not.toBeNull();
+    expect(meta![1]).toMatch(/\blight\b/);
+    expect(meta![1]).toMatch(/\bdark\b/);
+  });
+});
