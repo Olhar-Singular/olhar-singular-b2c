@@ -9,10 +9,11 @@
 --
 -- The Storage API enforces file_size_limit and allowed_mime_types on every
 -- upload, whatever the caller's role. The expected values mirror what the app
--- legitimately sends (see 20260926000000_question_bucket_limits.sql).
+-- legitimately sends (see 20260926000000_question_bucket_limits.sql and
+-- 20260926000003_question_pdfs_strict_mime.sql).
 -- =============================================================================
 BEGIN;
-SELECT plan(7);
+SELECT plan(8);
 
 -- ── question-pdfs (private): exam files for the question-bank extractor ─────
 SELECT is(
@@ -28,10 +29,17 @@ SELECT is(
   (SELECT array_agg(m ORDER BY m)
      FROM storage.buckets, unnest(allowed_mime_types) AS m
     WHERE id = 'question-pdfs'),
-  ARRAY['application/octet-stream',
-        'application/pdf',
+  ARRAY['application/pdf',
         'application/vnd.openxmlformats-officedocument.wordprocessingml.document'],
-  'question-pdfs accepts only PDF, DOCX and the untyped-File fallback');
+  'question-pdfs accepts only PDF and DOCX');
+
+-- The client now declares the type its magic-byte check proved
+-- (DOCUMENT_MIME in src/lib/utils/fileValidation.ts), so the untyped-File
+-- fallback is no longer needed and must not come back.
+SELECT ok(
+  NOT (SELECT allowed_mime_types && ARRAY['application/octet-stream', '*/*', 'application/*']
+         FROM storage.buckets WHERE id = 'question-pdfs'),
+  'question-pdfs never accepts octet-stream or a wildcard');
 
 -- ── question-images (public read): figures attached to question_bank rows ───
 SELECT is(
