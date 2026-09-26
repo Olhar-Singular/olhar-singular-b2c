@@ -3,10 +3,13 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 vi.mock("pdfjs-dist/build/pdf.worker.min.mjs?url", () => ({ default: "mock-worker-url" }));
 
 const getDocument = vi.fn();
+/** `PDFDocumentLoadingTask.destroy` — tears down the document AND the worker it spawned. */
+const destroyTask = vi.fn();
 
 vi.mock("pdfjs-dist", () => ({
   GlobalWorkerOptions: { workerSrc: "" },
-  getDocument: (...args: unknown[]) => getDocument(...args),
+  // Every loading task carries `destroy`; a test's own task shape wins.
+  getDocument: (...args: unknown[]) => ({ destroy: destroyTask, ...getDocument(...args) }),
 }));
 
 import { parsePdf, renderPdfPage, getPdfPageCount } from "./pdf-utils";
@@ -42,6 +45,8 @@ function fakeFile() {
 
 beforeEach(() => {
   getDocument.mockReset();
+  destroyTask.mockReset();
+  destroyTask.mockResolvedValue(undefined);
 });
 
 describe("pdf-utils — parsePdf", () => {
@@ -281,5 +286,91 @@ describe("pdf-utils — getPdfPageCount", () => {
       promise: Promise.resolve({ numPages: 7 }),
     });
     await expect(getPdfPageCount(fakeFile())).resolves.toBe(7);
+  });
+});
+
+// Each `getDocument` spawns its own pdf.js Web Worker, and only
+// `loadingTask.destroy()` terminates it. Skipping it leaked two workers every
+// time the PDF preview modal opened and one more per page change.
+describe("pdf-utils — releases the pdf.js document and its worker", () => {
+  let originalCreateElement: typeof document.createElement;
+
+  beforeEach(() => {
+    originalCreateElement = document.createElement.bind(document);
+    document.createElement = ((tag: string) => {
+      if (tag === "canvas") {
+        return { width: 0, height: 0, toDataURL: () => "data:image/jpeg;base64,X" } as unknown as HTMLCanvasElement;
+      }
+      return originalCreateElement(tag);
+    }) as typeof document.createElement;
+  });
+
+  afterEach(() => {
+    document.createElement = originalCreateElement;
+    vi.restoreAllMocks();
+  });
+
+  it("parsePdf destroys the loading task once every page is done", async () => {
+    const pages = [makePage("a"), makePage("b")];
+    getDocument.mockReturnValue({
+      promise: Promise.resolve({ numPages: 2, getPage: (i: number) => Promise.resolve(pages[i - 1]) }),
+    });
+
+    const result = await parsePdf(fakeFile());
+
+    expect(destroyTask).toHaveBeenCalledTimes(1);
+    const destroyedAt = destroyTask.mock.invocationCallOrder[0];
+    expect(destroyedAt).toBeGreaterThan(pages[1].render.mock.invocationCallOrder[0]);
+    expect(destroyedAt).toBeGreaterThan(pages[1].cleanup.mock.invocationCallOrder[0]);
+    // What the caller keeps is plain data, nothing tied to the dead document.
+    expect(result.pageImages).toEqual(["data:image/jpeg;base64,X", "data:image/jpeg;base64,X"]);
+  });
+
+  it("renderPdfPage destroys the loading task after rasterising the page", async () => {
+    const page = makePage("t");
+    singlePage(page);
+
+    await expect(renderPdfPage(fakeFile(), 1)).resolves.toBe("data:image/jpeg;base64,X");
+
+    expect(destroyTask).toHaveBeenCalledTimes(1);
+    expect(destroyTask.mock.invocationCallOrder[0]).toBeGreaterThan(page.cleanup.mock.invocationCallOrder[0]);
+  });
+
+  it("getPdfPageCount destroys the loading task after reading numPages", async () => {
+    getDocument.mockReturnValue({ promise: Promise.resolve({ numPages: 4 }) });
+
+    await expect(getPdfPageCount(fakeFile())).resolves.toBe(4);
+
+    expect(destroyTask).toHaveBeenCalledTimes(1);
+  });
+
+  it("still destroys the loading task when rendering fails", async () => {
+    const page = makePage("t");
+    page.render.mockReturnValue({ promise: Promise.reject(new Error("render boom")) });
+    singlePage(page);
+
+    await expect(renderPdfPage(fakeFile(), 1)).rejects.toThrow("render boom");
+
+    expect(destroyTask).toHaveBeenCalledTimes(1);
+  });
+
+  it("still destroys the loading task when the PDF cannot be opened", async () => {
+    getDocument.mockReturnValue({ promise: Promise.reject(new Error("Invalid PDF structure")) });
+
+    await expect(getPdfPageCount(fakeFile())).rejects.toThrow("Invalid PDF structure");
+
+    expect(destroyTask).toHaveBeenCalledTimes(1);
+  });
+
+  // The page is already rendered by then: failing to tear the worker down must
+  // not turn a good result into an error, but it must not vanish silently either.
+  it("returns the result and warns when tearing the document down fails", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    destroyTask.mockRejectedValueOnce(new Error("transport gone"));
+    getDocument.mockReturnValue({ promise: Promise.resolve({ numPages: 3 }) });
+
+    await expect(getPdfPageCount(fakeFile())).resolves.toBe(3);
+
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining("pdf.js"), expect.any(Error));
   });
 });
