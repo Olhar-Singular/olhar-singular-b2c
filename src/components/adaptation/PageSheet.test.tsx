@@ -1370,6 +1370,123 @@ describe("PageSheet", () => {
     });
   });
 
+  /*
+    Achado 0701: a prévia paginava no PIXEL (divisão da altura do fluxo pela
+    área útil) enquanto o `@react-pdf` pagina no BLOCO — ele nunca corta dentro
+    de uma `View`, e o bloco que não cabe inteiro vai todo para a folha
+    seguinte, deixando branco no pé. O branco perdido em cada virada não entrava
+    na conta, e o erro é cumulativo: o contador anunciava "3 páginas A4" para um
+    arquivo com `Pages: 4`, e a régua caía no meio de um bloco que o papel nunca
+    parte.
+  */
+  describe("a prévia pagina no bloco, como o arquivo (achado 0701)", () => {
+    const withBlocos = (height: number, run: () => void) => {
+      const heightSpy = vi
+        .spyOn(HTMLElement.prototype, "offsetHeight", "get")
+        .mockReturnValue(height);
+      const rectSpy = vi
+        .spyOn(HTMLElement.prototype, "getBoundingClientRect")
+        .mockImplementation(function (this: HTMLElement) {
+          const top = Number(this.dataset.testTop ?? 0);
+          const bottom = Number(this.dataset.testBottom ?? top);
+          return {
+            top,
+            bottom,
+            height: bottom - top,
+            left: 0,
+            right: 0,
+            width: 0,
+            x: 0,
+            y: top,
+            toJSON: () => ({}),
+          } as DOMRect;
+        });
+      try {
+        run();
+      } finally {
+        heightSpy.mockRestore();
+        rectSpy.mockRestore();
+      }
+    };
+
+    /*
+      Dois blocos: o primeiro ocupa quase a folha inteira, o segundo atravessa a
+      virada. No arquivo o segundo desce inteiro para a folha 2 e os ~116px que
+      sobram no pé da folha 1 não são aproveitados — o que empurra o fim do
+      documento para uma TERCEIRA folha que a divisão por pixel não prevê.
+    */
+    const folha = (
+      <PageSheet paginated toolbar={null}>
+        <div data-folha-bloco="" data-testid="bloco-1" data-test-top="53.33" data-test-bottom="953.33" />
+        <div data-folha-bloco="" data-testid="bloco-2" data-test-top="953.33" data-test-bottom="1983.33" />
+      </PageSheet>
+    );
+
+    it("conta a folha que o branco do pé empurra", () => {
+      withBlocos(1930, () => {
+        render(folha);
+        // Pelo pixel seriam 2 folhas (1930 / 1016,34); no papel são 3.
+        expect(screen.getByTestId("page-count")).toHaveTextContent("3 páginas A4");
+      });
+    });
+
+    it("empurra para a folha seguinte o bloco que não cabe inteiro", () => {
+      withBlocos(1930, () => {
+        render(folha);
+        expect(
+          Number.parseFloat(screen.getByTestId("bloco-2").style.marginTop),
+        ).toBeCloseTo(PAGE_MARGIN_PX + PAGE_CONTENT_HEIGHT_PX - 953.33, 2);
+      });
+    });
+
+    it("desenha a régua entre os blocos, nunca no meio de um", () => {
+      withBlocos(1930, () => {
+        render(folha);
+        const rules = screen.getByTestId("page-sheet").style.backgroundImage;
+        expect(rules).toContain("1069.67px");
+        expect(rules).toContain("2086.01px");
+      });
+    });
+
+    it("deixa o bloco aninhado viajar com o de topo", () => {
+      // O enunciado dentro da questão é bloco também, mas quem decide a virada
+      // é o de topo — como a `View` de topo no PDF. Empurrar o aninhado partiria
+      // a questão, que é exatamente o que o arquivo nunca faz.
+      withBlocos(1930, () => {
+        render(
+          <PageSheet paginated toolbar={null}>
+            <div data-folha-bloco="" data-test-top="53.33" data-test-bottom="953.33" />
+            <div data-folha-bloco="" data-testid="bloco-2" data-test-top="953.33" data-test-bottom="1983.33">
+              <div
+                data-folha-bloco=""
+                data-testid="enunciado"
+                data-test-top="953.33"
+                data-test-bottom="1983.33"
+              />
+            </div>
+          </PageSheet>,
+        );
+        expect(screen.getByTestId("page-count")).toHaveTextContent("3 páginas A4");
+        expect(screen.getByTestId("enunciado").style.marginTop).toBe("");
+        expect(
+          Number.parseFloat(screen.getByTestId("bloco-2").style.marginTop),
+        ).toBeCloseTo(PAGE_MARGIN_PX + PAGE_CONTENT_HEIGHT_PX - 953.33, 2);
+      });
+    });
+
+    it("não mexe no fluxo da folha do Revisar, que é contínua", () => {
+      withBlocos(1930, () => {
+        render(
+          <PageSheet toolbar={null}>
+            <div data-folha-bloco="" data-testid="bloco-1" data-test-top="53.33" data-test-bottom="953.33" />
+            <div data-folha-bloco="" data-testid="bloco-2" data-test-top="953.33" data-test-bottom="1983.33" />
+          </PageSheet>,
+        );
+        expect(screen.getByTestId("bloco-2").style.marginTop).toBe("");
+      });
+    });
+  });
+
   it("reflete o pageStyle na folha (fonte, tamanho e var de espaçamento)", () => {
     render(
       <PageSheet toolbar={null} pageStyle={{ fontFamily: "mono", fontSize: 18, blockSpacing: 24 }}>

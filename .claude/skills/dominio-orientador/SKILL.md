@@ -146,6 +146,12 @@ Plataforma educacional B2C. **Educadores adaptam atividades pedagógicas (provas
 - **A prévia do passo Exportar usa `PageSheet` + `pageStyle`**, igual à folha do Revisar. Renderizar
   o `CanonicalRenderer` solto mostrava a última tela antes do download na tipografia padrão do app,
   diferente do PDF que sairia.
+- **A prévia pagina no BLOCO, não no pixel** (achado 0701): o `@react-pdf` nunca parte uma `View`,
+  então o bloco que não cabe inteiro desce todo para a folha seguinte e o pé da anterior fica em
+  branco. O `BlockView` marca cada bloco impresso com `data-folha-bloco` e o `PageSheet` pagina por
+  essas marcas (contagem, réguas e empurrão saem da MESMA passada). Dividir a altura do fluxo pela
+  área útil subestimava a contagem, de forma cumulativa: "3 páginas A4" para um arquivo com
+  `Pages: 4`. A folha do **Revisar** é o DOM do editor, não tem bloco marcado e segue contínua.
 - **O editor precisa ressemear quando o documento muda por fora** (`useCanonicalEditor`): semear
   uma vez só fazia o "Recuperar" ser no-op visual — a folha seguia com o doc antigo e a 1ª tecla
   re-emitia ele, sobrescrevendo o recuperado. A guarda contra loop é o `lastDocRef` (o doc que o

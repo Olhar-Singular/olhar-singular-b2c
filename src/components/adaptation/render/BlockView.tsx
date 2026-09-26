@@ -54,7 +54,17 @@ export function BlockView({
 }) {
   const selected = block.id === selectedId;
   return (
-    <div data-selected={selected} className={selected ? "ring-2 ring-primary ring-offset-2 rounded" : undefined}>
+    /* `data-folha-bloco`: a folha (PageSheet) precisa saber onde cada bloco
+       IMPRESSO começa e termina para paginar como o arquivo pagina — o
+       `@react-pdf` não parte uma `View`, e o bloco que não cabe inteiro desce
+       todo para a folha seguinte (achado 0701). Marcado aqui, no despacho, vale
+       para todo tipo de bloco de uma vez; o bloco do enunciado, aninhado na
+       questão, viaja com ela e a folha ignora os aninhados. */
+    <div
+      data-folha-bloco=""
+      data-selected={selected}
+      className={selected ? "ring-2 ring-primary ring-offset-2 rounded" : undefined}
+    >
       {renderBlock(block, number, selectedId)}
     </div>
   );

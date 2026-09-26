@@ -96,6 +96,27 @@ const SHEET_WIDTH_PX = 794;
  */
 const CHROME_SELECTOR = "[data-folha-chrome]";
 
+/**
+ * Bloco IMPRESSO do documento, marcado pelo renderizador de leitura (achado 0701).
+ *
+ * É o que traduz para a tela a única regra de corte que o arquivo conhece: o
+ * `@react-pdf` nunca parte uma `View`, então o bloco que não cabe inteiro na
+ * folha desce todo para a seguinte e o pé da anterior fica em branco. Sem
+ * conhecer onde cada bloco começa e termina, a prévia só sabia dividir a altura
+ * do fluxo pela área útil — e o branco perdido em cada virada (dezenas de px,
+ * cumulativos) fazia o contador anunciar menos folhas do que o arquivo emite.
+ *
+ * Bloco ANINHADO não conta: o parágrafo do enunciado dentro da questão viaja
+ * com ela: quem decide a virada é o bloco de topo, como a `View` de topo no PDF.
+ */
+const BLOCK_SELECTOR = "[data-folha-bloco]";
+
+/** Os marcados que não estão dentro de outro marcado do mesmo tipo. */
+const topLevel = (content: HTMLElement, selector: string) =>
+  Array.from(content.querySelectorAll<HTMLElement>(selector))
+    // `parentElement` nunca é nulo: todo achado do seletor é descendente de `content`.
+    .filter((el) => el.parentElement!.closest(selector) === null);
+
 /** Valor de `getComputedStyle` em px; ausente (jsdom, `auto`) vale zero. */
 const px = (value: string) => Number.parseFloat(value) || 0;
 
@@ -107,9 +128,7 @@ const px = (value: string) => Number.parseFloat(value) || 0;
  * descontar o filho de novo encolheria o papel abaixo do que o arquivo tem.
  */
 const editorChromeHeight = (content: HTMLElement) =>
-  Array.from(content.querySelectorAll<HTMLElement>(CHROME_SELECTOR))
-    // `parentElement` nunca é nulo: todo achado do seletor é descendente de `content`.
-    .filter((el) => el.parentElement!.closest(CHROME_SELECTOR) === null)
+  topLevel(content, CHROME_SELECTOR)
     .reduce((sum, el) => {
       const style = getComputedStyle(el);
       return sum + el.offsetHeight + px(style.marginTop) + px(style.marginBottom);
@@ -295,6 +314,15 @@ export function PageSheet({
         mark.style.marginBottom = "";
       });
       /*
+        Achado 0701: o empurrão do BLOCO que não coube (no fim desta função) é
+        fluxo pelo mesmo motivo, e é zerado pela mesma razão — medido já
+        deslocado, cada remedida empilharia mais uma folha em branco.
+      */
+      const blocks = topLevel(content, BLOCK_SELECTOR);
+      blocks.forEach((block) => {
+        block.style.marginTop = "";
+      });
+      /*
         Achado 0123: a altura medida é a do CONTEÚDO, nunca a da folha. A folha
         passou a crescer até o fim da última página (abaixo), então medi-la aqui
         realimentaria a própria medição a cada layout: mais altura, mais páginas,
@@ -335,32 +363,118 @@ export function PageSheet({
         está desenhado; o contador é que conta só o que imprime. (O papel cresce
         o EXCEDENTE desenhado, não uma folha inteira — achado 0184, abaixo.)
       */
-      const sheetsFor = (height: number) => {
-        const ends = [...cuts, height];
-        let start = 0;
-        let total = 0;
-        ends.forEach((end) => {
-          // O comprimento do trecho é medido no CONTEÚDO (do corte até o próximo),
-          // porque é isso que o leitor vê na tela; só a origem dele é que passa a
-          // ser o fim da página anterior.
-          /*
-            Achado 0153: o divisor é a área ÚTIL da página (`PAGE_CONTENT_HEIGHT_PX`),
-            não a A4 inteira. O que se mede aqui é a altura do CONTEÚDO, e o conteúdo
-            vive DENTRO das margens que `pageTokensToCss` (e o `<Page>` do react-pdf)
-            aplicam: dividir por 1123px contava os 107px de margem como texto, uma vez
-            por folha. A folha do Revisar voltava a terminar no meio de uma página sem
-            régua (o 0151 reaberto) e o contador anunciava menos folhas que o arquivo.
-            Achado 0157: a área útil passou a ser TAMBÉM o passo das réguas e da
-            altura do papel (abaixo), porque o fluxo contínuo desta folha só gasta
-            margem uma vez — contar por uma régua e desenhar por outra era o que
-            fabricava a folha em branco no fim.
-          */
-          total += Math.max(1, Math.ceil((end - start) / PAGE_CONTENT_HEIGHT_PX));
-          start = end;
+      /*
+        Achado 0701: onde cada bloco IMPRESSO começa e termina, no mesmo fluxo
+        que `printedHeight` mede (daí o desconto da margem de cima da folha,
+        que o retângulo traz e o fluxo do conteúdo não).
+      */
+      const blockBounds = blocks.map((block) => {
+        const rect = block.getBoundingClientRect();
+        return {
+          el: block,
+          kind: "block" as const,
+          top: (rect.top - sheetTop) / scale - PAGE_MARGIN_PX,
+          bottom: (rect.bottom - sheetTop) / scale - PAGE_MARGIN_PX,
+          height: 0,
+        };
+      });
+      /*
+        A paginação da prévia numa passada só, sobre o fluxo em ordem: as
+        quebras forçadas e os blocos impressos. Ela responde de uma vez pela
+        CONTAGEM, pelas réguas e pelo empurrão de cada item — contar por uma
+        conta e desenhar por outra foi o que produziu os achados 0123 e 0701.
+
+        Achado 0153/0157: o passo é a área ÚTIL da página
+        (`PAGE_CONTENT_HEIGHT_PX`), não a A4 inteira, porque o conteúdo vive
+        dentro das margens que `pageTokensToCss` (e o `<Page>` do react-pdf)
+        aplicam.
+
+        Achado 0121/0131: cada trecho entre quebras começa numa página nova,
+        como o `<View break>` do PDF.
+
+        Achado 0701: e ENTRE duas quebras o corte não cai em qualquer pixel. O
+        `@react-pdf` não parte uma `View`: o bloco que não cabe inteiro desce
+        todo para a folha seguinte e o pé da anterior fica em branco. Dividir a
+        altura do fluxo pela área útil ignorava esse branco — dezenas de px por
+        virada, e cumulativos —, então o contador anunciava "3 páginas A4" para
+        um arquivo com `Pages: 4` e a régua caía no meio de um bloco que o papel
+        nunca parte. Documento sem bloco marcado (a folha do Revisar, que é o DOM
+        do editor) não tem o que empurrar e a conta volta a ser a divisão de
+        sempre.
+      */
+      const paginate = () => {
+        // Em ordem de DOCUMENTO, que é a ordem do fluxo: ordenar pela medida
+        // empataria a régua com o bloco que ela antecede.
+        const byMark = new Map(marks.map((mark, index) => [mark, index] as const));
+        const byBlock = new Map(blockBounds.map((bounds) => [bounds.el, bounds] as const));
+        const flow = Array.from(
+          sheet.querySelectorAll<HTMLElement>(`.adaptar-page-break, ${BLOCK_SELECTOR}`),
+        ).flatMap((el) => {
+          const index = byMark.get(el);
+          if (index !== undefined) {
+            return [
+              {
+                el,
+                kind: "break" as const,
+                top: cuts[index],
+                bottom: cuts[index],
+                height: el.getBoundingClientRect().height / scale,
+              },
+            ];
+          }
+          const bounds = byBlock.get(el);
+          // Bloco ANINHADO (o enunciado dentro da questão) viaja com o de topo:
+          // quem decide a virada é o de topo, como a `View` de topo no PDF.
+          return bounds ? [bounds] : [];
         });
-        return total;
+
+        let pageTop = 0;
+        let total = 1;
+        let shift = 0;
+        const pushes: { el: HTMLElement; kind: "break" | "block"; spacer: number }[] = [];
+        const turnPage = () => {
+          pageTop += PAGE_CONTENT_HEIGHT_PX;
+          total += 1;
+        };
+        flow.forEach((item) => {
+          const top = item.top + shift;
+          // Item que já passou da folha corrente: alcança a dele antes de
+          // qualquer conta.
+          while (top - pageTop > PAGE_CONTENT_HEIGHT_PX) turnPage();
+          if (item.kind === "break") {
+            /*
+              Achado 0135: a régua ganha, como margem inferior, o branco que
+              falta até o fim da folha em que ela caiu. O piso em 0 cobre a
+              régua que atravessa a virada — aí o branco que falta é negativo e
+              puxar o conteúdo para trás sobreporia o que já foi desenhado.
+            */
+            const pageEnd =
+              PAGE_MARGIN_PX +
+              Math.ceil((top - PAGE_MARGIN_PX) / PAGE_CONTENT_HEIGHT_PX) * PAGE_CONTENT_HEIGHT_PX;
+            const spacer = Math.max(0, pageEnd - (top + item.height));
+            pushes.push({ el: item.el, kind: "break", spacer });
+            shift += spacer;
+            total += 1;
+            pageTop = top + item.height + spacer;
+            return;
+          }
+          if (
+            item.bottom + shift - pageTop > PAGE_CONTENT_HEIGHT_PX &&
+            top > pageTop + 0.5
+          ) {
+            const spacer = Math.max(0, pageTop + PAGE_CONTENT_HEIGHT_PX - top);
+            turnPage();
+            pushes.push({ el: item.el, kind: "block", spacer });
+            shift += spacer;
+          }
+          // Bloco mais alto que uma folha inteira: o papel o parte, porque não
+          // há outro lugar para ele — é o que o arquivo também faz.
+          while (item.bottom + shift - pageTop > PAGE_CONTENT_HEIGHT_PX) turnPage();
+        });
+        while (printedHeight + shift - pageTop > PAGE_CONTENT_HEIGHT_PX) turnPage();
+        return { total, pushes };
       };
-      const total = sheetsFor(printedHeight);
+      const { total, pushes } = paginate();
       /*
         Achado 0184: o excedente desenhado estica o papel, mas NÃO vira folha. A
         primeira versão do 0183 media a geometria com `sheetsFor(offsetHeight)`,
@@ -419,27 +533,18 @@ export function PageSheet({
         marca a quebra dentro do editor, e um salto rígido no meio da digitação
         atrapalharia mais do que ajuda (a folha de lá é contínua de propósito).
 
-        `shift` acumula porque as réguas seguintes já são medidas cruas (o
-        zeramento no topo da função): sem somar o que as anteriores abriram, a
-        segunda quebra calcularia a virada da folha errada. O piso em 0 cobre a
-        régua que atravessa a virada — aí o branco que falta é negativo e puxar o
-        conteúdo para trás sobreporia o que já foi desenhado.
-
-        A contagem e a altura do papel acima NÃO mudam: elas já paginavam trecho
-        a trecho (achados 0121/0131/0157), que é exatamente o lugar para onde o
-        conteúdo passa a ser empurrado.
+        Achado 0701: o BLOCO que não cabe inteiro recebe o mesmo empurrão, pelo
+        topo — é a virada automática do arquivo desenhada na tela, e com ela o
+        branco que sobra no pé da folha fica visível (que é o sinal de que vem
+        uma folha quase vazia). O vão de cada empurrão já saiu da caminhada
+        acima, a MESMA que conta as folhas e posiciona as réguas: contar por uma
+        conta e desenhar por outra era o que fazia a régua prometer uma virada
+        que o arquivo não usa.
       */
       if (paginated) {
-        let shift = 0;
-        marks.forEach((mark, index) => {
-          const cut = cuts[index] + shift;
-          const markHeight = mark.getBoundingClientRect().height / scale;
-          const pageEnd =
-            PAGE_MARGIN_PX +
-            Math.ceil((cut - PAGE_MARGIN_PX) / PAGE_CONTENT_HEIGHT_PX) * PAGE_CONTENT_HEIGHT_PX;
-          const spacer = Math.max(0, pageEnd - (cut + markHeight));
-          mark.style.marginBottom = `${spacer}px`;
-          shift += spacer;
+        pushes.forEach(({ el, kind, spacer }) => {
+          if (kind === "break") el.style.marginBottom = `${spacer}px`;
+          else el.style.marginTop = `${spacer}px`;
         });
       }
     };
