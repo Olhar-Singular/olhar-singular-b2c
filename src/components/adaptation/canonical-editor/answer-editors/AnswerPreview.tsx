@@ -10,7 +10,7 @@
  * in the stem text.
  */
 
-import { Fragment, type ComponentProps } from "react";
+import { Fragment, type ComponentProps, type CSSProperties } from "react";
 import type { QuestionAnswer, RichText } from "@/lib/adaptation/canonical/schema";
 import { indexToLetter } from "@/components/adaptation/render/letters";
 import { ALTERNATIVE_MARKER_CLASS } from "@/components/adaptation/render/answers/markerColumn";
@@ -25,6 +25,9 @@ import {
   ORDERING_MARKER_TEXT,
   TRUE_FALSE_MARKER_GAP_PX,
   TRUE_FALSE_MARKER_TEXT,
+  TABLE_CELL_PADDING_PX,
+  RULE_WIDTH_PX,
+  BASE_LINE_HEIGHT,
 } from "@/components/adaptation/render/pageTokens";
 import { RichTextField } from "../RichTextField";
 import {
@@ -58,6 +61,19 @@ function Bullet() {
 function PreviewField(props: ComponentProps<typeof RichTextField>) {
   return <RichTextField {...props} plain />;
 }
+
+/**
+ * A caixa da célula de tabela é a MESMA das outras superfícies (achado 0606):
+ * recuo, traço e entrelinha vêm de `pageTokens`, exatamente como em `TableView`
+ * (prévia do Exportar) e em `PdfAnswer`. Antes a folha do Revisar tinha recuo
+ * próprio (`p-1.5`, 6px contra 4px) e a mesma tabela saía até 73% mais alta
+ * aqui — e é NESTA tela que o professor decide se a atividade cabe na folha.
+ */
+const TABLE_CELL_STYLE: CSSProperties = {
+  padding: `${TABLE_CELL_PADDING_PX}px`,
+  borderWidth: `${RULE_WIDTH_PX}px`,
+  lineHeight: BASE_LINE_HEIGHT,
+};
 
 /**
  * Rótulo acessível de uma célula do corpo da tabela. Cita o nome da coluna
@@ -227,7 +243,8 @@ export function AnswerPreview({ answer, onChange, disabled = false }: AnswerPrev
                   <th
                     key={ci}
                     scope="col"
-                    className="min-w-[60px] border border-surface-line-2 p-1.5 text-left align-top font-semibold"
+                    style={TABLE_CELL_STYLE}
+                    className="min-w-[60px] border border-surface-line-2 text-left align-top font-semibold"
                   >
                     <PreviewField
                       value={cell}
@@ -245,7 +262,11 @@ export function AnswerPreview({ answer, onChange, disabled = false }: AnswerPrev
             {body.map((row, ri) => (
               <tr key={ri}>
                 {row.map((cell, ci) => (
-                  <td key={ci} className="min-w-[60px] border border-surface-line-2 p-1.5 align-top">
+                  <td
+                    key={ci}
+                    style={TABLE_CELL_STYLE}
+                    className="min-w-[60px] border border-surface-line-2 align-top"
+                  >
                     <PreviewField
                       value={cell}
                       disabled={disabled}

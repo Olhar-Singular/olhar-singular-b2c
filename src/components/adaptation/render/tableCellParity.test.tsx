@@ -11,7 +11,7 @@
  * traço; o corpo e a entrelinha vêm do documento nas duas superfícies.
  */
 
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import type { ReactElement } from "react";
 import type { QuestionAnswer } from "@/lib/adaptation/canonical/schema";
@@ -24,6 +24,13 @@ import {
 } from "./pageTokens";
 import { TableView } from "./answers/TableView";
 import { PdfAnswer } from "./pdf/PdfAnswer";
+import { AnswerPreview } from "../canonical-editor/answer-editors/AnswerPreview";
+
+// A folha do Revisar edita inline com ProseMirror; aqui interessa só a CAIXA da
+// célula, então o campo vira um input simples.
+vi.mock("../canonical-editor/RichTextField", () => ({
+  RichTextField: ({ ariaLabel }: { ariaLabel?: string }) => <input aria-label={ariaLabel} readOnly />,
+}));
 
 const TABLE: Extract<QuestionAnswer, { kind: "table" }> = {
   kind: "table",
@@ -60,5 +67,39 @@ describe("célula de tabela — paridade entre a prévia do Exportar e o PDF", (
     expect(style.padding).toBe(TABLE_CELL_PADDING_PT);
     expect(style.borderRightWidth).toBe(RULE_WIDTH_PT);
     expect(style.borderBottomWidth).toBe(RULE_WIDTH_PT);
+  });
+});
+
+/**
+ * Contrato de paridade da CÉLULA DE TABELA entre a folha do REVISAR e a prévia
+ * do Exportar (achado 0606).
+ *
+ * O Revisar é a tela em que o professor decide se a atividade cabe na folha.
+ * Enquanto a célula do editor tinha recuo próprio (`p-1.5`, 6px) contra os 4px
+ * de `TABLE_CELL_PADDING_PX` da prévia, a mesma tabela media até 73% a mais no
+ * Revisar: o professor media a virada de página na folha errada.
+ */
+describe("célula de tabela — paridade entre a folha do Revisar e a prévia", () => {
+  function cellBox(el: HTMLTableCellElement) {
+    return {
+      padding: el.style.padding,
+      lineHeight: el.style.lineHeight,
+      borderWidth: el.style.borderWidth,
+    };
+  }
+
+  it("imprime a mesma caixa (recuo, entrelinha e traço) nas duas superfícies", () => {
+    const previa = render(<TableView answer={TABLE} />);
+    const previaCell = previa.container.querySelector("th") as HTMLTableCellElement;
+    const box = cellBox(previaCell);
+    previa.unmount();
+
+    const revisar = render(<AnswerPreview answer={TABLE} onChange={() => {}} />);
+    const revisarCells = revisar.container.querySelectorAll("th, td");
+    expect(revisarCells.length).toBe(4);
+    for (const cell of revisarCells) {
+      expect(cellBox(cell as HTMLTableCellElement)).toEqual(box);
+      expect((cell as HTMLTableCellElement).className).not.toMatch(/\bp-1\.5\b/);
+    }
   });
 });
