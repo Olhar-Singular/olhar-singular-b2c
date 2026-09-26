@@ -23,6 +23,9 @@ import {
   ANSWER_LINE_COLOR,
   CHECKBOX_BOX_PX,
   CHECKBOX_BOX_BORDER_PX,
+  CHECKBOX_BOX_PT,
+  CHECKBOX_BOX_BORDER_PT,
+  CHECKBOX_BOX_COLOR,
 } from "./pageTokens";
 import type { Block, QuestionAnswer, RichText } from "@/lib/adaptation/canonical/schema";
 
@@ -105,6 +108,40 @@ describe("caixa do checkbox — PDF (0358)", () => {
     expect(text.join("")).not.toContain("[");
     expect(text.join("")).not.toContain("]");
     expect(canvasNodes(el)).toHaveLength(2);
+  });
+
+  it("o pincel traça a caixa medindo o lado de ponta a ponta", () => {
+    // O `paint` do Canvas é uma função que o @react-pdf chama na hora de
+    // rasterizar — nada no JSX prova o que ela desenha. Aqui ela é invocada com
+    // um pincel espião: o traço entra meia espessura para dentro dos dois lados,
+    // então a caixa mede CHECKBOX_BOX_PT de fora a fora, e não meia borda a mais.
+    const calls: Array<[string, unknown[]]> = [];
+    const painter = {
+      lineWidth: (...a: unknown[]) => (calls.push(["lineWidth", a]), painter),
+      strokeColor: (...a: unknown[]) => (calls.push(["strokeColor", a]), painter),
+      roundedRect: (...a: unknown[]) => (calls.push(["roundedRect", a]), painter),
+      stroke: () => (calls.push(["stroke", []]), painter),
+    };
+    const canvas = canvasNodes(PdfAnswer({ answer: ANSWER }))[0];
+    const paint = (canvas.props as { paint: (p: unknown, w: number, h: number) => null }).paint;
+    const side = CHECKBOX_BOX_PT;
+
+    expect(paint(painter, side, side)).toBeNull();
+
+    const inset = CHECKBOX_BOX_BORDER_PT / 2;
+    expect(calls.map(([name]) => name)).toEqual([
+      "lineWidth",
+      "strokeColor",
+      "roundedRect",
+      "stroke",
+    ]);
+    expect(calls[0][1]).toEqual([CHECKBOX_BOX_BORDER_PT]);
+    expect(calls[1][1]).toEqual([CHECKBOX_BOX_COLOR]);
+    const [x, y, w, h] = calls[2][1] as number[];
+    expect([x, y]).toEqual([inset, inset]);
+    // Lado cheio: o retângulo mais as duas meias bordas fecha em CHECKBOX_BOX_PT.
+    expect(w + CHECKBOX_BOX_BORDER_PT).toBeCloseTo(side, 5);
+    expect(h + CHECKBOX_BOX_BORDER_PT).toBeCloseTo(side, 5);
   });
 });
 
