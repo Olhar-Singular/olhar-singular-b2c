@@ -21,24 +21,23 @@ describe("runSetInitialPassword", () => {
     const d = {
       updatePassword: vi.fn(async () => undefined),
       clearFlag: vi.fn(async () => undefined),
-      revokeOtherSessions: vi.fn(async () => undefined),
       log: vi.fn(),
       ...overrides,
     };
     return d as SetPasswordDeps & typeof d;
   }
 
-  it("updates the password, clears the flag and revokes the other sessions, in that order", async () => {
+  it("updates the password, then clears the flag, and logs nothing on the happy path", async () => {
     const order: string[] = [];
     const d = deps({
       updatePassword: vi.fn(async () => { order.push("password"); }),
       clearFlag: vi.fn(async () => { order.push("flag"); }),
-      revokeOtherSessions: vi.fn(async () => { order.push("revoke"); }),
     });
     expect(await runSetInitialPassword("u1", "secret1", d)).toEqual({ flagCleared: true });
     expect(d.updatePassword).toHaveBeenCalledWith("u1", "secret1");
     expect(d.clearFlag).toHaveBeenCalledWith("u1");
-    expect(order).toEqual(["password", "flag", "revoke"]);
+    expect(order).toEqual(["password", "flag"]);
+    expect(d.log).not.toHaveBeenCalled();
   });
 
   it("retries the flag once and reports when it still fails, without undoing the password", async () => {
@@ -46,7 +45,6 @@ describe("runSetInitialPassword", () => {
     expect(await runSetInitialPassword("u1", "secret1", d)).toEqual({ flagCleared: false });
     expect(d.clearFlag).toHaveBeenCalledTimes(2);
     expect(d.log).toHaveBeenCalledWith(expect.stringMatching(/ALERT/), "u1", expect.any(Error), expect.any(Error));
-    expect(d.revokeOtherSessions).toHaveBeenCalled();
 
     const flaky = deps({ clearFlag: vi.fn().mockRejectedValueOnce(new Error("blip")).mockResolvedValueOnce(undefined) });
     expect(await runSetInitialPassword("u1", "secret1", flaky)).toEqual({ flagCleared: true });
@@ -56,11 +54,5 @@ describe("runSetInitialPassword", () => {
     const d = deps({ updatePassword: vi.fn(async () => { throw new Error("weak"); }) });
     await expect(runSetInitialPassword("u1", "secret1", d)).rejects.toThrow("weak");
     expect(d.clearFlag).not.toHaveBeenCalled();
-  });
-
-  it("logs but does not fail when the other sessions cannot be revoked", async () => {
-    const d = deps({ revokeOtherSessions: vi.fn(async () => { throw new Error("gotrue down"); }) });
-    await expect(runSetInitialPassword("u1", "secret1", d)).resolves.toEqual({ flagCleared: true });
-    expect(d.log).toHaveBeenCalledWith(expect.stringMatching(/revoke/), "u1", expect.any(Error));
   });
 });

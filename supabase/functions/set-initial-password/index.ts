@@ -22,8 +22,9 @@ const INPUT_ERRORS: Record<string, string> = {
   password_too_long: "A senha é longa demais.",
 };
 
-// First access of an account born from a payment: the user picks a password,
-// the must_set_password flag is cleared and every other session is revoked.
+// First access of an account born from a payment: the user picks a password
+// and the must_set_password flag is cleared. GoTrue revokes every session of the
+// user on this admin password change (this one too); the client signs in again.
 // The password only ever travels in this request body and is never logged.
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
@@ -31,7 +32,6 @@ serve(async (req) => {
   try {
     const authHeader = req.headers.get("Authorization");
     if (!authHeader?.startsWith("Bearer ")) return json({ error: "Não autorizado." }, 401);
-    const jwt = authHeader.slice("Bearer ".length).trim();
 
     const supabaseUrl     = Deno.env.get("SUPABASE_URL")!;
     const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
@@ -59,10 +59,6 @@ serve(async (req) => {
       clearFlag: async (userId) => {
         const { error } = await admin.from("profiles").update({ must_set_password: false }).eq("id", userId);
         if (error) throw new Error(`must_set_password clear failed: ${error.message}`);
-      },
-      revokeOtherSessions: async () => {
-        const { error } = await admin.auth.admin.signOut(jwt, "others");
-        if (error) throw new Error(error.message);
       },
       log: (message, ...args) => console.warn(message, ...args),
     });
