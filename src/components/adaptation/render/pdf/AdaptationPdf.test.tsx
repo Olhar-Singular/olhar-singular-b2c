@@ -71,8 +71,15 @@ describe("AdaptationPdf", () => {
     expect(el.props.language).toBe("pt-BR");
   });
 
-  it("falls back to a generic title when the header has none", () => {
+  // Achado 0192: sem `header.title`, os metadados caíam no genérico enquanto a
+  // folha imprimia o heading na primeira linha. Cai na mesma derivação da tela.
+  it("falls back to the document heading when the header has no title", () => {
     const el = AdaptationPdf({ document: renderDocument, settings });
+    expect(el.props.title).toBe("Atividade de Frações");
+  });
+
+  it("falls back to a generic title when there is no heading either", () => {
+    const el = AdaptationPdf({ document: { schemaVersion: 1, blocks: [] }, settings });
     expect(el.props.title).toBe("Atividade adaptada");
   });
 

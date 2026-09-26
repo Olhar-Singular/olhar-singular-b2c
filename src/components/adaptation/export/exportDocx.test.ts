@@ -1382,9 +1382,33 @@ describe("documentMetadata", () => {
     expect(documentMetadata({ title: "  Prova de Ciências  " }).title).toBe("Prova de Ciências");
   });
 
-  it("sem título no cabeçalho, usa o mesmo rótulo do PDF", () => {
+  /**
+   * Achado 0192: sem `header.title` (o campo do Exportar nasce vazio, com o
+   * título do documento só como placeholder), o `.docx` caía direto no genérico
+   * enquanto imprimia o heading na primeira linha do papel. A cadeia passa a
+   * ser a MESMA que a tela sugere: header → heading do documento → genérico.
+   */
+  it("sem título no cabeçalho, deriva do heading do documento", () => {
+    const doc: CanonicalDocument = {
+      schemaVersion: 1,
+      blocks: [
+        {
+          id: "00000000-0000-4000-8000-000000000001",
+          type: "heading",
+          level: 2,
+          content: [{ type: "text", text: "Prova de Ciências - 5o ano" }],
+        },
+      ],
+    };
+    expect(documentMetadata({}, doc).title).toBe("Prova de Ciências - 5o ano");
+    expect(documentMetadata({ title: "   " }, doc).title).toBe("Prova de Ciências - 5o ano");
+    expect(documentMetadata({ title: "Nome dado" }, doc).title).toBe("Nome dado");
+  });
+
+  it("sem título e sem heading, usa o mesmo rótulo do PDF", () => {
     expect(documentMetadata({}).title).toBe("Atividade adaptada");
     expect(documentMetadata({ title: "   " }).title).toBe("Atividade adaptada");
+    expect(documentMetadata({}, { schemaVersion: 1, blocks: [] }).title).toBe("Atividade adaptada");
   });
 
   it("assina com o professor do cabeçalho, nunca com o 'Un-named' da lib", () => {

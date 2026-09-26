@@ -83,6 +83,7 @@ import { perQuestionBreakFlags } from "../render/perQuestionBreaks";
 import { latexLayoutAtom, readableMathText } from "../render/mathAtom";
 import { DEFAULT_PANEL_SETTINGS, formatHeaderDateBR, type PanelSettings } from "./panelSettings";
 import { HEADER_SPACING_PT } from "../render/headerSpacing";
+import { documentTitle, FALLBACK_TITLE } from "../titleField";
 import {
   FOOTER_COLOR,
   FOOTER_FONT_SIZE_PT,
@@ -720,14 +721,24 @@ export function documentRunStyle(pageStyle?: PageStyle): {
  * Mora fora de `downloadDocx` (que é `v8 ignore` pelos efeitos de DOM) para
  * nascer com teste, como `documentRunStyle` e `docxSectionProperties`.
  */
-export function documentMetadata(header: DocumentHeader): {
+export function documentMetadata(
+  header: DocumentHeader,
+  doc?: CanonicalDocument,
+): {
   title: string;
   creator: string;
   lastModifiedBy: string;
   description: string;
 } {
-  // Mesmo fallback que o `<Document title>` do PDF usa (AdaptationPdf.tsx).
-  const title = header.title?.trim() || "Atividade adaptada";
+  // Mesma cadeia que o `<Document title>` do PDF usa (AdaptationPdf.tsx).
+  //
+  // Achado 0192: parava no genérico porque `documentMetadata` só recebia o
+  // header — e o header nasce vazio, com o título do documento só como
+  // placeholder no passo Exportar. O `.docx` dizia "Atividade adaptada" em
+  // `dc:title` (o que o Word mostra em Propriedades) enquanto imprimia o
+  // heading no topo. Com o documento em mãos, cai na derivação da tela:
+  // header → heading → genérico.
+  const title = header.title?.trim() || (doc ? documentTitle(doc) : FALLBACK_TITLE);
   // Quem assina é o professor do cabeçalho; sem ele, o produto. Nunca a lib.
   const creator = header.teacher?.trim() || PRODUCT_NAME;
   return {
@@ -849,7 +860,7 @@ export async function downloadDocx(
   const contentParagraphs = docxContentBlocks(document, settings);
 
   const doc = new Document({
-    ...documentMetadata(header),
+    ...documentMetadata(header, document),
     styles: { default: { document: { run: documentRunStyle(pageStyle) } } },
     sections: [
       {

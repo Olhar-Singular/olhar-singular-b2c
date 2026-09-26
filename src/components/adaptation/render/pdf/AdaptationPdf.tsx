@@ -25,6 +25,7 @@ import { questionNumbers } from "../questionNumbering";
 import { perQuestionBreakFlags } from "../perQuestionBreaks";
 import { BASE_LINE_HEIGHT, pageTokensToPdf, pdfTextSize, RULE_WIDTH_PT } from "../pageTokens";
 import { HEADER_SPACING_PT } from "../headerSpacing";
+import { documentTitle } from "@/components/adaptation/titleField";
 import { resolvePageStyle, resolveElementFontSizes } from "../pageStyle";
 import {
   FOOTER_BOTTOM_PT,
@@ -136,10 +137,16 @@ export function AdaptationPdf({ document, settings = DEFAULT_PANEL_SETTINGS, pag
   // tela anunciarem a atividade (e não o nome do arquivo) e `/Lang` dá ao
   // sintetizador as regras de pronúncia do pt-BR (WCAG 3.1.1). O título sai do
   // mesmo `header.title` que já nomeia o cabeçalho impresso e o `.docx`.
-  const documentTitle = settings.header.title?.trim() || "Atividade adaptada";
+  //
+  // Achado 0192: o `header.title` nasce VAZIO (o campo do Exportar mostra o
+  // título do documento só como placeholder), então o arquivo se anunciava como
+  // "Atividade adaptada" enquanto imprimia o heading na primeira linha do papel.
+  // Sem header, cai na MESMA derivação que a tela sugere — `documentTitle()` já
+  // termina no genérico para o documento sem heading nenhum.
+  const title = settings.header.title?.trim() || documentTitle(document);
 
   return (
-    <Document title={documentTitle} language="pt-BR">
+    <Document title={title} language="pt-BR">
       <Page size="A4" style={pageTokensToPdf(resolved)}>
         <PdfHeader header={settings.header} />
         {(() => {
