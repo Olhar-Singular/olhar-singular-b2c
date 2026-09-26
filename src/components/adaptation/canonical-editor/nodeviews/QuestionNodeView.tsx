@@ -93,6 +93,27 @@ export function QuestionNodeView({ node, updateAttributes, editor, getPos, delet
   // QuestionCard local state and don't need restoration on Cancel).
   const snapshotRef = useRef<QuestionNodeJSON | null>(null);
 
+  /**
+   * Achado 0364: fechar o card (Escape, Cancelar ou Concluir) desmonta o card
+   * inteiro com o elemento focado dentro dele, e o navegador devolve o foco ao
+   * `<body>`: nenhum anel na tela e nada anunciado, enquanto os outros overlays
+   * do passo Revisar (popover Formato, gaveta de metadados e o diálogo de
+   * excluir questão) devolvem ao gatilho. Os três caminhos passam por
+   * `closeCard()`, que marca a devolução; o lápis só volta ao DOM junto com a
+   * prévia, então o foco é dado no efeito seguinte ao fechamento.
+   */
+  const refocusEditRef = useRef(false);
+  const editButtonRef = useRef<HTMLButtonElement>(null);
+  const closeCard = () => {
+    refocusEditRef.current = true;
+    collapse();
+  };
+  useEffect(() => {
+    if (expanded || !refocusEditRef.current) return;
+    refocusEditRef.current = false;
+    editButtonRef.current?.focus();
+  }, [expanded]);
+
   // Esc closes the open card (coordination is React/editor state, not the doc).
   useEffect(() => {
     if (!expanded) return;
@@ -166,7 +187,7 @@ export function QuestionNodeView({ node, updateAttributes, editor, getPos, delet
       enunciadoPosition: committedEnunciadoPosition,
       customNumber: committedCustomNumber,
     });
-    collapse();
+    closeCard();
   };
 
   /** Cancelar: restore the live stem content from the snapshot, discard buffered attrs. */
@@ -181,7 +202,7 @@ export function QuestionNodeView({ node, updateAttributes, editor, getPos, delet
         editor.view.dispatch(tr);
       }
     }
-    collapse();
+    closeCard();
   };
 
   /** Restaurar original: replace the entire node with the session-start snapshot. */
@@ -244,6 +265,7 @@ export function QuestionNodeView({ node, updateAttributes, editor, getPos, delet
       contentEditable={false}
     >
       <Button
+        ref={editButtonRef}
         type="button"
         variant="ghost"
         size="icon"

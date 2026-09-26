@@ -742,6 +742,22 @@ describe("QuestionNodeView — card open / commit / cancel", () => {
     expect(dispatch).toHaveBeenCalled(); // restore transaction
   });
 
+  // Achado 0364: fechar o card desmonta o card inteiro com o foco dentro dele, e
+  // o navegador devolve ao <body> — os outros overlays do passo Revisar (popover
+  // Formato, gaveta de metadados, diálogo de excluir) todos devolvem ao gatilho.
+  it.each([
+    ["Escape", () => fireEvent.keyDown(document, { key: "Escape" })],
+    ["Cancelar", () => fireEvent.click(screen.getByRole("button", { name: "Cancelar edição" }))],
+    ["Concluir", () => fireEvent.click(screen.getByRole("button", { name: "Concluir" }))],
+  ])("devolve o foco ao lápis ao fechar o card por %s (achado 0364)", (_saida, fechar) => {
+    const { props } = makeProps(mc);
+    render(<QuestionNodeView {...props} />);
+    fireEvent.click(screen.getByLabelText("Editar questão"));
+    fechar();
+    expect(screen.queryByTestId("question-card")).not.toBeInTheDocument();
+    expect(document.activeElement).toBe(screen.getByLabelText("Editar questão"));
+  });
+
   it("ignores non-Escape keys while the card is open", () => {
     const { props } = makeProps(mc);
     render(<QuestionNodeView {...props} />);
