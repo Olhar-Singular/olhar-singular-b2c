@@ -315,13 +315,28 @@ export function StepGenerate({ data, onResult, onNext, onPrev, onLoadingChange, 
 
   if (loading) {
     const messages = phase === "extracting" ? EXTRACTING_MESSAGES : ADAPTING_MESSAGES;
+    /**
+     * Anúncio ESTÁVEL da espera (0362). A copy visível roda a cada 2,8 s; se ela
+     * vivesse na região viva, o leitor de tela recitaria uma frase nova o tempo todo
+     * durante uma geração de minutos. A região viva diz uma vez o que começou, e o
+     * texto rotativo fica explicitamente fora dela.
+     */
+    const announcement =
+      phase === "extracting"
+        ? "Lendo a atividade enviada. Isso pode levar alguns minutos."
+        : "Gerando a adaptação. Isso pode levar alguns minutos.";
     return (
-      <div className="flex flex-col items-center justify-center py-20 gap-4">
-        <Loader2 className="w-10 h-10 animate-spin text-primary" />
-        <p className="text-lg font-medium text-foreground text-center max-w-md">
+      <div className="flex flex-col items-center justify-center py-20 gap-4" aria-busy="true">
+        <Loader2 aria-hidden="true" className="w-10 h-10 animate-spin text-primary" />
+        <p role="status" className="sr-only">
+          {announcement}
+        </p>
+        <p aria-live="off" className="text-lg font-medium text-foreground text-center max-w-md">
           {messages[messageIndex % messages.length]}
         </p>
-        <p className="text-xs text-muted-foreground">Isso pode levar alguns minutos</p>
+        <p aria-live="off" className="text-xs text-muted-foreground">
+          Isso pode levar alguns minutos
+        </p>
       </div>
     );
   }

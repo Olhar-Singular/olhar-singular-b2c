@@ -658,6 +658,54 @@ describe("StepGenerate", () => {
       expect(screen.getByText("ISA está adaptando a atividade...")).toBeInTheDocument();
     });
 
+    /**
+     * Regressão 0362: a espera era muda para leitor de tela. O anúncio precisa ser
+     * ESTÁVEL — a copy rotativa a cada 2,8 s não pode viver numa região viva, senão
+     * troca o silêncio por um despejo de frases durante minutos.
+     */
+    describe("anuncia a espera numa região viva estável (0362)", () => {
+      it("anuncia uma vez que a geração começou, sem recitar a copy rotativa", () => {
+        invokeMock.mockImplementation(() => new Promise(() => undefined));
+        renderWithProviders(
+          <StepGenerate data={baseData} onResult={vi.fn()} onNext={vi.fn()} onPrev={vi.fn()} />,
+        );
+        const status = screen.getByRole("status");
+        expect(status).toHaveTextContent("Gerando a adaptação. Isso pode levar alguns minutos.");
+        const announced = status.textContent;
+        act(() => { vi.advanceTimersByTime(2800 * 3); });
+        expect(screen.getByRole("status").textContent).toBe(announced);
+        expect(screen.getByRole("status")).not.toHaveTextContent(/Desenho Universal/i);
+      });
+
+      it("mantém a copy rotativa fora de qualquer região viva", () => {
+        invokeMock.mockImplementation(() => new Promise(() => undefined));
+        renderWithProviders(
+          <StepGenerate data={baseData} onResult={vi.fn()} onNext={vi.fn()} onPrev={vi.fn()} />,
+        );
+        const rotating = screen.getByText("ISA está adaptando a atividade...");
+        expect(rotating).toHaveAttribute("aria-live", "off");
+      });
+
+      it("esconde o spinner decorativo e marca a espera com aria-busy", () => {
+        invokeMock.mockImplementation(() => new Promise(() => undefined));
+        const { container } = renderWithProviders(
+          <StepGenerate data={baseData} onResult={vi.fn()} onNext={vi.fn()} onPrev={vi.fn()} />,
+        );
+        expect(container.querySelector("svg.animate-spin")).toHaveAttribute("aria-hidden", "true");
+        expect(container.querySelector("[aria-busy='true']")).not.toBeNull();
+      });
+
+      it("troca o anúncio quando a fase é a extração do arquivo", () => {
+        extractExamQuestionsMock.mockImplementation(() => new Promise(() => undefined));
+        renderWithProviders(
+          <StepGenerate data={uploadData} onResult={vi.fn()} onNext={vi.fn()} onPrev={vi.fn()} />,
+        );
+        expect(screen.getByRole("status")).toHaveTextContent(
+          "Lendo a atividade enviada. Isso pode levar alguns minutos.",
+        );
+      });
+    });
+
     it("rotates a separate message pool during extraction, reset to its own first message on phase change", () => {
       extractExamQuestionsMock.mockImplementation(() => new Promise(() => undefined));
       renderWithProviders(
