@@ -20,6 +20,12 @@
  *   montagem. Um `focus()` imperativo dependeria de a ref já estar preenchida
  *   no efeito.
  *
+ * Achado 0259: o Escape fechava a caixa sem desfazer nada — e, como o rascunho
+ * do LaTeX era commitado a cada tecla, fechar equivalia a confirmar. A tecla
+ * universal de desistir virava a segunda forma de dizer "Pronto", na única
+ * superfície do Revisar sem nenhum caminho de volta. Agora `open` marca o
+ * estado a restaurar e o Escape o devolve: confirmar é só do "Pronto".
+ *
  * Achado 0417: o "Pronto" fechava sem devolver o foco, no pressuposto de que
  * fechar ali era sempre gesto de mouse. Não é: o "Pronto" é um botão, e quem
  * chega nele pelo teclado é justamente quem paga o preço — ele é o próprio
@@ -44,19 +50,27 @@ export interface MathEditing {
   onKeyDown: (event: KeyboardEvent) => void;
 }
 
-/**
- * @param onEscape rodado antes de fechar pelo Escape — as NodeViews usam para
- * devolver o rascunho vazio à fórmula commitada (ver `useLatexDraft.onBlur`),
- * já que o input sai do DOM sem disparar `blur`.
- */
-export function useMathEditing(onEscape: () => void): MathEditing {
+export interface MathEditingHandlers {
+  /** Rodado ao abrir: marca o estado a que o Escape volta (`useLatexDraft.begin`). */
+  onOpen: () => void;
+  /**
+   * Rodado ao sair pelo Escape (`useLatexDraft.cancel`): desfaz a edição. Também
+   * cobre o que o `blur` do input não cobre — ele sai do DOM sem disparar.
+   */
+  onCancel: () => void;
+}
+
+export function useMathEditing({ onOpen, onCancel }: MathEditingHandlers): MathEditing {
   const [editing, setEditing] = useState(false);
   const [returnFocus, setReturnFocus] = useState(false);
 
   return {
     editing,
     returnFocus,
-    open: () => setEditing(true),
+    open: () => {
+      onOpen();
+      setEditing(true);
+    },
     close: () => {
       setReturnFocus(true);
       setEditing(false);
@@ -65,7 +79,7 @@ export function useMathEditing(onEscape: () => void): MathEditing {
       if (event.key !== "Escape") return;
       event.preventDefault();
       event.stopPropagation();
-      onEscape();
+      onCancel();
       setReturnFocus(true);
       setEditing(false);
     },

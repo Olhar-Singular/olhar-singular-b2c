@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 import type { NodeViewProps } from "@tiptap/react";
@@ -664,5 +665,89 @@ describe("InlineMathNodeView — aviso de alt desatualizado ligado ao campo (ach
     const depois = screen.getByRole("textbox", { name: /texto alternativo/i });
     expect(depois).not.toHaveAttribute("aria-invalid");
     expect(depois).not.toHaveAttribute("aria-describedby");
+  });
+});
+
+// Achado 0259: fechar não é cancelar. Como o rascunho commitava a cada tecla, o
+// Escape — a tecla universal de desistir, e a única saída do editor além do
+// "Pronto" — selava a edição (inclusive a perda do alt, que a troca do LaTeX
+// derruba). Cancelar devolve ao nó o par `{latex, alt}` de quando ele abriu.
+describe("InlineMathNodeView — Escape cancela a edição (achado 0259)", () => {
+  // As demais suítes fixam `node.attrs`, o que basta para ver o que foi
+  // commitado. Aqui o commit precisa VOLTAR para o nó, como o Tiptap faz: o
+  // cancelamento se mede no atributo depois de fechar, não na chamada.
+  function renderStateful(initial: { latex: string; alt: string | null }) {
+    const updateAttributes = vi.fn();
+    function Harness() {
+      const [attrs, setAttrs] = useState(initial);
+      const props = {
+        node: { attrs },
+        updateAttributes: (patch: Record<string, unknown>) => {
+          updateAttributes(patch);
+          setAttrs((prev) => ({ ...prev, ...patch }));
+        },
+        deleteNode: vi.fn(),
+        editor: { isEditable: true },
+      } as unknown as NodeViewProps;
+      return <InlineMathNodeView {...props} />;
+    }
+    render(<Harness />);
+    return { updateAttributes };
+  }
+
+  const trigger = () => screen.getByTestId("inlinemath-render");
+
+  it("devolve ao nó o latex que ele tinha quando o editor abriu", () => {
+    renderStateful({ latex: "x^2 + 2x + 1 = 0", alt: null });
+    fireEvent.click(trigger());
+    fireEvent.change(screen.getByLabelText("Expressão LaTeX inline"), { target: { value: "y^3 - 5y = 12" } });
+
+    fireEvent.keyDown(screen.getByLabelText("Expressão LaTeX inline"), { key: "Escape" });
+
+    expect(trigger()).toHaveAttribute("aria-label", "Editar fórmula: x^2 + 2x + 1 = 0");
+    fireEvent.click(trigger());
+    expect((screen.getByLabelText("Expressão LaTeX inline") as HTMLInputElement).value).toBe("x^2 + 2x + 1 = 0");
+  });
+
+  it("devolve junto o alt que a troca da fórmula derrubou", () => {
+    const alt = "x ao quadrado mais 2x mais 1 igual a zero";
+    const { updateAttributes } = renderStateful({ latex: "x^2 + 2x + 1 = 0", alt });
+    fireEvent.click(trigger());
+    fireEvent.change(screen.getByLabelText("Expressão LaTeX inline"), { target: { value: "y^3 - 5y = 12" } });
+    expect(updateAttributes).toHaveBeenCalledWith({ latex: "y^3 - 5y = 12", alt: null });
+
+    fireEvent.keyDown(screen.getByLabelText("Expressão LaTeX inline"), { key: "Escape" });
+
+    expect(trigger()).toHaveAttribute("aria-label", `Editar fórmula: ${alt}`);
+    expect(trigger()).not.toHaveAttribute("data-alt-stale");
+    // O aviso de descrição desatualizada morre com a edição cancelada.
+    fireEvent.click(trigger());
+    expect(screen.queryByTestId("inlinemath-alt-stale")).not.toBeInTheDocument();
+    expect((screen.getByLabelText("Texto alternativo da fórmula inline") as HTMLInputElement).value).toBe(alt);
+  });
+
+  it("devolve o alt editado sozinho, sem tocar no latex", () => {
+    renderStateful({ latex: "x^2", alt: "x ao quadrado" });
+    fireEvent.click(trigger());
+    fireEvent.change(screen.getByLabelText("Texto alternativo da fórmula inline"), { target: { value: "outra coisa" } });
+
+    fireEvent.keyDown(screen.getByLabelText("Texto alternativo da fórmula inline"), { key: "Escape" });
+
+    expect(trigger()).toHaveAttribute("aria-label", "Editar fórmula: x ao quadrado");
+  });
+
+  it("não escreve nada no nó quando o Escape não tem o que desfazer", () => {
+    const { updateAttributes } = renderStateful({ latex: "x^2", alt: null });
+    fireEvent.click(trigger());
+    fireEvent.keyDown(screen.getByLabelText("Expressão LaTeX inline"), { key: "Escape" });
+    expect(updateAttributes).not.toHaveBeenCalled();
+  });
+
+  it("confirma pelo Pronto o que foi digitado", () => {
+    renderStateful({ latex: "x^2", alt: null });
+    fireEvent.click(trigger());
+    fireEvent.change(screen.getByLabelText("Expressão LaTeX inline"), { target: { value: "y^3" } });
+    fireEvent.click(screen.getByText("Pronto"));
+    expect(trigger()).toHaveAttribute("aria-label", "Editar fórmula: y^3");
   });
 });
