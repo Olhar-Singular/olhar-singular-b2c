@@ -337,12 +337,16 @@ export default function CanonicalAdaptationWizard({ editMode }: Props = {}) {
     // ("Exportar"/"Voltar") é desmontado junto com o passo antigo, então o foco caía
     // no <body>: o Tab seguinte recomeçava no topo da página (link de pular, logo,
     // navegação lateral) e o leitor de tela não anunciava nada, porque a rota não
-    // mudou. Pousamos o foco no contêiner do passo novo, que carrega o nome do passo
-    // — o Tab continua de dentro dele e o nome é lido na chegada.
-    // 0245: com preventScroll, senão o foco desfaz o scrollTo(0, 0) logo acima — o
-    // navegador traria a região do passo para a vista (ela nasce ~176 px abaixo do topo)
+    // mudou. O foco tem que pousar dentro do wizard, no passo novo.
+    // 0366: mas pousá-lo no contêiner do passo (que no DOM vem depois da faixa)
+    // deixava os seis chips alcançáveis só por Shift+Tab, e quem navega por teclado
+    // perdia a navegação direta entre passos que o mouse tem. Pousamos no chip do
+    // passo atual: ele anuncia o passo (aria-current="step" mais o rótulo) e mantém
+    // a faixa e o conteúdo do passo à frente na ordem de tabulação.
+    // 0245: com preventScroll, senão o foco desfaz o scrollTo(0, 0) logo acima: o
+    // navegador traria o alvo para a vista (ele nasce abaixo do topo do documento)
     // e em telas estreitas a faixa de passos acabava debaixo do cabeçalho fixo.
-    stepRegionRef.current?.focus({ preventScroll: true });
+    chip.focus({ preventScroll: true });
   }, [stepIndex, updateEdgeHints]);
 
   // O teto só sobe sozinho; quem o rebaixa é quem invalida o que havia adiante
@@ -350,6 +354,11 @@ export default function CanonicalAdaptationWizard({ editMode }: Props = {}) {
   useEffect(() => {
     setMaxStepReached((max) => Math.max(max, stepIndex));
   }, [stepIndex]);
+  // 0366: mas o teto guardado no estado só chega ao DOM na render seguinte, então o
+  // chip do passo recém-aberto nascia `disabled` por um ciclo — e elemento disabled
+  // não recebe foco, o que fazia o foco da troca de passo cair no <body> de novo.
+  // Para a render, o teto é sempre pelo menos o passo atual.
+  const stepCeiling = Math.max(maxStepReached, stepIndex);
 
   const updateData = useCallback((partial: Partial<WizardData>) => {
     setData((prev) => ({ ...prev, ...partial }));
@@ -692,7 +701,7 @@ export default function CanonicalAdaptationWizard({ editMode }: Props = {}) {
               type="button"
               ref={i === stepIndex ? activeStepRef : undefined}
               onClick={() => goTo(i)}
-              disabled={i > maxStepReached}
+              disabled={i > stepCeiling}
               // 0230: "você está aqui" era só a cor de fundo. O leitor de tela via seis
               // botões iguais (1.4.1 e 4.1.2 do WCAG), e em 390px a faixa rola, então o
               // texto "Passo 5 de 6" de fora nem sempre está à vista.
@@ -700,7 +709,7 @@ export default function CanonicalAdaptationWizard({ editMode }: Props = {}) {
               className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs transition-colors ${
                 i === stepIndex
                   ? "bg-primary text-primary-foreground font-bold"
-                  : i <= maxStepReached
+                  : i <= stepCeiling
                   ? "bg-primary/10 text-primary-strong hover:bg-primary/20 font-medium"
                   : "bg-muted text-muted-foreground cursor-not-allowed font-medium"
               }`}

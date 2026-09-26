@@ -131,9 +131,9 @@ const wizardSource = readFileSync(
   "utf8",
 );
 
-/** Classes do ramo `i <= maxStepReached` (passo ja alcancado) do indicador de passos. */
+/** Classes do ramo `i <= stepCeiling` (passo ja alcancado) do indicador de passos. */
 function completedChipClasses(): string {
-  const match = wizardSource.match(/i <= maxStepReached\s*\?\s*"([^"]+)"/);
+  const match = wizardSource.match(/i <= stepCeiling\s*\?\s*"([^"]+)"/);
   expect(match, "ramo do chip concluido nao encontrado no wizard").not.toBeNull();
   return match![1];
 }

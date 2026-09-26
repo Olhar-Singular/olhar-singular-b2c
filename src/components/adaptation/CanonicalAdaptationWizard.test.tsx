@@ -701,16 +701,42 @@ describe("CanonicalAdaptationWizard", () => {
 
     advanceToReview();
 
+    // 0366: o pouso é no chip do passo atual, não mais no contêiner do passo
+    expect(document.activeElement).toHaveAttribute("aria-current", "step");
+    expect(document.activeElement).toHaveTextContent(/Revisar/);
     const region = screen.getByTestId("step-region");
-    expect(document.activeElement).toBe(region);
     expect(region).toHaveAttribute("tabindex", "-1");
     expect(region).toHaveAccessibleName("Revisar");
     expect(counter).toHaveTextContent("Passo 5 de 6");
 
     // e no caminho de volta (chip / botão Voltar) também
     fireEvent.click(screen.getByRole("button", { name: /1.*Tipo/i }));
-    expect(document.activeElement).toBe(screen.getByTestId("step-region"));
+    expect(document.activeElement).toHaveAttribute("aria-current", "step");
+    expect(document.activeElement).toHaveTextContent(/Tipo/);
     expect(screen.getByTestId("step-region")).toHaveAccessibleName("Tipo");
+  });
+
+  // 0366: o foco do 0167 pousava no contêiner do passo, que no DOM vem DEPOIS da
+  // faixa de chips: a partir dali todo Tab para frente anda para o conteúdo, e os
+  // seis chips só eram alcançáveis com Shift+Tab. Quem navega por teclado perdia a
+  // navegação direta entre passos que o mouse tem. O foco passa a pousar no chip do
+  // passo atual: ele anuncia o passo (aria-current) e deixa a faixa e o conteúdo do
+  // passo à frente na ordem de tabulação.
+  it("lands the focus on the current step chip so Tab forward still reaches the strip", () => {
+    renderWithProviders(<CanonicalAdaptationWizard />);
+    advanceToReview();
+
+    const strip = screen.getByTestId("step-strip");
+    const chips = within(strip).getAllByRole("button");
+    const current = chips.find((c) => c.getAttribute("aria-current") === "step");
+
+    expect(document.activeElement).toBe(current);
+
+    // e o conteúdo do passo continua adiante do foco, não atrás dele
+    const region = screen.getByTestId("step-region");
+    expect(
+      current!.compareDocumentPosition(region) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
   });
 
   // 0245: o foco do 0167 desfazia a rolagem do 0165. focus() sem preventScroll pede ao
@@ -721,14 +747,14 @@ describe("CanonicalAdaptationWizard", () => {
     const options: (FocusOptions | undefined)[] = [];
     const originalFocus = window.HTMLElement.prototype.focus;
     window.HTMLElement.prototype.focus = function (this: HTMLElement, opts?: FocusOptions) {
-      if (this.dataset.testid === "step-region") options.push(opts);
+      if (this.getAttribute("aria-current") === "step") options.push(opts);
       return originalFocus.call(this, opts);
     };
     try {
       renderWithProviders(<CanonicalAdaptationWizard />);
       advanceToReview();
 
-      expect(document.activeElement).toBe(screen.getByTestId("step-region"));
+      expect(document.activeElement).toHaveAttribute("aria-current", "step");
       expect(options).not.toHaveLength(0);
       for (const opts of options) expect(opts).toEqual({ preventScroll: true });
     } finally {
