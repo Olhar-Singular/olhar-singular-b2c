@@ -263,3 +263,36 @@ describe("Layout (Assinar nav item)", () => {
     expect(screen.getAllByRole("link", { name: /^Assinar$/ }).length).toBe(1);
   });
 });
+
+describe("Layout — scroll container (achado 0365)", () => {
+  it("keeps every ancestor of the main content out of the scroll-container business", () => {
+    // `position: sticky` resolves against the nearest scrolling ancestor. The
+    // window is the one that scrolls here (the root is `min-h-screen`, so the
+    // column always grows to the content), therefore no ancestor of the page
+    // content may declare `overflow` — doing so creates a scroll container that
+    // never scrolls and silently turns every sticky descendant (the wizard
+    // action bar of 0156, the save-error banner of 0223) back into `static`.
+    // jsdom does no layout, so the class is what we can assert; asserting the
+    // bar's own `sticky` class is exactly the check that let 0156 pass green.
+    setAuth();
+    renderWithProviders(
+      <Layout>
+        <div data-testid="content">payload</div>
+      </Layout>,
+      { route: "/adaptar" }
+    );
+
+    const offenders: string[] = [];
+    for (
+      let node: HTMLElement | null = screen.getByRole("main");
+      node && node !== document.body;
+      node = node.parentElement
+    ) {
+      const overflow = Array.from(node.classList).filter(
+        (c) => /^(overflow|overflow-x|overflow-y)-/.test(c) && !c.endsWith("-visible")
+      );
+      if (overflow.length > 0) offenders.push(`${node.tagName.toLowerCase()}: ${overflow.join(" ")}`);
+    }
+    expect(offenders).toEqual([]);
+  });
+});

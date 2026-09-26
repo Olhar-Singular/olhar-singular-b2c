@@ -223,12 +223,16 @@ export default function Layout({ children }: { children?: React.ReactNode }) {
       {/* ── Main content ── */}
       <div className="flex-1 flex flex-col mt-14 lg:mt-0 min-w-0">
         <AccessBanner access={access} subscription={subscription} />
-        <main
-          id="main-content"
-          tabIndex={-1}
-          className="flex-1 overflow-auto outline-none"
-          role="main"
-        >
+        {/*
+          Achado 0365: `overflow-auto` aqui estabelecia um contêiner de rolagem
+          que nunca rolava (a raiz é `min-h-screen`, então o `main` cresce até a
+          altura do conteúdo e quem rola é a janela). Todo `sticky` de dentro
+          das páginas se resolvia contra essa caixa e voltava a ser `static` —
+          a barra de ações do wizard (0156) e o aviso de falha no salvamento
+          (0223) nunca grudavam. Sem a classe, a janela volta a ser o ancestral
+          de rolagem, como a sidebar ao lado já assume com `sticky top-0`.
+        */}
+        <main id="main-content" tabIndex={-1} className="flex-1 outline-none" role="main">
           {children ?? <Outlet />}
         </main>
       </div>
