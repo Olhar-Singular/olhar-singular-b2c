@@ -249,6 +249,23 @@ export const TRUE_FALSE_MARKER_TEXT = "(  ) V  (  ) F";
 export const TRUE_FALSE_MARKER_GAP_PX = 12;
 
 /**
+ * Vão lateral entre cada coluna de texto e o elo `↔` da questão de Associação.
+ * Ponto único das TRÊS superfícies (achado 0197), na família do
+ * `ALTERNATIVE_MARKER_GAP_PX`.
+ *
+ * Estava escrito à mão uma vez por superfície e as cópias discordavam:
+ * `gap-x-4` (16px) na folha do Revisar contra `gap-2` (8px) na prévia do
+ * Exportar e `marginHorizontal: 6` pt (= 8px) no PDF. Como as duas colunas são
+ * `1fr`, 8px a mais de vão de cada lado encolhem cada coluna em 8px justamente
+ * na tela em que o professor edita: o par que ele alinha na folha quebra noutro
+ * ponto no arquivo que o aluno recebe.
+ *
+ * O valor adotado é o do papel (6pt = 8px, o que o PDF já imprimia e a prévia já
+ * mostrava): quem se move é o Revisar, o único fora.
+ */
+export const MATCHING_LINK_GAP_PX = 8;
+
+/**
  * Marcador do espaço onde o aluno escreve a ordem, na questão de Ordenação.
  * Ponto único das quatro superfícies (achado 0448): a prévia do Exportar, o PDF
  * e o Word já imprimiam `____`, mas a folha do Revisar desenhava um quadrado
@@ -480,6 +497,9 @@ export const ALTERNATIVE_MARKER_GAP_PT = ALTERNATIVE_MARKER_GAP_PX / PT_TO_PX;
 
 /** `TRUE_FALSE_MARKER_GAP_PX` na unidade do PDF (pt), pela mesma razão 72/96. */
 export const TRUE_FALSE_MARKER_GAP_PT = TRUE_FALSE_MARKER_GAP_PX / PT_TO_PX;
+
+/** `MATCHING_LINK_GAP_PX` na unidade do PDF (pt), pela mesma razão 72/96. */
+export const MATCHING_LINK_GAP_PT = MATCHING_LINK_GAP_PX / PT_TO_PX;
 
 /** `CHECKBOX_BOX_PX` na unidade do PDF (pt), pela mesma razão 72/96. */
 export const CHECKBOX_BOX_PT = CHECKBOX_BOX_PX / PT_TO_PX;

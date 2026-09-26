@@ -20,6 +20,7 @@ import {
   ANSWER_LINE_GAP_PX,
   ANSWER_LINE_WIDTH_PX,
   ANSWER_ITEM_GAP_PX,
+  MATCHING_LINK_GAP_PX,
   ALTERNATIVE_MARKER_GAP_PX,
   INK_MUTED,
   ORDERING_MARKER_TEXT,
@@ -210,8 +211,11 @@ export function AnswerPreview({ answer, onChange, disabled = false }: AnswerPrev
     case "matching":
       return (
         <div
-          className="grid grid-cols-[1fr_auto_1fr] items-center gap-x-4"
-          style={{ rowGap: `${ANSWER_ITEM_GAP_PX}px` }}
+          className="grid grid-cols-[1fr_auto_1fr] items-center"
+          style={{
+            rowGap: `${ANSWER_ITEM_GAP_PX}px`,
+            columnGap: `${MATCHING_LINK_GAP_PX}px`,
+          }}
           data-testid="answer-preview-matching"
         >
           {answer.pairs.map((pair, i) => (

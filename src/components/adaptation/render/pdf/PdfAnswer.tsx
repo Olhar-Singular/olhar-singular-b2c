@@ -32,6 +32,7 @@ import {
   BASE_LINE_HEIGHT,
   alternativeMarkerColumnPt,
   ALTERNATIVE_MARKER_GAP_PT,
+  MATCHING_LINK_GAP_PT,
   BASE_FONT_PT,
   pdfTextSize,
   TABLE_CELL_PADDING_PT,
@@ -226,15 +227,16 @@ const checkboxMarkerStyle = (fontSizePt: number) =>
   }) as const;
 
 /**
- * A caixa da seta ocupa a altura de UMA linha do item (corpo x entrelinha), com
- * a mesma folga lateral que o glifo tinha, para o par continuar alinhado pelo
- * topo como as duas colunas de texto.
+ * A caixa da seta ocupa a altura de UMA linha do item (corpo x entrelinha), para
+ * o par continuar alinhado pelo topo como as duas colunas de texto. A folga
+ * lateral vem de `MATCHING_LINK_GAP_PT`, o ponto único das três superfícies
+ * (achado 0197).
  */
 const matchingLinkStyle = (fontSizePt: number) =>
   ({
     width: matchingLinkWidthPt(fontSizePt),
     height: fontSizePt * BASE_LINE_HEIGHT,
-    marginHorizontal: 6,
+    marginHorizontal: MATCHING_LINK_GAP_PT,
     flexShrink: 0,
   }) as const;
 
