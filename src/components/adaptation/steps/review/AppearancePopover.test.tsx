@@ -1,6 +1,6 @@
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi, onTestFinished } from "vitest";
 import { render, screen, fireEvent, within } from "@testing-library/react";
-import { AppearanceControls, AppearancePopover } from "./AppearancePopover";
+import { AppearanceControls, AppearancePopover, resolveFormatPlacement } from "./AppearancePopover";
 import type { ResolvedPageStyle } from "@/components/adaptation/render/pageStyle";
 
 const value: ResolvedPageStyle = { fontFamily: undefined, fontSize: 12, blockSpacing: 16 };
@@ -217,32 +217,90 @@ describe("AppearancePopover", () => {
   });
 
   /*
-    Achado 0152: o painel abria com o padrão do Radix (`side="bottom"`) logo
-    abaixo do gatilho, que mora na barra de chrome em cima da folha — ou seja,
-    caía sobre o papel que ele formata e escondia as primeiras linhas justo
-    enquanto o professor mexia em fonte/corpo/espaçamento. O retângulo real
-    depende de layout que o jsdom não calcula, então o que se trava aqui são as
-    props de posicionamento: ele sai PARA O LADO da superfície, sobre a mesa.
+    Achado 0159 (corrige o 0152): ancorado no embrulho da mesa e aberto à
+    esquerda, o painel caía à esquerda DA MESA, isto é, sobre a sidebar do app
+    (1920) ou fora da janela (1366, x = -44). O jsdom não posiciona o popper,
+    então o que se trava é a decisão: qual elemento ancora (a folha, nunca o
+    embrulho) e qual lado, em função do vão medido entre a folha e a mesa.
   */
-  it("abre ao lado da folha, não sobre ela (achado 0152)", () => {
-    const onChange = vi.fn();
-    render(<AppearancePopover value={value} onChange={onChange} />);
+  it("sem superfície informada, abre abaixo do gatilho alinhado ao fim (achado 0159)", () => {
+    render(<AppearancePopover value={value} onChange={vi.fn()} />);
     fireEvent.click(screen.getByRole("button", { name: /formato/i }));
     const dialog = screen.getByRole("dialog");
-    expect(dialog).toHaveAttribute("data-side", "left");
+    expect(dialog).toHaveAttribute("data-side", "bottom");
+    expect(dialog).toHaveAttribute("data-align", "end");
+    expect(dialog).toHaveAttribute("data-format-anchor", "trigger");
+  });
+
+  function mountSurface(rects: { mesa: [number, number]; sheet: [number, number] }) {
+    const surface = document.createElement("div");
+    const mesa = document.createElement("div");
+    mesa.setAttribute("data-testid", "page-mesa");
+    const sheet = document.createElement("div");
+    sheet.setAttribute("data-testid", "page-sheet");
+    mesa.appendChild(sheet);
+    surface.appendChild(mesa);
+    document.body.appendChild(surface);
+    const rect = ([left, right]: [number, number]) =>
+      ({ left, right, top: 0, bottom: 100, width: right - left, height: 100, x: left, y: 0, toJSON: () => ({}) }) as DOMRect;
+    mesa.getBoundingClientRect = () => rect(rects.mesa);
+    sheet.getBoundingClientRect = () => rect(rects.sheet);
+    return { anchorRef: { current: surface }, sheet };
+  }
+
+  it("ancora na folha, não no embrulho da mesa, e abre no vão que comporta o painel (achado 0159)", () => {
+    // 1920: mesa 513–1904, folha 676–1470 → vão esquerdo 163 (não cabe), direito 434 (cabe).
+    const { anchorRef } = mountSurface({ mesa: [513, 1904], sheet: [676, 1470] });
+    const originalWidth = window.innerWidth;
+    Object.defineProperty(window, "innerWidth", { value: 1920, configurable: true });
+    // Com a âncora medindo um retângulo real, o autoUpdate do floating-ui
+    // instancia um IntersectionObserver com `new`: o mock global não é construtível.
+    vi.stubGlobal(
+      "IntersectionObserver",
+      class {
+        observe() {}
+        unobserve() {}
+        disconnect() {}
+      },
+    );
+    onTestFinished(() => {
+      Object.defineProperty(window, "innerWidth", { value: originalWidth, configurable: true });
+      vi.unstubAllGlobals();
+    });
+    render(<AppearancePopover value={value} onChange={vi.fn()} anchorRef={anchorRef} />);
+    fireEvent.click(screen.getByRole("button", { name: /formato/i }));
+    const dialog = screen.getByRole("dialog");
+    expect(dialog).toHaveAttribute("data-format-anchor", "sheet");
+    expect(dialog).toHaveAttribute("data-side", "right");
     expect(dialog).toHaveAttribute("data-align", "start");
   });
 
-  it("ancora na superfície da folha quando ela é informada (achado 0152)", () => {
-    const onChange = vi.fn();
-    const anchor = document.createElement("div");
-    document.body.appendChild(anchor);
-    const anchorRef = { current: anchor };
-    render(<AppearancePopover value={value} onChange={onChange} anchorRef={anchorRef} />);
+  it("sem vão na mesa, volta a abrir abaixo do gatilho em vez de sair da janela (achado 0159)", () => {
+    // 1366: mesa 256–1334, folha 399–1193 → vãos de 143 e 141 px; nenhum comporta 288 + 12.
+    const { anchorRef } = mountSurface({ mesa: [256, 1334], sheet: [399, 1193] });
+    render(<AppearancePopover value={value} onChange={vi.fn()} anchorRef={anchorRef} />);
     fireEvent.click(screen.getByRole("button", { name: /formato/i }));
     const dialog = screen.getByRole("dialog");
-    expect(dialog).toHaveAttribute("data-side", "left");
-    expect(within(dialog).getByLabelText("Fonte")).toBeInTheDocument();
+    expect(dialog).toHaveAttribute("data-format-anchor", "trigger");
+    expect(dialog).toHaveAttribute("data-side", "bottom");
+    expect(dialog).toHaveAttribute("data-align", "end");
+  });
+
+  it("fecha com Escape e mede de novo ao reabrir (achado 0159)", () => {
+    render(<AppearancePopover value={value} onChange={vi.fn()} />);
+    fireEvent.click(screen.getByRole("button", { name: /formato/i }));
+    fireEvent.keyDown(screen.getByRole("dialog"), { key: "Escape" });
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /formato/i }));
+    expect(screen.getByRole("dialog")).toHaveAttribute("data-format-anchor", "trigger");
+  });
+
+  it("superfície sem folha montada cai no gatilho (achado 0159)", () => {
+    const surface = document.createElement("div");
+    document.body.appendChild(surface);
+    render(<AppearancePopover value={value} onChange={vi.fn()} anchorRef={{ current: surface }} />);
+    fireEvent.click(screen.getByRole("button", { name: /formato/i }));
+    expect(screen.getByRole("dialog")).toHaveAttribute("data-format-anchor", "trigger");
   });
 
   it("dá nome acessível ao painel, igual ao rótulo do gatilho", () => {
@@ -250,5 +308,45 @@ describe("AppearancePopover", () => {
     render(<AppearancePopover value={value} onChange={onChange} />);
     fireEvent.click(screen.getByRole("button", { name: /formato/i }));
     expect(screen.getByRole("dialog", { name: "Formato" })).toBeInTheDocument();
+  });
+});
+
+describe("resolveFormatPlacement (achado 0159)", () => {
+  const r = (left: number, right: number) => ({ left, right });
+
+  it("prefere o vão à esquerda da folha quando ele comporta o painel", () => {
+    expect(resolveFormatPlacement({ mesa: r(0, 2000), sheet: r(400, 1200), viewportWidth: 2000 })).toEqual({
+      anchor: "sheet",
+      side: "left",
+      align: "start",
+    });
+  });
+
+  it("usa o vão à direita quando só ele comporta o painel", () => {
+    expect(resolveFormatPlacement({ mesa: r(513, 1904), sheet: r(676, 1470), viewportWidth: 1920 })).toEqual({
+      anchor: "sheet",
+      side: "right",
+      align: "start",
+    });
+  });
+
+  it("limita o vão pela janela, não só pela mesa (mesa vazando à direita)", () => {
+    expect(resolveFormatPlacement({ mesa: r(513, 2400), sheet: r(676, 1470), viewportWidth: 1500 })).toEqual({
+      anchor: "trigger",
+      side: "bottom",
+      align: "end",
+    });
+  });
+
+  it("limita o vão esquerdo pela borda da janela", () => {
+    expect(resolveFormatPlacement({ mesa: r(-400, 1000), sheet: r(200, 1000), viewportWidth: 1000 })).toEqual({
+      anchor: "trigger",
+      side: "bottom",
+      align: "end",
+    });
+  });
+
+  it("sem medidas, cai no gatilho", () => {
+    expect(resolveFormatPlacement(null)).toEqual({ anchor: "trigger", side: "bottom", align: "end" });
   });
 });
