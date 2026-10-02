@@ -230,7 +230,7 @@ describe("AnswerEditor — fillBlank", () => {
     render(<AnswerEditor answer={comExtras} onChange={onChange} />);
 
     const dica = screen.getByLabelText("Dica da lacuna 1") as HTMLInputElement;
-    const outras = screen.getByLabelText("Outras respostas aceitas na lacuna 1") as HTMLInputElement;
+    const outras = screen.getByLabelText("Outras respostas aceitas na lacuna 1, separadas por vírgula") as HTMLInputElement;
     expect(dica.value).toBe("comeca com E");
     expect(outras.value).toBe("evaporação");
 
@@ -252,7 +252,7 @@ describe("AnswerEditor — fillBlank", () => {
   it("deixa os campos extras vazios quando a lacuna não tem dica nem alternativas", () => {
     render(<AnswerEditor answer={answer} onChange={vi.fn()} />);
     expect((screen.getByLabelText("Dica da lacuna 2") as HTMLInputElement).value).toBe("");
-    expect((screen.getByLabelText("Outras respostas aceitas na lacuna 2") as HTMLInputElement).value).toBe("");
+    expect((screen.getByLabelText("Outras respostas aceitas na lacuna 2, separadas por vírgula") as HTMLInputElement).value).toBe("");
   });
 
   it("deixa remover a última lacuna (buildAnswer nasce com gaps vazio)", () => {
@@ -626,5 +626,33 @@ describe("AnswerEditor — marcadores de gabarito (0372)", () => {
     expect(target.className).toMatch(/(^|\s)w-6(\s|$)/);
     fireEvent.click(target);
     expect(onChange).toHaveBeenCalled();
+  });
+});
+
+/**
+ * Achado 0375: a 1366px o rótulo "Lacuna 1" quebrava em duas linhas (`w-12` sem
+ * `shrink-0` nem `whitespace-nowrap`) e o placeholder longo das respostas aceitas
+ * saía cortado em "...(separadas por ví", sumindo justo a regra de formato.
+ */
+describe("AnswerEditor — layout da linha da lacuna (achado 0375)", () => {
+  const answer: QuestionAnswer = {
+    kind: "fillBlank",
+    gaps: [{ id: "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee", answer: "x" }],
+  };
+
+  it("o rótulo 'Lacuna N' não quebra nem encolhe", () => {
+    render(<AnswerEditor answer={answer} onChange={vi.fn()} />);
+    const label = screen.getByText("Lacuna 1");
+    expect(label).toHaveClass("whitespace-nowrap");
+    expect(label).toHaveClass("shrink-0");
+    expect(label).not.toHaveClass("w-12");
+  });
+
+  it("a regra de formato cabe no placeholder curto e está no nome acessível", () => {
+    render(<AnswerEditor answer={answer} onChange={vi.fn()} />);
+    const outras = screen.getByLabelText(
+      "Outras respostas aceitas na lacuna 1, separadas por vírgula"
+    ) as HTMLInputElement;
+    expect(outras.placeholder).toBe("Outras respostas, separadas por vírgula");
   });
 });

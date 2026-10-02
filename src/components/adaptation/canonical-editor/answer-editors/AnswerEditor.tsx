@@ -295,7 +295,7 @@ export function AnswerEditor({
           {answer.gaps.map((gap, index) => (
             <div key={gap.id} className="flex flex-col gap-1">
               <div className="flex items-center gap-2">
-                <label htmlFor={`${fieldIdPrefix}-gap-${gap.id}`} className="text-xs text-surface-ink-faint w-12">
+                <label htmlFor={`${fieldIdPrefix}-gap-${gap.id}`} className="text-xs text-surface-ink-faint w-16 shrink-0 whitespace-nowrap">
                   Lacuna {index + 1}
                 </label>
                 {/* The gap answer is the answer key (plain text, not formattable). */}
@@ -324,7 +324,7 @@ export function AnswerEditor({
                 superfície os mostrava. Aqui o professor finalmente os vê e edita —
                 é ele quem corrige à mão e precisa da forma acentuada.
               */}
-              <div className="flex items-center gap-2 pl-14">
+              <div className="flex items-center gap-2 pl-[4.5rem]">
                 <Input
                   name="fillblank-gap-tip"
                   aria-label={`Dica da lacuna ${index + 1}`}
@@ -336,11 +336,11 @@ export function AnswerEditor({
                 />
                 <Input
                   name="fillblank-gap-alternatives"
-                  aria-label={`Outras respostas aceitas na lacuna ${index + 1}`}
+                  aria-label={`Outras respostas aceitas na lacuna ${index + 1}, separadas por vírgula`}
                   value={(gap.alternatives ?? []).join(", ")}
                   disabled={disabled}
                   onChange={(e) => onChange(setGapAlternatives(answer, gap.id, e.target.value))}
-                  placeholder="Outras respostas aceitas (separadas por vírgula)"
+                  placeholder="Outras respostas, separadas por vírgula"
                   className="h-8 text-xs border-surface-line-2 bg-surface-paper text-surface-ink"
                 />
               </div>
