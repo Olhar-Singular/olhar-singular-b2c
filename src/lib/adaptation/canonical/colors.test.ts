@@ -103,7 +103,43 @@ describe("normalizeColor", () => {
   it("maps a foreign color to the NEAREST palette entry (keeps the emphasis)", () => {
     expect(normalizeColor("#FF0000")).toBe("#DC2626"); // red -> palette red
     expect(normalizeColor("#000000")).toBe("#1F2937"); // black -> palette ink
-    expect(normalizeColor("rgb(255, 255, 0)")).toBe("#FEF08A"); // yellow -> highlight
+  });
+
+  /**
+   * Regressão (caça 0610): o "mais próximo" por RGB puro varria também as cores
+   * de realce pastel, e o modelo canônico só tem cor de TEXTO. Amarelo do Word
+   * virava `#FEF08A` (1,16:1 no papel branco), branco virava `#DDD6FE`, e o RGB
+   * puro perdia o matiz: roxo e verde caíam no cinza.
+   */
+  it("maps a foreign color only to TEXT_COLORS, never to a highlight tint", () => {
+    const probes = ["#FFFF00", "#FFC000", "#BFBFBF", "#D9D9D9", "#FFFFFF", "#7030A0", "#92D050", "#70AD47", "#00B0F0", "#C55A11", "#1F3864", "#808080", "#404040"];
+    for (const probe of probes) {
+      const result = normalizeColor(probe);
+      if (result !== null) expect(TEXT_COLORS).toContain(result);
+    }
+  });
+
+  it("keeps the hue of a saturated Word color", () => {
+    expect(normalizeColor("#7030A0")).toBe("#9333EA"); // purple
+    expect(normalizeColor("#92D050")).toBe("#16A34A"); // light green
+    expect(normalizeColor("#70AD47")).toBe("#16A34A"); // green
+    expect(normalizeColor("#00B0F0")).toBe("#2563EB"); // light blue
+    expect(normalizeColor("#1F3864")).toBe("#2563EB"); // dark blue
+    expect(normalizeColor("#C00000")).toBe("#DC2626"); // dark red
+    expect(normalizeColor("#FF9999")).toBe("#DC2626"); // light red keeps its hue
+  });
+
+  it("drops colors that would be illegible on the white sheet (default ink)", () => {
+    expect(normalizeColor("#FFFFFF")).toBeNull();
+    expect(normalizeColor("#D9D9D9")).toBeNull();
+    expect(normalizeColor("#BFBFBF")).toBeNull();
+    expect(normalizeColor("#FFFF00")).toBeNull();
+    expect(normalizeColor("#FFC000")).toBeNull();
+  });
+
+  it("maps a legible gray to the palette gray or ink by darkness", () => {
+    expect(normalizeColor("#808080")).toBe("#6B7280");
+    expect(normalizeColor("#404040")).toBe("#1F2937");
   });
 
   it("returns null for values it cannot parse (caller leaves the text unstyled)", () => {
@@ -121,10 +157,11 @@ describe("normalizeColor", () => {
     expect(normalizeColor(42)).toBeNull();
   });
 
-  it("never returns a value outside the allowlist", () => {
+  it("never returns a value outside the allowlist (null means unstyled)", () => {
     const probes = ["#FF0000", "#00FF00", "#123456", "rgb(1,2,3)", "#ABCDEF", "#fff"];
     for (const probe of probes) {
-      expect(isAllowedColor(normalizeColor(probe))).toBe(true);
+      const result = normalizeColor(probe);
+      if (result !== null) expect(isAllowedColor(result)).toBe(true);
     }
   });
 });

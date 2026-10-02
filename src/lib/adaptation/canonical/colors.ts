@@ -100,6 +100,47 @@ function channelsOf(hex: string): [number, number, number] {
   ];
 }
 
+/** WCAG relative luminance of an uppercase `#RRGGBB`. */
+function luminanceOf(hex: string): number {
+  const [r, g, b] = channelsOf(hex).map((c) => {
+    const s = c / 255;
+    return s <= 0.03928 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4;
+  });
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+}
+
+/** Contrast ratio of `hex` against the white sheet. */
+function contrastOnWhite(hex: string): number {
+  return 1.05 / (luminanceOf(hex) + 0.05);
+}
+
+/** Hue in degrees [0, 360) and chroma in [0, 1] of an uppercase `#RRGGBB`. */
+function hueAndChroma(hex: string): { hue: number; chroma: number } {
+  const [r, g, b] = channelsOf(hex).map((c) => c / 255);
+  const max = Math.max(r, g, b);
+  const min = Math.min(r, g, b);
+  const chroma = max - min;
+  if (chroma === 0) return { hue: 0, chroma };
+  let hue: number;
+  if (max === r) hue = ((g - b) / chroma) % 6;
+  else if (max === g) hue = (b - r) / chroma + 2;
+  else hue = (r - g) / chroma + 4;
+  return { hue: (hue * 60 + 360) % 360, chroma };
+}
+
+/** Below this chroma a color reads as gray (the palette's ink and gray are ~0.09). */
+const ACHROMATIC_CHROMA = 0.15;
+/** Below this contrast on the white sheet, text is not reliably legible. */
+const MIN_LEGIBLE_CONTRAST = 3;
+/** Yellow/gold band: the palette has no text color of this hue. */
+const YELLOW_BAND: [number, number] = [40, 75];
+
+const INK = "#1F2937";
+const GRAY = "#6B7280";
+const CHROMATIC_TEXT_COLORS = TEXT_COLORS.filter(
+  (c) => hueAndChroma(c).chroma >= ACHROMATIC_CHROMA,
+).map((c) => ({ color: c as string, hue: hueAndChroma(c).hue }));
+
 /**
  * Coerce an arbitrary CSS color into the canonical allowlist.
  *
@@ -110,11 +151,15 @@ function channelsOf(hex: string): [number, number, number] {
  * the document stopped round-tripping on EVERY keystroke and the autosave
  * silently froze until the colored text was deleted.
  *
- * We map to the NEAREST allowed color (plain RGB distance) rather than dropping
- * it: a teacher who pastes a red word means the emphasis, and the palette has a
- * red. Identity holds for colors already in the palette, so our own copy/paste
- * round-trips exactly. Unparseable values (`inherit`, `currentColor`, a
- * gradient) return null — the caller then leaves the text unstyled.
+ * A foreign color maps ONLY to a TEXT_COLORS entry (the canonical model has no
+ * highlight, so a pastel highlight tint as text color is near-invisible on the
+ * sheet — caça 0610), choosing by HUE rather than plain RGB distance (which
+ * favors luminance and sent Word purple/green to gray). Grays map to the ink or
+ * the palette gray by darkness. Colors with no legible counterpart (white/light
+ * gray, yellow/gold) return null: the text keeps the default ink. Identity
+ * holds for colors already in the palette, so our own copy/paste round-trips
+ * exactly. Unparseable values (`inherit`, `currentColor`, a gradient) also
+ * return null — the caller then leaves the text unstyled.
  */
 export function normalizeColor(raw: unknown): string | null {
   if (typeof raw !== "string") return null;
@@ -122,16 +167,26 @@ export function normalizeColor(raw: unknown): string | null {
   if (hex === null) return null;
   if (isAllowedColor(hex)) return hex;
 
-  const [r, g, b] = channelsOf(hex);
-  let nearest = ALLOWED_COLORS[0] as string;
+  const legible = contrastOnWhite(hex) >= MIN_LEGIBLE_CONTRAST;
+  const { hue, chroma } = hueAndChroma(hex);
+
+  if (chroma < ACHROMATIC_CHROMA) {
+    if (!legible) return null;
+    const lum = luminanceOf(hex);
+    return Math.abs(lum - luminanceOf(INK)) <= Math.abs(lum - luminanceOf(GRAY)) ? INK : GRAY;
+  }
+
+  if (!legible && hue >= YELLOW_BAND[0] && hue < YELLOW_BAND[1]) return null;
+
+  let nearest = CHROMATIC_TEXT_COLORS[0].color;
   let best = Infinity;
-  for (const candidate of ALLOWED_COLORS) {
-    const [cr, cg, cb] = channelsOf(candidate.toUpperCase());
-    const distance = (r - cr) ** 2 + (g - cg) ** 2 + (b - cb) ** 2;
+  for (const candidate of CHROMATIC_TEXT_COLORS) {
+    const diff = Math.abs(hue - candidate.hue);
+    const distance = Math.min(diff, 360 - diff);
     if (distance < best) {
       best = distance;
-      nearest = candidate;
+      nearest = candidate.color;
     }
   }
-  return nearest.toUpperCase();
+  return nearest;
 }
