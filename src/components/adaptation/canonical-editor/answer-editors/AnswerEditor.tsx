@@ -70,6 +70,15 @@ interface AnswerEditorProps {
 }
 
 /**
+ * Achado 0372: os marcadores de gabarito (rádio da múltipla escolha e caixa do
+ * checkbox) ficam dentro de um `<label>` de 24 x 24 px, o alvo mínimo do WCAG
+ * 2.2 (SC 2.5.8); o controle visível continua pequeno. A caixa leva
+ * `rounded-[3px]` porque o `rounded-sm` do projeto vale 8px e a deixava redonda,
+ * igual ao rádio, contradizendo a caixa quadrada impressa na folha.
+ */
+const MARKER_TARGET = "inline-flex h-6 w-6 shrink-0 cursor-pointer items-center justify-center";
+
+/**
  * Achado 0371: `label` é o nome acessível e cita o item afetado ("Remover
  * alternativa B"); o `title` (tooltip) continua curto, porque quem vê o botão
  * já vê a linha em que ele está.
@@ -124,15 +133,17 @@ export function AnswerEditor({
         <div className="flex flex-col gap-2" data-testid="answer-multipleChoice">
           {answer.alternatives.map((alt, i) => (
             <div key={alt.id} className="flex items-center gap-2 min-w-0">
-              <input
-                type="radio"
-                name={`mc-correct`}
-                checked={alt.correct}
-                disabled={disabled}
-                onChange={() => onChange(setCorrectAlternative(answer, alt.id))}
-                title="Marcar como correta"
-                aria-label={`Marcar alternativa ${indexToLetter(i)} como correta`}
-              />
+              <label className={MARKER_TARGET}>
+                <input
+                  type="radio"
+                  name={`mc-correct`}
+                  checked={alt.correct}
+                  disabled={disabled}
+                  onChange={() => onChange(setCorrectAlternative(answer, alt.id))}
+                  title="Marcar como correta"
+                  aria-label={`Marcar alternativa ${indexToLetter(i)} como correta`}
+                />
+              </label>
               <RichTextField
                 value={alt.content}
                 disabled={disabled}
@@ -190,12 +201,15 @@ export function AnswerEditor({
         <div className="flex flex-col gap-2" data-testid="answer-checkbox">
           {answer.items.map((item, i) => (
             <div key={item.id} className="flex items-center gap-2 min-w-0">
-              <Checkbox
-                checked={item.checked}
-                disabled={disabled}
-                onCheckedChange={() => onChange(toggleCheckbox(answer, item.id))}
-                aria-label={`Marcar opção ${i + 1}`}
-              />
+              <label className={MARKER_TARGET}>
+                <Checkbox
+                  className="rounded-[3px]"
+                  checked={item.checked}
+                  disabled={disabled}
+                  onCheckedChange={() => onChange(toggleCheckbox(answer, item.id))}
+                  aria-label={`Marcar opção ${i + 1}`}
+                />
+              </label>
               <RichTextField
                 value={item.content}
                 disabled={disabled}

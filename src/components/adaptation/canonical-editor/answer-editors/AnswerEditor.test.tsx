@@ -581,3 +581,50 @@ describe("AnswerEditor — nomes acessíveis citam a posição do item (0371)", 
     ]);
   });
 });
+
+/**
+ * Achado 0372: o `rounded-sm` do projeto vale `calc(0.75rem - 4px)` = 8px, que
+ * numa caixa de 16px vira círculo (igual ao rádio da múltipla escolha). E os
+ * dois marcadores de gabarito tinham alvo abaixo de 24 x 24 px (WCAG 2.5.8).
+ */
+describe("AnswerEditor — marcadores de gabarito (0372)", () => {
+  const A = "11111111-1111-4111-8111-111111111111";
+
+  it("checkbox: caixa de canto quase reto, distinguível do rádio", () => {
+    render(
+      <AnswerEditor answer={{ kind: "checkbox", items: [{ id: A, content: t("a"), checked: false }] }} onChange={vi.fn()} />,
+    );
+    const box = screen.getByLabelText("Marcar opção 1");
+    expect(box.className).toContain("rounded-[3px]");
+    expect(box.className).not.toMatch(/(^|\s)rounded-sm(\s|$)/);
+  });
+
+  it("checkbox: alvo de 24 x 24 px que alterna a opção", () => {
+    const onChange = vi.fn();
+    render(
+      <AnswerEditor answer={{ kind: "checkbox", items: [{ id: A, content: t("a"), checked: false }] }} onChange={onChange} />,
+    );
+    const target = screen.getByLabelText("Marcar opção 1").parentElement as HTMLElement;
+    expect(target.tagName).toBe("LABEL");
+    expect(target.className).toMatch(/(^|\s)h-6(\s|$)/);
+    expect(target.className).toMatch(/(^|\s)w-6(\s|$)/);
+    fireEvent.click(target);
+    expect(onChange).toHaveBeenCalledWith({ kind: "checkbox", items: [{ id: A, content: t("a"), checked: true }] });
+  });
+
+  it("múltipla escolha: rádio com alvo de 24 x 24 px", () => {
+    const onChange = vi.fn();
+    render(
+      <AnswerEditor
+        answer={{ kind: "multipleChoice", alternatives: [{ id: A, content: t("a"), correct: false }] }}
+        onChange={onChange}
+      />,
+    );
+    const target = screen.getByLabelText("Marcar alternativa a como correta").parentElement as HTMLElement;
+    expect(target.tagName).toBe("LABEL");
+    expect(target.className).toMatch(/(^|\s)h-6(\s|$)/);
+    expect(target.className).toMatch(/(^|\s)w-6(\s|$)/);
+    fireEvent.click(target);
+    expect(onChange).toHaveBeenCalled();
+  });
+});
