@@ -1466,15 +1466,18 @@ describe("PageSheet", () => {
     };
 
     /*
-      Dois blocos: o primeiro ocupa quase a folha inteira, o segundo atravessa a
+      Três blocos: o primeiro ocupa quase a folha inteira, o segundo atravessa a
       virada. No arquivo o segundo desce inteiro para a folha 2 e os ~116px que
-      sobram no pé da folha 1 não são aproveitados — o que empurra o fim do
-      documento para uma TERCEIRA folha que a divisão por pixel não prevê.
+      sobram no pé da folha 1 não são aproveitados — o que empurra o terceiro, e
+      o fim do documento, para uma TERCEIRA folha que a divisão por pixel não
+      prevê. (Achado 0507: cada bloco cabe numa folha; o mais alto que a área
+      útil não é empurrado, tem teste próprio.)
     */
     const folha = (
       <PageSheet paginated toolbar={null}>
         <div data-folha-bloco="" data-testid="bloco-1" data-test-top="53.33" data-test-bottom="953.33" />
-        <div data-folha-bloco="" data-testid="bloco-2" data-test-top="953.33" data-test-bottom="1983.33" />
+        <div data-folha-bloco="" data-testid="bloco-2" data-test-top="953.33" data-test-bottom="1853.33" />
+        <div data-folha-bloco="" data-test-top="1853.33" data-test-bottom="1983.33" />
       </PageSheet>
     );
 
@@ -1512,14 +1515,15 @@ describe("PageSheet", () => {
         render(
           <PageSheet paginated toolbar={null}>
             <div data-folha-bloco="" data-test-top="53.33" data-test-bottom="953.33" />
-            <div data-folha-bloco="" data-testid="bloco-2" data-test-top="953.33" data-test-bottom="1983.33">
+            <div data-folha-bloco="" data-testid="bloco-2" data-test-top="953.33" data-test-bottom="1853.33">
               <div
                 data-folha-bloco=""
                 data-testid="enunciado"
                 data-test-top="953.33"
-                data-test-bottom="1983.33"
+                data-test-bottom="1853.33"
               />
             </div>
+            <div data-folha-bloco="" data-test-top="1853.33" data-test-bottom="1983.33" />
           </PageSheet>,
         );
         expect(screen.getByTestId("page-count")).toHaveTextContent("3 páginas A4");
@@ -1527,6 +1531,24 @@ describe("PageSheet", () => {
         expect(
           Number.parseFloat(screen.getByTestId("bloco-2").style.marginTop),
         ).toBeCloseTo(PAGE_MARGIN_PX + PAGE_CONTENT_HEIGHT_PX - 953.33, 2);
+      });
+    });
+
+    /*
+      Achado 0507: bloco mais alto que a área útil não cabe inteiro em folha
+      nenhuma, e o arquivo o começa onde ele está e o parte. Empurrá-lo só
+      queimava o pé da folha 1 e inventava uma folha que o PDF não tem.
+    */
+    it("não empurra o bloco mais alto que uma folha inteira", () => {
+      withBlocos(1950, () => {
+        render(
+          <PageSheet paginated toolbar={null}>
+            <div data-folha-bloco="" data-test-top="53.33" data-test-bottom="353.33" />
+            <div data-folha-bloco="" data-testid="alto" data-test-top="353.33" data-test-bottom="2003.33" />
+          </PageSheet>,
+        );
+        expect(screen.getByTestId("alto").style.marginTop).toBe("");
+        expect(screen.getByTestId("page-count")).toHaveTextContent("2 páginas A4");
       });
     });
 

@@ -527,9 +527,13 @@ export function PageSheet({
             pageTop = top + item.height + spacer;
             return;
           }
+          // Achado 0507: bloco mais alto que a área útil não cabe inteiro em
+          // folha nenhuma; o arquivo o começa onde está e o parte. Empurrá-lo
+          // só queimaria o pé da folha e inventaria uma folha que o PDF não tem.
           if (
             item.bottom + shift - pageTop > PAGE_CONTENT_HEIGHT_PX &&
-            top > pageTop + 0.5
+            top > pageTop + 0.5 &&
+            item.bottom - item.top <= PAGE_CONTENT_HEIGHT_PX
           ) {
             const spacer = Math.max(0, pageTop + PAGE_CONTENT_HEIGHT_PX - top);
             turnPage();
