@@ -130,10 +130,16 @@ export function useCanonicalEditor({
     // aquilo é a atividade adaptada nem distinguir a folha das outras paradas do
     // passo (achado 0410, WCAG 4.1.2). Os campos aninhados já se nomeiam por
     // `RichTextField`; o container que os contém, não.
+    // `style`: o Tiptap injeta `.ProseMirror { white-space: break-spaces }`, em
+    // que o espaço no fim da linha ocupa largura e não pendura. A folha quebrava
+    // uma palavra antes da prévia (`normal`) e do PDF, que deixam o espaço final
+    // pendurar (achado 0453). `pre-wrap` preserva os espaços que o ProseMirror
+    // precisa e pendura o final; inline para vencer o CSS injetado.
     editorProps: {
       attributes: {
         spellcheck: "false",
         "aria-label": "Atividade adaptada, editor do documento",
+        style: "white-space: pre-wrap",
       },
       // O schema canônico não tem nó de tabela, e o parser do ProseMirror
       // descartava `<table>/<tr>/<td>` mantendo só o texto: uma tabela 1x2 do
