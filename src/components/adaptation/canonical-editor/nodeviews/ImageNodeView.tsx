@@ -1,5 +1,5 @@
 import { useEffect, useId, useRef, useState } from "react";
-import { AlignLeft, AlignCenter, AlignRight, Captions, Crop, ImageIcon, Trash2 } from "lucide-react";
+import { AlignLeft, AlignCenter, AlignRight, Captions, CaptionsOff, Crop, ImageIcon, Trash2 } from "lucide-react";
 import { NodeViewWrapper, type NodeViewProps } from "@tiptap/react";
 import { toast } from "sonner";
 import { FOLHA_BUTTON, FOLHA_GHOST, FOLHA_INPUT, FOLHA_RAIL, FOLHA_RAIL_HOST, FOLHA_SELECTED, FOLHA_TOUCH_TARGET } from "../folhaChrome";
@@ -282,8 +282,11 @@ export function ImageNodeView({ node, updateAttributes, deleteNode, editor, getP
             disabled={disabled}
             onClick={() => updateAttributes({ caption: null })}
             aria-label="Remover legenda"
+            // 0264 — ícone e tooltip próprios: a lixeira ao lado é "Excluir
+            // imagem", e duas lixeiras iguais só se distinguiam pela cor.
+            title="Remover legenda"
           >
-            <Trash2 className="h-3 w-3" />
+            <CaptionsOff className="h-3 w-3" />
           </Button>
         )}
         <Button
@@ -295,6 +298,7 @@ export function ImageNodeView({ node, updateAttributes, deleteNode, editor, getP
           disabled={disabled}
           onClick={() => setConfirmDeleteOpen(true)}
           aria-label="Excluir imagem"
+          title="Excluir imagem"
         >
           <Trash2 className="h-3.5 w-3.5" />
         </Button>

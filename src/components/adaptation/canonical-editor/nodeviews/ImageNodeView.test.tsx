@@ -884,3 +884,20 @@ describe("ImageNodeView — chrome de edição fora do fluxo da folha (0113)", (
     expect(getByTestId("image-caption-text").closest(".folha-rail")).toBeNull();
   });
 });
+
+describe("ImageNodeView — remover legenda x excluir imagem (0264)", () => {
+  it("não desenha a mesma lixeira para remover a legenda e para excluir a imagem", () => {
+    renderImage({ caption: [{ type: "text", text: "cap" }] });
+    const removeCaption = screen.getByRole("button", { name: "Remover legenda" });
+    const deleteImage = screen.getByRole("button", { name: "Excluir imagem" });
+    expect(deleteImage.querySelector("svg.lucide-trash2")).not.toBeNull();
+    expect(removeCaption.querySelector("svg.lucide-trash2")).toBeNull();
+    expect(removeCaption.querySelector("svg.lucide-captions-off")).not.toBeNull();
+  });
+
+  it("dá tooltip igual ao nome acessível nos dois botões", () => {
+    renderImage({ caption: [{ type: "text", text: "cap" }] });
+    expect(screen.getByRole("button", { name: "Remover legenda" })).toHaveAttribute("title", "Remover legenda");
+    expect(screen.getByRole("button", { name: "Excluir imagem" })).toHaveAttribute("title", "Excluir imagem");
+  });
+});
