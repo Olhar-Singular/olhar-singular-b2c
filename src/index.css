@@ -736,8 +736,14 @@
  * Os dois estados são os de FOLHA_RAIL_HOST: ponteiro grosso, onde o rail é
  * permanente (0232), e o foco DENTRO do rail, onde quem chega por teclado não
  * tem hover para o excesso sumir sozinho (0338). Em repouso, com ponteiro
- * fino, a folha segue medindo `my-3` (0102/0113/0413). */
-.folha-rail-host:has(.folha-rail:focus-within) {
+ * fino, a folha segue medindo `my-3` (0102/0113/0413).
+ *
+ * O foco do 0338 é o de TECLADO (`:focus-visible`), não `:focus-within`: o
+ * Chrome foca o botão já no `mousedown`, então a reserva ligada por qualquer
+ * foco descia a questão e o rail 24 a 28px entre o `mousedown` e o `mouseup`,
+ * o `mouseup` caía fora do botão e o primeiro clique no lápis não disparava
+ * (achado 0263). */
+.folha-rail-host:has(.folha-rail :focus-visible) {
   margin-top: calc(2.5rem / var(--folha-scale, 1));
 }
 

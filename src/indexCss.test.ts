@@ -838,8 +838,20 @@ describe("index.css — alvo de toque do chrome da folha (achado 0236)", () => {
 
   it("cresce a mesma reserva quando o teclado acende o rail", () => {
     expect(
-      ruleBody(".folha-rail-host:has(.folha-rail:focus-within)"),
+      ruleBody(".folha-rail-host:has(.folha-rail :focus-visible)"),
     ).toMatch(/margin-top:\s*calc\(2\.5rem\s*\/\s*var\(--folha-scale/);
+  });
+
+  /**
+   * Achado 0263: o Chrome foca o `<button>` no `mousedown`. Com a reserva
+   * presa a `:focus-within`, o proprio clique de mouse ligava os 2,5rem de
+   * margem entre o `mousedown` e o `mouseup`: a questao e o rail desciam 24 a
+   * 28px, o `mouseup` caia fora do botao e o `click` nunca chegava ao lapis.
+   * A reserva tem de reagir so ao foco de teclado (`:focus-visible`), que e o
+   * caso do 0338; o foco posto por ponteiro nao pode mexer na margem.
+   */
+  it("nao reserva o vao com o foco que o clique de mouse cria (achado 0263)", () => {
+    expect(css).not.toMatch(/\.folha-rail-host:has\(\.folha-rail:focus-within\)/);
   });
 });
 
