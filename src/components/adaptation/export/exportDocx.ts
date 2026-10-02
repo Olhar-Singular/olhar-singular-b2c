@@ -74,6 +74,7 @@ import {
   CHECKBOX_BOX_COLOR,
   TRUE_FALSE_MARKER_TEXT,
   ORDERING_MARKER_TEXT,
+  ANSWER_ITEM_GAP_PT,
 } from "../render/pageTokens";
 import { indexToLetter } from "../render/letters";
 import {
@@ -99,8 +100,6 @@ export type DocxBlock = Paragraph | Table;
 
 /** Monospace face for LaTeX source, mirroring the PDF's MATH_PDF_STYLE. */
 const MATH_FONT = "Courier New";
-/** Indent (twips) for answer rows — the PDF's 22pt marker column. */
-const ANSWER_INDENT = 360;
 /** Question instruction/enunciado size in half-points (10.5pt, as in the PDF). */
 const SUB_SIZE = 21;
 /**
@@ -293,6 +292,14 @@ export function richTextToRuns(nodes: Inline[], inherited: RunStyle = {}): TextR
   });
 }
 
+/**
+ * Geometria de toda linha de resposta (achado 0454): nasce na margem, como o
+ * marcador da tela, da prévia e do PDF (`PdfAnswer` não recua o `ROW`), e leva
+ * depois o mesmo vão entre itens do PDF, `ANSWER_ITEM_GAP_PT`. Antes o Word
+ * recuava 18 pt e colava as linhas: as caixas do checkbox viravam uma barra.
+ */
+const ANSWER_ROW_SPACING = { spacing: { after: ptToTwip(ANSWER_ITEM_GAP_PT) } } as const;
+
 /** The block-level style carried into the answer rows (achado 0134). */
 type InheritedStyle = { paragraph: ParagraphStyle; run: RunStyle };
 const NO_STYLE: InheritedStyle = { paragraph: {}, run: {} };
@@ -321,7 +328,7 @@ const CHECKBOX_BOX_BORDER = {
 function checkboxRow(content: RichText, style: InheritedStyle = NO_STYLE): Paragraph {
   return new Paragraph({
     ...style.paragraph,
-    indent: { left: ANSWER_INDENT },
+    ...ANSWER_ROW_SPACING,
     children: [
       new TextRun({ ...style.run, text: CHECKBOX_BOX_TEXT, border: CHECKBOX_BOX_BORDER }),
       new TextRun({ ...style.run, text: " " }),
@@ -334,7 +341,7 @@ function checkboxRow(content: RichText, style: InheritedStyle = NO_STYLE): Parag
 function answerRow(marker: string, content: RichText, style: InheritedStyle = NO_STYLE): Paragraph {
   return new Paragraph({
     ...style.paragraph,
-    indent: { left: ANSWER_INDENT },
+    ...ANSWER_ROW_SPACING,
     children: [
       new TextRun({ ...style.run, text: `${marker} ` }),
       ...richTextToRuns(content, style.run),
@@ -377,7 +384,7 @@ function answerToDocx(
         (pair) =>
           new Paragraph({
             ...style.paragraph,
-            indent: { left: ANSWER_INDENT },
+            ...ANSWER_ROW_SPACING,
             children: [
               ...richTextToRuns(pair.left, style.run),
               new TextRun({ ...style.run, text: "  ↔  " }),

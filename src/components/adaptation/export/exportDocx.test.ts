@@ -25,6 +25,7 @@ import {
   BASE_FONT_PT,
   TRUE_FALSE_MARKER_TEXT,
   ORDERING_MARKER_TEXT,
+  ANSWER_ITEM_GAP_PT,
 } from "../render/pageTokens";
 import { pdfFooterLabel } from "../render/footerLabel";
 import type {
@@ -752,6 +753,29 @@ describe("B15 · paridade docx", () => {
     }
     expect(out.length).toBeGreaterThanOrEqual(before);
     expect(docxText(out).trim().length).toBeGreaterThan(0);
+  });
+});
+
+/**
+ * Linhas de resposta no Word (achado 0454): nascem na margem, como o marcador
+ * da tela, da prévia e do PDF (sem o recuo de 18 pt que o arquivo trazia), e
+ * cada uma leva o vão `ANSWER_ITEM_GAP_PT` depois, o mesmo token do PDF. Sem o
+ * vão as caixas do checkbox encostavam umas nas outras e viravam uma barra.
+ */
+describe("linhas de resposta do .docx (achado 0454)", () => {
+  const ROW_KINDS = ["multipleChoice", "trueFalse", "checkbox", "matching", "ordering"] as const;
+
+  it.each(ROW_KINDS)("%s: linha na margem, com o vão entre itens do token", (kind) => {
+    const out = blockToDocxParagraphs(
+      { id: id(90), type: "question", stem: [], answer: sampleAnswer(kind) },
+      1,
+    );
+    const rows = out.filter((p) => docxText(p).trim().length > 0 && !/^\d+\.?$/.test(docxText(p).trim()));
+    expect(rows.length).toBeGreaterThan(0);
+    for (const row of rows) {
+      expect(docxNodeAttrs(row, "w:ind")).toBeUndefined();
+      expect(docxNodeAttrs(row, "w:spacing")).toEqual({ after: Math.round(ANSWER_ITEM_GAP_PT * 20) });
+    }
   });
 });
 
