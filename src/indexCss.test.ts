@@ -978,3 +978,73 @@ describe("index.html — meta color-scheme", () => {
     expect(meta![1]).toMatch(/\bdark\b/);
   });
 });
+
+/**
+ * Rotulo de tipo do bloco de topo preso ao bloco que rotula (achado 0265).
+ *
+ * O rotulo ("TÍTULO"/"SEÇÃO"/"PARÁGRAFO", 9 px) vive no vao ACIMA do bloco, mas
+ * o vao e `--doc-block-spacing`, que o popover Formato move de 8 a 40 px. Com
+ * `top: -0.85rem` fixo ele ficava a 2,4 px do bloco de cima e 4,6 px do proprio
+ * bloco no padrao (lia-se como legenda do vizinho) e, com vao de 12 px ou
+ * menos, era pintado sobre a ultima linha do bloco de cima.
+ *
+ * Modelo geometrico: avalia a regra do ::before para cada vao possivel e exige
+ * que o rotulo, quando desenhado, caiba no vao e fique mais perto do proprio
+ * bloco que do vizinho. Quando o vao nao comporta isso, o rotulo some.
+ */
+describe("index.css — rotulo do bloco de topo cabe no vao (achado 0265)", () => {
+  /** Avalia uma expressao CSS de comprimento (px/rem/calc/clamp/min/max) para um vao. */
+  function evalLength(expr: string, gapPx: number): number {
+    const js = expr
+      .replace(/var\(--doc-block-spacing,\s*1rem\)/g, `(${gapPx})`)
+      .replace(/(-?[\d.]+)rem/g, (_, n) => `(${Number(n) * 16})`)
+      .replace(/(-?[\d.]+)px/g, "($1)")
+      .replace(/calc\(/g, "(")
+      .replace(/clamp\(/g, "__clamp(")
+      .replace(/\bmin\(/g, "Math.min(")
+      .replace(/\bmax\(/g, "Math.max(");
+    expect(js, `expressao CSS nao suportada: ${expr}`).toMatch(/^[\d\s.+\-*/(),a-zA-Z_]*$/);
+    const clamp = (lo: number, v: number, hi: number) => Math.min(Math.max(lo, v), hi);
+    return new Function("__clamp", `return ${js};`)(clamp) as number;
+  }
+
+  /** Caixa do rotulo relativa ao topo do bloco (negativo = acima). */
+  function labelBox(gapPx: number): { top: number; bottom: number; size: number } {
+    const body = ruleBody(".tiptap:not(.rich-text-field) > p::before");
+    expect(body).toMatch(/line-height:\s*1\s*;/);
+    const size = evalLength(body.match(/font-size:\s*([^;]+);/)![1].trim(), gapPx);
+    const top = body.match(/(?:^|[\s;])top:\s*([^;]+);/);
+    if (top) {
+      const t = evalLength(top[1].trim(), gapPx);
+      return { top: t, bottom: t + size, size };
+    }
+    const bottom = body.match(/(?:^|[\s;])bottom:\s*calc\(100%\s*\+\s*([^;]+)\)\s*;/);
+    expect(bottom, `posicao do rotulo nao reconhecida: ${body}`).not.toBeNull();
+    const b = -evalLength(bottom![1].trim(), gapPx);
+    return { top: b - size, bottom: b, size };
+  }
+
+  // Faixa do popover Formato (AppearancePopover: SPACING_MIN_PX..SPACING_MAX_PX).
+  const gaps = Array.from({ length: 33 }, (_, i) => 8 + i);
+
+  it.each(gaps)("vao de %i px: o rotulo nao invade o bloco de cima", (gap) => {
+    const box = labelBox(gap);
+    if (box.size === 0) return;
+    expect(box.top, "rotulo sobrepoe o bloco de cima").toBeGreaterThanOrEqual(-gap);
+    expect(box.bottom, "rotulo sobrepoe o proprio bloco").toBeLessThanOrEqual(0);
+  });
+
+  it.each(gaps)("vao de %i px: o rotulo fica mais perto do proprio bloco", (gap) => {
+    const box = labelBox(gap);
+    if (box.size === 0) return;
+    const toOwn = -box.bottom;
+    const toAbove = box.top + gap;
+    expect(toOwn, `rotulo a ${toAbove}px do bloco de cima e ${toOwn}px do seu`).toBeLessThan(
+      toAbove,
+    );
+  });
+
+  it("no espacamento padrao (16 px) o rotulo continua visivel, em 9 px", () => {
+    expect(labelBox(16).size).toBe(9);
+  });
+});
