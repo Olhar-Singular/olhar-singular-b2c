@@ -112,7 +112,9 @@ export function MetadataDrawer({
 
           <section className="space-y-2">
             <SectionTitle>Justificativa pedagógica</SectionTitle>
-            <p className="rounded-md border border-surface-line-2 bg-surface-paper p-3 text-sm leading-relaxed text-surface-ink">
+            {/* 0266 — citação (filete à esquerda), não caixa: borda nos quatro lados +
+                rounded-md + fundo de papel é a silhueta do Input, e a gaveta é só leitura. */}
+            <p className="border-l-2 border-surface-line-2 pl-3 text-sm leading-relaxed text-surface-ink">
               {justification}
             </p>
           </section>

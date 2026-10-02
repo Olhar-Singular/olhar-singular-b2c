@@ -141,3 +141,20 @@ describe("MetadataDrawer — alvo de toque do botão de fechar (0367)", () => {
     }
   });
 });
+
+/**
+ * 0266 — a gaveta é "somente leitura", mas a justificativa vinha numa caixa com
+ * borda nos quatro lados + `rounded-md` + fundo de papel: a silhueta do `Input`
+ * do shadcn. O professor clicava para editar. Agora é citação: filete à esquerda.
+ */
+describe("MetadataDrawer — justificativa sem silhueta de campo (0266)", () => {
+  it("não desenha a justificativa como caixa de input", () => {
+    setup();
+    const p = screen.getByText(META.justification);
+    const cls = p.className.split(/\s+/);
+    expect(cls).not.toContain("border");
+    expect(cls).not.toContain("rounded-md");
+    expect(cls).not.toContain("bg-surface-paper");
+    expect(cls).toContain("border-l-2");
+  });
+});
