@@ -449,3 +449,33 @@ describe("QuestionCard", () => {
     });
   });
 });
+
+/**
+ * Achado 0373: o "remover ×" de instrução e enunciado era texto de 11px em
+ * `ink-faint` sem padding, com alvo de ~50 x 15 px (WCAG 2.2 SC 2.5.8 pede 24 px)
+ * e tinta abaixo de 4,5:1.
+ */
+describe("QuestionCard — botões de remover campo (0373)", () => {
+  const expectTarget = (el: HTMLElement) => {
+    expect(el.className).toMatch(/(^|\s)min-h-6(\s|$)/);
+    expect(el.className).toMatch(/(^|\s)min-w-6(\s|$)/);
+    expect(el.className).toMatch(/(^|\s)px-1\.5(\s|$)/);
+    expect(el.className).toMatch(/(^|\s)text-surface-ink-soft(\s|$)/);
+    expect(el.className).not.toMatch(/text-surface-ink-faint/);
+  };
+
+  it("Remover instrução tem alvo de 24 px e tinta legível", () => {
+    setup({ instruction: [{ type: "text", text: "Marque a correta." }] });
+    expectTarget(screen.getByLabelText("Remover instrução"));
+  });
+
+  it("Remover enunciado (abaixo da imagem) tem alvo de 24 px e tinta legível", () => {
+    setup({ enunciado: [{ type: "text", text: "Observe." }], enunciadoPosition: "below" });
+    expectTarget(screen.getByLabelText("Remover enunciado"));
+  });
+
+  it("Remover enunciado (acima da imagem) tem alvo de 24 px e tinta legível", () => {
+    setup({ enunciado: [{ type: "text", text: "Observe." }], enunciadoPosition: "above" });
+    expectTarget(screen.getByLabelText("Remover enunciado"));
+  });
+});

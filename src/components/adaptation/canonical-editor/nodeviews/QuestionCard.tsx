@@ -190,7 +190,7 @@ export function QuestionCard({
               Enunciado
               <button
                 type="button"
-                className="ml-auto text-[11px] font-medium normal-case tracking-normal text-surface-ink-faint hover:text-destructive disabled:opacity-50"
+                className="-my-1 ml-auto inline-flex min-h-6 min-w-6 items-center justify-center rounded px-1.5 text-[11px] font-medium normal-case tracking-normal text-surface-ink-soft hover:text-destructive disabled:opacity-50"
                 disabled={disabled}
                 onClick={() => setLocalEnunciado(null)}
                 aria-label="Remover enunciado"
@@ -248,7 +248,7 @@ export function QuestionCard({
               Enunciado
               <button
                 type="button"
-                className="ml-auto text-[11px] font-medium normal-case tracking-normal text-surface-ink-faint hover:text-destructive disabled:opacity-50"
+                className="-my-1 ml-auto inline-flex min-h-6 min-w-6 items-center justify-center rounded px-1.5 text-[11px] font-medium normal-case tracking-normal text-surface-ink-soft hover:text-destructive disabled:opacity-50"
                 disabled={disabled}
                 onClick={() => setLocalEnunciado(null)}
                 aria-label="Remover enunciado"
@@ -315,7 +315,7 @@ export function QuestionCard({
             {showInstruction && (
               <button
                 type="button"
-                className="ml-auto text-[11px] font-medium normal-case tracking-normal text-surface-ink-faint hover:text-destructive disabled:opacity-50"
+                className="-my-1 ml-auto inline-flex min-h-6 min-w-6 items-center justify-center rounded px-1.5 text-[11px] font-medium normal-case tracking-normal text-surface-ink-soft hover:text-destructive disabled:opacity-50"
                 disabled={disabled}
                 onClick={() => {
                   setLocalInstruction(null);
