@@ -1502,31 +1502,46 @@ describe("documentRunStyle — idioma", () => {
   });
 });
 
-describe("Word imprime a descrição legível da fórmula (achado 0401)", () => {
-  it("inlineMath com alt sai como texto legível, não como LaTeX", () => {
+describe("Word imprime a fórmula, nunca o texto alternativo (achado 0803)", () => {
+  it("inlineMath com alt sai como LaTeX costurado, em Courier New", () => {
     const runs = richTextToRuns([
       { type: "text", text: "vale " },
       { type: "inlineMath", latex: "x^2 + 1", alt: "x ao quadrado mais 1" },
     ]);
-    expect(docxText(runs)).toContain("x ao quadrado mais 1");
-    expect(docxText(runs)).not.toContain("^");
+    expect(docxText(runs)).toContain("x^2\u00a0+\u00a01");
+    expect(docxText(runs)).not.toContain("ao quadrado");
+    expect(docxNodeAttrs(runs[1], "w:rFonts")).toMatchObject({ ascii: "Courier New" });
   });
 
-  it("blockMath com alt sai como texto legível", () => {
-    expect(
-      blockText({
-        id: id(220),
-        type: "blockMath",
-        latex: "\\frac{1}{2} = 0.5",
-        alt: "um meio igual a zero vírgula cinco",
-      }),
-    ).toContain("um meio igual a zero vírgula cinco");
+  it("blockMath com alt sai como LaTeX costurado, em Courier New", () => {
+    const block = {
+      id: id(220),
+      type: "blockMath",
+      latex: "a^2 + b^2 = c^2",
+      alt: "teorema de pitagoras",
+    } as const;
+    expect(blockText(block)).toContain("a^2\u00a0+\u00a0b^2\u00a0=\u00a0c^2");
+    expect(blockText(block)).not.toContain("pitagoras");
+    expect(docxNodeAttrs(blockToDocxParagraphs(block, 1), "w:rFonts")).toMatchObject({
+      ascii: "Courier New",
+    });
   });
 
   it("sem alt continua saindo o LaTeX costurado", () => {
     expect(blockText({ id: id(221), type: "blockMath", latex: "\\frac{1}{2} = 0.5" })).toContain(
       "\\frac{1}{2}\u00a0=\u00a00.5",
     );
+  });
+
+  it("documento cujas fórmulas TODAS têm alt ainda ganha o aviso de monoespaçada", () => {
+    const warnings = docxExportWarnings(
+      {
+        schemaVersion: 1,
+        blocks: [{ id: id(232), type: "blockMath", latex: "x", alt: "xis" }],
+      } as CanonicalDocument,
+      { fontFamily: "opendyslexic" },
+    );
+    expect(warnings.join(" ")).toMatch(/monoespaçada/i);
   });
 });
 
@@ -1551,53 +1566,5 @@ describe("aviso de tipografia da fórmula no Word (0415)", () => {
         fontFamily: "opendyslexic",
       }).join(" "),
     ).not.toMatch(/monoespaçada/i);
-  });
-});
-
-/**
- * A descrição legível da fórmula é TEXTO DO DOCUMENTO (achado 0191).
- *
- * O run vindo do `alt` saía com `w:rFonts` em `Courier New`: prosa em português
- * vestida com a monoespaçada que existe para o LaTeX cru, num corpo próprio.
- */
-describe("tipografia do `alt` da fórmula no Word (achado 0191)", () => {
-  it("inlineMath com alt não carrega a fonte da fórmula", () => {
-    const runs = richTextToRuns([
-      { type: "text", text: "vale " },
-      { type: "inlineMath", latex: "x^2 + 1", alt: "x ao quadrado mais 1" },
-    ]);
-    expect(docxNodeAttrs(runs[1], "w:rFonts")).toBeUndefined();
-  });
-
-  it("inlineMath SEM alt mantém a monoespaçada", () => {
-    const runs = richTextToRuns([{ type: "inlineMath", latex: "x^2 + 1" }]);
-    expect(docxNodeAttrs(runs[0], "w:rFonts")).toMatchObject({ ascii: "Courier New" });
-  });
-
-  it("blockMath com alt não carrega a fonte da fórmula", () => {
-    const paragraphs = blockToDocxParagraphs(
-      { id: id(230), type: "blockMath", latex: "a^2 + b^2 = c^2", alt: "teorema de pitagoras" },
-      1,
-    );
-    expect(docxNodeAttrs(paragraphs, "w:rFonts")).toBeUndefined();
-  });
-
-  it("blockMath SEM alt mantém a monoespaçada", () => {
-    const paragraphs = blockToDocxParagraphs(
-      { id: id(231), type: "blockMath", latex: "a^2 + b^2 = c^2" },
-      1,
-    );
-    expect(docxNodeAttrs(paragraphs, "w:rFonts")).toMatchObject({ ascii: "Courier New" });
-  });
-
-  it("documento cujas fórmulas TODAS têm alt não ganha o aviso de monoespaçada", () => {
-    const warnings = docxExportWarnings(
-      {
-        schemaVersion: 1,
-        blocks: [{ id: id(232), type: "blockMath", latex: "x", alt: "xis" }],
-      } as CanonicalDocument,
-      { fontFamily: "opendyslexic" },
-    );
-    expect(warnings.join(" ")).not.toMatch(/monoespaçada/i);
   });
 });

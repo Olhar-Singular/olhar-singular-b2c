@@ -8,7 +8,7 @@
 
 import { Text } from "@react-pdf/renderer";
 import type { RichText } from "@/lib/adaptation/canonical/schema";
-import { mathToPdfText, mathPdfInlineStyleFor } from "./mathToPdfText";
+import { mathToPdfText, mathPdfInlineStyle } from "./mathToPdfText";
 import { marksToPdfStyle } from "./richTextPdf";
 import { BASE_FONT_PT } from "../pageTokens";
 
@@ -30,8 +30,8 @@ export function PdfRichText({
       {content.map((run, i) => {
         if (run.type === "inlineMath") {
           return (
-            <Text key={i} style={mathPdfInlineStyleFor(run, fontSize)}>
-              {mathToPdfText(run.latex, run.alt, fontSize)}
+            <Text key={i} style={mathPdfInlineStyle(fontSize)}>
+              {mathToPdfText(run.latex, fontSize)}
             </Text>
           );
         }

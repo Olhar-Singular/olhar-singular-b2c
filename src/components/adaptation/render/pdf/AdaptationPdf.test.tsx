@@ -137,12 +137,12 @@ describe("AdaptationPdf", () => {
     expect(types).toContain(PdfQuestion);
   });
 
-  it("renders math as its readable alt, falling back to the LaTeX source", () => {
+  it("renders math as its LaTeX source, never as the alt (0803)", () => {
     const { text } = collect(AdaptationPdf({ document: renderDocument }));
-    expect(text).toContain("a sobre b"); // inline math com alt (0401)
-    expect(text).not.toContain("\\frac{a}{b}");
-    expect(text).toContain("teorema de Pitágoras"); // block math com alt (0401)
-    expect(text).not.toContain("x^2\u00a0+\u00a0y^2\u00a0=\u00a0z^2");
+    expect(text).not.toContain("a sobre b");
+    expect(text).toContain("\\frac{a}{b}");
+    expect(text).not.toContain("teorema de Pitágoras");
+    expect(text).toContain("x^2\u00a0+\u00a0y^2\u00a0=\u00a0z^2");
   });
 
   it("aplica os tokens de página compartilhados no <Page>", () => {

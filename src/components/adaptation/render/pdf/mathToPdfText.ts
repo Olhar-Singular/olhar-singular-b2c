@@ -17,7 +17,7 @@ import {
   PAGE_MARGIN_PT,
   pdfTextSize,
 } from "../pageTokens";
-import { latexLayoutAtom, readableMathText } from "../mathAtom";
+import { latexLayoutAtom } from "../mathAtom";
 
 /** Largura da folha A4 do `@react-pdf`, em pontos. */
 const A4_WIDTH_PT = 595.28;
@@ -52,9 +52,10 @@ export const MATH_PDF_MAX_ATOM_CHARS = mathPdfMaxAtomChars();
 /**
  * Return the text to display for a math node in the PDF.
  *
- * Com `alt` preenchido o papel imprime a descrição legível, como as views de
- * tela já fazem (achado 0401): ela é texto em linguagem natural, então viaja
- * quebrável e sem a costura do LaTeX. Sem `alt`, segue o LaTeX cru.
+ * É sempre o LaTeX, nunca o `alt` do nó (achado 0803): o `alt` é o texto
+ * alternativo da fórmula, um rótulo curto para leitor de tela ("teorema de
+ * pitagoras"), e no lugar da equação deixava a prova sem a conta. Mesma
+ * política do "Copiar" (`plainText.ts`, achado 0125).
  *
  * Os espaços saem inquebráveis (`latexLayoutAtom`): sem isso o textkit trata
  * cada espaço do LaTeX como ponto de quebra e parte a fórmula no meio, ao
@@ -64,11 +65,8 @@ export const MATH_PDF_MAX_ATOM_CHARS = mathPdfMaxAtomChars();
  */
 export function mathToPdfText(
   latex: string,
-  alt?: string,
   contextFontSizePt: number = BASE_FONT_PT,
 ): string {
-  const readable = readableMathText({ latex, alt });
-  if (readable) return readable;
   return latexLayoutAtom(latex, mathPdfMaxAtomChars(contextFontSizePt));
 }
 
@@ -90,9 +88,6 @@ function balancedCut(rest: string, target: number, maxChars: number): { end: num
 
 /**
  * Quebra o LaTeX do bloco em linhas EQUILIBRADAS que cabem na coluna útil.
- *
- * Com `alt` preenchido não há LaTeX a quebrar: a descrição legível sai inteira
- * numa linha e o textkit a quebra como prosa (achado 0401).
  *
  * Existe porque `alignItems: "center"` só centra uma caixa que ENCOLHE ao
  * conteúdo: quando o `<Text>` é mais largo que a coluna, o Yoga clampa a caixa
@@ -117,11 +112,8 @@ function balancedCut(rest: string, target: number, maxChars: number): { end: num
  */
 export function mathBlockLines(
   latex: string,
-  alt?: string,
   contextFontSizePt: number = BASE_FONT_PT,
 ): string[] {
-  const readable = readableMathText({ latex, alt });
-  if (readable) return [readable];
   const maxChars = mathPdfMaxAtomChars(contextFontSizePt);
   const lines: string[] = [];
   let rest = latex.trim();
@@ -156,26 +148,6 @@ export function mathPdfStyle(contextFontSizePt: number = BASE_FONT_PT) {
 export const MATH_PDF_STYLE = mathPdfStyle();
 
 /**
- * O estilo do nó de math EM BLOCO, decidido pelo que o papel vai IMPRIMIR.
- *
- * Com `alt` o que sai não é fórmula, é prosa em português (achado 0401), e as
- * duas justificativas da monoespaçada caem: o corpo próprio existia para
- * compensar a métrica da Courier (achado 0424) e sobre prosa só deixava a frase
- * maior que o parágrafo ao redor; a costura de espaços inquebráveis e a quebra
- * por contagem de caracteres existiam porque LaTeX não pode quebrar no meio
- * (achados 0425 e 0427), e prosa quebra como qualquer frase. No papel a mesma
- * linha trocava de tipografia no meio de si mesma (achado 0191). A descrição
- * sai então no corpo do CONTEXTO e na fonte do documento, que ela herda do
- * `<Page>`.
- */
-export function mathPdfBlockStyle(
-  node: { latex: string; alt?: string },
-  contextFontSizePt: number,
-) {
-  return readableMathText(node) ? pdfTextSize(contextFontSizePt) : mathPdfStyle(contextFontSizePt);
-}
-
-/**
  * Estilo do run de fórmula INLINE, dentro de uma linha de texto do corpo.
  *
  * Mesma tinta do bloco (`mathPdfFontSizePt`, achado 0424), mas o avanço da
@@ -193,17 +165,3 @@ export function mathPdfInlineStyle(contextFontSizePt: number = BASE_FONT_PT) {
 
 /** O estilo inline no tamanho BASE, para quem renderiza um run solto. */
 export const MATH_PDF_INLINE_STYLE = mathPdfInlineStyle();
-
-/**
- * O estilo do run de math INLINE, pela mesma regra do bloco (achado 0191).
- *
- * Com `alt` o run é texto do parágrafo: estilo vazio, para que ele herde do
- * `<Text>` hospedeiro exatamente a fonte e o corpo das palavras ao lado — era
- * dentro de uma frase que a troca de tipografia mais aparecia.
- */
-export function mathPdfInlineStyleFor(
-  node: { latex: string; alt?: string },
-  contextFontSizePt: number,
-) {
-  return readableMathText(node) ? {} : mathPdfInlineStyle(contextFontSizePt);
-}

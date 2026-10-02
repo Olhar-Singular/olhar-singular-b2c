@@ -263,86 +263,31 @@ describe("aviso de caractere fora da CP1252 (0444)", () => {
 });
 
 // ---------------------------------------------------------------------------
-// 0190 — desde que o math passou a imprimir o `alt` (0401), o aviso continuava
-// prometendo LaTeX cru. Quem lia decidia baixar achando que ia receber
-// `a^2+b^2=c^2` para corrigir à mão, e recebia uma frase em português.
+// 0803 — os arquivos imprimem o LaTeX mesmo quando o nó tem `alt` (texto
+// alternativo), como o "Copiar". O aviso é um só para as três saídas.
 // ---------------------------------------------------------------------------
 
-describe("aviso de perda da fórmula segue a projeção real (0190)", () => {
+describe("aviso de perda da fórmula com texto alternativo (0803)", () => {
   const comAlt = doc([
     { id: id(1), type: "blockMath", latex: "a^2 + b^2 = c^2", alt: "teorema de pitágoras" },
+    {
+      id: id(2),
+      type: "paragraph",
+      content: [{ type: "inlineMath", latex: "E = mc^2", alt: "E igual a m c ao quadrado" }],
+    },
   ]);
 
-  it("com descrição, o PDF avisa da descrição e NÃO promete LaTeX", () => {
-    const warnings = pdfExportWarnings(comAlt);
-    expect(warnings.join(" ")).toMatch(/descrição/i);
-    expect(warnings).not.toContain(MATH_LOSS_WARNING);
-  });
-
-  it("com descrição, o Word avisa da descrição e NÃO promete LaTeX", () => {
-    const warnings = docxExportWarnings(comAlt);
-    expect(warnings.join(" ")).toMatch(/descrição/i);
-    expect(warnings).not.toContain(MATH_LOSS_WARNING);
-  });
-
-  it("sem descrição segue valendo o LaTeX cru", () => {
-    const semAlt = doc([{ id: id(1), type: "blockMath", latex: "a^2" }]);
-    expect(pdfExportWarnings(semAlt)).toContain(MATH_LOSS_WARNING);
-    expect(pdfExportWarnings(semAlt).join(" ")).not.toMatch(/descrição/i);
-  });
-
-  it("documento misto declara as duas perdas", () => {
-    const misto = doc([
-      { id: id(1), type: "blockMath", latex: "a^2", alt: "a ao quadrado" },
-      {
-        id: id(2),
-        type: "paragraph",
-        content: [{ type: "inlineMath", latex: "E = mc^2" }],
-      },
-    ]);
-    const warnings = pdfExportWarnings(misto);
-    expect(warnings.join(" ")).toMatch(/descrição/i);
-    expect(warnings).toContain(MATH_LOSS_WARNING);
-  });
-
-  it("inline com descrição também conta como perda de descrição", () => {
-    const warnings = pdfExportWarnings(
-      doc([
-        {
-          id: id(1),
-          type: "paragraph",
-          content: [{ type: "inlineMath", latex: "E = mc^2", alt: "E igual a m c ao quadrado" }],
-        },
-      ]),
-    );
-    expect(warnings.join(" ")).toMatch(/descrição/i);
-    expect(warnings).not.toContain(MATH_LOSS_WARNING);
-  });
-
-  it('o "Copiar" continua entregando LaTeX cru mesmo com descrição', () => {
+  it("PDF, Word e Copiar avisam do LaTeX cru e não falam em descrição", () => {
+    for (const warnings of [pdfExportWarnings(comAlt), docxExportWarnings(comAlt)]) {
+      expect(warnings).toContain(MATH_LOSS_WARNING);
+      expect(warnings.join(" ")).not.toMatch(/descrição/i);
+    }
     expect(copyExportWarnings(comAlt)).toEqual([MATH_LOSS_WARNING]);
   });
-});
 
-// ---------------------------------------------------------------------------
-// 0191 — com `alt` o arquivo não imprime fórmula nenhuma: imprime uma frase em
-// português, na tipografia do documento. O aviso do 0415 passou a descrever um
-// conteúdo que não está lá.
-// ---------------------------------------------------------------------------
-
-describe("aviso de tipografia x fórmula com descrição (0191)", () => {
-  it("documento cujas fórmulas TODAS têm alt não ganha o aviso de monoespaçada", () => {
-    const withAlt = doc([{ id: id(1), type: "blockMath", latex: "a^2", alt: "a ao quadrado" }]);
-    expect(pdfExportWarnings(withAlt, { fontFamily: "opendyslexic" }).join(" ")).not.toMatch(
+  it("fórmula com alt mantém o aviso de monoespaçada", () => {
+    expect(pdfExportWarnings(comAlt, { fontFamily: "opendyslexic" }).join(" ")).toMatch(
       /monoespaçada/i,
     );
-  });
-
-  it("basta UMA fórmula sem alt para o aviso voltar", () => {
-    const mixed = doc([
-      { id: id(1), type: "blockMath", latex: "a^2", alt: "a ao quadrado" },
-      { id: id(2), type: "blockMath", latex: "b^2" },
-    ]);
-    expect(pdfExportWarnings(mixed).join(" ")).toMatch(/monoespaçada/i);
   });
 });

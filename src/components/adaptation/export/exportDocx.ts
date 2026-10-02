@@ -78,13 +78,12 @@ import {
 import { indexToLetter } from "../render/letters";
 import {
   documentHasMath,
-  documentHasRawMath,
   everyBlock,
   mathLossWarnings,
   MATH_TYPOGRAPHY_WARNING,
 } from "./exportWarnings";
 import { perQuestionBreakFlags } from "../render/perQuestionBreaks";
-import { latexLayoutAtom, readableMathText } from "../render/mathAtom";
+import { latexLayoutAtom } from "../render/mathAtom";
 import { DEFAULT_PANEL_SETTINGS, formatHeaderDateBR, type PanelSettings } from "./panelSettings";
 import { HEADER_SPACING_PT } from "../render/headerSpacing";
 import { documentTitle, FALLBACK_TITLE } from "../titleField";
@@ -260,18 +259,14 @@ export function nodeStyleToDocx(style?: NodeStyle): {
 export function richTextToRuns(nodes: Inline[], inherited: RunStyle = {}): TextRun[] {
   return nodes.map((node) => {
     if (node.type === "inlineMath") {
-      // Word has no KaTeX. Com `alt` preenchido sai a descrição legível, a
-      // mesma regra das views de tela e do PDF (achado 0401); sem ela sai o
-      // LaTeX, que ao menos mantém o conteúdo visível — dropá-lo era perda
-      // silenciosa de dado no meio da frase.
-      // A monoespaçada é a tipografia do LaTeX CRU: com `alt` o que sai é prosa
-      // em português, e ela é texto do documento — mesma fonte e mesmo corpo do
-      // parágrafo que a cerca (achado 0191).
-      const readable = readableMathText(node);
+      // Word has no KaTeX: sai o LaTeX, que ao menos mantém o conteúdo
+      // visível — dropá-lo era perda silenciosa de dado no meio da frase.
+      // Nunca o `alt`: ele é o texto alternativo da fórmula, não a fórmula
+      // (achado 0803), mesma política do PDF e do "Copiar".
       return new TextRun({
         ...inherited,
-        text: readable ?? latexLayoutAtom(node.latex),
-        ...(readable === null ? { font: MATH_FONT } : {}),
+        text: latexLayoutAtom(node.latex),
+        font: MATH_FONT,
       });
     }
     // Cor e corpo do próprio run vencem o herdado, validados pela MESMA paleta
@@ -487,12 +482,8 @@ export function blockToDocxParagraphs(block: Block, number: number): DocxBlock[]
           ...para,
           ...spacing,
           children: [
-            // Mesma regra do inline: a Courier fica para o LaTeX cru (0191).
-            new TextRun({
-              ...run,
-              text: readableMathText(block) ?? latexLayoutAtom(block.latex),
-              ...(readableMathText(block) === null ? { font: MATH_FONT } : {}),
-            }),
+            // Mesma regra do inline: o LaTeX, nunca o `alt` (achado 0803).
+            new TextRun({ ...run, text: latexLayoutAtom(block.latex), font: MATH_FONT }),
           ],
         }),
       ];
@@ -708,9 +699,8 @@ export function docxExportWarnings(
   if (documentHasMath(document)) {
     warnings.push(...mathLossWarnings(document));
     // A fonte da fórmula é `MATH_FONT`, constante, e não a do documento: a
-    // mesma perda do PDF, e a mesma frase (achado 0415). Só onde sobra LaTeX
-    // cru: a fórmula com descrição já sai na tipografia do documento (0191).
-    if (documentHasRawMath(document)) warnings.push(MATH_TYPOGRAPHY_WARNING);
+    // mesma perda do PDF, e a mesma frase (achado 0415).
+    warnings.push(MATH_TYPOGRAPHY_WARNING);
   }
 
   const family = pageStyle?.fontFamily;
