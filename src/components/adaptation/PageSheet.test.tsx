@@ -294,8 +294,12 @@ describe("PageSheet", () => {
             render(
               <PageSheet paginated toolbar={null}>
                 <span>questão 1</span>
-                {/* 1016px de conteúdo vistos a 0,5 de escala (o ajuste em 397px). */}
-                <div className="adaptar-page-break" data-test-top="508" />
+                {/*
+                  1016px de conteúdo vistos a 0,5 de escala (o ajuste em 397px).
+                  O retângulo traz a margem de cima da folha (achado 0506):
+                  (1016 + 53,33) / 2.
+                */}
+                <div className="adaptar-page-break" data-test-top="534.67" />
                 <span>questão 2</span>
               </PageSheet>,
             );
@@ -1380,6 +1384,37 @@ describe("PageSheet", () => {
       withLayout(1200, () => {
         render(folha(true, [1060]));
         expect(screen.getByTestId("quebra-1060").style.marginBottom).toBe("0px");
+      });
+    });
+
+    /*
+      Achado 0506: a régua era medida na coordenada da FOLHA (com a margem de
+      cima) e comparada com `pageTop`, que anda na do CONTEÚDO. A régua que cai
+      nos últimos `PAGE_MARGIN_PX` da área útil virava a folha 53px antes da
+      hora e o contador ganhava uma folha fantasma em branco.
+    */
+    it("não conta folha fantasma quando a régua cai no pé da área útil", () => {
+      withLayout(1200, () => {
+        // Régua termina em 1060 (folha) < 1069,67, fim da área útil da folha 1.
+        render(folha(true, [1030]));
+        expect(screen.getByTestId("page-count")).toHaveTextContent("2 páginas A4");
+      });
+    });
+
+    it("compara os blocos depois da quebra com a folha real", () => {
+      withLayout(1570, () => {
+        render(
+          <PageSheet paginated toolbar={null}>
+            <div className="adaptar-page-break" data-test-top="500" data-test-height="30" />
+            <div data-folha-bloco="" data-test-top="530" data-test-height="500" />
+            <div data-folha-bloco="" data-testid="bloco-2" data-test-top="1030" data-test-height="540" />
+          </PageSheet>,
+        );
+        // Depois da quebra o bloco 2 vai de 1516,34 a 2056,34 no fluxo: passa
+        // do fim da folha 2 (2032,68) e tem que descer inteiro.
+        expect(
+          Number.parseFloat(screen.getByTestId("bloco-2").style.marginTop),
+        ).toBeCloseTo(2 * PAGE_CONTENT_HEIGHT_PX - (1030 - PAGE_MARGIN_PX + (PAGE_CONTENT_HEIGHT_PX - (500 - PAGE_MARGIN_PX + 30))), 2);
       });
     });
 

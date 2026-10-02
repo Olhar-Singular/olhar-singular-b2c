@@ -478,12 +478,17 @@ export function PageSheet({
         ).flatMap((el) => {
           const index = byMark.get(el);
           if (index !== undefined) {
+            // Achado 0506: a régua entra no MESMO referencial dos blocos e de
+            // `pageTop` (o do conteúdo, sem a margem de cima). Medida na folha,
+            // a régua no pé da área útil virava a folha 53px antes da hora e
+            // contava uma folha fantasma.
+            const cut = cuts[index] - PAGE_MARGIN_PX;
             return [
               {
                 el,
                 kind: "break" as const,
-                top: cuts[index],
-                bottom: cuts[index],
+                top: cut,
+                bottom: cut,
                 height: el.getBoundingClientRect().height / scale,
               },
             ];
@@ -514,9 +519,7 @@ export function PageSheet({
               régua que atravessa a virada — aí o branco que falta é negativo e
               puxar o conteúdo para trás sobreporia o que já foi desenhado.
             */
-            const pageEnd =
-              PAGE_MARGIN_PX +
-              Math.ceil((top - PAGE_MARGIN_PX) / PAGE_CONTENT_HEIGHT_PX) * PAGE_CONTENT_HEIGHT_PX;
+            const pageEnd = Math.ceil(top / PAGE_CONTENT_HEIGHT_PX) * PAGE_CONTENT_HEIGHT_PX;
             const spacer = Math.max(0, pageEnd - (top + item.height));
             pushes.push({ el: item.el, kind: "break", spacer });
             shift += spacer;
