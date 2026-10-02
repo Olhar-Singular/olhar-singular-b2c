@@ -387,6 +387,7 @@ export default function CanonicalAdaptationWizard({ editMode }: Props = {}) {
   // paid request and therefore a new row. Staying bound to the previous one
   // would autosave the new document over the old adaptation, against a token
   // that no longer describes it.
+  const editAdaptationId = editMode?.adaptationId;
   const handleResult = useCallback((result: AdaptationResult, row: GeneratedRow) => {
     // Reset isGenerating immediately when a result arrives. The real StepGenerate
     // calls onLoadingChange(false) via useEffect, but that effect may not fire when
@@ -398,7 +399,16 @@ export default function CanonicalAdaptationWizard({ editMode }: Props = {}) {
     setStashedResult(null);
     setDraftId(row.id);
     setDraftUpdatedAt(row.updatedAt);
-  }, []);
+    // 0456: in edit mode the URL still names the row we just left, so a reload
+    // reopened the pre-regenerate version and the paid document vanished from
+    // the screen. Rewrite the address bar in place instead of navigate():
+    // EditAdaptationPage keys the wizard on the route id, so a route change
+    // would remount it and throw away caret, scroll and zoom. The router's own
+    // history state is preserved, so back/forward keep working.
+    if (editAdaptationId && row.id !== editAdaptationId) {
+      window.history.replaceState(window.history.state, "", `/adaptar/editar/${row.id}`);
+    }
+  }, [editAdaptationId]);
 
   // Every edit re-arms "unsaved". `isSaved` only ever went true before, so
   // after the first save the wizard could no longer tell that the teacher had

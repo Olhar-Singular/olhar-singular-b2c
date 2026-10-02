@@ -1024,6 +1024,54 @@ describe("CanonicalAdaptationWizard", () => {
     );
   });
 
+  // --- 0456 · Regerar em modo edição troca a URL para a linha nova -----------
+
+  it("points the URL at the regenerated row in edit mode, without remounting (0456)", async () => {
+    // O Regerar grava uma linha NOVA; se a URL seguisse na antiga, um F5
+    // reabriria a versão anterior e o documento pago sumiria da tela.
+    window.history.replaceState(window.history.state, "", "/adaptar/editar/edit-1");
+    try {
+      renderWithProviders(<CanonicalAdaptationWizard editMode={editSeed()} />);
+      fireEvent.click(screen.getByRole("button", { name: /Regerar/i }));
+      const dialog = screen.getByRole("alertdialog");
+      fireEvent.click(within(dialog).getByRole("button", { name: /^Regerar$/i }));
+      await waitFor(() => expect(screen.getByTestId("do-generate")).toBeInTheDocument());
+      fireEvent.click(screen.getByTestId("do-generate"));
+      await waitFor(() => expect(adoptedDraftId()).toBe("srv-1"));
+
+      expect(window.location.pathname).toBe("/adaptar/editar/srv-1");
+      // Sem navigate: trocar a rota remontaria o wizard (key = id) e jogaria
+      // fora caret, scroll e zoom.
+      expect(mockNavigate).not.toHaveBeenCalledWith(
+        expect.stringMatching(/^\/adaptar\/editar\//),
+        expect.anything(),
+      );
+    } finally {
+      window.history.replaceState(window.history.state, "", "/");
+    }
+  });
+
+  it("leaves the URL alone when the adopted row is the one being edited (0456)", async () => {
+    window.history.replaceState(window.history.state, "", "/adaptar/editar/srv-1");
+    try {
+      renderWithProviders(
+        <CanonicalAdaptationWizard editMode={{ ...editSeed(), adaptationId: "srv-1" }} />,
+      );
+      fireEvent.click(screen.getByRole("button", { name: /Regerar/i }));
+      const dialog = screen.getByRole("alertdialog");
+      fireEvent.click(within(dialog).getByRole("button", { name: /^Regerar$/i }));
+      await waitFor(() => expect(screen.getByTestId("do-generate")).toBeInTheDocument());
+      const spy = vi.spyOn(window.history, "replaceState");
+      fireEvent.click(screen.getByTestId("do-generate"));
+      await waitFor(() => expect(adoptedDraftId()).toBe("srv-1"));
+      expect(spy).not.toHaveBeenCalled();
+      expect(window.location.pathname).toBe("/adaptar/editar/srv-1");
+      spy.mockRestore();
+    } finally {
+      window.history.replaceState(window.history.state, "", "/");
+    }
+  });
+
   // --- C1-a crash-mirror restore -------------------------------------------
 
   function editSeed(updatedAt = "2026-01-01T00:00:00Z") {
