@@ -108,6 +108,14 @@ export const FOLHA_RAIL_HOST =
 export const FOLHA_TOUCH_TARGET = "folha-touch-target";
 
 /**
+ * Caixa que desfaz a escala da folha para chrome DENSO desenhado dentro dela
+ * (achado 0374): o card de estrutura da questão é formulário do app e, na
+ * folha ajustada de 390px (42%), encolhia inteiro a alvos de 6 a 15px. A regra
+ * (index.css) aplica `zoom: 1 / --folha-scale`; com a folha em 1 nada muda.
+ */
+export const FOLHA_CHROME_UNSCALED = "folha-chrome-unscaled";
+
+/**
  * Campo de texto (`<Input>` shadcn) que vive SOBRE a folha.
  *
  * Mesmo motivo do FOLHA_BUTTON, e o `RichTextField` já registrou o defeito:

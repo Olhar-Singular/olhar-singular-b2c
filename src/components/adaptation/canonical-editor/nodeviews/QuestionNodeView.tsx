@@ -36,7 +36,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { FOLHA_RAIL, FOLHA_RAIL_HOST, FOLHA_TOUCH_TARGET } from "../folhaChrome";
+import { FOLHA_CHROME_UNSCALED, FOLHA_RAIL, FOLHA_RAIL_HOST, FOLHA_TOUCH_TARGET } from "../folhaChrome";
 import ImageManagerModal from "@/components/editor/ImageManagerModal";
 import type { ImageItem } from "@/components/editor/imageManagerUtils";
 import type { QuestionAnswer, RichText } from "@/lib/adaptation/canonical/schema";
@@ -302,20 +302,24 @@ export function QuestionNodeView({ node, updateAttributes, editor, getPos, delet
   return (
     <NodeViewWrapper className={FOLHA_RAIL_HOST} data-testid="question-node" data-question-expanded={String(expanded)}>
       {expanded ? (
-        <QuestionCard
-          num={ordinal}
-          customNumber={customNumber}
-          answer={answer}
-          instruction={instruction}
-          enunciado={enunciado}
-          enunciadoPosition={enunciadoPosition}
-          disabled={disabled}
-          onCommit={handleCommit}
-          onCancel={handleCancel}
-          onGapAdded={handleGapAdded}
-          onGapRemoved={handleGapRemoved}
-          stem={<NodeViewContent />}
-        />
+        // The structure card is app chrome, not printed content: undo the
+        // sheet's scale so it stays legible and tappable (finding 0374).
+        <div className={FOLHA_CHROME_UNSCALED}>
+          <QuestionCard
+            num={ordinal}
+            customNumber={customNumber}
+            answer={answer}
+            instruction={instruction}
+            enunciado={enunciado}
+            enunciadoPosition={enunciadoPosition}
+            disabled={disabled}
+            onCommit={handleCommit}
+            onCancel={handleCancel}
+            onGapAdded={handleGapAdded}
+            onGapRemoved={handleGapRemoved}
+            stem={<NodeViewContent />}
+          />
+        </div>
       ) : (
         <QuestionPreview
           num={ordinal}

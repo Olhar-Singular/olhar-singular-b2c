@@ -725,6 +725,18 @@
   min-height: calc(24px / var(--folha-scale, 1));
 }
 
+/* Card de estrutura da questão fora da escala da folha (achado 0374).
+ *
+ * O card aberto pelo lápis é formulário do app, não conteúdo impresso, mas é
+ * filho do NodeView e viaja dentro do `transform: scale()` da folha: em 390px
+ * a folha abre a 42% e o card inteiro chegava ao dedo com alvos de 6 a 15px e
+ * corpo de texto a ~6px. `zoom` (e não um contra-`transform`) desfaz a escala
+ * mexendo no layout, então a altura reservada acompanha o card; a largura
+ * percentual continua a da coluna da folha. Fora da folha o fallback 1 é neutro. */
+.folha-chrome-unscaled {
+  zoom: calc(1 / var(--folha-scale, 1));
+}
+
 /* A reserva do vão do rail cresce junto (achados 0233/0338 sob o 0236).
  *
  * O rail é uma caixa OPACA ancorada acima do bloco (`-translate-y-full`): o

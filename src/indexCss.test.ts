@@ -856,6 +856,20 @@ describe("index.css — alvo de toque do chrome da folha (achado 0236)", () => {
 });
 
 /**
+ * Achado 0374: o card de estrutura da questao e chrome do app, nao conteudo
+ * impresso, mas vive dentro do `transform: scale()` da folha. A caixa dele
+ * desfaz a escala com `zoom` (que, ao contrario do transform, mexe no layout:
+ * a altura reservada acompanha) e a largura percentual continua a da coluna.
+ */
+describe("index.css — card de estrutura fora da escala da folha (achado 0374)", () => {
+  it("desfaz o --folha-scale com zoom", () => {
+    expect(ruleBody(".folha-chrome-unscaled")).toMatch(
+      /zoom:\s*calc\(1\s*\/\s*var\(--folha-scale,\s*1\)\)/,
+    );
+  });
+});
+
+/**
  * Anel de foco dos campos de texto compartilhados (achado 0422).
  *
  * `src/components/ui/input.tsx` e `textarea.tsx` (arquivos gerados, protegidos)

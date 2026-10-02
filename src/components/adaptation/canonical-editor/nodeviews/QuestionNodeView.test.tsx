@@ -837,6 +837,28 @@ describe("QuestionNodeView — data-question-expanded attribute", () => {
   });
 });
 
+/*
+  Achado 0374: o card de estrutura e um formulario do app desenhado DENTRO do
+  `transform: scale()` da folha. Em 390px a folha abre a 42% e o card inteiro
+  ia junto: alvos de 6 a 15px e corpo de texto a ~6px. O card mora numa caixa
+  que desfaz a escala da folha (`.folha-chrome-unscaled`, index.css).
+*/
+describe("QuestionNodeView — card de estrutura fora da escala da folha (achado 0374)", () => {
+  it("desenha o card aberto numa caixa que desfaz a escala da folha", () => {
+    const { props } = makeProps(mc);
+    render(<QuestionNodeView {...props} />);
+    fireEvent.click(screen.getByLabelText("Editar questão"));
+    const card = screen.getByTestId("question-card");
+    expect(card.closest(".folha-chrome-unscaled")).not.toBeNull();
+  });
+
+  it("nao desfaz a escala da previa impressa", () => {
+    const { props } = makeProps(mc);
+    const { container } = render(<QuestionNodeView {...props} />);
+    expect(container.querySelector(".folha-chrome-unscaled")).toBeNull();
+  });
+});
+
 describe("QuestionNodeView — not editable", () => {
   it("disables the inline preview fields and the rail", () => {
     const { props } = makeProps(mc, { editable: false });
