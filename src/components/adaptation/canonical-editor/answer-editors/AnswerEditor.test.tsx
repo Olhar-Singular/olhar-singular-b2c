@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { useState } from "react";
 import { render, screen, fireEvent } from "@testing-library/react";
 import type { RichText, QuestionAnswer } from "@/lib/adaptation/canonical/schema";
 import { AnswerEditor } from "./AnswerEditor";
@@ -183,6 +184,29 @@ describe("AnswerEditor — fillBlank", () => {
     expect(onGapAdded).toHaveBeenCalledTimes(1);
     fireEvent.click(screen.getAllByTitle("Remover lacuna")[1]);
     expect(onGapRemoved).toHaveBeenCalledWith(1);
+  });
+
+  /**
+   * Achado 0370: depois de "+ Lacuna" o foco ficava onde estava; quem usa
+   * teclado tinha de tabular pelo card inteiro até achar o campo criado.
+   */
+  it("move o foco para o campo Resposta da lacuna criada", () => {
+    function Harness() {
+      const [value, setValue] = useState<QuestionAnswer>(answer);
+      return <AnswerEditor answer={value} onChange={setValue} />;
+    }
+    render(<Harness />);
+    fireEvent.click(screen.getByText("Lacuna"));
+    const created = screen.getByLabelText("Lacuna 3");
+    expect(created).toHaveFocus();
+  });
+
+  it("não rouba o foco se a resposta mudar sem a lacuna criada", () => {
+    const { rerender } = render(<AnswerEditor answer={answer} onChange={vi.fn()} />);
+    fireEvent.click(screen.getByText("Lacuna"));
+    const other: QuestionAnswer = { kind: "fillBlank", gaps: [answer.gaps[0]] };
+    rerender(<AnswerEditor answer={other} onChange={vi.fn()} />);
+    expect(screen.getByLabelText("Lacuna 1")).not.toHaveFocus();
   });
 
   it("segue funcionando sem os avisos de enunciado (card fora do editor)", () => {

@@ -11,7 +11,7 @@
  * answer-lines config) is always available — there is no editor mode to hide it.
  */
 
-import { useId } from "react";
+import { useEffect, useId, useRef } from "react";
 import { Plus, Trash2, ArrowUp, ArrowDown } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { FOLHA_BUTTON } from "@/components/adaptation/canonical-editor/folhaChrome";
@@ -99,6 +99,16 @@ export function AnswerEditor({
    * rótulo não levava o foco ao campo. O prefixo é único por card.
    */
   const fieldIdPrefix = useId();
+  // Achado 0370: "+ Lacuna" leva o foco ao campo Resposta da lacuna criada,
+  // assim que ela aparecer na resposta re-renderizada.
+  const focusGapId = useRef<string | null>(null);
+  useEffect(() => {
+    if (!focusGapId.current) return;
+    const field = document.getElementById(`${fieldIdPrefix}-gap-${focusGapId.current}`);
+    if (!field) return;
+    focusGapId.current = null;
+    field.focus();
+  }, [answer, fieldIdPrefix]);
   switch (answer.kind) {
     case "multipleChoice":
       return (
@@ -318,7 +328,10 @@ export function AnswerEditor({
             size="sm"
             className={cn("self-start gap-1", FOLHA_BUTTON)}
             onClick={() => {
-              onChange(addGap(answer));
+              const next = addGap(answer);
+              const { gaps } = next as typeof answer;
+              focusGapId.current = gaps[gaps.length - 1].id;
+              onChange(next);
               onGapAdded?.();
             }}
             disabled={disabled}

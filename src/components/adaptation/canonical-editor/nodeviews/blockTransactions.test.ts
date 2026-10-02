@@ -231,12 +231,39 @@ describe("gap ↔ stem sync (real schema)", () => {
 
   const text = (t: string) => ({ type: "text", text: t });
 
-  it("appends a printable blank to the end of the stem", () => {
+  /**
+   * Achado 0370: o `___` novo era colado no fim cego do bloco, depois do ponto
+   * final ("pela ___ . ___"), deixando uma lacuna órfã fora da frase.
+   */
+  it("inserts the new blank before the stem's final punctuation", () => {
     const state = makeState({ schemaVersion: 1, blocks: [fb(30, [text("A agua evapora pela ___ .")])] });
     const tr = buildAddGapTransaction(state, posOfChild(state.doc, 0));
     expect(tr).not.toBeNull();
     const next = state.apply(tr!);
-    expect(next.doc.child(0).textContent).toBe("A agua evapora pela ___ . ___");
+    expect(next.doc.child(0).textContent).toBe("A agua evapora pela ___ ___ .");
+  });
+
+  it.each([
+    ["Complete a frase?", "Complete a frase ___?"],
+    ["Complete:  ", "Complete ___:  "],
+    ["Termina sem pontuação", "Termina sem pontuação ___"],
+    ["Termina com espaço ", "Termina com espaço ___ "],
+    ["?!", "___?!"],
+  ])("places the blank before the trailing punctuation of %j", (stem, expected) => {
+    const state = makeState({ schemaVersion: 1, blocks: [fb(36, [text(stem)])] });
+    const next = state.apply(buildAddGapTransaction(state, posOfChild(state.doc, 0))!);
+    expect(next.doc.child(0).textContent).toBe(expected);
+  });
+
+  it("appends after a trailing inline formula (no text tail to step over)", () => {
+    const state = makeState({
+      schemaVersion: 1,
+      blocks: [fb(37, [text("Calcule "), { type: "inlineMath", latex: "x^2" }])],
+    });
+    const next = state.apply(buildAddGapTransaction(state, posOfChild(state.doc, 0))!);
+    const para = next.doc.child(0).child(0);
+    expect(para.lastChild!.text).toBe(" ___");
+    expect(para.childCount).toBe(3);
   });
 
   it("does not prepend a space when the stem is empty", () => {

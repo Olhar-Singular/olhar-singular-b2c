@@ -114,9 +114,16 @@ function questionAt(doc: PMNode, pos: number): PMNode | null {
 }
 
 /**
- * Append a printable blank to the end of the question's last stem text block.
- * Returns null when the position holds no question, or when the stem has no
- * text block to hold the blank (ex.: enunciado só com imagem).
+ * Trailing whitespace and sentence punctuation the new blank must stay before
+ * (achado 0370: "pela ___ ." virava "pela ___ . ___", lacuna órfã fora da frase).
+ */
+const TRAILING_PUNCTUATION = /[\s.?!:;…]*$/;
+
+/**
+ * Add a printable blank at the end of the question's last stem text block,
+ * before its final punctuation. Returns null when the position holds no
+ * question, or when the stem has no text block to hold the blank (ex.:
+ * enunciado só com imagem).
  */
 export function buildAddGapTransaction(state: EditorState, pos: number): Transaction | null {
   const question = questionAt(state.doc, pos);
@@ -130,8 +137,14 @@ export function buildAddGapTransaction(state: EditorState, pos: number): Transac
 
   const { node, offset } = target as { node: PMNode; offset: number };
   // +1 entra na questão, +1 entra no bloco de texto.
-  const insertAt = pos + 1 + offset + 1 + node.content.size;
-  const separator = node.textContent.length > 0 ? " " : "";
+  const blockStart = pos + 1 + offset + 1;
+  // Only a trailing text run can carry the final punctuation; after an inline
+  // formula the blank simply goes at the end.
+  const last = node.lastChild;
+  const tail = last?.isText ? (last.text as string).match(TRAILING_PUNCTUATION)![0].length : 0;
+  const insertAt = blockStart + node.content.size - tail;
+  const before = state.doc.textBetween(blockStart, insertAt, "", "\ufffc");
+  const separator = before.length > 0 && !/\s$/.test(before) ? " " : "";
   return state.tr.insertText(separator + BLANK, insertAt);
 }
 
