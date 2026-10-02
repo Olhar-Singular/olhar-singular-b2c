@@ -31,6 +31,7 @@ import {
   Table,
   TableRow,
   TableCell,
+  TableLayoutType,
   WidthType,
   HeadingLevel,
   AlignmentType,
@@ -75,6 +76,7 @@ import {
   TRUE_FALSE_MARKER_TEXT,
   ORDERING_MARKER_TEXT,
   ANSWER_ITEM_GAP_PT,
+  MATCHING_LINK_GAP_PT,
 } from "../render/pageTokens";
 import { indexToLetter } from "../render/letters";
 import {
@@ -350,6 +352,77 @@ function answerRow(marker: string, content: RichText, style: InheritedStyle = NO
 }
 
 /**
+ * Associação em colunas (achado 0455), espelhando a linha do PDF (`PdfAnswer`:
+ * esquerda `FLEX`, elo de largura fixa, direita `FLEX`). Antes cada par era um
+ * parágrafo `esquerda  ↔  direita`, e a seta e o termo da direita mudavam de x
+ * conforme o comprimento do termo da esquerda: no Word não havia coluna da
+ * direita para o aluno ligar.
+ *
+ * Tabela SEM bordas e de layout fixo (o Word não reajusta a grade pelo
+ * conteúdo), sem margem de célula para a coluna da esquerda nascer na margem
+ * como as outras linhas de resposta (achado 0454). O elo tem a largura de um
+ * corpo de alternativa mais o vão `MATCHING_LINK_GAP_PT` de cada lado; o resto
+ * da largura útil se divide igualmente entre as duas colunas de texto.
+ */
+const MATCHING_LINK_COLUMN_TWIPS = ptToTwip(
+  BASE_FONT_PT * ELEMENT_FONT_RATIOS.alternative + 2 * MATCHING_LINK_GAP_PT,
+);
+/** Grade [esquerda, elo, direita]; função porque a largura útil é declarada mais abaixo. */
+function matchingColumnWidths(): number[] {
+  const text = Math.floor((DOCX_CONTENT_WIDTH_TWIPS - MATCHING_LINK_COLUMN_TWIPS) / 2);
+  return [text, DOCX_CONTENT_WIDTH_TWIPS - 2 * text, text];
+}
+const NO_EDGE = { style: BorderStyle.NONE, size: 0, color: "auto" } as const;
+const NO_TABLE_BORDERS = {
+  top: NO_EDGE,
+  bottom: NO_EDGE,
+  left: NO_EDGE,
+  right: NO_EDGE,
+  insideHorizontal: NO_EDGE,
+  insideVertical: NO_EDGE,
+} as const;
+
+function matchingTable(
+  pairs: Extract<Extract<Block, { type: "question" }>["answer"], { kind: "matching" }>["pairs"],
+  style: InheritedStyle,
+): Table {
+  const cell = (paragraph: Paragraph) =>
+    new TableCell({ borders: NO_TABLE_BORDERS, children: [paragraph] });
+  const side = (content: RichText) =>
+    cell(
+      new Paragraph({
+        ...style.paragraph,
+        ...ANSWER_ROW_SPACING,
+        children: richTextToRuns(content, style.run),
+      }),
+    );
+  return new Table({
+    width: { size: DOCX_CONTENT_WIDTH_TWIPS, type: WidthType.DXA },
+    columnWidths: matchingColumnWidths(),
+    layout: TableLayoutType.FIXED,
+    borders: NO_TABLE_BORDERS,
+    margins: { top: 0, bottom: 0, left: 0, right: 0 },
+    rows: pairs.map(
+      (pair) =>
+        new TableRow({
+          cantSplit: true,
+          children: [
+            side(pair.left),
+            cell(
+              new Paragraph({
+                alignment: AlignmentType.CENTER,
+                ...ANSWER_ROW_SPACING,
+                children: [new TextRun({ ...style.run, text: "↔" })],
+              }),
+            ),
+            side(pair.right),
+          ],
+        }),
+    ),
+  });
+}
+
+/**
  * The typed answer, mirroring PdfAnswer kind by kind. Exhaustive over the union
  * (no default), so a new kind is a compile error rather than a silent omission.
  */
@@ -380,18 +453,7 @@ function answerToDocx(
       // Caixa vazia para todo item, nunca marcada — `checked` é o gabarito.
       return answer.items.map((item) => checkboxRow(item.content, style));
     case "matching":
-      return answer.pairs.map(
-        (pair) =>
-          new Paragraph({
-            ...style.paragraph,
-            ...ANSWER_ROW_SPACING,
-            children: [
-              ...richTextToRuns(pair.left, style.run),
-              new TextRun({ ...style.run, text: "  ↔  " }),
-              ...richTextToRuns(pair.right, style.run),
-            ],
-          }),
-      );
+      return [matchingTable(answer.pairs, style)];
     case "ordering":
       // Authored order, NOT sorted by `position` — sorting would reveal the answer.
       return answer.items.map((item) => answerRow(ORDERING_MARKER_TEXT, item.content, style));

@@ -470,6 +470,60 @@ describe("B15 · conteúdo que precisa chegar ao Word", () => {
     expect(out).toContain("late");
   });
 
+  it("0455 · matching sai em colunas: tabela sem bordas, elo de largura fixa no meio", () => {
+    // Antes: um parágrafo por par (`Peixe  ↔  Rio`), e a seta e a coluna da
+    // direita mudavam de x conforme o tamanho do termo da esquerda.
+    const out = blockToDocxParagraphs(
+      q({
+        kind: "matching",
+        pairs: [
+          { id: id(34), left: text("Peixe"), right: text("Rio") },
+          { id: id(37), left: text("Onça-pintada"), right: text("Floresta") },
+        ],
+      }),
+      1,
+    );
+    const tables = out.filter((b) => b instanceof Table) as Table[];
+    expect(tables).toHaveLength(1);
+    const table = tables[0] as unknown as { root: unknown[] };
+    const children = (n: unknown, key: string) =>
+      ((n as { root: unknown[] }).root ?? []).filter(
+        (c) => (c as { rootKey?: string }).rootKey === key,
+      );
+
+    // grade fixa de 3 colunas: esquerda e direita iguais, elo estreito no meio,
+    // somando a largura útil da folha
+    const grid = children(table, "w:tblGrid")[0];
+    const widths = children(grid, "w:gridCol").map((n) =>
+      Number(docxNodeAttrs(n, "w:gridCol")?.width),
+    );
+    expect(widths).toHaveLength(3);
+    expect(widths.reduce((a, b) => a + b, 0)).toBe(DOCX_CONTENT_WIDTH_TWIPS);
+    expect(widths[0]).toBe(widths[2]);
+    expect(widths[1]).toBeLessThan(widths[0] / 4);
+    expect(docxNodeAttrs(table, "w:tblLayout")?.type).toBe("fixed");
+
+    // sem moldura: é uma folha de associação, não uma tabela de dados
+    const borders = children(children(table, "w:tblPr")[0], "w:tblBorders")[0];
+    expect(borders).toBeDefined();
+    for (const edge of (borders as { root: unknown[] }).root) {
+      const key = (edge as { rootKey?: string }).rootKey;
+      if (key === "_attr") continue;
+      expect(docxNodeAttrs(edge, key!)?.style).toBe("none");
+    }
+
+    // cada par é uma linha com [esquerda, ↔, direita], cada um na sua célula
+    const rows = children(table, "w:tr");
+    expect(rows).toHaveLength(2);
+    expect(rows.map((r) => children(r, "w:tc").map((c) =>
+      // só a árvore XML: o TableCell também guarda `options.children`
+      docxText((c as { root: unknown }).root),
+    ))).toEqual([
+      ["Peixe", "↔", "Rio"],
+      ["Onça-pintada", "↔", "Floresta"],
+    ]);
+  });
+
   it("ordering emite os itens na ordem original, com espaço para o aluno", () => {
     const out = blockText(
       q({
