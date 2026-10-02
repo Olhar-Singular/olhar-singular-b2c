@@ -330,7 +330,7 @@ export default function QuestionBankPage() {
         images = result.pageImages;
         if (result.truncated) {
           limitWarnings.push(
-            "O texto do PDF é muito longo e foi truncado — questões no final do documento podem não ter sido extraídas.",
+            "O texto do PDF é muito longo e foi truncado: questões no final do documento podem não ter sido extraídas.",
           );
         }
         if (result.pageCount > result.pagesProcessed.length) {

@@ -166,7 +166,7 @@ export function StepActivityInput({ data, updateData, onNext, onPrev }: Props) {
     if (overLimit) {
       setError(
         `A atividade passou do limite de ${MAX_ACTIVITY_CHARS.toLocaleString("pt-BR")} caracteres. ` +
-          "Reduza o texto ou divida em duas adaptações — o excedente seria cortado e você pagaria por uma prova incompleta.",
+          "Reduza o texto ou divida em duas adaptações: o excedente seria cortado e você pagaria por uma prova incompleta.",
       );
       return;
     }

@@ -116,7 +116,7 @@ export function StepUploadExam({ data, updateData, onNext, onLoadingChange }: Pr
       <div>
         <h2 className="text-xl font-semibold text-foreground">Adaptar direto do arquivo</h2>
         <p className="text-sm text-muted-foreground mt-1">
-          Envie o arquivo (PDF ou Word) — a atividade é adaptada automaticamente, inteira, preservando a
+          Envie o arquivo (PDF ou Word): a atividade é adaptada automaticamente, inteira, preservando a
           ordem das questões e as imagens originais. Você já cai direto na edição da versão adaptada.
         </p>
       </div>
@@ -146,7 +146,7 @@ export function StepUploadExam({ data, updateData, onNext, onLoadingChange }: Pr
             <p className="text-sm text-muted-foreground">Lendo o arquivo...</p>
             <p className="text-xs text-muted-foreground/70 flex items-center gap-1.5">
               <Clock className="w-3.5 h-3.5" />
-              Pode levar alguns instantes — não feche esta aba.
+              Pode levar alguns instantes, não feche esta aba.
             </p>
           </div>
         ) : attached ? (

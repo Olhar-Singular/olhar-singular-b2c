@@ -37,7 +37,7 @@ export function BarrierProfileForm({ defaultValues, onSubmit, isPending }: Props
         <Label htmlFor="profile-name">Nome do perfil</Label>
         <Input
           id="profile-name"
-          placeholder="Ex.: Aluno com TEA — turma 5A"
+          placeholder="Ex.: Aluno com TEA, turma 5A"
           {...register("name")}
         />
         {errors.name && (

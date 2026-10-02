@@ -322,7 +322,7 @@ export function StepGenerate({ data, onResult, onNext, onPrev, onLoadingChange, 
             <AlertDialogHeader>
               <AlertDialogTitle>Atividade com muitas questões</AlertDialogTitle>
               <AlertDialogDescription>
-                Sua atividade tem {totalExtracted} questões — o limite para essa adaptação é {MAX_QUESTIONS}. Apenas
+                Sua atividade tem {totalExtracted} questões, e o limite para essa adaptação é {MAX_QUESTIONS}. Apenas
                 as {MAX_QUESTIONS} primeiras serão adaptadas. Continuar?
               </AlertDialogDescription>
             </AlertDialogHeader>

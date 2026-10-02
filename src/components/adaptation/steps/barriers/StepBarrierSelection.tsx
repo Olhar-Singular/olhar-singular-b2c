@@ -162,7 +162,7 @@ export function StepBarrierSelection({ data, updateData, onNext, onPrev }: Props
               value={data.barrierProfileId ?? ""}
               onChange={(e) => handleProfileChange(e.target.value)}
             >
-              <option value="">— Selecionar perfil —</option>
+              <option value="">Selecionar perfil</option>
               {profiles.map((p) => (
                 <option key={p.id} value={p.id}>
                   {p.name || "Perfil sem nome"}

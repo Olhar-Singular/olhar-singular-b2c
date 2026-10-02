@@ -202,7 +202,7 @@ export function InlineMathNodeView({ node, updateAttributes, editor, selected }:
           disabled={disabled}
           autoFocus={editing.returnFocus}
           onClick={editing.open}
-          title={draft.altStale ? "Editar fórmula — descrição desatualizada" : "Editar fórmula"}
+          title={draft.altStale ? "Editar fórmula (descrição desatualizada)" : "Editar fórmula"}
           aria-label={
             draft.altStale
               ? `Editar fórmula: ${draft.accessibleName} (descrição desatualizada)`

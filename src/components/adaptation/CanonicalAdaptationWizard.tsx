@@ -95,7 +95,7 @@ const SAVE_STATUS_LABEL: Record<string, string> = {
   saving: "Salvando…",
   saved: "Rascunho salvo",
   error: "Erro ao salvar",
-  conflict: "Conflito — recarregue",
+  conflict: "Conflito: recarregue",
 };
 
 export default function CanonicalAdaptationWizard({ editMode }: Props = {}) {
@@ -771,7 +771,7 @@ export default function CanonicalAdaptationWizard({ editMode }: Props = {}) {
             data-testid="capture-failure"
             title={captureFailure}
           >
-            Alterações não estão sendo salvas — desfaça a última edição
+            Alterações não estão sendo salvas: desfaça a última edição
           </p>
         ) : draftId && stepIndex >= REVIEW_INDEX && stepIndex <= EXPORT_INDEX && filingDirty ? (
           /* Matéria/pasta escolhidas e ainda não persistidas: este aviso tem
@@ -820,7 +820,7 @@ export default function CanonicalAdaptationWizard({ editMode }: Props = {}) {
             </DialogHeader>
             <p className="text-sm text-muted-foreground">
               A IA ainda está lendo e extraindo a atividade enviada. Se sair agora, o processamento será perdido e
-              você vai precisar enviar o arquivo de novo — nenhum crédito foi usado nessa etapa.
+              você vai precisar enviar o arquivo de novo (nenhum crédito foi usado nessa etapa).
             </p>
             <div className="flex justify-end gap-2 pt-2">
               <Button variant="outline" onClick={() => navGuard.reset?.()}>Continuar aqui</Button>

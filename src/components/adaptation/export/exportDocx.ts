@@ -764,7 +764,7 @@ export function docxExportWarnings(
 
   if (blocks.some((b) => b.type === "image")) {
     warnings.push(
-      "As imagens não são embutidas no Word — cada uma vira uma marcação [Imagem] no lugar.",
+      "As imagens não são embutidas no Word: cada uma vira uma marcação [Imagem] no lugar.",
     );
   }
 
