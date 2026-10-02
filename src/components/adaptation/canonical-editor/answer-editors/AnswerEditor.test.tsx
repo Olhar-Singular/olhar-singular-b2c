@@ -42,8 +42,8 @@ describe("AnswerEditor — multipleChoice", () => {
   it("sets correct via radio, edits content, removes and adds", () => {
     const onChange = vi.fn();
     render(<AnswerEditor answer={answer} onChange={onChange} />);
-    fireEvent.click(screen.getAllByLabelText("Marcar como correta")[1]);
-    fireEvent.change(screen.getAllByLabelText("Alternativa")[0], { target: { value: "z" } });
+    fireEvent.click(screen.getByLabelText("Marcar alternativa b como correta"));
+    fireEvent.change(screen.getByLabelText("Alternativa a"), { target: { value: "z" } });
     fireEvent.click(screen.getAllByTitle("Remover alternativa")[0]);
     fireEvent.click(screen.getByText("Alternativa"));
     expect(onChange).toHaveBeenCalledTimes(4);
@@ -61,7 +61,7 @@ describe("AnswerEditor — multipleChoice", () => {
     render(<AnswerEditor answer={answer} onChange={vi.fn()} />);
     // The row holds [radio, field, trash]. min-w-0 lets the flex child (field)
     // shrink below content width so long alternatives wrap instead of scrolling.
-    const row = screen.getAllByLabelText("Alternativa")[0].closest("div") as HTMLElement;
+    const row = screen.getByLabelText("Alternativa a").closest("div") as HTMLElement;
     expect(row.className).toContain("flex");
     expect(row.className).toContain("min-w-0");
   });
@@ -76,7 +76,7 @@ describe("AnswerEditor — trueFalse", () => {
   it("edits content and toggles value", () => {
     const onChange = vi.fn();
     render(<AnswerEditor answer={answer} onChange={onChange} />);
-    fireEvent.change(screen.getByLabelText("Afirmação"), { target: { value: "y" } });
+    fireEvent.change(screen.getByLabelText("Afirmação 1"), { target: { value: "y" } });
     fireEvent.click(screen.getByTitle("Alternar Verdadeiro/Falso"));
     expect(onChange).toHaveBeenCalledTimes(2);
   });
@@ -100,8 +100,8 @@ describe("AnswerEditor — checkbox", () => {
   it("toggles and edits content", () => {
     const onChange = vi.fn();
     render(<AnswerEditor answer={answer} onChange={onChange} />);
-    fireEvent.click(screen.getByLabelText("Marcar opção"));
-    fireEvent.change(screen.getByLabelText("Opção"), { target: { value: "z" } });
+    fireEvent.click(screen.getByLabelText("Marcar opção 1"));
+    fireEvent.change(screen.getByLabelText("Opção 1"), { target: { value: "z" } });
     expect(onChange).toHaveBeenCalledTimes(2);
   });
 });
@@ -118,8 +118,8 @@ describe("AnswerEditor — matching", () => {
   it("edits both sides, adds and removes", () => {
     const onChange = vi.fn();
     render(<AnswerEditor answer={answer} onChange={onChange} />);
-    fireEvent.change(screen.getAllByLabelText("Coluna A")[0], { target: { value: "L" } });
-    fireEvent.change(screen.getAllByLabelText("Coluna B")[0], { target: { value: "R" } });
+    fireEvent.change(screen.getByLabelText("Coluna A, par 1"), { target: { value: "L" } });
+    fireEvent.change(screen.getByLabelText("Coluna B, par 1"), { target: { value: "R" } });
     fireEvent.click(screen.getAllByTitle("Remover par")[0]);
     fireEvent.click(screen.getByText("Par"));
     expect(onChange).toHaveBeenCalledTimes(4);
@@ -138,7 +138,7 @@ describe("AnswerEditor — ordering", () => {
   it("edits content and reorders up/down", () => {
     const onChange = vi.fn();
     render(<AnswerEditor answer={answer} onChange={onChange} />);
-    fireEvent.change(screen.getAllByLabelText("Item")[0], { target: { value: "x" } });
+    fireEvent.change(screen.getByLabelText("Item 1"), { target: { value: "x" } });
     fireEvent.click(screen.getAllByTitle("Mover para baixo")[0]);
     fireEvent.click(screen.getAllByTitle("Mover para cima")[1]);
     expect(onChange).toHaveBeenCalledTimes(3);
@@ -273,7 +273,7 @@ describe("AnswerEditor — table", () => {
   it("edits a cell", () => {
     const onChange = vi.fn();
     render(<AnswerEditor answer={answer} onChange={onChange} />);
-    fireEvent.change(screen.getAllByLabelText("Célula")[0], { target: { value: "z" } });
+    fireEvent.change(screen.getByLabelText("Cabeçalho da coluna 1"), { target: { value: "z" } });
     expect(onChange).toHaveBeenCalledTimes(1);
   });
 });
@@ -312,7 +312,7 @@ describe("AnswerEditor — structure + answer-key controls stay visible", () => 
       alternatives: [{ id: "11111111-1111-4111-8111-111111111111", content: t("a"), correct: true }],
     };
     render(<AnswerEditor answer={answer} onChange={vi.fn()} />);
-    expect(screen.getByLabelText("Marcar como correta")).toBeInTheDocument();
+    expect(screen.getByLabelText("Marcar alternativa a como correta")).toBeInTheDocument();
     expect(screen.getByTitle("Remover alternativa")).toBeInTheDocument();
     expect(screen.getByText("Alternativa")).toBeInTheDocument();
   });
@@ -332,7 +332,7 @@ describe("AnswerEditor — structure + answer-key controls stay visible", () => 
       items: [{ id: "55555555-5555-4555-8555-555555555555", content: t("c"), checked: false }],
     };
     render(<AnswerEditor answer={answer} onChange={vi.fn()} />);
-    expect(screen.getByLabelText("Marcar opção")).toBeInTheDocument();
+    expect(screen.getByLabelText("Marcar opção 1")).toBeInTheDocument();
   });
 
   it("matching: keeps remove + add", () => {
@@ -476,5 +476,108 @@ describe("AnswerEditor — 0369 add/remove nos tipos com lista", () => {
     expect(onChange).toHaveBeenLastCalledWith({ kind: "table", rows: [[t("a"), t("b")]] });
     fireEvent.click(screen.getAllByTitle("Remover coluna")[0]);
     expect(onChange).toHaveBeenLastCalledWith({ kind: "table", rows: [[t("b")], [t("d")]] });
+  });
+});
+
+/**
+ * Achado 0371: dentro do card, todo campo de item tinha o mesmo nome acessível
+ * ("Célula" x12, "Alternativa", "Opção"...) e os controles não citavam o item.
+ * Os nomes seguem os da folha (AnswerPreview): posição, e linha/coluna na tabela.
+ */
+describe("AnswerEditor — nomes acessíveis citam a posição do item (0371)", () => {
+  const names = () =>
+    Array.from(document.querySelectorAll("[aria-label]")).map((e) => e.getAttribute("aria-label"));
+
+  it("multipleChoice: alternativa pela letra da folha, e o radio e a lixeira citam a letra", () => {
+    const answer: QuestionAnswer = {
+      kind: "multipleChoice",
+      alternatives: [
+        { id: "11111111-1111-4111-8111-111111111111", content: t("a"), correct: true },
+        { id: "22222222-2222-4222-8222-222222222222", content: t("b"), correct: false },
+      ],
+    };
+    render(<AnswerEditor answer={answer} onChange={vi.fn()} />);
+    expect(names()).toEqual([
+      "Marcar alternativa a como correta", "Alternativa a", "Remover alternativa a",
+      "Marcar alternativa b como correta", "Alternativa b", "Remover alternativa b",
+    ]);
+  });
+
+  it("trueFalse: afirmação numerada, toggle e lixeira citam o número", () => {
+    const answer: QuestionAnswer = {
+      kind: "trueFalse",
+      items: [
+        { id: "33333333-3333-4333-8333-333333333333", content: t("x"), value: true },
+        { id: "44444444-4444-4444-8444-444444444444", content: t("y"), value: false },
+      ],
+    };
+    render(<AnswerEditor answer={answer} onChange={vi.fn()} />);
+    expect(names()).toEqual([
+      "Afirmação 1", "Alternar Verdadeiro/Falso da afirmação 1", "Remover afirmação 1",
+      "Afirmação 2", "Alternar Verdadeiro/Falso da afirmação 2", "Remover afirmação 2",
+    ]);
+  });
+
+  it("checkbox: opção numerada, caixa e lixeira citam o número", () => {
+    const answer: QuestionAnswer = {
+      kind: "checkbox",
+      items: [
+        { id: "55555555-5555-4555-8555-555555555555", content: t("c"), checked: false },
+        { id: "66666666-6666-4666-8666-666666666666", content: t("d"), checked: true },
+      ],
+    };
+    render(<AnswerEditor answer={answer} onChange={vi.fn()} />);
+    expect(names()).toEqual([
+      "Marcar opção 1", "Opção 1", "Remover opção 1",
+      "Marcar opção 2", "Opção 2", "Remover opção 2",
+    ]);
+  });
+
+  it("matching: coluna e par, e a lixeira cita o par", () => {
+    const answer: QuestionAnswer = {
+      kind: "matching",
+      pairs: [
+        { id: "77777777-7777-4777-8777-777777777777", left: t("L"), right: t("R") },
+        { id: "88888888-8888-4888-8888-888888888888", left: t("L2"), right: t("R2") },
+      ],
+    };
+    render(<AnswerEditor answer={answer} onChange={vi.fn()} />);
+    expect(names()).toEqual([
+      "Coluna A, par 1", "Coluna B, par 1", "Remover par 1",
+      "Coluna A, par 2", "Coluna B, par 2", "Remover par 2",
+    ]);
+  });
+
+  it("ordering: item numerado, setas e lixeira citam o número", () => {
+    const answer: QuestionAnswer = {
+      kind: "ordering",
+      items: [
+        { id: "99999999-9999-4999-8999-999999999999", content: t("p") },
+        { id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", content: t("q") },
+      ],
+    };
+    render(<AnswerEditor answer={answer} onChange={vi.fn()} />);
+    expect(names()).toEqual([
+      "Item 1", "Mover item 1 para cima", "Mover item 1 para baixo", "Remover item 1",
+      "Item 2", "Mover item 2 para cima", "Mover item 2 para baixo", "Remover item 2",
+    ]);
+  });
+
+  it("table: cabeçalho por coluna, célula por coluna e linha, lixeiras citam coluna/linha", () => {
+    const answer: QuestionAnswer = {
+      kind: "table",
+      rows: [
+        [t("Nome"), [{ type: "inlineMath", latex: "x" }] as RichText],
+        [t("Ana"), t("1")],
+        [t("Bia"), t("2")],
+      ],
+    };
+    render(<AnswerEditor answer={answer} onChange={vi.fn()} />);
+    expect(names()).toEqual([
+      "Remover coluna 1", "Remover coluna 2",
+      "Cabeçalho da coluna 1", "Cabeçalho da coluna 2", "Remover linha do cabeçalho",
+      "Célula, Nome, linha 1", "Célula linha 1 coluna 2", "Remover linha 1",
+      "Célula, Nome, linha 2", "Célula linha 2 coluna 2", "Remover linha 2",
+    ]);
   });
 });

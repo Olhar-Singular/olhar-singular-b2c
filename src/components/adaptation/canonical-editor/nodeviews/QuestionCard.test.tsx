@@ -85,14 +85,14 @@ describe("QuestionCard", () => {
   it("renders the full AnswerEditor (structure controls visible)", () => {
     setup();
     expect(screen.getByTestId("answer-multipleChoice")).toBeInTheDocument();
-    expect(screen.getByLabelText("Marcar como correta")).toBeInTheDocument();
+    expect(screen.getByLabelText("Marcar alternativa a como correta")).toBeInTheDocument();
   });
 
   // --- Local state: edits are buffered, not immediately committed ---
 
   it("commits the updated answer on Concluir (answer edits are buffered locally)", () => {
     const props = setup();
-    fireEvent.change(screen.getByLabelText("Alternativa"), { target: { value: "z" } });
+    fireEvent.change(screen.getByLabelText("Alternativa a"), { target: { value: "z" } });
     fireEvent.click(screen.getByRole("button", { name: "Concluir" }));
     expect(props.onCommit).toHaveBeenCalledWith(
       expect.objectContaining({ kind: "multipleChoice" }),

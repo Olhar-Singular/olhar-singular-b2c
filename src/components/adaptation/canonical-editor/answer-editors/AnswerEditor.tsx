@@ -19,7 +19,9 @@ import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import type { QuestionAnswer } from "@/lib/adaptation/canonical/schema";
+import { indexToLetter } from "@/components/adaptation/render/letters";
 import { RichTextField } from "../RichTextField";
+import { tableCellLabel } from "./tableCellLabel";
 import {
   setCorrectAlternative,
   addAlternative,
@@ -67,19 +69,26 @@ interface AnswerEditorProps {
   onGapRemoved?: (index: number) => void;
 }
 
+/**
+ * Achado 0371: `label` é o nome acessível e cita o item afetado ("Remover
+ * alternativa B"); o `title` (tooltip) continua curto, porque quem vê o botão
+ * já vê a linha em que ele está.
+ */
 function IconButton({
   onClick,
   title,
+  label = title,
   disabled,
   children,
 }: {
   onClick: () => void;
   title: string;
+  label?: string;
   disabled?: boolean;
   children: React.ReactNode;
 }) {
   return (
-    <Button type="button" variant="ghost" size="icon" className="h-7 w-7" onClick={onClick} title={title} aria-label={title} disabled={disabled}>
+    <Button type="button" variant="ghost" size="icon" className="h-7 w-7" onClick={onClick} title={title} aria-label={label} disabled={disabled}>
       {children}
     </Button>
   );
@@ -113,7 +122,7 @@ export function AnswerEditor({
     case "multipleChoice":
       return (
         <div className="flex flex-col gap-2" data-testid="answer-multipleChoice">
-          {answer.alternatives.map((alt) => (
+          {answer.alternatives.map((alt, i) => (
             <div key={alt.id} className="flex items-center gap-2 min-w-0">
               <input
                 type="radio"
@@ -122,16 +131,16 @@ export function AnswerEditor({
                 disabled={disabled}
                 onChange={() => onChange(setCorrectAlternative(answer, alt.id))}
                 title="Marcar como correta"
-                aria-label="Marcar como correta"
+                aria-label={`Marcar alternativa ${indexToLetter(i)} como correta`}
               />
               <RichTextField
                 value={alt.content}
                 disabled={disabled}
                 onChange={(rt) => onChange(setAlternativeContent(answer, alt.id, rt))}
                 placeholder="Alternativa"
-                ariaLabel="Alternativa"
+                ariaLabel={`Alternativa ${indexToLetter(i)}`}
               />
-              <IconButton onClick={() => onChange(removeAlternative(answer, alt.id))} title="Remover alternativa" disabled={disabled}>
+              <IconButton onClick={() => onChange(removeAlternative(answer, alt.id))} title="Remover alternativa" label={`Remover alternativa ${indexToLetter(i)}`} disabled={disabled}>
                 <Trash2 className="w-3.5 h-3.5" />
               </IconButton>
             </div>
@@ -145,14 +154,14 @@ export function AnswerEditor({
     case "trueFalse":
       return (
         <div className="flex flex-col gap-2" data-testid="answer-trueFalse">
-          {answer.items.map((item) => (
+          {answer.items.map((item, i) => (
             <div key={item.id} className="flex items-center gap-2 min-w-0">
               <RichTextField
                 value={item.content}
                 disabled={disabled}
                 onChange={(rt) => onChange(setTrueFalseContent(answer, item.id, rt))}
                 placeholder="Afirmação"
-                ariaLabel="Afirmação"
+                ariaLabel={`Afirmação ${i + 1}`}
               />
               <Button
                 type="button"
@@ -161,10 +170,11 @@ export function AnswerEditor({
                 onClick={() => onChange(setTrueFalseValue(answer, item.id, !item.value))}
                 disabled={disabled}
                 title="Alternar Verdadeiro/Falso"
+                aria-label={`Alternar Verdadeiro/Falso da afirmação ${i + 1}`}
               >
                 {item.value ? "V" : "F"}
               </Button>
-              <IconButton onClick={() => onChange(removeTrueFalseItem(answer, item.id))} title="Remover afirmação" disabled={disabled}>
+              <IconButton onClick={() => onChange(removeTrueFalseItem(answer, item.id))} title="Remover afirmação" label={`Remover afirmação ${i + 1}`} disabled={disabled}>
                 <Trash2 className="w-3.5 h-3.5" />
               </IconButton>
             </div>
@@ -178,22 +188,22 @@ export function AnswerEditor({
     case "checkbox":
       return (
         <div className="flex flex-col gap-2" data-testid="answer-checkbox">
-          {answer.items.map((item) => (
+          {answer.items.map((item, i) => (
             <div key={item.id} className="flex items-center gap-2 min-w-0">
               <Checkbox
                 checked={item.checked}
                 disabled={disabled}
                 onCheckedChange={() => onChange(toggleCheckbox(answer, item.id))}
-                aria-label="Marcar opção"
+                aria-label={`Marcar opção ${i + 1}`}
               />
               <RichTextField
                 value={item.content}
                 disabled={disabled}
                 onChange={(rt) => onChange(setCheckboxContent(answer, item.id, rt))}
                 placeholder="Opção"
-                ariaLabel="Opção"
+                ariaLabel={`Opção ${i + 1}`}
               />
-              <IconButton onClick={() => onChange(removeCheckboxItem(answer, item.id))} title="Remover opção" disabled={disabled}>
+              <IconButton onClick={() => onChange(removeCheckboxItem(answer, item.id))} title="Remover opção" label={`Remover opção ${i + 1}`} disabled={disabled}>
                 <Trash2 className="w-3.5 h-3.5" />
               </IconButton>
             </div>
@@ -207,14 +217,14 @@ export function AnswerEditor({
     case "matching":
       return (
         <div className="flex flex-col gap-2" data-testid="answer-matching">
-          {answer.pairs.map((pair) => (
+          {answer.pairs.map((pair, i) => (
             <div key={pair.id} className="flex items-center gap-2 min-w-0">
               <RichTextField
                 value={pair.left}
                 disabled={disabled}
                 onChange={(rt) => onChange(setMatchingSide(answer, pair.id, "left", rt))}
                 placeholder="Coluna A"
-                ariaLabel="Coluna A"
+                ariaLabel={`Coluna A, par ${i + 1}`}
               />
               <span className="text-surface-ink-faint">↔</span>
               <RichTextField
@@ -222,9 +232,9 @@ export function AnswerEditor({
                 disabled={disabled}
                 onChange={(rt) => onChange(setMatchingSide(answer, pair.id, "right", rt))}
                 placeholder="Coluna B"
-                ariaLabel="Coluna B"
+                ariaLabel={`Coluna B, par ${i + 1}`}
               />
-              <IconButton onClick={() => onChange(removeMatchingPair(answer, pair.id))} title="Remover par" disabled={disabled}>
+              <IconButton onClick={() => onChange(removeMatchingPair(answer, pair.id))} title="Remover par" label={`Remover par ${i + 1}`} disabled={disabled}>
                 <Trash2 className="w-3.5 h-3.5" />
               </IconButton>
             </div>
@@ -246,15 +256,15 @@ export function AnswerEditor({
                 disabled={disabled}
                 onChange={(rt) => onChange(setOrderingContent(answer, item.id, rt))}
                 placeholder="Item"
-                ariaLabel="Item"
+                ariaLabel={`Item ${index + 1}`}
               />
-              <IconButton onClick={() => onChange(reorderOrdering(answer, index, index - 1))} title="Mover para cima" disabled={disabled}>
+              <IconButton onClick={() => onChange(reorderOrdering(answer, index, index - 1))} title="Mover para cima" label={`Mover item ${index + 1} para cima`} disabled={disabled}>
                 <ArrowUp className="w-3.5 h-3.5" />
               </IconButton>
-              <IconButton onClick={() => onChange(reorderOrdering(answer, index, index + 1))} title="Mover para baixo" disabled={disabled}>
+              <IconButton onClick={() => onChange(reorderOrdering(answer, index, index + 1))} title="Mover para baixo" label={`Mover item ${index + 1} para baixo`} disabled={disabled}>
                 <ArrowDown className="w-3.5 h-3.5" />
               </IconButton>
-              <IconButton onClick={() => onChange(removeOrderingItem(answer, item.id))} title="Remover item" disabled={disabled}>
+              <IconButton onClick={() => onChange(removeOrderingItem(answer, item.id))} title="Remover item" label={`Remover item ${index + 1}`} disabled={disabled}>
                 <Trash2 className="w-3.5 h-3.5" />
               </IconButton>
             </div>
@@ -348,7 +358,7 @@ export function AnswerEditor({
           <div className="flex gap-1 min-w-0 pr-8">
             {Array.from({ length: Math.max(0, ...answer.rows.map((r) => r.length)) }, (_, ci) => (
               <div key={ci} className="flex flex-1 justify-center min-w-0">
-                <IconButton onClick={() => onChange(removeTableColumn(answer, ci))} title="Remover coluna" disabled={disabled}>
+                <IconButton onClick={() => onChange(removeTableColumn(answer, ci))} title="Remover coluna" label={`Remover coluna ${ci + 1}`} disabled={disabled}>
                   <Trash2 className="w-3.5 h-3.5" />
                 </IconButton>
               </div>
@@ -363,10 +373,18 @@ export function AnswerEditor({
                   disabled={disabled}
                   onChange={(rt) => onChange(setTableCell(answer, ri, ci, rt))}
                   placeholder="Célula"
-                  ariaLabel="Célula"
+                  // Achado 0371: a linha 0 é o cabeçalho (é o que a folha, o PDF
+                  // e o Word imprimem como tal); os nomes seguem os da folha.
+                  ariaLabel={
+                    ri === 0
+                      ? `Cabeçalho da coluna ${ci + 1}`
+                      : tableCellLabel(answer.rows[0][ci], ri - 1, ci)
+                  }
                 />
               ))}
-              <IconButton onClick={() => onChange(removeTableRow(answer, ri))} title="Remover linha" disabled={disabled}>
+              <IconButton onClick={() => onChange(removeTableRow(answer, ri))} title="Remover linha"
+                label={ri === 0 ? "Remover linha do cabeçalho" : `Remover linha ${ri}`}
+                disabled={disabled}>
                 <Trash2 className="w-3.5 h-3.5" />
               </IconButton>
             </div>

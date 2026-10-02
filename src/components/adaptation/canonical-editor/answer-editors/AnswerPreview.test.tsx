@@ -45,7 +45,7 @@ describe("AnswerPreview — multipleChoice", () => {
     expect(screen.queryAllByTestId("preview-bullet")).toHaveLength(0);
     expect(screen.getAllByLabelText(/^Alternativa /)).toHaveLength(2);
     // the correct alternative must be indistinguishable from the rest (D5)
-    expect(screen.queryByLabelText("Marcar como correta")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/como correta$/)).not.toBeInTheDocument();
     expect(screen.queryByText("✔")).not.toBeInTheDocument();
   });
 
@@ -103,7 +103,7 @@ describe("AnswerPreview — checkbox", () => {
     const onChange = vi.fn();
     render(<AnswerPreview answer={answer} onChange={onChange} />);
     expect(screen.getByTestId("preview-bullet")).toHaveAttribute("data-shape", "square");
-    expect(screen.queryByLabelText("Marcar opção")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/^Marcar opção/)).not.toBeInTheDocument();
     fireEvent.change(screen.getByLabelText("Opção 1"), { target: { value: "x" } });
     expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ kind: "checkbox" }));
   });

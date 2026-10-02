@@ -100,7 +100,7 @@ describe("QuestionPreview", () => {
     expect(screen.getByTestId("answer-preview-multipleChoice")).toBeInTheDocument();
     expect(screen.queryByTestId("answer-multipleChoice")).not.toBeInTheDocument();
     // gabarito hidden: no correct-answer control on the folha (D5)
-    expect(screen.queryByLabelText("Marcar como correta")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/como correta$/)).not.toBeInTheDocument();
   });
 
   it("forwards inline alternative edits", () => {

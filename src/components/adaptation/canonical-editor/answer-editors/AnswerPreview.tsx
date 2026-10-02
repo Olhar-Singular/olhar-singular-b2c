@@ -11,7 +11,7 @@
  */
 
 import { Fragment, type ComponentProps, type CSSProperties } from "react";
-import type { QuestionAnswer, RichText } from "@/lib/adaptation/canonical/schema";
+import type { QuestionAnswer } from "@/lib/adaptation/canonical/schema";
 import { indexToLetter } from "@/components/adaptation/render/letters";
 import { ALTERNATIVE_MARKER_CLASS } from "@/components/adaptation/render/answers/markerColumn";
 import { CheckboxBox } from "@/components/adaptation/render/CheckboxBox";
@@ -31,6 +31,7 @@ import {
   BASE_LINE_HEIGHT,
 } from "@/components/adaptation/render/pageTokens";
 import { RichTextField } from "../RichTextField";
+import { tableCellLabel } from "./tableCellLabel";
 import {
   setAlternativeContent,
   setCheckboxContent,
@@ -77,22 +78,6 @@ const TABLE_CELL_STYLE: CSSProperties = {
   borderWidth: `${RULE_WIDTH_PX}px`,
   lineHeight: BASE_LINE_HEIGHT,
 };
-
-/**
- * Rótulo acessível de uma célula do corpo da tabela. Cita o nome da coluna
- * (o texto do cabeçalho) para que o leitor de tela diga o que o valor é, e não
- * só a coordenada. Cabeçalho sem texto puro (só fórmula, ou vazio) volta para a
- * coordenada, que é sempre inequívoca.
- */
-function tableCellLabel(header: RichText | undefined, rowIndex: number, colIndex: number): string {
-  const name = (header ?? [])
-    .map((node) => (node.type === "text" ? node.text : ""))
-    .join("")
-    .trim();
-  return name
-    ? `Célula, ${name}, linha ${rowIndex + 1}`
-    : `Célula linha ${rowIndex + 1} coluna ${colIndex + 1}`;
-}
 
 export function AnswerPreview({ answer, onChange, disabled = false }: AnswerPreviewProps) {
   switch (answer.kind) {

@@ -214,7 +214,7 @@ describe("QuestionNodeView — preview at rest", () => {
   it("hides the gabarito in the preview (no correct-answer control)", () => {
     const { props } = makeProps(mc);
     render(<QuestionNodeView {...props} />);
-    expect(screen.queryByLabelText("Marcar como correta")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/como correta$/)).not.toBeInTheDocument();
     expect(screen.queryByTestId("answer-multipleChoice")).not.toBeInTheDocument();
   });
 
@@ -678,7 +678,7 @@ describe("QuestionNodeView — card open / commit / cancel", () => {
     fireEvent.click(screen.getByLabelText("Editar questão"));
     expect(screen.getByTestId("question-card")).toBeInTheDocument();
     expect(screen.getByTestId("answer-multipleChoice")).toBeInTheDocument();
-    expect(screen.getByLabelText("Marcar como correta")).toBeInTheDocument();
+    expect(screen.getByLabelText("Marcar alternativa a como correta")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Concluir" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Cancelar edição" })).toBeInTheDocument();
     expect(screen.queryByTestId("answer-preview-multipleChoice")).not.toBeInTheDocument();
