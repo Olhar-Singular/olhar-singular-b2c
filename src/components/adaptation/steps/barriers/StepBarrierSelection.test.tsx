@@ -377,6 +377,49 @@ describe("StepBarrierSelection", () => {
     expect(screen.getByText(/complexidade alta/i)).toBeInTheDocument();
   });
 
+  // Upload path: "Gerar" reads the file with AI (extract-exam-for-adaptation)
+  // before adapting, and that reading is charged on its own.
+  describe("custo da leitura do arquivo enviado", () => {
+    const uploadedExam = {
+      fileName: "prova.pdf",
+      fileType: "pdf" as const,
+      text: "1) Q1",
+      pageImages: [],
+      file: new File(["pdf"], "prova.pdf", { type: "application/pdf" }),
+    };
+    const teaBarrier = [{ dimension: "tea", barrier_key: "tea_abstracao", label: "TEA", is_active: true }];
+
+    it("adds the file reading to the cost shown before Adaptar", () => {
+      renderStep({ ...baseData, barrierProfileId: "prof-1", barriers: teaBarrier, activityInputMode: "upload", uploadedExam });
+      expect(screen.getByText(/17 créditos/i)).toBeInTheDocument();
+      expect(screen.getByText(/Inclui 5 créditos pela leitura do arquivo enviado/i)).toBeInTheDocument();
+    });
+
+    it("checks the balance against the total, file reading included", () => {
+      // 15 covers the 12 of the adaptation alone, not the 17 of the upload path.
+      mockUseAuth.mockReturnValue({ profile: { access_kind: "legacy", credit_balance: 15, plan_credits: 0, plan_period_end: null } });
+      renderStep({ ...baseData, barrierProfileId: "prof-1", barriers: teaBarrier, activityInputMode: "upload", uploadedExam });
+      expect(screen.getByText(/Seus créditos acabaram/i)).toBeInTheDocument();
+    });
+
+    it("does not charge the reading of a file left attached after leaving the upload mode", () => {
+      // Same rule as StepGenerate: the mode decides, so the shown cost is the charged one.
+      mockUseAuth.mockReturnValue({ profile: { access_kind: "legacy", credit_balance: 15, plan_credits: 0, plan_period_end: null } });
+      renderStep({ ...baseData, barrierProfileId: "prof-1", barriers: teaBarrier, activityInputMode: "bank", uploadedExam });
+      expect(screen.getByText(/12 créditos/i)).toBeInTheDocument();
+      expect(screen.queryByText(/leitura do arquivo/i)).not.toBeInTheDocument();
+      expect(screen.queryByText(/Seus créditos acabaram/i)).not.toBeInTheDocument();
+    });
+
+    it("does not mention the file reading for a typed or bank activity", () => {
+      mockUseAuth.mockReturnValue({ profile: { access_kind: "legacy", credit_balance: 15, plan_credits: 0, plan_period_end: null } });
+      renderStep({ ...baseData, barrierProfileId: "prof-1", barriers: teaBarrier });
+      expect(screen.getByText(/12 créditos/i)).toBeInTheDocument();
+      expect(screen.queryByText(/leitura do arquivo/i)).not.toBeInTheDocument();
+      expect(screen.queryByText(/Seus créditos acabaram/i)).not.toBeInTheDocument();
+    });
+  });
+
   it("clears the error after a successful Adaptar", async () => {
     const user = userEvent.setup();
     const { rerender } = renderStep();

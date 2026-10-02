@@ -29,26 +29,53 @@ async function resolveImageUrl(
 }
 
 export type ExtractExamQuestionsResult =
-  | { status: "ok"; questions: ExamExtractedQuestion[] }
-  | { status: "empty" };
+  /** `charged`: this call ran (and paid for) the extraction; false when it reused one. */
+  | { status: "ok"; questions: ExamExtractedQuestion[]; charged: boolean }
+  /** The extraction ran (and was charged) but found no question. */
+  | { status: "empty" }
+  /** 402: the balance does not cover the extraction; nothing was charged. */
+  | { status: "insufficient_credits" };
+
+/**
+ * Successful extractions, per attached file. The extraction is charged
+ * (EXTRACTION_COST), so "Tentar novamente" after a failed adaptation, the
+ * >12-question detour and "Regerar" reuse it instead of paying again. Keyed by
+ * the UploadedExam object itself: attaching a file always creates a new one
+ * (StepUploadExam), and the WeakMap lets a dropped file take its entry along.
+ */
+const extractionCache = new WeakMap<UploadedExam, ExamExtractedQuestion[]>();
 
 /**
  * Runs the AI vision extraction (extract-exam-for-adaptation) for a file
  * already parsed locally, and resolves each question's figure (if any) to an
- * uploaded image URL. Free — no credit charge. Called from "Gerar" only, right
- * before adapt-activity, so nothing calls the AI provider until the user
- * actually commits to generating (see uploadedExam on WizardData).
+ * uploaded image URL. Charged (EXTRACTION_COST, on top of the adaptation).
+ * Called from "Gerar" only, right before adapt-activity, so nothing calls the
+ * AI provider until the user actually commits to generating (see uploadedExam
+ * on WizardData).
  */
 export async function extractExamQuestions(
   exam: UploadedExam,
   userId: string,
   signal?: AbortSignal,
 ): Promise<ExtractExamQuestionsResult> {
+  const cached = extractionCache.get(exam);
+  if (cached) return { status: "ok", questions: cached, charged: false };
+
   const { data: fnResult, error: fnError } = await supabase.functions.invoke("extract-exam-for-adaptation", {
-    body: { pdfText: exam.text, pdfFileName: exam.fileName, pageImages: exam.pageImages },
+    body: {
+      pdfText: exam.text,
+      pdfFileName: exam.fileName,
+      pageImages: exam.pageImages,
+      // Idempotency key of the credit reservation: a replayed request can never
+      // be charged twice. Fresh per attempt, since a real retry IS a new charge.
+      request_id: crypto.randomUUID(),
+    },
     signal,
   });
   if (fnError) {
+    if ((fnError as { context?: { status?: number } }).context?.status === 402) {
+      return { status: "insufficient_credits" };
+    }
     const msg = await parseInvokeError(fnError, "Não foi possível processar o arquivo enviado. Tente novamente.");
     throw new Error(msg);
   }
@@ -61,5 +88,6 @@ export async function extractExamQuestions(
     const image_url = await resolveImageUrl(exam.fileType, q, exam.pageImages, userId);
     resolved.push({ text: q.text, options: q.options && q.options.length > 0 ? q.options : null, image_url });
   }
-  return { status: "ok", questions: resolved };
+  extractionCache.set(exam, resolved);
+  return { status: "ok", questions: resolved, charged: true };
 }

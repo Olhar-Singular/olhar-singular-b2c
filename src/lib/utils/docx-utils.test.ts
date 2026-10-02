@@ -71,6 +71,30 @@ describe("extractDocxWithImages", () => {
     expect(out.images[0]).toContain("data:image/png;base64,AAAA");
   });
 
+  it("keeps only the image types the extraction accepts (png, jpeg, webp)", async () => {
+    // The extraction endpoints refuse (or drop) any other data URL, and Gemini
+    // cannot read GIF/BMP/TIFF anyway: sending them would fail the whole call.
+    const srcs: Record<string, string> = {};
+    convertToHtml.mockImplementation(async () => {
+      const handler = imgElement.mock.calls[0]?.[0] as (image: {
+        contentType: string;
+        read: (enc: string) => Promise<string>;
+      }) => Promise<{ src: string }>;
+      for (const contentType of ["image/jpeg", "image/webp", "image/gif", "image/bmp", "image/tiff", "image/x-emf"]) {
+        srcs[contentType] = (await handler({ contentType, read: () => Promise.resolve("QUJD") })).src;
+      }
+      return { value: "" };
+    });
+    extractRawText.mockResolvedValue({ value: "" });
+
+    const out = await extractDocxWithImages(fakeFile([0x50, 0x4b, 0x03, 0x04]));
+    expect(out.images).toEqual(["data:image/jpeg;base64,QUJD", "data:image/webp;base64,QUJD"]);
+    expect(srcs["image/gif"]).toBe("");
+    expect(srcs["image/bmp"]).toBe("");
+    expect(srcs["image/tiff"]).toBe("");
+    expect(srcs["image/x-emf"]).toBe("");
+  });
+
   it("falls back to image/png when contentType is missing", async () => {
     convertToHtml.mockImplementation(async (_args, _opts) => {
       const handler = imgElement.mock.calls[0]?.[0] as

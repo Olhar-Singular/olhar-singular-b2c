@@ -12,6 +12,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Loader2, Coins } from "lucide-react";
 import { Link } from "react-router-dom";
+import { useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { parseEdgeFnError } from "@/lib/utils/errors";
@@ -19,7 +20,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { extractExamQuestions } from "../upload-exam/extractExamQuestions";
 import { buildActivityTextFromExtraction, type ExamExtractedQuestion } from "../upload-exam/buildActivityTextFromExtraction";
 import type { AdaptationResult } from "@/lib/adaptation/canonical/schema";
-import type { WizardData } from "@/lib/adaptation/wizard/wizardState";
+import { activeUploadedExam, type WizardData } from "@/lib/adaptation/wizard/wizardState";
 
 export const MAX_QUESTIONS = 12;
 
@@ -63,10 +64,16 @@ type Props = {
   onRestorePrevious?: () => void;
 };
 
+const OUT_OF_CREDITS_MESSAGE = "Seus créditos acabaram. Compre créditos extras para continuar.";
+
 export function StepGenerate({ data, onResult, onNext, onPrev, onLoadingChange, onRestorePrevious }: Props) {
   const { user, refreshProfile } = useAuth();
+  const queryClient = useQueryClient();
+  // The file to read at this step, per the mode the teacher is in (null on the
+  // paste/bank path even if a file was left attached).
+  const uploadedExam = activeUploadedExam(data);
   const [loading, setLoading] = useState(!data.result);
-  const [phase, setPhase] = useState<"extracting" | "adapting">(data.uploadedExam ? "extracting" : "adapting");
+  const [phase, setPhase] = useState<"extracting" | "adapting">(uploadedExam ? "extracting" : "adapting");
   const [creditError, setCreditError] = useState<string | null>(null);
   const [failed, setFailed] = useState(false);
   /**
@@ -96,6 +103,13 @@ export function StepGenerate({ data, onResult, onNext, onPrev, onLoadingChange, 
     }, MESSAGE_INTERVAL_MS);
     return () => clearInterval(id);
   }, [phase, loading]);
+
+  // Both the extraction and the adaptation are charged: the balance in the
+  // header and the statement in Créditos must move right after each one.
+  const refreshCredits = useCallback(() => {
+    refreshProfile().catch(() => {});
+    queryClient.invalidateQueries({ queryKey: ["credit_transactions"] });
+  }, [refreshProfile, queryClient]);
 
   const adaptActivity = useCallback(async (
     activityText: string,
@@ -129,7 +143,7 @@ export function StepGenerate({ data, onResult, onNext, onPrev, onLoadingChange, 
         // Turns on the MODO FIEL block of the system prompt — which is what
         // the upload screen already promises ("preservando a ordem das
         // questões e as imagens originais").
-        fidelity_mode: !!data.uploadedExam,
+        fidelity_mode: !!uploadedExam,
         // How many questions actually went in, so the server can tell a
         // complete adaptation from one that quietly came back short. Zero
         // means "not knowable" (free-typed activity) and is not inspected.
@@ -148,7 +162,7 @@ export function StepGenerate({ data, onResult, onNext, onPrev, onLoadingChange, 
     if (fnError) {
       const context = (fnError as { context?: Response }).context;
       if (context?.status === 402) {
-        setCreditError("Seus créditos acabaram. Compre créditos extras para continuar.");
+        setCreditError(OUT_OF_CREDITS_MESSAGE);
         return;
       }
       let errMsg = "Falha na adaptação";
@@ -174,9 +188,9 @@ export function StepGenerate({ data, onResult, onNext, onPrev, onLoadingChange, 
       id: adaptationId,
       updatedAt: adaptationUpdatedAt,
     });
-    refreshProfile().catch(() => {});
+    refreshCredits();
     onNext();
-  }, [data, onResult, onNext, refreshProfile]);
+  }, [data, uploadedExam, onResult, onNext, refreshCredits]);
 
   const proceedToAdapt = useCallback(async (
     activityText: string,
@@ -215,7 +229,7 @@ export function StepGenerate({ data, onResult, onNext, onPrev, onLoadingChange, 
     setFailReason(null);
     setPendingExtracted(null);
 
-    if (!data.uploadedExam) {
+    if (!uploadedExam) {
       // Questions picked from the bank are countable; free-typed text is not,
       // and 0 tells the server to skip that check rather than guess.
       await proceedToAdapt(data.activityText, controller, data.selectedQuestions.length);
@@ -229,9 +243,18 @@ export function StepGenerate({ data, onResult, onNext, onPrev, onLoadingChange, 
     try {
       /* v8 ignore next -- user is always set: this step only renders inside the authenticated wizard */
       const userId = user?.id ?? "";
-      const result = await extractExamQuestions(data.uploadedExam, userId, controller.signal);
+      const result = await extractExamQuestions(uploadedExam, userId, controller.signal);
       /* v8 ignore next -- AbortController race */
       if (controller.signal.aborted) return;
+      if (result.status === "insufficient_credits") {
+        // Refused before anything was charged: same screen as the adaptation's 402.
+        setCreditError(OUT_OF_CREDITS_MESSAGE);
+        setLoading(false);
+        onLoadingChange?.(false);
+        return;
+      }
+      // An empty extraction was charged too; a reused one charged nothing new.
+      if (result.status === "empty" || result.charged) refreshCredits();
       if (result.status === "empty") {
         throw new Error("Não foi possível identificar questões no arquivo enviado. Volte e tente outro arquivo.");
       }
@@ -258,7 +281,7 @@ export function StepGenerate({ data, onResult, onNext, onPrev, onLoadingChange, 
     }
 
     await proceedToAdapt(buildActivityTextFromExtraction(extracted), controller, extracted.length);
-  }, [data, user, proceedToAdapt, onLoadingChange]);
+  }, [data, uploadedExam, user, proceedToAdapt, onLoadingChange, refreshCredits]);
 
   function confirmTruncate() {
     /* v8 ignore next -- guard: the dialog only renders while pendingExtracted is set */

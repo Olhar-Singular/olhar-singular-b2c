@@ -1,4 +1,5 @@
 import { render, screen, waitFor, act } from "@testing-library/react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { AuthProvider, useAuthContext } from "./AuthContext";
 
@@ -36,6 +37,10 @@ vi.mock("@/integrations/supabase/client", () => ({
   },
 }));
 
+function renderAuth(ui: React.ReactElement, queryClient = new QueryClient()) {
+  return render(<QueryClientProvider client={queryClient}>{ui}</QueryClientProvider>);
+}
+
 function TestConsumer() {
   const { session, profile, loading, profileLoading, refreshProfile } = useAuthContext();
   if (loading) return <div>loading</div>;
@@ -56,7 +61,7 @@ describe("AuthContext", () => {
   });
 
   it("starts in loading state", () => {
-    render(
+    renderAuth(
       <AuthProvider>
         <TestConsumer />
       </AuthProvider>
@@ -65,7 +70,7 @@ describe("AuthContext", () => {
   });
 
   it("resolves to anonymous when no session", async () => {
-    render(
+    renderAuth(
       <AuthProvider>
         <TestConsumer />
       </AuthProvider>
@@ -81,7 +86,7 @@ describe("AuthContext", () => {
       data: { session: mockSession as never },
     });
 
-    render(
+    renderAuth(
       <AuthProvider>
         <TestConsumer />
       </AuthProvider>
@@ -104,7 +109,7 @@ describe("AuthContext", () => {
       single: vi.fn(() => new Promise((r) => { resolveProfile = r; })),
     } as never);
 
-    render(
+    renderAuth(
       <AuthProvider>
         <TestConsumer />
       </AuthProvider>
@@ -119,7 +124,7 @@ describe("AuthContext", () => {
   });
 
   it("updates state on auth change event", async () => {
-    render(
+    renderAuth(
       <AuthProvider>
         <TestConsumer />
       </AuthProvider>
@@ -148,7 +153,7 @@ describe("AuthContext", () => {
       data: { session: mockSession as never },
     });
 
-    render(
+    renderAuth(
       <AuthProvider>
         <TestConsumer />
       </AuthProvider>
@@ -172,7 +177,7 @@ describe("AuthContext", () => {
       if (!providedSignOut) providedSignOut = signOut;
       return loading ? null : <span>ready</span>;
     }
-    render(
+    renderAuth(
       <AuthProvider>
         <Capture />
       </AuthProvider>
@@ -193,7 +198,7 @@ describe("AuthContext", () => {
       if (!providedRefresh) providedRefresh = refreshProfile;
       return loading ? null : <span>ready</span>;
     }
-    render(
+    renderAuth(
       <AuthProvider>
         <Capture />
       </AuthProvider>
@@ -227,7 +232,7 @@ describe("AuthContext", () => {
       single: vi.fn().mockResolvedValue({ data: null, error: { message: "timeout" } }),
     } as never);
 
-    render(
+    renderAuth(
       <AuthProvider>
         <TestConsumer />
       </AuthProvider>
@@ -262,7 +267,7 @@ describe("AuthContext", () => {
       single: vi.fn().mockResolvedValue({ data: updatedProfile, error: null }),
     } as never);
 
-    render(
+    renderAuth(
       <AuthProvider>
         <TestConsumer />
       </AuthProvider>
@@ -275,5 +280,77 @@ describe("AuthContext", () => {
     });
 
     await waitFor(() => expect(screen.getByTestId("credits")).toHaveTextContent("5"));
+  });
+
+  describe("query cache across accounts", () => {
+    const otherSession = { user: { id: "user-456", email: "outro@teste.com" }, access_token: "token-2" };
+
+    async function renderSignedIn() {
+      const { supabase } = await import("@/integrations/supabase/client");
+      vi.mocked(supabase.auth.getSession).mockResolvedValue({
+        data: { session: mockSession as never },
+      });
+      const queryClient = new QueryClient();
+      queryClient.setQueryData(["subscription"], { plan: "pro" });
+      renderAuth(
+        <AuthProvider>
+          <TestConsumer />
+        </AuthProvider>,
+        queryClient
+      );
+      await waitFor(() => expect(screen.getByTestId("session")).toHaveTextContent("autenticado"));
+      await waitFor(() => expect(authStateCallback).not.toBeNull());
+      return queryClient;
+    }
+
+    it("drops the previous account's cached data on sign out", async () => {
+      const queryClient = await renderSignedIn();
+
+      act(() => {
+        authStateCallback!("SIGNED_OUT", null);
+      });
+
+      expect(queryClient.getQueryData(["subscription"])).toBeUndefined();
+    });
+
+    it("drops the cached data when a different account signs in", async () => {
+      const queryClient = await renderSignedIn();
+
+      act(() => {
+        authStateCallback!("SIGNED_IN", otherSession);
+      });
+
+      expect(queryClient.getQueryData(["subscription"])).toBeUndefined();
+    });
+
+    it("keeps the cache when the same account refreshes its token", async () => {
+      const queryClient = await renderSignedIn();
+
+      act(() => {
+        authStateCallback!("TOKEN_REFRESHED", mockSession);
+      });
+
+      expect(queryClient.getQueryData(["subscription"])).toEqual({ plan: "pro" });
+    });
+
+    it("keeps the cache when an anonymous visitor signs in", async () => {
+      const { supabase } = await import("@/integrations/supabase/client");
+      vi.mocked(supabase.auth.getSession).mockResolvedValue({ data: { session: null } });
+      const queryClient = new QueryClient();
+      queryClient.setQueryData(["plans"], [{ slug: "basico" }]);
+      renderAuth(
+        <AuthProvider>
+          <TestConsumer />
+        </AuthProvider>,
+        queryClient
+      );
+      await waitFor(() => expect(screen.getByTestId("session")).toHaveTextContent("anônimo"));
+
+      act(() => {
+        authStateCallback!("SIGNED_IN", mockSession);
+      });
+
+      expect(queryClient.getQueryData(["plans"])).toEqual([{ slug: "basico" }]);
+    });
   });
 });

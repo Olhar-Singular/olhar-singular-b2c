@@ -1,11 +1,12 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { createClient } from "@supabase/supabase-js";
 import { authorizeSuperAdmin } from "../_shared/adminAuth.ts";
 import { parseCancelInput } from "../_shared/subscribeInput.ts";
 import { runCancelSubscription } from "../_shared/subscriptionActions.ts";
 import { buildSubscriptionActionDeps } from "../_shared/subscriptionActionDeps.ts";
 import { logAdminAction } from "../_shared/adminAudit.ts";
 import { dispatchAnalytics, readAnalyticsConfig, sendAnalyticsEvents } from "../_shared/analyticsEvents.ts";
+import { errorResponse } from "../_shared/publicError.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -80,7 +81,6 @@ serve(async (req) => {
 
     return json({ status: "cancelled", subscriptionId: result.subscriptionId });
   } catch (e) {
-    console.error("cancel-subscription error:", e);
-    return json({ error: e instanceof Error ? e.message : "Erro desconhecido." }, 500);
+    return errorResponse(e, { label: "cancel-subscription error:", headers: corsHeaders });
   }
 });

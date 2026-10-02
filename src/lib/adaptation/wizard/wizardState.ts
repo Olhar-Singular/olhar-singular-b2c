@@ -37,9 +37,11 @@ export type SelectedQuestion = {
 /**
  * A file attached via "Adaptar direto do arquivo", parsed locally (no AI yet)
  * — text/images pulled out client-side by pdf-utils/docx-utils. AI extraction
- * (extract-exam-for-adaptation) only runs at the "Gerar" step, bundled with
- * the paid adaptation call, so nothing calls the AI provider until the user
- * actually commits to generating.
+ * (extract-exam-for-adaptation) only runs at the "Gerar" step, right before
+ * the adaptation call, so nothing calls the AI provider until the user
+ * actually commits to generating. It is charged on its own (EXTRACTION_COST,
+ * shown with the adaptation cost in the Barreiras step), once per attached
+ * file: extractExamQuestions reuses a successful extraction of this object.
  */
 export type UploadedExam = {
   fileName: string;
@@ -80,6 +82,20 @@ export const INITIAL_WIZARD_DATA: WizardData = {
   barrierProfileId: null,
   result: null,
 };
+
+/**
+ * The attached file the next generation will read, or null.
+ *
+ * The MODE decides, not the mere presence of a file: "Voltar" on the upload
+ * screen and re-picking the activity type flip the mode back to "bank" but keep
+ * the file attached (so returning to the upload view still shows it). Deciding
+ * by presence read (and charged) that abandoned file instead of the text the
+ * teacher pasted. Every consumer (Gerar, the Barreiras cost, Revisar's
+ * "prova original") goes through here, so what is shown is what is charged.
+ */
+export function activeUploadedExam(data: WizardData): UploadedExam | null {
+  return data.activityInputMode === "upload" ? data.uploadedExam ?? null : null;
+}
 
 /** Replace the whole adaptation result (after generate / regenerate). */
 export function setResult(data: WizardData, result: AdaptationResult): WizardData {

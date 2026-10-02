@@ -35,7 +35,13 @@ export default function SetPasswordPage() {
     if (password !== confirmation) return setError("As senhas não coincidem.");
 
     try {
-      await setPassword.mutateAsync({ password });
+      const result = await setPassword.mutateAsync({ password });
+      if (result.sessionRenewed === false) {
+        toast.success("Senha definida! Entre com a nova senha para continuar.");
+        await signOut();
+        navigate("/auth", { replace: true });
+        return;
+      }
       toast.success("Senha definida! Bem-vindo à plataforma.");
       navigate("/dashboard", { replace: true });
     } catch {

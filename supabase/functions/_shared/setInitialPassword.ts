@@ -20,8 +20,6 @@ export function parsePasswordInput(body: unknown): PasswordParse {
 export interface SetPasswordDeps {
   updatePassword(userId: string, password: string): Promise<void>;
   clearFlag(userId: string): Promise<void>;
-  /** Revokes every other session of the user (auth.admin.signOut(jwt, 'others')). */
-  revokeOtherSessions(): Promise<void>;
   log(message: string, ...args: unknown[]): void;
 }
 
@@ -31,12 +29,12 @@ export interface SetPasswordOutcome {
 }
 
 // Order matters: the password changes first (the thing the user asked for),
-// then the flag, then the other sessions. Once the password is saved the call
-// never fails: a flag that would not clear (after one retry) is reported, so
-// the client can say "saved, refresh in a moment" instead of "try again",
-// which would make the user type a new password for nothing. A failure to
-// revoke is logged, not fatal: the user already holds the session that made
-// the request.
+// then the flag. Once the password is saved the call never fails: a flag that
+// would not clear (after one retry) is reported, so the client can say "saved,
+// refresh in a moment" instead of "try again", which would make the user type a
+// new password for nothing. The admin password change already revokes every
+// session of the user, the calling one included, so there is nothing left to
+// revoke here: the client signs in again with the new password.
 export async function runSetInitialPassword(userId: string, password: string, deps: SetPasswordDeps): Promise<SetPasswordOutcome> {
   await deps.updatePassword(userId, password);
 
@@ -52,10 +50,5 @@ export async function runSetInitialPassword(userId: string, password: string, de
     }
   }
 
-  try {
-    await deps.revokeOtherSessions();
-  } catch (e) {
-    deps.log("set-initial-password: could not revoke other sessions", userId, e);
-  }
   return { flagCleared };
 }

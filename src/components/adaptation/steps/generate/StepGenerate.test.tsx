@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { screen, fireEvent, waitFor, act } from "@testing-library/react";
-import { renderWithProviders } from "@/test/helpers";
+import { createTestQueryClient, renderWithProviders } from "@/test/helpers";
 import { StepGenerate } from "./StepGenerate";
 import { validateDocument } from "@/lib/adaptation/canonical/validate";
 import type { AdaptationResult } from "@/lib/adaptation/canonical/schema";
@@ -509,7 +509,8 @@ describe("StepGenerate", () => {
     expect(onPrev).toHaveBeenCalled();
   });
 
-  // ── Upload path: extraction runs here, bundled with the paid adaptation call ──
+  // ── Upload path: extraction runs here, charged on its own right before the
+  // paid adaptation call ──
 
   it("does not call extractExamQuestions on the bank/text path (no uploadedExam)", async () => {
     invokeMock.mockResolvedValueOnce(okResponse());
@@ -578,6 +579,96 @@ describe("StepGenerate", () => {
       expect(toast.error).toHaveBeenCalledWith("Limite de requisições IA atingido. Tente novamente em alguns minutos."),
     );
     expect(invokeMock).not.toHaveBeenCalled();
+  });
+
+  it("adapts the pasted text, never the file left attached, once the teacher left the upload mode", async () => {
+    // Attached a file, pressed Voltar (mode back to "bank") and pasted text:
+    // the file must be neither read nor charged, and the text is what goes in.
+    invokeMock.mockResolvedValueOnce(okResponse());
+    renderWithProviders(
+      <StepGenerate
+        data={{ ...uploadData, activityInputMode: "bank", activityText: "1) Colada" }}
+        onResult={vi.fn()}
+        onNext={vi.fn()}
+        onPrev={vi.fn()}
+      />,
+    );
+    expect(screen.getByText(/ISA está adaptando/i)).toBeInTheDocument();
+    await waitFor(() => expect(invokeMock).toHaveBeenCalled());
+    expect(extractExamQuestionsMock).not.toHaveBeenCalled();
+    expect(invokeMock.mock.calls[0][1].body.original_activity).toBe("1) Colada");
+    expect(invokeMock.mock.calls[0][1].body.fidelity_mode).toBe(false);
+  });
+
+  describe("cobrança da extração", () => {
+    it("shows the credit screen when the extraction is refused for lack of credits, without adapting", async () => {
+      const onLoadingChange = vi.fn();
+      extractExamQuestionsMock.mockResolvedValueOnce({ status: "insufficient_credits" });
+      renderWithProviders(
+        <StepGenerate
+          data={uploadData}
+          onResult={vi.fn()}
+          onNext={vi.fn()}
+          onPrev={vi.fn()}
+          onLoadingChange={onLoadingChange}
+        />,
+      );
+      await waitFor(() => expect(screen.getByText(/Seus créditos acabaram/i)).toBeInTheDocument());
+      expect(screen.getByRole("link", { name: /Comprar créditos extras/i })).toHaveAttribute("href", "/creditos");
+      expect(invokeMock).not.toHaveBeenCalled();
+      expect(onLoadingChange).toHaveBeenLastCalledWith(false);
+    });
+
+    it("refreshes the balance and the statement right after a charged extraction", async () => {
+      const mockRefresh = vi.fn().mockResolvedValue(undefined);
+      const { useAuth } = await import("@/hooks/useAuth");
+      vi.mocked(useAuth).mockReturnValueOnce({ user: { id: "user-1" }, refreshProfile: mockRefresh } as never);
+      const queryClient = createTestQueryClient();
+      const invalidate = vi.spyOn(queryClient, "invalidateQueries");
+      extractExamQuestionsMock.mockResolvedValueOnce({
+        status: "ok",
+        questions: [{ text: "Primeira", options: null, image_url: null }],
+        charged: true,
+      });
+      // The adaptation never answers: whatever refresh happens is the extraction's.
+      invokeMock.mockImplementation(() => new Promise(() => undefined));
+      renderWithProviders(
+        <StepGenerate data={uploadData} onResult={vi.fn()} onNext={vi.fn()} onPrev={vi.fn()} />,
+        { queryClient },
+      );
+      await waitFor(() => expect(invokeMock).toHaveBeenCalled());
+      expect(mockRefresh).toHaveBeenCalled();
+      expect(invalidate).toHaveBeenCalledWith({ queryKey: ["credit_transactions"] });
+    });
+
+    it("refreshes the credits also when the charged extraction found nothing", async () => {
+      const mockRefresh = vi.fn().mockResolvedValue(undefined);
+      const { useAuth } = await import("@/hooks/useAuth");
+      vi.mocked(useAuth).mockReturnValueOnce({ user: { id: "user-1" }, refreshProfile: mockRefresh } as never);
+      extractExamQuestionsMock.mockResolvedValueOnce({ status: "empty" });
+      renderWithProviders(
+        <StepGenerate data={uploadData} onResult={vi.fn()} onNext={vi.fn()} onPrev={vi.fn()} />,
+      );
+      await waitFor(() => expect(screen.getByRole("button", { name: /Tentar novamente/i })).toBeInTheDocument());
+      expect(mockRefresh).toHaveBeenCalled();
+    });
+
+    it("does not refresh anything when the extraction was reused (nothing new was charged)", async () => {
+      const mockRefresh = vi.fn().mockResolvedValue(undefined);
+      const { useAuth } = await import("@/hooks/useAuth");
+      vi.mocked(useAuth).mockReturnValueOnce({ user: { id: "user-1" }, refreshProfile: mockRefresh } as never);
+      extractExamQuestionsMock.mockResolvedValueOnce({
+        status: "ok",
+        questions: [{ text: "Primeira", options: null, image_url: null }],
+        charged: false,
+      });
+      invokeMock.mockImplementation(() => new Promise(() => undefined));
+      renderWithProviders(
+        <StepGenerate data={uploadData} onResult={vi.fn()} onNext={vi.fn()} onPrev={vi.fn()} />,
+      );
+      await waitFor(() => expect(invokeMock).toHaveBeenCalled());
+      expect(mockRefresh).not.toHaveBeenCalled();
+    });
   });
 
   it("warns before proceeding when more than 12 questions are extracted, without calling adapt-activity yet", async () => {

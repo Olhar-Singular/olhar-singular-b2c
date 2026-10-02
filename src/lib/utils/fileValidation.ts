@@ -17,3 +17,13 @@ export function detectFileType(bytes: Uint8Array): "pdf" | "docx" | "jpeg" | "pn
   if (validateDocxMagicBytes(bytes)) return "docx";
   return validateImageMagicBytes(bytes);
 }
+
+/**
+ * Canonical MIME type of each accepted document format. The upload declares
+ * this, not the browser's `file.type` (empty or generic on platforms that do
+ * not know .docx), and the question-pdfs bucket accepts exactly these values.
+ */
+export const DOCUMENT_MIME = {
+  pdf: "application/pdf",
+  docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+} as const;

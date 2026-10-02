@@ -1,5 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { createClient } from "@supabase/supabase-js";
 import { selectPackage, type CreditPackageRow } from "../_shared/creditPackages.ts";
 import { parseCardPaymentRequest } from "../_shared/cardPaymentInput.ts";
 import { buildCardPaymentBody, interpretCardPayment, maskPayer } from "../_shared/mpCardPayment.ts";
@@ -7,6 +7,7 @@ import { statusDetailMessage } from "../_shared/mpStatusDetail.ts";
 import { approvePurchaseAndGrant, rejectPendingPurchase } from "../_shared/purchaseGrant.ts";
 import { dispatchAnalytics, readAnalyticsConfig, sendAnalyticsEvents } from "../_shared/analyticsEvents.ts";
 import { mpRequest, MpTimeoutError } from "../_shared/mpHttp.ts";
+import { errorResponse } from "../_shared/publicError.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -179,7 +180,6 @@ serve(async (req) => {
     }
     return json({ status: "pending", purchaseId: purchase.id });
   } catch (e) {
-    console.error("create-card-payment error:", e);
-    return json({ error: e instanceof Error ? e.message : "Erro desconhecido." }, 500);
+    return errorResponse(e, { label: "create-card-payment error:", headers: corsHeaders });
   }
 });

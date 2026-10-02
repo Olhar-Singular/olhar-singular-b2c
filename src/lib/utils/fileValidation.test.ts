@@ -4,6 +4,7 @@ import {
   validateDocxMagicBytes,
   validateImageMagicBytes,
   detectFileType,
+  DOCUMENT_MIME,
 } from "./fileValidation";
 
 const pdf  = new Uint8Array([0x25, 0x50, 0x44, 0x46, 0x00]); // %PDF
@@ -58,4 +59,15 @@ describe("detectFileType", () => {
   it("detects jpeg", () => expect(detectFileType(jpeg)).toBe("jpeg"));
   it("detects png", () => expect(detectFileType(png)).toBe("png"));
   it("returns null for unknown", () => expect(detectFileType(junk)).toBeNull());
+});
+
+describe("DOCUMENT_MIME", () => {
+  // Must match allowed_mime_types of the question-pdfs bucket
+  // (20260926000003_question_pdfs_strict_mime.sql): the upload sends exactly these.
+  it("maps each accepted document format to its canonical MIME type", () => {
+    expect(DOCUMENT_MIME).toEqual({
+      pdf: "application/pdf",
+      docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    });
+  });
 });

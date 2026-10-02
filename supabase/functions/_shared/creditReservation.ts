@@ -130,6 +130,14 @@ export function resolveRequestId(
   generate: () => string,
 ): RequestIdResult {
   if (raw === undefined || raw === null) return { ok: true, id: generate() };
+  return requireRequestId(raw);
+}
+
+/**
+ * The strict flavour, for endpoints whose every client already sends a key:
+ * a missing id is refused too, so no charge ever runs without replay protection.
+ */
+export function requireRequestId(raw: unknown): RequestIdResult {
   if (typeof raw === "string" && UUID_RE.test(raw)) {
     return { ok: true, id: raw.toLowerCase() };
   }

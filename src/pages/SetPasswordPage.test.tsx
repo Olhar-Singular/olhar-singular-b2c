@@ -66,6 +66,20 @@ describe("SetPasswordPage", () => {
     expect(toast.success).toHaveBeenCalled();
   });
 
+  it("sends the user to sign in again when the session could not be renewed", async () => {
+    const user = userEvent.setup();
+    const { toast } = await import("sonner");
+    mockSetPassword.mockResolvedValue({ ok: true, sessionRenewed: false });
+    renderWithProviders(<SetPasswordPage />);
+    await user.type(screen.getByLabelText("Senha"), "segura1");
+    await user.type(screen.getByLabelText("Confirme a senha"), "segura1");
+    await user.click(screen.getByRole("button", { name: /Salvar senha/ }));
+    await waitFor(() => expect(navigateSpy).toHaveBeenCalledWith("/auth", { replace: true }));
+    expect(mockSignOut).toHaveBeenCalled();
+    expect(toast.success).toHaveBeenCalledWith(expect.stringMatching(/Entre com a nova senha/));
+    expect(navigateSpy).not.toHaveBeenCalledWith("/dashboard", expect.anything());
+  });
+
   it("keeps the form when the server refuses (hook toasts)", async () => {
     const user = userEvent.setup();
     mockSetPassword.mockRejectedValue(new Error("falha"));

@@ -89,3 +89,46 @@ describe("edge functions — grafo de imports Deno (extensões explícitas, sem 
     expect(violations).toEqual([]);
   });
 });
+
+/**
+ * supabase-js is pinned ONCE, in the deno.json import map, to the exact version
+ * the frontend resolves (package-lock.json), so edge and browser run the same
+ * client. A remote `https://esm.sh/@supabase/supabase-js@2` would float to
+ * whatever major-2 release esm.sh serves on the next deploy.
+ */
+describe("edge functions — supabase-js fixado", () => {
+  const SUPABASE_JS_URL = /https?:\/\/[^"'\s]*@supabase\/supabase-js/;
+
+  function lockedVersion(): string {
+    const lock = JSON.parse(readFileSync(join(ROOT, "package-lock.json"), "utf8"));
+    return lock.packages["node_modules/@supabase/supabase-js"].version;
+  }
+
+  function edgeSources(): string[] {
+    const files: string[] = [];
+    const visit = (dir: string) => {
+      for (const d of readdirSync(dir, { withFileTypes: true })) {
+        const p = join(dir, d.name);
+        if (d.isDirectory()) visit(p);
+        else if (/\.ts$/.test(d.name) && !/\.test\.ts$/.test(d.name)) files.push(p);
+      }
+    };
+    visit(FUNCTIONS_DIR);
+    return files;
+  }
+
+  it("o import map aponta @supabase/supabase-js para a versão exata do package-lock", () => {
+    const denoJson = JSON.parse(readFileSync(join(FUNCTIONS_DIR, "deno.json"), "utf8"));
+    expect(denoJson.imports["@supabase/supabase-js"]).toBe(
+      `https://esm.sh/@supabase/supabase-js@${lockedVersion()}`,
+    );
+  });
+
+  it("nenhuma function importa supabase-js por URL remota (só pelo import map)", () => {
+    const offenders = edgeSources()
+      .map((file) => relative(ROOT, file))
+      .filter((rel) => SUPABASE_JS_URL.test(readFileSync(join(ROOT, rel), "utf8")))
+      .sort();
+    expect(offenders).toEqual([]);
+  });
+});

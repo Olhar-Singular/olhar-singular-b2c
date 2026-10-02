@@ -41,5 +41,19 @@ export async function validateMpSignature(
     .map((b) => b.toString(16).padStart(2, "0"))
     .join("");
 
-  return hex === v1;
+  return timingSafeEqual(hex, v1);
+}
+
+/**
+ * Constant-time string equality: every byte is compared, so the response time
+ * does not reveal how many leading characters of a forged signature matched.
+ * Only the length can short-circuit, and an HMAC-SHA256 hex is always 64 chars.
+ */
+export function timingSafeEqual(a: string, b: string): boolean {
+  const x = new TextEncoder().encode(a);
+  const y = new TextEncoder().encode(b);
+  if (x.length !== y.length) return false;
+  let diff = 0;
+  for (let i = 0; i < x.length; i++) diff |= x[i] ^ y[i];
+  return diff === 0;
 }

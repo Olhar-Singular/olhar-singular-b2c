@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { validateMpSignature } from "./mpSignature";
+import { timingSafeEqual, validateMpSignature } from "./mpSignature";
 
 const SECRET = "test-webhook-secret";
 const DATA_ID = "123456";
@@ -73,5 +73,24 @@ describe("validateMpSignature", () => {
   it("rejects when ts or v1 is missing from the header", async () => {
     expect(await validateMpSignature("v1=abc", REQ_ID, DATA_ID, SECRET)).toBe(false);
     expect(await validateMpSignature("ts=1700000000", REQ_ID, DATA_ID, SECRET)).toBe(false);
+  });
+});
+
+describe("timingSafeEqual", () => {
+  it("is true only for identical strings", () => {
+    const hex = "a".repeat(63) + "b";
+    expect(timingSafeEqual(hex, hex)).toBe(true);
+    expect(timingSafeEqual("", "")).toBe(true);
+  });
+
+  it("is false for same-length strings that differ in any position (first or last)", () => {
+    const hex = "0123456789abcdef";
+    expect(timingSafeEqual(hex, "1123456789abcdef")).toBe(false);
+    expect(timingSafeEqual(hex, "0123456789abcdee")).toBe(false);
+  });
+
+  it("is false when the lengths differ, including a prefix of the expected value", () => {
+    expect(timingSafeEqual("abcdef", "abc")).toBe(false);
+    expect(timingSafeEqual("", "a")).toBe(false);
   });
 });

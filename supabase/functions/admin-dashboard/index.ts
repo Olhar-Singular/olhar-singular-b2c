@@ -1,5 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { createClient } from "@supabase/supabase-js";
 import { authorizeSuperAdmin } from "../_shared/adminAuth.ts";
 import {
   mergeUserRows,
@@ -12,6 +12,7 @@ import {
   type InvoiceLite,
   summarizeSubscriptions,
 } from "../_shared/adminDashboard.ts";
+import { errorResponse } from "../_shared/publicError.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -143,7 +144,6 @@ serve(async (req) => {
       200,
     );
   } catch (error) {
-    console.error("admin-dashboard unhandled error:", error);
-    return json({ error: "internal_error" }, 500);
+    return errorResponse(error, { label: "admin-dashboard unhandled error:", headers: corsHeaders });
   }
 });

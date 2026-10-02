@@ -40,12 +40,13 @@ import {
 import { toast } from "sonner";
 import { useAuthContext } from "@/contexts/AuthContext";
 import { canAfford, computeAccess } from "@/lib/domain/access";
+import { EXTRACTION_COST } from "@/lib/domain/extractionCost";
 import { useQuestions, useDeleteQuestion, useQuestionStats, useInsertQuestions } from "@/hooks/useQuestionBank";
 import { validateExtractedQuestions } from "@/lib/domain/questionParser";
 import { supabase } from "@/integrations/supabase/client";
 import { parsePdf } from "@/lib/utils/pdf-utils";
 import { extractDocxWithImages } from "@/lib/utils/docx-utils";
-import { detectFileType } from "@/lib/utils/fileValidation";
+import { detectFileType, DOCUMENT_MIME } from "@/lib/utils/fileValidation";
 import { resolveUniqueFileName } from "@/lib/utils/fileNameUtils";
 import { normalizeTextForDedup, autoCropFromBbox, dataUrlToBlob, stripOptionMarker, stripOptionsFromText } from "@/lib/utils/extraction-utils";
 import { parseDbError, parseEdgeFnError } from "@/lib/utils/errors";
@@ -55,8 +56,6 @@ import ManualQuestionEditor from "@/components/forms/ManualQuestionEditor";
 import PdfPreviewModal from "@/components/forms/PdfPreviewModal";
 import { SUBJECTS, normalizeSubject } from "@/lib/utils/constants";
 import "katex/dist/katex.min.css";
-
-const EXTRACTION_COST = 5;
 
 const DIFFICULTY_LABEL: Record<string, string> = {
   facil: "Fácil",
@@ -263,7 +262,14 @@ export default function QuestionBankPage() {
       file.name,
       pdfUploads.map((u) => u.file_name),
     );
-    const fileToUpload = wasRenamed ? new File([file], finalName, { type: file.type }) : file;
+    // Declare the type the magic bytes proved. supabase-js sends a File as
+    // multipart and ignores the `contentType` option, so the File itself must
+    // carry the type the question-pdfs bucket allows.
+    const contentType = DOCUMENT_MIME[type];
+    const fileToUpload =
+      wasRenamed || file.type !== contentType
+        ? new File([file], wasRenamed ? finalName : file.name, { type: contentType })
+        : file;
 
     setUploading(true);
     try {
@@ -272,7 +278,15 @@ export default function QuestionBankPage() {
         .replace(/[̀-ͯ]/g, "")
         .replace(/[^a-zA-Z0-9._-]/g, "_");
       const filePath = `${user.id}/${Date.now()}_${safeName}`;
-      await supabase.storage.from("question-pdfs").upload(filePath, fileToUpload);
+      const { error: uploadError } = await supabase.storage
+        .from("question-pdfs")
+        .upload(filePath, fileToUpload);
+      if (uploadError) {
+        // No history row: it would point at a file that was never stored.
+        console.error("PDF upload error:", uploadError);
+        toast.error("Não foi possível enviar o arquivo. Confira se é um PDF ou DOCX de até 10 MB e tente novamente.");
+        return;
+      }
       const { data: inserted } = await supabase
         .from("pdf_uploads")
         .insert({
@@ -344,7 +358,8 @@ export default function QuestionBankPage() {
         let errMsg = "Falha na extração.";
         try {
           const body = await context?.json();
-          if (body?.error) errMsg = body.error;
+          if (context?.status === 402) errMsg = "Créditos insuficientes para extrair as questões.";
+          else if (body?.error) errMsg = body.error;
         } catch {
           // corpo já consumido ou não-JSON — mantém o fallback
         }

@@ -4,7 +4,12 @@ import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Send, Loader2, Bot, User } from "lucide-react";
 import ChatMarkdown from "./ChatMarkdown";
+import { MAX_CHAT_MESSAGE_CHARS } from "@/lib/domain/chatLimits";
 import type { ChatMessage } from "@/types/chat";
+
+// The counter only appears near the cap: below it, it is noise.
+const COUNTER_THRESHOLD = Math.floor(MAX_CHAT_MESSAGE_CHARS * 0.9);
+const COUNTER_ID = "chat-input-counter";
 
 type Props = {
   messages: ChatMessage[];
@@ -23,10 +28,15 @@ export default function ChatWindow({ messages, onSend, isPending }: Props) {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     const trimmed = text.trim();
-    if (!trimmed || isPending) return;
+    // Same limit the chat edge function enforces; maxLength already stops
+    // typing, this also covers a value set some other way.
+    if (!trimmed || isPending || trimmed.length > MAX_CHAT_MESSAGE_CHARS) return;
     onSend(trimmed);
     setText("");
   };
+
+  const overLimit = text.trim().length > MAX_CHAT_MESSAGE_CHARS;
+  const showCounter = text.length >= COUNTER_THRESHOLD;
 
   return (
     <div className="flex flex-col h-full">
@@ -93,6 +103,8 @@ export default function ChatWindow({ messages, onSend, isPending }: Props) {
             placeholder="Digite sua mensagem..."
             className="resize-none min-h-[44px] max-h-32"
             rows={1}
+            maxLength={MAX_CHAT_MESSAGE_CHARS}
+            aria-describedby={showCounter ? COUNTER_ID : undefined}
             onKeyDown={(e) => {
               if (e.key === "Enter" && !e.shiftKey) {
                 e.preventDefault();
@@ -100,10 +112,15 @@ export default function ChatWindow({ messages, onSend, isPending }: Props) {
               }
             }}
           />
-          <Button type="submit" size="icon" disabled={isPending || !text.trim()} aria-label="Enviar">
+          <Button type="submit" size="icon" disabled={isPending || !text.trim() || overLimit} aria-label="Enviar">
             <Send className="w-4 h-4" />
           </Button>
         </form>
+        {showCounter && (
+          <p id={COUNTER_ID} aria-live="polite" className="text-[10px] text-muted-foreground text-right max-w-2xl mx-auto mt-1">
+            {text.length}/{MAX_CHAT_MESSAGE_CHARS}
+          </p>
+        )}
         <p className="text-[10px] text-muted-foreground text-center mt-2">
           Ferramenta pedagógica. Não realiza diagnóstico. A decisão final é sempre do profissional.
         </p>

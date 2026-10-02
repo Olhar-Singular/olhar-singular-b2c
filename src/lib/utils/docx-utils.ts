@@ -6,17 +6,24 @@ export async function extractDocxText(file: File): Promise<string> {
   return result.value;
 }
 
+/**
+ * The only image types the AI extraction accepts (`isAcceptedPageImage` in
+ * supabase/functions/_shared/examExtractionCore.ts). Anything else (GIF, BMP,
+ * TIFF, WMF/EMF...) is dropped here: sending it would fail the whole call.
+ */
+const EXTRACTABLE_IMAGE_TYPES = new Set(["image/png", "image/jpeg", "image/webp"]);
+
 export async function extractDocxWithImages(file: File): Promise<{ text: string; images: string[] }> {
   const arrayBuffer = await file.arrayBuffer();
   const images: string[] = [];
 
-  const result = await mammoth.convertToHtml(
+  await mammoth.convertToHtml(
     { arrayBuffer },
     {
       convertImage: mammoth.images.imgElement((image: any) => {
         return image.read("base64").then((imageBuffer: string) => {
           const contentType = image.contentType || "image/png";
-          if (contentType.includes("wmf") || contentType.includes("emf")) return { src: "" };
+          if (!EXTRACTABLE_IMAGE_TYPES.has(contentType.toLowerCase())) return { src: "" };
           const dataUrl = `data:${contentType};base64,${imageBuffer}`;
           images.push(dataUrl);
           return { src: dataUrl };
