@@ -183,9 +183,14 @@ const DOCUMENT_LANGUAGE = "pt-BR";
 /** Pontos → twips (1/20 pt), a unidade de espaçamento do OOXML. */
 const ptToTwip = (pt: number): number => Math.round(pt * 20);
 
-/** Derive a safe .docx filename from the document header title. */
-export function docxFileName(header: DocumentHeader): string {
-  const title = header.title?.trim();
+/**
+ * Derive a safe .docx filename from the document header title.
+ *
+ * Achado 0100: with no header title, fall back to the document's first heading
+ * (`documentTitle`), the same chain the printed title and the metadata use.
+ */
+export function docxFileName(header: DocumentHeader, document?: CanonicalDocument): string {
+  const title = header.title?.trim() || (document ? documentTitle(document) : "");
   if (!title) return "atividade-adaptada.docx";
   const slug = title
     .toLowerCase()
@@ -925,7 +930,7 @@ export async function downloadDocx(
   const url = URL.createObjectURL(blob);
   const link = window.document.createElement("a");
   link.href = url;
-  link.download = docxFileName(header);
+  link.download = docxFileName(header, document);
   window.document.body.appendChild(link);
   link.click();
   link.remove();

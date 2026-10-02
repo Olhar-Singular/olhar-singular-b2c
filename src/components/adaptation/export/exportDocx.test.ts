@@ -86,6 +86,24 @@ describe("docxFileName", () => {
   it("retorna nome padrão quando o título só tem símbolos (slug vazio)", () => {
     expect(docxFileName({ title: "!!!" })).toBe("atividade-adaptada.docx");
   });
+
+  it("sem título, usa o primeiro heading do documento (achado 0100)", () => {
+    const comHeading = {
+      schemaVersion: 1,
+      blocks: [
+        {
+          id: "00000000-0000-4000-8000-000000000001",
+          type: "heading",
+          level: 1,
+          content: [{ type: "text", text: "Prova de Ciências" }],
+        },
+      ],
+    } as CanonicalDocument;
+    const semHeading = { schemaVersion: 1, blocks: [] } as CanonicalDocument;
+    expect(docxFileName({ title: "" }, comHeading)).toBe("prova-de-ciencias.docx");
+    expect(docxFileName({ title: "Outra" }, comHeading)).toBe("outra.docx");
+    expect(docxFileName({}, semHeading)).toBe("atividade-adaptada.docx");
+  });
 });
 
 describe("richTextToRuns", () => {
