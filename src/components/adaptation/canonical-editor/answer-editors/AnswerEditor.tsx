@@ -11,7 +11,7 @@
  * answer-lines config) is always available — there is no editor mode to hide it.
  */
 
-import { useEffect, useId, useRef } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { Plus, Trash2, ArrowUp, ArrowDown } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { FOLHA_BUTTON } from "@/components/adaptation/canonical-editor/folhaChrome";
@@ -90,7 +90,7 @@ function IconButton({
   disabled,
   children,
 }: {
-  onClick: () => void;
+  onClick: (event: React.MouseEvent<HTMLButtonElement>) => void;
   title: string;
   label?: string;
   disabled?: boolean;
@@ -127,6 +127,29 @@ export function AnswerEditor({
     focusGapId.current = null;
     field.focus();
   }, [answer, fieldIdPrefix]);
+  /**
+   * Achado 0267: as linhas e as lixeiras da tabela são chaveadas por índice (o
+   * canônico não dá `id` a linha/coluna). Removida a do meio, o React reaproveita
+   * o botão focado, que passa a apagar a VIZINHA. Por isso: remover leva o foco
+   * ao "+ Linha"/"+ Coluna" (alvo estável que não destrói nada) e anuncia a
+   * remoção; o segundo clique de um duplo clique é ignorado; e adicionar leva o
+   * foco à primeira célula criada, como o "+ Lacuna" (0370).
+   */
+  const tableRef = useRef<HTMLDivElement>(null);
+  const addRowRef = useRef<HTMLButtonElement>(null);
+  const addColumnRef = useRef<HTMLButtonElement>(null);
+  const [tableStatus, setTableStatus] = useState("");
+  const focusTableCell = useRef<string | null>(null);
+  useEffect(() => {
+    const label = focusTableCell.current;
+    if (!label || !tableRef.current) return;
+    const cell = Array.from(tableRef.current.querySelectorAll<HTMLElement>("[aria-label]")).find(
+      (el) => el.getAttribute("aria-label") === label,
+    );
+    if (!cell) return;
+    focusTableCell.current = null;
+    cell.focus();
+  }, [answer]);
   switch (answer.kind) {
     case "multipleChoice":
       return (
@@ -367,12 +390,21 @@ export function AnswerEditor({
 
     case "table":
       return (
-        <div className="flex flex-col gap-1.5" data-testid="answer-table">
+        <div ref={tableRef} className="flex flex-col gap-1.5" data-testid="answer-table">
+          <p role="status" className="sr-only">{tableStatus}</p>
           {/* Achado 0369: uma lixeira por coluna, acima dela, e uma por linha. */}
           <div className="flex gap-1 min-w-0 pr-8">
             {Array.from({ length: Math.max(0, ...answer.rows.map((r) => r.length)) }, (_, ci) => (
               <div key={ci} className="flex flex-1 justify-center min-w-0">
-                <IconButton onClick={() => onChange(removeTableColumn(answer, ci))} title="Remover coluna" label={`Remover coluna ${ci + 1}`} disabled={disabled}>
+                <IconButton
+                  onClick={(e) => {
+                    const next = removeTableColumn(answer, ci);
+                    if (e.detail > 1 || next === answer) return;
+                    onChange(next);
+                    setTableStatus(`Coluna ${ci + 1} removida`);
+                    addColumnRef.current?.focus();
+                  }}
+                  title="Remover coluna" label={`Remover coluna ${ci + 1}`} disabled={disabled}>
                   <Trash2 className="w-3.5 h-3.5" />
                 </IconButton>
               </div>
@@ -396,7 +428,15 @@ export function AnswerEditor({
                   }
                 />
               ))}
-              <IconButton onClick={() => onChange(removeTableRow(answer, ri))} title="Remover linha"
+              <IconButton
+                onClick={(e) => {
+                  const next = removeTableRow(answer, ri);
+                  if (e.detail > 1 || next === answer) return;
+                  onChange(next);
+                  setTableStatus(ri === 0 ? "Linha do cabeçalho removida" : `Linha ${ri} removida`);
+                  addRowRef.current?.focus();
+                }}
+                title="Remover linha"
                 label={ri === 0 ? "Remover linha do cabeçalho" : `Remover linha ${ri}`}
                 disabled={disabled}>
                 <Trash2 className="w-3.5 h-3.5" />
@@ -404,10 +444,22 @@ export function AnswerEditor({
             </div>
           ))}
           <div className="flex gap-2">
-            <Button type="button" variant="outline" size="sm" className={cn("gap-1", FOLHA_BUTTON)} onClick={() => onChange(addTableRow(answer))} disabled={disabled}>
+            <Button type="button" variant="outline" size="sm" className={cn("gap-1", FOLHA_BUTTON)} ref={addRowRef}
+              onClick={() => {
+                const next = addTableRow(answer) as typeof answer;
+                focusTableCell.current = tableCellLabel(next.rows[0][0], next.rows.length - 2, 0);
+                onChange(next);
+              }}
+              disabled={disabled}>
               <Plus className="w-3.5 h-3.5" /> Linha
             </Button>
-            <Button type="button" variant="outline" size="sm" className={cn("gap-1", FOLHA_BUTTON)} onClick={() => onChange(addTableColumn(answer))} disabled={disabled}>
+            <Button type="button" variant="outline" size="sm" className={cn("gap-1", FOLHA_BUTTON)} ref={addColumnRef}
+              onClick={() => {
+                const next = addTableColumn(answer) as typeof answer;
+                focusTableCell.current = `Cabeçalho da coluna ${next.rows[0].length}`;
+                onChange(next);
+              }}
+              disabled={disabled}>
               <Plus className="w-3.5 h-3.5" /> Coluna
             </Button>
           </div>

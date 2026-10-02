@@ -656,3 +656,90 @@ describe("AnswerEditor — layout da linha da lacuna (achado 0375)", () => {
     expect(outras.placeholder).toBe("Outras respostas, separadas por vírgula");
   });
 });
+
+/**
+ * Achado 0267: linhas e lixeiras da tabela são chaveadas por índice. Removida
+ * uma linha/coluna do meio, o botão focado passava a apagar a VIZINHA: um
+ * segundo Enter (ou o segundo clique de um duplo clique) apagava outra com
+ * dados. E "+ Linha"/"+ Coluna" deixavam o foco no próprio botão.
+ */
+describe("AnswerEditor — foco depois de mexer na tabela (0267)", () => {
+  const start: QuestionAnswer = {
+    kind: "table",
+    rows: [
+      [t("Nome"), t("Estado"), t("Fusão")],
+      [t("Água"), t("Líquido"), t("0")],
+      [t("Ferro"), t("Sólido"), t("1538")],
+      [t("Oxigênio"), t("Gasoso"), t("-218")],
+    ],
+  };
+  function Harness() {
+    const [value, setValue] = useState<QuestionAnswer>(start);
+    return <AnswerEditor answer={value} onChange={setValue} />;
+  }
+
+  it("remover linha leva o foco para o + Linha, não para a lixeira da vizinha", () => {
+    render(<Harness />);
+    const trash = screen.getByRole("button", { name: "Remover linha 2" });
+    trash.focus();
+    fireEvent.click(trash);
+    expect(screen.getByRole("button", { name: /^\s*Linha$/ })).toHaveFocus();
+    expect(screen.getByLabelText("Célula, Nome, linha 2")).toBeInTheDocument();
+    expect(screen.getByRole("status")).toHaveTextContent("Linha 2 removida");
+  });
+
+  it("remover coluna leva o foco para o + Coluna", () => {
+    render(<Harness />);
+    const trash = screen.getByRole("button", { name: "Remover coluna 2" });
+    trash.focus();
+    fireEvent.click(trash);
+    expect(screen.getByRole("button", { name: /^\s*Coluna$/ })).toHaveFocus();
+    expect(screen.getByRole("status")).toHaveTextContent("Coluna 2 removida");
+  });
+
+  it("o segundo clique de um duplo clique na lixeira não apaga a vizinha", () => {
+    render(<Harness />);
+    fireEvent.click(screen.getByRole("button", { name: "Remover linha 2" }), { detail: 1 });
+    fireEvent.click(screen.getByRole("button", { name: "Remover linha 2" }), { detail: 2 });
+    expect(screen.getByLabelText("Célula, Nome, linha 2")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Remover coluna 1" }), { detail: 1 });
+    fireEvent.click(screen.getByRole("button", { name: "Remover coluna 1" }), { detail: 2 });
+    expect(screen.getAllByRole("button", { name: /^Remover coluna/ })).toHaveLength(2);
+  });
+
+  it("+ Linha leva o foco à primeira célula da linha nova", () => {
+    render(<Harness />);
+    fireEvent.click(screen.getByRole("button", { name: /^\s*Linha$/ }));
+    expect(screen.getByLabelText("Célula, Nome, linha 4")).toHaveFocus();
+  });
+
+  it("+ Coluna leva o foco ao cabeçalho da coluna nova", () => {
+    render(<Harness />);
+    fireEvent.click(screen.getByRole("button", { name: /^\s*Coluna$/ }));
+    expect(screen.getByLabelText("Cabeçalho da coluna 4")).toHaveFocus();
+  });
+
+  it("anuncia a remoção da linha do cabeçalho", () => {
+    render(<Harness />);
+    fireEvent.click(screen.getByRole("button", { name: "Remover linha do cabeçalho" }));
+    expect(screen.getByRole("status")).toHaveTextContent("Linha do cabeçalho removida");
+  });
+
+  it("lixeira sem efeito (última linha/coluna) não anuncia nem muda nada", () => {
+    const onChange = vi.fn();
+    render(<AnswerEditor answer={{ kind: "table", rows: [[t("a")]] }} onChange={onChange} />);
+    fireEvent.click(screen.getByRole("button", { name: "Remover linha do cabeçalho" }));
+    fireEvent.click(screen.getByRole("button", { name: "Remover coluna 1" }));
+    expect(onChange).not.toHaveBeenCalled();
+    expect(screen.getByRole("status")).toHaveTextContent("");
+  });
+
+  it("não rouba o foco se a tabela mudar sem a célula criada, nem fora da tabela", () => {
+    const { rerender } = render(<AnswerEditor answer={start} onChange={vi.fn()} />);
+    fireEvent.click(screen.getByRole("button", { name: /^\s*Linha$/ }));
+    rerender(<AnswerEditor answer={{ ...start }} onChange={vi.fn()} />);
+    expect(document.body).toHaveFocus();
+    rerender(<AnswerEditor answer={{ kind: "open", answerLines: 1 }} onChange={vi.fn()} />);
+    expect(document.body).toHaveFocus();
+  });
+});
