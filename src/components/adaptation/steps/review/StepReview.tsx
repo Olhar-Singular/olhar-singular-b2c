@@ -1,6 +1,7 @@
 import { useId, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { cn } from "@/lib/utils";
 import { ArrowLeft, ArrowRight, FileText, Info, RefreshCw, Save } from "lucide-react";
 import { EditorContent, BubbleMenu } from "@tiptap/react";
 import { isTextSelection } from "@tiptap/core";
@@ -117,6 +118,11 @@ const NEW_FOLDER = "__nova_pasta__";
  * (§Reset). Stable across renders — UploadedExamExtension (which DOES vary
  * per adaptation) is added separately, memoized on `originalExam`.
  */
+// Secondary actions on the paper-palette action bar (finding 0705): override the
+// app tokens of `variant="outline"`, which flip in dark mode while the bar does not.
+const PAPER_SECONDARY_BUTTON =
+  "border-surface-chrome-line bg-surface-paper text-surface-ink hover:bg-surface-mesa hover:text-surface-ink";
+
 const REVIEW_EXTENSIONS = [PageBreakMarker, OriginalDocExtension];
 
 /**
@@ -481,7 +487,15 @@ export function StepReview({
         da folha, onde mora a última pauta da questão aberta.
       */}
       <div className="sticky bottom-0 z-10 flex flex-wrap justify-between gap-2 border-t border-surface-chrome-line bg-surface-chrome px-2 py-3">
-        <Button variant="outline" onClick={onPrev} aria-label="Voltar" className="shrink-0">
+        {/* Achado 0705: a barra segue a paleta do papel (clara nos dois temas);
+            os secundários também, senão o `outline` cru do app vira laje escura
+            no tema escuro. "Exportar" fica teal: é a cor de ação do app. */}
+        <Button
+          variant="outline"
+          onClick={onPrev}
+          aria-label="Voltar"
+          className={cn("shrink-0", PAPER_SECONDARY_BUTTON)}
+        >
           <ArrowLeft className="w-4 h-4 mr-2" /> Voltar
         </Button>
         <div className="flex min-w-0 items-center gap-2">
@@ -497,7 +511,7 @@ export function StepReview({
             disabled={!canSave || saving}
             aria-label="Salvar adaptação"
             title="Salvar adaptação"
-            className="shrink-0 px-2 sm:px-4"
+            className={cn("shrink-0 px-2 sm:px-4", PAPER_SECONDARY_BUTTON)}
           >
             <Save className="w-4 h-4" />
             <span className="hidden sm:ml-2 sm:inline">

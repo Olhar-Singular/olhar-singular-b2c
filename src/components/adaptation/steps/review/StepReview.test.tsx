@@ -798,6 +798,30 @@ describe("StepReview", () => {
       const bar = screen.getByLabelText("Voltar").parentElement!;
       expect(bar.className).toMatch(/(?:^|\s)sticky(?:\s|$)/);
     });
+
+    // Achado 0705: a barra usa a paleta do papel (clara nos dois temas), mas
+    // Voltar e Salvar eram `variant="outline"` crus, com `bg-background` /
+    // `border-input` do app: no tema escuro viravam lajes escuras sobre a faixa
+    // creme. Os secundários seguem a paleta da barra, como os da barra do topo.
+    it.each(["Voltar", "Salvar adaptação"])(
+      "pinta %s com tokens do papel, não do app (0705)",
+      (name) => {
+        setup();
+        const button = screen.getByRole("button", { name });
+        for (const token of [
+          "border-surface-chrome-line",
+          "bg-surface-paper",
+          "text-surface-ink",
+          "hover:bg-surface-mesa",
+          "hover:text-surface-ink",
+        ]) {
+          expect(button.className.split(/\s+/)).toContain(token);
+        }
+        for (const appToken of ["bg-background", "border-input", "hover:bg-accent"]) {
+          expect(button.className.split(/\s+/)).not.toContain(appToken);
+        }
+      },
+    );
   });
   // Achado 0409: WCAG 2.5.3 (Label in Name). O botão imprime "Exportar" e se
   // anunciava como "Avançar para exportação": quem usa comando de voz dizia
