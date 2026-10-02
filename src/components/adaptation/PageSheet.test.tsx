@@ -1661,6 +1661,42 @@ describe("PageSheet", () => {
       });
     });
 
+    it("tira o cabeçalho repetido quando a tabela volta a caber numa folha", () => {
+      withTabela(() => 900, () => {
+        const { rerender } = render(<PageSheet paginated toolbar={null}>{tabela}</PageSheet>);
+        expect(
+          screen.getByTestId("tabela").querySelectorAll("[data-folha-thead-repetido]"),
+        ).toHaveLength(1);
+        // A edição encurta o que vem antes: a linha 3 sobe para a folha 1.
+        rerender(
+          <PageSheet paginated toolbar={null}>
+            <table data-folha-tabela="" data-testid="tabela">
+              <thead>
+                <tr data-test-top={PAGE_MARGIN_PX} data-test-bottom={PAGE_MARGIN_PX + 40}>
+                  <th>Aluno</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr data-testid="linha-1" data-test-top={PAGE_MARGIN_PX + 40} data-test-bottom={PAGE_MARGIN_PX + 80}>
+                  <td>Ana</td>
+                </tr>
+                <tr data-testid="linha-2" data-test-top={PAGE_MARGIN_PX + 80} data-test-bottom={PAGE_MARGIN_PX + 120}>
+                  <td>Bruno</td>
+                </tr>
+                <tr data-testid="linha-3" data-test-top={PAGE_MARGIN_PX + 120} data-test-bottom={PAGE_MARGIN_PX + 160}>
+                  <td>Carla</td>
+                </tr>
+              </tbody>
+            </table>
+          </PageSheet>,
+        );
+        expect(
+          screen.getByTestId("tabela").querySelectorAll("[data-folha-thead-repetido]"),
+        ).toHaveLength(0);
+        expect(corpo().map((linha) => linha.textContent)).toEqual(["Ana", "Bruno", "Carla"]);
+      });
+    });
+
     it("não repete nada enquanto a tabela cabe numa folha só", () => {
       withTabela(() => 900, () => {
         render(
