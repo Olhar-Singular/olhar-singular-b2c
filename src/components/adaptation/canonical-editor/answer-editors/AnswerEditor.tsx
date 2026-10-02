@@ -41,6 +41,16 @@ import {
   removeGap,
   setAnswerLines,
   setTableCell,
+  addTrueFalseItem,
+  removeTrueFalseItem,
+  addCheckboxItem,
+  removeCheckboxItem,
+  addOrderingItem,
+  removeOrderingItem,
+  addTableRow,
+  removeTableRow,
+  addTableColumn,
+  removeTableColumn,
 } from "./answerOps";
 
 interface AnswerEditorProps {
@@ -144,8 +154,14 @@ export function AnswerEditor({
               >
                 {item.value ? "V" : "F"}
               </Button>
+              <IconButton onClick={() => onChange(removeTrueFalseItem(answer, item.id))} title="Remover afirmação" disabled={disabled}>
+                <Trash2 className="w-3.5 h-3.5" />
+              </IconButton>
             </div>
           ))}
+          <Button type="button" variant="outline" size="sm" className={cn("self-start gap-1", FOLHA_BUTTON)} onClick={() => onChange(addTrueFalseItem(answer))} disabled={disabled}>
+            <Plus className="w-3.5 h-3.5" /> Afirmação
+          </Button>
         </div>
       );
 
@@ -167,8 +183,14 @@ export function AnswerEditor({
                 placeholder="Opção"
                 ariaLabel="Opção"
               />
+              <IconButton onClick={() => onChange(removeCheckboxItem(answer, item.id))} title="Remover opção" disabled={disabled}>
+                <Trash2 className="w-3.5 h-3.5" />
+              </IconButton>
             </div>
           ))}
+          <Button type="button" variant="outline" size="sm" className={cn("self-start gap-1", FOLHA_BUTTON)} onClick={() => onChange(addCheckboxItem(answer))} disabled={disabled}>
+            <Plus className="w-3.5 h-3.5" /> Opção
+          </Button>
         </div>
       );
 
@@ -222,8 +244,14 @@ export function AnswerEditor({
               <IconButton onClick={() => onChange(reorderOrdering(answer, index, index + 1))} title="Mover para baixo" disabled={disabled}>
                 <ArrowDown className="w-3.5 h-3.5" />
               </IconButton>
+              <IconButton onClick={() => onChange(removeOrderingItem(answer, item.id))} title="Remover item" disabled={disabled}>
+                <Trash2 className="w-3.5 h-3.5" />
+              </IconButton>
             </div>
           ))}
+          <Button type="button" variant="outline" size="sm" className={cn("self-start gap-1", FOLHA_BUTTON)} onClick={() => onChange(addOrderingItem(answer))} disabled={disabled}>
+            <Plus className="w-3.5 h-3.5" /> Item
+          </Button>
         </div>
       );
 
@@ -303,8 +331,18 @@ export function AnswerEditor({
     case "table":
       return (
         <div className="flex flex-col gap-1.5" data-testid="answer-table">
+          {/* Achado 0369: uma lixeira por coluna, acima dela, e uma por linha. */}
+          <div className="flex gap-1 min-w-0 pr-8">
+            {Array.from({ length: Math.max(0, ...answer.rows.map((r) => r.length)) }, (_, ci) => (
+              <div key={ci} className="flex flex-1 justify-center min-w-0">
+                <IconButton onClick={() => onChange(removeTableColumn(answer, ci))} title="Remover coluna" disabled={disabled}>
+                  <Trash2 className="w-3.5 h-3.5" />
+                </IconButton>
+              </div>
+            ))}
+          </div>
           {answer.rows.map((row, ri) => (
-            <div key={ri} className="flex gap-1 min-w-0">
+            <div key={ri} className="flex items-center gap-1 min-w-0">
               {row.map((cell, ci) => (
                 <RichTextField
                   key={ci}
@@ -315,8 +353,19 @@ export function AnswerEditor({
                   ariaLabel="Célula"
                 />
               ))}
+              <IconButton onClick={() => onChange(removeTableRow(answer, ri))} title="Remover linha" disabled={disabled}>
+                <Trash2 className="w-3.5 h-3.5" />
+              </IconButton>
             </div>
           ))}
+          <div className="flex gap-2">
+            <Button type="button" variant="outline" size="sm" className={cn("gap-1", FOLHA_BUTTON)} onClick={() => onChange(addTableRow(answer))} disabled={disabled}>
+              <Plus className="w-3.5 h-3.5" /> Linha
+            </Button>
+            <Button type="button" variant="outline" size="sm" className={cn("gap-1", FOLHA_BUTTON)} onClick={() => onChange(addTableColumn(answer))} disabled={disabled}>
+              <Plus className="w-3.5 h-3.5" /> Coluna
+            </Button>
+          </div>
         </div>
       );
 

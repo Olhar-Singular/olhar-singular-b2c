@@ -24,6 +24,16 @@ import {
   setAnswerLines,
   setTableCell,
   changeAnswerKind,
+  addTrueFalseItem,
+  removeTrueFalseItem,
+  addCheckboxItem,
+  removeCheckboxItem,
+  addOrderingItem,
+  removeOrderingItem,
+  addTableRow,
+  removeTableRow,
+  addTableColumn,
+  removeTableColumn,
 } from "./answerOps";
 
 const rt = (text: string): RichText => [{ type: "text", text }];
@@ -680,5 +690,108 @@ describe("changeAnswerKind", () => {
     const a4 = changeAnswerKind(a3, "multipleChoice", g);
     expect(a4.kind).toBe("multipleChoice");
     expect(QuestionAnswerSchema.safeParse(a4).success).toBe(true);
+  });
+});
+
+/**
+ * Achado 0369: V/F, checkbox, ordenação e tabela não tinham como crescer nem
+ * encolher no card. `changeAnswerKind` cria 1 item (ou tabela 1x2) e a
+ * quantidade ficava definitiva.
+ */
+describe("0369 — add/remove em trueFalse, checkbox, ordering e table", () => {
+  const ID = (n: number) => `${String(n).repeat(8)}-${String(n).repeat(4)}-4${String(n).repeat(3)}-8${String(n).repeat(3)}-${String(n).repeat(12)}`;
+  const g = () => ID(9);
+  const tf: QuestionAnswer = {
+    kind: "trueFalse",
+    items: [
+      { id: ID(1), content: rt("a"), value: true },
+      { id: ID(2), content: rt("b"), value: false },
+    ],
+  };
+  const cb: QuestionAnswer = {
+    kind: "checkbox",
+    items: [
+      { id: ID(1), content: rt("a"), checked: true },
+      { id: ID(2), content: rt("b"), checked: false },
+    ],
+  };
+  const ord: QuestionAnswer = {
+    kind: "ordering",
+    items: [
+      { id: ID(1), content: rt("a"), position: 0 },
+      { id: ID(2), content: rt("b"), position: 1 },
+      { id: ID(3), content: rt("c"), position: 2 },
+    ],
+  };
+  const tbl: QuestionAnswer = {
+    kind: "table",
+    rows: [
+      [rt("a"), rt("b")],
+      [rt("c"), rt("d")],
+    ],
+  };
+
+  it("trueFalse: adds an empty statement and removes by id, keeping at least one", () => {
+    const added = addTrueFalseItem(tf, g);
+    expect(added).toEqual({ ...tf, items: [...(tf as { items: unknown[] }).items, { id: ID(9), content: [], value: true }] });
+    expect(QuestionAnswerSchema.safeParse(added).success).toBe(true);
+    const removed = removeTrueFalseItem(tf, ID(1));
+    expect(removed).toEqual({ kind: "trueFalse", items: [{ id: ID(2), content: rt("b"), value: false }] });
+    expect(removeTrueFalseItem(removed, ID(2))).toBe(removed);
+    expect(addTrueFalseItem(cb)).toBe(cb);
+    expect(removeTrueFalseItem(cb, ID(1))).toBe(cb);
+  });
+
+  it("checkbox: adds an unchecked option and removes by id, keeping at least one", () => {
+    const added = addCheckboxItem(cb, g);
+    expect(added).toEqual({ ...cb, items: [...(cb as { items: unknown[] }).items, { id: ID(9), content: [], checked: false }] });
+    const removed = removeCheckboxItem(cb, ID(2));
+    expect(removed).toEqual({ kind: "checkbox", items: [{ id: ID(1), content: rt("a"), checked: true }] });
+    expect(removeCheckboxItem(removed, ID(1))).toBe(removed);
+    expect(addCheckboxItem(tf)).toBe(tf);
+    expect(removeCheckboxItem(tf, ID(1))).toBe(tf);
+  });
+
+  it("ordering: adds at the end and renumbers position on remove, keeping at least one", () => {
+    const added = addOrderingItem(ord, g);
+    expect(added.kind === "ordering" && added.items.at(-1)).toEqual({ id: ID(9), content: [], position: 3 });
+    const removed = removeOrderingItem(ord, ID(1));
+    expect(removed).toEqual({
+      kind: "ordering",
+      items: [
+        { id: ID(2), content: rt("b"), position: 0 },
+        { id: ID(3), content: rt("c"), position: 1 },
+      ],
+    });
+    const single: QuestionAnswer = { kind: "ordering", items: [{ id: ID(1), content: [], position: 0 }] };
+    expect(removeOrderingItem(single, ID(1))).toBe(single);
+    expect(addOrderingItem(tf)).toBe(tf);
+    expect(removeOrderingItem(tf, ID(1))).toBe(tf);
+  });
+
+  it("table: adds/removes rows and columns keeping rows rectangular and at least 1x1", () => {
+    expect(addTableRow(tbl)).toEqual({ kind: "table", rows: [[rt("a"), rt("b")], [rt("c"), rt("d")], [[], []]] });
+    expect(addTableRow({ kind: "table", rows: [] })).toEqual({ kind: "table", rows: [[[]]] });
+    expect(addTableColumn(tbl)).toEqual({ kind: "table", rows: [[rt("a"), rt("b"), []], [rt("c"), rt("d"), []]] });
+    expect(addTableColumn({ kind: "table", rows: [] })).toEqual({ kind: "table", rows: [[[]]] });
+    expect(removeTableRow(tbl, 0)).toEqual({ kind: "table", rows: [[rt("c"), rt("d")]] });
+    expect(removeTableColumn(tbl, 1)).toEqual({ kind: "table", rows: [[rt("a")], [rt("c")]] });
+    const oneRow: QuestionAnswer = { kind: "table", rows: [[rt("a"), rt("b")]] };
+    expect(removeTableRow(oneRow, 0)).toBe(oneRow);
+    const oneCol: QuestionAnswer = { kind: "table", rows: [[rt("a")], [rt("b")]] };
+    expect(removeTableColumn(oneCol, 0)).toBe(oneCol);
+    expect(removeTableRow(tbl, 5)).toBe(tbl);
+    expect(removeTableColumn(tbl, -1)).toBe(tbl);
+    expect(removeTableColumn(tbl, 2)).toBe(tbl);
+    expect(addTableRow(tf)).toBe(tf);
+    expect(addTableColumn(tf)).toBe(tf);
+    expect(removeTableRow(tf, 0)).toBe(tf);
+    expect(removeTableColumn(tf, 0)).toBe(tf);
+  });
+
+  it("table: a ragged table becomes rectangular when growing", () => {
+    const ragged: QuestionAnswer = { kind: "table", rows: [[rt("a")], [rt("b"), rt("c")]] };
+    expect(addTableRow(ragged)).toEqual({ kind: "table", rows: [[rt("a"), []], [rt("b"), rt("c")], [[], []]] });
+    expect(addTableColumn(ragged)).toEqual({ kind: "table", rows: [[rt("a"), [], []], [rt("b"), rt("c"), []]] });
   });
 });

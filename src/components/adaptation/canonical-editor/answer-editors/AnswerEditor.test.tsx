@@ -383,3 +383,74 @@ describe("AnswerEditor — identidade e rótulo dos campos (achado 0312)", () =>
     expect(input.getAttribute("name")).toBe("open-answer-lines");
   });
 });
+
+/**
+ * Achado 0369: o card não deixava adicionar/remover afirmação (V/F), opção
+ * (checkbox), item (ordenação) nem linha/coluna (tabela).
+ */
+describe("AnswerEditor — 0369 add/remove nos tipos com lista", () => {
+  const A = "11111111-1111-4111-8111-111111111111";
+  const B = "22222222-2222-4222-8222-222222222222";
+
+  it("trueFalse: adds and removes a statement", () => {
+    const answer: QuestionAnswer = {
+      kind: "trueFalse",
+      items: [
+        { id: A, content: t("a"), value: true },
+        { id: B, content: t("b"), value: false },
+      ],
+    };
+    const onChange = vi.fn();
+    render(<AnswerEditor answer={answer} onChange={onChange} />);
+    fireEvent.click(screen.getAllByTitle("Remover afirmação")[0]);
+    expect(onChange).toHaveBeenLastCalledWith({ kind: "trueFalse", items: [{ id: B, content: t("b"), value: false }] });
+    fireEvent.click(screen.getByRole("button", { name: /Afirmação/ }));
+    expect(onChange.mock.calls[1][0].items).toHaveLength(3);
+  });
+
+  it("checkbox: adds and removes an option", () => {
+    const answer: QuestionAnswer = {
+      kind: "checkbox",
+      items: [
+        { id: A, content: t("a"), checked: true },
+        { id: B, content: t("b"), checked: false },
+      ],
+    };
+    const onChange = vi.fn();
+    render(<AnswerEditor answer={answer} onChange={onChange} />);
+    fireEvent.click(screen.getAllByTitle("Remover opção")[1]);
+    expect(onChange).toHaveBeenLastCalledWith({ kind: "checkbox", items: [{ id: A, content: t("a"), checked: true }] });
+    fireEvent.click(screen.getByRole("button", { name: /Opção/ }));
+    expect(onChange.mock.calls[1][0].items).toHaveLength(3);
+  });
+
+  it("ordering: adds and removes an item", () => {
+    const answer: QuestionAnswer = {
+      kind: "ordering",
+      items: [
+        { id: A, content: t("a"), position: 0 },
+        { id: B, content: t("b"), position: 1 },
+      ],
+    };
+    const onChange = vi.fn();
+    render(<AnswerEditor answer={answer} onChange={onChange} />);
+    fireEvent.click(screen.getAllByTitle("Remover item")[0]);
+    expect(onChange).toHaveBeenLastCalledWith({ kind: "ordering", items: [{ id: B, content: t("b"), position: 0 }] });
+    fireEvent.click(screen.getByRole("button", { name: /^\s*Item$/ }));
+    expect(onChange.mock.calls[1][0].items).toHaveLength(3);
+  });
+
+  it("table: adds/removes rows and columns", () => {
+    const answer: QuestionAnswer = { kind: "table", rows: [[t("a"), t("b")], [t("c"), t("d")]] };
+    const onChange = vi.fn();
+    render(<AnswerEditor answer={answer} onChange={onChange} />);
+    fireEvent.click(screen.getByRole("button", { name: /Linha/ }));
+    expect(onChange).toHaveBeenLastCalledWith({ kind: "table", rows: [[t("a"), t("b")], [t("c"), t("d")], [[], []]] });
+    fireEvent.click(screen.getByRole("button", { name: /Coluna/ }));
+    expect(onChange).toHaveBeenLastCalledWith({ kind: "table", rows: [[t("a"), t("b"), []], [t("c"), t("d"), []]] });
+    fireEvent.click(screen.getAllByTitle("Remover linha")[1]);
+    expect(onChange).toHaveBeenLastCalledWith({ kind: "table", rows: [[t("a"), t("b")]] });
+    fireEvent.click(screen.getAllByTitle("Remover coluna")[0]);
+    expect(onChange).toHaveBeenLastCalledWith({ kind: "table", rows: [[t("b")], [t("d")]] });
+  });
+});
