@@ -328,8 +328,12 @@ export function StepReview({
           )}
         </div>
         {/* Em telas estreitas os botões viram só ícone (rótulo a partir de `sm`),
-            senão o grupo `shrink-0` transborda a viewport e é clipado. */}
-        <div className="flex shrink-0 flex-wrap items-center gap-1">
+            senão o grupo `shrink-0` transborda a viewport e é clipado.
+            `max-w-full` + `min-w-0` (achado 0532): sem limite, o grupo media o
+            `max-content` e o `flex-wrap` nunca valia; em 390 px com "Ver prova
+            original" o ícone "Sobre" passava da borda do cartão. Limitado à
+            largura da barra, os ícones quebram para a linha de baixo. */}
+        <div className="flex min-w-0 max-w-full shrink-0 flex-wrap items-center gap-1">
           {/* shadcn Select, não o <select> nativo: a lista de <option> é
               desenhada pelo navegador e não aceita as cores nem a fonte do
               projeto. O popover é portalado, então recebe a paleta surface-*

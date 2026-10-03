@@ -514,6 +514,24 @@ describe("StepReview", () => {
       const controls = screen.getByLabelText("Pasta").closest("div")!;
       expect(controls.className).toMatch(/(?:^|\s)flex-wrap(?:\s|$)/);
     });
+
+    // Achado 0532: o `flex-wrap` do grupo acima nunca era acionado. Como item
+    // `shrink-0` sem limite de largura, o grupo media o `max-content` (dois
+    // selects + quatro ícones) e, em 390 px com "Ver prova original", o ícone
+    // "Sobre esta adaptação" passava da borda do cartão (x 358-390 contra
+    // ~374). Limitado à largura da barra, os ícones quebram para baixo.
+    it("limita o grupo dos controles à largura da barra para o wrap valer (0532)", () => {
+      setup({
+        title: "",
+        originalExam: { file: new File(["x"], "prova.pdf"), pageImages: [], userId: "user-1" },
+      });
+      const controls = screen.getByLabelText("Pasta").closest("div")!;
+      expect(controls.parentElement).toBe(
+        screen.getByLabelText(TITLE_FIELD_LABEL).parentElement!.parentElement,
+      );
+      expect(controls.className).toMatch(/(?:^|\s)max-w-full(?:\s|$)/);
+      expect(controls.className).toMatch(/(?:^|\s)min-w-0(?:\s|$)/);
+    });
   });
 
   // Saving lived only on the Exportar step, at the very end of the flow. A
