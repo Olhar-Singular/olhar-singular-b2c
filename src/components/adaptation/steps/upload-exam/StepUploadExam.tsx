@@ -19,6 +19,7 @@ const MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024;
 export function StepUploadExam({ data, updateData, onNext, onLoadingChange }: Props) {
   const [processing, setProcessing] = useState(false);
   const [error, setError] = useState("");
+  const [dragging, setDragging] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
   const attached = data.uploadedExam ?? null;
 
@@ -111,6 +112,29 @@ export function StepUploadExam({ data, updateData, onNext, onLoadingChange }: Pr
     e.target.value = "";
   }
 
+  // The dropzone is busy while a file is attached or still being parsed.
+  const dropDisabled = !!attached || processing;
+
+  // preventDefault runs unconditionally: without it the browser's default for a
+  // dropped file is to open it in the tab, taking the teacher out of the app.
+  function handleDragOver(e: React.DragEvent<HTMLDivElement>) {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = dropDisabled ? "none" : "copy";
+    if (!dropDisabled) setDragging(true);
+  }
+
+  function handleDragLeave() {
+    setDragging(false);
+  }
+
+  function handleDrop(e: React.DragEvent<HTMLDivElement>) {
+    e.preventDefault();
+    setDragging(false);
+    if (dropDisabled) return;
+    const file = e.dataTransfer.files?.[0];
+    if (file) void handleFile(file);
+  }
+
   return (
     <div className="space-y-4">
       <div>
@@ -125,10 +149,15 @@ export function StepUploadExam({ data, updateData, onNext, onLoadingChange }: Pr
         onClick={() => {
           if (!attached) fileRef.current?.click();
         }}
+        onDragOver={handleDragOver}
+        onDragLeave={handleDragLeave}
+        onDrop={handleDrop}
         className={`border-2 border-dashed rounded-lg p-8 text-center transition-colors ${
           attached
             ? "cursor-not-allowed opacity-60"
-            : "cursor-pointer hover:border-primary hover:bg-primary/5"
+            : dragging
+              ? "cursor-pointer border-primary bg-primary/5"
+              : "cursor-pointer hover:border-primary hover:bg-primary/5"
         }`}
       >
         <input
@@ -157,7 +186,9 @@ export function StepUploadExam({ data, updateData, onNext, onLoadingChange }: Pr
         ) : (
           <div className="flex flex-col items-center gap-2">
             <Upload className="w-8 h-8 text-muted-foreground" />
-            <p className="text-sm font-medium">Arraste um PDF ou Word aqui, ou clique para escolher</p>
+            <p className="text-sm font-medium">
+              {dragging ? "Solte o arquivo aqui" : "Arraste um PDF ou Word aqui, ou clique para escolher"}
+            </p>
           </div>
         )}
       </div>

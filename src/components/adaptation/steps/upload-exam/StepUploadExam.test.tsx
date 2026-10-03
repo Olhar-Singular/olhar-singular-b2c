@@ -179,6 +179,69 @@ describe("StepUploadExam", () => {
     clickSpy.mockRestore();
   });
 
+  // Regression (1114): the dropzone says "Arraste ... aqui" but had no drag
+  // handlers, so dropping a file let the browser open it in the tab, taking the
+  // teacher out of the app and losing Tipo/Atividade.
+  describe("drag and drop", () => {
+    function dropzone() {
+      return (document.querySelector("input[data-upload-input]") as HTMLInputElement).parentElement!;
+    }
+
+    it("prevents the browser default on dragover and drop, and parses the dropped file", async () => {
+      const updateData = vi.fn();
+      renderWithProviders(<StepUploadExam data={baseData} updateData={updateData} onNext={vi.fn()} onPrev={vi.fn()} />);
+      const file = pdfFile();
+      expect(fireEvent.dragOver(dropzone(), { dataTransfer: { files: [file], dropEffect: "none" } })).toBe(false);
+      expect(fireEvent.drop(dropzone(), { dataTransfer: { files: [file] } })).toBe(false);
+      await waitFor(() =>
+        expect(updateData).toHaveBeenCalledWith({
+          uploadedExam: { fileName: "prova.pdf", fileType: "pdf", text: "1) Q1", pageImages: [], file },
+          result: null,
+        }),
+      );
+    });
+
+    it("highlights the zone while a file is dragged over it and clears it on leave", () => {
+      renderWithProviders(<StepUploadExam data={baseData} updateData={vi.fn()} onNext={vi.fn()} onPrev={vi.fn()} />);
+      fireEvent.dragOver(dropzone(), { dataTransfer: { files: [], dropEffect: "none" } });
+      expect(screen.getByText(/Solte o arquivo aqui/i)).toBeInTheDocument();
+      fireEvent.dragLeave(dropzone());
+      expect(screen.queryByText(/Solte o arquivo aqui/i)).not.toBeInTheDocument();
+      expect(screen.getByText(/Arraste um PDF ou Word/i)).toBeInTheDocument();
+    });
+
+    it("ignores a drop with no file, still blocking the browser default", () => {
+      renderWithProviders(<StepUploadExam data={baseData} updateData={vi.fn()} onNext={vi.fn()} onPrev={vi.fn()} />);
+      expect(fireEvent.drop(dropzone(), { dataTransfer: { files: [] } })).toBe(false);
+      expect(parsePdfMock).not.toHaveBeenCalled();
+    });
+
+    it("blocks the browser default but ignores the drop once a file is attached", () => {
+      const dataTransfer = { files: [pdfFile()], dropEffect: "copy" };
+      renderWithProviders(
+        <StepUploadExam data={{ ...baseData, uploadedExam: attachedExam() }} updateData={vi.fn()} onNext={vi.fn()} onPrev={vi.fn()} />,
+      );
+      expect(fireEvent.dragOver(dropzone(), { dataTransfer })).toBe(false);
+      expect(dataTransfer.dropEffect).toBe("none");
+      expect(screen.queryByText(/Solte o arquivo aqui/i)).not.toBeInTheDocument();
+      expect(fireEvent.drop(dropzone(), { dataTransfer })).toBe(false);
+      expect(parsePdfMock).not.toHaveBeenCalled();
+    });
+
+    it("ignores a second drop while the first file is still being parsed", async () => {
+      const pending = deferred<{ text: string; pageImages: string[] }>();
+      parsePdfMock.mockReturnValue(pending.promise);
+      renderWithProviders(<StepUploadExam data={baseData} updateData={vi.fn()} onNext={vi.fn()} onPrev={vi.fn()} />);
+      fireEvent.drop(dropzone(), { dataTransfer: { files: [pdfFile()] } });
+      await waitFor(() => expect(screen.getByText(/Lendo o arquivo/i)).toBeInTheDocument());
+      fireEvent.drop(dropzone(), { dataTransfer: { files: [pdfFile("outra.pdf")] } });
+      await flushMicrotasks();
+      expect(parsePdfMock).toHaveBeenCalledTimes(1);
+      pending.resolve({ text: "1) Q1", pageImages: [] });
+      await waitFor(() => expect(screen.queryByText(/Lendo o arquivo/i)).not.toBeInTheDocument());
+    });
+  });
+
   it("removing the attached file clears uploadedExam and re-enables the dropzone", () => {
     const updateData = vi.fn();
     const attachedData: WizardData = {
