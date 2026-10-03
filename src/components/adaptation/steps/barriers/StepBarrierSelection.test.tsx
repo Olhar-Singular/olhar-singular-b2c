@@ -494,6 +494,16 @@ describe("StepBarrierSelection", () => {
       expect(screen.getByText(/Criar perfil de barreira/i)).toBeInTheDocument();
     });
 
+    it("does not scroll the whole dialog and closes it from Cancelar (0385)", async () => {
+      vi.mocked(useBarrierProfiles).mockReturnValue({ data: [], isLoading: false } as never);
+      renderStep();
+      fireEvent.click(screen.getByRole("button", { name: /criar perfil/i }));
+      const dialog = await screen.findByRole("dialog");
+      expect(dialog.className).not.toMatch(/overflow-y-auto/);
+      fireEvent.click(screen.getByRole("button", { name: /Cancelar/i }));
+      await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    });
+
     it("clicking '+ Novo' opens the creation dialog", async () => {
       const user = userEvent.setup();
       renderStep();

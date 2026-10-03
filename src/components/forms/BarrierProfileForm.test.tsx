@@ -103,4 +103,28 @@ describe("BarrierProfileForm", () => {
     const btn = screen.getByRole("button", { name: /Salvando/i });
     expect(btn).toBeDisabled();
   });
+
+  it("keeps the save action in a fixed footer outside the scrolling barrier list (0385)", () => {
+    render(<BarrierProfileForm onSubmit={vi.fn()} onCancel={vi.fn()} />);
+    const scroll = screen.getByTestId("barrier-profile-form-scroll");
+    expect(scroll.className).toMatch(/overflow-y-auto/);
+    expect(scroll).toContainElement(screen.getAllByRole("checkbox")[0]);
+    const save = screen.getByRole("button", { name: /Salvar perfil/i });
+    expect(scroll).not.toContainElement(save);
+    expect(scroll).not.toContainElement(screen.getByRole("button", { name: /Cancelar/i }));
+  });
+
+  it("calls onCancel from the footer Cancelar button without submitting (0385)", () => {
+    const onSubmit = vi.fn();
+    const onCancel = vi.fn();
+    render(<BarrierProfileForm onSubmit={onSubmit} onCancel={onCancel} />);
+    fireEvent.click(screen.getByRole("button", { name: /Cancelar/i }));
+    expect(onCancel).toHaveBeenCalledTimes(1);
+    expect(onSubmit).not.toHaveBeenCalled();
+  });
+
+  it("omits Cancelar when no onCancel is given (0385)", () => {
+    render(<BarrierProfileForm onSubmit={vi.fn()} />);
+    expect(screen.queryByRole("button", { name: /Cancelar/i })).toBeNull();
+  });
 });

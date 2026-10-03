@@ -281,7 +281,7 @@ export function StepBarrierSelection({ data, updateData, onNext, onPrev }: Props
       {/* Inline profile creation dialog */}
       <Dialog open={creatingProfile} onOpenChange={setCreatingProfile}>
         <DialogContent
-          className="max-w-lg max-h-[85vh] overflow-y-auto"
+          className="flex max-h-[85vh] max-w-lg flex-col overflow-hidden"
           onCloseAutoFocus={handleDialogCloseAutoFocus}
         >
           <DialogHeader>
@@ -290,6 +290,7 @@ export function StepBarrierSelection({ data, updateData, onNext, onPrev }: Props
           <BarrierProfileForm
             onSubmit={handleCreateProfile}
             isPending={createProfile.isPending}
+            onCancel={() => setCreatingProfile(false)}
           />
         </DialogContent>
       </Dialog>

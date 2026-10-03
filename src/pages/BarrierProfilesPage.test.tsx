@@ -108,6 +108,16 @@ describe("BarrierProfilesPage", () => {
     expect(screen.getByText(/Editar perfil/i)).toBeInTheDocument();
   });
 
+  it("does not scroll the whole dialog and closes it from Cancelar (0385)", async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await user.click(screen.getByRole("button", { name: /novo perfil/i }));
+    const dialog = screen.getByRole("dialog");
+    expect(dialog.className).not.toMatch(/overflow-y-auto/);
+    await user.click(screen.getByRole("button", { name: /Cancelar/i }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+  });
+
   it("opens 'Criar primeiro perfil' button in empty state", async () => {
     const user = userEvent.setup();
     const m = await import("@/hooks/useBarrierProfiles");
