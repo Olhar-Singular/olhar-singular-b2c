@@ -117,6 +117,18 @@ export function StepUploadExam({ data, updateData, onNext, onLoadingChange }: Pr
     e.target.value = "";
   }
 
+  function openFilePicker() {
+    if (!attached) fileRef.current?.click();
+  }
+
+  // The dashed area is the only way to pick a file. As a <div role="button"> it
+  // gets no native Enter/Space activation, so the keyboard is wired by hand.
+  function handleDropzoneKeyDown(e: React.KeyboardEvent<HTMLDivElement>) {
+    if (e.key !== "Enter" && e.key !== " ") return;
+    e.preventDefault();
+    openFilePicker();
+  }
+
   // The dropzone is busy while a file is attached or still being parsed.
   const dropDisabled = !!attached || processing;
 
@@ -151,13 +163,16 @@ export function StepUploadExam({ data, updateData, onNext, onLoadingChange }: Pr
       </div>
 
       <div
-        onClick={() => {
-          if (!attached) fileRef.current?.click();
-        }}
+        role="button"
+        tabIndex={attached ? -1 : 0}
+        aria-disabled={!!attached}
+        aria-label="Escolher arquivo PDF ou Word"
+        onClick={openFilePicker}
+        onKeyDown={handleDropzoneKeyDown}
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
-        className={`border-2 border-dashed rounded-lg p-8 text-center transition-colors ${
+        className={`border-2 border-dashed rounded-lg p-8 text-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ${
           attached
             ? "cursor-not-allowed opacity-60"
             : dragging

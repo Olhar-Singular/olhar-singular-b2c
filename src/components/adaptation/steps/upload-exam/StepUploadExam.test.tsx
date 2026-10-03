@@ -1,6 +1,7 @@
 import { StrictMode } from "react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { screen, fireEvent, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { renderWithProviders } from "@/test/helpers";
 import { StepUploadExam } from "./StepUploadExam";
 import type { WizardData } from "@/lib/adaptation/wizard/wizardState";
@@ -177,6 +178,46 @@ describe("StepUploadExam", () => {
     expect(clickSpy).not.toHaveBeenCalled();
     expect(document.querySelector("input[data-upload-input]")).toBeDisabled();
     clickSpy.mockRestore();
+  });
+
+  // Regression (1115): the dashed area was a <div> with no role/tabindex and the
+  // file input was display:none, so keyboard and screen-reader users could not
+  // reach the only way to pick a file.
+  describe("1115: the dropzone is keyboard-operable", () => {
+    function render(data: WizardData = baseData) {
+      renderWithProviders(<StepUploadExam data={data} updateData={vi.fn()} onNext={vi.fn()} onPrev={vi.fn()} />);
+      return screen.getByRole("button", { name: /escolher arquivo/i });
+    }
+
+    it("exposes the area as a focusable named button reachable by Tab", async () => {
+      const user = userEvent.setup();
+      const dropzone = render();
+      expect(dropzone).toHaveAttribute("tabindex", "0");
+      for (let i = 0; i < 5 && document.activeElement !== dropzone; i++) await user.tab();
+      expect(document.activeElement).toBe(dropzone);
+    });
+
+    it("opens the file picker with Enter and Space, ignoring other keys", () => {
+      const clickSpy = vi.spyOn(HTMLInputElement.prototype, "click").mockImplementation(() => {});
+      const dropzone = render();
+      fireEvent.keyDown(dropzone, { key: "a" });
+      expect(clickSpy).not.toHaveBeenCalled();
+      fireEvent.keyDown(dropzone, { key: "Enter" });
+      expect(clickSpy).toHaveBeenCalledTimes(1);
+      fireEvent.keyDown(dropzone, { key: " " });
+      expect(clickSpy).toHaveBeenCalledTimes(2);
+      clickSpy.mockRestore();
+    });
+
+    it("is aria-disabled, out of the tab order and inert to keys once a file is attached", () => {
+      const clickSpy = vi.spyOn(HTMLInputElement.prototype, "click").mockImplementation(() => {});
+      const dropzone = render({ ...baseData, uploadedExam: attachedExam() });
+      expect(dropzone).toHaveAttribute("aria-disabled", "true");
+      expect(dropzone).toHaveAttribute("tabindex", "-1");
+      fireEvent.keyDown(dropzone, { key: "Enter" });
+      expect(clickSpy).not.toHaveBeenCalled();
+      clickSpy.mockRestore();
+    });
   });
 
   // Regression (1114): the dropzone says "Arraste ... aqui" but had no drag
