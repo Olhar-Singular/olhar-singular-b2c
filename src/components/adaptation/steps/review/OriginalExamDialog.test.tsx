@@ -37,4 +37,39 @@ describe("OriginalExamDialog", () => {
     setup({ open: false });
     expect(screen.queryByText("Prova original")).not.toBeInTheDocument();
   });
+
+  // Achado 0280: para .docx, `pageImages` são as figuras embutidas do Word, não
+  // páginas. O diálogo mostrava "Nenhuma página disponível" num Word só com
+  // texto e rotulava cada figura como "Página N".
+  describe("Word (.docx)", () => {
+    it("shows the extracted text of the file when it has no embedded figures", () => {
+      setup({ fileType: "docx", text: "1) Quanto é 2 + 2?\nA) 3\nB) 4", pageImages: [] });
+      expect(screen.queryByText(/Nenhuma página disponível/i)).not.toBeInTheDocument();
+      const body = screen.getByTestId("original-exam-text");
+      expect(body.textContent).toBe("1) Quanto é 2 + 2?\nA) 3\nB) 4");
+      expect(body).toHaveClass("whitespace-pre-wrap");
+    });
+
+    it("labels embedded figures as 'Figura N', never 'Página N'", () => {
+      setup({ fileType: "docx", text: "Texto", pageImages: ["data:image/png;base64,F1", "data:image/png;base64,F2"] });
+      expect(screen.getByTestId("original-exam-text")).toHaveTextContent("Texto");
+      const images = screen.getAllByRole("img");
+      expect(images).toHaveLength(2);
+      expect(images[0]).toHaveAttribute("alt", "Figura 1 da prova original");
+      expect(screen.getByText("Figura 1")).toBeInTheDocument();
+      expect(screen.getByText("Figura 2")).toBeInTheDocument();
+      expect(screen.queryByText(/Página \d/)).not.toBeInTheDocument();
+    });
+
+    it("falls back to a message when the file has neither text nor figures", () => {
+      setup({ fileType: "docx", text: "   ", pageImages: [] });
+      expect(screen.getByText(/Nenhum conteúdo disponível/i)).toBeInTheDocument();
+      expect(screen.queryByTestId("original-exam-text")).not.toBeInTheDocument();
+    });
+
+    it("treats a missing text as empty", () => {
+      setup({ fileType: "docx", pageImages: [] });
+      expect(screen.getByText(/Nenhum conteúdo disponível/i)).toBeInTheDocument();
+    });
+  });
 });

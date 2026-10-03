@@ -995,6 +995,20 @@ describe("StepReview", () => {
       expect(screen.getByRole("img")).toHaveAttribute("src", "data:image/png;base64,P1");
     });
 
+    it("passes the Word text and type into the dialog (achado 0280)", () => {
+      setup({
+        originalExam: {
+          file: new File(["x"], "prova.docx"),
+          fileType: "docx",
+          text: "1) Texto do Word",
+          pageImages: [],
+          userId: "user-1",
+        },
+      });
+      fireEvent.click(screen.getByRole("button", { name: /Ver prova original/i }));
+      expect(screen.getByTestId("original-exam-text")).toHaveTextContent("1) Texto do Word");
+    });
+
     /**
      * Regressão (caça 1111): em 390x844 o rótulo sempre visível de "Ver prova
      * original" alargava o grupo `shrink-0` da barra para 524px e empurrava o

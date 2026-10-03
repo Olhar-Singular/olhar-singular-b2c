@@ -103,7 +103,14 @@ type Props = {
    * compare, and ImageNodeView can offer "Recortar do original". Absent for
    * adaptações montadas pelo Banco de Questões (no source file to compare).
    */
-  originalExam?: { file: File; pageImages: string[]; userId: string | null } | null;
+  originalExam?: {
+    file: File;
+    /** Word's `pageImages` are embedded figures, not pages (achado 0280). */
+    fileType?: "pdf" | "docx";
+    text?: string;
+    pageImages: string[];
+    userId: string | null;
+  } | null;
 };
 
 /**
@@ -510,6 +517,8 @@ export function StepReview({
           open={originalOpen}
           onOpenChange={setOriginalOpen}
           pageImages={originalExam.pageImages}
+          fileType={originalExam.fileType}
+          text={originalExam.text}
         />
       )}
 

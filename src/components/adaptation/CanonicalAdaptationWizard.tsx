@@ -731,7 +731,13 @@ export default function CanonicalAdaptationWizard({ editMode }: Props = {}) {
               // Only the file this adaptation was generated from; one left
               // attached after switching to paste/bank is not "the original".
               uploadedExam
-                ? { file: uploadedExam.file, pageImages: uploadedExam.pageImages, userId: user?.id ?? null }
+                ? {
+                    file: uploadedExam.file,
+                    fileType: uploadedExam.fileType,
+                    text: uploadedExam.text,
+                    pageImages: uploadedExam.pageImages,
+                    userId: user?.id ?? null,
+                  }
                 : null
             }
           />

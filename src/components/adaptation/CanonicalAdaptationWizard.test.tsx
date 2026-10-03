@@ -267,7 +267,13 @@ vi.mock("./steps/review/StepReview", () => ({
     onNext: () => void;
     onPrev: () => void;
     onCaptureFailure?: (reason: string | null) => void;
-    originalExam?: { file: File; pageImages: string[]; userId: string | null } | null;
+    originalExam?: {
+      file: File;
+      fileType?: "pdf" | "docx";
+      text?: string;
+      pageImages: string[];
+      userId: string | null;
+    } | null;
     title?: string;
     onTitleChange?: (t: string) => void;
     subject?: string | null;
@@ -309,7 +315,12 @@ vi.mock("./steps/review/StepReview", () => ({
       </button>
       <button data-testid="review-save" onClick={() => onSave?.()}>salvar na revisar</button>
       <pre data-testid="review-original-exam">
-        {originalExam ? JSON.stringify({ fileName: originalExam.file.name, userId: originalExam.userId }) : "null"}
+        {originalExam ? JSON.stringify({
+              fileName: originalExam.file.name,
+              fileType: originalExam.fileType,
+              text: originalExam.text,
+              userId: originalExam.userId,
+            }) : "null"}
       </pre>
       <button
         data-testid="edit-content"
@@ -1113,7 +1124,7 @@ describe("CanonicalAdaptationWizard", () => {
       />,
     );
     expect(screen.getByTestId("review-original-exam")).toHaveTextContent(
-      JSON.stringify({ fileName: "prova.pdf", userId: "u1" }),
+      JSON.stringify({ fileName: "prova.pdf", fileType: "pdf", text: "1) Q1", userId: "u1" }),
     );
   });
 
@@ -1172,7 +1183,7 @@ describe("CanonicalAdaptationWizard", () => {
       />,
     );
     expect(screen.getByTestId("review-original-exam")).toHaveTextContent(
-      JSON.stringify({ fileName: "prova.pdf", userId: null }),
+      JSON.stringify({ fileName: "prova.pdf", fileType: "pdf", text: "1) Q1", userId: null }),
     );
   });
 
