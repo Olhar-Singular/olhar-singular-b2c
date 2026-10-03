@@ -43,6 +43,7 @@ import {
   TabStopPosition,
   Footer,
   PageNumber,
+  LineRuleType,
 } from "docx";
 import type {
   CanonicalDocument,
@@ -78,6 +79,8 @@ import {
   ANSWER_ITEM_GAP_PT,
   MATCHING_LINK_GAP_PT,
   TABLE_CELL_PADDING_PT,
+  BASE_LINE_HEIGHT,
+  BASE_BLOCK_SPACING_PX,
 } from "../render/pageTokens";
 import { indexToLetter } from "../render/letters";
 import {
@@ -227,6 +230,20 @@ const ALIGNMENT = {
 const pxToPt = (px: number): number => px * (72 / 96);
 /** px → twips, the OOXML spacing unit (1pt = 20 twips). */
 const pxToTwips = (px: number): number => Math.round(pxToPt(px) * 20);
+
+/**
+ * Achado 0269: os vãos que o PDF desenha e o Word não tinha.
+ *
+ * - `DEFAULT_BLOCK_GAP_TWIPS`: o `blockSpacing` default do documento (16px = 12pt),
+ *   o `blockGap` que `AdaptationPdf` dá a todo bloco de topo sem `spacingAfter`.
+ * - `QUESTION_INNER_GAP_TWIPS`: 6pt entre os blocos do stem, o
+ *   `QUESTION_INNER_GAP_PT` do `PdfQuestion`.
+ * - `QUESTION_PART_GAP_TWIPS`: 4pt depois do enunciado e da instrução, o
+ *   `marginBottom: 4` das duas `View` do `PdfQuestion`.
+ */
+const DEFAULT_BLOCK_GAP_TWIPS = pxToTwips(BASE_BLOCK_SPACING_PX);
+const QUESTION_INNER_GAP_TWIPS = ptToTwip(6);
+const QUESTION_PART_GAP_TWIPS = ptToTwip(4);
 /** An allowed palette color in the docx unit (raw hex, no `#`); `undefined` otherwise. */
 const docxColor = (color?: string): string | undefined =>
   color !== undefined && isAllowedColor(color) ? color.slice(1).toUpperCase() : undefined;
@@ -525,10 +542,19 @@ function answerToDocx(
   }
 }
 
-export function blockToDocxParagraphs(block: Block, number: number): DocxBlock[] {
+export function blockToDocxParagraphs(
+  block: Block,
+  number: number,
+  blockGapTwips: number = DEFAULT_BLOCK_GAP_TWIPS,
+): DocxBlock[] {
   // `block.style` projetado no docx: alinhamento em todo parágrafo do bloco,
-  // `spacingAfter` só no último, cor/corpo/fonte herdados pelos runs.
-  const { paragraph: para, spacing, run } = nodeStyleToDocx(block.style);
+  // `spacingAfter` só no último, cor/corpo/fonte herdados pelos runs. Sem
+  // `spacingAfter`, o último parágrafo leva o vão do documento, como o
+  // `blockGap` do PDF (achado 0269).
+  const { paragraph: para, spacing: ownSpacing, run } = nodeStyleToDocx(block.style);
+  const spacing: { spacing: { after: number } } = {
+    spacing: ownSpacing.spacing ?? { after: blockGapTwips },
+  };
   const inherited: InheritedStyle = { paragraph: para, run };
 
   switch (block.type) {
@@ -659,7 +685,7 @@ export function blockToDocxParagraphs(block: Block, number: number): DocxBlock[]
             new Paragraph({
               ...para,
               children: richTextToRuns(block.enunciado!, run),
-              spacing: { after: 60 },
+              spacing: { after: QUESTION_PART_GAP_TWIPS },
             }),
           ]
         : [];
@@ -669,12 +695,24 @@ export function blockToDocxParagraphs(block: Block, number: number): DocxBlock[]
       // vanished from the Word file.
       const [first, ...restStem] = block.stem;
       const firstRuns = first?.type === "paragraph" ? richTextToRuns(first.content, run) : [];
+      // O primeiro parágrafo do stem viaja no parágrafo do número: leva o vão
+      // interno da questão (ou o `spacingAfter` dele), como no PDF.
+      const firstSpacing =
+        first?.type === "paragraph"
+          ? {
+              spacing: {
+                after:
+                  nodeStyleToDocx(first.style).spacing.spacing?.after ?? QUESTION_INNER_GAP_TWIPS,
+              },
+            }
+          : {};
       const numbered = new Paragraph({
         ...para,
+        ...firstSpacing,
         children: [new TextRun({ ...run, text: `${label}. `, bold: true }), ...firstRuns],
       });
       const stemRest = (first?.type === "paragraph" ? restStem : block.stem).flatMap((child) =>
-        blockToDocxParagraphs(child, 1),
+        blockToDocxParagraphs(child, 1, QUESTION_INNER_GAP_TWIPS),
       );
 
       return [
@@ -686,6 +724,7 @@ export function blockToDocxParagraphs(block: Block, number: number): DocxBlock[]
           ? [
               new Paragraph({
                 ...para,
+                spacing: { after: QUESTION_PART_GAP_TWIPS },
                 children: richTextToRuns(block.instruction, {
                   ...run,
                   italics: true,
@@ -696,8 +735,18 @@ export function blockToDocxParagraphs(block: Block, number: number): DocxBlock[]
           : []),
         ...answerToDocx(block.answer, inherited),
         // O parágrafo que fecha a questão é o último do bloco: é nele que o
-        // `spacingAfter` do `block.style` cabe (achado 0134).
-        new Paragraph({ ...para, ...spacing, children: [] }),
+        // `spacingAfter` do `block.style` cabe (achado 0134). Vazio, ele já
+        // ocupa uma linha; com a altura EXATA do vão, a questão fecha com o
+        // mesmo respiro do PDF, e não uma linha de texto inteira (achado 0269).
+        new Paragraph({
+          ...para,
+          spacing: {
+            line: Math.max(spacing.spacing.after, 1),
+            lineRule: LineRuleType.EXACT,
+            after: 0,
+          },
+          children: [],
+        }),
       ];
     }
   }
@@ -839,6 +888,27 @@ export function documentRunStyle(pageStyle?: PageStyle): {
 }
 
 /**
+ * Os estilos padrão do `.docx`: o run de `documentRunStyle` e a entrelinha do
+ * corpo.
+ *
+ * Achado 0269: só o run ia, então o `<w:pPrDefault/>` saía vazio e o Word caía
+ * na entrelinha simples, contra `BASE_LINE_HEIGHT` (1,4) no PDF e nas telas. Em
+ * OOXML a entrelinha proporcional é `line` em 240 avos com `lineRule` auto.
+ */
+export function docxDocumentStyles(pageStyle?: PageStyle) {
+  return {
+    default: {
+      document: {
+        run: documentRunStyle(pageStyle),
+        paragraph: {
+          spacing: { line: Math.round(BASE_LINE_HEIGHT * 240), lineRule: LineRuleType.AUTO },
+        },
+      },
+    },
+  };
+}
+
+/**
  * Os metadados do `.docx` (`docProps/core.xml`).
  *
  * Achado 0344: o `new Document(...)` ia só com `styles` e `sections`, então o
@@ -910,12 +980,15 @@ export function withPageBreak(blocks: DocxBlock[]): DocxBlock[] {
 export function docxContentBlocks(
   document: CanonicalDocument,
   settings: PanelSettings = DEFAULT_PANEL_SETTINGS,
+  pageStyle?: PageStyle,
 ): DocxBlock[] {
   const breaks = perQuestionBreakFlags(document.blocks);
+  // O mesmo `blockSpacing` (px) que o PDF converte em `blockGap` (achado 0269).
+  const blockGapTwips = pxToTwips(pageStyle?.blockSpacing ?? BASE_BLOCK_SPACING_PX);
   let questionIndex = 0;
   return document.blocks.flatMap((block, i) => {
     if (block.type === "question") questionIndex++;
-    const paragraphs = blockToDocxParagraphs(block, questionIndex);
+    const paragraphs = blockToDocxParagraphs(block, questionIndex, blockGapTwips);
     const forceBreak =
       (settings.pageBreakPerQuestion && breaks[i]) || block.style?.pageBreakBefore === true;
     return forceBreak ? withPageBreak(paragraphs) : paragraphs;
@@ -995,11 +1068,11 @@ export async function downloadDocx(
   pageStyle?: PageStyle,
 ): Promise<void> {
   const header = settings.header;
-  const contentParagraphs = docxContentBlocks(document, settings);
+  const contentParagraphs = docxContentBlocks(document, settings, pageStyle);
 
   const doc = new Document({
     ...documentMetadata(header, document),
-    styles: { default: { document: { run: documentRunStyle(pageStyle) } } },
+    styles: docxDocumentStyles(pageStyle),
     sections: [
       {
         properties: docxSectionProperties(),

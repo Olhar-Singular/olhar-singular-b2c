@@ -13,6 +13,7 @@ import {
   documentMetadata,
   docxSectionProperties,
   docxFooter,
+  docxDocumentStyles,
   DOCX_CONTENT_WIDTH_TWIPS,
 } from "./exportDocx";
 import {
@@ -27,6 +28,7 @@ import {
   ORDERING_MARKER_TEXT,
   ANSWER_ITEM_GAP_PT,
   TABLE_CELL_PADDING_PT,
+  BASE_LINE_HEIGHT,
 } from "../render/pageTokens";
 import { pdfFooterLabel } from "../render/footerLabel";
 import type {
@@ -1684,5 +1686,99 @@ describe("aviso de tipografia da fórmula no Word (0415)", () => {
         fontFamily: "opendyslexic",
       }).join(" "),
     ).not.toMatch(/monoespaçada/i);
+  });
+});
+
+/**
+ * Achado 0269 — o Word saía em entrelinha simples (`<w:pPrDefault/>` vazio) e
+ * sem o vão entre as partes da questão e entre os blocos, contra os 1,4 de
+ * `BASE_LINE_HEIGHT` e o `blockSpacing` do documento que o PDF e as telas usam.
+ */
+describe("0269 · entrelinha e vão entre blocos no Word", () => {
+  const para = (n: number, t: string): Block => ({ id: id(n), type: "paragraph", content: text(t) });
+  const docOf = (blocks: Block[]): CanonicalDocument => ({ schemaVersion: 1, blocks });
+
+  it("o estilo padrão do documento declara a entrelinha do corpo (1,4 = 336/240, auto)", () => {
+    const styles = docxDocumentStyles();
+    expect(styles.default.document.paragraph).toEqual({
+      spacing: { line: Math.round(BASE_LINE_HEIGHT * 240), lineRule: "auto" },
+    });
+    expect(styles.default.document.paragraph.spacing.line).toBe(336);
+    expect(styles.default.document.run).toEqual(documentRunStyle());
+    expect(docxDocumentStyles({ fontSize: 16 }).default.document.run).toEqual(
+      documentRunStyle({ fontSize: 16 }),
+    );
+  });
+
+  it("bloco de topo sem `spacingAfter` fecha com o `blockSpacing` do documento", () => {
+    const [semPageStyle] = docxContentBlocks(docOf([para(1, "a")]));
+    // Default 16px = 12pt = 240 twips.
+    expect(docxNodeAttrs(semPageStyle, "w:spacing")).toEqual({ after: 240 });
+    const [comPageStyle] = docxContentBlocks(docOf([para(2, "b")]), undefined, { blockSpacing: 24 });
+    // 24px = 18pt = 360 twips.
+    expect(docxNodeAttrs(comPageStyle, "w:spacing")).toEqual({ after: 360 });
+  });
+
+  it("o `spacingAfter` do bloco continua vencendo o vão do documento", () => {
+    const [p] = docxContentBlocks(
+      docOf([{ ...para(3, "c"), style: { spacingAfter: 8 } } as Block]),
+      undefined,
+      { blockSpacing: 24 },
+    );
+    expect(docxNodeAttrs(p, "w:spacing")).toEqual({ after: 120 });
+  });
+
+  it("enunciado, instrução e stem saem separados como no PDF, e a questão fecha com o vão do documento", () => {
+    const question: Block = {
+      id: id(10),
+      type: "question",
+      stem: [para(11, "primeiro"), para(12, "segundo")],
+      enunciado: text("Leia com atenção."),
+      instruction: text("Escreva nas células vazias."),
+      answer: { kind: "open", answerLines: 1 },
+    };
+    const blocks = docxContentBlocks(docOf([question]), undefined, { blockSpacing: 24 });
+    const byText = (t: string) => blocks.find((b) => docxText(b).includes(t));
+    // Stem: 6pt (QUESTION_INNER_GAP_PT) = 120 twips entre os blocos do enunciado.
+    expect(docxNodeAttrs(byText("primeiro"), "w:spacing")).toEqual({ after: 120 });
+    expect(docxNodeAttrs(byText("segundo"), "w:spacing")).toEqual({ after: 120 });
+    // Enunciado e instrução: `marginBottom: 4` do PdfQuestion = 80 twips.
+    expect(docxNodeAttrs(byText("Leia com"), "w:spacing")).toEqual({ after: 80 });
+    expect(docxNodeAttrs(byText("Escreva nas"), "w:spacing")).toEqual({ after: 80 });
+    // O parágrafo que fecha a questão mede EXATAMENTE o vão do documento.
+    const closing = blocks[blocks.length - 1];
+    expect(docxText(closing)).toBe("");
+    expect(docxNodeAttrs(closing, "w:spacing")).toEqual({ line: 360, lineRule: "exact", after: 0 });
+  });
+
+  it("o primeiro parágrafo do stem com `spacingAfter` próprio leva ele no parágrafo do número", () => {
+    const [numbered] = blockToDocxParagraphs(
+      {
+        id: id(30),
+        type: "question",
+        stem: [{ ...para(31, "y"), style: { spacingAfter: 24 } } as Block],
+        answer: { kind: "open", answerLines: 1 },
+      },
+      1,
+    );
+    expect(docxNodeAttrs(numbered, "w:spacing")).toEqual({ after: 360 });
+  });
+
+  it("a questão com `spacingAfter` próprio fecha com ele", () => {
+    const blocks = blockToDocxParagraphs(
+      {
+        id: id(20),
+        type: "question",
+        stem: [para(21, "x")],
+        answer: { kind: "open", answerLines: 1 },
+        style: { spacingAfter: 8 },
+      },
+      1,
+    );
+    expect(docxNodeAttrs(blocks[blocks.length - 1], "w:spacing")).toEqual({
+      line: 120,
+      lineRule: "exact",
+      after: 0,
+    });
   });
 });
