@@ -165,6 +165,9 @@ export function StepGenerate({ data, onResult, onNext, onPrev, onLoadingChange, 
       if (isNetworkError(fnError)) throw fnError;
       const context = (fnError as { context?: Response }).context;
       if (context?.status === 402) {
+        // The server just said the balance does not cover the cost: the cached
+        // balance (sidebar, banner) may be stale, so re-read it.
+        refreshCredits();
         setCreditError(OUT_OF_CREDITS_MESSAGE);
         return;
       }
@@ -209,6 +212,9 @@ export function StepGenerate({ data, onResult, onNext, onPrev, onLoadingChange, 
       /* v8 ignore next -- AbortController race */
       if ((e as Error).name === "AbortError" || controller.signal.aborted) return;
       console.error("Erro ao gerar adaptação:", e);
+      // A failure may still have charged the reservation (worker died after
+      // opening it), so the balance shown must be re-read.
+      refreshCredits();
       const reason = parseEdgeFnError(e, "Erro ao gerar adaptação.");
       setFailed(true);
       setFailReason(reason);
@@ -220,7 +226,7 @@ export function StepGenerate({ data, onResult, onNext, onPrev, onLoadingChange, 
         onLoadingChange?.(false);
       }
     }
-  }, [adaptActivity, onLoadingChange]);
+  }, [adaptActivity, onLoadingChange, refreshCredits]);
 
   const generate = useCallback(async () => {
     abortRef.current?.abort();

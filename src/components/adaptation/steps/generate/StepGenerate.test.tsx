@@ -320,6 +320,49 @@ describe("StepGenerate", () => {
     expect(screen.getByRole("link", { name: /^Assinar$/ })).toHaveAttribute("href", "/assinar");
   });
 
+  /**
+   * Regressão 0469: o saldo só era relido após uma geração bem-sucedida. No 402 e
+   * numa falha (que pode ter debitado a reserva), a sidebar e a faixa de créditos
+   * ficavam com o valor em cache justamente quando ele pode estar errado.
+   */
+  describe("relê o saldo também quando a geração não dá certo (0469)", () => {
+    const renderWithSpies = async (data = baseData) => {
+      const mockRefresh = vi.fn().mockResolvedValue(undefined);
+      const { useAuth } = await import("@/hooks/useAuth");
+      vi.mocked(useAuth).mockReturnValueOnce({ user: { id: "user-1" }, refreshProfile: mockRefresh } as never);
+      const queryClient = createTestQueryClient();
+      const invalidate = vi.spyOn(queryClient, "invalidateQueries");
+      renderWithProviders(
+        <StepGenerate data={data} onResult={vi.fn()} onNext={vi.fn()} onPrev={vi.fn()} />,
+        { queryClient },
+      );
+      return { mockRefresh, invalidate };
+    };
+
+    it("relê saldo e extrato no 402", async () => {
+      invokeMock.mockResolvedValueOnce({
+        data: null,
+        error: { context: { status: 402, json: async () => ({ error: "no" }) } },
+      });
+      const { mockRefresh, invalidate } = await renderWithSpies();
+      await waitFor(() => expect(screen.getByText(/Seus créditos acabaram/i)).toBeInTheDocument());
+      expect(mockRefresh).toHaveBeenCalled();
+      expect(invalidate).toHaveBeenCalledWith({ queryKey: ["credit_transactions"] });
+    });
+
+    it("relê saldo e extrato quando a adaptação falha (a reserva pode ter sido debitada)", async () => {
+      const { toast } = await import("sonner");
+      invokeMock.mockResolvedValueOnce({
+        data: null,
+        error: { context: { status: 500, json: async () => ({ error: "boom" }) } },
+      });
+      const { mockRefresh, invalidate } = await renderWithSpies();
+      await waitFor(() => expect(toast.error).toHaveBeenCalledWith("boom"));
+      expect(mockRefresh).toHaveBeenCalled();
+      expect(invalidate).toHaveBeenCalledWith({ queryKey: ["credit_transactions"] });
+    });
+  });
+
   it("returns to the previous step from the credit-error screen", async () => {
     const onPrev = vi.fn();
     invokeMock.mockResolvedValueOnce({
