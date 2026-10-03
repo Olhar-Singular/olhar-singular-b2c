@@ -77,6 +77,7 @@ import {
   ORDERING_MARKER_TEXT,
   ANSWER_ITEM_GAP_PT,
   MATCHING_LINK_GAP_PT,
+  TABLE_CELL_PADDING_PT,
 } from "../render/pageTokens";
 import { indexToLetter } from "../render/letters";
 import {
@@ -422,6 +423,15 @@ function matchingTable(
   });
 }
 
+/** Recuo da célula da tabela em twips, o mesmo `TABLE_CELL_PADDING_PT` do PDF. */
+const TABLE_CELL_MARGIN_TWIPS = Math.round(TABLE_CELL_PADDING_PT * 20);
+const TABLE_CELL_MARGINS = {
+  top: TABLE_CELL_MARGIN_TWIPS,
+  bottom: TABLE_CELL_MARGIN_TWIPS,
+  left: TABLE_CELL_MARGIN_TWIPS,
+  right: TABLE_CELL_MARGIN_TWIPS,
+};
+
 /**
  * The typed answer, mirroring PdfAnswer kind by kind. Exhaustive over the union
  * (no default), so a new kind is a compile error rather than a silent omission.
@@ -504,6 +514,10 @@ function answerToDocx(
         new Table({
           width: { size: 100, type: WidthType.PERCENTAGE },
           columnWidths,
+          // Achado 0268: sem `w:tblCellMar` o Word usa o default dele (108 twips
+          // dos lados, 0 em cima/embaixo) e quebra a célula uma palavra antes da
+          // folha, da prévia e do PDF; o recuo vem do mesmo ponto único (3pt).
+          margins: TABLE_CELL_MARGINS,
           rows: [row(header, true), ...body.map((cells) => row(cells, false))],
         }),
       ];

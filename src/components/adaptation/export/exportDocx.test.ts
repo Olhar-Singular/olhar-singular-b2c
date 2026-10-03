@@ -26,6 +26,7 @@ import {
   TRUE_FALSE_MARKER_TEXT,
   ORDERING_MARKER_TEXT,
   ANSWER_ITEM_GAP_PT,
+  TABLE_CELL_PADDING_PT,
 } from "../render/pageTokens";
 import { pdfFooterLabel } from "../render/footerLabel";
 import type {
@@ -635,6 +636,27 @@ describe("B15 · conteúdo que precisa chegar ao Word", () => {
     // divisão igual, a menos do resto que fecha a soma na última coluna
     expect(Math.max(...widths) - Math.min(...widths)).toBeLessThanOrEqual(1);
     expect(widths.every((w) => w > 1000)).toBe(true);
+  });
+
+  it("table declara o recuo da célula de TABLE_CELL_PADDING_PT nos quatro lados", () => {
+    // Achado 0268: sem `w:tblCellMar` o Word aplica o default dele (108 twips à
+    // esquerda/direita, 0 em cima/embaixo) e a célula quebra uma palavra antes
+    // da folha, da prévia e do PDF, que usam 3pt em todos os lados.
+    const table = blockToDocxParagraphs(
+      q({ kind: "table", rows: [[text("Substância"), text("Estado")]] }),
+      1,
+    ).find((b) => b instanceof Table) as unknown as { root: unknown[] };
+    const tblPr = table.root.find(
+      (n) => (n as { rootKey?: string }).rootKey === "w:tblPr",
+    ) as { root: unknown[] };
+    const cellMar = tblPr.root.find(
+      (n) => (n as { rootKey?: string }).rootKey === "w:tblCellMar",
+    );
+    expect(cellMar).toBeDefined();
+    const twips = Math.round(TABLE_CELL_PADDING_PT * 20);
+    for (const side of ["w:top", "w:left", "w:bottom", "w:right"]) {
+      expect(docxNodeAttrs(cellMar, side)).toMatchObject({ size: twips, type: "dxa" });
+    }
   });
 
   it("stem com blocos não-parágrafo (imagem, fórmula) não é descartado", () => {
