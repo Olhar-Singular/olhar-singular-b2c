@@ -844,50 +844,69 @@ describe("StepActivityInput — bank question cards are keyboard accessible", ()
   });
 });
 
-describe("StepActivityInput — manual edits are never discarded silently (1129)", () => {
+describe("StepActivityInput — manual edits are never discarded silently (1129, 1138)", () => {
   const q1 = { id: "q1", text: "Questão um", subject: "Física", topic: null, difficulty: null, image_url: null, options: null };
   const q2 = { id: "q2", text: "Questão dois", subject: "Física", topic: null, difficulty: null, image_url: null, options: null };
   const editedText = "1) Questão um\n\n2) Questão dois\n\n3) PERGUNTA DIGITADA A MAO";
 
+  // 1138: the warning is the app's AlertDialog, never the browser's window.confirm.
+  function keepEdit() {
+    fireEvent.click(within(screen.getByRole("alertdialog")).getByRole("button", { name: "Manter minha edição" }));
+  }
+  function replaceText() {
+    fireEvent.click(within(screen.getByRole("alertdialog")).getByRole("button", { name: "Substituir texto" }));
+  }
+
+  it("asks in the app dialog (not window.confirm), naming the consequence and the verbs", () => {
+    const confirmSpy = vi.spyOn(window, "confirm");
+    const data: WizardData = { ...baseData, selectedQuestions: [q1, q2], activityText: editedText };
+    render(<StepActivityInput data={data} updateData={vi.fn()} onNext={vi.fn()} onPrev={vi.fn()} />);
+    fireEvent.click(screen.getByRole("button", { name: /Banco de Questões/i }));
+    fireEvent.click(screen.getAllByRole("button", { name: /Remover questão/i })[0]);
+    expect(confirmSpy).not.toHaveBeenCalled();
+    const dialog = screen.getByRole("alertdialog");
+    expect(within(dialog).getByRole("heading", { name: /Substituir o texto editado/i })).toBeInTheDocument();
+    expect(dialog).toHaveTextContent(/a edição será perdida/i);
+    expect(within(dialog).getByRole("button", { name: "Substituir texto" })).toBeInTheDocument();
+    expect(within(dialog).getByRole("button", { name: "Manter minha edição" })).toBeInTheDocument();
+    confirmSpy.mockRestore();
+  });
+
   it("asks before rebuilding the text on remove and keeps it when the user cancels", () => {
-    const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(false);
     const updateData = vi.fn();
     const data: WizardData = { ...baseData, selectedQuestions: [q1, q2], activityText: editedText };
     render(<StepActivityInput data={data} updateData={updateData} onNext={vi.fn()} onPrev={vi.fn()} />);
     fireEvent.click(screen.getByRole("button", { name: /Banco de Questões/i }));
     fireEvent.click(screen.getAllByRole("button", { name: /Remover questão/i })[0]);
-    expect(confirmSpy).toHaveBeenCalledTimes(1);
+    keepEdit();
     expect(updateData).not.toHaveBeenCalled();
-    confirmSpy.mockRestore();
+    expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
   });
 
   it("rebuilds the text on remove when the user confirms", () => {
-    const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(true);
     const updateData = vi.fn();
     const data: WizardData = { ...baseData, selectedQuestions: [q1, q2], activityText: editedText };
     render(<StepActivityInput data={data} updateData={updateData} onNext={vi.fn()} onPrev={vi.fn()} />);
     fireEvent.click(screen.getByRole("button", { name: /Banco de Questões/i }));
     fireEvent.click(screen.getAllByRole("button", { name: /Remover questão/i })[0]);
+    expect(updateData).not.toHaveBeenCalled();
+    replaceText();
     expect(updateData).toHaveBeenCalledWith(
       expect.objectContaining({ selectedQuestions: [q2], activityText: "1) Questão dois", result: null }),
     );
-    confirmSpy.mockRestore();
   });
 
   it("does not ask when the text still matches the bank list", () => {
-    const confirmSpy = vi.spyOn(window, "confirm");
     const updateData = vi.fn();
     const data: WizardData = { ...baseData, selectedQuestions: [q1, q2], activityText: "1) Questão um\n\n2) Questão dois" };
     render(<StepActivityInput data={data} updateData={updateData} onNext={vi.fn()} onPrev={vi.fn()} />);
     fireEvent.click(screen.getByRole("button", { name: /Banco de Questões/i }));
     fireEvent.click(screen.getAllByRole("button", { name: /Remover questão/i })[0]);
-    expect(confirmSpy).not.toHaveBeenCalled();
+    expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
     expect(updateData).toHaveBeenCalledWith(expect.objectContaining({ activityText: "1) Questão dois" }));
-    confirmSpy.mockRestore();
   });
 
   it("asks before adding bank questions over an edited text and keeps it when the user cancels", async () => {
-    const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(false);
     bankQuestionsResult.data = [
       { id: "q3", text: "Questão três", subject: "Física", topic: null, difficulty: null, image_url: null, options: null },
     ];
@@ -899,14 +918,12 @@ describe("StepActivityInput — manual edits are never discarded silently (1129)
     await waitFor(() => screen.getByText("Questão três"));
     fireEvent.click(screen.getByText("Questão três"));
     fireEvent.click(screen.getByRole("button", { name: /Adicionar 1/i }));
-    expect(confirmSpy).toHaveBeenCalledTimes(1);
+    keepEdit();
     expect(updateData).not.toHaveBeenCalled();
     expect(toast.success).not.toHaveBeenCalled();
-    confirmSpy.mockRestore();
   });
 
   it("asks before adding bank questions over text typed with no bank questions yet", async () => {
-    const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(true);
     bankQuestionsResult.data = [
       { id: "q3", text: "Questão três", subject: "Física", topic: null, difficulty: null, image_url: null, options: null },
     ];
@@ -918,9 +935,9 @@ describe("StepActivityInput — manual edits are never discarded silently (1129)
     await waitFor(() => screen.getByText("Questão três"));
     fireEvent.click(screen.getByText("Questão três"));
     fireEvent.click(screen.getByRole("button", { name: /Adicionar 1/i }));
-    expect(confirmSpy).toHaveBeenCalledTimes(1);
+    expect(updateData).not.toHaveBeenCalled();
+    replaceText();
     expect(updateData).toHaveBeenCalledWith(expect.objectContaining({ activityText: "1) Questão três" }));
-    confirmSpy.mockRestore();
   });
 });
 
@@ -1024,8 +1041,7 @@ describe("StepActivityInput — removing a selected question keeps focus and is 
     expect(screen.getByRole("status")).toHaveTextContent("Questão removida. 3 questão(ões) selecionada(s).");
   });
 
-  it("does not move focus nor announce when the user cancels the rebuild", () => {
-    const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(false);
+  it("does not move focus nor announce when the user cancels the rebuild", async () => {
     function Edited() {
       const [data, setData] = useState<WizardData>({ ...baseData, selectedQuestions: qs, activityText: "editado à mão" });
       return <StepActivityInput data={data} updateData={(p) => setData((d) => ({ ...d, ...p }))} onNext={vi.fn()} onPrev={vi.fn()} />;
@@ -1035,9 +1051,10 @@ describe("StepActivityInput — removing a selected question keeps focus and is 
     const second = screen.getByRole("button", { name: "Remover questão 2" });
     second.focus();
     fireEvent.click(second);
-    expect(document.activeElement).toBe(second);
+    fireEvent.click(within(screen.getByRole("alertdialog")).getByRole("button", { name: "Manter minha edição" }));
+    // 1138: closing the warning hands focus back to the button that opened it.
+    await waitFor(() => expect(document.activeElement).toBe(second));
     expect(screen.getByRole("status")).toBeEmptyDOMElement();
-    confirmSpy.mockRestore();
   });
 
   it("uses a remove target larger than 24x24", () => {

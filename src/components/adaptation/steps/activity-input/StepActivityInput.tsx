@@ -10,6 +10,16 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
   Select,
   SelectContent,
   SelectItem,
@@ -138,6 +148,10 @@ export function StepActivityInput({ data, updateData, onNext, onPrev }: Props) {
   const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const bankSearchInputRef = useRef<HTMLInputElement>(null);
+  // 1138: the bank change waiting for "Substituir texto", and who asked for it.
+  const [pendingRebuild, setPendingRebuild] = useState<(() => void) | null>(null);
+  const rebuildTriggerRef = useRef<HTMLElement | null>(null);
+  const rebuildConfirmedRef = useRef(false);
 
   // ── Bank query ────────────────────────────────────────────────────────────
 
@@ -263,16 +277,22 @@ export function StepActivityInput({ data, updateData, onNext, onPrev }: Props) {
   // Both tabs write the same `activityText`, and changing the bank list rebuilds
   // it from the list. When the user already edited the text by hand ("Colar
   // Texto"), that rebuild would wipe the edit, so it only happens on consent.
-  function canRebuildActivityText(): boolean {
-    if (data.activityText === buildActivityText(data.selectedQuestions)) return true;
-    return window.confirm(
-      "O texto da atividade foi editado à mão. Alterar as questões do banco vai substituí-lo " +
-        "pelo texto das questões selecionadas e a edição será perdida. Continuar?",
-    );
+  // 1138: consent is asked in the app's AlertDialog (themed, verbs on the
+  // buttons), not window.confirm, so the change runs only after "Substituir".
+  function withRebuildConsent(action: () => void) {
+    if (data.activityText === buildActivityText(data.selectedQuestions)) {
+      action();
+      return;
+    }
+    rebuildTriggerRef.current = document.activeElement as HTMLElement;
+    setPendingRebuild(() => action);
   }
 
   function confirmBankSelection() {
-    if (!canRebuildActivityText()) return;
+    withRebuildConsent(addCheckedQuestions);
+  }
+
+  function addCheckedQuestions() {
     const newQuestions: SelectedQuestion[] = [...checked.values()]
       .filter((q) => !addedIds.has(q.id))
       .map((q) => ({
@@ -294,7 +314,10 @@ export function StepActivityInput({ data, updateData, onNext, onPrev }: Props) {
   }
 
   function removeQuestion(id: string) {
-    if (!canRebuildActivityText()) return;
+    withRebuildConsent(() => removeQuestionNow(id));
+  }
+
+  function removeQuestionNow(id: string) {
     const index = data.selectedQuestions.findIndex((q) => q.id === id);
     const updated = data.selectedQuestions.filter((q) => q.id !== id);
     // Next question (now at the same index), else the previous one, else the opener.
@@ -647,6 +670,48 @@ export function StepActivityInput({ data, updateData, onNext, onPrev }: Props) {
           </div>
         </DialogContent>
       </Dialog>
+
+      <AlertDialog
+        open={pendingRebuild !== null}
+        onOpenChange={(open) => {
+          /* v8 ignore next -- Radix controlado sem trigger nunca chama onOpenChange(true) */
+          if (!open) setPendingRebuild(null);
+        }}
+      >
+        <AlertDialogContent
+          // Opened by state, with no AlertDialogTrigger: keeping the edit hands
+          // focus back to whoever asked; replacing leaves focus to the action
+          // (next remove button, or the bank opener after adding).
+          onCloseAutoFocus={(event) => {
+            event.preventDefault();
+            if (rebuildConfirmedRef.current) {
+              rebuildConfirmedRef.current = false;
+              return;
+            }
+            rebuildTriggerRef.current.focus();
+          }}
+        >
+          <AlertDialogHeader>
+            <AlertDialogTitle>Substituir o texto editado?</AlertDialogTitle>
+            <AlertDialogDescription>
+              O texto da atividade foi editado à mão. Alterar as questões do banco vai substituí-lo pelo
+              texto das questões selecionadas e a edição será perdida.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Manter minha edição</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                rebuildConfirmedRef.current = true;
+                pendingRebuild();
+              }}
+              className="bg-destructive-surface text-destructive-foreground hover:bg-destructive-surface-hover"
+            >
+              Substituir texto
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <ImagePreviewDialog
         open={!!previewImageUrl}
