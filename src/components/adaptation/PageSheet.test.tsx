@@ -5,6 +5,10 @@ import { PAGE_CONTENT_HEIGHT_PX, PAGE_MARGIN_PX } from "./render/pageTokens";
 import { FOOTER_BOTTOM_PX } from "./render/footerLabel";
 
 describe("PageSheet", () => {
+  // Posições (px da folha) das réguas de virada desenhadas (achado 0382).
+  const ruleYs = () =>
+    screen.queryAllByTestId("page-rule").map((rule) => Number(rule.dataset.ruleY));
+
   it("renderiza a barra fixa e a folha com o conteúdo", () => {
     render(
       <PageSheet toolbar={<div>BARRA</div>}>
@@ -423,7 +427,7 @@ describe("PageSheet", () => {
       render(<PageSheet toolbar={null}><span>x</span></PageSheet>);
       const sheet = screen.getByTestId("page-sheet");
       // Cabendo numa folha não há virada para desenhar (achado 0151).
-      expect(sheet.style.backgroundImage).toBe("none");
+      expect(ruleYs()).toEqual([]);
       // A folha cabe inteira na mesa: escala neutra (achado 0234).
       expect(sheet.style.transform).toBe("scale(1)");
       expect(screen.queryByTestId("page-count")).toBeNull();
@@ -450,7 +454,7 @@ describe("PageSheet", () => {
       withHeight(1500, () => {
         render(<PageSheet toolbar={null}><span>x</span></PageSheet>);
         const sheet = screen.getByTestId("page-sheet");
-        expect(sheet.style.backgroundImage).toBe("none");
+        expect(ruleYs()).toEqual([]);
         // O papel continua crescendo em folhas inteiras (achado 0151).
         expect(sheet.style.minHeight).toBe("2139.34px");
       });
@@ -466,7 +470,7 @@ describe("PageSheet", () => {
         // 2 áreas úteis + as duas margens do fluxo contínuo (achado 0157).
         expect(sheet.style.minHeight).toBe("2139.34px");
         // Sem régua: o fluxo do Revisar não vira (achado 0198).
-        expect(sheet.style.backgroundImage).toBe("none");
+        expect(ruleYs()).toEqual([]);
         // Continua sem paginar de verdade: nenhum contador de folhas.
         expect(screen.queryByTestId("page-count")).toBeNull();
       });
@@ -517,8 +521,8 @@ describe("PageSheet", () => {
         // A virada cai no ponto do FLUXO onde a área imprimível da página 1
         // acaba (53,33 + 1016,34), e o conteúdo (53,33 + 1058 = 1111,33px)
         // passa dela: a folha 2 tem tinta.
-        expect(sheet.style.backgroundImage).toContain("1069.67px");
-        expect(sheet.style.backgroundImage).not.toContain("1123px");
+        expect(ruleYs()).toContain(1069.67);
+        expect(ruleYs()).not.toContain(1123);
       });
     });
 
@@ -532,8 +536,63 @@ describe("PageSheet", () => {
       withHeight(1500, () => {
         render(<PageSheet paginated toolbar={null}><span>x</span></PageSheet>);
         const sheet = screen.getByTestId("page-sheet");
-        expect(sheet.style.backgroundImage).toContain("hsl(var(--sf-ink-soft))");
-        expect(sheet.style.backgroundImage).not.toContain("--sf-line-2");
+        const [rule] = screen.getAllByTestId("page-rule");
+        expect(sheet).toContainElement(rule);
+        expect(rule.style.background).toBe("hsl(var(--sf-ink-soft))");
+        expect(rule.style.background).not.toContain("--sf-line-2");
+      });
+    });
+
+    /*
+      Achado 0382: a régua era uma faixa de 1px dentro de UM `linear-gradient`
+      que cobria a folha inteira (5.000 a 9.000px). Com 4+ viradas o Chrome
+      amostra o gradiente numa tabela de cores de resolução fixa e a faixa some:
+      nenhum pixel da tela era pintado, em qualquer escala. Cada virada passa a
+      ser um elemento próprio, com espessura de pelo menos 1px de TELA.
+    */
+    it("desenha cada virada como elemento próprio, não como faixa de gradiente (achado 0382)", () => {
+      withHeight(3000, () => {
+        withTops(() => {
+          render(
+            <PageSheet paginated toolbar={null}>
+              <span>questão 1 longa</span>
+              <div className="adaptar-page-break" data-test-top="1500" />
+              <span>questão 2</span>
+            </PageSheet>,
+          );
+          const sheet = screen.getByTestId("page-sheet");
+          expect(sheet.style.backgroundImage).toBe("");
+          const rules = screen.getAllByTestId("page-rule");
+          expect(rules.map((rule) => Number(rule.dataset.ruleY))).toEqual([1069.67, 2086.01, 3102.35]);
+          for (const rule of rules) {
+            expect(rule.parentElement).toBe(sheet);
+            expect(rule.getAttribute("aria-hidden")).toBe("true");
+            expect(rule.style.position).toBe("absolute");
+            expect(rule.style.left).toBe("0px");
+            expect(rule.style.right).toBe("0px");
+            expect(rule.style.background).toBe("hsl(var(--sf-ink-soft))");
+            // Escala 1: 1px de folha = 1px de tela, terminando na virada.
+            expect(rule.style.height).toBe("1px");
+            expect(Number.parseFloat(rule.style.top)).toBeCloseTo(Number(rule.dataset.ruleY) - 1, 2);
+          }
+        });
+      });
+    });
+
+    it("mantém a régua com pelo menos 1px de tela quando a folha encolhe (achado 0382)", () => {
+      withClientWidth(332, () => {
+        withHeight(1500, () => {
+          render(<PageSheet paginated toolbar={null}><span>x</span></PageSheet>);
+          const sheet = screen.getByTestId("page-sheet");
+          const factor = Number(/scale\(([\d.]+)\)/.exec(sheet.style.transform)![1]);
+          expect(factor).toBeLessThan(1);
+          const [rule] = screen.getAllByTestId("page-rule");
+          expect(Number.parseFloat(rule.style.height) * factor).toBeCloseTo(1, 5);
+          expect(Number.parseFloat(rule.style.top) + Number.parseFloat(rule.style.height)).toBeCloseTo(
+            Number(rule.dataset.ruleY),
+            5,
+          );
+        });
       });
     });
 
@@ -548,7 +607,7 @@ describe("PageSheet", () => {
         render(<PageSheet paginated toolbar={null}><span>x</span></PageSheet>);
         const sheet = screen.getByTestId("page-sheet");
         expect(screen.getByTestId("page-count")).toHaveTextContent("2 páginas A4");
-        expect(sheet.style.backgroundImage).toContain("1069.67px");
+        expect(ruleYs()).toContain(1069.67);
         // A folha vai até o fim da 2ª página: o branco que sobra fica visível.
         expect(sheet.style.minHeight).toBe("2139.34px");
       });
@@ -685,8 +744,8 @@ describe("PageSheet", () => {
           // A quebra forçada gera uma virada desenhada (antes do 0123 não saía
           // régua nenhuma); ela cai no fim da página 1, que é onde o papel acaba
           // (achado 0131 — antes era desenhada em cima do corte, em 500px).
-          expect(sheet.style.backgroundImage).toContain("1069.67px");
-          expect(sheet.style.backgroundImage).not.toContain("500px");
+          expect(ruleYs()).toContain(1069.67);
+          expect(ruleYs()).not.toContain(500);
           // A folha vai até o fim da 2ª página: o branco do fim fica visível.
           expect(sheet.style.minHeight).toBe("2139.34px");
           expect(sheet.parentElement!.style.height).toBe("2139.34px");
@@ -716,8 +775,8 @@ describe("PageSheet", () => {
           expect(sheet.style.minHeight).toBe("2139.34px");
           expect(sheet.parentElement!.style.height).toBe("2139.34px");
           // A virada fica no fim da página 1, onde o papel realmente acaba.
-          expect(sheet.style.backgroundImage).toContain("1069.67px");
-          expect(sheet.style.backgroundImage).not.toContain("1919px");
+          expect(ruleYs()).toContain(1069.67);
+          expect(ruleYs()).not.toContain(1919);
         });
       });
     });
@@ -737,17 +796,7 @@ describe("PageSheet", () => {
           // trecho 1: 1500px de conteúdo -> 2 folhas; trecho 2 começa no fim da
           // página 2 e também gasta 2. As três viradas caem no fim da área útil
           // de cada folha (achado 0157).
-          const rules = sheet.style.backgroundImage.match(/[\d.]+px/g) ?? [];
-          expect(new Set(rules)).toEqual(
-            new Set([
-              "1068.67px",
-              "1069.67px",
-              "2085.01px",
-              "2086.01px",
-              "3101.35px",
-              "3102.35px",
-            ]),
-          );
+          expect(ruleYs()).toEqual([1069.67, 2086.01, 3102.35]);
           expect(sheet.style.minHeight).toBe("4172.02px");
         });
       });
@@ -806,7 +855,7 @@ describe("PageSheet", () => {
         resize(1500);
         expect(sheet.style.minHeight).toBe("2139.34px");
         // Sem régua no Revisar (achado 0198): o papel é que responde pela medida.
-        expect(sheet.style.backgroundImage).toBe("none");
+        expect(ruleYs()).toEqual([]);
         expect(sheet.parentElement!.style.height).toBe("2139.34px");
       });
     });
@@ -1248,7 +1297,7 @@ describe("PageSheet", () => {
         );
         const sheet = screen.getByTestId("page-sheet");
         expect(sheet.style.minHeight).toBe("1166.66px");
-        expect(sheet.style.backgroundImage).toBe("none");
+        expect(ruleYs()).toEqual([]);
       });
     });
 
@@ -1307,7 +1356,7 @@ describe("PageSheet", () => {
     it("não desenha régua de virada que o arquivo não tem", () => {
       withHeights(1300, () => {
         renderFolha(false);
-        expect(screen.getByTestId("page-sheet").style.backgroundImage).toBe("none");
+        expect(ruleYs()).toEqual([]);
       });
     });
 
@@ -1551,9 +1600,7 @@ describe("PageSheet", () => {
     it("desenha a régua entre os blocos, nunca no meio de um", () => {
       withBlocos(1930, () => {
         render(folha);
-        const rules = screen.getByTestId("page-sheet").style.backgroundImage;
-        expect(rules).toContain("1069.67px");
-        expect(rules).toContain("2086.01px");
+        expect(ruleYs()).toEqual([1069.67, 2086.01]);
       });
     });
 

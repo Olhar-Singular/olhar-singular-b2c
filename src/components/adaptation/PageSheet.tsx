@@ -781,15 +781,16 @@ export function PageSheet({
     (1,38:1 sobre o branco) e sumia no pé da folha e sob bordas de tabela;
     `--sf-ink-soft` dá ~6:1 e continua sendo token da folha (light-only).
   */
+  /*
+    Achado 0382: e cada régua é um ELEMENTO, não uma faixa de 1px dentro de um
+    `linear-gradient` único da folha inteira. Com 4+ viradas o gradiente (5.000
+    a 9.000px, 4 paradas por virada) é amostrado pelo Chrome numa tabela de
+    cores de resolução fixa e a faixa sumia: nenhum pixel da tela era pintado,
+    em qualquer escala. A espessura é dividida pela escala da folha para dar
+    sempre pelo menos 1px de TELA; a régua termina na virada, como antes.
+  */
   const ruleColor = "hsl(var(--sf-ink-soft))";
-  const pageRulesBackground = pageRules.length
-    ? `linear-gradient(to bottom, ${pageRules
-        .map(
-          (y) =>
-            `transparent ${y - 1}px, ${ruleColor} ${y - 1}px, ${ruleColor} ${y}px, transparent ${y}px`,
-        )
-        .join(", ")})`
-    : "none";
+  const ruleThickness = Math.max(1, 1 / scale);
 
   /*
     Achado 0222: a folha passa da mesa quando a escala trava no piso, e o que
@@ -860,7 +861,6 @@ export function PageSheet({
           decorativa) e a folha nunca termina no meio de uma página.
         */
         minHeight: `${sheetHeight}px`,
-        backgroundImage: pageRulesBackground,
         transform: `scale(${scale})`,
         /*
           Achado 0236: a escala vale para o conteúdo INTEIRO da folha, chrome de
@@ -879,6 +879,27 @@ export function PageSheet({
         Envelope do conteúdo: dá a altura NATURAL do documento, que a folha (já
         esticada até o fim da última página) não dá mais (achado 0123).
       */}
+      {pageRules.map((y) => (
+        <div
+          key={y}
+          data-testid="page-rule"
+          data-rule-y={y}
+          aria-hidden="true"
+          className="pointer-events-none"
+          style={{
+            position: "absolute",
+            left: 0,
+            right: 0,
+            top: `${y - ruleThickness}px`,
+            height: `${ruleThickness}px`,
+            background: ruleColor,
+            // Abaixo do conteúdo, como o fundo que substitui: a transform da
+            // folha cria o contexto de empilhamento, então -1 ainda fica sobre
+            // o papel.
+            zIndex: -1,
+          }}
+        />
+      ))}
       <div ref={contentRef}>{children}</div>
       {/*
         Achado 0242: o rodapé do PDF é `fixed`, sai em toda página e mora DENTRO
