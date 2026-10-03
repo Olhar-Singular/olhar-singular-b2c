@@ -38,6 +38,12 @@ export default {
           surface: "hsl(var(--destructive-surface))",
           "surface-hover": "hsl(var(--destructive-surface-hover))",
         },
+        warning: {
+          surface: "hsl(var(--warning-surface))",
+          border: "hsl(var(--warning-border))",
+          ink: "hsl(var(--warning-ink))",
+          icon: "hsl(var(--warning-icon))",
+        },
         muted: {
           DEFAULT: "hsl(var(--muted))",
           foreground: "hsl(var(--muted-foreground))",

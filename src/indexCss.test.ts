@@ -1133,3 +1133,52 @@ describe("index.css — contraste do --input (trilho do switch e borda dos campo
     expect(ratio).toBeGreaterThanOrEqual(3);
   });
 });
+
+/**
+ * Aviso de custo do passo Barreiras (achado 1120).
+ *
+ * O aviso "Esta adaptacao consumira N creditos (complexidade ...)" era pintado com
+ * ambar literal do Tailwind (`bg-amber-50`, `text-amber-600`): ficava um bloco creme
+ * no tema escuro e o trecho "(complexidade ...)" dava 3,07:1 sobre o fundo. Agora
+ * usa tokens --warning-* com variante escura.
+ */
+describe("aviso de custo do passo Barreiras (achado 1120)", () => {
+  const source = readSource("./components/adaptation/steps/barriers/StepBarrierSelection.tsx");
+
+  it("nao usa ambar literal do Tailwind (nao acompanharia o tema)", () => {
+    expect(source).not.toMatch(/\b(?:bg|text|border)-amber-\d+/);
+  });
+
+  it("pinta o aviso com os tokens --warning-*", () => {
+    expect(source).toMatch(/bg-warning-surface/);
+    expect(source).toMatch(/border-warning-border/);
+    expect(source).toMatch(/text-warning-ink/);
+  });
+
+  it.each([
+    [":root", "tema claro"],
+    [".dark", "tema escuro"],
+  ])("%s (%s): tinta do aviso atinge 4,5:1 sobre o fundo do aviso", (theme) => {
+    expect(
+      contrastRatio(token(theme, "warning-ink"), token(theme, "warning-surface")),
+    ).toBeGreaterThanOrEqual(4.5);
+  });
+
+  it.each([
+    [":root", "tema claro"],
+    [".dark", "tema escuro"],
+  ])("%s (%s): icone e borda do aviso atingem 3:1 (WCAG 1.4.11)", (theme) => {
+    expect(
+      contrastRatio(token(theme, "warning-icon"), token(theme, "warning-surface")),
+    ).toBeGreaterThanOrEqual(3);
+  });
+
+  it("o fundo do aviso no tema escuro e escuro (nao um bloco creme)", () => {
+    expect(relativeLuminance(token(".dark", "warning-surface"))).toBeLessThan(
+      relativeLuminance(token(".dark", "foreground")),
+    );
+    expect(
+      contrastRatio(token(".dark", "foreground"), token(".dark", "warning-surface")),
+    ).toBeGreaterThanOrEqual(4.5);
+  });
+});

@@ -204,14 +204,14 @@ export function StepBarrierSelection({ data, updateData, onNext, onPrev }: Props
         ) : (
           <div
             className={`flex items-center gap-2 p-3 rounded-lg border ${
-              affordable ? "bg-amber-50 border-amber-200" : "bg-destructive/10 border-destructive/30"
+              affordable ? "bg-warning-surface border-warning-border" : "bg-destructive/10 border-destructive/30"
             }`}
           >
-            <Coins className={`w-4 h-4 shrink-0 ${affordable ? "text-amber-600" : "text-destructive"}`} />
-            <p className={`text-sm ${affordable ? "text-amber-800" : "text-destructive"}`}>
+            <Coins className={`w-4 h-4 shrink-0 ${affordable ? "text-warning-icon" : "text-destructive"}`} />
+            <p className={`text-sm ${affordable ? "text-warning-ink" : "text-destructive"}`}>
               Esta adaptação consumirá{" "}
               <strong>{totalCost} créditos</strong>
-              <span className={`ml-1 ${affordable ? "text-amber-600" : ""}`}>
+              <span className={"ml-1"}>
                 (complexidade {COMPLEXITY_LABELS[complexityTier]})
               </span>
               {extractionCost > 0 && (

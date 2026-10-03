@@ -134,6 +134,14 @@
        Mesmo matiz, luminosidade menor, e o hover ESCURECE. Achado 0355. */
     --destructive-surface: 0 72% 44%;
     --destructive-surface-hover: 0 72% 38%;
+    /* Aviso (ambar): o aviso de custo do passo Barreiras. Antes era ambar literal
+       do Tailwind, creme no tema escuro e com "(complexidade ...)" a 3,07:1.
+       --warning-ink >= 4,5:1 e --warning-icon >= 3:1 sobre --warning-surface.
+       Achado 1120. */
+    --warning-surface: 48 100% 96%;
+    --warning-border: 45 90% 70%;
+    --warning-ink: 26 83% 30%;
+    --warning-icon: 32 90% 38%;
 
     --border: 195 12% 87%;
     /* Trilho do Switch desligado (o polegar e --background por cima) e borda de
@@ -239,6 +247,11 @@
        o rotulo branco, so o hover precisa escurecer em vez de clarear (0355). */
     --destructive-surface: 0 55% 48%;
     --destructive-surface-hover: 0 55% 42%;
+    /* Aviso no tema escuro: fundo ambar escuro, tinta clara. Achado 1120. */
+    --warning-surface: 38 35% 22%;
+    --warning-border: 38 50% 40%;
+    --warning-ink: 45 90% 75%;
+    --warning-icon: 42 85% 60%;
     --border: 195 15% 33%;
     /* Brighter than --border: this also lights up the outline Button variant's
        border (shares --input with Input/Select/Textarea per shadcn's outline
