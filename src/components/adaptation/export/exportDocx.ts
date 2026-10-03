@@ -362,7 +362,7 @@ export function nodeStyleToDocx(style?: NodeStyle): {
 }
 
 export function richTextToRuns(nodes: Inline[], inherited: RunStyle = {}): TextRun[] {
-  return nodes.map((node) => {
+  return nodes.flatMap((node) => {
     if (node.type === "inlineMath") {
       // Word has no KaTeX: sai o LaTeX, que ao menos mantém o conteúdo
       // visível — dropá-lo era perda silenciosa de dado no meio da frase.
@@ -378,9 +378,8 @@ export function richTextToRuns(nodes: Inline[], inherited: RunStyle = {}): TextR
     // que a tela (`textRunStyle`) e o PDF (`marksToPdfStyle`) usam. Ignorá-los
     // apagava o destaque que a professora pintou (achado 0134); `fontSize`
     // inline é pt, como nas outras superfícies, daí o meio-ponto por 2.
-    return new TextRun({
+    const runStyle = {
       ...inherited,
-      text: node.text,
       bold: node.marks?.includes("bold") || inherited.bold,
       italics: node.marks?.includes("italic") || inherited.italics,
       underline: node.marks?.includes("underline") ? {} : undefined,
@@ -389,7 +388,12 @@ export function richTextToRuns(nodes: Inline[], inherited: RunStyle = {}): TextR
       size: node.fontSize !== undefined && node.fontSize > 0
         ? Math.round(node.fontSize * 2)
         : inherited.size,
-    });
+    };
+    // O Word lê `\n` dentro de `<w:t>` como espaço (achado 0528): cada linha
+    // vira um run com a mesma formatação, precedido de `<w:br/>` a partir da 2ª.
+    return node.text.split("\n").map(
+      (line, i) => new TextRun({ ...runStyle, text: line, ...(i > 0 ? { break: 1 } : {}) }),
+    );
   });
 }
 

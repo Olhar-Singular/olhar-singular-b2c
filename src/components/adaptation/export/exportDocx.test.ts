@@ -2309,3 +2309,53 @@ describe("0527 · título, instrução, APOIO e legenda do Word acompanham o cor
     expect(sz(legenda)).toContain(half(sizes.caption));
   });
 });
+
+/**
+ * Achado 0528 — `\n` dentro do `text` de um run ia cru para `<w:t>`, e o Word
+ * o lê como espaço: a "Tabela de Preços" (uma linha por fruta na folha, na
+ * prévia e no PDF) virava um parágrafo corrido. Cada `\n` tem que virar
+ * `<w:br/>`, com a mesma formatação do run.
+ */
+describe("0528 · quebra de linha dentro do run vira <w:br/> no Word", () => {
+  const countKey = (node: unknown, key: string): number => {
+    let n = 0;
+    const walk = (o: unknown): void => {
+      if (Array.isArray(o)) return o.forEach(walk);
+      if (o === null || typeof o !== "object") return;
+      if ((o as { rootKey?: string }).rootKey === key) n += 1;
+      Object.values(o as Record<string, unknown>).forEach(walk);
+    };
+    walk(node);
+    return n;
+  };
+
+  it("cada \\n vira uma quebra e nenhum \\n sobra no texto", () => {
+    const runs = richTextToRuns([
+      { type: "text", text: "\n• Maçã: R$ 2,50\n• Banana: R$ 1,20", marks: ["bold"], color: "#DC2626" },
+    ]);
+    expect(docxText(runs)).not.toContain("\n");
+    expect(docxText(runs)).toBe("• Maçã: R$ 2,50• Banana: R$ 1,20");
+    expect(countKey(runs, "w:br")).toBe(2);
+    // A formatação do run vale para toda linha, não só a primeira.
+    expect(runs).toHaveLength(3);
+    for (const run of runs) {
+      expect(docxRunProps(run).some((p) => p.key === "w:color" && p.val === "DC2626")).toBe(true);
+      expect(countKey(run, "w:b")).toBeGreaterThan(0);
+    }
+  });
+
+  it("texto sem \\n continua um run só, sem quebra", () => {
+    const runs = richTextToRuns([{ type: "text", text: "linha única" }]);
+    expect(runs).toHaveLength(1);
+    expect(countKey(runs, "w:br")).toBe(0);
+  });
+
+  it("vale para o parágrafo inteiro exportado", () => {
+    const paragraphs = blockToDocxParagraphs(
+      { id: id(528), type: "paragraph", content: text("Tabela:\nMaçã\nBanana") },
+      1,
+    );
+    expect(countKey(paragraphs, "w:br")).toBe(2);
+    expect(paragraphs.map(docxText).join("")).toBe("Tabela:MaçãBanana");
+  });
+});
