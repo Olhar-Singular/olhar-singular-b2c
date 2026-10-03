@@ -55,6 +55,65 @@ describe("questionCardState store", () => {
   });
 });
 
+describe("questionCardState leave handler (achado 1106)", () => {
+  it("runs the open card's leave handler before another card expands", () => {
+    const store = getQuestionCardStore(fakeEditor());
+    const order: string[] = [];
+    store.expand("a");
+    store.setLeaveHandler(() => order.push(`leave:${store.getExpandedId()}`));
+    store.subscribe(() => order.push(`now:${store.getExpandedId()}`));
+    store.expand("b");
+    expect(order).toEqual(["leave:a", "now:b"]);
+  });
+
+  it("does not run it when re-expanding the same card", () => {
+    const store = getQuestionCardStore(fakeEditor());
+    const leave = vi.fn();
+    store.expand("a");
+    store.setLeaveHandler(leave);
+    store.expand("a");
+    expect(leave).not.toHaveBeenCalled();
+  });
+
+  it("drops the handler on collapse, so a later expand does not run it", () => {
+    const store = getQuestionCardStore(fakeEditor());
+    const leave = vi.fn();
+    store.expand("a");
+    store.setLeaveHandler(leave);
+    store.collapse();
+    store.expand("b");
+    store.expand("c");
+    expect(leave).not.toHaveBeenCalled();
+  });
+
+  it("runs the handler only once", () => {
+    const store = getQuestionCardStore(fakeEditor());
+    const leave = vi.fn();
+    store.expand("a");
+    store.setLeaveHandler(leave);
+    store.expand("b");
+    store.expand("c");
+    expect(leave).toHaveBeenCalledTimes(1);
+  });
+
+  it("unregister clears only the handler it registered", () => {
+    const store = getQuestionCardStore(fakeEditor());
+    const first = vi.fn();
+    const second = vi.fn();
+    store.expand("a");
+    const unregisterFirst = store.setLeaveHandler(first);
+    const unregisterSecond = store.setLeaveHandler(second);
+    unregisterFirst();
+    store.expand("b");
+    expect(second).toHaveBeenCalledTimes(1);
+    store.expand("a");
+    store.setLeaveHandler(first);
+    unregisterSecond();
+    store.expand("b");
+    expect(first).toHaveBeenCalledTimes(1);
+  });
+});
+
 describe("useQuestionCard hook", () => {
   it("starts collapsed and toggles this id via expand/collapse", () => {
     const editor = fakeEditor();

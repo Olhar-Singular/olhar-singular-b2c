@@ -32,6 +32,15 @@ import { RichTextField } from "../RichTextField";
 
 type EnunciadoPosition = "above" | "below";
 
+/** The card's buffered (not yet committed) values, in onCommit order. */
+export interface QuestionCardBuffer {
+  answer: QuestionAnswer;
+  instruction: RichText | null;
+  enunciado: RichText | null;
+  enunciadoPosition: EnunciadoPosition;
+  customNumber: string | null;
+}
+
 interface QuestionCardProps {
   num: number | undefined;
   /** Optional custom number override (e.g. "1a"). Null → auto from position. */
@@ -63,6 +72,11 @@ interface QuestionCardProps {
    */
   onGapAdded?: () => void;
   onGapRemoved?: (index: number) => void;
+  /**
+   * Achado 1106: mirrors the buffered values so the parent can commit them when
+   * the card is closed by opening another question's card (no Concluir click).
+   */
+  bufferRef?: React.MutableRefObject<QuestionCardBuffer | null>;
   stem: React.ReactNode;
 }
 
@@ -86,6 +100,7 @@ export function QuestionCard({
   onCancel,
   onGapAdded,
   onGapRemoved,
+  bufferRef,
   stem,
 }: QuestionCardProps) {
   const [localAnswer, setLocalAnswer] = useState<QuestionAnswer>(answer);
@@ -93,6 +108,16 @@ export function QuestionCard({
   const [localEnunciado, setLocalEnunciado] = useState<RichText | null>(enunciado);
   const [localPosition, setLocalPosition] = useState<EnunciadoPosition>(enunciadoPosition);
   const [localCustomNumber, setLocalCustomNumber] = useState<string | null>(customNumber);
+  useEffect(() => {
+    if (!bufferRef) return;
+    bufferRef.current = {
+      answer: localAnswer,
+      instruction: localInstruction,
+      enunciado: localEnunciado,
+      enunciadoPosition: localPosition,
+      customNumber: localCustomNumber,
+    };
+  });
   // Local "adding" reveals the instruction field before any text is persisted.
   const [adding, setAdding] = useState(false);
   const showInstruction = localInstruction != null || adding;

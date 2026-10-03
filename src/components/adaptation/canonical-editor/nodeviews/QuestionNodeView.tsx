@@ -51,7 +51,7 @@ import {
 } from "./blockTransactions";
 import { useQuestionCard } from "./questionCardState";
 import { QuestionPreview } from "./QuestionPreview";
-import { QuestionCard } from "./QuestionCard";
+import { QuestionCard, type QuestionCardBuffer } from "./QuestionCard";
 import type { QuestionNodeJSON } from "../originalDocExtension";
 
 /**
@@ -86,7 +86,28 @@ export function QuestionNodeView({ node, updateAttributes, editor, getPos, delet
   const id = node.attrs.id as string;
   const disabled = !editor.isEditable;
 
-  const { expanded, expand, collapse } = useQuestionCard(editor, id);
+  const { expanded, expand, collapse, setLeaveHandler } = useQuestionCard(editor, id);
+
+  /**
+   * Achado 1106: abrir o card de outra questão desmontava este card com o buffer
+   * (resposta, instrução, número) sem Concluir nem Cancelar, e as edições sumiam
+   * em silêncio, enquanto as do enunciado (vivo no Tiptap) ficavam. Enquanto o
+   * card está aberto, ele registra no store o que fazer ao ser trocado: gravar o
+   * buffer como o Concluir faria, sem devolver o foco ao lápis (o card novo é
+   * quem fica com ele).
+   */
+  const bufferRef = useRef<QuestionCardBuffer | null>(null);
+  const updateAttributesRef = useRef(updateAttributes);
+  updateAttributesRef.current = updateAttributes;
+  useEffect(() => {
+    if (!expanded) return;
+    return setLeaveHandler(() => {
+      const buffer = bufferRef.current;
+      /* v8 ignore next -- defensive: the card fills the buffer on mount */
+      if (!buffer) return;
+      updateAttributesRef.current({ ...buffer });
+    });
+  }, [expanded, setLeaveHandler]);
 
   // Snapshot of the full question node JSON captured when the card is opened —
   // used by Cancel to restore the live stem content (attrs are buffered in
@@ -317,6 +338,7 @@ export function QuestionNodeView({ node, updateAttributes, editor, getPos, delet
             onCancel={handleCancel}
             onGapAdded={handleGapAdded}
             onGapRemoved={handleGapRemoved}
+            bufferRef={bufferRef}
             stem={<NodeViewContent />}
           />
         </div>

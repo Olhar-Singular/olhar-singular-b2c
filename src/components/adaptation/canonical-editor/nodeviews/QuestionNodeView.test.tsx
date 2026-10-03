@@ -804,6 +804,93 @@ describe("QuestionNodeView — card open / commit / cancel", () => {
   });
 });
 
+// Achado 1106: abrir o card de outra questão trocava o id expandido e
+// desmontava o card aberto junto com o buffer (resposta, instrução, número),
+// sem Concluir nem Cancelar: as edições sumiam em silêncio.
+describe("QuestionNodeView — trocar de card (achado 1106)", () => {
+  const sharedEditor = () =>
+    ({
+      isEditable: true,
+      state: {
+        doc: {
+          descendants() {},
+          forEach(fn: (node: { attrs: Record<string, unknown> }, offset: number) => void) {
+            fn({ attrs: { id: "q-a" } }, 0);
+            fn({ attrs: { id: "q-b" } }, 100);
+          },
+        },
+        schema: { nodeFromJSON: vi.fn().mockReturnValue({}) },
+        tr: { replaceWith: vi.fn().mockReturnThis() },
+      },
+      view: { dispatch: vi.fn() },
+      storage: { originalDoc: { snapshots: new Map() } },
+    }) as unknown as NodeViewProps["editor"];
+
+  const checkbox = SEEDS.find((s) => s.kind === "checkbox")!;
+
+  it("grava as edições do card aberto antes de abrir o card de outra questão", () => {
+    const editor = sharedEditor();
+    const a = makeProps(checkbox, { id: "q-a", editor });
+    const b = makeProps(mc, { id: "q-b", editor });
+    render(
+      <>
+        <QuestionNodeView {...a.props} />
+        <QuestionNodeView {...b.props} />
+      </>,
+    );
+    fireEvent.click(screen.getAllByLabelText("Editar questão")[0]);
+    fireEvent.click(screen.getByLabelText("Remover opção 2"));
+    // o lápis que sobra é o da questão B
+    fireEvent.click(screen.getByLabelText("Editar questão"));
+
+    expect(a.updateAttributes).toHaveBeenCalledWith({
+      answer: expect.objectContaining({
+        kind: "checkbox",
+        items: [expect.objectContaining({ id: "55555555-5555-4555-8555-555555555555" })],
+      }),
+      instruction: null,
+      enunciado: null,
+      enunciadoPosition: "below",
+      customNumber: null,
+    });
+    expect(b.updateAttributes).not.toHaveBeenCalled();
+    // um card só, e é o da B
+    expect(screen.getAllByTestId("question-card")).toHaveLength(1);
+    expect(screen.getAllByTestId("question-node")[1]).toContainElement(screen.getByTestId("question-card"));
+  });
+
+  it("deixa o foco no card novo, sem devolvê-lo ao lápis da questão que fechou", () => {
+    const editor = sharedEditor();
+    const a = makeProps(checkbox, { id: "q-a", editor });
+    const b = makeProps(mc, { id: "q-b", editor });
+    render(
+      <>
+        <QuestionNodeView {...a.props} />
+        <QuestionNodeView {...b.props} />
+      </>,
+    );
+    fireEvent.click(screen.getAllByLabelText("Editar questão")[0]);
+    fireEvent.click(screen.getByLabelText("Editar questão"));
+    expect(screen.getByTestId("question-card")).toContainElement(document.activeElement as HTMLElement);
+  });
+
+  it("Concluir e Cancelar não gravam de novo quando outro card abre depois", () => {
+    const editor = sharedEditor();
+    const a = makeProps(checkbox, { id: "q-a", editor });
+    const b = makeProps(mc, { id: "q-b", editor });
+    render(
+      <>
+        <QuestionNodeView {...a.props} />
+        <QuestionNodeView {...b.props} />
+      </>,
+    );
+    fireEvent.click(screen.getAllByLabelText("Editar questão")[0]);
+    fireEvent.click(screen.getByRole("button", { name: "Cancelar edição" }));
+    fireEvent.click(screen.getAllByLabelText("Editar questão")[1]);
+    expect(a.updateAttributes).not.toHaveBeenCalled();
+  });
+});
+
 describe("QuestionNodeView — customNumber", () => {
   it("shows customNumber override in the preview ordinal", () => {
     const { props } = makeProps(mc);
