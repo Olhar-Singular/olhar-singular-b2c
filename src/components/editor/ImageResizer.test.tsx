@@ -352,4 +352,51 @@ describe("ImageResizer", () => {
     expect(indicator.className).toContain("text-surface-ink-soft");
     expect(indicator.className).not.toMatch(/text-muted-foreground/);
   });
+
+  /**
+   * 0611 — o resizer copiava `initialWidth` para estado local só na montagem.
+   * Ctrl+Z revertia o atributo `width` do nó, o NodeView re-renderizava com a
+   * largura antiga e a folha continuava desenhando a do arraste (e o próximo
+   * toque na alça partia do valor local, ressuscitando o tamanho desfeito).
+   */
+  describe("0611 — largura do documento é a fonte de verdade fora do arraste", () => {
+    it("redesenha a largura quando o documento muda (desfazer/refazer)", () => {
+      const { rerender } = render(<ImageResizer src="https://x.png" alt="a" initialWidth={762} onResize={vi.fn()} />);
+      rerender(<ImageResizer src="https://x.png" alt="a" initialWidth={300} onResize={vi.fn()} />);
+      const wrapper = screen.getByRole("img").parentElement as HTMLElement;
+      expect(wrapper.style.width).toBe("300px");
+      expect(screen.getByRole("slider")).toHaveAttribute("aria-valuenow", "300");
+      expect(screen.getByText("300px")).toBeInTheDocument();
+    });
+
+    it("volta ao padrão quando o documento zera a largura (trocar imagem)", () => {
+      const { rerender } = render(<ImageResizer src="https://x.png" alt="a" initialWidth={500} onResize={vi.fn()} />);
+      rerender(<ImageResizer src="https://y.png" alt="a" onResize={vi.fn()} />);
+      expect((screen.getByRole("img").parentElement as HTMLElement).style.width).toBe("300px");
+    });
+
+    it("o próximo passo do teclado parte da largura do documento", () => {
+      const onResize = vi.fn();
+      const { rerender } = render(<ImageResizer src="https://x.png" alt="a" initialWidth={762} onResize={onResize} />);
+      rerender(<ImageResizer src="https://x.png" alt="a" initialWidth={300} onResize={onResize} />);
+      fireEvent.keyDown(screen.getByRole("slider"), { key: "ArrowLeft" });
+      expect(onResize).toHaveBeenLastCalledWith(290);
+    });
+
+    it("não atropela a largura provisória durante um arraste em curso", () => {
+      const onResize = vi.fn();
+      const { rerender } = render(<ImageResizer src="https://x.png" alt="a" initialWidth={300} onResize={onResize} />);
+      const handle = screen.getByRole("slider");
+      fireEvent.mouseDown(handle, { clientX: 0 });
+      act(() => {
+        fireEvent.mouseMove(document, { clientX: 100 });
+      });
+      rerender(<ImageResizer src="https://x.png" alt="a" initialWidth={250} onResize={onResize} />);
+      expect((screen.getByRole("img").parentElement as HTMLElement).style.width).toBe("400px");
+      act(() => {
+        fireEvent.mouseUp(document);
+      });
+      expect(onResize).toHaveBeenLastCalledWith(400);
+    });
+  });
 });

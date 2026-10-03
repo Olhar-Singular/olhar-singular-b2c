@@ -120,6 +120,20 @@ export default function ImageResizer({ src, alt, initialWidth, onResize }: Props
     [onResize]
   );
 
+  /**
+   * 0611 — the document is the source of truth outside a drag. The local state
+   * used to be seeded once, on mount: undo/redo (or "Trocar imagem" resetting
+   * `width`) changed the node's attribute while the sheet kept drawing the old
+   * size, and the next keyboard/drag step started from that stale value. During
+   * a live drag the provisional width wins; the mouseup commits it.
+   */
+  useEffect(() => {
+    if (detachRef.current) return;
+    const next = initialWidth ?? DEFAULT_IMAGE_WIDTH_PX;
+    widthRef.current = next;
+    setWidth(next);
+  }, [initialWidth]);
+
   // Unmounting mid-drag (image deleted, step left) must not leave the handlers
   // on `document` writing into a component that no longer exists.
   useEffect(() => () => detachRef.current?.(), []);
