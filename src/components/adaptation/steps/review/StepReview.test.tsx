@@ -977,6 +977,25 @@ describe("StepReview", () => {
       expect(screen.getByRole("img")).toHaveAttribute("src", "data:image/png;base64,P1");
     });
 
+    /**
+     * Regressão (caça 1111): em 390x844 o rótulo sempre visível de "Ver prova
+     * original" alargava o grupo `shrink-0` da barra para 524px e empurrava o
+     * hambúrguer do cabeçalho mobile para fora da tela. Abaixo de `sm` ele vira
+     * só ícone, como Regerar e Sobre, com o nome acessível preservado.
+     */
+    it("'Ver prova original' só mostra o rótulo a partir de sm, nome acessível preservado", () => {
+      setup({
+        originalExam: { file: new File(["x"], "prova.pdf"), pageImages: [], userId: "user-1" },
+      });
+      const name = "Ver prova original";
+      const button = screen.getByRole("button", { name });
+      expect(button).toHaveAttribute("aria-label", name);
+      expect(button).toHaveAttribute("title", name);
+      const label = within(button).getByText(name);
+      expect(label).toHaveClass("hidden");
+      expect(label).toHaveClass("sm:inline");
+    });
+
     it("configures UploadedExamExtension with the file, pages and userId when present", () => {
       const file = new File(["x"], "prova.pdf");
       setup({ originalExam: { file, pageImages: ["data:image/png;base64,P1"], userId: "user-1" } });

@@ -469,9 +469,12 @@ export function StepReview({
               size="sm"
               variant="ghost"
               onClick={() => setOriginalOpen(true)}
-              className="shrink-0 text-surface-ink-soft hover:text-surface-ink"
+              aria-label="Ver prova original"
+              title="Ver prova original"
+              className="shrink-0 px-2 text-surface-ink-soft hover:text-surface-ink sm:px-3"
             >
-              <FileText className="w-4 h-4 mr-1" /> Ver prova original
+              <FileText className="w-4 h-4" />
+              <span className="hidden sm:ml-1 sm:inline">Ver prova original</span>
             </Button>
           )}
           <Button
