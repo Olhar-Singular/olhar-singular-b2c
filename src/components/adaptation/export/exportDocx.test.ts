@@ -853,6 +853,12 @@ describe("pauta da questão aberta no .docx (achado 0523)", () => {
       });
     }
   });
+
+  it("declara a borda between igual à bottom (achado 0526: parágrafos de borda idêntica viram um grupo e só a última linha era desenhada)", () => {
+    for (const line of lines()) {
+      expect(paragraphBorder(line, "w:between")).toEqual(paragraphBorder(line, "w:bottom"));
+    }
+  });
 });
 
 describe("divider no .docx (achado 0168)", () => {

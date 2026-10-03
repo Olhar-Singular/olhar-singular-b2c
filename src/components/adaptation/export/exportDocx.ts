@@ -188,14 +188,21 @@ const DIVIDER_RULE = {
  * Antes eram 60 `_` de texto no corpo e na tinta do documento: a largura
  * dependia do avanço do glifo e, a partir de ~15,5 pt na Arial, cada linha
  * passava da coluna e quebrava em duas.
+ *
+ * `between` repete a mesma borda (achado 0526): parágrafos adjacentes com
+ * bordas idênticas formam um grupo no OOXML, e a `bottom` só é desenhada
+ * embaixo do último. Sem `between`, N linhas de pauta viravam uma só.
  */
+const ANSWER_LINE_BORDER = {
+  style: BorderStyle.DASHED,
+  size: Math.round(ANSWER_LINE_WIDTH_PT * 8),
+  color: ANSWER_LINE_COLOR.slice(1),
+} as const;
+
 const ANSWER_LINE_RULE = {
   border: {
-    bottom: {
-      style: BorderStyle.DASHED,
-      size: Math.round(ANSWER_LINE_WIDTH_PT * 8),
-      color: ANSWER_LINE_COLOR.slice(1),
-    },
+    between: ANSWER_LINE_BORDER,
+    bottom: ANSWER_LINE_BORDER,
   },
 } as const;
 
