@@ -386,7 +386,7 @@ export function StepActivityInput({ data, updateData, onNext, onPrev }: Props) {
                   <div className="flex gap-3">
                     <span className="text-xs font-bold text-primary shrink-0 mt-0.5">{i + 1})</span>
                     <div className="flex-1 min-w-0 space-y-2">
-                      <p className="text-sm line-clamp-3 pr-8">{q.text}</p>
+                      <p className="text-sm line-clamp-3 pr-8 break-words">{q.text}</p>
                       {q.image_url && (
                         <div
                           className="inline-block cursor-zoom-in"
@@ -528,7 +528,7 @@ export function StepActivityInput({ data, updateData, onNext, onPrev }: Props) {
                         {isSelected && <Check className="w-3 h-3 text-primary-foreground" />}
                       </div>
                       <div className="flex-1 min-w-0 space-y-2">
-                        <p className="text-sm line-clamp-2">{q.text}</p>
+                        <p className="text-sm line-clamp-2 break-words">{q.text}</p>
                         {q.image_url && (
                           <div
                             className="relative inline-block cursor-zoom-in"

@@ -1016,3 +1016,26 @@ describe("StepActivityInput — removing a selected question keeps focus and is 
     expect(btn.className).toMatch(/\bw-8\b/);
   });
 });
+
+describe("StepActivityInput — long unbroken words wrap inside the cards (1132)", () => {
+  // A token wider than the card (URL, formula, code) does not wrap by default; the
+  // line-clamp's overflow:hidden then cuts it mid-word with no ellipsis.
+  const longToken = "Pneumoultramicroscopicossilicovulcanoconiotico_sem_espacos_para_testar_quebra_de_linha";
+  const q = { id: "q1", text: longToken, subject: "Física", topic: null, difficulty: null, image_url: null, options: null };
+
+  it("lets the long word break in the selected-question list", () => {
+    const data: WizardData = { ...baseData, selectedQuestions: [q], activityText: `1) ${longToken}` };
+    render(<StepActivityInput data={data} updateData={vi.fn()} onNext={vi.fn()} onPrev={vi.fn()} />);
+    fireEvent.click(screen.getByRole("button", { name: /^Banco de Questões$/i }));
+    expect(screen.getByText(longToken)).toHaveClass("break-words");
+  });
+
+  it("lets the long word break in the bank dialog card", async () => {
+    bankQuestionsResult.data = [q];
+    render(<StepActivityInput data={baseData} updateData={vi.fn()} onNext={vi.fn()} onPrev={vi.fn()} />);
+    fireEvent.click(screen.getByRole("button", { name: /Banco de Questões/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Abrir Banco de Questões/i }));
+    const text = await within(await screen.findByRole("dialog")).findByText(longToken);
+    expect(text).toHaveClass("break-words");
+  });
+});
