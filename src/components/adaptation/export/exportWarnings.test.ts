@@ -155,9 +155,93 @@ describe("copyExportWarnings (0411)", () => {
   });
 
   it("não herda o aviso de imagem do PDF: a cópia é texto, não carrega figura nenhuma", () => {
+    const warnings = copyExportWarnings(
+      doc([{ id: id(1), type: "image", src: "https://exemplo.com/figura.png", alt: "figura" }]),
+    );
+    expect(warnings.join(" ")).not.toMatch(/leitor de tela/i);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 0377 — o aviso do "Copiar" listava só a fórmula e calava a imagem (que vira
+// "[Imagem]"), a tabela (que vira linhas com "|") e a formatação (negrito, cor,
+// tamanho), todas desenhadas na prévia e perdidas no texto copiado.
+// ---------------------------------------------------------------------------
+
+describe("copyExportWarnings: perdas além da fórmula (0377)", () => {
+  const tableQuestion = (): CanonicalDocument["blocks"][number] => ({
+    id: id(10),
+    type: "question",
+    number: 1,
+    stem: [{ id: id(11), type: "paragraph", content: [{ type: "text", text: "Complete" }] }],
+    answer: {
+      kind: "table",
+      rows: [
+        [[{ type: "text", text: "Planeta" }], [{ type: "text", text: "Posicao" }]],
+        [[{ type: "text", text: "Terra" }], [{ type: "text", text: "3" }]],
+      ],
+    },
+  } as CanonicalDocument["blocks"][number]);
+
+  it("avisa que a imagem vira a marcação [Imagem]", () => {
+    const warnings = copyExportWarnings(
+      doc([{ id: id(1), type: "image", src: "https://exemplo.com/figura.png", alt: "figura" }]),
+    );
+    expect(warnings).toHaveLength(1);
+    expect(warnings[0]).toMatch(/\[Imagem\]/);
+  });
+
+  it("avisa que a tabela vira linhas separadas por |", () => {
+    const warnings = copyExportWarnings(doc([tableQuestion()]));
+    expect(warnings).toHaveLength(1);
+    expect(warnings[0]).toMatch(/tabela/i);
+    expect(warnings[0]).toMatch(/\|/);
+  });
+
+  it.each([
+    ["negrito", { type: "text", text: "Negrito", marks: ["bold"] }],
+    ["cor", { type: "text", text: "vermelho", color: "#DC2626" }],
+    ["tamanho", { type: "text", text: "grande", fontSize: 20 }],
+  ])("avisa que a formatação (%s) não vai", (_label, inline) => {
+    const warnings = copyExportWarnings(
+      doc([{ id: id(1), type: "paragraph", content: [inline] } as CanonicalDocument["blocks"][number]]),
+    );
+    expect(warnings).toHaveLength(1);
+    expect(warnings[0]).toMatch(/negrito/i);
+  });
+
+  it("acha formatação dentro de uma célula de tabela também", () => {
+    const question = tableQuestion() as Extract<CanonicalDocument["blocks"][number], { type: "question" }>;
+    if (question.answer.kind !== "table") throw new Error("fixture");
+    question.answer.rows[0][0] = [{ type: "text", text: "Planeta", marks: ["italic"] }];
+    const warnings = copyExportWarnings(doc([question]));
+    expect(warnings).toHaveLength(2);
+    expect(warnings[1]).toMatch(/negrito/i);
+  });
+
+  it("lista todas as perdas juntas, a fórmula primeiro", () => {
+    const warnings = copyExportWarnings(
+      doc([
+        {
+          id: id(1),
+          type: "paragraph",
+          content: [
+            { type: "text", text: "Negrito", marks: ["bold"] },
+            { type: "inlineMath", latex: "x^2" },
+          ],
+        },
+        { id: id(2), type: "image", src: "https://exemplo.com/figura.png", alt: "" },
+        tableQuestion(),
+      ]),
+    );
+    expect(warnings).toHaveLength(4);
+    expect(warnings[0]).toBe(MATH_LOSS_WARNING);
+  });
+
+  it("texto sem marca, sem imagem e sem tabela segue sem aviso", () => {
     expect(
       copyExportWarnings(
-        doc([{ id: id(1), type: "image", src: "https://exemplo.com/figura.png", alt: "figura" }]),
+        doc([{ id: id(1), type: "paragraph", content: [{ type: "text", text: "olá", marks: [] }] }]),
       ),
     ).toEqual([]);
   });

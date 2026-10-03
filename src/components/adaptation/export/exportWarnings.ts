@@ -251,7 +251,7 @@ export function pdfExportWarnings(
 }
 
 /**
- * O que o "Copiar" não carrega fiel (0411).
+ * O que o "Copiar" não carrega fiel (0411, 0377).
  *
  * `documentToPlainText` emite o LaTeX cru SEMPRE, como o PDF e o Word (achado
  * 0803) — mas o botão da cópia
@@ -261,9 +261,45 @@ export function pdfExportWarnings(
  * revisar. A frase é a do LaTeX cru porque é isso que a cópia entrega, com ou
  * sem descrição no nó.
  *
- * A cópia é texto puro, então nada aqui fala de imagem ou de fonte: o `alt`
- * nunca foi prometido e não há tipografia a perder.
+ * A cópia é `text/plain`, então tudo o que a prévia desenha e o texto não
+ * carrega entra na lista (0377), no mesmo critério do Word: a imagem vira a
+ * marcação `[Imagem]`, a tabela vira linhas com `|` e a formatação de trecho
+ * (negrito, itálico, cor, tamanho) some. Calar essas três certificava o resto
+ * como fiel. O `alt` e a fonte continuam fora: o texto alternativo VAI na
+ * marcação e não há tipografia num texto puro.
  */
+export const COPY_IMAGE_WARNING =
+  "As imagens não vão no texto copiado: cada uma vira uma marcação [Imagem] no lugar.";
+
+export const COPY_TABLE_WARNING =
+  "As tabelas saem como linhas de texto, com as células separadas por | e sem " +
+  "destacar o cabeçalho.";
+
+export const COPY_FORMATTING_WARNING =
+  "A formatação do texto não vai: negrito, itálico, sublinhado, cor e tamanho " +
+  "saem como texto comum.";
+
+function hasInlineFormatting(rich: RichText): boolean {
+  return rich.some(
+    (inline) =>
+      inline.type === "text" &&
+      ((inline.marks?.length ?? 0) > 0 ||
+        inline.color !== undefined ||
+        inline.fontSize !== undefined),
+  );
+}
+
 export function copyExportWarnings(document: CanonicalDocument): string[] {
-  return mathLossWarnings(document);
+  const blocks = everyBlock(document.blocks);
+  const warnings = mathLossWarnings(document);
+  if (blocks.some((block) => block.type === "image")) {
+    warnings.push(COPY_IMAGE_WARNING);
+  }
+  if (blocks.some((block) => block.type === "question" && block.answer.kind === "table")) {
+    warnings.push(COPY_TABLE_WARNING);
+  }
+  if (blocks.flatMap(richTextsOf).some(hasInlineFormatting)) {
+    warnings.push(COPY_FORMATTING_WARNING);
+  }
+  return warnings;
 }
