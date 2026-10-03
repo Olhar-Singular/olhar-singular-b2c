@@ -34,7 +34,7 @@ import {
   questionNumberColumnPt,
   alternativeMarkerColumnPt,
 } from "../render/pageTokens";
-import { pdfFooterLabel } from "../render/footerLabel";
+import { FOOTER_COLOR, FOOTER_FONT_SIZE_PT, pdfFooterLabel } from "../render/footerLabel";
 import type {
   Block,
   Inline,
@@ -1646,11 +1646,72 @@ describe("docxFooter", () => {
     // quem os resolve é o campo, na hora de paginar.
     const header = { title: "Prova", school: "Escola X" };
     expect(pdfFooterLabel(header, 1, 2)).toBe("Prova · Escola X · Página 1 de 2");
-    expect(docxText(docxFooter(header))).toBe("Prova · Escola X · Página  de ");
+    expect(docxText(docxFooter(header))).toBe("Prova · Escola X · Página 1 de 1");
   });
 
   it("descarta título e escola em branco, sem separador solto", () => {
-    expect(docxText(docxFooter({ title: "  ", school: "" }))).toBe("Página  de ");
+    expect(docxText(docxFooter({ title: "  ", school: "" }))).toBe("Página 1 de 1");
+  });
+
+  // Achado 0525: o campo saía como begin/instr/separate/end num run só, sem run
+  // de resultado; quem resolve o campo (LibreOffice) desenhava o número no corpo
+  // do documento (12pt, tinta de corpo), e não nos 8pt cinza do rodapé.
+  it("emite o número de cada campo num run de resultado com o corpo e a cor do rodapé", () => {
+    type RunInfo = { fld: string[]; text: string; sz: unknown; color: unknown };
+    const runs: RunInfo[] = [];
+    const attrOf = (n: { root?: unknown }): Record<string, { value?: unknown }> => {
+      const a = Array.isArray(n.root)
+        ? (n.root.find((c) => (c as { rootKey?: string }).rootKey === "_attr") as
+            | { root?: Record<string, { value?: unknown }> }
+            | undefined)
+        : undefined;
+      return a?.root ?? {};
+    };
+    const walk = (o: unknown): void => {
+      if (Array.isArray(o)) return o.forEach(walk);
+      if (o === null || typeof o !== "object") return;
+      const n = o as { rootKey?: string; root?: unknown };
+      if (n.rootKey === "w:r" && Array.isArray(n.root)) {
+        const props = docxRunProps(n);
+        const types: string[] = [];
+        const collect = (c: unknown): void => {
+          if (Array.isArray(c)) return c.forEach(collect);
+          if (c === null || typeof c !== "object") return;
+          const m = c as { rootKey?: string; root?: unknown };
+          if (m.rootKey === "w:fldChar") {
+            const attrs = attrOf(m) as Record<string, unknown>;
+            const t = Object.values(attrs).find(
+              (v) => (v as { key?: string })?.key === "w:fldCharType",
+            ) as { value?: string } | undefined;
+            types.push(t?.value ?? String((attrs as { type?: unknown }).type));
+          }
+          Object.values(m).forEach(collect);
+        };
+        collect(n.root);
+        runs.push({
+          fld: types,
+          text: docxText(n),
+          sz: props.find((p) => p.key === "w:sz")?.val,
+          color: props.find((p) => p.key === "w:color")?.val,
+        });
+        return;
+      }
+      Object.values(o as Record<string, unknown>).forEach(walk);
+    };
+    walk(docxFooter({}));
+
+    const separates = runs
+      .map((r, i) => (r.fld.includes("separate") ? i : -1))
+      .filter((i) => i >= 0);
+    expect(separates).toHaveLength(2);
+    for (const i of separates) {
+      expect(runs[i].fld).not.toContain("end");
+      const result = runs[i + 1];
+      expect(result.text).toMatch(/\d/);
+      expect(result.sz).toBe(Math.round(FOOTER_FONT_SIZE_PT * 2));
+      expect(String(result.color).toUpperCase()).toBe(FOOTER_COLOR.slice(1).toUpperCase());
+      expect(runs[i + 2].fld).toContain("end");
+    }
   });
 });
 

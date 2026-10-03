@@ -42,8 +42,10 @@ import {
   TabStopType,
   TabStopPosition,
   Footer,
-  PageNumber,
   LineRuleType,
+  BuilderElement,
+  NextAttributeComponent,
+  XmlComponent,
 } from "docx";
 import type {
   CanonicalDocument,
@@ -1214,6 +1216,35 @@ export function docxSectionProperties(): {
  * Mora fora de `downloadDocx` (que é `v8 ignore` pelos efeitos de DOM) para
  * nascer com teste, como `documentRunStyle` e `docxSectionProperties`.
  */
+/** `<w:instrText xml:space="preserve">CODE</w:instrText>`. */
+class FieldCode extends XmlComponent {
+  constructor(code: string) {
+    super("w:instrText");
+    this.root.push(new NextAttributeComponent({ space: { key: "xml:space", value: "preserve" } }));
+    this.root.push(code);
+  }
+}
+
+const fieldChar = (type: "begin" | "separate" | "end") =>
+  new BuilderElement({ name: "w:fldChar", attributes: { type: { key: "w:fldCharType", value: type } } });
+
+/**
+ * Um campo complexo do Word (PAGE, NUMPAGES) com run de RESULTADO próprio.
+ *
+ * Achado 0525: o `PageNumber.*` da lib emite begin/instr/separate/end num run
+ * só, sem resultado; quem resolve o campo (LibreOffice) desenhava o número com o
+ * default do documento (12pt, tinta de corpo), e não nos 8pt cinza do rodapé.
+ * Com o resultado num run formatado entre `separate` e `end`, o número herda o
+ * corpo e a cor do rodapé. O "1" é só o valor em cache: o editor recalcula.
+ */
+function docxField(code: string, style: { size: number; color: string }): TextRun[] {
+  return [
+    new TextRun({ ...style, children: [fieldChar("begin"), new FieldCode(code), fieldChar("separate")] }),
+    new TextRun({ ...style, text: "1" }),
+    new TextRun({ ...style, children: [fieldChar("end")] }),
+  ];
+}
+
 export function docxFooter(header: DocumentHeader): Footer {
   const style = { size: Math.round(FOOTER_FONT_SIZE_PT * 2), color: FOOTER_COLOR.slice(1) };
   const prefix = footerPrefixParts(header).map(
@@ -1226,9 +1257,9 @@ export function docxFooter(header: DocumentHeader): Footer {
         children: [
           ...prefix,
           new TextRun({ ...style, text: "Página " }),
-          new TextRun({ ...style, children: [PageNumber.CURRENT] }),
+          ...docxField("PAGE", style),
           new TextRun({ ...style, text: " de " }),
-          new TextRun({ ...style, children: [PageNumber.TOTAL_PAGES] }),
+          ...docxField("NUMPAGES", style),
         ],
       }),
     ],
