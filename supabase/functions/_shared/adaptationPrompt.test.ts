@@ -172,6 +172,12 @@ describe("buildSystemPrompt", () => {
     expect(prompt).toContain("UMA ÚNICA versão adaptada");
   });
 
+  it("tells the model the ordering array is the printed order and must not be the answer key", () => {
+    const prompt = buildSystemPrompt([{ dimension: "tea" }]);
+    expect(prompt).toContain('Em "ordering", a ordem do array "items" é a ordem IMPRESSA');
+    expect(prompt).toContain("NUNCA liste os itens já na ordem correta");
+  });
+
   it("instructs turning an [IMAGEM: <url>] marker into an image block (exact src, alt, no literal marker)", () => {
     const prompt = buildSystemPrompt([{ dimension: "tea" }]);
     // Mentions the marker syntax and the image-block contract.

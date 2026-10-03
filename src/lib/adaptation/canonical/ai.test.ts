@@ -241,6 +241,46 @@ describe("normalizeAiActivity — round-trip", () => {
     }
   });
 
+  describe("ordering answer key never printed in order", () => {
+    const orderingActivity = (positions: number[]) => ({
+      blocks: [
+        {
+          type: "question" as const,
+          stem: [{ type: "paragraph" as const, content: [{ type: "text" as const, text: "Ordene" }] }],
+          answer: {
+            kind: "ordering" as const,
+            items: positions.map((position) => ({
+              content: [{ type: "text" as const, text: `p${position}` }],
+              position,
+            })),
+          },
+        },
+      ],
+      strategies_applied: [],
+      pedagogical_justification: "j",
+      implementation_tips: [],
+    });
+
+    const printed = (positions: number[]) => {
+      const doc = normalizeAiActivity(orderingActivity(positions) as never);
+      const q = doc.blocks[0] as Extract<(typeof doc.blocks)[number], { type: "question" }>;
+      if (q.answer.kind !== "ordering") throw new Error("expected ordering");
+      return q.answer.items.map((item) => item.position);
+    };
+
+    it("reorders items deterministically when the array is already in answer order", () => {
+      expect(printed([1, 2, 3, 4])).toEqual([2, 3, 4, 1]);
+    });
+
+    it("keeps the AI order when it already differs from the answer key", () => {
+      expect(printed([3, 1, 2])).toEqual([3, 1, 2]);
+    });
+
+    it("keeps a single item untouched", () => {
+      expect(printed([1])).toEqual([1]);
+    });
+  });
+
   it("sets schemaVersion to SCHEMA_VERSION", () => {
     const doc = normalizeAiActivity(validRichActivity);
     expect(doc.schemaVersion).toBe(SCHEMA_VERSION);

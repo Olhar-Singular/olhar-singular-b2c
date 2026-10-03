@@ -281,6 +281,18 @@ function normalizeContentBlock(block: AiContentBlock): CanonicalDocument["blocks
   }
 }
 
+/**
+ * The array order of an ordering answer is what the student sees; `position` is
+ * the answer key. When the AI returns the items already sorted by `position`,
+ * the printed sheet would show the answer, so rotate them by one (deterministic,
+ * and a rotation of a strictly increasing list is never increasing).
+ */
+function shuffleIfAnswerOrder<T extends { position: number }>(items: T[]): T[] {
+  const inAnswerOrder = items.every((item, i) => i === 0 || items[i - 1].position < item.position);
+  if (items.length < 2 || !inAnswerOrder) return items;
+  return [...items.slice(1), items[0]];
+}
+
 /** Normalize an AiQuestionAnswer into a canonical QuestionAnswer (injecting ids). */
 function normalizeAnswer(answer: AiQuestionAnswer): CanonicalDocument["blocks"][number] extends { type: "question"; answer: infer A } ? A : never {
   type CanonicalAnswer = Extract<CanonicalDocument["blocks"][number], { type: "question" }>["answer"];
@@ -331,7 +343,7 @@ function normalizeAnswer(answer: AiQuestionAnswer): CanonicalDocument["blocks"][
     case "ordering":
       return {
         kind: "ordering",
-        items: answer.items.map((item) => ({
+        items: shuffleIfAnswerOrder(answer.items).map((item) => ({
           id: newId(),
           content: item.content,
           position: item.position,
