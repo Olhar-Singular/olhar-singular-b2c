@@ -104,6 +104,9 @@ export function StepActivityInput({ data, updateData, onNext, onPrev }: Props) {
 
   // Bank modal state
   const [showBankModal, setShowBankModal] = useState(false);
+  // 1127: the dialog is opened by state, with no `DialogTrigger`, so Radix
+  // would restore focus to `<body>` on close. Hand it back to the opener.
+  const bankTriggerRef = useRef<HTMLButtonElement>(null);
   const [bankQuestions, setBankQuestions] = useState<BankQuestion[]>([]);
   const [bankSearch, setBankSearch] = useState("");
   const [bankLoading, setBankLoading] = useState(false);
@@ -325,7 +328,7 @@ export function StepActivityInput({ data, updateData, onNext, onPrev }: Props) {
           <p className="text-sm text-muted-foreground">
             Selecione questões do seu banco para compor a atividade.
           </p>
-          <Button variant="outline" onClick={() => setShowBankModal(true)}>
+          <Button ref={bankTriggerRef} variant="outline" onClick={() => setShowBankModal(true)}>
             <Database className="w-4 h-4 mr-1" />
             Abrir Banco de Questões
           </Button>
@@ -407,7 +410,13 @@ export function StepActivityInput({ data, updateData, onNext, onPrev }: Props) {
 
       {/* Bank Modal */}
       <Dialog open={showBankModal} onOpenChange={setShowBankModal}>
-        <DialogContent className="max-w-3xl max-h-[85vh] flex flex-col">
+        <DialogContent
+          className="max-w-3xl max-h-[85vh] flex flex-col"
+          onCloseAutoFocus={(event) => {
+            event.preventDefault();
+            bankTriggerRef.current?.focus();
+          }}
+        >
           <DialogHeader>
             <DialogTitle>Selecionar Questões</DialogTitle>
           </DialogHeader>

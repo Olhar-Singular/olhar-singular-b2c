@@ -852,3 +852,38 @@ describe("StepActivityInput — manual edits are never discarded silently (1129)
     confirmSpy.mockRestore();
   });
 });
+
+/**
+ * 1127: the bank dialog is opened by state, with no `DialogTrigger`, so Radix
+ * restores focus to `<body>` on close. Closing must hand focus back to the
+ * "Abrir Banco de Questões" button, whether by Escape or after adding.
+ */
+describe("StepActivityInput — focus return when the bank dialog closes (1127)", () => {
+  function openBank() {
+    render(<StepActivityInput data={baseData} updateData={vi.fn()} onNext={vi.fn()} onPrev={vi.fn()} />);
+    fireEvent.click(screen.getByRole("button", { name: /Banco de Questões/i }));
+    const trigger = screen.getByRole("button", { name: /Abrir Banco de Questões/i });
+    fireEvent.click(trigger);
+    return trigger;
+  }
+
+  it("returns focus to 'Abrir Banco de Questões' when dismissed with Escape", async () => {
+    const trigger = openBank();
+    const dialog = await screen.findByRole("dialog", { name: /Selecionar Questões/i });
+    fireEvent.keyDown(dialog, { key: "Escape" });
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    expect(document.activeElement).toBe(trigger);
+  });
+
+  it("returns focus to 'Abrir Banco de Questões' after adding questions", async () => {
+    bankQuestionsResult.data = [
+      { id: "q2", text: "Sete vezes oito", subject: "Matemática", topic: null, difficulty: null, image_url: null, options: null },
+    ];
+    const trigger = openBank();
+    await waitFor(() => screen.getByText("Sete vezes oito"));
+    fireEvent.click(screen.getByText("Sete vezes oito"));
+    fireEvent.click(screen.getByRole("button", { name: /Adicionar 1/i }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    expect(document.activeElement).toBe(trigger);
+  });
+});
