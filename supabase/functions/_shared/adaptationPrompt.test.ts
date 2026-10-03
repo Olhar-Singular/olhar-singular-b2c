@@ -216,6 +216,20 @@ describe("buildSystemPrompt", () => {
     expect(prompt).toContain('NUNCA use um nome de bloco como "answer.kind"');
     expect(prompt).toContain('"scaffolding"');
   });
+
+  // 0474: an informative table in the stem came out as ONE paragraph with "•"
+  // and "|" glued by "\n", and the support told the student to read the
+  // "coluna 'Preço (R$)'" that the printed sheet does not have.
+  it("describes an informative table one paragraph per row, with no fake list marks (0474)", () => {
+    const prompt = buildSystemPrompt([{ dimension: "tea" }]);
+    expect(prompt).toContain('cada linha da tabela vira um "paragraph" próprio');
+    expect(prompt).toContain('NUNCA junte linhas com "\\n", "•" ou "|"');
+  });
+
+  it("forbids support/tips from pointing at columns or rows the sheet does not show (0474)", () => {
+    const prompt = buildSystemPrompt([{ dimension: "tea" }]);
+    expect(prompt).toContain('o apoio NÃO pode mandar o aluno olhar "coluna" ou "linha" da tabela');
+  });
 });
 
 /**
