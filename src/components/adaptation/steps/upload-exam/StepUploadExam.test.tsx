@@ -192,7 +192,7 @@ describe("StepUploadExam", () => {
   describe("1115: the dropzone is keyboard-operable", () => {
     function render(data: WizardData = baseData) {
       renderWithProviders(<StepUploadExam data={data} updateData={vi.fn()} onNext={vi.fn()} onPrev={vi.fn()} />);
-      return screen.getByRole("button", { name: /escolher arquivo/i });
+      return screen.getByRole("button", { name: data.uploadedExam ? /arquivo pronto para adaptar/i : /escolher arquivo/i });
     }
 
     it("exposes the area as a focusable named button reachable by Tab", async () => {
@@ -239,7 +239,7 @@ describe("StepUploadExam", () => {
       renderWithProviders(
         <StepUploadExam data={{ ...baseData, uploadedExam: attachedExam() }} updateData={vi.fn()} onNext={vi.fn()} onPrev={vi.fn()} />,
       );
-      const zone = screen.getByRole("button", { name: /Escolher arquivo PDF ou Word/i });
+      const zone = screen.getByRole("button", { name: /Arquivo pronto para adaptar/i });
       expect(zone.className).not.toMatch(/\bopacity-/);
       let el: HTMLElement | null = screen.getByText("Arquivo pronto para adaptar");
       while (el) {
@@ -352,6 +352,53 @@ describe("StepUploadExam", () => {
 
     it("does not steal focus on first render without an attached file", () => {
       renderWithProviders(<StepUploadExam data={baseData} updateData={vi.fn()} onNext={vi.fn()} onPrev={vi.fn()} />);
+      expect(document.activeElement).toBe(document.body);
+      expect(screen.getByRole("status")).toBeEmptyDOMElement();
+    });
+  });
+
+  // Regression (0282): attaching a file swapped the screen to "Arquivo pronto
+  // para adaptar" + Continuar, but the live region stayed empty, focus stayed on
+  // the now-disabled dropzone and its fixed aria-label still said "Escolher
+  // arquivo", the opposite of what had just happened.
+  describe("0282: attaching a file is announced and moves focus forward", () => {
+    function Harness({ initial = baseData }: { initial?: WizardData }) {
+      const [data, setData] = useState<WizardData>(initial);
+      return (
+        <StepUploadExam
+          data={data}
+          updateData={(partial) => setData((d) => ({ ...d, ...partial }))}
+          onNext={vi.fn()}
+          onPrev={vi.fn()}
+        />
+      );
+    }
+
+    it("announces the ready file by name in the polite live region", async () => {
+      renderWithProviders(<Harness />);
+      selectFile(pdfFile("avaliacao.pdf"));
+      await waitFor(() =>
+        expect(screen.getByRole("status")).toHaveTextContent(/arquivo avaliacao\.pdf pronto para adaptar/i),
+      );
+    });
+
+    it("moves focus to Continuar instead of leaving it on the disabled dropzone", async () => {
+      renderWithProviders(<Harness />);
+      const zone = screen.getByRole("button", { name: /escolher arquivo pdf ou word/i });
+      zone.focus();
+      selectFile(pdfFile());
+      const next = await screen.findByRole("button", { name: /continuar/i });
+      await waitFor(() => expect(document.activeElement).toBe(next));
+    });
+
+    it("drops the 'Escolher arquivo' name from the dropzone once a file is attached", () => {
+      renderWithProviders(<Harness initial={{ ...baseData, uploadedExam: attachedExam() }} />);
+      expect(screen.queryByRole("button", { name: /escolher arquivo/i })).not.toBeInTheDocument();
+      expect(screen.getByRole("button", { name: /arquivo pronto para adaptar/i })).toHaveAttribute("aria-disabled", "true");
+    });
+
+    it("does not steal focus when the step opens with a file already attached", () => {
+      renderWithProviders(<Harness initial={{ ...baseData, uploadedExam: attachedExam() }} />);
       expect(document.activeElement).toBe(document.body);
       expect(screen.getByRole("status")).toBeEmptyDOMElement();
     });

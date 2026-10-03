@@ -29,6 +29,8 @@ export function StepUploadExam({ data, updateData, onNext, onLoadingChange }: Pr
   const fileRef = useRef<HTMLInputElement>(null);
   const dropzoneRef = useRef<HTMLDivElement>(null);
   const focusDropzoneOnDetachRef = useRef(false);
+  const continueRef = useRef<HTMLButtonElement>(null);
+  const focusContinueOnAttachRef = useRef(false);
   const attached = data.uploadedExam ?? null;
 
   // Removing the file unmounts the card holding the trash button, which would
@@ -38,6 +40,15 @@ export function StepUploadExam({ data, updateData, onNext, onLoadingChange }: Pr
     if (attached || !focusDropzoneOnDetachRef.current) return;
     focusDropzoneOnDetachRef.current = false;
     dropzoneRef.current?.focus();
+  }, [attached]);
+
+  // Attaching a file disables the dropzone (tabIndex -1), stranding focus on a
+  // control that no longer does anything. Only after a fresh attach (never on
+  // mount with a file already there), move focus to Continuar, the next action.
+  useEffect(() => {
+    if (!attached || !focusContinueOnAttachRef.current) return;
+    focusContinueOnAttachRef.current = false;
+    continueRef.current?.focus();
   }, [attached]);
 
   // Guards against a stray completion after this step is left mid-parse (Voltar
@@ -105,6 +116,8 @@ export function StepUploadExam({ data, updateData, onNext, onLoadingChange }: Pr
          parsing" and "stores the locally-parsed file" tests); v8's branch
          instrumentation misattributes the fall-through hit on this exact shape. */
       if (!mountedRef.current) return;
+      focusContinueOnAttachRef.current = true;
+      setAnnouncement(`Arquivo ${file.name} pronto para adaptar. Continue para escolher o perfil de barreira.`);
       // Dropping the previous result is what makes a SECOND adaptation
       // possible: StepGenerate only generates while `data.result` is empty, so
       // a leftover one makes the Gerar step silently do nothing and land the
@@ -182,7 +195,9 @@ export function StepUploadExam({ data, updateData, onNext, onLoadingChange }: Pr
         role="button"
         tabIndex={attached ? -1 : 0}
         aria-disabled={!!attached}
-        aria-label="Escolher arquivo PDF ou Word"
+        // The name follows the state: a fixed "Escolher arquivo" would tell a
+        // screen-reader user the opposite of what just happened.
+        aria-label={attached ? "Arquivo pronto para adaptar" : "Escolher arquivo PDF ou Word"}
         onClick={openFilePicker}
         onKeyDown={handleDropzoneKeyDown}
         onDragOver={handleDragOver}
@@ -262,7 +277,7 @@ export function StepUploadExam({ data, updateData, onNext, onLoadingChange }: Pr
           Voltar
         </Button>
         {attached && (
-          <Button onClick={handleContinue}>
+          <Button ref={continueRef} onClick={handleContinue}>
             Continuar
             <ArrowRight className="w-4 h-4 ml-2" />
           </Button>
