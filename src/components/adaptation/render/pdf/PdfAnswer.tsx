@@ -46,8 +46,13 @@ import {
 } from "../pageTokens";
 
 // O vão entre itens vem de pageTokens para o papel imprimir o mesmo passo que as
-// duas telas mostram (achado 0313).
+// duas telas mostram (achado 0313). Ele vale só ENTRE itens, como o `rowGap` das
+// telas (achado 0707): o último item sai sem margem. O @react-pdf soma o
+// `marginBottom` do último filho na conta de virada de página, e a sobra mandava
+// a última alternativa sozinha para a folha seguinte mesmo cabendo nesta.
 const ROW = { flexDirection: "row", marginBottom: ANSWER_ITEM_GAP_PT } as const;
+const LAST_ROW = { flexDirection: "row" } as const;
+const rowStyle = (index: number, count: number) => (index < count - 1 ? ROW : LAST_ROW);
 // flexShrink: 0 prevents the marker column from collapsing when the row is
 // tight, which would push marker text over the content column. A largura vem
 // do corpo do item (achado 0182): com a coluna fixa em pt e o glifo escalando
@@ -276,11 +281,9 @@ const matchingLinkTextStyle = (fontSizePt: number) =>
 
 // Largura e altura explícitas: sem elas o @react-pdf mede o `Canvas` chamando o
 // `paint` com um contexto de medição e a linha colapsa.
-const ANSWER_LINE_STYLE = {
-  width: "100%",
-  height: ANSWER_LINE_WIDTH_PT,
-  marginBottom: ANSWER_LINE_GAP_PT,
-} as const;
+// Como o `ROW`, o passo da pauta vale só entre linhas (achado 0707).
+const LAST_ANSWER_LINE_STYLE = { width: "100%", height: ANSWER_LINE_WIDTH_PT } as const;
+const ANSWER_LINE_STYLE = { ...LAST_ANSWER_LINE_STYLE, marginBottom: ANSWER_LINE_GAP_PT } as const;
 
 /**
  * Default sizes for callers that render an answer standalone. Resolving them
@@ -309,7 +312,11 @@ export function PdfAnswer({
       return (
         <View>
           {Array.from({ length: lines }, (_, i) => (
-            <Canvas key={i} style={ANSWER_LINE_STYLE} paint={paintAnswerLine} />
+            <Canvas
+              key={i}
+              style={i < lines - 1 ? ANSWER_LINE_STYLE : LAST_ANSWER_LINE_STYLE}
+              paint={paintAnswerLine}
+            />
           ))}
         </View>
       );
@@ -317,8 +324,8 @@ export function PdfAnswer({
     case "multipleChoice":
       return (
         <View>
-          {answer.alternatives.map((alt, i) => (
-            <View key={alt.id} style={ROW}>
+          {answer.alternatives.map((alt, i, all) => (
+            <View key={alt.id} style={rowStyle(i, all.length)}>
               <Text style={MARKER}>{indexToLetter(i)})</Text>
               <View style={FLEX}>
                 <Text style={itemStyle}>
@@ -332,8 +339,8 @@ export function PdfAnswer({
     case "trueFalse":
       return (
         <View>
-          {answer.items.map((item) => (
-            <View key={item.id} style={ROW}>
+          {answer.items.map((item, i, all) => (
+            <View key={item.id} style={rowStyle(i, all.length)}>
               <Text style={TF_MARKER}>{TRUE_FALSE_MARKER_TEXT}</Text>
               <View style={FLEX}>
                 <Text style={itemStyle}>
@@ -347,8 +354,8 @@ export function PdfAnswer({
     case "checkbox":
       return (
         <View>
-          {answer.items.map((item) => (
-            <View key={item.id} style={ROW}>
+          {answer.items.map((item, i, all) => (
+            <View key={item.id} style={rowStyle(i, all.length)}>
               <View style={checkboxMarkerStyle(elementSizes.alternative)}>
                 <Canvas style={CHECKBOX_BOX_STYLE} paint={paintCheckboxBox} />
               </View>
@@ -364,8 +371,8 @@ export function PdfAnswer({
     case "matching":
       return (
         <View>
-          {answer.pairs.map((pair) => (
-            <View key={pair.id} style={ROW}>
+          {answer.pairs.map((pair, i, all) => (
+            <View key={pair.id} style={rowStyle(i, all.length)}>
               <View style={FLEX}>
                 <Text style={itemStyle}>
                   <PdfRichText content={pair.left} fontSize={elementSizes.alternative} />
@@ -389,8 +396,8 @@ export function PdfAnswer({
     case "ordering":
       return (
         <View>
-          {answer.items.map((item) => (
-            <View key={item.id} style={ROW}>
+          {answer.items.map((item, i, all) => (
+            <View key={item.id} style={rowStyle(i, all.length)}>
               <Text style={{ ...itemStyle, ...ORDERING_MARKER }}>____</Text>
               <View style={FLEX}>
                 <Text style={itemStyle}>
