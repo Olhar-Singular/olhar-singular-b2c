@@ -320,3 +320,13 @@ describe("attemptTimeoutMs", () => {
     expect(AI_TOTAL_BUDGET_MS).toBeLessThan(400_000);
   });
 });
+
+describe("trueFalse contract (0388)", () => {
+  const prompt = () => buildSystemPrompt([{ dimension: "tea" }]);
+
+  it("says each item is a statement and the V/F marker is printed automatically", () => {
+    expect(prompt()).toMatch(/cada item é uma AFIRMAÇÃO/);
+    expect(prompt()).toMatch(/\( \) V \( \) F/);
+    expect(prompt()).toMatch(/NUNCA[^.]*"Verdadeiro"[^.]*"Falso"/);
+  });
+});
