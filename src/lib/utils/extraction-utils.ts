@@ -45,13 +45,20 @@ export function dataUrlToBlob(dataUrl: string): Blob {
   return new Blob([bytes], { type: mime });
 }
 
+// A pixel is "ink" when any channel is clearly below white (tolerates JPEG noise).
+const INK_THRESHOLD = 230;
+// Blank margin kept around the figure once its edge is found, as a fraction of the page.
+const BLANK_MARGIN = 0.01;
+
 export async function autoCropFromBbox(
   pageImageUrl: string,
   bbox: { x: number; y: number; width: number; height: number },
   // The AI estimates this bbox by eye from the page image — general-purpose
   // vision models are not precise at pixel-level localization, so a tight
-  // margin routinely cropped part of the actual figure off. 6% gives enough
-  // slack to keep the whole figure without pulling in much surrounding text.
+  // margin routinely cropped part of the actual figure off. Up to 6% of slack
+  // is searched past each bbox edge, but only while the figure keeps going:
+  // the crop stops at the first blank band (plus a small margin), so the text
+  // lines around the figure are not pulled into the image.
   padding = 0.06
 ): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -59,17 +66,63 @@ export async function autoCropFromBbox(
     img.crossOrigin = "anonymous";
     img.onload = () => {
       const { naturalWidth: w, naturalHeight: h } = img;
-      const x = Math.max(0, (bbox.x - padding) * w);
-      const y = Math.max(0, (bbox.y - padding) * h);
-      const cropW = Math.min(w - x, (bbox.width + padding * 2) * w);
-      const cropH = Math.min(h - y, (bbox.height + padding * 2) * h);
+
+      const page = document.createElement("canvas");
+      page.width = w;
+      page.height = h;
+      const pageCtx = page.getContext("2d")!;
+      pageCtx.drawImage(img, 0, 0);
+      const { data } = pageCtx.getImageData(0, 0, w, h);
+      const inkAt = (px: number, py: number) => {
+        const i = (py * w + px) * 4;
+        return Math.min(data[i], data[i + 1], data[i + 2]) < INK_THRESHOLD;
+      };
+      const rowHasInk = (row: number, x0: number, x1: number) => {
+        for (let px = x0; px < x1; px++) if (inkAt(px, row)) return true;
+        return false;
+      };
+      const colHasInk = (col: number, y0: number, y1: number) => {
+        for (let py = y0; py < y1; py++) if (inkAt(col, py)) return true;
+        return false;
+      };
+
+      // Walks from `edge` towards `limit` (one step at a time, `step` = ±1):
+      // through ink (figure the bbox undershot), then up to `margin` blank lines.
+      const grow = (edge: number, limit: number, step: number, margin: number, hasInk: (i: number) => boolean) => {
+        let pos = edge;
+        while (pos !== limit && hasInk(pos + (step < 0 ? -1 : 0))) pos += step;
+        let blank = 0;
+        while (pos !== limit && blank < margin && !hasInk(pos + (step < 0 ? -1 : 0))) {
+          pos += step;
+          blank++;
+        }
+        return pos;
+      };
+
+      const clamp = (v: number, max: number) => Math.min(max, Math.max(0, Math.round(v)));
+      const bx0 = clamp(bbox.x * w, w);
+      const bx1 = clamp((bbox.x + bbox.width) * w, w);
+      const by0 = clamp(bbox.y * h, h);
+      const by1 = clamp((bbox.y + bbox.height) * h, h);
+      const padX = Math.round(padding * w);
+      const padY = Math.round(padding * h);
+      const marginX = Math.round(BLANK_MARGIN * w);
+      const marginY = Math.round(BLANK_MARGIN * h);
+
+      const y0 = grow(by0, Math.max(0, by0 - padY), -1, marginY, (r) => rowHasInk(r, bx0, bx1));
+      const y1 = grow(by1, Math.min(h, by1 + padY), 1, marginY, (r) => rowHasInk(r, bx0, bx1));
+      const x0 = grow(bx0, Math.max(0, bx0 - padX), -1, marginX, (c) => colHasInk(c, y0, y1));
+      const x1 = grow(bx1, Math.min(w, bx1 + padX), 1, marginX, (c) => colHasInk(c, y0, y1));
+
+      const cropW = Math.max(1, x1 - x0);
+      const cropH = Math.max(1, y1 - y0);
       const canvas = document.createElement("canvas");
       canvas.width = cropW;
       canvas.height = cropH;
       const ctx = canvas.getContext("2d")!;
       ctx.fillStyle = "#FFFFFF";
       ctx.fillRect(0, 0, cropW, cropH);
-      ctx.drawImage(img, x, y, cropW, cropH, 0, 0, cropW, cropH);
+      ctx.drawImage(img, x0, y0, cropW, cropH, 0, 0, cropW, cropH);
       resolve(canvas.toDataURL("image/png", 0.92));
     };
     img.onerror = () => reject(new Error("Failed to load image for cropping"));

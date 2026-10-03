@@ -188,9 +188,16 @@ describe("autoCropFromBbox", () => {
   let originalImage: typeof globalThis.Image;
   let originalCreateElement: typeof document.createElement;
   let drawImageSpy: ReturnType<typeof vi.fn>;
+  // Which source pixels are "ink" (non-white). Defaults to a fully inked page,
+  // where the figure never visibly ends, so the crop extends the full padding.
+  let isInk: (x: number, y: number) => boolean;
+
+  // The 9-arg drawImage call is the crop; the 3-arg one is the page analysis.
+  const cropCall = () => drawImageSpy.mock.calls.find((c) => c.length === 9)!;
 
   beforeEach(() => {
     drawImageSpy = vi.fn();
+    isInk = () => true;
     originalImage = (globalThis as { Image: typeof globalThis.Image }).Image;
     originalCreateElement = document.createElement.bind(document);
     document.createElement = ((tag: string) => {
@@ -202,6 +209,18 @@ describe("autoCropFromBbox", () => {
             fillStyle: "",
             fillRect: vi.fn(),
             drawImage: drawImageSpy,
+            getImageData: (_x: number, _y: number, w: number, h: number) => {
+              const data = new Uint8ClampedArray(w * h * 4);
+              for (let y = 0; y < h; y++) {
+                for (let x = 0; x < w; x++) {
+                  const i = (y * w + x) * 4;
+                  const v = isInk(x, y) ? 0 : 255;
+                  data[i] = data[i + 1] = data[i + 2] = v;
+                  data[i + 3] = 255;
+                }
+              }
+              return { data, width: w, height: h };
+            },
           }),
           toDataURL: () => "data:image/png;base64,FAKE",
         } as unknown as HTMLCanvasElement;
@@ -233,17 +252,46 @@ describe("autoCropFromBbox", () => {
     ).rejects.toThrow(/Failed to load/);
   });
 
-  it("pads the AI-estimated bbox by 6% by default — LLM bounding boxes are imprecise enough that 2% padding routinely cropped the figure itself", async () => {
+  it("extends up to 6% past the AI-estimated bbox while the figure keeps going (bbox imprecise, 2% routinely cropped the figure)", async () => {
     // 100x200 source image, bbox {x:.1,y:.1,w:.5,h:.5} → with 6% padding:
     // sx = (.1-.06)*100 = 4, sy = (.1-.06)*200 = 8
     // sw = (.5+.12)*100 = 62, sh = (.5+.12)*200 = 124
     installFakeImage("load", 100, 200);
     await autoCropFromBbox("http://example/img.png", { x: 0.1, y: 0.1, width: 0.5, height: 0.5 });
-    const [, sx, sy, sw, sh] = drawImageSpy.mock.calls[0];
+    const [, sx, sy, sw, sh] = cropCall();
     expect(sx).toBeCloseTo(4);
     expect(sy).toBeCloseTo(8);
     expect(sw).toBeCloseTo(62);
     expect(sh).toBeCloseTo(124);
+  });
+
+  it("does not pull neighbouring text lines into the crop when the bbox is accurate (0278)", async () => {
+    // 100x200 page. Text line above (rows 50-55), figure (rows 60-99, cols 10-89),
+    // text line below (rows 104-109). Old 6%-of-page padding reached rows 48-111,
+    // dragging both text lines into the image.
+    installFakeImage("load", 100, 200);
+    isInk = (x, y) =>
+      (y >= 50 && y <= 55 && x >= 5 && x <= 95) ||
+      (y >= 60 && y <= 99 && x >= 10 && x <= 89) ||
+      (y >= 104 && y <= 109 && x >= 5 && x <= 95);
+    await autoCropFromBbox("http://example/img.png", { x: 0.1, y: 0.3, width: 0.8, height: 0.2 });
+    const [, sx, sy, sw, sh] = cropCall();
+    expect(sy).toBeGreaterThan(55);
+    expect(sy).toBeLessThanOrEqual(60);
+    expect(sy + sh).toBeLessThanOrEqual(104);
+    expect(sy + sh).toBeGreaterThanOrEqual(100);
+    expect(sx).toBeLessThanOrEqual(10);
+    expect(sx + sw).toBeGreaterThanOrEqual(90);
+  });
+
+  it("still grows the crop to cover a figure the bbox undershot", async () => {
+    // Figure really spans rows 56-103; the AI bbox says 60-100.
+    installFakeImage("load", 100, 200);
+    isInk = (x, y) => y >= 56 && y <= 103 && x >= 10 && x <= 89;
+    await autoCropFromBbox("http://example/img.png", { x: 0.1, y: 0.3, width: 0.8, height: 0.2 });
+    const [, , sy, , sh] = cropCall();
+    expect(sy).toBeLessThanOrEqual(56);
+    expect(sy + sh).toBeGreaterThanOrEqual(104);
   });
 
   it("clamps the padded crop to the image bounds instead of reading past the edge", async () => {
@@ -251,7 +299,7 @@ describe("autoCropFromBbox", () => {
     // clamped to 0 — and the crop must not claim more width/height than exists.
     installFakeImage("load", 100, 200);
     await autoCropFromBbox("http://example/img.png", { x: 0, y: 0, width: 0.1, height: 0.1 });
-    const [, sx, sy, sw, sh] = drawImageSpy.mock.calls[0];
+    const [, sx, sy, sw, sh] = cropCall();
     expect(sx).toBe(0);
     expect(sy).toBe(0);
     expect(sw).toBeLessThanOrEqual(100);
