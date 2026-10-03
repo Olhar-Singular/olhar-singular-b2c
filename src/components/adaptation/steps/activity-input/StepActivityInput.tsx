@@ -108,7 +108,9 @@ export function StepActivityInput({ data, updateData, onNext, onPrev }: Props) {
   const [bankSearch, setBankSearch] = useState("");
   const [bankLoading, setBankLoading] = useState(false);
   const [bankError, setBankError] = useState(false);
-  const [checkedIds, setCheckedIds] = useState<Set<string>>(new Set());
+  // Checked questions keyed by id, holding the whole row: a checked question
+  // must survive a search/filter change that drops it from `bankQuestions`.
+  const [checked, setChecked] = useState<Map<string, BankQuestion>>(new Map());
   const [filterSubject, setFilterSubject] = useState("all");
   const [filterDifficulty, setFilterDifficulty] = useState("all");
 
@@ -188,10 +190,15 @@ export function StepActivityInput({ data, updateData, onNext, onPrev }: Props) {
 
   // ── Bank selection ────────────────────────────────────────────────────────
 
-  function toggleQuestion(id: string) {
-    setCheckedIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id); else next.add(id);
+  // Questions already in the activity are shown as added and cannot be
+  // checked again, so the add button never counts a no-op duplicate.
+  const addedIds = new Set(data.selectedQuestions.map((q) => q.id));
+
+  function toggleQuestion(q: BankQuestion) {
+    if (addedIds.has(q.id)) return;
+    setChecked((prev) => {
+      const next = new Map(prev);
+      if (next.has(q.id)) next.delete(q.id); else next.set(q.id, q);
       return next;
     });
   }
@@ -209,8 +216,9 @@ export function StepActivityInput({ data, updateData, onNext, onPrev }: Props) {
 
   function confirmBankSelection() {
     if (!canRebuildActivityText()) return;
-    const selected = bankQuestions.filter((q) => checkedIds.has(q.id));
-    const newQuestions: SelectedQuestion[] = selected.map((q) => ({
+    const newQuestions: SelectedQuestion[] = [...checked.values()]
+      .filter((q) => !addedIds.has(q.id))
+      .map((q) => ({
       id: q.id,
       text: q.text,
       image_url: q.image_url,
@@ -219,15 +227,14 @@ export function StepActivityInput({ data, updateData, onNext, onPrev }: Props) {
       topic: q.topic,
       difficulty: q.difficulty,
     }));
-    const existingIds = new Set(data.selectedQuestions.map((q) => q.id));
-    const merged = [...data.selectedQuestions, ...newQuestions.filter((q) => !existingIds.has(q.id))];
+    const merged = [...data.selectedQuestions, ...newQuestions];
     // `result: null` for the same reason as the upload path: StepGenerate
     // skips generation while a result is present, so changing the question set
     // without clearing it would silently reuse the adaptation of the old set.
     updateData({ selectedQuestions: merged, activityText: buildActivityText(merged), result: null });
     setShowBankModal(false);
-    setCheckedIds(new Set());
-    toast.success(`${selected.length} questão(ões) adicionada(s)`);
+    setChecked(new Map());
+    toast.success(`${newQuestions.length} questão(ões) adicionada(s)`);
   }
 
   function removeQuestion(id: string) {
@@ -444,22 +451,28 @@ export function StepActivityInput({ data, updateData, onNext, onPrev }: Props) {
             ) : (
               <div className="space-y-2 flex-1 overflow-y-auto px-1 py-1">
                 {bankQuestions.map((q) => {
-                  const isSelected = checkedIds.has(q.id);
+                  const isAdded = addedIds.has(q.id);
+                  const isSelected = isAdded || checked.has(q.id);
                   return (
                     <div
                       key={q.id}
                       role="checkbox"
                       aria-checked={isSelected}
+                      aria-disabled={isAdded || undefined}
                       tabIndex={0}
-                      onClick={() => toggleQuestion(q.id)}
+                      onClick={() => toggleQuestion(q)}
                       onKeyDown={(e) => {
                         if (e.target !== e.currentTarget) return;
                         if (e.key !== " " && e.key !== "Enter") return;
                         e.preventDefault();
-                        toggleQuestion(q.id);
+                        toggleQuestion(q);
                       }}
                       className={`border rounded-lg p-3 cursor-pointer transition-all flex items-start gap-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ${
-                        isSelected ? "border-primary bg-primary/5 shadow-sm" : "hover:bg-accent/20"
+                        isAdded
+                          ? "border-primary/40 bg-primary/5 cursor-not-allowed opacity-70"
+                          : isSelected
+                            ? "border-primary bg-primary/5 shadow-sm"
+                            : "hover:bg-accent/20"
                       }`}
                     >
                       <div
@@ -488,6 +501,7 @@ export function StepActivityInput({ data, updateData, onNext, onPrev }: Props) {
                           </div>
                         )}
                         <div className="flex gap-2 flex-wrap">
+                          {isAdded && <Badge className="text-xs">Já adicionada</Badge>}
                           <Badge variant="secondary" className="text-xs">{q.subject}</Badge>
                           {q.topic && <Badge variant="outline" className="text-xs">{q.topic}</Badge>}
                           {q.difficulty && (
@@ -505,10 +519,10 @@ export function StepActivityInput({ data, updateData, onNext, onPrev }: Props) {
 
             <Button
               onClick={confirmBankSelection}
-              disabled={checkedIds.size === 0}
+              disabled={checked.size === 0}
               className="w-full shrink-0"
             >
-              Adicionar {checkedIds.size} questão(ões)
+              Adicionar {checked.size} questão(ões)
             </Button>
           </div>
         </DialogContent>

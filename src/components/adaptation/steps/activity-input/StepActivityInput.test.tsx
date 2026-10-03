@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor, within } from "@testing-library/react";
 import { toast } from "sonner";
 import { StepActivityInput } from "./StepActivityInput";
 import type { WizardData } from "@/lib/adaptation/wizard/wizardState";
@@ -387,39 +387,65 @@ describe("StepActivityInput — toggleQuestion deselect", () => {
   });
 });
 
-// ── confirmBankSelection deduplication (line 163) ─────────────────────────
+// ── Count what actually enters the activity (1130) ────────────────────────
 
-describe("StepActivityInput — confirmBankSelection deduplication", () => {
-  it("does not add a question that is already in selectedQuestions", async () => {
-    const existingQ = { id: "q1", text: "Questão já selecionada", subject: "Física", topic: null, difficulty: null, image_url: null, options: null };
-    bankQuestionsResult.data = [existingQ];
-    const dataWithExisting: WizardData = { ...baseData, selectedQuestions: [existingQ], activityText: "1) Questão já selecionada" };
-    const updateData = vi.fn();
-    render(<StepActivityInput data={dataWithExisting} updateData={updateData} onNext={vi.fn()} onPrev={vi.fn()} />);
+describe("StepActivityInput — the add button and toast count what enters (1130)", () => {
+  function openBank(data: WizardData, updateData = vi.fn()) {
+    render(<StepActivityInput data={data} updateData={updateData} onNext={vi.fn()} onPrev={vi.fn()} />);
     fireEvent.click(screen.getByRole("button", { name: /Banco de Questões/i }));
     fireEvent.click(screen.getByRole("button", { name: /Abrir Banco de Questões/i }));
-    // Wait for dialog and question to appear inside the dialog
+    return updateData;
+  }
+
+  it("shows questions already in the activity as checked and not selectable", async () => {
+    const existingQ = { id: "q1", text: "Questão já selecionada", subject: "Física", topic: null, difficulty: null, image_url: null, options: null };
+    bankQuestionsResult.data = [existingQ];
+    const data: WizardData = { ...baseData, selectedQuestions: [existingQ], activityText: "1) Questão já selecionada" };
+    openBank(data);
     const dialog = await waitFor(() => screen.getByRole("dialog", { name: /Selecionar Questões/i }));
-    await waitFor(() => {
-      const textEl = dialog.querySelector("p.text-sm.line-clamp-2");
-      expect(textEl).not.toBeNull();
-    });
-    // Click the question row inside the dialog (scope to dialog to avoid selected list)
-    const questionRow = dialog.querySelector("p.text-sm.line-clamp-2")!;
-    fireEvent.click(questionRow);
-    // Now the "Adicionar 1" button should appear
-    await waitFor(() => {
-      expect(screen.getByRole("button", { name: /Adicionar 1/i })).toBeInTheDocument();
-    });
+    const card = await waitFor(() => within(dialog).getByRole("checkbox", { name: /Questão já selecionada/ }));
+    expect(card).toHaveAttribute("aria-checked", "true");
+    expect(card).toHaveAttribute("aria-disabled", "true");
+    expect(within(card).getByText(/Já adicionada/i)).toBeInTheDocument();
+    fireEvent.click(card);
+    fireEvent.keyDown(card, { key: " " });
+    expect(screen.getByRole("button", { name: /Adicionar 0/i })).toBeDisabled();
+  });
+
+  it("keeps a checked question when the filter hides it, adds it and counts it", async () => {
+    bankQuestionsResult.data = [
+      { id: "q7", text: "Resolva: x/2 + 3 = 7", subject: "Matemática", topic: null, difficulty: "medio", image_url: null, options: null },
+    ];
+    const updateData = openBank(baseData);
+    await waitFor(() => screen.getByText("Resolva: x/2 + 3 = 7"));
+    fireEvent.click(screen.getByText("Resolva: x/2 + 3 = 7"));
+    // New search result no longer contains the checked question.
+    bankQuestionsResult.data = [
+      { id: "q8", text: "Fotossíntese", subject: "Ciências", topic: null, difficulty: null, image_url: null, options: null },
+    ];
+    fireEvent.change(screen.getByPlaceholderText("Buscar questões..."), { target: { value: "Foto" } });
+    await waitFor(() => screen.getByText("Fotossíntese"));
+    expect(screen.queryByText("Resolva: x/2 + 3 = 7")).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: /Adicionar 1/i }));
     expect(updateData).toHaveBeenCalledWith(
-      expect.objectContaining({
-        selectedQuestions: expect.arrayContaining([expect.objectContaining({ id: "q1" })]),
-      }),
+      expect.objectContaining({ selectedQuestions: [expect.objectContaining({ id: "q7" })] }),
     );
-    // Should still be exactly 1 question (no duplicate)
-    const call = updateData.mock.calls[0][0];
-    expect(call.selectedQuestions).toHaveLength(1);
+    expect(toast.success).toHaveBeenCalledWith("1 questão(ões) adicionada(s)");
+  });
+
+  it("toasts the number of questions added, not the number checked on screen", async () => {
+    const existingQ = { id: "q1", text: "Capital", subject: "Geografia", topic: null, difficulty: null, image_url: null, options: null };
+    bankQuestionsResult.data = [
+      existingQ,
+      { id: "q2", text: "Sete vezes oito", subject: "Matemática", topic: null, difficulty: null, image_url: null, options: null },
+    ];
+    const data: WizardData = { ...baseData, selectedQuestions: [existingQ], activityText: "1) Capital" };
+    const updateData = openBank(data);
+    await waitFor(() => screen.getByText("Sete vezes oito"));
+    fireEvent.click(screen.getByText("Sete vezes oito"));
+    fireEvent.click(screen.getByRole("button", { name: /Adicionar 1/i }));
+    expect(updateData.mock.calls[0][0].selectedQuestions.map((q: { id: string }) => q.id)).toEqual(["q1", "q2"]);
+    expect(toast.success).toHaveBeenCalledWith("1 questão(ões) adicionada(s)");
   });
 });
 
