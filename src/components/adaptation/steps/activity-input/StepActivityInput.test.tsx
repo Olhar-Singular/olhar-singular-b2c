@@ -10,14 +10,27 @@ import { MAX_ACTIVITY_CHARS } from "@/lib/domain/activityLimits";
 
 const bankQuestionsResult: { data: unknown[] | null; error: unknown } = { data: [], error: null };
 
+// Like PostgREST, a request returns at most `max_rows` (1000 by default) rows,
+// and `.range(from, to)` picks the window inside the result.
+const POSTGREST_MAX_ROWS = 1000;
+let requestedRange: [number, number] | null = null;
+
 const fromChain = {
   select: vi.fn().mockReturnThis(),
   order: vi.fn().mockReturnThis(),
   limit: vi.fn().mockReturnThis(),
   eq: vi.fn().mockReturnThis(),
   ilike: vi.fn().mockReturnThis(),
+  range: vi.fn(function (this: unknown, from: number, to: number) {
+    requestedRange = [from, to];
+    return this;
+  }),
   then(resolve: (v: unknown) => unknown) {
-    return Promise.resolve(bankQuestionsResult).then(resolve);
+    const [from, to] = requestedRange ?? [0, Number.MAX_SAFE_INTEGER];
+    requestedRange = null;
+    const { data, error } = bankQuestionsResult;
+    const rows = data && data.slice(from, Math.min(to + 1, from + POSTGREST_MAX_ROWS));
+    return Promise.resolve({ data: rows, error }).then(resolve);
   },
 };
 
@@ -36,6 +49,7 @@ const fetchSpy = vi.fn();
 
 beforeEach(() => {
   vi.clearAllMocks();
+  requestedRange = null;
   bankQuestionsResult.data = [];
   bankQuestionsResult.error = null;
   getSessionSpy.mockResolvedValue({ data: { session: { access_token: "tok" } } });
@@ -1270,5 +1284,57 @@ describe("StepActivityInput — bank dialog close button target (0536)", () => {
     ]) {
       expect(dialog).toHaveClass(cls);
     }
+  });
+});
+
+describe("StepActivityInput — the whole bank is reachable without rendering it all (1139)", () => {
+  function bankRows(count: number) {
+    return Array.from({ length: count }, (_, i) => ({
+      id: `b${i}`, text: `Questão número ${i}`, subject: "Física", topic: null,
+      difficulty: null, image_url: null, options: null,
+    }));
+  }
+  function openBankDialog() {
+    render(<StepActivityInput data={baseData} updateData={vi.fn()} onNext={vi.fn()} onPrev={vi.fn()} />);
+    fireEvent.click(screen.getByRole("button", { name: /Banco de Questões/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Abrir Banco de Questões/i }));
+  }
+
+  it("finds a question past the server row limit", async () => {
+    bankQuestionsResult.data = bankRows(2500);
+    openBankDialog();
+    await waitFor(() => screen.getByText("Questão número 0"));
+    fireEvent.change(screen.getByPlaceholderText("Buscar questões..."), { target: { value: "número 2499" } });
+    await waitFor(() => expect(screen.getByText("Questão número 2499")).toBeInTheDocument());
+  });
+
+  it("renders the list in pages and loads more on request", async () => {
+    bankQuestionsResult.data = bankRows(45);
+    openBankDialog();
+    await waitFor(() => screen.getByText("Questão número 0"));
+    expect(screen.getAllByRole("checkbox")).toHaveLength(20);
+    fireEvent.click(screen.getByRole("button", { name: /Carregar mais/i }));
+    expect(screen.getAllByRole("checkbox")).toHaveLength(40);
+    fireEvent.click(screen.getByRole("button", { name: /Carregar mais/i }));
+    expect(screen.getAllByRole("checkbox")).toHaveLength(45);
+    expect(screen.queryByRole("button", { name: /Carregar mais/i })).toBeNull();
+  });
+
+  it("moves focus to the first card the load revealed", async () => {
+    bankQuestionsResult.data = bankRows(21);
+    openBankDialog();
+    await waitFor(() => screen.getByText("Questão número 0"));
+    fireEvent.click(screen.getByRole("button", { name: "Carregar mais (1 restante)" }));
+    expect(screen.getAllByRole("checkbox")[20]).toHaveFocus();
+  });
+
+  it("starts again from the first page when the search changes", async () => {
+    bankQuestionsResult.data = bankRows(45);
+    openBankDialog();
+    await waitFor(() => screen.getByText("Questão número 0"));
+    fireEvent.click(screen.getByRole("button", { name: /Carregar mais/i }));
+    expect(screen.getAllByRole("checkbox")).toHaveLength(40);
+    fireEvent.change(screen.getByPlaceholderText("Buscar questões..."), { target: { value: "questão" } });
+    await waitFor(() => expect(screen.getAllByRole("checkbox")).toHaveLength(20));
   });
 });

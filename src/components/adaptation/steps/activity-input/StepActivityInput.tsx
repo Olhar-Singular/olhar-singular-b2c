@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from "react";
+import { flushSync } from "react-dom";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -95,6 +96,13 @@ function matchesBankSearch(q: BankQuestion, term: string): boolean {
   return [q.text, q.subject, q.topic].some((field) => !!field && foldForSearch(field).includes(term));
 }
 
+// 1139: PostgREST returns at most `max_rows` (1000 by default) rows per request
+// and drops the rest silently, so the bank is read in pages of this size until
+// a short page shows it ended. The search above runs over all of it.
+const BANK_FETCH_PAGE_SIZE = 1000;
+// 1139: cards drawn per step in the dialog; "Carregar mais" draws the next step.
+const BANK_RENDER_STEP = 20;
+
 // Debounce (ms) before re-running the bank search as the user types.
 const BANK_SEARCH_DEBOUNCE_MS = 300;
 // Id of the "Colar Texto" validation message, referenced by the textarea.
@@ -141,6 +149,8 @@ export function StepActivityInput({ data, updateData, onNext, onPrev }: Props) {
   const [checked, setChecked] = useState<Map<string, BankQuestion>>(new Map());
   const [filterSubject, setFilterSubject] = useState("all");
   const [filterDifficulty, setFilterDifficulty] = useState("all");
+  const [bankRenderCount, setBankRenderCount] = useState(BANK_RENDER_STEP);
+  const bankCardRefs = useRef(new Map<string, HTMLDivElement>());
 
   // Image preview
   const [previewImageUrl, setPreviewImageUrl] = useState<string | null>(null);
@@ -158,13 +168,26 @@ export function StepActivityInput({ data, updateData, onNext, onPrev }: Props) {
   const fetchBankQuestions = useCallback(async () => {
     setBankLoading(true);
     setBankError(false);
-    let query = supabase
-      .from("question_bank")
-      .select("id, text, subject, topic, difficulty, image_url, options")
-      .order("created_at", { ascending: false });
-    if (filterSubject !== "all") query = query.eq("subject", filterSubject);
-    if (filterDifficulty !== "all") query = query.eq("difficulty", filterDifficulty);
-    const { data: rows, error } = await query;
+    const rows: BankQuestion[] = [];
+    let error: unknown = null;
+    for (let from = 0; ; from += BANK_FETCH_PAGE_SIZE) {
+      let query = supabase
+        .from("question_bank")
+        .select("id, text, subject, topic, difficulty, image_url, options")
+        .order("created_at", { ascending: false })
+        .order("id", { ascending: true });
+      if (filterSubject !== "all") query = query.eq("subject", filterSubject);
+      if (filterDifficulty !== "all") query = query.eq("difficulty", filterDifficulty);
+      const page = await query.range(from, from + BANK_FETCH_PAGE_SIZE - 1);
+      if (page.error) {
+        error = page.error;
+        break;
+      }
+      /* v8 ignore next -- v8 não credita o branch após await; o caminho data nulo é exercitado em teste */
+      const pageRows = (page.data as BankQuestion[]) || [];
+      rows.push(...pageRows);
+      if (pageRows.length < BANK_FETCH_PAGE_SIZE) break;
+    }
     if (error) {
       // A failed bank query must NOT masquerade as an empty bank: tell the user.
       console.error("question_bank query failed:", error);
@@ -172,8 +195,7 @@ export function StepActivityInput({ data, updateData, onNext, onPrev }: Props) {
       setBankQuestions([]);
       toast.error("Erro ao carregar o banco de questões. Tente novamente.");
     } else {
-      /* v8 ignore next -- v8 não credita o branch após await; o caminho rows nulo é exercitado em teste */
-      setBankQuestions((rows as BankQuestion[]) || []);
+      setBankQuestions(rows);
     }
     setBankLoading(false);
   }, [filterSubject, filterDifficulty]);
@@ -182,7 +204,22 @@ export function StepActivityInput({ data, updateData, onNext, onPrev }: Props) {
   const visibleBankQuestions = bankSearchTerm
     ? bankQuestions.filter((q) => matchesBankSearch(q, bankSearchTerm))
     : bankQuestions;
+  const renderedBankQuestions = visibleBankQuestions.slice(0, bankRenderCount);
+  const hiddenBankCount = visibleBankQuestions.length - renderedBankQuestions.length;
   const bankFiltered = !!bankSearchTerm || filterSubject !== "all" || filterDifficulty !== "all";
+
+  // 1139: a new result set (new search, filter or fetch) starts at the first step.
+  useEffect(() => {
+    setBankRenderCount(BANK_RENDER_STEP);
+  }, [bankSearchTerm, bankQuestions]);
+
+  // The button stays put, so focus goes to the first card the step revealed,
+  // which is where the user wants to keep reading.
+  function showMoreBankQuestions() {
+    const firstNew = visibleBankQuestions[bankRenderCount];
+    flushSync(() => setBankRenderCount((count) => count + BANK_RENDER_STEP));
+    bankCardRefs.current.get(firstNew.id).focus();
+  }
 
   function clearBankFilters() {
     setBankSearch("");
@@ -588,12 +625,16 @@ export function StepActivityInput({ data, updateData, onNext, onPrev }: Props) {
               </div>
             ) : (
               <div className="space-y-2 flex-1 overflow-y-auto px-1 py-1">
-                {visibleBankQuestions.map((q) => {
+                {renderedBankQuestions.map((q) => {
                   const isAdded = addedIds.has(q.id);
                   const isSelected = isAdded || checked.has(q.id);
                   return (
                     <div
                       key={q.id}
+                      ref={(el) => {
+                        if (el) bankCardRefs.current.set(q.id, el);
+                        else bankCardRefs.current.delete(q.id);
+                      }}
                       role="checkbox"
                       aria-checked={isSelected}
                       aria-disabled={isAdded || undefined}
@@ -652,6 +693,11 @@ export function StepActivityInput({ data, updateData, onNext, onPrev }: Props) {
                     </div>
                   );
                 })}
+                {hiddenBankCount > 0 && (
+                  <Button variant="outline" size="sm" className="w-full" onClick={showMoreBankQuestions}>
+                    Carregar mais ({hiddenBankCount} restante{hiddenBankCount === 1 ? "" : "s"})
+                  </Button>
+                )}
               </div>
             )}
 
