@@ -6,6 +6,12 @@ export type ExamExtractedQuestion = {
   figure_description?: string | null;
 };
 
+/** Activity-level text printed outside the questions: the title and the general instruction. */
+export type ExamExtractedHeader = {
+  title?: string | null;
+  intro?: string | null;
+};
+
 /**
  * A question label the extraction may copy verbatim from the native PDF text
  * ("1) ", "2. ", "Questão 3:", "Q4 -"), mirroring the numbering patterns listed in
@@ -25,9 +31,16 @@ const LEADING_QUESTION_LABEL = /^\s*(?:(?:quest[aã]o|q)\s*\d+\s*[.):\-–]?|\d+
  * `[DESCRIÇÃO DA IMAGEM: ...]`, since adapt-activity never sees the image and
  * would otherwise invent the alt text. A label already present in `q.text` is dropped so the numbering is
  * not doubled ("1) 1) ...").
+ *
+ * The exam's own title and general instruction (`header`) open the text, as in
+ * the paste path, so the adaptation keeps them instead of inventing a title.
  */
-export function buildActivityTextFromExtraction(questions: ExamExtractedQuestion[]): string {
-  return questions
+export function buildActivityTextFromExtraction(
+  questions: ExamExtractedQuestion[],
+  header: ExamExtractedHeader = {},
+): string {
+  const lead = [header.title, header.intro].map((part) => (part ?? "").trim()).filter(Boolean);
+  const body = questions
     .map((q, i) => {
       let text = `${i + 1}) ${q.text.replace(LEADING_QUESTION_LABEL, "")}`;
       if (q.options && Array.isArray(q.options) && q.options.length > 0) {
@@ -43,4 +56,5 @@ export function buildActivityTextFromExtraction(questions: ExamExtractedQuestion
       return text;
     })
     .join("\n\n");
+  return [...lead, body].join("\n\n");
 }

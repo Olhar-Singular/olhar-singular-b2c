@@ -5,6 +5,7 @@ import {
   buildExtractionMessages,
   isAcceptedPageImage,
   parseExtractionResponse,
+  parseExtractionHeader,
   validateExamExtractionRequest,
   validateQuestionBankExtractionRequest,
   OCR_SYSTEM_PROMPT,
@@ -358,5 +359,36 @@ describe("figure_description rule (0472)", () => {
     const items = EXTRACTION_TOOL_SCHEMA.function.parameters.properties.questions.items;
     expect(items.properties.figure_description.description).toMatch(/only visible elements/i);
     expect(items.properties.figure_description.description).toMatch(/never the answer/i);
+  });
+});
+
+describe("document header: title and general instruction (0473)", () => {
+  function withToolCallArgs(args: string) {
+    return { choices: [{ message: { tool_calls: [{ function: { arguments: args } }] } }] };
+  }
+
+  it("asks the model for the exam title and the instruction printed before question 1", () => {
+    const props = EXTRACTION_TOOL_SCHEMA.function.parameters.properties as Record<string, { type: string }>;
+    expect(props.title.type).toBe("string");
+    expect(props.intro.type).toBe("string");
+    expect(OCR_SYSTEM_PROMPT).toMatch(/"title"/);
+    expect(OCR_SYSTEM_PROMPT).toMatch(/"intro"/);
+  });
+
+  it("reads the title and intro from the tool call, trimmed and with real line breaks", () => {
+    const aiData = withToolCallArgs(
+      JSON.stringify({ title: "  Atividade de Matematica - Feira ", intro: "Leia.\\nResponda.", questions: [] }),
+    );
+    expect(parseExtractionHeader(aiData)).toEqual({ title: "Atividade de Matematica - Feira", intro: "Leia.\nResponda." });
+  });
+
+  it("returns nulls for missing, blank or non-string fields", () => {
+    expect(parseExtractionHeader(withToolCallArgs(JSON.stringify({ title: " ", intro: 3 })))).toEqual({
+      title: null,
+      intro: null,
+    });
+    expect(parseExtractionHeader(withToolCallArgs("{not json"))).toEqual({ title: null, intro: null });
+    expect(parseExtractionHeader(withToolCallArgs("null"))).toEqual({ title: null, intro: null });
+    expect(parseExtractionHeader(null)).toEqual({ title: null, intro: null });
   });
 });

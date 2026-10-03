@@ -125,4 +125,29 @@ describe("buildActivityTextFromExtraction", () => {
       buildActivityTextFromExtraction([makeQuestion({ image_url: "https://bucket.example/a.png", figure_description: null })]),
     ).not.toContain("DESCRIÇÃO DA IMAGEM");
   });
+
+  describe("document header (0473)", () => {
+    it("puts the exam's title and general instruction before question 1", () => {
+      const out = buildActivityTextFromExtraction([makeQuestion({ text: "Primeira" })], {
+        title: "Atividade de Geografia - O ciclo da agua",
+        intro: "Observe a figura abaixo e responda.",
+      });
+      expect(out).toBe(
+        "Atividade de Geografia - O ciclo da agua\n\nObserve a figura abaixo e responda.\n\n1) Primeira",
+      );
+    });
+
+    it("keeps only the parts that came, trimmed", () => {
+      expect(buildActivityTextFromExtraction([makeQuestion({ text: "P" })], { title: "  Feira  ", intro: null })).toBe(
+        "Feira\n\n1) P",
+      );
+      expect(buildActivityTextFromExtraction([makeQuestion({ text: "P" })], { title: " ", intro: "Leia." })).toBe(
+        "Leia.\n\n1) P",
+      );
+    });
+
+    it("adds nothing when there is no header", () => {
+      expect(buildActivityTextFromExtraction([makeQuestion({ text: "P" })], {})).toBe("1) P");
+    });
+  });
 });

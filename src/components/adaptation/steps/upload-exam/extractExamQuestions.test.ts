@@ -275,4 +275,30 @@ describe("extractExamQuestions", () => {
       charged: true,
     });
   });
+
+  describe("document header (0473)", () => {
+    it("returns the exam's title and general instruction, also on reuse", async () => {
+      invokeMock.mockResolvedValueOnce({
+        data: { title: "Atividade de Matematica - Feira", intro: "Responda.", questions: [{ text: "Q1" }] },
+        error: null,
+      });
+      const first = await extractExamQuestions(pdfExam, "user-1");
+      const second = await extractExamQuestions(pdfExam, "user-1");
+      const header = { title: "Atividade de Matematica - Feira", intro: "Responda." };
+      expect(first).toMatchObject({ status: "ok", header, charged: true });
+      expect(second).toMatchObject({ status: "ok", header, charged: false });
+    });
+
+    it("keeps only string header fields", async () => {
+      invokeMock.mockResolvedValueOnce({ data: { title: 7, intro: "Leia.", questions: [{ text: "Q1" }] }, error: null });
+      const result = await extractExamQuestions(pdfExam, "user-1");
+      expect(result).toMatchObject({ status: "ok", header: { title: null, intro: "Leia." } });
+    });
+
+    it("has no header when the file has neither title nor instruction", async () => {
+      invokeMock.mockResolvedValueOnce({ data: { title: null, questions: [{ text: "Q1" }] }, error: null });
+      const result = await extractExamQuestions(pdfExam, "user-1");
+      expect(result).not.toHaveProperty("header");
+    });
+  });
 });

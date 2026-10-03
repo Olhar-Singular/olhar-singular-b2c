@@ -20,7 +20,11 @@ import { insufficientCreditsMessage } from "@/lib/domain/access";
 import { calcAdaptationCost } from "@/lib/domain/barriers";
 import { EXTRACTION_COST } from "@/lib/domain/extractionCost";
 import { extractExamQuestions } from "../upload-exam/extractExamQuestions";
-import { buildActivityTextFromExtraction, type ExamExtractedQuestion } from "../upload-exam/buildActivityTextFromExtraction";
+import {
+  buildActivityTextFromExtraction,
+  type ExamExtractedHeader,
+  type ExamExtractedQuestion,
+} from "../upload-exam/buildActivityTextFromExtraction";
 import type { AdaptationResult } from "@/lib/adaptation/canonical/schema";
 import { activeUploadedExam, type WizardData } from "@/lib/adaptation/wizard/wizardState";
 
@@ -86,6 +90,8 @@ export function StepGenerate({ data, onResult, onNext, onPrev, onLoadingChange, 
   // paused here — proceeding to the paid adapt-activity call needs an explicit
   // user decision, same as the pre-upload-refactor flow did at the Atividade step.
   const [pendingExtracted, setPendingExtracted] = useState<ExamExtractedQuestion[] | null>(null);
+  // The exam's title/general instruction, kept across the >12-question detour (0473).
+  const pendingHeaderRef = useRef<ExamExtractedHeader | undefined>(undefined);
   const [totalExtracted, setTotalExtracted] = useState(0);
   const abortRef = useRef<AbortController | null>(null);
   const startedRef = useRef(false);
@@ -274,6 +280,7 @@ export function StepGenerate({ data, onResult, onNext, onPrev, onLoadingChange, 
     setLoading(true);
     onLoadingChange?.(true);
     let extracted: ExamExtractedQuestion[];
+    let header: ExamExtractedHeader | undefined;
     try {
       /* v8 ignore next -- user is always set: this step only renders inside the authenticated wizard */
       const userId = user?.id ?? "";
@@ -296,6 +303,7 @@ export function StepGenerate({ data, onResult, onNext, onPrev, onLoadingChange, 
         throw new Error("Não foi possível identificar questões no arquivo enviado. Volte e tente outro arquivo.");
       }
       extracted = result.questions;
+      header = result.header;
     } catch (e) {
       /* v8 ignore next -- AbortController race */
       if ((e as Error).name === "AbortError" || controller.signal.aborted) return;
@@ -310,13 +318,14 @@ export function StepGenerate({ data, onResult, onNext, onPrev, onLoadingChange, 
 
     if (extracted.length > MAX_QUESTIONS) {
       setTotalExtracted(extracted.length);
+      pendingHeaderRef.current = header;
       setPendingExtracted(extracted);
       setLoading(false);
       onLoadingChange?.(false);
       return;
     }
 
-    await proceedToAdapt(buildActivityTextFromExtraction(extracted), controller, extracted.length);
+    await proceedToAdapt(buildActivityTextFromExtraction(extracted, header), controller, extracted.length);
   }, [data, uploadedExam, user, proceedToAdapt, onLoadingChange, refreshCredits]);
 
   function confirmTruncate() {
@@ -326,7 +335,7 @@ export function StepGenerate({ data, onResult, onNext, onPrev, onLoadingChange, 
     setPendingExtracted(null);
     /* v8 ignore next -- guard: generate() always sets abortRef before pendingExtracted can be set */
     const controller = abortRef.current ?? new AbortController();
-    void proceedToAdapt(buildActivityTextFromExtraction(truncated), controller, truncated.length);
+    void proceedToAdapt(buildActivityTextFromExtraction(truncated, pendingHeaderRef.current), controller, truncated.length);
   }
 
   /** Bails out to the Atividade step — the file stays attached, so the user can re-attach or swap it. */

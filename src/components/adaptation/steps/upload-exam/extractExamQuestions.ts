@@ -3,7 +3,7 @@ import { autoCropFromBbox } from "@/lib/utils/extraction-utils";
 import { uploadImageDataUrl } from "@/lib/utils/imageUpload";
 import { parseInvokeError } from "@/lib/utils/errors";
 import type { UploadedExam } from "@/lib/adaptation/wizard/wizardState";
-import type { ExamExtractedQuestion } from "./buildActivityTextFromExtraction";
+import type { ExamExtractedHeader, ExamExtractedQuestion } from "./buildActivityTextFromExtraction";
 
 type RawExtractedQuestion = {
   text: string;
@@ -30,8 +30,11 @@ async function resolveImageUrl(
 }
 
 export type ExtractExamQuestionsResult =
-  /** `charged`: this call ran (and paid for) the extraction; false when it reused one. */
-  | { status: "ok"; questions: ExamExtractedQuestion[]; charged: boolean }
+  /**
+   * `charged`: this call ran (and paid for) the extraction; false when it reused one.
+   * `header`: the exam's title/general instruction, absent when it prints neither.
+   */
+  | { status: "ok"; questions: ExamExtractedQuestion[]; header?: ExamExtractedHeader; charged: boolean }
   /** The extraction ran (and was charged) but found no question. */
   | { status: "empty" }
   /**
@@ -47,7 +50,12 @@ export type ExtractExamQuestionsResult =
  * the UploadedExam object itself: attaching a file always creates a new one
  * (StepUploadExam), and the WeakMap lets a dropped file take its entry along.
  */
-const extractionCache = new WeakMap<UploadedExam, ExamExtractedQuestion[]>();
+const extractionCache = new WeakMap<UploadedExam, { questions: ExamExtractedQuestion[]; header?: ExamExtractedHeader }>();
+
+/** A header field from the response: only a string counts. */
+function headerText(value: unknown): string | null {
+  return typeof value === "string" ? value : null;
+}
 
 /**
  * Runs the AI vision extraction (extract-exam-for-adaptation) for a file
@@ -63,7 +71,7 @@ export async function extractExamQuestions(
   signal?: AbortSignal,
 ): Promise<ExtractExamQuestionsResult> {
   const cached = extractionCache.get(exam);
-  if (cached) return { status: "ok", questions: cached, charged: false };
+  if (cached) return { status: "ok", ...cached, charged: false };
 
   const { data: fnResult, error: fnError } = await supabase.functions.invoke("extract-exam-for-adaptation", {
     body: {
@@ -105,6 +113,9 @@ export async function extractExamQuestions(
     if (image_url && q.figure_description) question.figure_description = q.figure_description;
     resolved.push(question);
   }
-  extractionCache.set(exam, resolved);
-  return { status: "ok", questions: resolved, charged: true };
+  const title = headerText(fnResult?.title);
+  const intro = headerText(fnResult?.intro);
+  const extraction = title || intro ? { questions: resolved, header: { title, intro } } : { questions: resolved };
+  extractionCache.set(exam, extraction);
+  return { status: "ok", ...extraction, charged: true };
 }

@@ -705,6 +705,35 @@ describe("StepGenerate", () => {
     expect(invokeMock.mock.calls[0][1].body.original_activity).toBe("1) Primeira");
   });
 
+  it("sends the exam's title and general instruction before the questions (0473)", async () => {
+    extractExamQuestionsMock.mockResolvedValueOnce({
+      status: "ok",
+      questions: [{ text: "Primeira", options: null, image_url: null }],
+      header: { title: "Atividade de Matematica - Feira", intro: "Responda." },
+    });
+    invokeMock.mockResolvedValueOnce(okResponse());
+    renderWithProviders(
+      <StepGenerate data={uploadData} onResult={vi.fn()} onNext={vi.fn()} onPrev={vi.fn()} />,
+    );
+    await waitFor(() => expect(invokeMock).toHaveBeenCalled());
+    expect(invokeMock.mock.calls[0][1].body.original_activity).toBe(
+      "Atividade de Matematica - Feira\n\nResponda.\n\n1) Primeira",
+    );
+  });
+
+  it("keeps the exam's title when the 12-question warning is confirmed (0473)", async () => {
+    const questions = Array.from({ length: 13 }, (_, i) => ({ text: `Questão ${i + 1}`, options: null, image_url: null }));
+    extractExamQuestionsMock.mockResolvedValueOnce({ status: "ok", questions, header: { title: "Prova da Feira" } });
+    invokeMock.mockResolvedValueOnce(okResponse());
+    renderWithProviders(
+      <StepGenerate data={uploadData} onResult={vi.fn()} onNext={vi.fn()} onPrev={vi.fn()} />,
+    );
+    await waitFor(() => screen.getByText(/13 questões/i));
+    fireEvent.click(screen.getByRole("button", { name: /^continuar$/i }));
+    await waitFor(() => expect(invokeMock).toHaveBeenCalled());
+    expect(invokeMock.mock.calls[0][1].body.original_activity as string).toMatch(/^Prova da Feira\n\n1\) Questão 1/);
+  });
+
   it("shows the adaptation loading message once extraction has finished", async () => {
     extractExamQuestionsMock.mockResolvedValueOnce({
       status: "ok",
