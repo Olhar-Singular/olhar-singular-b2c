@@ -85,6 +85,34 @@ describe("StepActivityInput — Colar Texto tab", () => {
     expect(screen.getByRole("alert")).toHaveTextContent(/Digite ou cole/i);
   });
 
+  // Regressão 1117: o erro só aparecia no role="alert"; a caixa não era marcada
+  // nem recebia o foco, então o leitor de tela não sabia onde estava o problema
+  // e, em 1366x768, a mensagem nascia abaixo da dobra.
+  it.each([
+    ["vazia", ""],
+    ["só espaços", "     "],
+    ["acima do limite", "a".repeat(MAX_ACTIVITY_CHARS + 1)],
+  ])("marks and focuses the textarea when the activity is %s", (_label, activityText) => {
+    render(
+      <StepActivityInput
+        data={{ ...baseData, activityText }}
+        updateData={vi.fn()}
+        onNext={vi.fn()}
+        onPrev={vi.fn()}
+      />,
+    );
+    const textarea = screen.getByLabelText(/Conteúdo da atividade/i);
+    expect(textarea).not.toHaveAttribute("aria-invalid");
+    expect(textarea).not.toHaveAttribute("aria-describedby");
+    fireEvent.click(screen.getByRole("button", { name: /Próximo/i }));
+    const alert = screen.getByRole("alert");
+    expect(textarea).toHaveAttribute("aria-invalid", "true");
+    expect(alert.id).toBeTruthy();
+    expect(textarea).toHaveAttribute("aria-describedby", alert.id);
+    expect(textarea).toHaveClass("border-destructive");
+    expect(textarea).toHaveFocus();
+  });
+
   it("calls onNext when textarea has content", () => {
     const onNext = vi.fn();
     render(

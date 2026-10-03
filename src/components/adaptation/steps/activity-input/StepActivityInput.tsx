@@ -78,6 +78,8 @@ const TABS: { key: Tab; label: string; icon: React.ElementType }[] = [
 const BANK_QUERY_LIMIT = 50;
 // Debounce (ms) before re-running the bank search as the user types.
 const BANK_SEARCH_DEBOUNCE_MS = 300;
+// Id of the "Colar Texto" validation message, referenced by the textarea.
+const ACTIVITY_ERROR_ID = "activity-text-error";
 
 export function StepActivityInput({ data, updateData, onNext, onPrev }: Props) {
   const [tab, setTab] = useState<Tab>("manual");
@@ -114,6 +116,7 @@ export function StepActivityInput({ data, updateData, onNext, onPrev }: Props) {
   const [previewImageUrl, setPreviewImageUrl] = useState<string | null>(null);
 
   const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   // ── Bank query ────────────────────────────────────────────────────────────
 
@@ -158,13 +161,22 @@ export function StepActivityInput({ data, updateData, onNext, onPrev }: Props) {
   const activityLength = escapedLength(data.activityText);
   const overLimit = isActivityOverLimit(data.activityText);
 
+  // Both validation failures are about the activity text, so the message is
+  // tied to the textarea (aria-invalid + aria-describedby) and the focus goes
+  // to it, which also scrolls it into view. Same contract as the Barriers step.
+  // On the "banco" tab the textarea is not mounted and the ref stays null.
+  function failValidation(message: string) {
+    setError(message);
+    textareaRef.current?.focus();
+  }
+
   function handleNext() {
     if (!data.activityText.trim()) {
-      setError("Digite ou cole a atividade antes de continuar.");
+      failValidation("Digite ou cole a atividade antes de continuar.");
       return;
     }
     if (overLimit) {
-      setError(
+      failValidation(
         `A atividade passou do limite de ${MAX_ACTIVITY_CHARS.toLocaleString("pt-BR")} caracteres. ` +
           "Reduza o texto ou divida em duas adaptações: o excedente seria cortado e você pagaria por uma prova incompleta.",
       );
@@ -267,10 +279,13 @@ export function StepActivityInput({ data, updateData, onNext, onPrev }: Props) {
           <Label htmlFor="activity-text">Conteúdo da atividade</Label>
           <textarea
             id="activity-text"
+            ref={textareaRef}
+            aria-invalid={error ? true : undefined}
+            aria-describedby={error ? ACTIVITY_ERROR_ID : undefined}
             value={data.activityText}
             onChange={(e) => updateData({ activityText: e.target.value })}
             placeholder="Cole ou digite a atividade aqui..."
-            className="w-full min-h-[300px] resize-y rounded-md border border-input bg-background px-3 py-2 text-sm font-mono leading-relaxed placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            className={`w-full min-h-[300px] resize-y rounded-md border ${error ? "border-destructive" : "border-input"} bg-background px-3 py-2 text-sm font-mono leading-relaxed placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring`}
           />
           <p
             data-testid="activity-char-count"
@@ -279,7 +294,7 @@ export function StepActivityInput({ data, updateData, onNext, onPrev }: Props) {
             {activityLength.toLocaleString("pt-BR")} / {MAX_ACTIVITY_CHARS.toLocaleString("pt-BR")} caracteres
           </p>
           {error && (
-            <p role="alert" className="text-sm text-destructive-strong">{error}</p>
+            <p id={ACTIVITY_ERROR_ID} role="alert" className="text-sm text-destructive-strong">{error}</p>
           )}
         </div>
       )}
