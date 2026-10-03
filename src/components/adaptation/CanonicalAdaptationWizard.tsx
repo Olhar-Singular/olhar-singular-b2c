@@ -952,7 +952,9 @@ export default function CanonicalAdaptationWizard({ editMode }: Props = {}) {
               <DialogTitle>A adaptação ainda está em andamento</DialogTitle>
             </DialogHeader>
             <p className="text-sm text-muted-foreground">
-              A ISA ainda está gerando a adaptação. Se sair agora, o resultado será perdido e os créditos não serão devolvidos.
+              {/* 1125 · Leaving does not cancel the edge call: it still writes the row and charges. */}
+              A ISA ainda está gerando a adaptação. Se sair agora, a geração continua: a adaptação vai aparecer em
+              Adaptações quando ficar pronta, e os créditos serão cobrados normalmente.
             </p>
             <div className="flex justify-end gap-2 pt-2">
               <Button variant="outline" onClick={() => navGuard.reset?.()}>Continuar aqui</Button>

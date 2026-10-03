@@ -1741,6 +1741,20 @@ describe("CanonicalAdaptationWizard — navigation guard", () => {
     expect(screen.getByText(/adaptação ainda está em andamento/i)).toBeInTheDocument();
   });
 
+  // 1125 · Leaving does not cancel the edge call: the row is written and the
+  // credits are charged anyway. The dialog used to claim the result was lost.
+  it("tells the truth about leaving mid-generation: the result lands in Adaptações and is charged", () => {
+    mockNavGuard.mockReturnValue({ state: "blocked", reset: vi.fn(), proceed: vi.fn() });
+    renderWithProviders(<CanonicalAdaptationWizard />);
+    fireEvent.click(screen.getByTestId("pick-type"));
+    fireEvent.click(screen.getByTestId("input-next"));
+    fireEvent.click(screen.getByTestId("barriers-next"));
+    fireEvent.click(screen.getByTestId("simulate-loading"));
+    expect(screen.queryByText(/resultado será perdido/i)).not.toBeInTheDocument();
+    expect(screen.getByText(/vai aparecer em Adaptações/i)).toBeInTheDocument();
+    expect(screen.getByText(/créditos serão cobrados/i)).toBeInTheDocument();
+  });
+
   it("shows 'O arquivo ainda está sendo processado' dialog when uploading and blocked (not the generation dialog)", () => {
     mockNavGuard.mockReturnValue({ state: "blocked", reset: vi.fn(), proceed: vi.fn() });
     renderWithProviders(<CanonicalAdaptationWizard />);
