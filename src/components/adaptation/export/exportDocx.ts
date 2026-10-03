@@ -384,14 +384,22 @@ const CHECKBOX_BOX_BORDER = {
   space: 0,
 } as const;
 
-/** O vão entre itens de resposta com a linha do corpo herdado do bloco (achado 0518). */
-const answerRowSpacing = (style: InheritedStyle) =>
-  spacingWith(lineFor(style.run.size), ANSWER_ROW_SPACING.spacing);
+/**
+ * O vão entre itens de resposta com a linha do corpo herdado do bloco (achado
+ * 0518). Vale só ENTRE itens, como o `rowStyle` do `PdfAnswer` (achado 0707): a
+ * última linha sai com `after` zero, porque o parágrafo que fecha a questão já
+ * dá o vão de bloco, e os dois somados davam 18 pt contra 12 no PDF (achado 0519).
+ */
+const answerRowSpacing = (style: InheritedStyle, last: boolean) =>
+  spacingWith(lineFor(style.run.size), last ? { after: 0 } : ANSWER_ROW_SPACING.spacing);
 
-function checkboxRow(content: RichText, style: InheritedStyle = NO_STYLE): Paragraph {
+/** Se o item `index` é o último de `count` (o que fecha a resposta). */
+const isLast = (index: number, count: number) => index === count - 1;
+
+function checkboxRow(content: RichText, style: InheritedStyle, last: boolean): Paragraph {
   return new Paragraph({
     ...style.paragraph,
-    ...answerRowSpacing(style),
+    ...answerRowSpacing(style, last),
     children: [
       new TextRun({ ...style.run, text: CHECKBOX_BOX_TEXT, border: CHECKBOX_BOX_BORDER }),
       new TextRun({ ...style.run, text: " " }),
@@ -401,10 +409,15 @@ function checkboxRow(content: RichText, style: InheritedStyle = NO_STYLE): Parag
 }
 
 /** An answer row: an empty marker plus the item's content. */
-function answerRow(marker: string, content: RichText, style: InheritedStyle = NO_STYLE): Paragraph {
+function answerRow(
+  marker: string,
+  content: RichText,
+  style: InheritedStyle,
+  last: boolean,
+): Paragraph {
   return new Paragraph({
     ...style.paragraph,
-    ...answerRowSpacing(style),
+    ...answerRowSpacing(style, last),
     children: [
       new TextRun({ ...style.run, text: `${marker} ` }),
       ...richTextToRuns(content, style.run),
@@ -449,11 +462,11 @@ function matchingTable(
 ): Table {
   const cell = (paragraph: Paragraph) =>
     new TableCell({ borders: NO_TABLE_BORDERS, children: [paragraph] });
-  const side = (content: RichText) =>
+  const side = (content: RichText, last: boolean) =>
     cell(
       new Paragraph({
         ...style.paragraph,
-        ...answerRowSpacing(style),
+        ...answerRowSpacing(style, last),
         children: richTextToRuns(content, style.run),
       }),
     );
@@ -464,19 +477,19 @@ function matchingTable(
     borders: NO_TABLE_BORDERS,
     margins: { top: 0, bottom: 0, left: 0, right: 0 },
     rows: pairs.map(
-      (pair) =>
+      (pair, i) =>
         new TableRow({
           cantSplit: true,
           children: [
-            side(pair.left),
+            side(pair.left, isLast(i, pairs.length)),
             cell(
               new Paragraph({
                 alignment: AlignmentType.CENTER,
-                ...answerRowSpacing(style),
+                ...answerRowSpacing(style, isLast(i, pairs.length)),
                 children: [new TextRun({ ...style.run, text: "↔" })],
               }),
             ),
-            side(pair.right),
+            side(pair.right, isLast(i, pairs.length)),
           ],
         }),
     ),
@@ -514,20 +527,26 @@ function answerToDocx(
       );
     }
     case "multipleChoice":
-      return answer.alternatives.map((alternative, i) =>
+      return answer.alternatives.map((alternative, i, all) =>
         // No ✔ on the correct one — the gabarito stays hidden, as in the PDF.
-        answerRow(`${indexToLetter(i)})`, alternative.content, style),
+        answerRow(`${indexToLetter(i)})`, alternative.content, style, isLast(i, all.length)),
       );
     case "trueFalse":
-      return answer.items.map((item) => answerRow(TRUE_FALSE_MARKER_TEXT, item.content, style));
+      return answer.items.map((item, i, all) =>
+        answerRow(TRUE_FALSE_MARKER_TEXT, item.content, style, isLast(i, all.length)),
+      );
     case "checkbox":
       // Caixa vazia para todo item, nunca marcada — `checked` é o gabarito.
-      return answer.items.map((item) => checkboxRow(item.content, style));
+      return answer.items.map((item, i, all) =>
+        checkboxRow(item.content, style, isLast(i, all.length)),
+      );
     case "matching":
       return [matchingTable(answer.pairs, style)];
     case "ordering":
       // Authored order, NOT sorted by `position` — sorting would reveal the answer.
-      return answer.items.map((item) => answerRow(ORDERING_MARKER_TEXT, item.content, style));
+      return answer.items.map((item, i, all) =>
+        answerRow(ORDERING_MARKER_TEXT, item.content, style, isLast(i, all.length)),
+      );
     case "fillBlank":
       // The gaps live inline in the stem; there is no separate answer to show
       // (same contract as PdfAnswer, which renders an empty view here).

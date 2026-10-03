@@ -840,10 +840,12 @@ describe("B15 · paridade docx", () => {
  * cada uma leva o vão `ANSWER_ITEM_GAP_PT` depois, o mesmo token do PDF. Sem o
  * vão as caixas do checkbox encostavam umas nas outras e viravam uma barra.
  */
+const ROW_KINDS_0519 = ["multipleChoice", "trueFalse", "checkbox", "matching", "ordering"] as const;
+
 describe("linhas de resposta do .docx (achado 0454)", () => {
   const ROW_KINDS = ["multipleChoice", "trueFalse", "checkbox", "matching", "ordering"] as const;
 
-  it.each(ROW_KINDS)("%s: linha na margem, com o vão entre itens do token", (kind) => {
+  it.each(ROW_KINDS)("%s: linha na margem, item único sem vão depois", (kind) => {
     const out = blockToDocxParagraphs(
       { id: id(90), type: "question", stem: [], answer: sampleAnswer(kind) },
       1,
@@ -852,8 +854,90 @@ describe("linhas de resposta do .docx (achado 0454)", () => {
     expect(rows.length).toBeGreaterThan(0);
     for (const row of rows) {
       expect(docxNodeAttrs(row, "w:ind")).toBeUndefined();
-      expect(docxNodeAttrs(row, "w:spacing")).toEqual({ after: Math.round(ANSWER_ITEM_GAP_PT * 20) });
+      // Item único é o último: sem o vão entre itens (achado 0519); o vão dos
+      // itens anteriores é coberto no describe do 0519.
+      expect(docxNodeAttrs(row, "w:spacing")).toEqual({ after: 0 });
     }
+  });
+});
+
+/**
+ * Achado 0519: o vão entre itens vale só ENTRE itens, como o `rowStyle` do
+ * `PdfAnswer` (achado 0707). A última linha levava `after` de 6 pt e o fecho da
+ * questão somava o vão de bloco por cima: 18 pt no Word contra 12 pt no PDF.
+ */
+describe("última linha de resposta do .docx sem o vão entre itens (achado 0519)", () => {
+  const twoItems = (kind: (typeof ROW_KINDS_0519)[number]): QuestionAnswer => {
+    switch (kind) {
+      case "multipleChoice":
+        return {
+          kind,
+          alternatives: [
+            { id: id(91), content: text("a1"), correct: true },
+            { id: id(92), content: text("a2"), correct: false },
+          ],
+        };
+      case "trueFalse":
+        return {
+          kind,
+          items: [
+            { id: id(91), content: text("t1"), value: true },
+            { id: id(92), content: text("t2"), value: false },
+          ],
+        };
+      case "checkbox":
+        return {
+          kind,
+          items: [
+            { id: id(91), content: text("c1"), checked: false },
+            { id: id(92), content: text("c2"), checked: true },
+          ],
+        };
+      case "matching":
+        return {
+          kind,
+          pairs: [
+            { id: id(91), left: text("e1"), right: text("d1") },
+            { id: id(92), left: text("e2"), right: text("d2") },
+          ],
+        };
+      case "ordering":
+        return {
+          kind,
+          items: [
+            { id: id(91), content: text("o1"), position: 0 },
+            { id: id(92), content: text("o2"), position: 1 },
+          ],
+        };
+    }
+  };
+
+  it.each(ROW_KINDS_0519)("%s: só as linhas antes da última levam o vão", (kind) => {
+    const out = blockToDocxParagraphs(
+      { id: id(93), type: "question", stem: [], answer: twoItems(kind) },
+      1,
+    );
+    const gap = { after: Math.round(ANSWER_ITEM_GAP_PT * 20) };
+    const spacingOf = (needle: string) => {
+      const holder = out.find((p) => docxText(p).includes(needle))!;
+      if (kind !== "matching") return docxNodeAttrs(holder, "w:spacing");
+      // Na associação as linhas são linhas da tabela: procura a célula do termo.
+      const rows: unknown[] = [];
+      const walk = (o: unknown): void => {
+        if (Array.isArray(o)) return o.forEach(walk);
+        if (o === null || typeof o !== "object") return;
+        if ((o as { rootKey?: string }).rootKey === "w:tr") rows.push(o);
+        else Object.values(o as Record<string, unknown>).forEach(walk);
+      };
+      walk(holder);
+      const row = rows.find((r) => docxText(r).includes(needle));
+      return docxNodeAttrs(row, "w:spacing");
+    };
+    const [first, last] =
+      kind === "matching" ? ["e1", "e2"] : kind === "multipleChoice" ? ["a1", "a2"]
+        : kind === "trueFalse" ? ["t1", "t2"] : kind === "checkbox" ? ["c1", "c2"] : ["o1", "o2"];
+    expect(spacingOf(first)).toEqual(gap);
+    expect(spacingOf(last)).toEqual({ after: 0 });
   });
 });
 
