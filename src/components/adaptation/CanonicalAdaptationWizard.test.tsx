@@ -1642,6 +1642,31 @@ describe("CanonicalAdaptationWizard — navigation guard", () => {
     expect(screen.getByText(/sair sem salvar/i)).toBeInTheDocument();
   });
 
+  // 1112: the step chips stayed clickable during generation. Leaving Gerar did not
+  // abort the request, its response then called the relative onNext() and dragged
+  // the teacher one step past wherever they had gone, and the Adaptar button on
+  // Barreiras could start a second paid generation in parallel.
+  it("disables the other step chips while a generation is running", () => {
+    renderWithProviders(<CanonicalAdaptationWizard />);
+    fireEvent.click(screen.getByTestId("pick-type"));
+    fireEvent.click(screen.getByTestId("input-next"));
+    fireEvent.click(screen.getByTestId("barriers-next"));
+    const chip = (name: RegExp) => screen.getByRole("button", { name });
+    expect(chip(/3.*Barreiras/i)).toBeEnabled();
+
+    fireEvent.click(screen.getByTestId("simulate-loading"));
+
+    expect(chip(/1.*Tipo/i)).toBeDisabled();
+    expect(chip(/2.*Atividade/i)).toBeDisabled();
+    expect(chip(/3.*Barreiras/i)).toBeDisabled();
+    fireEvent.click(chip(/3.*Barreiras/i));
+    expect(screen.getByTestId("simulate-loading")).toBeInTheDocument();
+
+    // and once the result lands the teacher is on Revisar with the chips back
+    fireEvent.click(screen.getByTestId("do-generate"));
+    expect(chip(/3.*Barreiras/i)).toBeEnabled();
+  });
+
   it("calls useNavigationGuard with false after saving (isSaved=true)", async () => {
     renderWithProviders(<CanonicalAdaptationWizard />);
     advanceToReview();
