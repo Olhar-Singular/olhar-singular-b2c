@@ -334,6 +334,7 @@ export function ImageNodeView({ node, updateAttributes, deleteNode, editor, getP
             src={src}
             alt={alt}
             initialWidth={width ?? undefined}
+            columnWidth={columnWidth}
             onResize={(w) => updateAttributes({ width: w })}
           />
         </div>

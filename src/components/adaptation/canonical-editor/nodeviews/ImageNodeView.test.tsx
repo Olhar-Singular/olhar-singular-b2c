@@ -46,8 +46,8 @@ vi.mock("@/lib/adaptation/canonical/ids", async (importOriginal) => {
 });
 
 vi.mock("@/components/editor/ImageResizer", () => ({
-  default: ({ alt, onResize }: { alt: string; onResize: (w: number) => void }) => (
-    <button data-testid="resizer" data-alt={alt} onClick={() => onResize(123)}>resizer</button>
+  default: ({ alt, columnWidth, onResize }: { alt: string; columnWidth?: number; onResize: (w: number) => void }) => (
+    <button data-testid="resizer" data-alt={alt} data-column-width={columnWidth} onClick={() => onResize(123)}>resizer</button>
   ),
 }));
 
@@ -290,6 +290,16 @@ describe("ImageNodeView", () => {
       const centralizar = screen.getByRole("button", { name: "Centralizar" });
       expect(centralizar).toBeEnabled();
       expect(centralizar).toHaveAttribute("title", "Centralizar");
+    } finally {
+      widthSpy.mockRestore();
+    }
+  });
+
+  it("passa a coluna medida como teto da alça de redimensionar (achado 0612)", () => {
+    const widthSpy = vi.spyOn(HTMLElement.prototype, "clientWidth", "get").mockReturnValue(666);
+    try {
+      renderImage({ width: 762 });
+      expect(screen.getByTestId("resizer")).toHaveAttribute("data-column-width", "666");
     } finally {
       widthSpy.mockRestore();
     }

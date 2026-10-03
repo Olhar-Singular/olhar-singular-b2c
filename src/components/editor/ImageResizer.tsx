@@ -2,7 +2,10 @@ import { useState, useCallback, useEffect, useRef } from "react";
 import { DEFAULT_IMAGE_WIDTH_PX } from "@/components/adaptation/render/pageTokens";
 import { FOLHA_TOUCH_TARGET } from "@/components/adaptation/canonical-editor/folhaChrome";
 
-/** Teto que o arraste pode ALCANÇAR por conta própria (ver 0308). */
+/**
+ * Teto de reserva que o arraste pode ALCANÇAR por conta própria (ver 0308),
+ * usado só enquanto a coluna da figura não foi medida (0612).
+ */
 const MAX_DRAG_WIDTH_PX = 800;
 /** Piso absoluto: uma imagem menor que isto deixa de ser clicável na folha. */
 const MIN_WIDTH_PX = 50;
@@ -11,14 +14,26 @@ const KEY_STEP_PX = 10;
 const KEY_STEP_LARGE_PX = 50;
 
 /**
- * Mesmo clamp para o arraste e para o teclado.
+ * Mesmo passo para o arraste e para o teclado.
  *
  * O teto é móvel de propósito (0308): limita o que o GESTO acrescenta, nunca o
  * que o documento já tinha — uma imagem de 2400px encolhe normalmente, mas
- * crescer é no-op em vez de despencar para 800.
+ * crescer é no-op em vez de despencar para o teto.
+ *
+ * 0612 — com a coluna medida, o teto é ela: o desenho é cortado em
+ * `max-w-full`, então tudo entre a coluna e 800px era gravado e anunciado sem
+ * existir em nenhuma superfície. Um pedido do documento acima da coluna parte
+ * da largura DESENHADA ao encolher (sem faixa morta no teclado) e continua
+ * intacto quando o gesto é de crescer.
  */
-function clampWidth(start: number, next: number) {
-  return Math.max(MIN_WIDTH_PX, Math.min(Math.max(MAX_DRAG_WIDTH_PX, start), next));
+function stepWidth(start: number, delta: number, columnWidth: number) {
+  if (columnWidth <= 0) {
+    return Math.max(MIN_WIDTH_PX, Math.min(Math.max(MAX_DRAG_WIDTH_PX, start), start + delta));
+  }
+  const drawn = Math.min(start, columnWidth);
+  const next = drawn + delta;
+  if (start > columnWidth && next >= columnWidth) return start;
+  return Math.max(MIN_WIDTH_PX, Math.min(columnWidth, next));
 }
 
 type Props = {
@@ -30,10 +45,16 @@ type Props = {
    */
   alt: string;
   initialWidth?: number;
+  /**
+   * 0612 — largura (CSS px, sem a escala da folha) da coluna em que a figura é
+   * desenhada. É o teto do gesto e do valor anunciado; 0/ausente = ainda não
+   * medida, cai no teto de reserva.
+   */
+  columnWidth?: number;
   onResize: (width: number) => void;
 };
 
-export default function ImageResizer({ src, alt, initialWidth, onResize }: Props) {
+export default function ImageResizer({ src, alt, initialWidth, columnWidth = 0, onResize }: Props) {
   // No explicit width → the shared default, kept in sync with the export preview
   // and the PDF so an un-resized image is the same size on every surface.
   const [width, setWidth] = useState(initialWidth ?? DEFAULT_IMAGE_WIDTH_PX);
@@ -76,7 +97,7 @@ export default function ImageResizer({ src, alt, initialWidth, onResize }: Props
          * largura de partida já passa do teto, crescer é no-op e só encolher
          * tem efeito.
          */
-        const newWidth = clampWidth(startWidth.current, startWidth.current + delta);
+        const newWidth = stepWidth(startWidth.current, delta, columnWidth);
         widthRef.current = newWidth;
         setWidth(newWidth);
       };
@@ -96,7 +117,7 @@ export default function ImageResizer({ src, alt, initialWidth, onResize }: Props
       document.addEventListener("mouseup", onMouseUp);
       detachRef.current = detach;
     },
-    [onResize]
+    [onResize, columnWidth]
   );
 
   /**
@@ -107,18 +128,27 @@ export default function ImageResizer({ src, alt, initialWidth, onResize }: Props
    */
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
-      const direction = e.key === "ArrowRight" || e.key === "ArrowUp" ? 1 : e.key === "ArrowLeft" || e.key === "ArrowDown" ? -1 : 0;
-      if (direction === 0) return;
-      e.preventDefault();
       const step = e.shiftKey ? KEY_STEP_LARGE_PX : KEY_STEP_PX;
+      // 0612 — Home/End: mínimo e máximo, como o padrão de slider da APG.
+      const delta =
+        e.key === "ArrowRight" || e.key === "ArrowUp" ? step
+        : e.key === "ArrowLeft" || e.key === "ArrowDown" ? -step
+        : e.key === "End" ? Infinity
+        : e.key === "Home" ? -Infinity
+        : 0;
+      if (delta === 0) return;
+      e.preventDefault();
       const current = widthRef.current;
-      const newWidth = clampWidth(current, current + direction * step);
+      const newWidth = stepWidth(current, delta, columnWidth);
       widthRef.current = newWidth;
       setWidth(newWidth);
       onResize(newWidth);
     },
-    [onResize]
+    [onResize, columnWidth]
   );
+
+  /** 0612 — o que a folha desenha: o pedido do documento cortado na coluna. */
+  const drawnWidth = columnWidth > 0 ? Math.min(width, columnWidth) : width;
 
   /**
    * 0611 — the document is the source of truth outside a drag. The local state
@@ -172,10 +202,10 @@ export default function ImageResizer({ src, alt, initialWidth, onResize }: Props
         type="button"
         role="slider"
         aria-label="Redimensionar imagem"
-        aria-valuenow={width}
+        aria-valuenow={drawnWidth}
         aria-valuemin={MIN_WIDTH_PX}
-        aria-valuemax={Math.max(MAX_DRAG_WIDTH_PX, width)}
-        aria-valuetext={`${width} pixels de largura`}
+        aria-valuemax={columnWidth > 0 ? columnWidth : Math.max(MAX_DRAG_WIDTH_PX, width)}
+        aria-valuetext={`${drawnWidth} pixels de largura`}
         onMouseDown={handleMouseDown}
         onKeyDown={handleKeyDown}
         className={`absolute bottom-0 right-0 w-4 h-4 ${FOLHA_TOUCH_TARGET} bg-surface-accent/80 rounded-tl-md cursor-se-resize opacity-0 group-hover:opacity-100 focus-visible:opacity-100 [@media(hover:none)]:opacity-100 transition-opacity flex items-center justify-center`}
@@ -198,12 +228,16 @@ export default function ImageResizer({ src, alt, initialWidth, onResize }: Props
         remove da árvore de acessibilidade, e como o resizer vive dentro do
         `contenteditable` da folha o "2400px" era lido como conteúdo do
         documento. Fica explicitamente fora da árvore.
+
+        0612 — dentro da figura (canto inferior esquerdo, longe da alça): a
+        20px abaixo do pé, com só `my-1.5` de folga, era pintado sobre a
+        legenda impressa. Mostra a largura desenhada, não o pedido.
       */}
       <div
         aria-hidden="true"
-        className="absolute -bottom-5 right-0 text-[0.6rem] text-surface-ink-soft opacity-0 group-hover:opacity-100 transition-opacity"
+        className="pointer-events-none absolute bottom-1 left-1 rounded-sm bg-surface-paper/90 px-1 text-[0.6rem] text-surface-ink-soft opacity-0 group-hover:opacity-100 transition-opacity"
       >
-        {width}px
+        {drawnWidth}px
       </div>
     </div>
   );
