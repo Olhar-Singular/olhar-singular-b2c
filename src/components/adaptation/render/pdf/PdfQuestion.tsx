@@ -174,11 +174,16 @@ export function PdfQuestion({
    * react-pdf só quebra antes de um nó com irmão anterior, daí o segundo
    * marco abrindo o grupo. Nada vira `wrap={false}`: abertura longa continua
    * fatiável e nada é cortado.
+   *
+   * A FIGURA logo depois da abertura (achado 1135) tem a mesma forma: o
+   * <Image> do react-pdf é indivisível e "Observe a figura e responda:" ficava
+   * sozinho no pé da folha. Mesmo grupo, mesmo marco.
    */
-  const leadKeepsScaffolding =
-    nextAfterLead?.type === "scaffolding" && !pageBreakBefore(nextAfterLead.style);
+  const leadKeepsIndivisible =
+    (nextAfterLead?.type === "scaffolding" || nextAfterLead?.type === "image") &&
+    !pageBreakBefore(nextAfterLead.style);
 
-  const leadGroup = leadKeepsScaffolding ? (
+  const leadGroup = leadKeepsIndivisible ? (
     <View>
       <View style={{ height: 0 }} />
       <View style={{ height: 0 }} minPresenceAhead={KEEP_WITH_SCAFFOLDING_PT} />
@@ -193,7 +198,7 @@ export function PdfQuestion({
     enunciadoLeads || paragraphLeads ? (
       <View style={{ paddingLeft: numberColumn }}>
         {leadGroup}
-        {stemBlocks.slice(afterLead + (leadKeepsScaffolding ? 1 : 0))}
+        {stemBlocks.slice(afterLead + (leadKeepsIndivisible ? 1 : 0))}
         {position === "below" && enunciadoView()}
       </View>
     ) : (
