@@ -240,6 +240,102 @@ describe("BlockInserter", () => {
     }
   });
 
+  /*
+    Achado 0274: o overlay é irmão do `EditorContent`, então na ordem do DOM os
+    "+" vinham todos depois do documento inteiro. Tab tem de visitar cada "+" no
+    limite do bloco que ele representa: depois do último focável do bloco de
+    cima, antes do primeiro do bloco de baixo.
+  */
+  it("tabula cada + no limite do bloco que ele representa (achado 0274)", () => {
+    const { editor, dom } = makeEditor();
+    dom.setAttribute("contenteditable", "true");
+    dom.setAttribute("aria-label", "editor");
+    dom.innerHTML = `
+      <p id="b0">a</p>
+      <div id="b1" contenteditable="false"><button>Editar</button></div>`;
+    const blocks = [dom.querySelector("#b0"), dom.querySelector("#b1")];
+    // Gaps: 0 (pos 0, antes de b0), 1 (pos 3, antes de b1), 2 (fim).
+    (editor.view as unknown as { nodeDOM: (pos: number) => Node | null }).nodeDOM = (pos) =>
+      pos === 0 ? blocks[0] : pos === 3 ? blocks[1] : null;
+    render(
+      <div>
+        <div className="relative">
+          <div>{null}</div>
+          <BlockInserter editor={editor} />
+        </div>
+        <button>Voltar</button>
+      </div>,
+    );
+    const wrapper = document.querySelector(".relative") as HTMLElement;
+    wrapper.firstElementChild!.appendChild(dom);
+
+    const name = (e: Element | null) => e?.getAttribute("aria-label") ?? e?.textContent;
+    const visited: (string | null | undefined)[] = [];
+    dom.focus();
+    visited.push(name(document.activeElement));
+    for (let i = 0; i < 4; i++) {
+      const prevented = !fireEvent.keyDown(document.activeElement!, { key: "Tab" });
+      expect(prevented).toBe(true);
+      visited.push(name(document.activeElement));
+    }
+    expect(visited).toEqual([
+      "editor",
+      'Inserir bloco antes de parágrafo 1 "a"',
+      'Inserir bloco antes de parágrafo 2 "b"',
+      "Editar",
+      'Inserir bloco após parágrafo 2 "b"',
+    ]);
+    // No último "+", Tab segue o caminho nativo (sai para "Voltar").
+    expect(fireEvent.keyDown(document.activeElement!, { key: "Tab" })).toBe(true);
+
+    // Shift+Tab percorre de volta na mesma ordem.
+    fireEvent.keyDown(document.activeElement!, { key: "Tab", shiftKey: true });
+    expect(name(document.activeElement)).toBe("Editar");
+    fireEvent.keyDown(document.activeElement!, { key: "Tab", shiftKey: true });
+    expect(name(document.activeElement)).toBe('Inserir bloco antes de parágrafo 2 "b"');
+    // Na raiz do editor, Shift+Tab sai pelo caminho nativo.
+    dom.focus();
+    expect(fireEvent.keyDown(dom, { key: "Tab", shiftKey: true })).toBe(true);
+  });
+
+  it("não interfere em Tab já tratado pelo editor nem em outras teclas (achado 0274)", () => {
+    const { editor, dom } = makeEditor();
+    dom.setAttribute("contenteditable", "true");
+    (editor.view as unknown as { nodeDOM: () => Node | null }).nodeDOM = () => null;
+    render(
+      <div className="relative">
+        <div />
+        <BlockInserter editor={editor} />
+      </div>,
+    );
+    document.querySelector(".relative")!.firstElementChild!.appendChild(dom);
+    dom.focus();
+    dom.addEventListener("keydown", (e) => e.preventDefault(), { once: true });
+    fireEvent.keyDown(dom, { key: "Tab" });
+    expect(document.activeElement).toBe(dom);
+    expect(fireEvent.keyDown(dom, { key: "Enter" })).toBe(true);
+    expect(fireEvent.keyDown(dom, { key: "Tab", ctrlKey: true })).toBe(true);
+    expect(document.activeElement).toBe(dom);
+
+    // Foco num elemento que não é parada de Tab: caminho nativo.
+    const inner = document.createElement("span");
+    inner.tabIndex = -1;
+    dom.appendChild(inner);
+    inner.focus();
+    expect(fireEvent.keyDown(inner, { key: "Tab" })).toBe(true);
+
+    // Parada que recusa o foco (ex.: invisível) é pulada.
+    const pluses = screen.getAllByRole("button", { name: /^Inserir bloco/ });
+    pluses[0].focus = () => {};
+    dom.focus();
+    expect(fireEvent.keyDown(dom, { key: "Tab" })).toBe(false);
+    expect(document.activeElement).toBe(pluses[1]);
+    // Se nenhuma parada aceita o foco, o Tab segue o caminho nativo.
+    for (const p of pluses) p.focus = () => {};
+    dom.focus();
+    expect(fireEvent.keyDown(dom, { key: "Tab" })).toBe(true);
+  });
+
   it("recomputes positions on window resize", () => {
     const { editor, coordsAtPos } = makeEditor();
     render(<BlockInserter editor={editor} />);

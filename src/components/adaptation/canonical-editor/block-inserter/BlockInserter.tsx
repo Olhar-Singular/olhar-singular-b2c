@@ -20,8 +20,10 @@
  * dividem o mesmo retângulo.
  *
  * Cada "+" recebe de `gapLabel` um nome acessível dizendo onde a inserção cai
- * (achado 0220): como a camada é um overlay fora do fluxo, na ordem de foco os
- * botões aparecem todos juntos no fim, longe do bloco que cada um toca.
+ * (achado 0220). Como a camada é um overlay fora do fluxo, na ordem do DOM os
+ * botões ficam todos juntos no fim, longe do bloco que cada um toca; por isso o
+ * Tab dentro do invólucro é redirecionado pela sequência de `gapFocusOrder`,
+ * que põe cada "+" no limite do seu bloco (achado 0274).
  *
  * The component must be placed inside a `position: relative` ancestor that wraps
  * the `EditorContent` (so `inset-0` lines the layer up with the editor DOM).
@@ -31,6 +33,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { Editor } from "@tiptap/react";
 import { topLevelGaps, type BlockGap } from "./topLevelGaps";
 import { gapLabel } from "./gapLabel";
+import { collectEditorStops, interleaveGapStops } from "./gapFocusOrder";
 import { runInserterAction } from "./insertAtPos";
 import { BlockInserterMenu } from "./BlockInserterMenu";
 import type { InserterItem } from "./blockInserterItems";
@@ -107,6 +110,44 @@ export function BlockInserter({ editor }: { editor: Editor }) {
       window.removeEventListener("resize", recompute);
     };
   }, [editor, recompute]);
+
+  /*
+    Achado 0274: Tab segue a ordem do documento, com cada "+" entre o último
+    focável do bloco de cima e o primeiro do bloco de baixo. Escuta em bolha no
+    invólucro `relative` (pai do overlay): Tab que o editor já tratou chega com
+    `defaultPrevented` e é respeitado. Nas pontas da sequência (raiz do editor
+    com Shift, último "+" sem Shift) o caminho nativo já é o certo.
+  */
+  useEffect(() => {
+    const layer = layerRef.current;
+    const container = layer?.parentElement;
+    /* v8 ignore next -- the overlay always mounts inside its wrapper */
+    if (!layer || !container) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "Tab" || event.defaultPrevented) return;
+      if (event.altKey || event.ctrlKey || event.metaKey) return;
+      const gaps = topLevelGaps(editor.state.doc);
+      const pluses = Array.from(
+        layer.querySelectorAll<HTMLElement>("[data-block-gap] button"),
+      );
+      const anchors = gaps.map((gap) =>
+        gap.followingPos == null ? null : editor.view.nodeDOM(gap.followingPos),
+      );
+      const order = interleaveGapStops(collectEditorStops(editor.view.dom), anchors, pluses);
+      const from = order.indexOf(document.activeElement as HTMLElement);
+      if (from < 0) return;
+      const step = event.shiftKey ? -1 : 1;
+      for (let i = from + step; i >= 0 && i < order.length; i += step) {
+        order[i].focus();
+        if (document.activeElement === order[i]) {
+          event.preventDefault();
+          return;
+        }
+      }
+    };
+    container.addEventListener("keydown", onKeyDown);
+    return () => container.removeEventListener("keydown", onKeyDown);
+  }, [editor]);
 
   const handlePick = (gap: BlockGap, item: InserterItem) => {
     runInserterAction(editor, gap, item.action);
