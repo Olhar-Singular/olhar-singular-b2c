@@ -2097,6 +2097,18 @@ describe("0271 · a questão não se parte na virada do Word", () => {
     );
     expect(hasTag(out, "w:keepNext")).toBe(false);
   });
+
+  it("0392 · o título de seção anda com o bloco que encabeça", () => {
+    // O `Heading2` que a lib grava em styles.xml não tem keepNext; sem ele no
+    // parágrafo, o Microsoft Word deixa o título sozinho no pé da folha.
+    for (const level of [1, 2, 3] as const) {
+      const out = blockToDocxParagraphs(
+        { id: id(96), type: "heading", level, content: text("Missão 2") },
+        1,
+      );
+      expect(hasTag(out, "w:keepNext")).toBe(true);
+    }
+  });
 });
 
 /**

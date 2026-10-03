@@ -112,6 +112,12 @@ const CHROME_SELECTOR = "[data-folha-chrome]";
 const BLOCK_SELECTOR = "[data-folha-bloco]";
 
 /**
+ * Bloco impresso que é TÍTULO de seção (achado 0392): ele anda com o bloco que
+ * encabeça e nunca fica sozinho no pé da folha.
+ */
+const HEADING_ATTR = "data-folha-titulo";
+
+/**
  * Tabela impressa, marcada pelo renderizador de leitura (achado 0262).
  *
  * O arquivo repete o cabeçalho no topo de cada folha em que a tabela continua:
@@ -621,8 +627,18 @@ export function PageSheet({
           pageTop += PAGE_CONTENT_HEIGHT_PX;
           total += 1;
         };
+        /*
+          Achado 0392: o título de seção de topo que acabou de ser posto na
+          folha (null quando o item anterior não é título, ou é régua). Se o
+          bloco que ele encabeça desce, o título desce junto: título nunca fecha
+          uma folha, como o `minPresenceAhead` do `PdfHeading` e o keepNext do
+          título no Word.
+        */
+        let lastHeading: { el: HTMLElement; top: number } | null = null;
         flow.forEach((item) => {
           const top = item.top + shift;
+          const heading = lastHeading;
+          lastHeading = null;
           // Item que já passou da folha corrente: alcança a dele antes de
           // qualquer conta.
           while (top - pageTop > PAGE_CONTENT_HEIGHT_PX) turnPage();
@@ -663,9 +679,12 @@ export function PageSheet({
             top > pageTop + 0.5 &&
             item.bottom - item.top <= PAGE_CONTENT_HEIGHT_PX
           ) {
-            const spacer = Math.max(0, pageTop + PAGE_CONTENT_HEIGHT_PX - top);
+            // O título só desce se não for ele mesmo quem abre a folha:
+            // descê-lo ali só queimaria uma folha inteira.
+            const lead = heading && heading.top > pageTop + 0.5 ? heading : null;
+            const spacer = Math.max(0, pageTop + PAGE_CONTENT_HEIGHT_PX - (lead ? lead.top : top));
             turnPage();
-            pushes.push({ el: item.el, kind: "block", spacer });
+            pushes.push({ el: lead ? lead.el : item.el, kind: "block", spacer });
             shift += spacer;
           }
           /*
@@ -694,6 +713,7 @@ export function PageSheet({
             }
             turnPage();
           }
+          if (item.el.hasAttribute(HEADING_ATTR)) lastHeading = { el: item.el, top: item.top + shift };
         });
         while (printedHeight + shift - pageTop > PAGE_CONTENT_HEIGHT_PX) turnPage();
         return { total, pushes };

@@ -789,10 +789,14 @@ export function blockToDocxParagraphs(
       // lib pinta o título de azul #2E74B5, em 16pt e SEM negrito — a única
       // linha do documento que perdia o peso, contra preto/negrito/18pt no PDF
       // e nas duas telas (achado 0164). Run vence styleId.
+      // Achado 0392: o título anda com o bloco que encabeça. O `Heading*` que a
+      // lib grava em styles.xml não traz keepNext, e o Microsoft Word (que usa
+      // o estilo do arquivo) deixava o título sozinho no pé da folha.
       return [
         new Paragraph({
           heading: level,
           ...para,
+          ...KEEP_WITH_NEXT,
           spacing: { ...lineSpacing(run.size ?? sizes.heading[block.level]), ...spacing.spacing },
           children: richTextToRuns(block.content, {
             bold: true,

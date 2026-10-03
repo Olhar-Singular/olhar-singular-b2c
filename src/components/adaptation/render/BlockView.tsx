@@ -62,6 +62,8 @@ export function BlockView({
        questão, viaja com ela e a folha ignora os aninhados. */
     <div
       data-folha-bloco=""
+      /* Achado 0392: o título anda com o bloco que encabeça na paginação. */
+      data-folha-titulo={block.type === "heading" ? "" : undefined}
       data-selected={selected}
       className={selected ? "ring-2 ring-primary ring-offset-2 rounded" : undefined}
     >

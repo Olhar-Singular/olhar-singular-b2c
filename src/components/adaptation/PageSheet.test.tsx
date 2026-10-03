@@ -1756,6 +1756,67 @@ describe("PageSheet", () => {
       });
     });
 
+    /*
+      Achado 0392: o título de seção que coube no pé da folha ficava lá, e o
+      bloco que ele encabeça (que não coube) abria a folha seguinte. Título
+      nunca fecha uma folha: quando o bloco seguinte desce, o título desce junto.
+    */
+    const comTitulo = (titleAttr: Record<string, string>) => (
+      <PageSheet paginated toolbar={null}>
+        <div data-folha-bloco="" data-test-top="53.33" data-test-bottom="903.33" />
+        <div
+          data-folha-bloco=""
+          {...titleAttr}
+          data-testid="titulo"
+          data-test-top="903.33"
+          data-test-bottom="933.33"
+        />
+        <div data-folha-bloco="" data-testid="bloco-2" data-test-top="953.33" data-test-bottom="1853.33" />
+      </PageSheet>
+    );
+
+    it("leva o título junto quando o bloco que ele encabeça desce (achado 0392)", () => {
+      withBlocos(1800, () => {
+        render(comTitulo({ "data-folha-titulo": "" }));
+        expect(
+          Number.parseFloat(screen.getByTestId("titulo").style.marginTop),
+        ).toBeCloseTo(PAGE_MARGIN_PX + PAGE_CONTENT_HEIGHT_PX - 903.33, 2);
+        // O bloco desce pelo empurrão do título, sem empurrão próprio.
+        expect(screen.getByTestId("bloco-2").style.marginTop).toBe("");
+        expect(screen.getByTestId("page-count")).toHaveTextContent("2 páginas A4");
+      });
+    });
+
+    it("não puxa o bloco anterior que não é título (achado 0392)", () => {
+      withBlocos(1800, () => {
+        render(comTitulo({}));
+        expect(screen.getByTestId("titulo").style.marginTop).toBe("");
+        expect(
+          Number.parseFloat(screen.getByTestId("bloco-2").style.marginTop),
+        ).toBeCloseTo(PAGE_MARGIN_PX + PAGE_CONTENT_HEIGHT_PX - 953.33, 2);
+      });
+    });
+
+    it("não empurra o título que já abre a folha (achado 0392)", () => {
+      // Título no topo da folha 1 e bloco que não cabe nem com ele: descer o
+      // título só queimaria uma folha inteira.
+      withBlocos(1100, () => {
+        render(
+          <PageSheet paginated toolbar={null}>
+            <div
+              data-folha-bloco=""
+              data-folha-titulo=""
+              data-testid="titulo"
+              data-test-top="53.33"
+              data-test-bottom="83.33"
+            />
+            <div data-folha-bloco="" data-testid="bloco" data-test-top="103.33" data-test-bottom="1053.33" />
+          </PageSheet>,
+        );
+        expect(screen.getByTestId("titulo").style.marginTop).toBe("");
+      });
+    });
+
     it("não mexe no fluxo da folha do Revisar, que é contínua", () => {
       withBlocos(1930, () => {
         render(
