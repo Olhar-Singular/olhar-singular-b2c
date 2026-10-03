@@ -809,6 +809,24 @@ describe("StepReview", () => {
       expect(bar.className).toMatch(/(?:^|\s)z-\d+(?:\s|$)/);
     });
 
+    // Achado 0806: com a barra grudada, o Tab dentro do card da questão parava
+    // em controles cobertos por ela, e o navegador não rolava (um alvo sob um
+    // `sticky` conta como visível). Os controles da superfície reservam a altura
+    // da barra (e a do cabeçalho mobile `fixed`, abaixo de lg) na rolagem do foco.
+    it("reserva a altura das barras na rolagem do foco da superfície (0806)", () => {
+      setup();
+      let surface: HTMLElement | null = screen.getByTestId("editor-content");
+      while (surface && !surface.className.split(/\s+/).includes("[&_*]:scroll-mb-24")) {
+        surface = surface.parentElement;
+      }
+      expect(surface).not.toBeNull();
+      expect(surface).toContainElement(screen.getByTestId("page-sheet"));
+      const classes = surface!.className.split(/\s+/);
+      expect(classes).toContain("[&_*]:scroll-mb-24");
+      expect(classes).toContain("[&_*]:scroll-mt-16");
+      expect(classes).toContain("lg:[&_*]:scroll-mt-0");
+    });
+
     it("mantém Voltar na mesma barra grudada", () => {
       setup();
       const bar = screen.getByLabelText("Voltar").parentElement!;

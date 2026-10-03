@@ -449,7 +449,15 @@ export function StepReview({
       )}
 
       {editor && (
-        <div ref={surfaceRef} onKeyDown={handleSurfaceKeyDown}>
+        /* Achado 0806: a barra de ações do pé é `sticky` e o cabeçalho mobile é
+           `fixed`; um controle coberto por eles conta como visível, então o Tab
+           parava atrás da barra sem rolar. A margem de rolagem nos descendentes
+           reserva a altura das duas barras quando o foco rola um alvo à vista. */
+        <div
+          ref={surfaceRef}
+          onKeyDown={handleSurfaceKeyDown}
+          className="[&_*]:scroll-mb-24 [&_*]:scroll-mt-16 lg:[&_*]:scroll-mt-0"
+        >
           {/* Bubble de seleção (plano §6.2): aparece só com seleção não-vazia no
               editor principal — editores aninhados (RichTextField) são instâncias
               separadas, então o bubble não os atinge.
