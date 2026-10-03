@@ -65,6 +65,22 @@ describe("ExportPanel", () => {
     expect(globalThis.document.getElementById(hintId!)).toHaveTextContent(TITLE_FIELD_HINT);
     expect(screen.getByText(TITLE_FIELD_HINT)).toBeInTheDocument();
   });
+  // Achado 0464: o indicador nativo do calendário era esticado (inset-0/w-full/h-full)
+  // sobre o campo Data inteiro; qualquer clique abria o calendário e engolia a
+  // digitação. O indicador deve ficar restrito à área do ícone à direita.
+  it("não estica o indicador do calendário sobre o campo Data inteiro", () => {
+    render(<Harness onDownload={vi.fn().mockResolvedValue(undefined)} />);
+    const tokens = screen.getByLabelText("Data").className.split(/\s+/);
+    const indicator = tokens.filter((t) => t.startsWith("[&::-webkit-calendar-picker-indicator]:"));
+    const props = indicator.map((t) => t.slice("[&::-webkit-calendar-picker-indicator]:".length));
+    expect(props).not.toContain("inset-0");
+    expect(props).not.toContain("w-full");
+    expect(props).not.toContain("left-0");
+    expect(props).toContain("right-0");
+    expect(props).toContain("w-10");
+    expect(tokens).not.toContain("cursor-pointer");
+  });
+
   it("copies the plain-text projection", async () => {
     const writeText = vi.fn().mockResolvedValue(undefined);
     Object.assign(navigator, { clipboard: { writeText } });
