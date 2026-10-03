@@ -497,6 +497,7 @@ export default function CanonicalAdaptationWizard({ editMode }: Props = {}) {
    * they spread the same props.
    */
   const guardOpenerRef = useRef<HTMLElement | null>(null);
+  const restoreActionRef = useRef<HTMLButtonElement>(null);
   const guardDialogFocusProps = {
     onOpenAutoFocus: () => {
       guardOpenerRef.current = document.activeElement as HTMLElement | null;
@@ -987,14 +988,22 @@ export default function CanonicalAdaptationWizard({ editMode }: Props = {}) {
         </Dialog>
       )}
 
-      <AlertDialog
-        open={!!pendingMirror}
-        onOpenChange={(open) => {
-          /* v8 ignore next -- no trigger opens this; Radix only fires open=false */
-          if (!open) dismissRestore();
-        }}
-      >
-        <AlertDialogContent {...guardDialogFocusProps}>
+      {/* 0275 · The mirror is the only copy of an edit that never reached the
+          DB, so only the explicit "Descartar" button may clear it: Escape is
+          swallowed (no onOpenChange either) and the opening focus goes to
+          "Recuperar", the action that keeps the work. "Descartar" is not an
+          AlertDialogCancel because Radix treats Cancel as the safe action and
+          autofocuses it. */}
+      <AlertDialog open={!!pendingMirror}>
+        <AlertDialogContent
+          {...guardDialogFocusProps}
+          onOpenAutoFocus={(event) => {
+            guardDialogFocusProps.onOpenAutoFocus();
+            event.preventDefault();
+            restoreActionRef.current?.focus();
+          }}
+          onEscapeKeyDown={(event) => event.preventDefault()}
+        >
           <AlertDialogHeader>
             <AlertDialogTitle>Recuperar alterações não salvas?</AlertDialogTitle>
             <AlertDialogDescription>
@@ -1002,8 +1011,12 @@ export default function CanonicalAdaptationWizard({ editMode }: Props = {}) {
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter className="flex-col">
-            <AlertDialogCancel onClick={dismissRestore}>Descartar</AlertDialogCancel>
-            <AlertDialogAction onClick={confirmRestore}>Recuperar</AlertDialogAction>
+            <Button variant="destructive" className="mt-2 sm:mt-0" onClick={dismissRestore}>
+              Descartar
+            </Button>
+            <AlertDialogAction ref={restoreActionRef} onClick={confirmRestore}>
+              Recuperar
+            </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

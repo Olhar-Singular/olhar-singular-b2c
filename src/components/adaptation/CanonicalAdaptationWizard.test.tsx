@@ -1307,6 +1307,36 @@ describe("CanonicalAdaptationWizard", () => {
     expect(screen.getByTestId("edit-content")).toHaveTextContent("gerado");
   });
 
+  // 0275 · The mirror is the only copy of an edit that never reached the DB.
+  // Escape must not discard it, and the opening focus must sit on the action
+  // that preserves the work, not on the destructive one.
+  it("Escape does not discard the mirror nor close the restore prompt", async () => {
+    vi.mocked(mirror.readMirror).mockResolvedValue({
+      draftId: "edit-1",
+      result: mirrorResult("RECUPERADO"),
+      savedAt: Date.parse("2026-02-01T00:00:00Z"),
+    });
+    renderWithProviders(<CanonicalAdaptationWizard editMode={editSeed()} />);
+    const dialog = await screen.findByRole("alertdialog");
+    fireEvent.keyDown(dialog, { key: "Escape", code: "Escape" });
+    await act(async () => {});
+    expect(mirror.clearMirror).not.toHaveBeenCalled();
+    expect(screen.getByRole("alertdialog")).toBeInTheDocument();
+  });
+
+  it("opens the restore prompt with the focus on Recuperar, not Descartar", async () => {
+    vi.mocked(mirror.readMirror).mockResolvedValue({
+      draftId: "edit-1",
+      result: mirrorResult("RECUPERADO"),
+      savedAt: Date.parse("2026-02-01T00:00:00Z"),
+    });
+    renderWithProviders(<CanonicalAdaptationWizard editMode={editSeed()} />);
+    const dialog = await screen.findByRole("alertdialog");
+    await waitFor(() =>
+      expect(document.activeElement).toBe(within(dialog).getByRole("button", { name: /Recuperar/i })),
+    );
+  });
+
   it("does not prompt and clears a mirror that matches the loaded row", async () => {
     // Nothing to recover: the row already holds exactly what the mirror does,
     // so the leftover is noise and clearing it is safe.
