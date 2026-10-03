@@ -65,6 +65,7 @@
     "date-fns": "^3.6.0",
     "docx": "^9.7.1",
     "docx-preview": "^0.3.7",
+    "jszip": "^3.10.1",
     "katex": "^0.16.45",
     "lucide-react": "^0.462.0",
     "mammoth": "^1.12.0",
