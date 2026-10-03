@@ -17,6 +17,9 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { isNetworkError, parseEdgeFnError } from "@/lib/utils/errors";
 import { useAuth } from "@/hooks/useAuth";
+import { insufficientCreditsMessage } from "@/lib/domain/access";
+import { calcAdaptationCost } from "@/lib/domain/barriers";
+import { EXTRACTION_COST } from "@/lib/domain/extractionCost";
 import { extractExamQuestions } from "../upload-exam/extractExamQuestions";
 import { buildActivityTextFromExtraction, type ExamExtractedQuestion } from "../upload-exam/buildActivityTextFromExtraction";
 import type { AdaptationResult } from "@/lib/adaptation/canonical/schema";
@@ -63,8 +66,6 @@ type Props = {
    */
   onRestorePrevious?: () => void;
 };
-
-const OUT_OF_CREDITS_MESSAGE = "Seus créditos acabaram. Compre créditos extras para continuar.";
 
 export function StepGenerate({ data, onResult, onNext, onPrev, onLoadingChange, onRestorePrevious }: Props) {
   const { user, refreshProfile } = useAuth();
@@ -168,7 +169,17 @@ export function StepGenerate({ data, onResult, onNext, onPrev, onLoadingChange, 
         // The server just said the balance does not cover the cost: the cached
         // balance (sidebar, banner) may be stale, so re-read it.
         refreshCredits();
-        setCreditError(OUT_OF_CREDITS_MESSAGE);
+        // The 402 carries the balance and the cost: say them (0470).
+        let balance: number | null = null;
+        let required: number | null = null;
+        try {
+          const body = await context.json();
+          if (typeof body?.balance === "number") balance = body.balance;
+          if (typeof body?.required === "number") required = body.required;
+        } catch {
+          // corpo já consumido ou não-JSON: mensagem genérica
+        }
+        setCreditError(insufficientCreditsMessage(balance, required));
         return;
       }
       let errMsg = "Falha na adaptação";
@@ -257,7 +268,10 @@ export function StepGenerate({ data, onResult, onNext, onPrev, onLoadingChange, 
       if (controller.signal.aborted) return;
       if (result.status === "insufficient_credits") {
         // Refused before anything was charged: same screen as the adaptation's 402.
-        setCreditError(OUT_OF_CREDITS_MESSAGE);
+        // The cost that matters is the whole one (reading + adaptation), the
+        // same total Passo 3 showed.
+        const dimensions = [...new Set(data.barriers.filter((b) => b.is_active).map((b) => b.dimension).filter(Boolean))];
+        setCreditError(insufficientCreditsMessage(result.balance, calcAdaptationCost(dimensions) + EXTRACTION_COST));
         setLoading(false);
         onLoadingChange?.(false);
         return;

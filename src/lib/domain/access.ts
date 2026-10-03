@@ -85,3 +85,20 @@ export function canAfford(access: Access | null, cost: number): boolean {
   if (access.unlimited) return true;
   return access.total >= cost;
 }
+
+const creditsLabel = (n: number) => `${n} ${n === 1 ? "crédito" : "créditos"}`;
+
+/**
+ * First sentence of every "not enough credits" notice (Passo 3 and Passo 4).
+ * "Acabaram" only when nothing is left: a teacher with 10 credits facing a
+ * cost of 12 needs to read how many they have and what it costs (0470).
+ */
+export function insufficientCreditsLead(balance: number | null, cost: number | null): string {
+  if (!balance || balance <= 0 || cost === null) return "Seus créditos acabaram.";
+  return `Você tem ${creditsLabel(balance)}; esta adaptação custa ${cost}.`;
+}
+
+/** Full notice, offering both ways out the screens offer (subscribe or buy extras). */
+export function insufficientCreditsMessage(balance: number | null, cost: number | null): string {
+  return `${insufficientCreditsLead(balance, cost)} Assine um plano ou compre créditos extras para continuar.`;
+}

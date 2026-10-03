@@ -66,7 +66,23 @@ describe("extractExamQuestions", () => {
       context: { status: 402, json: async () => ({ error: "Créditos insuficientes.", reason: "insufficient_credits" }) },
     });
     invokeMock.mockResolvedValueOnce({ data: null, error: fnError });
-    await expect(extractExamQuestions(pdfExam, "user-1")).resolves.toEqual({ status: "insufficient_credits" });
+    await expect(extractExamQuestions(pdfExam, "user-1")).resolves.toEqual({ status: "insufficient_credits", balance: null });
+  });
+
+  it("carries the balance the 402 reports, so the screen can say how many credits are left (0470)", async () => {
+    const fnError = Object.assign(new Error("Edge Function returned a non-2xx status code"), {
+      context: { status: 402, json: async () => ({ reason: "insufficient_credits", balance: 10, required: 5 }) },
+    });
+    invokeMock.mockResolvedValueOnce({ data: null, error: fnError });
+    await expect(extractExamQuestions(pdfExam, "user-1")).resolves.toEqual({ status: "insufficient_credits", balance: 10 });
+  });
+
+  it("reports an unknown balance when the 402 body cannot be read", async () => {
+    const fnError = Object.assign(new Error("Edge Function returned a non-2xx status code"), {
+      context: { status: 402, json: async () => { throw new Error("consumed"); } },
+    });
+    invokeMock.mockResolvedValueOnce({ data: null, error: fnError });
+    await expect(extractExamQuestions(pdfExam, "user-1")).resolves.toEqual({ status: "insufficient_credits", balance: null });
   });
 
   it("reuses a successful extraction of the same file instead of paying for it again", async () => {

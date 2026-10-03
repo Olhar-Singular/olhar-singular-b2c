@@ -320,6 +320,55 @@ describe("StepGenerate", () => {
     expect(screen.getByRole("link", { name: /^Assinar$/ })).toHaveAttribute("href", "/assinar");
   });
 
+  describe("mensagem de saldo insuficiente (0470)", () => {
+    it("states the balance and the cost the 402 reports, and offers both ways out", async () => {
+      invokeMock.mockResolvedValueOnce({
+        data: null,
+        error: { context: { status: 402, json: async () => ({ reason: "insufficient_credits", balance: 10, required: 12 }) } },
+      });
+      renderWithProviders(
+        <StepGenerate data={baseData} onResult={vi.fn()} onNext={vi.fn()} onPrev={vi.fn()} />,
+      );
+      await waitFor(() =>
+        expect(
+          screen.getByText(
+            "Você tem 10 créditos; esta adaptação custa 12. Assine um plano ou compre créditos extras para continuar.",
+          ),
+        ).toBeInTheDocument(),
+      );
+    });
+
+    it("says the credits ran out when the 402 reports a zero balance", async () => {
+      invokeMock.mockResolvedValueOnce({
+        data: null,
+        error: { context: { status: 402, json: async () => ({ reason: "insufficient_credits", balance: 0, required: 12 }) } },
+      });
+      renderWithProviders(
+        <StepGenerate data={baseData} onResult={vi.fn()} onNext={vi.fn()} onPrev={vi.fn()} />,
+      );
+      await waitFor(() =>
+        expect(
+          screen.getByText("Seus créditos acabaram. Assine um plano ou compre créditos extras para continuar."),
+        ).toBeInTheDocument(),
+      );
+    });
+
+    it("falls back to the generic sentence when the 402 body cannot be read", async () => {
+      invokeMock.mockResolvedValueOnce({
+        data: null,
+        error: { context: { status: 402, json: async () => { throw new Error("consumed"); } } },
+      });
+      renderWithProviders(
+        <StepGenerate data={baseData} onResult={vi.fn()} onNext={vi.fn()} onPrev={vi.fn()} />,
+      );
+      await waitFor(() =>
+        expect(
+          screen.getByText("Seus créditos acabaram. Assine um plano ou compre créditos extras para continuar."),
+        ).toBeInTheDocument(),
+      );
+    });
+  });
+
   /**
    * Regressão 0469: o saldo só era relido após uma geração bem-sucedida. No 402 e
    * numa falha (que pode ter debitado a reserva), a sidebar e a faixa de créditos
@@ -677,6 +726,20 @@ describe("StepGenerate", () => {
       expect(screen.getByRole("link", { name: /Comprar créditos extras/i })).toHaveAttribute("href", "/creditos");
       expect(invokeMock).not.toHaveBeenCalled();
       expect(onLoadingChange).toHaveBeenLastCalledWith(false);
+    });
+
+    it("states the balance and the whole cost (reading + adaptation) when the extraction is refused (0470)", async () => {
+      extractExamQuestionsMock.mockResolvedValueOnce({ status: "insufficient_credits", balance: 10 });
+      renderWithProviders(
+        <StepGenerate data={uploadData} onResult={vi.fn()} onNext={vi.fn()} onPrev={vi.fn()} />,
+      );
+      await waitFor(() =>
+        expect(
+          screen.getByText(
+            "Você tem 10 créditos; esta adaptação custa 17. Assine um plano ou compre créditos extras para continuar.",
+          ),
+        ).toBeInTheDocument(),
+      );
     });
 
     it("refreshes the balance and the statement right after a charged extraction", async () => {

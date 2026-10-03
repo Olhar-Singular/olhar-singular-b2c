@@ -34,8 +34,11 @@ export type ExtractExamQuestionsResult =
   | { status: "ok"; questions: ExamExtractedQuestion[]; charged: boolean }
   /** The extraction ran (and was charged) but found no question. */
   | { status: "empty" }
-  /** 402: the balance does not cover the extraction; nothing was charged. */
-  | { status: "insufficient_credits" };
+  /**
+   * 402: the balance does not cover the extraction; nothing was charged.
+   * `balance`: the total the server reported, or null when the body was unreadable.
+   */
+  | { status: "insufficient_credits"; balance: number | null };
 
 /**
  * Successful extractions, per attached file. The extraction is charged
@@ -75,7 +78,14 @@ export async function extractExamQuestions(
   });
   if (fnError) {
     if ((fnError as { context?: { status?: number } }).context?.status === 402) {
-      return { status: "insufficient_credits" };
+      let balance: number | null = null;
+      try {
+        const body = await (fnError as { context: { json: () => Promise<{ balance?: unknown } | null> } }).context.json();
+        if (typeof body?.balance === "number") balance = body.balance;
+      } catch {
+        // body already consumed or not JSON: the balance stays unknown
+      }
+      return { status: "insufficient_credits", balance };
     }
     const msg = await parseInvokeError(fnError, "Não foi possível processar o arquivo enviado. Tente novamente.");
     throw new Error(msg);

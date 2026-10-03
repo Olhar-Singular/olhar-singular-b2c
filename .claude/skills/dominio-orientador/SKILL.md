@@ -251,8 +251,9 @@ Plataforma educacional B2C. **Educadores adaptam atividades pedagógicas (provas
   `request_id` segue **opcional** (a `QuestionBankPage` não manda; ausente é gerado, malformado é 400). `buildExtractionMessages` também descarta
   imagem fora da allowlist (uma URL http viraria fetch do provedor por nossa conta) e o
   `docx-utils` só extrai PNG/JPEG/WEBP. No cliente, `extractExamQuestions` manda um `request_id` novo
-  por tentativa, devolve `insufficient_credits` no 402 (o `StepGenerate` mostra a mesma tela de
-  créditos do adapt) e **reaproveita a extração paga do mesmo arquivo** (WeakMap por objeto
+  por tentativa, devolve `insufficient_credits` (com o `balance` do corpo) no 402 (o `StepGenerate` mostra a mesma tela de
+  créditos do adapt; a frase vem de `insufficientCreditsMessage` em `lib/domain/access.ts`, que só
+  diz "acabaram" com saldo 0 e, fora isso, mostra saldo e custo) e **reaproveita a extração paga do mesmo arquivo** (WeakMap por objeto
   `UploadedExam`): "Tentar novamente" após falha do adapt, o desvio das >12 questões e o Regerar não
   cobram de novo. **Quem decide se há leitura do arquivo é o MODO, não a presença do arquivo**:
   `activeUploadedExam(data)` (`wizardState.ts`) só devolve o `uploadedExam` com

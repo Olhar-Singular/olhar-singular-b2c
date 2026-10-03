@@ -1,5 +1,12 @@
 import { describe, it, expect } from "vitest";
-import { canAfford, computeAccess, parseIsoOrNull, type AccessProfile } from "./access";
+import {
+  canAfford,
+  computeAccess,
+  insufficientCreditsLead,
+  insufficientCreditsMessage,
+  parseIsoOrNull,
+  type AccessProfile,
+} from "./access";
 
 const NOW = new Date("2026-09-12T12:00:00Z");
 
@@ -135,5 +142,33 @@ describe("canAfford", () => {
     );
     expect(canAfford(access, 5)).toBe(true);
     expect(canAfford(access, 6)).toBe(false);
+  });
+});
+
+// 0470: "acabaram" só quando o saldo é zero; com saldo, dizer quanto tem e quanto custa.
+describe("insufficientCreditsLead", () => {
+  it("says the credits ran out only when the balance is zero", () => {
+    expect(insufficientCreditsLead(0, 12)).toBe("Seus créditos acabaram.");
+  });
+
+  it("states the balance and the cost when there is some balance left", () => {
+    expect(insufficientCreditsLead(10, 12)).toBe("Você tem 10 créditos; esta adaptação custa 12.");
+  });
+
+  it("uses the singular for a single credit", () => {
+    expect(insufficientCreditsLead(1, 5)).toBe("Você tem 1 crédito; esta adaptação custa 5.");
+  });
+
+  it("falls back to the generic sentence when the balance or the cost is unknown", () => {
+    expect(insufficientCreditsLead(null, 12)).toBe("Seus créditos acabaram.");
+    expect(insufficientCreditsLead(10, null)).toBe("Seus créditos acabaram.");
+  });
+});
+
+describe("insufficientCreditsMessage", () => {
+  it("offers both ways out the screen offers: subscribing and buying extras", () => {
+    expect(insufficientCreditsMessage(10, 12)).toBe(
+      "Você tem 10 créditos; esta adaptação custa 12. Assine um plano ou compre créditos extras para continuar.",
+    );
   });
 });

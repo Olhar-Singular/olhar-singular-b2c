@@ -366,9 +366,21 @@ describe("StepBarrierSelection", () => {
       barrierProfileId: "prof-1",
       barriers: [{ dimension: "tea", barrier_key: "tea_abstracao", label: "TEA", is_active: true }],
     });
-    expect(screen.getByText(/Seus créditos acabaram/i)).toBeInTheDocument();
+    // 0470: with 3 credits left they did not "run out"; say how many and the cost.
+    expect(screen.getByText(/Você tem 3 créditos; esta adaptação custa 12\./i)).toBeInTheDocument();
+    expect(screen.queryByText(/Seus créditos acabaram/i)).not.toBeInTheDocument();
     expect(screen.getByRole("link", { name: /comprar créditos extras/i })).toHaveAttribute("href", "/creditos");
     expect(screen.getByRole("link", { name: /^Assinar$/ })).toHaveAttribute("href", "/assinar");
+  });
+
+  it("says the credits ran out only when the balance is zero (0470)", () => {
+    mockUseAuth.mockReturnValue({ profile: { access_kind: "legacy", credit_balance: 0, plan_credits: 0, plan_period_end: null } });
+    renderStep({
+      ...baseData,
+      barrierProfileId: "prof-1",
+      barriers: [{ dimension: "tea", barrier_key: "tea_abstracao", label: "TEA", is_active: true }],
+    });
+    expect(screen.getByText(/Seus créditos acabaram/i)).toBeInTheDocument();
   });
 
   it("shows credit cost badge when barriers exist and the account pays", () => {
@@ -429,7 +441,7 @@ describe("StepBarrierSelection", () => {
       // 15 covers the 12 of the adaptation alone, not the 17 of the upload path.
       mockUseAuth.mockReturnValue({ profile: { access_kind: "legacy", credit_balance: 15, plan_credits: 0, plan_period_end: null } });
       renderStep({ ...baseData, barrierProfileId: "prof-1", barriers: teaBarrier, activityInputMode: "upload", uploadedExam });
-      expect(screen.getByText(/Seus créditos acabaram/i)).toBeInTheDocument();
+      expect(screen.getByText(/Você tem 15 créditos; esta adaptação custa 17\./i)).toBeInTheDocument();
     });
 
     it("does not charge the reading of a file left attached after leaving the upload mode", () => {

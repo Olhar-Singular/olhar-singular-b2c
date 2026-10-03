@@ -12,7 +12,7 @@ import {
 import { ArrowLeft, Sparkles, User, Coins, Plus } from "lucide-react";
 import { useBarrierProfiles, useCreateBarrierProfile } from "@/hooks/useBarrierProfiles";
 import { useAuth } from "@/hooks/useAuth";
-import { canAfford, computeAccess } from "@/lib/domain/access";
+import { canAfford, computeAccess, insufficientCreditsLead } from "@/lib/domain/access";
 import {
   BARRIER_DIMENSIONS,
   COMPLEXITY_LABELS,
@@ -252,7 +252,7 @@ export function StepBarrierSelection({ data, updateData, onNext, onPrev }: Props
               )}
               {!affordable && (
                 <span className="block mt-1">
-                  Seus créditos acabaram.{" "}
+                  {insufficientCreditsLead(access?.total ?? null, totalCost)}{" "}
                   <Link to="/assinar" className="underline font-medium">Assinar</Link>
                   {" ou "}
                   <Link to="/creditos" className="underline font-medium">comprar créditos extras</Link>
