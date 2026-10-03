@@ -25,8 +25,20 @@ export function StepUploadExam({ data, updateData, onNext, onLoadingChange }: Pr
   const [processing, setProcessing] = useState(false);
   const [error, setError] = useState("");
   const [dragging, setDragging] = useState(false);
+  const [announcement, setAnnouncement] = useState("");
   const fileRef = useRef<HTMLInputElement>(null);
+  const dropzoneRef = useRef<HTMLDivElement>(null);
+  const focusDropzoneOnDetachRef = useRef(false);
   const attached = data.uploadedExam ?? null;
+
+  // Removing the file unmounts the card holding the trash button, which would
+  // drop keyboard focus on <body>. Once the dropzone is re-enabled (tabbable
+  // again), hand focus to it so the teacher can pick the next file right away.
+  useEffect(() => {
+    if (attached || !focusDropzoneOnDetachRef.current) return;
+    focusDropzoneOnDetachRef.current = false;
+    dropzoneRef.current?.focus();
+  }, [attached]);
 
   // Guards against a stray completion after this step is left mid-parse (Voltar
   // is disabled while processing, but the wizard's step pills / sidebar nav are
@@ -59,12 +71,15 @@ export function StepUploadExam({ data, updateData, onNext, onLoadingChange }: Pr
 
   /** Detaches the current file, re-enabling the dropzone for a new upload. */
   function handleRemoveFile() {
+    focusDropzoneOnDetachRef.current = true;
     updateData({ uploadedExam: null });
     setError("");
+    setAnnouncement("Arquivo removido. Escolha outro arquivo para adaptar.");
   }
 
   async function handleFile(file: File) {
     setError("");
+    setAnnouncement("");
 
     if (file.size > MAX_FILE_SIZE_BYTES) {
       setError("Arquivo muito grande (máximo 10MB).");
@@ -163,6 +178,7 @@ export function StepUploadExam({ data, updateData, onNext, onLoadingChange }: Pr
       </div>
 
       <div
+        ref={dropzoneRef}
         role="button"
         tabIndex={attached ? -1 : 0}
         aria-disabled={!!attached}
@@ -230,6 +246,8 @@ export function StepUploadExam({ data, updateData, onNext, onLoadingChange }: Pr
           </Button>
         </div>
       )}
+
+      <p role="status" aria-live="polite" className="sr-only">{announcement}</p>
 
       {error && (
         <p role="alert" className="text-sm text-destructive">{error}</p>

@@ -1,4 +1,4 @@
-import { StrictMode } from "react";
+import { StrictMode, useState } from "react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { screen, fireEvent, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
@@ -292,6 +292,43 @@ describe("StepUploadExam", () => {
     renderWithProviders(<StepUploadExam data={attachedData} updateData={updateData} onNext={vi.fn()} onPrev={vi.fn()} />);
     fireEvent.click(screen.getByRole("button", { name: /remover arquivo/i }));
     expect(updateData).toHaveBeenCalledWith({ uploadedExam: null });
+  });
+
+  describe("1116: removing the file keeps keyboard focus and announces it", () => {
+    function Harness() {
+      const [data, setData] = useState<WizardData>({ ...baseData, uploadedExam: attachedExam() });
+      return (
+        <StepUploadExam
+          data={data}
+          updateData={(partial) => setData((d) => ({ ...d, ...partial }))}
+          onNext={vi.fn()}
+          onPrev={vi.fn()}
+        />
+      );
+    }
+
+    it("moves focus to the re-enabled dropzone instead of dropping it on <body>", async () => {
+      const user = userEvent.setup();
+      renderWithProviders(<Harness />);
+      screen.getByRole("button", { name: /remover arquivo/i }).focus();
+      await user.keyboard("{Enter}");
+      const zone = screen.getByRole("button", { name: /escolher arquivo pdf ou word/i });
+      expect(document.activeElement).toBe(zone);
+      expect(document.activeElement).not.toBe(document.body);
+    });
+
+    it("announces the removal in a polite live region", async () => {
+      const user = userEvent.setup();
+      renderWithProviders(<Harness />);
+      await user.click(screen.getByRole("button", { name: /remover arquivo/i }));
+      expect(screen.getByRole("status")).toHaveTextContent(/arquivo removido/i);
+    });
+
+    it("does not steal focus on first render without an attached file", () => {
+      renderWithProviders(<StepUploadExam data={baseData} updateData={vi.fn()} onNext={vi.fn()} onPrev={vi.fn()} />);
+      expect(document.activeElement).toBe(document.body);
+      expect(screen.getByRole("status")).toBeEmptyDOMElement();
+    });
   });
 
   it("ignores a change event with no selected file", () => {
