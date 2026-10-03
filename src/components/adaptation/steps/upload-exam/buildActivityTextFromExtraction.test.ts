@@ -68,4 +68,25 @@ describe("buildActivityTextFromExtraction", () => {
   it("returns an empty string for an empty question list", () => {
     expect(buildActivityTextFromExtraction([])).toBe("");
   });
+  // 1124: native PDF text keeps the original "1) " in q.text; the builder numbered on top of it.
+  it("does not double the numbering when the extracted text already carries one", () => {
+    const out = buildActivityTextFromExtraction([
+      makeQuestion({ text: "1) O que acontece com a agua?" }),
+      makeQuestion({ text: "2. Explique com suas palavras." }),
+      makeQuestion({ text: "Questão 3: Cite um exemplo." }),
+      makeQuestion({ text: "Q4 - Desenhe o ciclo." }),
+      makeQuestion({ text: "QUESTÃO 5 Compare." }),
+    ]);
+    expect(out).toBe(
+      "1) O que acontece com a agua?\n\n2) Explique com suas palavras.\n\n3) Cite um exemplo.\n\n4) Desenhe o ciclo.\n\n5) Compare.",
+    );
+  });
+
+  it("keeps a leading number that is content, not a question label", () => {
+    const out = buildActivityTextFromExtraction([
+      makeQuestion({ text: "10 pessoas dividem 5 pizzas." }),
+      makeQuestion({ text: "1,5 litro cabe em quantos copos?" }),
+    ]);
+    expect(out).toBe("1) 10 pessoas dividem 5 pizzas.\n\n2) 1,5 litro cabe em quantos copos?");
+  });
 });
