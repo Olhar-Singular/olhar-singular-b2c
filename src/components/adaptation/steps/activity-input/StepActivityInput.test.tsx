@@ -1091,6 +1091,17 @@ describe("StepActivityInput — bank dialog never claims empty before querying (
     expect(screen.getByLabelText(/Conteúdo da atividade/i)).toBeInTheDocument();
   });
 
+  // 0533: the bank tab (and its trigger) unmounts on this path, so focus must
+  // land on the textarea the button promised instead of falling to <body>.
+  it("focuses the activity textarea after 'Colar Texto' from the empty bank", async () => {
+    openBankDialog();
+    const dialog = await screen.findByRole("dialog");
+    await within(dialog).findByText(/Seu banco ainda não tem questões/i);
+    fireEvent.click(within(dialog).getByRole("button", { name: /Colar Texto/i }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    expect(screen.getByLabelText(/Conteúdo da atividade/i)).toHaveFocus();
+  });
+
   it("says the search/filter found nothing and lets the user clear it", async () => {
     bankQuestionsResult.data = [
       { id: "s1", text: "Questão de Física", subject: "Física", topic: null, difficulty: null, image_url: null, options: null },

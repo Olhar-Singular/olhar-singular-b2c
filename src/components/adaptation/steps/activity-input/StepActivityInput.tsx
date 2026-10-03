@@ -466,7 +466,9 @@ export function StepActivityInput({ data, updateData, onNext, onPrev }: Props) {
           className="max-w-3xl max-h-[85vh] flex flex-col"
           onCloseAutoFocus={(event) => {
             event.preventDefault();
-            bankTriggerRef.current?.focus();
+            // 0533: "Colar Texto" switches to the manual tab, unmounting the bank
+            // trigger; focus the textarea that path promised instead.
+            (bankTriggerRef.current ?? textareaRef.current)?.focus();
           }}
         >
           <DialogHeader>
