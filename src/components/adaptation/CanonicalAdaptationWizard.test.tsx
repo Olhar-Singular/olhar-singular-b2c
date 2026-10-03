@@ -503,6 +503,26 @@ describe("CanonicalAdaptationWizard", () => {
     expect((screen.getByLabelText(TITLE_FIELD_LABEL) as HTMLInputElement).value).toBe("Prova Final");
   });
 
+  /*
+    Achado 0517: o switch "Quebra de página por questão" morava em dois
+    `useState(false)` dentro do passo Exportar, que desmonta a cada troca de
+    passo. Voltar ao Revisar e retornar desligava a escolha sem aviso, e o
+    próximo arquivo saía sem as quebras. A escolha sobe para o wizard.
+  */
+  it("SSOT: a quebra de página por questão sobrevive à ida e volta ao Revisar (achado 0517)", () => {
+    renderWithProviders(<CanonicalAdaptationWizard />);
+    advanceToReview();
+    fireEvent.click(screen.getByRole("button", { name: /^Exportar$/i }));
+
+    const toggle = () => screen.getByRole("switch", { name: /Quebra de página por questão/i });
+    fireEvent.click(toggle());
+    expect(toggle()).toHaveAttribute("aria-checked", "true");
+
+    fireEvent.click(screen.getByRole("button", { name: /Voltar/i }));
+    fireEvent.click(screen.getByRole("button", { name: /^Exportar$/i }));
+    expect(toggle()).toHaveAttribute("aria-checked", "true");
+  });
+
   it("the step indicator navigates back to a visited step", () => {
     renderWithProviders(<CanonicalAdaptationWizard />);
     advanceToReview();

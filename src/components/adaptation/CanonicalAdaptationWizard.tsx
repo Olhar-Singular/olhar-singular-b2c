@@ -188,6 +188,10 @@ export default function CanonicalAdaptationWizard({ editMode }: Props = {}) {
     o ajuste: uma folha nunca ajustada continua abrindo cabendo na mesa.
   */
   const [reviewZoomIndex, setReviewZoomIndex] = useState(0);
+  // Achado 0517: a escolha "Quebra de página por questão" do Exportar mora aqui,
+  // não no passo (que desmonta a cada troca). Dura a sessão de edição; não
+  // entra no documento salvo.
+  const [pageBreakPerQuestion, setPageBreakPerQuestion] = useState(false);
   // Crash-mirror recovery: a surviving mirror newer than the loaded row means a
   // save was lost. We hold it here and prompt the user to recover it.
   const [pendingMirror, setPendingMirror] = useState<MirrorEntry | null>(null);
@@ -737,6 +741,8 @@ export default function CanonicalAdaptationWizard({ editMode }: Props = {}) {
             saving={markReady.isPending}
             onSave={handleSave}
             onHeaderChange={handleHeaderChange}
+            pageBreakPerQuestion={pageBreakPerQuestion}
+            onPageBreakPerQuestionChange={setPageBreakPerQuestion}
             onPrev={onPrev}
             onRestart={() => void handleRestart()}
           />

@@ -1,4 +1,3 @@
-import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, RotateCcw, Save, Loader2 } from "lucide-react";
 import { CanonicalRenderer } from "@/components/adaptation/render/CanonicalRenderer";
@@ -17,6 +16,13 @@ type Props = {
   onSave: () => void;
   /** Persist a change to the document header (title/school/teacher/date). */
   onHeaderChange?: (header: DocumentHeader) => void;
+  /**
+   * Switch "Quebra de página por questão", controlado pelo wizard: o passo
+   * desmonta a cada troca de passo e o estado local voltava a desligado
+   * (achado 0517). Não entra no documento salvo.
+   */
+  pageBreakPerQuestion: boolean;
+  onPageBreakPerQuestionChange: (value: boolean) => void;
   onPrev: () => void;
   onRestart: () => void;
 };
@@ -27,16 +33,17 @@ export function StepExportCanonical({
   saving,
   onSave,
   onHeaderChange,
+  pageBreakPerQuestion,
+  onPageBreakPerQuestionChange,
   onPrev,
   onRestart,
 }: Props) {
   const document = result.document;
   /*
-    Espelho do switch do ExportPanel: a escolha é só de exportação (não entra no
-    documento salvo), mas a prévia precisa dela para desenhar onde a página vira.
-    Sem isso o switch mudava o PDF e a folha aqui não mexia um pixel (achado 0110).
+    A escolha da quebra é só de exportação (não entra no documento salvo), mas a
+    prévia precisa dela para desenhar onde a página vira (achado 0110). Uma só
+    fonte de verdade, no wizard, para o painel e a prévia (achado 0517).
   */
-  const [pageBreakPerQuestion, setPageBreakPerQuestion] = useState(false);
 
   return (
     <div className="space-y-6">
@@ -47,7 +54,8 @@ export function StepExportCanonical({
         header={result.header}
         onHeaderChange={onHeaderChange}
         pageStyle={result.pageStyle}
-        onPageBreakPerQuestionChange={setPageBreakPerQuestion}
+        pageBreakPerQuestion={pageBreakPerQuestion}
+        onPageBreakPerQuestionChange={onPageBreakPerQuestionChange}
       />
 
       <div className="flex flex-wrap gap-2">

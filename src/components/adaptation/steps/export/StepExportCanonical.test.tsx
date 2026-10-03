@@ -28,16 +28,19 @@ vi.mock("@/components/adaptation/export/ExportPanel", () => ({
     pageStyle,
     header,
     onHeaderChange,
+    pageBreakPerQuestion,
     onPageBreakPerQuestionChange,
   }: {
     document: CanonicalDocument;
     pageStyle?: PageStyle;
     header?: DocumentHeader;
     onHeaderChange?: (h: DocumentHeader) => void;
+    pageBreakPerQuestion?: boolean;
     onPageBreakPerQuestionChange?: (v: boolean) => void;
   }) => (
     <div
       data-testid="export-panel"
+      data-panel-page-break={String(pageBreakPerQuestion)}
       data-page-style={pageStyle?.fontFamily ?? "none"}
       data-header-title={header?.title ?? "none"}
     >
@@ -77,6 +80,8 @@ function renderStep(overrides: Partial<React.ComponentProps<typeof StepExportCan
       onSave={vi.fn()}
       onPrev={vi.fn()}
       onRestart={vi.fn()}
+      pageBreakPerQuestion={false}
+      onPageBreakPerQuestionChange={vi.fn()}
       {...overrides}
     />,
   );
@@ -195,10 +200,18 @@ describe("StepExportCanonical", () => {
       expect(screen.getByTestId("renderer").dataset.pageBreak).toBe("false");
     });
 
-    it("propagates the page-break toggle from the panel to the preview", () => {
-      renderStep();
+    it("forwards the page-break toggle from the panel to the parent", () => {
+      const onPageBreakPerQuestionChange = vi.fn();
+      renderStep({ onPageBreakPerQuestionChange });
       fireEvent.click(screen.getByRole("button", { name: "toggle-page-break" }));
+      expect(onPageBreakPerQuestionChange).toHaveBeenCalledWith(true);
+    });
+
+    // Achado 0517: o valor vem do wizard e é o MESMO para o painel e a prévia.
+    it("feeds the controlled page-break value to both the panel and the preview", () => {
+      renderStep({ pageBreakPerQuestion: true });
       expect(screen.getByTestId("renderer").dataset.pageBreak).toBe("true");
+      expect(screen.getByTestId("export-panel").dataset.panelPageBreak).toBe("true");
     });
 
     /**

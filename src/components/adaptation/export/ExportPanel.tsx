@@ -75,9 +75,15 @@ type Props = {
   /** Document-level presentation style (font, size, spacing). Comes from pageStyle in the result. */
   pageStyle?: PageStyle;
   /**
-   * Avisa o pai a cada mudança do switch "Quebra de página por questão", para que
-   * a prévia irmã possa desenhar a quebra. O estado continua morando aqui (é uma
-   * escolha de exportação, não vai para o documento salvo).
+   * Valor controlado do switch "Quebra de página por questão". Quando o pai o
+   * fornece, ele é a única fonte de verdade (achado 0517: o estado local morria
+   * a cada troca de passo do wizard). Sem ele, o painel guarda o valor sozinho.
+   * Continua sendo escolha de exportação: não entra no documento salvo.
+   */
+  pageBreakPerQuestion?: boolean;
+  /**
+   * Avisa o pai a cada mudança do switch, para que a prévia irmã possa desenhar
+   * a quebra e para que a escolha sobreviva à troca de passo.
    */
   onPageBreakPerQuestionChange?: (value: boolean) => void;
   /** Override the PDF download trigger (used in tests). */
@@ -91,13 +97,15 @@ export function ExportPanel({
   header = {},
   onHeaderChange = () => {},
   pageStyle,
+  pageBreakPerQuestion: controlledPageBreak,
   onPageBreakPerQuestionChange = () => {},
   onDownload = downloadPdf,
   onDownloadWord = downloadDocx,
 }: Props) {
-  // Page-break is a transient, export-only choice (not persisted); the header
-  // is lifted to the parent so it survives save.
-  const [pageBreakPerQuestion, setPageBreakPerQuestion] = useState(false);
+  // Page-break is an export-only choice (not persisted in the document). When
+  // the parent controls it, the parent's value wins (single source of truth).
+  const [localPageBreak, setPageBreakPerQuestion] = useState(false);
+  const pageBreakPerQuestion = controlledPageBreak ?? localPageBreak;
   const [exporting, setExporting] = useState(false);
   const [exportingWord, setExportingWord] = useState(false);
   /**

@@ -128,6 +128,16 @@ describe("ExportPanel", () => {
     expect(onPageBreakPerQuestionChange).toHaveBeenLastCalledWith(false);
   });
 
+  // Achado 0517: com valor controlado, o switch e o arquivo seguem o pai.
+  it("uses the controlled page-break value from the parent", async () => {
+    const onDownload = vi.fn<(d: CanonicalDocument, s: PanelSettings, ps?: PageStyle) => Promise<void>>().mockResolvedValue(undefined);
+    render(<ExportPanel document={document} onDownload={onDownload} pageBreakPerQuestion />);
+    expect(screen.getByRole("switch")).toHaveAttribute("aria-checked", "true");
+    fireEvent.click(screen.getByRole("button", { name: /Exportar PDF/i }));
+    await waitFor(() => expect(onDownload).toHaveBeenCalled());
+    expect(onDownload.mock.calls[0][1].pageBreakPerQuestion).toBe(true);
+  });
+
   it("is safe to toggle the page break without a parent listener", () => {
     render(<ExportPanel document={document} onDownload={vi.fn()} />);
     expect(() => fireEvent.click(screen.getByRole("switch"))).not.toThrow();
