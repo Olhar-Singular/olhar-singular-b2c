@@ -407,7 +407,18 @@ export default function CanonicalAdaptationWizard({ editMode }: Props = {}) {
     // the component is unmounted in the same React 18 batch as onNext(). Resetting
     // here ensures the navigation guard switches to "unsaved" mode, not "generating".
     setIsGenerating(false);
-    setData((prev) => setResult(prev, result));
+    // 0379: a Regerar replaces the CONTENT only. The name, header and Formato
+    // the teacher already chose live inside `result`, and the edge never sees
+    // them, so they are carried over from the stashed version. The autosave
+    // then writes them (and the manual title) onto the new row.
+    const adopted = stashedResult
+      ? {
+          ...result,
+          header: stashedResult.header ?? result.header,
+          pageStyle: stashedResult.pageStyle ?? result.pageStyle,
+        }
+      : result;
+    setData((prev) => setResult(prev, adopted));
     // A nova adaptação chegou: a anterior não é mais uma saída de emergência.
     setStashedResult(null);
     setDraftId(row.id);
@@ -424,7 +435,7 @@ export default function CanonicalAdaptationWizard({ editMode }: Props = {}) {
     if (row.id !== editAdaptationId) {
       window.history.replaceState(window.history.state, "", `/adaptar/editar/${row.id}`);
     }
-  }, [editAdaptationId]);
+  }, [editAdaptationId, stashedResult]);
 
   // Every edit re-arms "unsaved". `isSaved` only ever went true before, so
   // after the first save the wizard could no longer tell that the teacher had

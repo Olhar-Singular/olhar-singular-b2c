@@ -1009,6 +1009,29 @@ describe("CanonicalAdaptationWizard", () => {
     expect(adoptedUpdatedAt()).toBe("2026-02-01T00:00:00Z");
   });
 
+  // --- 0379 · Regerar troca só o conteúdo: nome e Formato do professor ficam ---
+  it("keeps the teacher's title and page style on the regenerated version (0379)", async () => {
+    renderWithProviders(<CanonicalAdaptationWizard />);
+    advanceToReview();
+    await waitFor(() => expect(adoptedDraftId()).toBe("srv-1"));
+    fireEvent.click(screen.getByTestId("review-rename"));
+    fireEvent.click(screen.getByTestId("set-pagestyle"));
+    expect(screen.getByTestId("review-title")).toHaveTextContent("Prova de Geografia");
+
+    fireEvent.click(screen.getByRole("button", { name: /Regerar/i }));
+    const dialog = screen.getByRole("alertdialog");
+    fireEvent.click(within(dialog).getByRole("button", { name: /^Regerar$/i }));
+    await waitFor(() => expect(screen.getByTestId("do-generate")).toBeInTheDocument());
+    fireEvent.click(screen.getByTestId("do-generate"));
+    await waitFor(() => expect(adoptedDraftId()).toBe("srv-2"));
+
+    expect(screen.getByTestId("review-title")).toHaveTextContent("Prova de Geografia");
+    expect(JSON.parse(screen.getByTestId("review-pagestyle").textContent ?? "null")).toEqual({
+      fontFamily: "lexend",
+      fontSize: 14,
+    });
+  });
+
   // --- originalExam (Adaptar direto do arquivo) passthrough into StepReview -
 
   it("passes originalExam=null into StepReview when the adaptation has no uploadedExam (Banco de Questões)", () => {
