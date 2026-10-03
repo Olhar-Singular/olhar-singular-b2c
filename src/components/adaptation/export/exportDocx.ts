@@ -72,6 +72,8 @@ import {
   PAGE_MARGIN_PT,
   RULE_COLOR,
   RULE_WIDTH_PT,
+  ANSWER_LINE_COLOR,
+  ANSWER_LINE_WIDTH_PT,
   CHECKBOX_BOX_BORDER_PT,
   CHECKBOX_BOX_COLOR,
   TRUE_FALSE_MARKER_TEXT,
@@ -155,6 +157,24 @@ const DIVIDER_RULE = {
       style: BorderStyle.SINGLE,
       size: Math.round(RULE_WIDTH_PT * 8),
       color: RULE_COLOR.slice(1),
+    },
+  },
+} as const;
+
+/**
+ * A pauta da questão aberta (achado 0523): borda inferior de um parágrafo
+ * vazio, na largura útil da coluna em qualquer fonte e corpo, com a tinta, a
+ * espessura e o traço tracejado dos tokens da pauta das outras superfícies.
+ * Antes eram 60 `_` de texto no corpo e na tinta do documento: a largura
+ * dependia do avanço do glifo e, a partir de ~15,5 pt na Arial, cada linha
+ * passava da coluna e quebrava em duas.
+ */
+const ANSWER_LINE_RULE = {
+  border: {
+    bottom: {
+      style: BorderStyle.DASHED,
+      size: Math.round(ANSWER_LINE_WIDTH_PT * 8),
+      color: ANSWER_LINE_COLOR.slice(1),
     },
   },
 } as const;
@@ -523,8 +543,9 @@ function answerToDocx(
         () =>
           new Paragraph({
             ...style.paragraph,
+            ...ANSWER_LINE_RULE,
             ...spacingWith(lineFor(style.run.size)),
-            children: [new TextRun({ ...style.run, text: "_".repeat(60) })],
+            children: [],
           }),
       );
     }

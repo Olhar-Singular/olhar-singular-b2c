@@ -29,6 +29,8 @@ import {
   ANSWER_ITEM_GAP_PT,
   TABLE_CELL_PADDING_PT,
   BASE_LINE_HEIGHT,
+  ANSWER_LINE_COLOR,
+  ANSWER_LINE_WIDTH_PT,
 } from "../render/pageTokens";
 import { pdfFooterLabel } from "../render/footerLabel";
 import type {
@@ -788,6 +790,37 @@ function paragraphBorder(node: unknown, side: string): Record<string, unknown> |
   walk(node);
   return found;
 }
+
+describe("pauta da questão aberta no .docx (achado 0523)", () => {
+  // stem vazio: [0] é o número da questão, [1..2] a pauta, o último o spacer.
+  const lines = (style?: Block["style"]) =>
+    blockToDocxParagraphs(
+      {
+        id: id(210),
+        type: "question",
+        stem: [],
+        answer: { kind: "open", answerLines: 2 },
+        ...(style ? { style } : {}),
+      },
+      1,
+    ).slice(1, 3);
+
+  it("não escreve a pauta como texto (60 '_' dependiam da fonte e quebravam em corpo grande)", () => {
+    for (const line of [...lines(), ...lines({ fontSize: 28 } as Block["style"])]) {
+      expect(docxText(line)).toBe("");
+    }
+  });
+
+  it("desenha cada linha como borda inferior tracejada na tinta e espessura dos tokens da pauta", () => {
+    for (const line of lines()) {
+      expect(paragraphBorder(line, "w:bottom")).toEqual({
+        style: "dashed",
+        color: ANSWER_LINE_COLOR.slice(1),
+        size: Math.round(ANSWER_LINE_WIDTH_PT * 8),
+      });
+    }
+  });
+});
 
 describe("divider no .docx (achado 0168)", () => {
   const divider = () => blockToDocxParagraphs({ id: id(200), type: "divider" }, 1)[0];
