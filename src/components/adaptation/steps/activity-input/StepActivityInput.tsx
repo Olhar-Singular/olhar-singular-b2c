@@ -167,9 +167,24 @@ export function StepActivityInput({ data, updateData, onNext, onPrev }: Props) {
   const visibleBankQuestions = bankSearchTerm
     ? bankQuestions.filter((q) => matchesBankSearch(q, bankSearchTerm))
     : bankQuestions;
+  const bankFiltered = !!bankSearchTerm || filterSubject !== "all" || filterDifficulty !== "all";
+
+  function clearBankFilters() {
+    setBankSearch("");
+    setFilterSubject("all");
+    setFilterDifficulty("all");
+  }
+
+  function switchToPasteText() {
+    setShowBankModal(false);
+    setTab("manual");
+  }
 
   useEffect(() => {
     if (!showBankModal) return;
+    // 1134: show the spinner from the moment the query is scheduled, so the
+    // previous result (e.g. a stale "empty") never stands in for the new one.
+    setBankLoading(true);
     if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
     searchTimerRef.current = setTimeout(fetchBankQuestions, BANK_SEARCH_DEBOUNCE_MS);
     /* v8 ignore next -- searchTimerRef.current sempre setado na linha anterior */
@@ -485,15 +500,28 @@ export function StepActivityInput({ data, updateData, onNext, onPrev }: Props) {
             </div>
 
             {bankLoading ? (
-              <div className="flex items-center justify-center py-12">
-                <Loader2 className="w-6 h-6 animate-spin text-primary" />
+              <div role="status" aria-label="Carregando questões" className="flex items-center justify-center py-12">
+                <Loader2 className="w-6 h-6 animate-spin text-primary" aria-hidden="true" />
               </div>
             ) : bankError ? (
               <p role="alert" className="text-sm text-destructive-strong py-8 text-center">
                 Erro ao carregar o banco de questões. Tente novamente.
               </p>
+            ) : visibleBankQuestions.length === 0 && bankFiltered ? (
+              <div className="py-8 text-center space-y-3">
+                <p className="text-sm text-muted-foreground">Nenhuma questão encontrada para esta busca ou filtro.</p>
+                <Button variant="outline" size="sm" onClick={clearBankFilters}>Limpar filtros</Button>
+              </div>
             ) : visibleBankQuestions.length === 0 ? (
-              <p className="text-sm text-muted-foreground py-8 text-center">Nenhuma questão encontrada.</p>
+              <div className="py-8 text-center space-y-3">
+                <p className="text-sm text-muted-foreground">
+                  Seu banco ainda não tem questões. Cadastre-as em Banco de Questões, no menu lateral, ou cole o texto da atividade.
+                </p>
+                <Button variant="outline" size="sm" onClick={switchToPasteText}>
+                  <Type className="w-4 h-4 mr-1" />
+                  Colar Texto
+                </Button>
+              </div>
             ) : (
               <div className="space-y-2 flex-1 overflow-y-auto px-1 py-1">
                 {visibleBankQuestions.map((q) => {

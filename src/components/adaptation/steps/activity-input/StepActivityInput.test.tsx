@@ -355,7 +355,7 @@ describe("StepActivityInput — fetchBankQuestions filters", () => {
     openBankDialog();
     await waitFor(() => screen.getByText("Palavra comprida"));
     fireEvent.change(screen.getByPlaceholderText("Buscar questões..."), { target: { value: "_" } });
-    await waitFor(() => expect(screen.getByText("Nenhuma questão encontrada.")).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText(/Nenhuma questão encontrada/)).toBeInTheDocument());
     fireEvent.change(screen.getByPlaceholderText("Buscar questões..."), { target: { value: "50%" } });
     await waitFor(() => screen.getByText("Aumentou 50% do preço"));
     expect(screen.queryByText("Palavra comprida")).toBeNull();
@@ -414,7 +414,7 @@ describe("StepActivityInput — fetchBankQuestions filters", () => {
     fireEvent.click(screen.getByRole("button", { name: /Banco de Questões/i }));
     fireEvent.click(screen.getByRole("button", { name: /Abrir Banco de Questões/i }));
     await waitFor(() => {
-      expect(screen.getByText("Nenhuma questão encontrada.")).toBeInTheDocument();
+      expect(screen.getByText(/Seu banco ainda não tem questões/)).toBeInTheDocument();
     });
     fromChain.then = originalThen;
   });
@@ -1054,5 +1054,55 @@ describe("StepActivityInput — long unbroken words wrap inside the cards (1132)
     fireEvent.click(screen.getByRole("button", { name: /Abrir Banco de Questões/i }));
     const text = await within(await screen.findByRole("dialog")).findByText(longToken);
     expect(text).toHaveClass("break-words");
+  });
+});
+
+describe("StepActivityInput — bank dialog never claims empty before querying (1134)", () => {
+  function openBankDialog() {
+    render(<StepActivityInput data={baseData} updateData={vi.fn()} onNext={vi.fn()} onPrev={vi.fn()} />);
+    fireEvent.click(screen.getByRole("button", { name: /^Banco de Questões$/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Abrir Banco de Questões/i }));
+  }
+
+  it("shows loading, not 'empty', right after reopening the dialog", async () => {
+    openBankDialog();
+    await within(await screen.findByRole("dialog")).findByText(/ainda não tem questões/i);
+    fireEvent.keyDown(screen.getByRole("dialog"), { key: "Escape" });
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    bankQuestionsResult.data = [
+      { id: "n1", text: "Questão nova", subject: "Física", topic: null, difficulty: null, image_url: null, options: null },
+    ];
+    fireEvent.click(screen.getByRole("button", { name: /Abrir Banco de Questões/i }));
+    const dialog = await screen.findByRole("dialog");
+    // Before the debounced query resolves, the stale empty state must not show.
+    expect(within(dialog).queryByText(/ainda não tem questões/i)).toBeNull();
+    expect(within(dialog).queryByText(/Nenhuma questão encontrada/i)).toBeNull();
+    expect(within(dialog).getByRole("status", { name: /Carregando questões/i })).toBeInTheDocument();
+    await within(dialog).findByText("Questão nova");
+  });
+
+  it("tells an empty bank apart and offers the paste-text path", async () => {
+    openBankDialog();
+    const dialog = await screen.findByRole("dialog");
+    await within(dialog).findByText(/Seu banco ainda não tem questões/i);
+    expect(within(dialog).queryByText(/Nenhuma questão encontrada/i)).toBeNull();
+    fireEvent.click(within(dialog).getByRole("button", { name: /Colar Texto/i }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    expect(screen.getByLabelText(/Conteúdo da atividade/i)).toBeInTheDocument();
+  });
+
+  it("says the search/filter found nothing and lets the user clear it", async () => {
+    bankQuestionsResult.data = [
+      { id: "s1", text: "Questão de Física", subject: "Física", topic: null, difficulty: null, image_url: null, options: null },
+    ];
+    openBankDialog();
+    const dialog = await screen.findByRole("dialog");
+    await within(dialog).findByText("Questão de Física");
+    fireEvent.change(within(dialog).getByPlaceholderText("Buscar questões..."), { target: { value: "zzz" } });
+    await within(dialog).findByText(/Nenhuma questão encontrada para esta busca ou filtro/i);
+    expect(within(dialog).queryByText(/ainda não tem questões/i)).toBeNull();
+    fireEvent.click(within(dialog).getByRole("button", { name: /Limpar filtros/i }));
+    await within(dialog).findByText("Questão de Física");
+    expect(within(dialog).getByPlaceholderText("Buscar questões...")).toHaveValue("");
   });
 });
