@@ -435,8 +435,17 @@ export function StepActivityInput({ data, updateData, onNext, onPrev }: Props) {
                   return (
                     <div
                       key={q.id}
+                      role="checkbox"
+                      aria-checked={isSelected}
+                      tabIndex={0}
                       onClick={() => toggleQuestion(q.id)}
-                      className={`border rounded-lg p-3 cursor-pointer transition-all flex items-start gap-3 ${
+                      onKeyDown={(e) => {
+                        if (e.target !== e.currentTarget) return;
+                        if (e.key !== " " && e.key !== "Enter") return;
+                        e.preventDefault();
+                        toggleQuestion(q.id);
+                      }}
+                      className={`border rounded-lg p-3 cursor-pointer transition-all flex items-start gap-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ${
                         isSelected ? "border-primary bg-primary/5 shadow-sm" : "hover:bg-accent/20"
                       }`}
                     >

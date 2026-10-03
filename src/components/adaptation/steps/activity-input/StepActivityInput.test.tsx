@@ -705,3 +705,44 @@ describe("StepActivityInput — limite de tamanho", () => {
     expect(onNext).toHaveBeenCalled();
   });
 });
+
+// ── bank question cards reachable by keyboard (1126) ───────────────────────
+
+describe("StepActivityInput — bank question cards are keyboard accessible", () => {
+  async function openBankWith(text: string) {
+    bankQuestionsResult.data = [
+      { id: "q1", text, subject: "Física", topic: null, difficulty: null, image_url: null, options: null },
+    ];
+    render(<StepActivityInput data={baseData} updateData={vi.fn()} onNext={vi.fn()} onPrev={vi.fn()} />);
+    fireEvent.click(screen.getByRole("button", { name: /Banco de Questões/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Abrir Banco de Questões/i }));
+    return waitFor(() => screen.getByRole("checkbox", { name: new RegExp(text) }));
+  }
+
+  it("exposes each card as a focusable checkbox with its checked state", async () => {
+    const card = await openBankWith("Questão por teclado");
+    expect(card).toHaveAttribute("tabindex", "0");
+    expect(card).toHaveAttribute("aria-checked", "false");
+    fireEvent.click(card);
+    await waitFor(() => expect(card).toHaveAttribute("aria-checked", "true"));
+  });
+
+  it("toggles the card with Space and Enter", async () => {
+    const card = await openBankWith("Questão por teclado");
+    fireEvent.keyDown(card, { key: " " });
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: /Adicionar 1/i })).toBeEnabled();
+    });
+    fireEvent.keyDown(card, { key: "Enter" });
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: /Adicionar 0/i })).toBeInTheDocument();
+    });
+  });
+
+  it("ignores other keys and keys from nested elements", async () => {
+    const card = await openBankWith("Questão por teclado");
+    fireEvent.keyDown(card, { key: "a" });
+    fireEvent.keyDown(screen.getByText("Questão por teclado"), { key: "Enter" });
+    expect(card).toHaveAttribute("aria-checked", "false");
+  });
+});
