@@ -580,6 +580,26 @@ describe("ImageNodeView", () => {
     expect(updateAttributes).toHaveBeenCalledWith({ alt: "gráfico de barras" });
   });
 
+  /**
+   * 0618 — o campo só se identificava pelo placeholder: com o alt preenchido (o
+   * caso normal) sobrava uma caixa com "retangulo cinza" sem nada dizendo o que
+   * era (WCAG 3.3.2). O rótulo visível volta compacto, NA MESMA linha do rail
+   * (restrição do 0113: não ocupar faixa de papel), ligado ao campo por
+   * `htmlFor` e fora da árvore acessível (0337/0339: o chrome mora dentro do
+   * `contenteditable`; o nome programático segue vindo do `aria-label`).
+   */
+  it("mantém um rótulo visível ligado ao campo de texto alternativo quando ele tem valor (achado 0618)", () => {
+    const { container } = renderImage({ alt: "retangulo cinza" });
+    const input = container.querySelector('input[name="image-alt"]') as HTMLInputElement;
+    expect(input.value).toBe("retangulo cinza");
+    expect(input.labels).toHaveLength(1);
+    const label = input.labels![0];
+    expect(label.textContent).toBe("Texto alternativo");
+    expect(label).toHaveAttribute("aria-hidden", "true");
+    expect(label.closest(".folha-rail")).toBe(input.closest(".folha-rail"));
+    expect(input.getAttribute("title")).toMatch(/leitor de tela/i);
+  });
+
   it("desabilita o campo de texto alternativo quando o editor é read-only", () => {
     renderImage({ alt: "figura de apoio" }, false);
     expect(screen.getByLabelText("Texto alternativo")).toBeDisabled();

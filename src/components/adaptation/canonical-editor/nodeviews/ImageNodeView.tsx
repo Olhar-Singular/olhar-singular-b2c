@@ -310,14 +310,26 @@ export function ImageNodeView({ node, updateAttributes, deleteNode, editor, getP
           impresso, então vive no rail. O antigo rótulo "TEXTO ALTERNATIVO"
           virou o placeholder: ele já era decorativo desde o 0337 (o nome vem do
           `aria-label`) e custava uma faixa inteira de papel.
+          0618 — só o placeholder não basta (WCAG 3.3.2): com alt preenchido o
+          campo ficava sem identificação. O rótulo volta compacto, na mesma
+          linha do rail (sem faixa própria), ligado por `htmlFor` (clicável) e
+          `aria-hidden` pelo mesmo motivo do 0339; o nome segue no `aria-label`.
         */}
+        <label
+          htmlFor={altId}
+          aria-hidden="true"
+          className={cn("text-xs text-surface-ink-soft", FOLHA_CHROME_UNSCALED)}
+        >
+          Texto alternativo
+        </label>
         <Input
           id={altId}
           name="image-alt"
           value={alt}
           disabled={disabled}
           aria-label="Texto alternativo"
-          placeholder="Texto alternativo: descreva a imagem…"
+          placeholder="Descreva a imagem…"
+          title="Descrição da imagem para leitor de tela (não sai impressa)"
           /* 0342 — o `<Input>` cru pinta `border-input bg-background`: some
              no papel (1,09:1) no tema claro e vira laje escura no tema
              escuro. Chrome sobre a folha usa a paleta da folha. */
