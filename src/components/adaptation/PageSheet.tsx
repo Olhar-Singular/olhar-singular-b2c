@@ -129,45 +129,117 @@ const TABLE_SELECTOR = "[data-folha-tabela]";
 const REPEATED_HEADER_ATTR = "data-folha-thead-repetido";
 
 /**
- * Põe uma cópia do cabeçalho antes da primeira linha de cada folha em que a
- * tabela continua, e tira as que sobraram. Devolve `true` quando mexeu no DOM —
- * o cabeçalho repetido é FLUXO, então a paginação precisa correr de novo com
- * ele dentro (é a altura que o contador não somava).
+ * Marca o vão que esta folha injeta antes da cópia do cabeçalho (achado 1108):
+ * o branco no pé da folha que a linha que não cabe deixa para trás. O valor do
+ * atributo é a altura pedida, em px, para a remedida reconhecer o próprio vão.
+ */
+const ROW_SPACER_ATTR = "data-folha-espaco";
+
+/** Vão menor que isto é ruído de medida, não branco no pé da folha. */
+const SPACER_EPSILON_PX = 0.5;
+
+/**
+ * Põe uma cópia do cabeçalho no topo de cada folha em que a tabela continua, e
+ * tira as que sobraram. Devolve `true` quando mexeu no DOM — o cabeçalho
+ * repetido é FLUXO, então a paginação precisa correr de novo com ele dentro (é
+ * a altura que o contador não somava).
  *
- * Idempotente de propósito: se as âncoras já são as que deviam ser, não toca em
- * nada e devolve `false`, senão a remedida nunca convergiria.
+ * Achado 1108: a regra é a do arquivo. A linha cuja caixa passa da régua desce
+ * inteira (`wrap={false}` no PDF, 0602), o pé da folha fica em branco (um vão
+ * marcado com `data-folha-espaco`, sem borda) e a cópia abre a folha seguinte,
+ * NA régua. Antes a âncora era a linha cujo topo, medido com a cópia já no
+ * fluxo, caía na folha seguinte: a própria cópia empurrava a linha para lá e a
+ * escolha se confirmava sozinha, com o cabeçalho em cima da régua e uma linha a
+ * mais por folha do que o PDF. Por isso a conta agora corre sobre a geometria
+ * SEM o que esta função inseriu (topo medido menos as inserções acima da linha)
+ * e simula a descida linha a linha.
+ *
+ * Idempotente de propósito: se âncoras e vãos já são os que deviam ser, não toca
+ * em nada e devolve `false`, senão a remedida nunca convergiria.
  */
 const syncRepeatedTableHeaders = (sheet: HTMLElement, scale: number) => {
   const sheetTop = sheet.getBoundingClientRect().top;
-  // Folha em que o topo do elemento cai, na mesma geometria não escalada em que
-  // as réguas são desenhadas (`PAGE_MARGIN_PX + N x PAGE_CONTENT_HEIGHT_PX`).
-  const pageOf = (el: HTMLElement) =>
-    Math.floor(
-      ((el.getBoundingClientRect().top - sheetTop) / scale - PAGE_MARGIN_PX) /
-        PAGE_CONTENT_HEIGHT_PX,
-    );
+  // Posição na mesma geometria não escalada em que as réguas são desenhadas
+  // (`PAGE_MARGIN_PX + N x PAGE_CONTENT_HEIGHT_PX`).
+  const topOf = (el: HTMLElement) => (el.getBoundingClientRect().top - sheetTop) / scale;
+  const heightOf = (el: HTMLElement) => el.getBoundingClientRect().height / scale;
+  const pageOf = (y: number) => Math.floor((y - PAGE_MARGIN_PX) / PAGE_CONTENT_HEIGHT_PX);
+  const ruleOf = (page: number) => PAGE_MARGIN_PX + (page + 1) * PAGE_CONTENT_HEIGHT_PX;
+  const isInserted = (el: Element) =>
+    el.hasAttribute(REPEATED_HEADER_ATTR) || el.hasAttribute(ROW_SPACER_ATTR);
   let changed = false;
   sheet.querySelectorAll<HTMLElement>(TABLE_SELECTOR).forEach((table) => {
     const header = table.querySelector<HTMLElement>("thead > tr");
     const body = table.querySelector<HTMLElement>("tbody");
     if (!header || !body) return;
+    const headerHeight = heightOf(header);
+    // Altura já inserida acima da linha corrente (medida) e a que o plano
+    // acrescenta até ela (simulada).
+    let inserted = 0;
+    let planned = 0;
+    let page = pageOf(topOf(header));
+    const plan: { anchor: HTMLElement; spacer: number }[] = [];
+    Array.from(body.querySelectorAll<HTMLElement>(":scope > tr")).forEach((row) => {
+      if (isInserted(row)) {
+        inserted += heightOf(row);
+        return;
+      }
+      const top = topOf(row) - inserted + planned;
+      const height = heightOf(row);
+      let rowPage = pageOf(top);
+      if (rowPage > page) {
+        // Começa já numa folha nova (na régua, ou depois de uma linha mais alta
+        // que a folha, que o arquivo também parte): só ganha o cabeçalho.
+        plan.push({ anchor: row, spacer: 0 });
+        planned += headerHeight;
+      } else if (
+        top + height > ruleOf(rowPage) + SPACER_EPSILON_PX &&
+        height + headerHeight <= PAGE_CONTENT_HEIGHT_PX
+      ) {
+        // Atravessa a régua e cabe numa folha: desce inteira, atrás da cópia.
+        const spacer = ruleOf(rowPage) - top;
+        plan.push({ anchor: row, spacer });
+        planned += spacer + headerHeight;
+        rowPage += 1;
+      }
+      page = Math.max(page, rowPage);
+    });
     const clones = Array.from(
       body.querySelectorAll<HTMLElement>(`:scope > tr[${REPEATED_HEADER_ATTR}]`),
     );
-    const rows = Array.from(body.querySelectorAll<HTMLElement>(":scope > tr")).filter(
-      (row) => !row.hasAttribute(REPEATED_HEADER_ATTR),
-    );
-    let page = pageOf(header);
-    const anchors: HTMLElement[] = [];
-    rows.forEach((row) => {
-      const rowPage = pageOf(row);
-      if (rowPage > page) anchors.push(row);
-      page = Math.max(page, rowPage);
-    });
-    const current = clones.map((clone) => clone.nextElementSibling);
-    if (current.length === anchors.length && anchors.every((el, i) => current[i] === el)) return;
-    clones.forEach((clone) => clone.remove());
-    anchors.forEach((anchor) => {
+    const spacerBefore = (clone: HTMLElement) => {
+      const prev = clone.previousElementSibling;
+      return prev?.hasAttribute(ROW_SPACER_ATTR) ? Number(prev.getAttribute(ROW_SPACER_ATTR)) : 0;
+    };
+    const wanted = (spacer: number) => (spacer > SPACER_EPSILON_PX ? spacer : 0);
+    const spacers = body.querySelectorAll(`:scope > tr[${ROW_SPACER_ATTR}]`).length;
+    const settled =
+      clones.length === plan.length &&
+      spacers === plan.filter(({ spacer }) => wanted(spacer) > 0).length &&
+      plan.every(
+        ({ anchor, spacer }, i) =>
+          clones[i].nextElementSibling === anchor &&
+          Math.abs(spacerBefore(clones[i]) - wanted(spacer)) <= SPACER_EPSILON_PX,
+      );
+    if (settled) return;
+    body.querySelectorAll(`:scope > tr[${REPEATED_HEADER_ATTR}], :scope > tr[${ROW_SPACER_ATTR}]`)
+      .forEach((el) => el.remove());
+    const columns = header.children.length;
+    plan.forEach(({ anchor, spacer }) => {
+      if (wanted(spacer) > 0) {
+        // Linha sem borda nem conteúdo: o branco do pé da folha, como no
+        // arquivo, sem o fio da célula atravessando (o erro que o 0261 temia).
+        const gap = document.createElement("tr");
+        gap.setAttribute(ROW_SPACER_ATTR, String(spacer));
+        gap.setAttribute("aria-hidden", "true");
+        const cell = document.createElement("td");
+        cell.colSpan = columns;
+        cell.style.height = `${spacer}px`;
+        cell.style.padding = "0";
+        cell.style.border = "none";
+        gap.appendChild(cell);
+        body.insertBefore(gap, anchor);
+      }
       const clone = header.cloneNode(true) as HTMLElement;
       clone.setAttribute(REPEATED_HEADER_ATTR, "");
       body.insertBefore(clone, anchor);

@@ -1687,8 +1687,12 @@ describe("PageSheet", () => {
       const rectSpy = vi
         .spyOn(HTMLElement.prototype, "getBoundingClientRect")
         .mockImplementation(function (this: HTMLElement) {
-          const top = Number(this.dataset.testTop ?? 0);
-          const bottom = Number(this.dataset.testBottom ?? top);
+          // As posições do mock são fixas, ou seja, a geometria SEM o que a
+          // folha insere (achado 1108): a cópia e o vão não ocupam nada aqui,
+          // senão a folha descontaria uma altura que não empurrou ninguém.
+          const inserido = this.closest("[data-folha-thead-repetido], [data-folha-espaco]");
+          const top = inserido ? 0 : Number(this.dataset.testTop ?? 0);
+          const bottom = inserido ? 0 : Number(this.dataset.testBottom ?? top);
           return {
             top,
             bottom,
@@ -1852,6 +1856,137 @@ describe("PageSheet", () => {
         expect(
           screen.getByTestId("tabela").querySelectorAll("[data-folha-thead-repetido]"),
         ).toHaveLength(0);
+      });
+    });
+  });
+
+  /*
+    Achado 1108: a cópia do cabeçalho (0262) era ancorada pela linha cujo topo,
+    medido COM a cópia já no fluxo, caía na folha seguinte. A linha que
+    atravessava a régua ficava no lugar e a cópia ia para depois dela (ou, no
+    ponto fixo oposto, para cima da régua). No arquivo a linha que não cabe
+    inteira desce (`wrap={false}`, 0602) e o cabeçalho repetido abre a folha
+    seguinte, então cada folha da prévia cabia uma linha a mais que a do PDF e
+    a contagem saía uma folha curta.
+
+    O mock aqui é um layout de verdade em miniatura: cada `<tr>` empilha pela
+    ordem do DOM, então o que a folha insere empurra o que vem depois, como no
+    navegador.
+  */
+  describe("a linha que atravessa a régua desce com o cabeçalho repetido (achado 1108)", () => {
+    const CABECALHO = 40;
+    const LINHA = 100;
+    const VIRADA = PAGE_MARGIN_PX + PAGE_CONTENT_HEIGHT_PX;
+
+    const alturaDa = (tr: HTMLElement) => {
+      const espaco = tr.querySelector<HTMLElement>("td[style]");
+      if (tr.hasAttribute("data-folha-espaco")) return Number.parseFloat(espaco!.style.height);
+      return tr.querySelector("th") ? CABECALHO : LINHA;
+    };
+
+    const layout = (table: HTMLElement) => {
+      const tops = new Map<HTMLElement, [number, number]>();
+      let y = PAGE_MARGIN_PX;
+      table.querySelectorAll<HTMLElement>("tr").forEach((tr) => {
+        const h = alturaDa(tr);
+        tops.set(tr, [y, y + h]);
+        y += h;
+      });
+      tops.set(table, [PAGE_MARGIN_PX, y]);
+      return tops;
+    };
+
+    const comLayout = (run: () => void) => {
+      const altura = () => {
+        const table = document.querySelector<HTMLElement>("[data-folha-tabela]");
+        const [top, bottom] = layout(table!).get(table!)!;
+        return bottom - top;
+      };
+      const heightSpy = vi
+        .spyOn(HTMLElement.prototype, "offsetHeight", "get")
+        .mockImplementation(altura);
+      const rectSpy = vi
+        .spyOn(HTMLElement.prototype, "getBoundingClientRect")
+        .mockImplementation(function (this: HTMLElement) {
+          const table = this.closest<HTMLElement>("[data-folha-tabela]");
+          const caixa = table ? layout(table).get(this) : undefined;
+          const [top, bottom] = caixa ?? [0, 0];
+          return {
+            top,
+            bottom,
+            height: bottom - top,
+            left: 0,
+            right: 0,
+            width: 0,
+            x: 0,
+            y: top,
+            toJSON: () => ({}),
+          } as DOMRect;
+        });
+      try {
+        run();
+      } finally {
+        heightSpy.mockRestore();
+        rectSpy.mockRestore();
+      }
+    };
+
+    // Cabeçalho de 40px + 9 linhas de 100px = 940px: a 10ª linha (índice 9)
+    // começa a 76px da régua e termina 24px depois dela.
+    const tabela = (linhas: number) => (
+      <table data-folha-tabela="" data-folha-bloco="" data-testid="tabela">
+        <thead>
+          <tr>
+            <th>Etapa</th>
+          </tr>
+        </thead>
+        <tbody>
+          {Array.from({ length: linhas }, (_, i) => (
+            <tr key={i} data-testid={`linha-${i}`}>
+              <td>{`Etapa ${i + 1}`}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    );
+
+    it("abre a folha seguinte com o cabeçalho e desce a linha que não cabe", () => {
+      comLayout(() => {
+        render(<PageSheet paginated toolbar={null}>{tabela(12)}</PageSheet>);
+        const repetido = document.querySelector<HTMLElement>("[data-folha-thead-repetido]")!;
+        expect(repetido).not.toBeNull();
+        // A cópia vem imediatamente antes da linha que atravessaria a régua...
+        expect(repetido.nextElementSibling).toBe(screen.getByTestId("linha-9"));
+        // ...e começa NA régua, nunca antes dela.
+        expect(repetido.getBoundingClientRect().top).toBeCloseTo(VIRADA, 1);
+        expect(screen.getByTestId("linha-9").getBoundingClientRect().top).toBeCloseTo(
+          VIRADA + CABECALHO,
+          1,
+        );
+        // O vão no pé da folha não ganha cabeçalho nem linha de dado.
+        const espaco = repetido.previousElementSibling as HTMLElement;
+        expect(espaco.hasAttribute("data-folha-espaco")).toBe(true);
+        expect(espaco.getAttribute("aria-hidden")).toBe("true");
+      });
+    });
+
+    it("conta as folhas pelas linhas que cabem em cada uma, como o PDF", () => {
+      // 9 linhas por folha (cabeçalho + 9 x 100px): 28 linhas pedem 4 folhas.
+      // Sem descer a linha que atravessa, cabiam 10 e a prévia dizia 3.
+      comLayout(() => {
+        render(<PageSheet paginated toolbar={null}>{tabela(28)}</PageSheet>);
+        expect(screen.getByTestId("page-count")).toHaveTextContent("4 páginas A4");
+        expect(document.querySelectorAll("[data-folha-thead-repetido]")).toHaveLength(3);
+      });
+    });
+
+    it("converge: remedir a mesma geometria não mexe no DOM", () => {
+      comLayout(() => {
+        const { rerender } = render(<PageSheet paginated toolbar={null}>{tabela(12)}</PageSheet>);
+        const antes = document.querySelector("[data-folha-espaco]");
+        rerender(<PageSheet paginated toolbar={null}>{tabela(12)}</PageSheet>);
+        expect(document.querySelector("[data-folha-espaco]")).toBe(antes);
+        expect(document.querySelectorAll("[data-folha-espaco]")).toHaveLength(1);
       });
     });
   });
