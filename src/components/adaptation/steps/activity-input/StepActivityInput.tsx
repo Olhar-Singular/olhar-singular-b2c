@@ -196,7 +196,19 @@ export function StepActivityInput({ data, updateData, onNext, onPrev }: Props) {
     });
   }
 
+  // Both tabs write the same `activityText`, and changing the bank list rebuilds
+  // it from the list. When the user already edited the text by hand ("Colar
+  // Texto"), that rebuild would wipe the edit, so it only happens on consent.
+  function canRebuildActivityText(): boolean {
+    if (data.activityText === buildActivityText(data.selectedQuestions)) return true;
+    return window.confirm(
+      "O texto da atividade foi editado à mão. Alterar as questões do banco vai substituí-lo " +
+        "pelo texto das questões selecionadas e a edição será perdida. Continuar?",
+    );
+  }
+
   function confirmBankSelection() {
+    if (!canRebuildActivityText()) return;
     const selected = bankQuestions.filter((q) => checkedIds.has(q.id));
     const newQuestions: SelectedQuestion[] = selected.map((q) => ({
       id: q.id,
@@ -219,6 +231,7 @@ export function StepActivityInput({ data, updateData, onNext, onPrev }: Props) {
   }
 
   function removeQuestion(id: string) {
+    if (!canRebuildActivityText()) return;
     const updated = data.selectedQuestions.filter((q) => q.id !== id);
     updateData({ selectedQuestions: updated, activityText: buildActivityText(updated), result: null });
   }

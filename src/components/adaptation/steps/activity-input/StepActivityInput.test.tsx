@@ -746,3 +746,83 @@ describe("StepActivityInput — bank question cards are keyboard accessible", ()
     expect(card).toHaveAttribute("aria-checked", "false");
   });
 });
+
+describe("StepActivityInput — manual edits are never discarded silently (1129)", () => {
+  const q1 = { id: "q1", text: "Questão um", subject: "Física", topic: null, difficulty: null, image_url: null, options: null };
+  const q2 = { id: "q2", text: "Questão dois", subject: "Física", topic: null, difficulty: null, image_url: null, options: null };
+  const editedText = "1) Questão um\n\n2) Questão dois\n\n3) PERGUNTA DIGITADA A MAO";
+
+  it("asks before rebuilding the text on remove and keeps it when the user cancels", () => {
+    const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(false);
+    const updateData = vi.fn();
+    const data: WizardData = { ...baseData, selectedQuestions: [q1, q2], activityText: editedText };
+    render(<StepActivityInput data={data} updateData={updateData} onNext={vi.fn()} onPrev={vi.fn()} />);
+    fireEvent.click(screen.getByRole("button", { name: /Banco de Questões/i }));
+    fireEvent.click(screen.getAllByRole("button", { name: /Remover questão/i })[0]);
+    expect(confirmSpy).toHaveBeenCalledTimes(1);
+    expect(updateData).not.toHaveBeenCalled();
+    confirmSpy.mockRestore();
+  });
+
+  it("rebuilds the text on remove when the user confirms", () => {
+    const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(true);
+    const updateData = vi.fn();
+    const data: WizardData = { ...baseData, selectedQuestions: [q1, q2], activityText: editedText };
+    render(<StepActivityInput data={data} updateData={updateData} onNext={vi.fn()} onPrev={vi.fn()} />);
+    fireEvent.click(screen.getByRole("button", { name: /Banco de Questões/i }));
+    fireEvent.click(screen.getAllByRole("button", { name: /Remover questão/i })[0]);
+    expect(updateData).toHaveBeenCalledWith(
+      expect.objectContaining({ selectedQuestions: [q2], activityText: "1) Questão dois", result: null }),
+    );
+    confirmSpy.mockRestore();
+  });
+
+  it("does not ask when the text still matches the bank list", () => {
+    const confirmSpy = vi.spyOn(window, "confirm");
+    const updateData = vi.fn();
+    const data: WizardData = { ...baseData, selectedQuestions: [q1, q2], activityText: "1) Questão um\n\n2) Questão dois" };
+    render(<StepActivityInput data={data} updateData={updateData} onNext={vi.fn()} onPrev={vi.fn()} />);
+    fireEvent.click(screen.getByRole("button", { name: /Banco de Questões/i }));
+    fireEvent.click(screen.getAllByRole("button", { name: /Remover questão/i })[0]);
+    expect(confirmSpy).not.toHaveBeenCalled();
+    expect(updateData).toHaveBeenCalledWith(expect.objectContaining({ activityText: "1) Questão dois" }));
+    confirmSpy.mockRestore();
+  });
+
+  it("asks before adding bank questions over an edited text and keeps it when the user cancels", async () => {
+    const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(false);
+    bankQuestionsResult.data = [
+      { id: "q3", text: "Questão três", subject: "Física", topic: null, difficulty: null, image_url: null, options: null },
+    ];
+    const updateData = vi.fn();
+    const data: WizardData = { ...baseData, selectedQuestions: [q1, q2], activityText: editedText };
+    render(<StepActivityInput data={data} updateData={updateData} onNext={vi.fn()} onPrev={vi.fn()} />);
+    fireEvent.click(screen.getByRole("button", { name: /Banco de Questões/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Abrir Banco de Questões/i }));
+    await waitFor(() => screen.getByText("Questão três"));
+    fireEvent.click(screen.getByText("Questão três"));
+    fireEvent.click(screen.getByRole("button", { name: /Adicionar 1/i }));
+    expect(confirmSpy).toHaveBeenCalledTimes(1);
+    expect(updateData).not.toHaveBeenCalled();
+    expect(toast.success).not.toHaveBeenCalled();
+    confirmSpy.mockRestore();
+  });
+
+  it("asks before adding bank questions over text typed with no bank questions yet", async () => {
+    const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(true);
+    bankQuestionsResult.data = [
+      { id: "q3", text: "Questão três", subject: "Física", topic: null, difficulty: null, image_url: null, options: null },
+    ];
+    const updateData = vi.fn();
+    const data: WizardData = { ...baseData, activityText: "texto colado à mão" };
+    render(<StepActivityInput data={data} updateData={updateData} onNext={vi.fn()} onPrev={vi.fn()} />);
+    fireEvent.click(screen.getByRole("button", { name: /Banco de Questões/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Abrir Banco de Questões/i }));
+    await waitFor(() => screen.getByText("Questão três"));
+    fireEvent.click(screen.getByText("Questão três"));
+    fireEvent.click(screen.getByRole("button", { name: /Adicionar 1/i }));
+    expect(confirmSpy).toHaveBeenCalledTimes(1);
+    expect(updateData).toHaveBeenCalledWith(expect.objectContaining({ activityText: "1) Questão três" }));
+    confirmSpy.mockRestore();
+  });
+});
