@@ -257,6 +257,30 @@ const pxToTwips = (px: number): number => Math.round(pxToPt(px) * 20);
  *   mesmo `QUESTION_INNER_GAP_PT` que o `PdfQuestion` usa ali (achado 0270).
  */
 const DEFAULT_BLOCK_GAP_TWIPS = pxToTwips(BASE_BLOCK_SPACING_PX);
+
+/**
+ * Achado 0518 (corrige o 0269): a entrelinha do Word em altura ABSOLUTA, o
+ * `corpo x BASE_LINE_HEIGHT` que o PDF (`pdfTextSize`) e as telas medem. O
+ * `lineRule="auto"` multiplicava a entrelinha SIMPLES da fonte (1,149 em na
+ * Arial), e a linha do Word saía 15% mais alta que no PDF: a prova virava folha
+ * antes da prévia. `atLeast`, e não `exact`, para a fórmula ou o run maior
+ * dentro da linha crescerem em vez de serem cortados. Como no PDF, que repete a
+ * razão ao lado de cada corpo, a altura sai do corpo DE CADA parágrafo; quem
+ * está no corpo do documento herda a do `pPrDefault` (`docxDocumentStyles`).
+ */
+type LineSpacing = { line?: number; lineRule?: (typeof LineRuleType)[keyof typeof LineRuleType] };
+const lineSpacing = (halfPoints: number): LineSpacing => ({
+  line: Math.round((halfPoints / 2) * BASE_LINE_HEIGHT * 20),
+  lineRule: LineRuleType.AT_LEAST,
+});
+/** A linha de um corpo próprio; sem corpo próprio, nada (herda o documento). */
+const lineFor = (halfPoints?: number): LineSpacing =>
+  halfPoints === undefined ? {} : lineSpacing(halfPoints);
+/** `{ spacing }` com a linha e o resto, ou nada quando os dois vêm vazios. */
+const spacingWith = (line: LineSpacing, rest: { after?: number } = {}) => {
+  const spacing = { ...line, ...rest };
+  return Object.keys(spacing).length > 0 ? { spacing } : {};
+};
 const QUESTION_INNER_GAP_TWIPS = ptToTwip(6);
 const QUESTION_PART_GAP_TWIPS = ptToTwip(6);
 /** An allowed palette color in the docx unit (raw hex, no `#`); `undefined` otherwise. */
@@ -360,10 +384,14 @@ const CHECKBOX_BOX_BORDER = {
   space: 0,
 } as const;
 
+/** O vão entre itens de resposta com a linha do corpo herdado do bloco (achado 0518). */
+const answerRowSpacing = (style: InheritedStyle) =>
+  spacingWith(lineFor(style.run.size), ANSWER_ROW_SPACING.spacing);
+
 function checkboxRow(content: RichText, style: InheritedStyle = NO_STYLE): Paragraph {
   return new Paragraph({
     ...style.paragraph,
-    ...ANSWER_ROW_SPACING,
+    ...answerRowSpacing(style),
     children: [
       new TextRun({ ...style.run, text: CHECKBOX_BOX_TEXT, border: CHECKBOX_BOX_BORDER }),
       new TextRun({ ...style.run, text: " " }),
@@ -376,7 +404,7 @@ function checkboxRow(content: RichText, style: InheritedStyle = NO_STYLE): Parag
 function answerRow(marker: string, content: RichText, style: InheritedStyle = NO_STYLE): Paragraph {
   return new Paragraph({
     ...style.paragraph,
-    ...ANSWER_ROW_SPACING,
+    ...answerRowSpacing(style),
     children: [
       new TextRun({ ...style.run, text: `${marker} ` }),
       ...richTextToRuns(content, style.run),
@@ -425,7 +453,7 @@ function matchingTable(
     cell(
       new Paragraph({
         ...style.paragraph,
-        ...ANSWER_ROW_SPACING,
+        ...answerRowSpacing(style),
         children: richTextToRuns(content, style.run),
       }),
     );
@@ -444,7 +472,7 @@ function matchingTable(
             cell(
               new Paragraph({
                 alignment: AlignmentType.CENTER,
-                ...ANSWER_ROW_SPACING,
+                ...answerRowSpacing(style),
                 children: [new TextRun({ ...style.run, text: "↔" })],
               }),
             ),
@@ -480,6 +508,7 @@ function answerToDocx(
         () =>
           new Paragraph({
             ...style.paragraph,
+            ...spacingWith(lineFor(style.run.size)),
             children: [new TextRun({ ...style.run, text: "_".repeat(60) })],
           }),
       );
@@ -522,6 +551,7 @@ function answerToDocx(
                 children: [
                   new Paragraph({
                     ...style.paragraph,
+                    ...spacingWith(lineFor(style.run.size)),
                     children: richTextToRuns(cell, { ...style.run, bold }),
                   }),
                 ],
@@ -570,8 +600,11 @@ export function blockToDocxParagraphs(
   const { paragraph: ownPara, spacing: ownSpacing, run } = nodeStyleToDocx(block.style);
   // Bloco dentro de uma questão (stem): cada parágrafo dele anda com o seguinte.
   const para: ParagraphStyle = keepWithNext ? { ...ownPara, ...KEEP_WITH_NEXT } : ownPara;
-  const spacing: { spacing: { after: number } } = {
-    spacing: ownSpacing.spacing ?? { after: blockGapTwips },
+  // Corpo próprio do bloco: a linha dele vai em todo parágrafo (achado 0518).
+  const line = lineFor(run.size);
+  const lineOnly = spacingWith(line);
+  const spacing: { spacing: LineSpacing & { after: number } } = {
+    spacing: { ...line, ...(ownSpacing.spacing ?? { after: blockGapTwips }) },
   };
 
   switch (block.type) {
@@ -591,7 +624,7 @@ export function blockToDocxParagraphs(
         new Paragraph({
           heading: level,
           ...para,
-          ...spacing,
+          spacing: { ...lineSpacing(run.size ?? Math.round(HEADING_PT[block.level] * 2)), ...spacing.spacing },
           children: richTextToRuns(block.content, {
             bold: true,
             color: DOCX_INK,
@@ -635,7 +668,7 @@ export function blockToDocxParagraphs(
       const paragraphs: DocxBlock[] = [
         new Paragraph({
           ...imagePara,
-          ...(hasCaption ? {} : spacing),
+          ...(hasCaption ? lineOnly : spacing),
           children: [new TextRun({ ...run, text: label, italics: true })],
         }),
       ];
@@ -647,7 +680,7 @@ export function blockToDocxParagraphs(
           // O tamanho que a professora escolheu no bloco continua vencendo.
           new Paragraph({
             ...imagePara,
-            ...spacing,
+            spacing: { ...lineSpacing(run.size ?? CAPTION_SIZE), ...spacing.spacing },
             children: richTextToRuns(block.caption!, { ...run, size: run.size ?? CAPTION_SIZE }),
           }),
         );
@@ -663,7 +696,10 @@ export function blockToDocxParagraphs(
         new Paragraph({
           ...SCAFFOLDING_BOX,
           ...para,
-          ...(block.items.length > 0 ? {} : spacing),
+          spacing: {
+            ...lineSpacing(CAPTION_SIZE),
+            ...(block.items.length > 0 ? {} : { after: spacing.spacing.after }),
+          },
           children: [
             new TextRun({
               ...run,
@@ -678,7 +714,7 @@ export function blockToDocxParagraphs(
             new Paragraph({
               ...SCAFFOLDING_BOX,
               ...para,
-              ...(i === block.items.length - 1 ? spacing : {}),
+              ...(i === block.items.length - 1 ? spacing : lineOnly),
               children: [new TextRun({ ...run, text: `${i + 1}. ${item}` })],
             }),
         ),
@@ -705,7 +741,7 @@ export function blockToDocxParagraphs(
             new Paragraph({
               ...kept,
               children: richTextToRuns(block.enunciado!, run),
-              spacing: { after: QUESTION_PART_GAP_TWIPS },
+              spacing: { ...line, after: QUESTION_PART_GAP_TWIPS },
             }),
           ]
         : [];
@@ -717,15 +753,15 @@ export function blockToDocxParagraphs(
       const firstRuns = first?.type === "paragraph" ? richTextToRuns(first.content, run) : [];
       // O primeiro parágrafo do stem viaja no parágrafo do número: leva o vão
       // interno da questão (ou o `spacingAfter` dele), como no PDF.
-      const firstSpacing =
+      const firstSpacing = spacingWith(
+        line,
         first?.type === "paragraph"
           ? {
-              spacing: {
-                after:
-                  nodeStyleToDocx(first.style).spacing.spacing?.after ?? QUESTION_INNER_GAP_TWIPS,
-              },
+              after:
+                nodeStyleToDocx(first.style).spacing.spacing?.after ?? QUESTION_INNER_GAP_TWIPS,
             }
-          : {};
+          : {},
+      );
       const numbered = new Paragraph({
         ...kept,
         ...firstSpacing,
@@ -744,7 +780,7 @@ export function blockToDocxParagraphs(
           ? [
               new Paragraph({
                 ...kept,
-                spacing: { after: QUESTION_PART_GAP_TWIPS },
+                spacing: { ...lineSpacing(run.size ?? SUB_SIZE), after: QUESTION_PART_GAP_TWIPS },
                 children: richTextToRuns(block.instruction, {
                   ...run,
                   italics: true,
@@ -788,13 +824,14 @@ export function headerParagraphs(header: DocumentHeader): Paragraph[] {
   if (title) {
     blocks.push({
       alignment: AlignmentType.CENTER,
+      spacing: lineSpacing(HEADER_TITLE_HALF_PT),
       children: [new TextRun({ text: title, bold: true, size: HEADER_TITLE_HALF_PT })],
     });
   }
   if (school) {
     blocks.push({
       alignment: AlignmentType.CENTER,
-      spacing: { before: ptToTwip(HEADER_SPACING_PT.schoolTop) },
+      spacing: { ...lineSpacing(HEADER_SCHOOL_HALF_PT), before: ptToTwip(HEADER_SPACING_PT.schoolTop) },
       children: [new TextRun({ text: school, size: HEADER_SCHOOL_HALF_PT })],
     });
   }
@@ -810,6 +847,7 @@ export function headerParagraphs(header: DocumentHeader): Paragraph[] {
     blocks.push({
       tabStops: [{ type: TabStopType.RIGHT, position: TabStopPosition.MAX }],
       spacing: {
+        ...lineSpacing(HEADER_META_HALF_PT),
         before: ptToTwip(HEADER_SPACING_PT.metaTop),
         after: ptToTwip(HEADER_SPACING_PT.bottomPadding),
       },
@@ -913,17 +951,17 @@ export function documentRunStyle(pageStyle?: PageStyle): {
  * corpo.
  *
  * Achado 0269: só o run ia, então o `<w:pPrDefault/>` saía vazio e o Word caía
- * na entrelinha simples, contra `BASE_LINE_HEIGHT` (1,4) no PDF e nas telas. Em
- * OOXML a entrelinha proporcional é `line` em 240 avos com `lineRule` auto.
+ * na entrelinha simples, contra `BASE_LINE_HEIGHT` (1,4) no PDF e nas telas.
+ * Achado 0518: a entrelinha vai ABSOLUTA, `corpo x 1,4` (ver `lineSpacing`); o
+ * `lineRule` auto do 0269 multiplicava a métrica da fonte, não o corpo.
  */
 export function docxDocumentStyles(pageStyle?: PageStyle) {
+  const run = documentRunStyle(pageStyle);
   return {
     default: {
       document: {
-        run: documentRunStyle(pageStyle),
-        paragraph: {
-          spacing: { line: Math.round(BASE_LINE_HEIGHT * 240), lineRule: LineRuleType.AUTO },
-        },
+        run,
+        paragraph: { spacing: lineSpacing(run.size) },
       },
     },
   };

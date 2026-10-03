@@ -1326,8 +1326,13 @@ describe("0134 · o Word carrega a formatação por nó", () => {
       1,
     );
     expect(docxNodeAttrs(paragraph, "w:jc")).toEqual({ val: "center" });
-    // px → twips (1px = 0,75pt; 1pt = 20 twips): 16px = 240 twips.
-    expect(docxNodeAttrs(paragraph, "w:spacing")).toEqual({ after: 240 });
+    // px → twips (1px = 0,75pt; 1pt = 20 twips): 16px = 240 twips. A linha sai
+    // do corpo do bloco, 18pt x 1,4 = 504 twips (achado 0518).
+    expect(docxNodeAttrs(paragraph, "w:spacing")).toEqual({
+      after: 240,
+      line: 504,
+      lineRule: "atLeast",
+    });
     const props = docxRunProps(paragraph);
     expect(props.some((p) => p.key === "w:color" && p.val === "2563EB")).toBe(true);
     // NodeStyle.fontSize é px (como em `nodeStyleToPdf`): 24px = 18pt = 36 meios-pontos.
@@ -1341,7 +1346,8 @@ describe("0134 · o Word carrega a formatação por nó", () => {
       { id: id(139), type: "scaffolding", items: ["um", "dois"], style },
       1,
     ) as [unknown, unknown];
-    expect(docxNodeAttrs(label, "w:spacing")).toBeUndefined();
+    // O rótulo leva só a linha do corpo de legenda dele (achado 0518), sem vão.
+    expect(docxNodeAttrs(label, "w:spacing")).not.toHaveProperty("after");
     expect(docxNodeAttrs(passo, "w:spacing")).toBeUndefined();
 
     // Sem passos, o rótulo é o último (e único) parágrafo do bloco.
@@ -1349,7 +1355,7 @@ describe("0134 · o Word carrega a formatação por nó", () => {
       { id: id(140), type: "scaffolding", items: [], style },
       1,
     );
-    expect(docxNodeAttrs(soRotulo, "w:spacing")).toEqual({ after: 240 });
+    expect(docxNodeAttrs(soRotulo, "w:spacing")).toMatchObject({ after: 240 });
 
     // A legenda é o último parágrafo do bloco de imagem; sem ela, é a marcação.
     const [marcacao, legenda] = blockToDocxParagraphs(
@@ -1357,7 +1363,7 @@ describe("0134 · o Word carrega a formatação por nó", () => {
       1,
     ) as [unknown, unknown];
     expect(docxNodeAttrs(marcacao, "w:spacing")).toBeUndefined();
-    expect(docxNodeAttrs(legenda, "w:spacing")).toEqual({ after: 240 });
+    expect(docxNodeAttrs(legenda, "w:spacing")).toMatchObject({ after: 240 });
     const [semLegenda] = blockToDocxParagraphs(
       { id: id(142), type: "image", src: "https://e.com/a.png", style },
       1,
@@ -1698,11 +1704,8 @@ describe("0269 · entrelinha e vão entre blocos no Word", () => {
   const para = (n: number, t: string): Block => ({ id: id(n), type: "paragraph", content: text(t) });
   const docOf = (blocks: Block[]): CanonicalDocument => ({ schemaVersion: 1, blocks });
 
-  it("o estilo padrão do documento declara a entrelinha do corpo (1,4 = 336/240, auto)", () => {
+  it("o estilo padrão do documento declara a entrelinha do corpo (12pt x 1,4 = 336 twips)", () => {
     const styles = docxDocumentStyles();
-    expect(styles.default.document.paragraph).toEqual({
-      spacing: { line: Math.round(BASE_LINE_HEIGHT * 240), lineRule: "auto" },
-    });
     expect(styles.default.document.paragraph.spacing.line).toBe(336);
     expect(styles.default.document.run).toEqual(documentRunStyle());
     expect(docxDocumentStyles({ fontSize: 16 }).default.document.run).toEqual(
@@ -1744,7 +1747,12 @@ describe("0269 · entrelinha e vão entre blocos no Word", () => {
     expect(docxNodeAttrs(byText("segundo"), "w:spacing")).toEqual({ after: 120 });
     // Enunciado e instrução: o mesmo vão interno de 6pt (achado 0270) = 120 twips.
     expect(docxNodeAttrs(byText("Leia com"), "w:spacing")).toEqual({ after: 120 });
-    expect(docxNodeAttrs(byText("Escreva nas"), "w:spacing")).toEqual({ after: 120 });
+    // A instrução mede a linha pelo corpo menor dela, 10,5pt x 1,4 (achado 0518).
+    expect(docxNodeAttrs(byText("Escreva nas"), "w:spacing")).toEqual({
+      after: 120,
+      line: 294,
+      lineRule: "atLeast",
+    });
     // O parágrafo que fecha a questão mede EXATAMENTE o vão do documento.
     const closing = blocks[blocks.length - 1];
     expect(docxText(closing)).toBe("");
@@ -1829,5 +1837,102 @@ describe("0271 · a questão não se parte na virada do Word", () => {
       1,
     );
     expect(hasTag(out, "w:keepNext")).toBe(false);
+  });
+});
+
+/**
+ * Achado 0518 — correção do 0269: `lineRule="auto"` multiplica a entrelinha
+ * SIMPLES da fonte (1,149 em na Arial), não o corpo. A linha do Word saía 15%
+ * mais alta que no PDF e nas telas, que medem `corpo x BASE_LINE_HEIGHT`. A
+ * altura vai absoluta (twips, `atLeast` para não cortar fórmula inline), e
+ * calculada pelo corpo de cada parágrafo, como a razão que o PDF repete.
+ */
+describe("0518 · entrelinha absoluta do Word, corpo x 1,4 como no PDF", () => {
+  /** Altura de linha do PDF para um corpo em meios-pontos, em twips. */
+  const lineTwips = (halfPoints: number) => Math.round((halfPoints / 2) * BASE_LINE_HEIGHT * 20);
+  const atLeast = (halfPoints: number) => ({ line: lineTwips(halfPoints), lineRule: "atLeast" });
+
+  it("o estilo padrão declara a altura absoluta do corpo, não um múltiplo da métrica da fonte", () => {
+    expect(docxDocumentStyles().default.document.paragraph).toEqual({
+      spacing: atLeast(BASE_FONT_PT * 2),
+    });
+    // Corpo escolhido no "Formato": 16pt x 1,4 = 22,4pt = 448 twips.
+    expect(docxDocumentStyles({ fontSize: 16 }).default.document.paragraph).toEqual({
+      spacing: { line: 448, lineRule: "atLeast" },
+    });
+  });
+
+  it("o título mede a linha pelo próprio corpo", () => {
+    const [h] = blockToDocxParagraphs(
+      { id: id(518), type: "heading", level: 1, content: text("Título") } as Block,
+      1,
+    );
+    expect(docxNodeAttrs(h, "w:spacing")).toMatchObject(atLeast(HEADING_PT[1] * 2));
+  });
+
+  it("a instrução e a legenda medem a linha pelo corpo menor delas", () => {
+    const blocks = blockToDocxParagraphs(
+      {
+        id: id(519),
+        type: "question",
+        stem: [{ id: id(520), type: "paragraph", content: text("x") }],
+        instruction: text("Marque uma."),
+        answer: { kind: "open", answerLines: 1 },
+      },
+      1,
+    );
+    const instr = blocks.find((b) => docxText(b).includes("Marque uma."));
+    expect(docxNodeAttrs(instr, "w:spacing")).toEqual({ ...atLeast(21), after: 120 });
+
+    const [, legenda] = blockToDocxParagraphs(
+      { id: id(521), type: "image", src: "https://e.com/a.png", caption: text("Fig") },
+      1,
+    ) as [unknown, unknown];
+    const caption = Math.round(ELEMENT_FONT_RATIOS.caption * BASE_FONT_PT * 2);
+    expect(docxNodeAttrs(legenda, "w:spacing")).toMatchObject(atLeast(caption));
+  });
+
+  it("o corpo do bloco (`style.fontSize`) vale para a linha de todo parágrafo dele", () => {
+    const blocks = blockToDocxParagraphs(
+      {
+        id: id(522),
+        type: "question",
+        stem: [{ id: id(523), type: "paragraph", content: text("enunciado") }],
+        answer: {
+          kind: "multipleChoice",
+          alternatives: [
+            { id: id(524), content: text("alt A"), correct: true },
+            { id: id(525), content: text("alt B"), correct: false },
+          ],
+        },
+        style: { fontSize: 24 }, // px → 18pt → 36 meios-pontos
+      } as Block,
+      1,
+    );
+    expect(docxNodeAttrs(blocks[0], "w:spacing")).toMatchObject(atLeast(36));
+    const alt = blocks.find((b) => docxText(b).includes("alt A"));
+    expect(docxNodeAttrs(alt, "w:spacing")).toMatchObject(atLeast(36));
+    const [p] = blockToDocxParagraphs(
+      { id: id(526), type: "paragraph", content: text("p"), style: { fontSize: 24 } } as Block,
+      1,
+    );
+    expect(docxNodeAttrs(p, "w:spacing")).toEqual({ ...atLeast(36), after: 240 });
+  });
+
+  it("o parágrafo no corpo do documento herda a linha do estilo padrão (sem `line` próprio)", () => {
+    const [p] = blockToDocxParagraphs({ id: id(527), type: "paragraph", content: text("p") }, 1);
+    expect(docxNodeAttrs(p, "w:spacing")).toEqual({ after: 240 });
+  });
+
+  it("as linhas do cabeçalho medem pelo próprio corpo", () => {
+    const [title, school, meta] = headerParagraphs({
+      title: "Prova",
+      school: "Escola",
+      teacher: "Ana",
+      date: "",
+    } as Parameters<typeof headerParagraphs>[0]);
+    expect(docxNodeAttrs(title, "w:spacing")).toMatchObject(atLeast(36));
+    expect(docxNodeAttrs(school, "w:spacing")).toMatchObject(atLeast(22));
+    expect(docxNodeAttrs(meta, "w:spacing")).toMatchObject(atLeast(20));
   });
 });
