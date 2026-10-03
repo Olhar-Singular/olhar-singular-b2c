@@ -2440,3 +2440,94 @@ describe("0529 · resto do enunciado e APOIO na coluna da questão no Word", () 
     expect(docxNodeAttrs(sub, "w:ind")).toEqual({ left: outer + inner, hanging: inner });
   });
 });
+
+describe("Word quebra a fórmula longa num espaço do LaTeX, nunca no meio do comando (achado 0390)", () => {
+  // A fórmula da questão 5 da adaptação A: 74 caracteres, mais larga que a
+  // coluna útil em Courier New 12pt (10300 twips / 144 twips = 71 caracteres).
+  const LONGA =
+    "0,7 \\quad ; \\quad \\frac{1}{2} \\quad ; \\quad 0,25 \\quad ; \\quad \\frac{3}{4}";
+
+  /** Cada `<w:t>` do nó, separado: no bloco, uma linha da fórmula por run. */
+  function runTexts(node: unknown): string[] {
+    const parts: string[] = [];
+    const walk = (o: unknown): void => {
+      if (Array.isArray(o)) return o.forEach(walk);
+      if (o === null || typeof o !== "object") return;
+      const n = o as { rootKey?: string; root?: unknown };
+      if (n.rootKey === "w:t" && Array.isArray(n.root)) {
+        parts.push(n.root.filter((p) => typeof p === "string").join(""));
+      }
+      Object.values(o as Record<string, unknown>).forEach(walk);
+    };
+    walk(node);
+    return parts;
+  }
+
+  /** Quantas quebras de linha (`<w:br/>`) o nó carrega. */
+  function breaks(node: unknown): number {
+    let count = 0;
+    const walk = (o: unknown): void => {
+      if (Array.isArray(o)) return o.forEach(walk);
+      if (o === null || typeof o !== "object") return;
+      if ((o as { rootKey?: string }).rootKey === "w:br") count += 1;
+      Object.values(o as Record<string, unknown>).forEach(walk);
+    };
+    walk(node);
+    return count;
+  }
+
+  it("blockMath longo sai em linhas equilibradas que cabem na coluna, partidas num espaço", () => {
+    expect(LONGA.length).toBe(74);
+    const out = blockToDocxParagraphs({ id: id(390), type: "blockMath", latex: LONGA }, 1);
+    const lines = runTexts(out);
+    expect(lines.length).toBe(2);
+    expect(breaks(out)).toBe(1);
+    // Nada se perde: as linhas, reunidas por um espaço, são a fórmula inteira.
+    expect(lines.join(" ").replace(/ /g, " ")).toBe(LONGA);
+    for (const line of lines) {
+      expect(line.length).toBeLessThanOrEqual(71);
+      // Dentro da linha não sobra ponto de quebra para o Word inventar outro.
+      expect(line).not.toContain(" ");
+      expect(line.endsWith("\\")).toBe(false);
+    }
+    // Equilibradas, como no PDF (achado 0435): nenhuma satura a coluna.
+    expect(Math.abs(lines[0].length - lines[1].length)).toBeLessThanOrEqual(6);
+  });
+
+  it("blockMath curto continua um só átomo, sem quebra", () => {
+    const out = blockToDocxParagraphs({ id: id(391), type: "blockMath", latex: "x^2 + 1" }, 1);
+    expect(runTexts(out)).toEqual(["x^2 + 1"]);
+    expect(breaks(out)).toBe(0);
+  });
+
+  it("o teto acompanha o corpo do documento: a 24pt a mesma fórmula curta-média quebra", () => {
+    // 40 caracteres cabem a 12pt (71) mas não a 24pt (10300 / 288 = 35).
+    const media = "a + b + c + d + e + f + g + h + i + j +";
+    expect(runTexts(blockToDocxParagraphs({ id: id(392), type: "blockMath", latex: media }, 1)))
+      .toHaveLength(1);
+    expect(
+      runTexts(blockToDocxParagraphs({ id: id(393), type: "blockMath", latex: media }, 1, undefined, false, 24))
+        .length,
+    ).toBeGreaterThan(1);
+  });
+
+  it("dentro do enunciado a coluna é mais estreita, e o teto desconta o recuo", () => {
+    // 67 caracteres: cabem na coluna cheia (71), não numa coluna recuada 1440 twips (61).
+    const latex = "a + b + c + d + e + f + g + h + i + j + k + l + m + n + o + p + q +";
+    expect(latex.length).toBe(67);
+    const block = { id: id(394), type: "blockMath", latex } as const;
+    expect(runTexts(blockToDocxParagraphs(block, 1))).toHaveLength(1);
+    expect(runTexts(blockToDocxParagraphs(block, 1, undefined, false, BASE_FONT_PT, 1440)).length)
+      .toBeGreaterThan(1);
+  });
+
+  it("inlineMath mais larga que a coluna volta quebrável nos espaços, em vez de átomo sem teto", () => {
+    const runs = richTextToRuns([{ type: "inlineMath", latex: LONGA }]);
+    expect(docxText(runs)).toBe(LONGA);
+  });
+
+  it("inlineMath que cabe continua costurada", () => {
+    const runs = richTextToRuns([{ type: "inlineMath", latex: "x^2 + 1" }]);
+    expect(docxText(runs)).toBe("x^2 + 1");
+  });
+});

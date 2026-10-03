@@ -17,13 +17,13 @@ import {
   PAGE_MARGIN_PT,
   pdfTextSize,
 } from "../pageTokens";
-import { latexLayoutAtom } from "../mathAtom";
+import { latexBalancedLines, latexLayoutAtom, MONO_ADVANCE_EM } from "../mathAtom";
 
 /** Largura da folha A4 do `@react-pdf`, em pontos. */
 const A4_WIDTH_PT = 595.28;
 
 /** Avanço de um caractere da Courier, em `em` (a família é monoespaçada). */
-const COURIER_ADVANCE_EM = 0.6;
+const COURIER_ADVANCE_EM = MONO_ADVANCE_EM;
 
 /**
  * Quantos caracteres de fórmula cabem na coluna útil da folha.
@@ -71,22 +71,6 @@ export function mathToPdfText(
 }
 
 /**
- * Onde cortar `rest` para que a linha fique perto de `target` caracteres.
- *
- * Devolve o fim da linha e por onde continuar (o espaço usado na quebra é
- * consumido). Sem nenhum espaço no trecho que cabe, corta no seco no alvo.
- */
-function balancedCut(rest: string, target: number, maxChars: number): { end: number; next: number } {
-  const head = rest.slice(0, maxChars + 1);
-  let best = -1;
-  for (let i = 0; i < head.length; i += 1) {
-    if (!/\s/.test(head[i])) continue;
-    if (best < 0 || Math.abs(i - target) < Math.abs(best - target)) best = i;
-  }
-  return best < 0 ? { end: target, next: target } : { end: best, next: best + 1 };
-}
-
-/**
  * Quebra o LaTeX do bloco em linhas EQUILIBRADAS que cabem na coluna útil.
  *
  * Existe porque `alignItems: "center"` só centra uma caixa que ENCOLHE ao
@@ -114,17 +98,7 @@ export function mathBlockLines(
   latex: string,
   contextFontSizePt: number = BASE_FONT_PT,
 ): string[] {
-  const maxChars = mathPdfMaxAtomChars(contextFontSizePt);
-  const lines: string[] = [];
-  let rest = latex.trim();
-  while (rest.length > maxChars) {
-    const target = Math.ceil(rest.length / Math.ceil(rest.length / maxChars));
-    const { end, next } = balancedCut(rest, target, maxChars);
-    lines.push(rest.slice(0, end));
-    rest = rest.slice(next).trimStart();
-  }
-  lines.push(rest);
-  return lines.map((line) => latexLayoutAtom(line, maxChars));
+  return latexBalancedLines(latex, mathPdfMaxAtomChars(contextFontSizePt));
 }
 
 /**

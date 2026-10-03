@@ -99,7 +99,7 @@ import {
   MATH_TYPOGRAPHY_WARNING,
 } from "./exportWarnings";
 import { perQuestionBreakFlags } from "../render/perQuestionBreaks";
-import { latexLayoutAtom } from "../render/mathAtom";
+import { latexBalancedLines, latexLayoutAtom, MONO_ADVANCE_EM } from "../render/mathAtom";
 import { DEFAULT_PANEL_SETTINGS, formatHeaderDateBR, type PanelSettings } from "./panelSettings";
 import { HEADER_SPACING_PT } from "../render/headerSpacing";
 import { documentTitle, FALLBACK_TITLE } from "../titleField";
@@ -115,6 +115,21 @@ export type DocxBlock = Paragraph | Table;
 
 /** Monospace face for LaTeX source, mirroring the PDF's MATH_PDF_STYLE. */
 const MATH_FONT = "Courier New";
+
+/**
+ * Quantos caracteres de fórmula em `MATH_FONT` cabem numa coluna do Word.
+ *
+ * Mesma conta do PDF (`mathPdfMaxAtomChars`): a família é monoespaçada, então a
+ * largura em twips dividida pelo avanço fixo (`halfPoints * 10` twips por em).
+ * Sem teto o Word recebia a fórmula longa como um átomo inquebrável e, sem
+ * ponto de quebra legal, partia no meio de um comando LaTeX (achado 0390).
+ */
+function docxMathMaxAtomChars(
+  halfPoints: number,
+  columnTwips: number = DOCX_CONTENT_WIDTH_TWIPS,
+): number {
+  return Math.floor(columnTwips / (MONO_ADVANCE_EM * halfPoints * 10));
+}
 /**
  * Tinta do texto no Word: o MESMO `DEFAULT_INK` das outras três superfícies,
  * sem o `#` (a unidade do docx é o hex cru). Vale para o título e, via
@@ -386,7 +401,12 @@ export function richTextToRuns(nodes: Inline[], inherited: RunStyle = {}): TextR
       // (achado 0803), mesma política do PDF e do "Copiar".
       return new TextRun({
         ...inherited,
-        text: latexLayoutAtom(node.latex),
+        // Com teto (achado 0390): acima da coluna o LaTeX volta quebrável nos
+        // espaços, em vez de o Word partir no meio de um comando.
+        text: latexLayoutAtom(
+          node.latex,
+          docxMathMaxAtomChars(inherited.size ?? Math.round(BASE_FONT_PT * 2)),
+        ),
         font: MATH_FONT,
       });
     }
@@ -794,10 +814,19 @@ export function blockToDocxParagraphs(
           alignment: AlignmentType.CENTER,
           ...para,
           ...spacing,
-          children: [
-            // Mesma regra do inline: o LaTeX, nunca o `alt` (achado 0803).
-            new TextRun({ ...run, text: latexLayoutAtom(block.latex), font: MATH_FONT }),
-          ],
+          // Mesma regra do inline: o LaTeX, nunca o `alt` (achado 0803). Mais
+          // larga que a coluna, a fórmula sai em linhas equilibradas partidas
+          // num espaço, como no PDF (achado 0390), cada uma um átomo.
+          children: latexBalancedLines(
+            block.latex,
+            docxMathMaxAtomChars(
+              run.size ?? Math.round(bodyPt * 2),
+              DOCX_CONTENT_WIDTH_TWIPS - columnTwips,
+            ),
+          ).map(
+            (line, i) =>
+              new TextRun({ ...run, text: line, font: MATH_FONT, ...(i > 0 ? { break: 1 } : {}) }),
+          ),
         }),
       ];
 
