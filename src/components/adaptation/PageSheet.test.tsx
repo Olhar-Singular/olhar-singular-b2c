@@ -1650,6 +1650,78 @@ describe("PageSheet", () => {
     });
 
     /*
+      Achado 1137: o arquivo parte a questão mais alta que a folha ENTRE os
+      filhos dela (parágrafo, figura, linha de alternativa), nunca dentro de uma
+      figura ou de uma linha. A prévia virava no pixel, com a régua passando por
+      trás da figura e cortando "b) Opção 33B" ao meio.
+    */
+    const questaoAlta = (figuraBottom = 1308) => (
+      <PageSheet paginated toolbar={null}>
+        <div data-folha-bloco="" data-test-top="53.33" data-test-bottom="353.33" />
+        <div data-folha-bloco="" data-testid="questao" data-test-top="353.33" data-test-bottom="1448">
+          <div data-test-top="353.33" data-test-bottom="400" />
+          <div data-folha-bloco="" data-testid="figura" data-test-top="408" data-test-bottom={figuraBottom}>
+            <div data-testid="img" data-test-top="408" data-test-bottom={figuraBottom} />
+          </div>
+          <div data-test-top="1316" data-test-bottom="1346" />
+          <div data-testid="alt-b" style={{ marginTop: "8px" }} data-test-top="1410" data-test-bottom="1440">
+            <span data-test-top="1410" data-test-bottom="1440">
+              b) Opção 33B
+            </span>
+          </div>
+        </div>
+      </PageSheet>
+    );
+
+    it("desce inteira a figura que atravessa a virada da questão alta (achado 1137)", () => {
+      withBlocos(1394.67, () => {
+        render(questaoAlta());
+        // A figura começa em 354,67 do fluxo e a folha 1 acaba em 1016,34.
+        expect(Number.parseFloat(screen.getByTestId("img").style.marginTop)).toBeCloseTo(
+          PAGE_MARGIN_PX + PAGE_CONTENT_HEIGHT_PX - 408,
+          2,
+        );
+        expect(screen.getByTestId("questao").style.marginTop).toBe("");
+        expect(screen.getByTestId("figura").style.marginTop).toBe("");
+      });
+    });
+
+    it("desce inteira a linha que atravessa a virada, somando à margem própria (achado 1137)", () => {
+      withBlocos(1394.67, () => {
+        render(questaoAlta());
+        // Empurrada pela figura (661,67px), a alternativa b abre em 2071,67 da
+        // folha e a página 2 acaba em 2086,01: desce 14,34px, por cima dos 8px
+        // que ela já tinha (o inline troca a margem, não soma).
+        const shiftFigura = PAGE_MARGIN_PX + PAGE_CONTENT_HEIGHT_PX - 408;
+        const spacer = PAGE_MARGIN_PX + 2 * PAGE_CONTENT_HEIGHT_PX - (1410 + shiftFigura);
+        expect(Number.parseFloat(screen.getByTestId("alt-b").style.marginTop)).toBeCloseTo(
+          8 + spacer,
+          2,
+        );
+        expect(screen.getByTestId("page-count")).toHaveTextContent("3 páginas A4");
+      });
+    });
+
+    it("refaz o empurrão dos filhos a cada medida, sem acumular (achado 1137)", () => {
+      withBlocos(1394.67, () => {
+        const { rerender } = render(questaoAlta());
+        rerender(questaoAlta());
+        expect(Number.parseFloat(screen.getByTestId("img").style.marginTop)).toBeCloseTo(
+          PAGE_MARGIN_PX + PAGE_CONTENT_HEIGHT_PX - 408,
+          2,
+        );
+        expect(screen.getByTestId("page-count")).toHaveTextContent("3 páginas A4");
+      });
+    });
+
+    it("corta no pixel a figura mais alta que uma folha inteira (achado 1137)", () => {
+      withBlocos(1394.67, () => {
+        render(questaoAlta(1500));
+        expect(screen.getByTestId("img").style.marginTop).toBe("");
+      });
+    });
+
+    /*
       Achado 0708: o `@react-pdf` decide a virada pela caixa MAIS a margem de
       baixo do bloco, e todo bloco do PDF carrega o vão entre blocos
       (`blockSpacing`) como `marginBottom`, inclusive o último. O bloco que

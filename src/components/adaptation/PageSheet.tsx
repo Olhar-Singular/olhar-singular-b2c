@@ -125,6 +125,13 @@ const BLOCK_SELECTOR = "[data-folha-bloco]";
  */
 const TABLE_SELECTOR = "[data-folha-tabela]";
 
+/**
+ * Marca o filho de um bloco alto que esta folha empurrou para a folha seguinte
+ * (achado 1137). O valor é o `marginTop` inline que ele tinha antes, para a
+ * remedida devolvê-lo intacto.
+ */
+const PIECE_PUSH_ATTR = "data-folha-empurrado";
+
 /** Marca a cópia do cabeçalho que esta folha injeta na virada (achado 0262). */
 const REPEATED_HEADER_ATTR = "data-folha-thead-repetido";
 
@@ -462,6 +469,11 @@ export function PageSheet({
       blocks.forEach((block) => {
         block.style.marginTop = "";
       });
+      // Achado 1137: idem para o filho de bloco alto empurrado na virada.
+      sheet.querySelectorAll<HTMLElement>(`[${PIECE_PUSH_ATTR}]`).forEach((piece) => {
+        piece.style.marginTop = piece.getAttribute(PIECE_PUSH_ATTR) as string;
+        piece.removeAttribute(PIECE_PUSH_ATTR);
+      });
       /*
         Achado 0123: a altura medida é a do CONTEÚDO, nunca a da folha. A folha
         passou a crescer até o fim da última página (abaixo), então medi-la aqui
@@ -577,10 +589,34 @@ export function PageSheet({
           return bounds ? [bounds] : [];
         });
 
+        /*
+          Achado 1137: o pedaço INDIVISÍVEL de um bloco que atravessa `cut`
+          (fluxo cru, sem empurrões). Desce pelos filhos de bloco que cruzam o
+          corte até o que não tem mais nenhum: a figura, a linha da alternativa,
+          o parágrafo. Filho `inline` não conta: margem nele não move nada, e é
+          o pai (a linha) que vira inteiro.
+        */
+        const flowBox = (el: HTMLElement) => {
+          const rect = el.getBoundingClientRect();
+          return {
+            top: (rect.top - sheetTop) / scale - PAGE_MARGIN_PX,
+            bottom: (rect.bottom - sheetTop) / scale - PAGE_MARGIN_PX,
+          };
+        };
+        const crossingPiece = (root: HTMLElement, cut: number): HTMLElement => {
+          const child = (Array.from(root.children) as HTMLElement[]).find((el) => {
+            if (getComputedStyle(el).display.startsWith("inline")) return false;
+            const box = flowBox(el);
+            return box.top < cut && box.bottom > cut;
+          });
+          return child ? crossingPiece(child, cut) : root;
+        };
+
         let pageTop = 0;
         let total = 1;
         let shift = 0;
-        const pushes: { el: HTMLElement; kind: "break" | "block"; spacer: number }[] = [];
+        const pushes: { el: HTMLElement; kind: "break" | "block" | "piece"; spacer: number }[] =
+          [];
         const turnPage = () => {
           pageTop += PAGE_CONTENT_HEIGHT_PX;
           total += 1;
@@ -632,9 +668,32 @@ export function PageSheet({
             pushes.push({ el: item.el, kind: "block", spacer });
             shift += spacer;
           }
-          // Bloco mais alto que uma folha inteira: o papel o parte, porque não
-          // há outro lugar para ele — é o que o arquivo também faz.
-          while (item.bottom + shift - pageTop > PAGE_CONTENT_HEIGHT_PX) turnPage();
+          /*
+            Bloco mais alto que uma folha inteira: o papel o parte, porque não
+            há outro lugar para ele.
+
+            Achado 1137: mas o arquivo o parte ENTRE os filhos (parágrafo,
+            figura, caixa do APOIO, linha de alternativa), nunca dentro de uma
+            figura ou de uma linha. Virar no pixel passava a régua por trás da
+            figura e no meio de "b) Opção 33B". O pedaço que atravessa a virada
+            desce inteiro, como o bloco de topo do 0701; só o que sozinho é mais
+            alto que a folha continua partido no pixel, porque não cabe em
+            folha nenhuma.
+          */
+          while (item.bottom + shift - pageTop > PAGE_CONTENT_HEIGHT_PX) {
+            const pageEnd = pageTop + PAGE_CONTENT_HEIGHT_PX;
+            const piece = crossingPiece(item.el, pageEnd - shift);
+            const box = flowBox(piece);
+            if (box.bottom - box.top <= PAGE_CONTENT_HEIGHT_PX) {
+              const spacer = pageEnd - (box.top + shift);
+              // O inline TROCA a margem própria (a do `space-y`, por exemplo),
+              // então ela entra somada ao vão, como no 0521.
+              const ownMargin = Number.parseFloat(getComputedStyle(piece).marginTop) || 0;
+              pushes.push({ el: piece, kind: "piece", spacer: ownMargin + spacer });
+              shift += spacer;
+            }
+            turnPage();
+          }
         });
         while (printedHeight + shift - pageTop > PAGE_CONTENT_HEIGHT_PX) turnPage();
         return { total, pushes };
@@ -722,7 +781,10 @@ export function PageSheet({
       if (paginated) {
         pushes.forEach(({ el, kind, spacer }) => {
           if (kind === "break") el.style.marginBottom = `${spacer}px`;
-          else el.style.marginTop = `${spacer}px`;
+          else {
+            if (kind === "piece") el.setAttribute(PIECE_PUSH_ATTR, el.style.marginTop);
+            el.style.marginTop = `${spacer}px`;
+          }
         });
       }
       /*
