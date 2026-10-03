@@ -673,6 +673,22 @@ describe("StepReview", () => {
       expect(screen.getByLabelText("Pasta")).toHaveTextContent("Sem pasta");
     });
 
+    it("abrir e cancelar a nova pasta não desarquiva nem perde a pasta atual (0509)", async () => {
+      const onFolderChange = vi.fn();
+      setup({ folders: FOLDERS, folderId: "f1", onFolderChange, onNewFolderChange: vi.fn() });
+      fireEvent.click(screen.getByLabelText("Pasta"));
+      await waitFor(() => screen.getByRole("option", { name: /Nova pasta/i }));
+      fireEvent.click(screen.getByRole("option", { name: /Nova pasta/i }));
+      const field = await screen.findByLabelText("Nome da nova pasta");
+      expect(onFolderChange).not.toHaveBeenCalled();
+      fireEvent.keyDown(field, { key: "Escape" });
+      await waitFor(() =>
+        expect(screen.queryByLabelText("Nome da nova pasta")).not.toBeInTheDocument(),
+      );
+      expect(onFolderChange).not.toHaveBeenCalled();
+      expect(screen.getByLabelText("Pasta")).toHaveTextContent("6º ano B");
+    });
+
     it("deixa as outras teclas passarem no campo de nova pasta", async () => {
       // Só o Escape é interceptado (e tem `stopPropagation`). Qualquer outra
       // tecla precisa seguir para o campo, senão não daria para digitar o nome

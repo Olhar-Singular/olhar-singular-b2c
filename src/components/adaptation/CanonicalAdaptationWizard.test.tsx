@@ -297,6 +297,10 @@ vi.mock("./steps/review/StepReview", () => ({
       <button data-testid="review-name-folder" onClick={() => onNewFolderChange?.("7º ano A")}>
         nomear pasta
       </button>
+      <button data-testid="review-unpick-folder" onClick={() => onFolderChange?.(null)}>sem pasta</button>
+      <button data-testid="review-clear-new-folder" onClick={() => onNewFolderChange?.("")}>
+        limpar nome da pasta
+      </button>
       <button data-testid="review-save" onClick={() => onSave?.()}>salvar na revisar</button>
       <pre data-testid="review-original-exam">
         {originalExam ? JSON.stringify({ fileName: originalExam.file.name, userId: originalExam.userId }) : "null"}
@@ -1818,6 +1822,18 @@ describe("CanonicalAdaptationWizard — navigation guard", () => {
       advanceToReview();
       fireEvent.click(screen.getByTestId("review-pick-folder"));
       expect(screen.getByTestId("filing-dirty")).toBeInTheDocument();
+    });
+
+    it("não arma o aviso nem a guarda quando pasta e nome não mudam (0509)", () => {
+      // Abrir e cancelar "+ Nova pasta…" reemite os valores que já estavam
+      // (sem pasta, nome vazio). Nada mudou, então nada fica pendente.
+      renderWithProviders(<CanonicalAdaptationWizard />);
+      advanceToReview();
+      mockNavGuard.mockClear();
+      fireEvent.click(screen.getByTestId("review-unpick-folder"));
+      fireEvent.click(screen.getByTestId("review-clear-new-folder"));
+      expect(screen.queryByTestId("filing-dirty")).not.toBeInTheDocument();
+      expect(mockNavGuard).not.toHaveBeenCalledWith(true);
     });
 
     it("avisa também ao nomear uma pasta nova", () => {

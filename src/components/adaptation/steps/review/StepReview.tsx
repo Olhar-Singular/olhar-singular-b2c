@@ -314,9 +314,10 @@ export function StepReview({
               // would leave an empty one behind whenever someone changes their
               // mind and never saves — so it is created on save, or never.
               if (v === NEW_FOLDER) {
+                // 0509: só abre o campo. A pasta atual fica intacta até um
+                // nome ser salvo, para o Escape ter o que devolver.
                 focusNewFolder.current = true;
                 setCreatingFolder(true);
-                onFolderChange?.(null);
                 return;
               }
               setCreatingFolder(false);

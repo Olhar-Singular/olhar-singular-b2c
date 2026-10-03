@@ -651,12 +651,15 @@ export default function CanonicalAdaptationWizard({ editMode }: Props = {}) {
             folders={folders}
             folderId={folderId}
             onFolderChange={(id) => {
+              // 0509: reemitir o mesmo valor não é uma escolha nova.
+              if (id === folderId) return;
               setIsSaved(false);
               setFilingDirty(true);
               setFolderId(id);
             }}
             newFolder={newFolder}
             onNewFolderChange={(name) => {
+              if (name === newFolder) return;
               setIsSaved(false);
               setFilingDirty(true);
               setNewFolder(name);
