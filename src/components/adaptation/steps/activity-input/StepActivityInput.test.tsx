@@ -172,6 +172,26 @@ describe("StepActivityInput — Banco de Questões tab", () => {
     expect(screen.getByRole("button", { name: /Banco de Questões/i })).toBeInTheDocument();
   });
 
+  it("exposes which tab is active via aria-pressed (1133)", () => {
+    render(<StepActivityInput data={baseData} updateData={vi.fn()} onNext={vi.fn()} onPrev={vi.fn()} />);
+    const manual = screen.getByRole("button", { name: /Colar Texto/i });
+    const bank = screen.getByRole("button", { name: /^Banco de Questões$/i });
+    expect(manual).toHaveAttribute("aria-pressed", "true");
+    expect(bank).toHaveAttribute("aria-pressed", "false");
+    fireEvent.click(bank);
+    expect(manual).toHaveAttribute("aria-pressed", "false");
+    expect(bank).toHaveAttribute("aria-pressed", "true");
+  });
+
+  it("names the subject and difficulty filters of the bank dialog (1133)", async () => {
+    render(<StepActivityInput data={baseData} updateData={vi.fn()} onNext={vi.fn()} onPrev={vi.fn()} />);
+    fireEvent.click(screen.getByRole("button", { name: /Banco de Questões/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Abrir Banco de Questões/i }));
+    await waitFor(() => screen.getByRole("dialog"));
+    expect(screen.getByRole("combobox", { name: "Filtrar por matéria" })).toBeInTheDocument();
+    expect(screen.getByRole("combobox", { name: "Filtrar por dificuldade" })).toBeInTheDocument();
+  });
+
   it("switching to bank tab shows Abrir Banco button and hides textarea", () => {
     render(<StepActivityInput data={baseData} updateData={vi.fn()} onNext={vi.fn()} onPrev={vi.fn()} />);
     fireEvent.click(screen.getByRole("button", { name: /Banco de Questões/i }));
@@ -356,8 +376,7 @@ describe("StepActivityInput — fetchBankQuestions filters", () => {
     fireEvent.click(screen.getByRole("button", { name: /Banco de Questões/i }));
     fireEvent.click(screen.getByRole("button", { name: /Abrir Banco de Questões/i }));
     await waitFor(() => screen.getByRole("dialog"));
-    // comboboxes have no accessible name — subject is first (w-40), difficulty is second (w-36)
-    const [subjectTrigger] = screen.getAllByRole("combobox");
+    const subjectTrigger = screen.getByRole("combobox", { name: "Filtrar por matéria" });
     fireEvent.click(subjectTrigger);
     await waitFor(() => screen.getByRole("option", { name: "Matemática" }));
     fireEvent.click(screen.getByRole("option", { name: "Matemática" }));
@@ -374,9 +393,7 @@ describe("StepActivityInput — fetchBankQuestions filters", () => {
     fireEvent.click(screen.getByRole("button", { name: /Banco de Questões/i }));
     fireEvent.click(screen.getByRole("button", { name: /Abrir Banco de Questões/i }));
     await waitFor(() => screen.getByRole("dialog"));
-    // comboboxes have no accessible name — subject is first (w-40), difficulty is second (w-36)
-    const comboboxes = screen.getAllByRole("combobox");
-    const difficultyTrigger = comboboxes[1];
+    const difficultyTrigger = screen.getByRole("combobox", { name: "Filtrar por dificuldade" });
     fireEvent.click(difficultyTrigger);
     await waitFor(() => screen.getByRole("option", { name: "Fácil" }));
     fireEvent.click(screen.getByRole("option", { name: "Fácil" }));

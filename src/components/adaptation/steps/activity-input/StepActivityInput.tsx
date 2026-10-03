@@ -318,6 +318,7 @@ export function StepActivityInput({ data, updateData, onNext, onPrev }: Props) {
             key={t.key}
             variant={tab === t.key ? "default" : "outline"}
             size="sm"
+            aria-pressed={tab === t.key}
             onClick={() => setTab(t.key)}
           >
             <t.icon className="w-4 h-4 mr-1" />
@@ -468,14 +469,14 @@ export function StepActivityInput({ data, updateData, onNext, onPrev }: Props) {
                 />
               </div>
               <Select value={filterSubject} onValueChange={setFilterSubject}>
-                <SelectTrigger className="w-40"><SelectValue placeholder="Matéria" /></SelectTrigger>
+                <SelectTrigger className="w-40" aria-label="Filtrar por matéria"><SelectValue placeholder="Matéria" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">Todas</SelectItem>
                   {SUBJECTS.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}
                 </SelectContent>
               </Select>
               <Select value={filterDifficulty} onValueChange={setFilterDifficulty}>
-                <SelectTrigger className="w-36"><SelectValue placeholder="Dificuldade" /></SelectTrigger>
+                <SelectTrigger className="w-36" aria-label="Filtrar por dificuldade"><SelectValue placeholder="Dificuldade" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">Todas</SelectItem>
                   {DIFFICULTIES.map((d) => <SelectItem key={d.value} value={d.value}>{d.label}</SelectItem>)}
