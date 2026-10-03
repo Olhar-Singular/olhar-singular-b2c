@@ -21,6 +21,16 @@ const MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024;
 const PARSE_ERROR_MESSAGE =
   "Não foi possível ler este arquivo. Ele pode estar corrompido: abra no Word e salve de novo, ou exporte o PDF outra vez, e envie novamente.";
 
+// pdf.js rejects an open-password PDF with a PasswordException. The file is fine,
+// so the "corrupted" advice above would send the teacher down the wrong path.
+const PASSWORD_ERROR_MESSAGE =
+  "Este PDF está protegido por senha. Remova a senha (abra o PDF e salve ou imprima como PDF sem proteção) e envie novamente.";
+
+/** pdf.js exceptions are identified by `name`; Object() keeps non-object throws (strings, null) safe. */
+function isPdfPasswordError(e: unknown): boolean {
+  return Object(e).name === "PasswordException";
+}
+
 export function StepUploadExam({ data, updateData, onNext, onLoadingChange }: Props) {
   const [processing, setProcessing] = useState(false);
   const [error, setError] = useState("");
@@ -130,7 +140,7 @@ export function StepUploadExam({ data, updateData, onNext, onLoadingChange }: Pr
     } catch (e) {
       console.error("Exam parsing error:", e);
       if (!mountedRef.current) return;
-      setError(PARSE_ERROR_MESSAGE);
+      setError(isPdfPasswordError(e) ? PASSWORD_ERROR_MESSAGE : PARSE_ERROR_MESSAGE);
     } finally {
       if (mountedRef.current) {
         setProcessing(false);

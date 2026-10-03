@@ -442,6 +442,16 @@ describe("StepUploadExam", () => {
     expect(alert).not.toHaveTextContent(/Invalid PDF structure/i);
   });
 
+  it("tells the teacher the PDF is password-protected instead of calling it corrupted (0284)", async () => {
+    // pdf.js rejects with a PasswordException (identified by `name`, its prototype is not a plain Error).
+    parsePdfMock.mockRejectedValueOnce(Object.assign(Object.create(null), { name: "PasswordException", message: "No password given", code: 1 }));
+    renderWithProviders(<StepUploadExam data={baseData} updateData={vi.fn()} onNext={vi.fn()} onPrev={vi.fn()} />);
+    selectFile(pdfFile());
+    const alert = await screen.findByRole("alert");
+    expect(alert).toHaveTextContent(/protegido por senha/i);
+    expect(alert).not.toHaveTextContent(/corrompido/i);
+  });
+
   it("shows a pt-BR message instead of the raw JSZip error for a corrupted DOCX (1113)", async () => {
     detectFileTypeMock.mockReturnValue("docx");
     extractDocxWithImagesMock.mockRejectedValueOnce(new Error("Corrupted zip: can't find end of central directory"));
