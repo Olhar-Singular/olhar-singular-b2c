@@ -520,20 +520,24 @@ export function StepActivityInput({ data, updateData, onNext, onPrev }: Props) {
                   className="pl-9"
                 />
               </div>
-              <Select value={filterSubject} onValueChange={setFilterSubject}>
-                <SelectTrigger className="w-40" aria-label="Filtrar por matéria"><SelectValue placeholder="Matéria" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Todas</SelectItem>
-                  {SUBJECTS.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}
-                </SelectContent>
-              </Select>
-              <Select value={filterDifficulty} onValueChange={setFilterDifficulty}>
-                <SelectTrigger className="w-36" aria-label="Filtrar por dificuldade"><SelectValue placeholder="Dificuldade" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Todas</SelectItem>
-                  {DIFFICULTIES.map((d) => <SelectItem key={d.value} value={d.value}>{d.label}</SelectItem>)}
-                </SelectContent>
-              </Select>
+              {/* 0537: below `sm` the filters wrap under the search; the wrapper takes the
+                  whole row and each trigger grows so the right edge lines up with the search. */}
+              <div className="flex w-full gap-2 sm:w-auto">
+                <Select value={filterSubject} onValueChange={setFilterSubject}>
+                  <SelectTrigger className="flex-1 sm:w-40 sm:flex-none" aria-label="Filtrar por matéria"><SelectValue placeholder="Matéria" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Todas</SelectItem>
+                    {SUBJECTS.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+                <Select value={filterDifficulty} onValueChange={setFilterDifficulty}>
+                  <SelectTrigger className="flex-1 sm:w-36 sm:flex-none" aria-label="Filtrar por dificuldade"><SelectValue placeholder="Dificuldade" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Todas</SelectItem>
+                    {DIFFICULTIES.map((d) => <SelectItem key={d.value} value={d.value}>{d.label}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
 
             {bankLoading ? (

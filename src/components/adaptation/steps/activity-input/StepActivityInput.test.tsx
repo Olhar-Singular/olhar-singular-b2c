@@ -192,6 +192,22 @@ describe("StepActivityInput — Banco de Questões tab", () => {
     expect(screen.getByRole("combobox", { name: "Filtrar por dificuldade" })).toBeInTheDocument();
   });
 
+  it("lets the bank filters share the full row on narrow screens (0537)", async () => {
+    render(<StepActivityInput data={baseData} updateData={vi.fn()} onNext={vi.fn()} onPrev={vi.fn()} />);
+    fireEvent.click(screen.getByRole("button", { name: /Banco de Questões/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Abrir Banco de Questões/i }));
+    await waitFor(() => screen.getByRole("dialog"));
+    const subject = screen.getByRole("combobox", { name: "Filtrar por matéria" });
+    const difficulty = screen.getByRole("combobox", { name: "Filtrar por dificuldade" });
+    // Below `sm` the filters wrap under the search: their wrapper takes the whole row
+    // and each trigger grows, so the right edge lines up with the search and the cards.
+    const wrapper = subject.parentElement as HTMLElement;
+    expect(difficulty.parentElement).toBe(wrapper);
+    expect(wrapper).toHaveClass("w-full", "sm:w-auto");
+    expect(subject).toHaveClass("flex-1", "sm:flex-none", "sm:w-40");
+    expect(difficulty).toHaveClass("flex-1", "sm:flex-none", "sm:w-36");
+  });
+
   it("switching to bank tab shows Abrir Banco button and hides textarea", () => {
     render(<StepActivityInput data={baseData} updateData={vi.fn()} onNext={vi.fn()} onPrev={vi.fn()} />);
     fireEvent.click(screen.getByRole("button", { name: /Banco de Questões/i }));
