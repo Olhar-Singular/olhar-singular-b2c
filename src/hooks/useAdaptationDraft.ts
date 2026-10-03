@@ -9,6 +9,8 @@
  * Guarantees:
  *   - status indicator: idle | saving | saved | error | conflict
  *   - flush on unmount, window blur, and visibilitychange→hidden
+ *   - flush when the browser comes back `online`, so an edit that failed to
+ *     save while offline is retried without waiting for another keystroke
  *   - crash mirror (IndexedDB / localStorage) written before each save and
  *     cleared once the server save lands; `restoreFromMirror` reads it back
  *   - optimistic concurrency via the repo: a stale updated_at → status
@@ -295,18 +297,27 @@ export function useAdaptationDraft({
     };
   }, [draftId, resultKey, debounceMs, performSave]);
 
-  // Flush on blur, tab-hide, and unmount so no edit is lost.
+  // Flush on blur, tab-hide, reconnect, and unmount so no edit is lost.
+  //
+  // `online` matters because a failed save schedules nothing by itself: without
+  // it, an edit that hit "Erro ao salvar" while offline stayed only in the
+  // crash mirror until the user typed again or another action forced a flush.
+  // The flush is a no-op when nothing is dirty, so firing it on every
+  // reconnect is harmless.
   const flushRef = useRef(flush);
   flushRef.current = flush;
   useEffect(() => {
     const onBlur = () => void flushRef.current();
+    const onOnline = () => void flushRef.current();
     const onVisibility = () => {
       if (document.visibilityState === "hidden") void flushRef.current();
     };
     window.addEventListener("blur", onBlur);
+    window.addEventListener("online", onOnline);
     document.addEventListener("visibilitychange", onVisibility);
     return () => {
       window.removeEventListener("blur", onBlur);
+      window.removeEventListener("online", onOnline);
       document.removeEventListener("visibilitychange", onVisibility);
       void flushRef.current();
     };

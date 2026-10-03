@@ -334,6 +334,39 @@ describe("useAdaptationDraft", () => {
     expect(repo.updateAdaptation).toHaveBeenCalled();
   });
 
+  /**
+   * Regressão 0459: o autosave que falhou por falta de rede ficava em "Erro ao
+   * salvar" para sempre. Nada re-tentava quando a conexão voltava; a edição só
+   * subia se o professor digitasse de novo ou outra ação forçasse um flush.
+   */
+  it("retries the pending edit when the connection comes back online", async () => {
+    vi.mocked(repo.updateAdaptation).mockRejectedValueOnce(new Error("offline"));
+    const props = {
+      draftId: "d1",
+      result: validResult,
+      initialUpdatedAt: "2026-01-01T00:00:00Z",
+      debounceMs: 500,
+    };
+    const { rerender, result } = renderHook((p) => useAdaptationDraft(p), { initialProps: props });
+    rerender({ ...props, result: edited("offline-1") });
+    await act(async () => { await vi.advanceTimersByTimeAsync(500); });
+    expect(result.current.status).toBe("error");
+    expect(repo.updateAdaptation).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      window.dispatchEvent(new Event("online"));
+      await vi.advanceTimersByTimeAsync(0);
+    });
+
+    expect(repo.updateAdaptation).toHaveBeenCalledTimes(2);
+    expect(repo.updateAdaptation).toHaveBeenLastCalledWith(
+      "d1",
+      { adaptation_result: edited("offline-1") },
+      "2026-01-01T00:00:00Z",
+    );
+    expect(result.current.status).toBe("saved");
+  });
+
   it("flushes when the tab becomes hidden", async () => {
     const props = {
       draftId: "d1",
