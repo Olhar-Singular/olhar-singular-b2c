@@ -107,9 +107,13 @@ export function ScaffoldNodeView({ node, updateAttributes, editor, deleteNode, g
                 lista impressa: ~18px por passo que só existiam no Revisar. A
                 borda fica (é o que diz que dá para digitar ali, achado 0342);
                 a altura passa a ser a do texto.
+                0619 — o texto do passo é impresso no corpo do documento (prévia
+                e PDF), então herda o tamanho da folha em vez do `text-base
+                md:text-sm` fixo do `<Input>`; assim segue o Formato > Tamanho.
               */
               className={cn(
                 "h-auto py-0",
+                "text-[length:inherit] md:text-[length:inherit]",
                 "border-surface-line bg-surface-paper text-surface-ink placeholder:text-surface-ink-faint",
               )}
             />

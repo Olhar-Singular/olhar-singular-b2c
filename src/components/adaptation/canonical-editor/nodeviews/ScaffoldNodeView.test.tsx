@@ -217,6 +217,16 @@ describe("ScaffoldNodeView — chrome de edição fora do fluxo da folha (0113)"
     expect(campo.className).toMatch(/py-0/);
   });
 
+  it("o texto do passo herda o corpo da folha, não o 14/16px do input do app (0619)", () => {
+    const { props } = makeProps(["a"]);
+    render(<ScaffoldNodeView {...props} />);
+    const classes = screen.getByLabelText("Passo 1").className.split(/\s+/);
+    expect(classes).not.toContain("text-base");
+    expect(classes).not.toContain("md:text-sm");
+    expect(classes).toContain("text-[length:inherit]");
+    expect(classes).toContain("md:text-[length:inherit]");
+  });
+
   it("hospeda o rail no wrapper, que continua medindo o vão de sempre", () => {
     const { props } = makeProps(["a"]);
     const { getByTestId } = render(<ScaffoldNodeView {...props} />);
