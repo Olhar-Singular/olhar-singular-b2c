@@ -1214,3 +1214,28 @@ describe("StepActivityInput — the bank dialog starts clean on every opening (0
     expect(within(dialog).getByText("1 selecionada(s) fora deste filtro")).toBeInTheDocument();
   });
 });
+
+/**
+ * 0536 — the close button comes from the shadcn `DialogContent` (protected file)
+ * without padding or size: its box was the icon's, 16 x 16, below the 24 x 24 CSS px
+ * of WCAG 2.2 SC 2.5.8 (AA). The bank dialog grows the target as the consumer.
+ */
+describe("StepActivityInput — bank dialog close button target (0536)", () => {
+  it("grows the Dialog-injected close button to the 24 x 24 floor", async () => {
+    render(<StepActivityInput data={baseData} updateData={vi.fn()} onNext={vi.fn()} onPrev={vi.fn()} />);
+    fireEvent.click(screen.getByRole("button", { name: /Banco de Questões/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Abrir Banco de Questões/i }));
+    const dialog = await waitFor(() => screen.getByRole("dialog", { name: /Selecionar Questões/i }));
+    const close = within(dialog).getByRole("button", { name: "Close" });
+    // `[&>button]:*` utilities only reach DIRECT children of the content
+    expect(close.parentElement).toBe(dialog);
+    for (const cls of [
+      "[&>button]:min-h-[24px]",
+      "[&>button]:min-w-[24px]",
+      "[&>button]:p-1",
+      "[&>button]:-m-1",
+    ]) {
+      expect(dialog).toHaveClass(cls);
+    }
+  });
+});

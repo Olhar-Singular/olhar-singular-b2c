@@ -489,7 +489,15 @@ export function StepActivityInput({ data, updateData, onNext, onPrev }: Props) {
         }}
       >
         <DialogContent
-          className="max-w-3xl max-h-[85vh] flex flex-col"
+          className={[
+            "max-w-3xl max-h-[85vh] flex flex-col",
+            // 0536: the close button injected by `DialogContent` (shadcn, protected)
+            // has no padding or size, so its box was the 16 x 16 icon, below the
+            // 24 x 24 CSS px of WCAG 2.2 SC 2.5.8 (AA). It is the only DIRECT
+            // `<button>` child; `-m-1` gives the `p-1` back so the icon stays put.
+            "[&>button]:-m-1 [&>button]:flex [&>button]:min-h-[24px] [&>button]:min-w-[24px]",
+            "[&>button]:items-center [&>button]:justify-center [&>button]:p-1",
+          ].join(" ")}
           onCloseAutoFocus={(event) => {
             event.preventDefault();
             // 0533: "Colar Texto" switches to the manual tab, unmounting the bank
