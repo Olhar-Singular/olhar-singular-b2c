@@ -1652,6 +1652,63 @@ describe("CanonicalAdaptationWizard — navigation guard", () => {
     expect(reset).toHaveBeenCalled();
   });
 
+  /**
+   * 0460 · "Voltar e salvar" promised a save and only dismissed the dialog: with
+   * the autosave in "Erro ao salvar" nothing retried, so the label lied.
+   */
+  it("flushes the autosave on 'Voltar e salvar' in unsaved dialog", () => {
+    mockNavGuard.mockReturnValue({ state: "blocked", reset: vi.fn(), proceed: vi.fn() });
+    renderWithProviders(<CanonicalAdaptationWizard />);
+    advanceToReview();
+    mockFlush.mockClear();
+    fireEvent.click(screen.getByRole("button", { name: /Voltar e salvar/i }));
+    expect(mockFlush).toHaveBeenCalledTimes(1);
+  });
+
+  /**
+   * 0460 · The guard dialogs have no DialogTrigger, so Radix's close handler
+   * focused a null trigger and the focus fell to <body>. Closing must hand the
+   * focus back to what had it when the guard opened (the sidebar link).
+   */
+  it("returns focus to the element that had it when the guard dialog closes", async () => {
+    const { rerender } = renderWithProviders(<CanonicalAdaptationWizard />);
+    advanceToReview();
+    const sidebarLink = document.createElement("a");
+    sidebarLink.href = "/dashboard";
+    sidebarLink.textContent = "Dashboard";
+    document.body.appendChild(sidebarLink);
+    sidebarLink.focus();
+
+    mockNavGuard.mockReturnValue({ state: "blocked", reset: vi.fn(), proceed: vi.fn() });
+    rerender(<CanonicalAdaptationWizard />);
+    expect(screen.getByText(/sair sem salvar/i)).toBeInTheDocument();
+    expect(document.activeElement).not.toBe(sidebarLink);
+
+    mockNavGuard.mockReturnValue({ state: "unblocked", reset: vi.fn(), proceed: vi.fn() });
+    rerender(<CanonicalAdaptationWizard />);
+    expect(screen.queryByText(/sair sem salvar/i)).not.toBeInTheDocument();
+    // Radix restores focus on a setTimeout(0) after the scope unmounts.
+    await waitFor(() => expect(document.activeElement).toBe(sidebarLink));
+    sidebarLink.remove();
+  });
+
+  it("falls back to the step region when the opener is gone after the guard closes", async () => {
+    const { rerender } = renderWithProviders(<CanonicalAdaptationWizard />);
+    advanceToReview();
+    const sidebarLink = document.createElement("a");
+    sidebarLink.href = "/dashboard";
+    document.body.appendChild(sidebarLink);
+    sidebarLink.focus();
+
+    mockNavGuard.mockReturnValue({ state: "blocked", reset: vi.fn(), proceed: vi.fn() });
+    rerender(<CanonicalAdaptationWizard />);
+    sidebarLink.remove();
+
+    mockNavGuard.mockReturnValue({ state: "unblocked", reset: vi.fn(), proceed: vi.fn() });
+    rerender(<CanonicalAdaptationWizard />);
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByTestId("step-region")));
+  });
+
   it("calls proceed() on 'Sair assim mesmo' in unsaved dialog", () => {
     const proceed = vi.fn();
     mockNavGuard.mockReturnValue({ state: "blocked", reset: vi.fn(), proceed });

@@ -462,6 +462,29 @@ export default function CanonicalAdaptationWizard({ editMode }: Props = {}) {
     await flush();
   }, [flush]);
 
+  /**
+   * 0460 · The guard dialogs are rendered by condition, with no DialogTrigger.
+   * Radix's modal close handler always focuses `triggerRef`, which is null
+   * here, so closing dropped the focus on <body> and a keyboard user restarted
+   * from the top of the page. We remember what had the focus when the dialog
+   * opened (at `onOpenAutoFocus` the focus has not moved yet: usually the
+   * sidebar link that tried to leave) and hand it back on close, falling back
+   * to the step region when that element is gone.
+   */
+  const guardOpenerRef = useRef<HTMLElement | null>(null);
+  const guardDialogFocusProps = {
+    onOpenAutoFocus: () => {
+      guardOpenerRef.current = document.activeElement as HTMLElement | null;
+    },
+    onCloseAutoFocus: (event: Event) => {
+      event.preventDefault();
+      const opener = guardOpenerRef.current;
+      guardOpenerRef.current = null;
+      if (opener?.isConnected && opener !== document.body) opener.focus();
+      else stepRegionRef.current?.focus();
+    },
+  };
+
   async function handleRestart() {
     await flushPending();
     setData(INITIAL_WIZARD_DATA);
@@ -837,7 +860,7 @@ export default function CanonicalAdaptationWizard({ editMode }: Props = {}) {
 
       {navGuard.state === "blocked" && isUploading && (
         <Dialog open onOpenChange={() => navGuard.reset?.()}>
-          <DialogContent>
+          <DialogContent {...guardDialogFocusProps}>
             <DialogHeader>
               <DialogTitle>O arquivo ainda está sendo processado</DialogTitle>
             </DialogHeader>
@@ -855,7 +878,7 @@ export default function CanonicalAdaptationWizard({ editMode }: Props = {}) {
 
       {navGuard.state === "blocked" && isGenerating && !isUploading && (
         <Dialog open onOpenChange={() => navGuard.reset?.()}>
-          <DialogContent>
+          <DialogContent {...guardDialogFocusProps}>
             <DialogHeader>
               <DialogTitle>A adaptação ainda está em andamento</DialogTitle>
             </DialogHeader>
@@ -872,7 +895,7 @@ export default function CanonicalAdaptationWizard({ editMode }: Props = {}) {
 
       {navGuard.state === "blocked" && !isGenerating && !isUploading && (
         <Dialog open onOpenChange={() => navGuard.reset?.()}>
-          <DialogContent>
+          <DialogContent {...guardDialogFocusProps}>
             <DialogHeader>
               <DialogTitle>Sair sem salvar?</DialogTitle>
             </DialogHeader>
@@ -880,7 +903,17 @@ export default function CanonicalAdaptationWizard({ editMode }: Props = {}) {
               Você tem uma adaptação não salva. O rascunho ficará disponível em Adaptações.
             </p>
             <div className="flex justify-end gap-2 pt-2">
-              <Button variant="outline" onClick={() => navGuard.reset?.()}>Voltar e salvar</Button>
+              <Button
+                variant="outline"
+                onClick={() => {
+                  // 0460 · The label promises a save: retry the autosave (a
+                  // failed one is still dirty, so this is a real attempt).
+                  navGuard.reset?.();
+                  void flushPending();
+                }}
+              >
+                Voltar e salvar
+              </Button>
               <Button variant="destructive" onClick={() => navGuard.proceed?.()}>Sair assim mesmo</Button>
             </div>
           </DialogContent>
