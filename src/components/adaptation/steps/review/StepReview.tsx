@@ -520,13 +520,22 @@ export function StepReview({
               que 390px e empurravam "Exportar", a ação primária do passo, para
               fora da viewport. Abaixo de `sm` este vira só ícone, o mesmo
               tratamento que a barra de chrome do topo recebeu no achado 0010. */}
+          {/* Achado 0511: `disabled` nativo durante o salvamento derrubava o
+              foco do próprio botão para o `<body>`. Em curso, ele fica só
+              `aria-disabled` e ignora o clique, segurando o foco. */}
           <Button
             variant="outline"
-            onClick={() => onSave?.()}
-            disabled={!canSave || saving}
+            onClick={() => {
+              if (!saving) onSave?.();
+            }}
+            disabled={!canSave}
+            aria-disabled={saving || undefined}
             aria-label="Salvar adaptação"
             title="Salvar adaptação"
-            className={cn("shrink-0 px-2 sm:px-4", PAPER_SECONDARY_BUTTON)}
+            className={cn(
+              "shrink-0 px-2 sm:px-4 aria-disabled:opacity-50",
+              PAPER_SECONDARY_BUTTON,
+            )}
           >
             <Save className="w-4 h-4" />
             <span className="hidden sm:ml-2 sm:inline">

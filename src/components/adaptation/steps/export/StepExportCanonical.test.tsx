@@ -127,9 +127,17 @@ describe("StepExportCanonical", () => {
     expect(screen.getByRole("button", { name: /Salvar/i })).toBeDisabled();
   });
 
-  it("disables Salvar and shows a spinner while saving", () => {
-    renderStep({ saving: true });
-    expect(screen.getByRole("button", { name: /Salvar/i })).toBeDisabled();
+  // Regressão (caça 0511): `disabled` nativo derrubava o foco para o `<body>`.
+  it("keeps focus on Salvar while saving, ignoring clicks", () => {
+    const onSave = vi.fn();
+    renderStep({ saving: true, onSave });
+    const button = screen.getByRole("button", { name: /Salvar/i });
+    expect(button).not.toBeDisabled();
+    expect(button).toHaveAttribute("aria-disabled", "true");
+    button.focus();
+    expect(button).toHaveFocus();
+    fireEvent.click(button);
+    expect(onSave).not.toHaveBeenCalled();
   });
 
   /**

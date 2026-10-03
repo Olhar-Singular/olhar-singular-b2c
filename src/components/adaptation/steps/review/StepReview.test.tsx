@@ -773,9 +773,21 @@ describe("StepReview", () => {
       expect(screen.getByRole("button", { name: /Salvar adaptação/i })).toBeDisabled();
     });
 
-    it("disables Salvar while a save is in flight", () => {
-      setup({ canSave: true, saving: true });
-      expect(screen.getByRole("button", { name: /Salvar adaptação/i })).toBeDisabled();
+    /**
+     * Regressão (caça 0511): o `disabled` nativo durante o salvamento derrubava o
+     * foco do próprio botão para o `<body>`. Enquanto salva, o botão fica
+     * `aria-disabled`, segura o foco e ignora o clique.
+     */
+    it("keeps focus on Salvar while a save is in flight, ignoring clicks", () => {
+      const onSave = vi.fn();
+      setup({ canSave: true, saving: true, onSave });
+      const button = screen.getByRole("button", { name: /Salvar adaptação/i });
+      expect(button).not.toBeDisabled();
+      expect(button).toHaveAttribute("aria-disabled", "true");
+      button.focus();
+      expect(button).toHaveFocus();
+      fireEvent.click(button);
+      expect(onSave).not.toHaveBeenCalled();
     });
 
     /**

@@ -51,7 +51,17 @@ export function StepExportCanonical({
       />
 
       <div className="flex flex-wrap gap-2">
-        <Button variant="outline" onClick={onSave} disabled={!canSave || saving}>
+        {/* Achado 0511: `disabled` nativo durante o salvamento largava o foco
+            no `<body>`; em curso, só `aria-disabled` + guarda no clique. */}
+        <Button
+          variant="outline"
+          onClick={() => {
+            if (!saving) onSave();
+          }}
+          disabled={!canSave}
+          aria-disabled={saving || undefined}
+          className="aria-disabled:opacity-50"
+        >
           {saving ? (
             <Loader2 className="w-4 h-4 mr-1 animate-spin" />
           ) : (
