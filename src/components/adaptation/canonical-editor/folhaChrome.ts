@@ -103,7 +103,9 @@ export const FOLHA_RAIL_HOST =
  * `PageSheet` publica, e `min-*` faz o botão crescer só o que a escala tirou —
  * na folha em tamanho real nada muda.
  *
- * Vale para todo controle de ÍCONE da folha; os `size="sm"` (36px) já passam.
+ * Vale para todo controle da folha, inclusive os `size="sm"` (36px): eles só
+ * passam com escala >= 0,67, e na folha ajustada de 390px (42%) chegam a 15px
+ * de altura (achado 0616).
  */
 export const FOLHA_TOUCH_TARGET = "folha-touch-target";
 

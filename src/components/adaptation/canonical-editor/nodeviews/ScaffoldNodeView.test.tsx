@@ -82,6 +82,19 @@ describe("ScaffoldNodeView", () => {
     );
   });
 
+  /*
+    Achado 0616: o "+ Passo" e `size="sm"` (36px de folha) e ficou fora do piso
+    do 0236 na premissa de que "ja passa". Na folha a 42% (390px) ele chega ao
+    dedo com 15px de altura, abaixo dos 24 CSS px do WCAG 2.2 SC 2.5.8.
+  */
+  it("da ao '+ Passo' o mesmo piso de toque da lixeira vizinha (achado 0616)", () => {
+    const { props } = makeProps(["a"]);
+    render(<ScaffoldNodeView {...props} />);
+    expect(screen.getByRole("button", { name: "Passo" }).className).toMatch(
+      /(^|\s)folha-touch-target(\s|$)/,
+    );
+  });
+
   it("calls deleteNode when the delete button is clicked", () => {
     const { props, deleteNode } = makeProps(["a"]);
     render(<ScaffoldNodeView {...props} />);

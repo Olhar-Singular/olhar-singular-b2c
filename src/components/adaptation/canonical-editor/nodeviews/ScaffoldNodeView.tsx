@@ -61,7 +61,8 @@ export function ScaffoldNodeView({ node, updateAttributes, editor, deleteNode, g
           type="button"
           variant="outline"
           size="sm"
-          className={cn("gap-1", FOLHA_BUTTON)}
+          // 0616 — `size="sm"` (36px de folha) chega a 15px na folha a 42%.
+          className={cn("gap-1", FOLHA_BUTTON, FOLHA_TOUCH_TARGET)}
           disabled={disabled}
           onClick={() => updateAttributes({ items: addStep(items) })}
         >
