@@ -763,8 +763,13 @@ export function PageSheet({
     `PAGE_MARGIN_PX + N x PAGE_CONTENT_HEIGHT_PX`, não o múltiplo de A4).
     Na prévia o conteúdo pós-quebra é empurrado até o topo da folha seguinte
     (achado 0135), então a régua marca mesmo onde o papel vira.
+
+    Achado 1110: é a ÚNICA marca de onde uma A4 acaba, então é objeto gráfico
+    estrutural (WCAG 1.4.11, 3:1). `--sf-line-2` é o traço decorativo da folha
+    (1,38:1 sobre o branco) e sumia no pé da folha e sob bordas de tabela;
+    `--sf-ink-soft` dá ~6:1 e continua sendo token da folha (light-only).
   */
-  const ruleColor = "hsl(var(--sf-line-2))";
+  const ruleColor = "hsl(var(--sf-ink-soft))";
   const pageRulesBackground = pageRules.length
     ? `linear-gradient(to bottom, ${pageRules
         .map(

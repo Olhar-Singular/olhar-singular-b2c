@@ -522,6 +522,21 @@ describe("PageSheet", () => {
       });
     });
 
+    /*
+      Achado 1110: a régua é o ÚNICO sinal de onde uma A4 termina na folha
+      contínua da prévia, e era pintada em `--sf-line-2` (1,38:1 sobre o papel
+      branco): sumia no pé da folha e sob as bordas de tabela. Marca estrutural
+      precisa de 3:1 (WCAG 1.4.11); `--sf-ink-soft` dá ~6:1 e é token da folha.
+    */
+    it("pinta a régua da virada com tinta de 3:1 sobre o papel, não o traço decorativo (achado 1110)", () => {
+      withHeight(1500, () => {
+        render(<PageSheet paginated toolbar={null}><span>x</span></PageSheet>);
+        const sheet = screen.getByTestId("page-sheet");
+        expect(sheet.style.backgroundImage).toContain("hsl(var(--sf-ink-soft))");
+        expect(sheet.style.backgroundImage).not.toContain("--sf-line-2");
+      });
+    });
+
     it("dá altura de página A4 à folha", () => {
       render(<PageSheet paginated toolbar={null}><span>x</span></PageSheet>);
       const sheet = screen.getByTestId("page-sheet");
