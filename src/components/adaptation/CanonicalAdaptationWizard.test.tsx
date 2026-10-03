@@ -1132,6 +1132,27 @@ describe("CanonicalAdaptationWizard", () => {
     }
   });
 
+  // --- 0378 · primeira geração no fluxo de criação troca a URL --------------
+
+  it("points the URL at the generated row in create mode, without navigating (0378)", async () => {
+    // A linha já foi gravada e cobrada; se a URL seguisse em /adaptar, um F5
+    // voltaria ao Passo 1 vazio e o documento pago sumiria da tela.
+    window.history.replaceState(window.history.state, "", "/adaptar");
+    try {
+      renderWithProviders(<CanonicalAdaptationWizard />);
+      advanceToReview();
+      await waitFor(() => expect(adoptedDraftId()).toBe("srv-1"));
+
+      expect(window.location.pathname).toBe("/adaptar/editar/srv-1");
+      expect(mockNavigate).not.toHaveBeenCalledWith(
+        expect.stringMatching(/^\/adaptar\/editar\//),
+        expect.anything(),
+      );
+    } finally {
+      window.history.replaceState(window.history.state, "", "/");
+    }
+  });
+
   // --- C1-a crash-mirror restore -------------------------------------------
 
   function editSeed(updatedAt = "2026-01-01T00:00:00Z") {

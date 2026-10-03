@@ -418,7 +418,10 @@ export default function CanonicalAdaptationWizard({ editMode }: Props = {}) {
     // EditAdaptationPage keys the wizard on the route id, so a route change
     // would remount it and throw away caret, scroll and zoom. The router's own
     // history state is preserved, so back/forward keep working.
-    if (editAdaptationId && row.id !== editAdaptationId) {
+    // 0378: the create flow (/adaptar) needs the same rewrite. The row is
+    // already durable and charged; left on /adaptar, a reload remounted the
+    // wizard at step 1 with no draftId, so nothing could bring it back.
+    if (row.id !== editAdaptationId) {
       window.history.replaceState(window.history.state, "", `/adaptar/editar/${row.id}`);
     }
   }, [editAdaptationId]);
