@@ -994,3 +994,39 @@ describe("AnswerEditor — lixeira desabilitada no mínimo (1107)", () => {
     expect(screen.getByRole("button", { name: "Remover linha do cabeçalho" })).toBeEnabled();
   });
 });
+
+/**
+ * Achado 0467: a numeração da ordenação, "Lacuna N" e "Linhas de resposta:"
+ * usavam `ink-faint` sobre o papel branco do card, 2,45:1 (WCAG 2.2 AA pede
+ * 4,5:1). `ink-soft` mede 5,88:1.
+ */
+describe("AnswerEditor — rótulos legíveis sobre o papel (0467)", () => {
+  const expectInk = (el: HTMLElement) => {
+    expect(el.className).toMatch(/(^|\s)text-surface-ink-soft(\s|$)/);
+    expect(el.className).not.toMatch(/text-surface-ink-faint/);
+  };
+
+  it("ordering: a numeração do item usa ink-soft", () => {
+    const answer: QuestionAnswer = {
+      kind: "ordering",
+      items: [{ id: "99999999-9999-4999-8999-999999999999", content: t("o1"), position: 0 }],
+    };
+    render(<AnswerEditor answer={answer} onChange={vi.fn()} />);
+    expectInk(screen.getByText("1."));
+  });
+
+  it("fillBlank: o rótulo 'Lacuna N' usa ink-soft", () => {
+    const answer: QuestionAnswer = {
+      kind: "fillBlank",
+      gaps: [{ id: "cccccccc-cccc-4ccc-8ccc-cccccccccccc", answer: "g1" }],
+    };
+    render(<AnswerEditor answer={answer} onChange={vi.fn()} />);
+    expectInk(screen.getByText("Lacuna 1"));
+  });
+
+  it("open: o rótulo 'Linhas de resposta:' usa ink-soft", () => {
+    const answer: QuestionAnswer = { kind: "open", answerLines: 3 };
+    render(<AnswerEditor answer={answer} onChange={vi.fn()} />);
+    expectInk(screen.getByText(/Linhas de resposta/));
+  });
+});

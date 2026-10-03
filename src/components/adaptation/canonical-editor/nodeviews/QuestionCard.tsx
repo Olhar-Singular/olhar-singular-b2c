@@ -82,7 +82,7 @@ interface QuestionCardProps {
 
 function FieldLabel({ children }: { children: React.ReactNode }) {
   return (
-    <div className="mb-1.5 flex items-center gap-2 text-[11.5px] font-semibold uppercase tracking-wide text-surface-ink-faint">
+    <div className="mb-1.5 flex items-center gap-2 text-[11.5px] font-semibold uppercase tracking-wide text-surface-ink-soft">
       {children}
     </div>
   );

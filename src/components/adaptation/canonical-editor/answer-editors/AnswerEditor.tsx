@@ -338,7 +338,7 @@ export function AnswerEditor({
           <p role="status" className="sr-only">{orderingStatus}</p>
           {answer.items.map((item, index) => (
             <div key={item.id} className="flex items-center gap-2 min-w-0">
-              <span className="text-xs text-surface-ink-faint w-5">{index + 1}.</span>
+              <span className="text-xs text-surface-ink-soft w-5">{index + 1}.</span>
               <RichTextField
                 value={item.content}
                 disabled={disabled}
@@ -369,7 +369,7 @@ export function AnswerEditor({
           {answer.gaps.map((gap, index) => (
             <div key={gap.id} className="flex flex-col gap-1">
               <div className="flex items-center gap-2">
-                <label htmlFor={`${fieldIdPrefix}-gap-${gap.id}`} className="text-xs text-surface-ink-faint w-16 shrink-0 whitespace-nowrap">
+                <label htmlFor={`${fieldIdPrefix}-gap-${gap.id}`} className="text-xs text-surface-ink-soft w-16 shrink-0 whitespace-nowrap">
                   Lacuna {index + 1}
                 </label>
                 {/* The gap answer is the answer key (plain text, not formattable). */}
@@ -533,7 +533,7 @@ export function AnswerEditor({
     default:
       return (
         <div className="flex items-center gap-2" data-testid="answer-open">
-          <label htmlFor={`${fieldIdPrefix}-answer-lines`} className="text-xs text-surface-ink-faint">
+          <label htmlFor={`${fieldIdPrefix}-answer-lines`} className="text-xs text-surface-ink-soft">
             Linhas de resposta:
           </label>
           <Input

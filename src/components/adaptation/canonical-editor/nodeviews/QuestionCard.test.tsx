@@ -479,3 +479,32 @@ describe("QuestionCard — botões de remover campo (0373)", () => {
     expectTarget(screen.getByLabelText("Remover enunciado"));
   });
 });
+
+/**
+ * Achado 0467: os rótulos de seção do card ("Imagem / Conteúdo", "Instrução",
+ * "Enunciado") eram 11,5 px em `ink-faint` sobre o papel branco, 2,45:1 (WCAG
+ * 2.2 AA 1.4.3 pede 4,5:1). `ink-soft` mede 5,88:1.
+ */
+describe("QuestionCard — rótulos de seção legíveis (0467)", () => {
+  const expectInk = (text: string) => {
+    const el = screen.getByText(text);
+    expect(el.className).toMatch(/(^|\s)text-surface-ink-soft(\s|$)/);
+    expect(el.className).not.toMatch(/text-surface-ink-faint/);
+  };
+
+  it("Imagem / Conteúdo e Instrução usam ink-soft", () => {
+    setup({ instruction: [{ type: "text", text: "Marque a correta." }] });
+    expectInk("Imagem / Conteúdo");
+    expectInk("Instrução");
+  });
+
+  it("Enunciado abaixo da imagem usa ink-soft", () => {
+    setup({ enunciado: [{ type: "text", text: "Observe." }], enunciadoPosition: "below" });
+    expectInk("Enunciado");
+  });
+
+  it("Enunciado acima da imagem usa ink-soft", () => {
+    setup({ enunciado: [{ type: "text", text: "Observe." }], enunciadoPosition: "above" });
+    expectInk("Enunciado");
+  });
+});
