@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, waitFor, within } from "@testing-library/react";
 import { toast } from "sonner";
@@ -885,5 +886,96 @@ describe("StepActivityInput — focus return when the bank dialog closes (1127)"
     fireEvent.click(screen.getByRole("button", { name: /Adicionar 1/i }));
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
     expect(document.activeElement).toBe(trigger);
+  });
+});
+
+describe("StepActivityInput — removing a selected question keeps focus and is announced (1128)", () => {
+  const mk = (id: string, text: string) => ({ id, text, subject: "Física", topic: null, difficulty: null, image_url: null, options: null });
+  const qs = [mk("q1", "Questão um"), mk("q2", "Questão dois"), mk("q3", "Questão três"), mk("q4", "Questão quatro")];
+
+  function Harness({ initial }: { initial: typeof qs }) {
+    const [data, setData] = useState<WizardData>({
+      ...baseData,
+      selectedQuestions: initial,
+      activityText: initial.map((q, i) => `${i + 1}) ${q.text}`).join("\n\n"),
+    });
+    return (
+      <StepActivityInput
+        data={data}
+        updateData={(partial) => setData((d) => ({ ...d, ...partial }))}
+        onNext={vi.fn()}
+        onPrev={vi.fn()}
+      />
+    );
+  }
+
+  function openBankTab() {
+    fireEvent.click(screen.getByRole("button", { name: /^Banco de Questões$/i }));
+  }
+
+  it("gives each remove button a name that identifies its question", () => {
+    render(<Harness initial={qs} />);
+    openBankTab();
+    const names = screen.getAllByRole("button", { name: /Remover questão/i }).map((b) => b.getAttribute("aria-label"));
+    expect(names).toEqual(["Remover questão 1", "Remover questão 2", "Remover questão 3", "Remover questão 4"]);
+  });
+
+  it("moves focus to the next question's remove button instead of <body>", () => {
+    render(<Harness initial={qs} />);
+    openBankTab();
+    const third = screen.getByRole("button", { name: "Remover questão 3" });
+    third.focus();
+    fireEvent.click(third);
+    expect(screen.queryByText("Questão três")).not.toBeInTheDocument();
+    // The old 4th question is now the 3rd one.
+    expect(document.activeElement).toBe(screen.getByRole("button", { name: "Remover questão 3" }));
+    expect(document.activeElement).not.toBe(document.body);
+  });
+
+  it("falls back to the previous question when the last one is removed", () => {
+    render(<Harness initial={qs} />);
+    openBankTab();
+    fireEvent.click(screen.getByRole("button", { name: "Remover questão 4" }));
+    expect(document.activeElement).toBe(screen.getByRole("button", { name: "Remover questão 3" }));
+  });
+
+  it("falls back to the bank opener when the list empties", () => {
+    render(<Harness initial={[qs[0]]} />);
+    openBankTab();
+    fireEvent.click(screen.getByRole("button", { name: "Remover questão 1" }));
+    expect(document.activeElement).toBe(screen.getByRole("button", { name: /Abrir Banco de Questões/i }));
+  });
+
+  it("announces the removal and the new count in a polite live region", () => {
+    render(<Harness initial={qs} />);
+    openBankTab();
+    expect(screen.getByRole("status")).toBeEmptyDOMElement();
+    fireEvent.click(screen.getByRole("button", { name: "Remover questão 2" }));
+    expect(screen.getByRole("status")).toHaveTextContent("Questão removida. 3 questão(ões) selecionada(s).");
+  });
+
+  it("does not move focus nor announce when the user cancels the rebuild", () => {
+    const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(false);
+    function Edited() {
+      const [data, setData] = useState<WizardData>({ ...baseData, selectedQuestions: qs, activityText: "editado à mão" });
+      return <StepActivityInput data={data} updateData={(p) => setData((d) => ({ ...d, ...p }))} onNext={vi.fn()} onPrev={vi.fn()} />;
+    }
+    render(<Edited />);
+    openBankTab();
+    const second = screen.getByRole("button", { name: "Remover questão 2" });
+    second.focus();
+    fireEvent.click(second);
+    expect(document.activeElement).toBe(second);
+    expect(screen.getByRole("status")).toBeEmptyDOMElement();
+    confirmSpy.mockRestore();
+  });
+
+  it("uses a remove target larger than 24x24", () => {
+    render(<Harness initial={qs} />);
+    openBankTab();
+    const btn = screen.getByRole("button", { name: "Remover questão 1" });
+    expect(btn.className).not.toMatch(/\bh-6\b/);
+    expect(btn.className).toMatch(/\bh-8\b/);
+    expect(btn.className).toMatch(/\bw-8\b/);
   });
 });

@@ -107,6 +107,12 @@ export function StepActivityInput({ data, updateData, onNext, onPrev }: Props) {
   // 1127: the dialog is opened by state, with no `DialogTrigger`, so Radix
   // would restore focus to `<body>` on close. Hand it back to the opener.
   const bankTriggerRef = useRef<HTMLButtonElement>(null);
+  // 1128: the remove button unmounts with its card, which would drop focus on
+  // <body>. Remember where focus should land (the question now at that
+  // position, else the opener) and move it once the new list has rendered.
+  const removeButtonRefs = useRef(new Map<string, HTMLButtonElement>());
+  const pendingRemoveFocusRef = useRef<string | null>(null);
+  const [removeAnnouncement, setRemoveAnnouncement] = useState("");
   const [bankQuestions, setBankQuestions] = useState<BankQuestion[]>([]);
   const [bankSearch, setBankSearch] = useState("");
   const [bankLoading, setBankLoading] = useState(false);
@@ -242,9 +248,21 @@ export function StepActivityInput({ data, updateData, onNext, onPrev }: Props) {
 
   function removeQuestion(id: string) {
     if (!canRebuildActivityText()) return;
+    const index = data.selectedQuestions.findIndex((q) => q.id === id);
     const updated = data.selectedQuestions.filter((q) => q.id !== id);
+    // Next question (now at the same index), else the previous one, else the opener.
+    pendingRemoveFocusRef.current = updated[Math.min(index, updated.length - 1)]?.id ?? "";
+    setRemoveAnnouncement(`Questão removida. ${updated.length} questão(ões) selecionada(s).`);
     updateData({ selectedQuestions: updated, activityText: buildActivityText(updated), result: null });
   }
+
+  useEffect(() => {
+    const target = pendingRemoveFocusRef.current;
+    if (target === null) return;
+    pendingRemoveFocusRef.current = null;
+    const button = target ? removeButtonRefs.current.get(target) : bankTriggerRef.current;
+    button?.focus();
+  }, [data.selectedQuestions]);
 
   // ── Render ────────────────────────────────────────────────────────────────
 
@@ -341,10 +359,14 @@ export function StepActivityInput({ data, updateData, onNext, onPrev }: Props) {
               {data.selectedQuestions.map((q, i) => (
                 <div key={q.id} className="border rounded-lg p-3 bg-muted/30 relative group">
                   <Button
+                    ref={(el) => {
+                      if (el) removeButtonRefs.current.set(q.id, el);
+                      else removeButtonRefs.current.delete(q.id);
+                    }}
                     size="icon"
                     variant="ghost"
-                    aria-label="Remover questão"
-                    className="absolute top-1 right-1 h-6 w-6"
+                    aria-label={`Remover questão ${i + 1}`}
+                    className="absolute top-1 right-1 h-8 w-8"
                     onClick={() => removeQuestion(q.id)}
                   >
                     <X className="w-3 h-3" />
@@ -352,7 +374,7 @@ export function StepActivityInput({ data, updateData, onNext, onPrev }: Props) {
                   <div className="flex gap-3">
                     <span className="text-xs font-bold text-primary shrink-0 mt-0.5">{i + 1})</span>
                     <div className="flex-1 min-w-0 space-y-2">
-                      <p className="text-sm line-clamp-3 pr-6">{q.text}</p>
+                      <p className="text-sm line-clamp-3 pr-8">{q.text}</p>
                       {q.image_url && (
                         <div
                           className="inline-block cursor-zoom-in"
@@ -394,6 +416,8 @@ export function StepActivityInput({ data, updateData, onNext, onPrev }: Props) {
           {error && (
             <p role="alert" className="text-sm text-destructive-strong">{error}</p>
           )}
+
+          <p role="status" aria-live="polite" className="sr-only">{removeAnnouncement}</p>
         </div>
       )}
 
