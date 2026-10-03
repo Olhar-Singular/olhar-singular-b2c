@@ -689,6 +689,46 @@ describe("StepReview", () => {
       expect(screen.getByLabelText("Pasta")).toHaveTextContent("6º ano B");
     });
 
+    it("fecha o campo de nova pasta quando o salvar cria a pasta e a seleciona (0508)", async () => {
+      // O wizard cria a pasta no salvar e devolve o id novo em `folderId` (e o
+      // nome vazio em `newFolder`). O campo tem que fechar: aberto e vazio, ele
+      // contradiz o gatilho e o próximo salvar tentaria criar outra pasta.
+      useCanonicalEditor.mockReturnValue({ editor: fakeEditor });
+      const base = {
+        document: DOC,
+        metadata: METADATA,
+        onDocumentChange: vi.fn(),
+        onRegenerate: vi.fn(),
+        onNext: vi.fn(),
+        onPrev: vi.fn(),
+        onFolderChange: vi.fn(),
+        onNewFolderChange: vi.fn(),
+      };
+      const { rerender } = render(
+        <StepReview {...base} folders={FOLDERS} folderId={null} newFolder="" />,
+      );
+      fireEvent.click(screen.getByLabelText("Pasta"));
+      await waitFor(() => screen.getByRole("option", { name: /Nova pasta/i }));
+      fireEvent.click(screen.getByRole("option", { name: /Nova pasta/i }));
+      await screen.findByLabelText("Nome da nova pasta");
+      rerender(
+        <StepReview {...base} folders={FOLDERS} folderId={null} newFolder="Turma A" />,
+      );
+      expect(screen.getByLabelText("Nome da nova pasta")).toBeInTheDocument();
+      rerender(
+        <StepReview
+          {...base}
+          folders={[...FOLDERS, { id: "f9", name: "Turma A" }]}
+          folderId="f9"
+          newFolder=""
+        />,
+      );
+      await waitFor(() =>
+        expect(screen.queryByLabelText("Nome da nova pasta")).not.toBeInTheDocument(),
+      );
+      expect(screen.getByLabelText("Pasta")).toHaveTextContent("Turma A");
+    });
+
     it("deixa as outras teclas passarem no campo de nova pasta", async () => {
       // Só o Escape é interceptado (e tem `stopPropagation`). Qualquer outra
       // tecla precisa seguir para o campo, senão não daria para digitar o nome

@@ -1,4 +1,4 @@
-import { useId, useMemo, useRef, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
@@ -176,6 +176,12 @@ export function StepReview({
   // campo. Por isso o foco é redirecionado no `onCloseAutoFocus` (o hook que o
   // Radix expõe justamente para isso), com estas duas refs: uma marca que o
   // fechamento em curso veio de "+ Nova pasta…", a outra aponta para o campo.
+  // 0508 — o salvar do wizard cria a pasta e devolve o id dela em `folderId`.
+  // A pasta passou a ser a escolhida, então o modo "nova pasta" acabou: sem
+  // isto o campo ficava aberto e vazio, e o próximo salvar criaria outra pasta.
+  useEffect(() => {
+    setCreatingFolder(false);
+  }, [folderId]);
   const newFolderRef = useRef<HTMLInputElement>(null);
   const focusNewFolder = useRef(false);
   const folderTriggerRef = useRef<HTMLButtonElement>(null);
