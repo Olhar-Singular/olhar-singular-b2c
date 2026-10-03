@@ -130,6 +130,7 @@ export function ExportPanel({
    * o botão volta a ser focável).
    */
   const pdfTriggerRef = useRef<HTMLButtonElement>(null);
+  const copyTriggerRef = useRef<HTMLButtonElement>(null);
   const wordTriggerRef = useRef<HTMLButtonElement>(null);
   const restoreFocusRef = useRef<"pdf" | "word" | null>(null);
 
@@ -236,8 +237,8 @@ export function ExportPanel({
     const { format } = pending;
     setPending(null);
     if (format === "copy") {
-      // O botão "Copiar" nunca fica desabilitado, então o Radix devolve o foco
-      // a ele sozinho: nada a restaurar à mão aqui.
+      // O botão "Copiar" nunca fica desabilitado: quem devolve o foco a ele é
+      // o `onCloseAutoFocus` do diálogo, já no fechamento (0376).
       void runCopy();
       return;
     }
@@ -329,7 +330,7 @@ export function ExportPanel({
       </div>
 
       <div className="flex flex-wrap gap-2">
-        <Button variant="outline" onClick={handleCopy}>
+        <Button ref={copyTriggerRef} variant="outline" onClick={handleCopy}>
           <Copy className="mr-1 h-4 w-4" /> Copiar
         </Button>
         <Button ref={pdfTriggerRef} variant="outline" onClick={handleExport} disabled={exporting}>
@@ -362,13 +363,15 @@ export function ExportPanel({
               // No caminho de confirmar o gatilho fica `disabled` no mesmo
               // commit: focar aqui é no-op e quem devolve o foco é o efeito
               // acima, quando a geração termina (0419). O "Copiar" nunca
-              // desabilita e o Radix já o devolve sozinho.
-              if (shown.format === "copy") return;
+              // desabilita, mas o Radix NÃO o devolve sozinho: o handler padrão
+              // faz `preventDefault` e foca o `triggerRef`, `null` aqui (0376).
+              // Então ele é focado já, em qualquer saída.
               event.preventDefault();
               // O Radix dispara este evento num timeout: o painel inteiro pode
               // já ter desmontado (troca de passo, navegação), e aí não há
               // gatilho para focar.
-              (shown.format === "pdf" ? pdfTriggerRef : wordTriggerRef).current?.focus();
+              const triggerRefs = { copy: copyTriggerRef, pdf: pdfTriggerRef, word: wordTriggerRef };
+              triggerRefs[shown.format].current?.focus();
             }}
           >
             <AlertDialogHeader>

@@ -754,6 +754,47 @@ describe("foco depois de desistir do aviso (0361)", () => {
 });
 
 // ---------------------------------------------------------------------------
+// 0376 — o aviso do "Copiar" também largava o foco no BODY em todas as saídas:
+// o handler padrão do Radix faz `preventDefault` e foca o `triggerRef`, que é
+// `null` num diálogo aberto por estado. Não é verdade que o Radix devolve sozinho.
+// ---------------------------------------------------------------------------
+
+describe("foco depois do aviso do Copiar (0376)", () => {
+  const openCopyWarning = async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.assign(navigator, { clipboard: { writeText } });
+    render(<ExportPanel document={mathDocument} onDownload={vi.fn()} />);
+    const trigger = screen.getByRole("button", { name: "Copiar" });
+    trigger.focus();
+    fireEvent.click(trigger);
+    const dialog = await screen.findByRole("alertdialog");
+    return { trigger, dialog, writeText };
+  };
+
+  it("devolve o foco ao botão 'Copiar' ao confirmar", async () => {
+    const { trigger, writeText } = await openCopyWarning();
+    fireEvent.click(screen.getByRole("button", { name: /Copiar mesmo assim/i }));
+
+    await waitFor(() => expect(writeText).toHaveBeenCalled());
+    await waitFor(() => expect(globalThis.document.activeElement).toBe(trigger));
+  });
+
+  it("devolve o foco ao botão 'Copiar' ao cancelar", async () => {
+    const { trigger } = await openCopyWarning();
+    fireEvent.click(screen.getByRole("button", { name: /Cancelar/i }));
+
+    await waitFor(() => expect(globalThis.document.activeElement).toBe(trigger));
+  });
+
+  it("devolve o foco ao botão 'Copiar' ao fechar com Escape", async () => {
+    const { trigger, dialog } = await openCopyWarning();
+    fireEvent.keyDown(dialog, { key: "Escape", code: "Escape" });
+
+    await waitFor(() => expect(globalThis.document.activeElement).toBe(trigger));
+  });
+});
+
+// ---------------------------------------------------------------------------
 // 0360 — a exportação DIRETA (documento sem imagem e sem fórmula, que não abre
 // aviso nenhum) também larga o foco no BODY: `setExporting(true)` desabilita o
 // próprio gatilho focado no mesmo commit. É o caminho mais comum do produto, e
