@@ -2,7 +2,7 @@ import { useEffect, useId, useRef, useState } from "react";
 import { AlignLeft, AlignCenter, AlignRight, Captions, CaptionsOff, Crop, ImageIcon, Trash2 } from "lucide-react";
 import { NodeViewWrapper, type NodeViewProps } from "@tiptap/react";
 import { toast } from "sonner";
-import { FOLHA_BUTTON, FOLHA_GHOST, FOLHA_INPUT, FOLHA_RAIL, FOLHA_RAIL_HOST, FOLHA_SELECTED, FOLHA_TOUCH_TARGET } from "../folhaChrome";
+import { FOLHA_BUTTON, FOLHA_CHROME_UNSCALED, FOLHA_GHOST, FOLHA_INPUT, FOLHA_RAIL, FOLHA_RAIL_HOST, FOLHA_SELECTED, FOLHA_TOUCH_TARGET } from "../folhaChrome";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -223,7 +223,7 @@ export function ImageNodeView({ node, updateAttributes, deleteNode, editor, getP
           type="button"
           variant="outline"
           size="sm"
-          className={cn("gap-1", FOLHA_BUTTON)}
+          className={cn("gap-1", FOLHA_BUTTON, FOLHA_TOUCH_TARGET)}
           disabled={disabled}
           onClick={() => setModalOpen(true)}
           aria-label="Trocar ou adicionar imagem"
@@ -241,7 +241,7 @@ export function ImageNodeView({ node, updateAttributes, deleteNode, editor, getP
             type="button"
             variant="outline"
             size="sm"
-            className={cn("gap-1", FOLHA_BUTTON)}
+            className={cn("gap-1", FOLHA_BUTTON, FOLHA_TOUCH_TARGET)}
             disabled={disabled || cropping}
             onClick={() => setCropOpen(true)}
             aria-label="Recortar do original"
@@ -261,7 +261,7 @@ export function ImageNodeView({ node, updateAttributes, deleteNode, editor, getP
             type="button"
             variant="ghost"
             size="sm"
-            className={cn("gap-1", FOLHA_GHOST)}
+            className={cn("gap-1", FOLHA_GHOST, FOLHA_TOUCH_TARGET)}
             disabled={disabled}
             onClick={() => updateAttributes({ caption: [] })}
             aria-label="Adicionar legenda"
@@ -294,7 +294,9 @@ export function ImageNodeView({ node, updateAttributes, deleteNode, editor, getP
           type="button"
           variant="ghost"
           size="sm"
-          className="gap-1 text-destructive hover:bg-surface-mesa hover:text-destructive"
+          // 0381 — o piso do 0236 vale também para os `sm`: a 42% eles
+          // chegavam a 17 x 15 px, e este é o destrutivo do rail.
+          className={cn("gap-1 text-destructive hover:bg-surface-mesa hover:text-destructive", FOLHA_TOUCH_TARGET)}
           disabled={disabled}
           onClick={() => setConfirmDeleteOpen(true)}
           aria-label="Excluir imagem"
@@ -319,7 +321,10 @@ export function ImageNodeView({ node, updateAttributes, deleteNode, editor, getP
           /* 0342 — o `<Input>` cru pinta `border-input bg-background`: some
              no papel (1,09:1) no tema claro e vira laje escura no tema
              escuro. Chrome sobre a folha usa a paleta da folha. */
-          className={cn("h-8 w-56 text-xs", FOLHA_INPUT)}
+          /* 0381 — o piso de alvo não resolve o corpo: o `text-xs` chegava a
+             ~5px na folha a 42%. O campo é formulário do app, não impresso,
+             então sai da escala como o card da questão (0374). */
+          className={cn("h-8 w-56 text-xs", FOLHA_INPUT, FOLHA_CHROME_UNSCALED)}
           onChange={(e) => updateAttributes({ alt: e.target.value })}
         />
       </div>

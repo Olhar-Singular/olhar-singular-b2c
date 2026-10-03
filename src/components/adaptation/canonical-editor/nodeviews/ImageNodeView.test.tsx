@@ -365,6 +365,29 @@ describe("ImageNodeView", () => {
     );
   });
 
+  /*
+    Achado 0381: o 0236 levou o piso só aos botões de ícone do rail. Os de
+    tamanho `sm` (36px declarados) chegavam a 15px de altura na folha a 42%
+    (390px), inclusive "Excluir imagem", a ação destrutiva do rail.
+  */
+  it("todo botão sm do rail sobrevive a escala da folha (achado 0381)", () => {
+    const { props } = makeProps({ caption: null }, true, { file: pdfFile() });
+    render(<ImageNodeView {...props} />);
+    for (const name of ["Excluir imagem", "Trocar ou adicionar imagem", "Adicionar legenda", "Recortar do original"]) {
+      expect(screen.getByRole("button", { name }).className).toMatch(/(^|\s)folha-touch-target(\s|$)/);
+    }
+  });
+
+  /*
+    Achado 0381: o piso de alvo não resolve o corpo do campo de alt: o `text-xs`
+    chegava à tela com ~5px a 42%. O campo sai da escala da folha (mesma
+    ferramenta do card da questão, 0374), ficando legível no tamanho do app.
+  */
+  it("o campo de texto alternativo sai da escala da folha (achado 0381)", () => {
+    renderImage();
+    expect(screen.getByLabelText("Texto alternativo").className).toMatch(/(^|\s)folha-chrome-unscaled(\s|$)/);
+  });
+
   it("clicar remover legenda chama updateAttributes com null", () => {
     const { props, updateAttributes } = makeProps({ caption: [{ type: "text", text: "cap" }] });
     render(<ImageNodeView {...props} />);
