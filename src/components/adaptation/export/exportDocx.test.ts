@@ -1742,9 +1742,9 @@ describe("0269 · entrelinha e vão entre blocos no Word", () => {
     // Stem: 6pt (QUESTION_INNER_GAP_PT) = 120 twips entre os blocos do enunciado.
     expect(docxNodeAttrs(byText("primeiro"), "w:spacing")).toEqual({ after: 120 });
     expect(docxNodeAttrs(byText("segundo"), "w:spacing")).toEqual({ after: 120 });
-    // Enunciado e instrução: `marginBottom: 4` do PdfQuestion = 80 twips.
-    expect(docxNodeAttrs(byText("Leia com"), "w:spacing")).toEqual({ after: 80 });
-    expect(docxNodeAttrs(byText("Escreva nas"), "w:spacing")).toEqual({ after: 80 });
+    // Enunciado e instrução: o mesmo vão interno de 6pt (achado 0270) = 120 twips.
+    expect(docxNodeAttrs(byText("Leia com"), "w:spacing")).toEqual({ after: 120 });
+    expect(docxNodeAttrs(byText("Escreva nas"), "w:spacing")).toEqual({ after: 120 });
     // O parágrafo que fecha a questão mede EXATAMENTE o vão do documento.
     const closing = blocks[blocks.length - 1];
     expect(docxText(closing)).toBe("");

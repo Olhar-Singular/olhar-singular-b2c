@@ -253,12 +253,12 @@ const pxToTwips = (px: number): number => Math.round(pxToPt(px) * 20);
  *   o `blockGap` que `AdaptationPdf` dá a todo bloco de topo sem `spacingAfter`.
  * - `QUESTION_INNER_GAP_TWIPS`: 6pt entre os blocos do stem, o
  *   `QUESTION_INNER_GAP_PT` do `PdfQuestion`.
- * - `QUESTION_PART_GAP_TWIPS`: 4pt depois do enunciado e da instrução, o
- *   `marginBottom: 4` das duas `View` do `PdfQuestion`.
+ * - `QUESTION_PART_GAP_TWIPS`: 6pt depois do enunciado e da instrução, o
+ *   mesmo `QUESTION_INNER_GAP_PT` que o `PdfQuestion` usa ali (achado 0270).
  */
 const DEFAULT_BLOCK_GAP_TWIPS = pxToTwips(BASE_BLOCK_SPACING_PX);
 const QUESTION_INNER_GAP_TWIPS = ptToTwip(6);
-const QUESTION_PART_GAP_TWIPS = ptToTwip(4);
+const QUESTION_PART_GAP_TWIPS = ptToTwip(6);
 /** An allowed palette color in the docx unit (raw hex, no `#`); `undefined` otherwise. */
 const docxColor = (color?: string): string | undefined =>
   color !== undefined && isAllowedColor(color) ? color.slice(1).toUpperCase() : undefined;

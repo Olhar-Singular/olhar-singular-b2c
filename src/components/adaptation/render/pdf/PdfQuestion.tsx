@@ -52,6 +52,9 @@ const DEFAULT_ELEMENT_SIZES = resolveElementFontSizes(resolvePageStyle());
  * documento: dois paragrafos do mesmo enunciado saiam com o dobro do respiro da
  * previa. 6pt = 8px, o mesmo que as duas telas usam entre irmaos do stem
  * (`space-y-2` no QuestionView, `p + p` do `.question-stem` na folha).
+ * Vale tambem depois do enunciado e da instrucao (achado 0270): o papel usava
+ * 4pt ali e as telas 8px, e a previa, que pagina sobre essa geometria, empurrava
+ * blocos para folhas onde o arquivo nao os punha.
  */
 const QUESTION_INNER_GAP_PT = 6;
 
@@ -82,7 +85,7 @@ export function PdfQuestion({
 
   const enunciadoView = (prefix?: ReactNode) =>
     hasEnunciado ? (
-      <View style={{ marginBottom: 4 }}>
+      <View style={{ marginBottom: QUESTION_INNER_GAP_PT }}>
         <Text style={{ ...pdfTextSize(elementSizes.stem) }}>
           {prefix}
           <PdfRichText content={block.enunciado!} fontSize={elementSizes.stem} />
@@ -160,7 +163,7 @@ export function PdfQuestion({
       {body}
 
       {block.instruction && (
-        <View style={{ marginBottom: 4 }}>
+        <View style={{ marginBottom: QUESTION_INNER_GAP_PT }}>
           <Text style={{ fontStyle: "italic", color: INK_MUTED, ...pdfTextSize(elementSizes.instruction) }}>
             <PdfRichText content={block.instruction} fontSize={elementSizes.instruction} />
           </Text>
