@@ -758,6 +758,23 @@ describe("QuestionNodeView — card open / commit / cancel", () => {
     expect(document.activeElement).toBe(screen.getByLabelText("Editar questão"));
   });
 
+  // Achado 0466: o listener do Escape era registrado só quando `expanded` mudava
+  // e guardava o `handleCancel` daquele render. Com o enunciado editado no card,
+  // o nó cresce, e o Escape trocava só o trecho [pos, pos + tamanho ANTIGO]: o
+  // resto do enunciado sobrava como uma questão fantasma, o nodeview era
+  // recriado e o foco caía no <body>. O Escape tem de usar o nó atual, igual ao
+  // "Cancelar".
+  it("Escape restaura o nó pelo tamanho ATUAL depois de o enunciado mudar (achado 0466)", () => {
+    const { props, mockTr } = makeProps(mc);
+    const { rerender } = render(<QuestionNodeView {...props} />);
+    fireEvent.click(screen.getByLabelText("Editar questão"));
+    const grown = { ...props.node, nodeSize: 14 } as unknown as NodeViewProps["node"];
+    rerender(<QuestionNodeView {...props} node={grown} />);
+    fireEvent.keyDown(document, { key: "Escape" });
+    expect(mockTr.replaceWith).toHaveBeenCalledWith(100, 114, expect.anything());
+    expect(document.activeElement).toBe(screen.getByLabelText("Editar questão"));
+  });
+
   it("ignores non-Escape keys while the card is open", () => {
     const { props } = makeProps(mc);
     render(<QuestionNodeView {...props} />);

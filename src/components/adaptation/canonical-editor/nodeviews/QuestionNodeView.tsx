@@ -135,17 +135,6 @@ export function QuestionNodeView({ node, updateAttributes, editor, getPos, delet
     editButtonRef.current?.focus();
   }, [expanded]);
 
-  // Esc closes the open card (coordination is React/editor state, not the doc).
-  useEffect(() => {
-    if (!expanded) return;
-    const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") handleCancel();
-    };
-    document.addEventListener("keydown", onKeyDown);
-    return () => document.removeEventListener("keydown", onKeyDown);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [expanded]);
-
   // Tiptap's `getPos()` can return `undefined` transiently (initial mount /
   // edit-mode rehydration) and may be stale right after a move transaction
   // dispatches. Derive the live position from the current doc state instead;
@@ -225,6 +214,22 @@ export function QuestionNodeView({ node, updateAttributes, editor, getPos, delet
     }
     closeCard();
   };
+
+  // Esc closes the open card (coordination is React/editor state, not the doc).
+  // Achado 0466: o listener chama o `handleCancel` do render ATUAL pela ref. O
+  // do render em que o card abriu guardava o `node` daquele momento, e depois de
+  // editar o enunciado o Escape trocava só parte do nó (tamanho antigo): sobrava
+  // uma questão fantasma, o nodeview era recriado e o foco caía no <body>.
+  const cancelRef = useRef(handleCancel);
+  cancelRef.current = handleCancel;
+  useEffect(() => {
+    if (!expanded) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") cancelRef.current();
+    };
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [expanded]);
 
   /** Restaurar original: replace the entire node with the session-start snapshot. */
   const handleReset = () => {
