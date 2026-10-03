@@ -55,17 +55,47 @@ export interface AdaptationInsertClient {
 }
 
 /**
- * Human title for the history list, derived from the first line of the pasted
- * activity. Mirrors what the client used to do at insert time — the "Título"
- * field on the Exportar step overwrites it later via the autosave patch.
+ * Name used when the document has neither a manual `header.title` nor a heading.
+ * Must equal `FALLBACK_TITLE` in `src/components/adaptation/titleField.ts`
+ * (that module lives behind the `@/` alias, which Deno cannot resolve).
  */
-export function deriveAdaptationTitle(activityText: string): string {
-  const trimmed = activityText.trim();
-  if (!trimmed) return "Adaptação sem título";
-  const firstLine = trimmed.split("\n")[0];
-  return firstLine.length > MAX_TITLE_CHARS
-    ? `${firstLine.slice(0, MAX_TITLE_CHARS - 3)}…`
-    : firstLine;
+export const FALLBACK_TITLE = "Atividade adaptada";
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
+function inlineText(content: unknown): string {
+  if (!Array.isArray(content)) return "";
+  return content
+    .map((n) => (isRecord(n) && n.type === "text" && typeof n.text === "string" ? n.text : ""))
+    .join("")
+    .trim();
+}
+
+/**
+ * Human title for the history list, derived from the GENERATED DOCUMENT.
+ *
+ * Achado 0458: this used to be the first line of the pasted activity, which in
+ * a pasted test is question 1 with its alternatives. The list then showed that
+ * raw line while the Revisar step suggested the document heading (and the sheet
+ * printed it), so the teacher looked for one name and found another. Now the
+ * row starts with the same derivation the Revisar uses (`documentTitle`): a
+ * manual `header.title` if present, else the first heading, else the fallback.
+ * The autosave still overwrites the column once the teacher names it.
+ */
+export function deriveAdaptationTitle(adaptationResult: unknown): string {
+  if (!isRecord(adaptationResult)) return FALLBACK_TITLE;
+  // `header` is a sibling of `document` inside the result (AdaptationResultSchema).
+  const header = adaptationResult.header;
+  let title = isRecord(header) && typeof header.title === "string" ? header.title.trim() : "";
+  const doc = adaptationResult.document;
+  if (!title && isRecord(doc) && Array.isArray(doc.blocks)) {
+    const heading = doc.blocks.find((b) => isRecord(b) && b.type === "heading");
+    title = isRecord(heading) ? inlineText(heading.content) : "";
+  }
+  if (!title) return FALLBACK_TITLE;
+  return title.length > MAX_TITLE_CHARS ? `${title.slice(0, MAX_TITLE_CHARS - 3)}…` : title;
 }
 
 function asTextOrNull(value: unknown): string | null {
@@ -84,7 +114,7 @@ export function buildAdaptationInsert(
   return {
     user_id: input.userId,
     request_id: input.requestId,
-    title: deriveAdaptationTitle(input.originalActivity),
+    title: deriveAdaptationTitle(input.adaptationResult),
     original_activity: input.originalActivity,
     activity_type: asTextOrNull(input.activityType),
     barrier_profile_id: asUuidOrNull(input.barrierProfileId),
