@@ -169,6 +169,68 @@ describe("AnswerEditor — ordering", () => {
     expect(screen.getByLabelText("Mover item 2 para cima")).toBeEnabled();
     expect(screen.getByLabelText("Mover item 2 para baixo")).toBeDisabled();
   });
+
+  // Achado 0463: mover reordenava em silêncio para quem usa leitor de tela.
+  describe("anúncio e foco ao mover (0463)", () => {
+    const four: QuestionAnswer = {
+      kind: "ordering",
+      items: [
+        t("Evaporação"),
+        [...t("Condensação a "), { type: "inlineMath" as const, latex: "x^2" }],
+        [],
+        t("Infiltração"),
+      ].map((content, i) => ({
+        id: `${i + 1}${i + 1}${i + 1}${i + 1}${i + 1}${i + 1}${i + 1}${i + 1}-0000-4000-8000-000000000000`,
+        content,
+        position: i,
+      })),
+    };
+    function Harness() {
+      const [value, setValue] = useState<QuestionAnswer>(four);
+      return <AnswerEditor answer={value} onChange={setValue} />;
+    }
+
+    it("anuncia o item movido e a nova posição", () => {
+      render(<Harness />);
+      expect(screen.getByRole("status")).toHaveTextContent("");
+      fireEvent.click(screen.getByRole("button", { name: "Mover item 1 para baixo" }));
+      expect(screen.getByRole("status")).toHaveTextContent("Evaporação movido para a posição 2 de 4");
+      fireEvent.click(screen.getByRole("button", { name: "Mover item 2 para cima" }));
+      expect(screen.getByRole("status")).toHaveTextContent("Evaporação movido para a posição 1 de 4");
+    });
+
+    it("item sem texto é anunciado pelo nome genérico", () => {
+      render(<Harness />);
+      fireEvent.click(screen.getByRole("button", { name: "Mover item 3 para cima" }));
+      expect(screen.getByRole("status")).toHaveTextContent("Item movido para a posição 2 de 4");
+    });
+
+    it("fórmula do item entra no anúncio pelo LaTeX", () => {
+      render(<Harness />);
+      fireEvent.click(screen.getByRole("button", { name: "Mover item 2 para baixo" }));
+      expect(screen.getByRole("status")).toHaveTextContent("Condensação a x^2 movido para a posição 3 de 4");
+    });
+
+    it("chegando à ponta, o foco vai para a seta oposta da mesma linha", () => {
+      render(<Harness />);
+      const down = screen.getByRole("button", { name: "Mover item 3 para baixo" });
+      down.focus();
+      fireEvent.click(down);
+      expect(screen.getByRole("button", { name: "Mover item 4 para cima" })).toHaveFocus();
+      const up = screen.getByRole("button", { name: "Mover item 2 para cima" });
+      up.focus();
+      fireEvent.click(up);
+      expect(screen.getByRole("button", { name: "Mover item 1 para baixo" })).toHaveFocus();
+    });
+
+    it("no meio da lista o foco continua na seta usada", () => {
+      render(<Harness />);
+      const down = screen.getByRole("button", { name: "Mover item 1 para baixo" });
+      down.focus();
+      fireEvent.click(down);
+      expect(screen.getByRole("button", { name: "Mover item 2 para baixo" })).toHaveFocus();
+    });
+  });
 });
 
 describe("AnswerEditor — fillBlank", () => {

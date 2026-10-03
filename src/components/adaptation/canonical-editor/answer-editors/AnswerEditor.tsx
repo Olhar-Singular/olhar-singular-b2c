@@ -174,6 +174,29 @@ export function AnswerEditor({
     onChange(next);
   };
   const addGapRef = useRef<HTMLButtonElement>(null);
+  /**
+   * Achado 0463: mover um item da ordenação reordenava em silêncio para o leitor
+   * de tela (o botão focado anda com a linha e só troca de nome). Cada movimento
+   * anuncia o item e a nova posição, no padrão do `tableStatus` (0267); e, se o
+   * item chegou à ponta, a seta usada fica desabilitada, então o foco vai para a
+   * seta oposta da mesma linha.
+   */
+  const [orderingStatus, setOrderingStatus] = useState("");
+  const moveOrderingItem = (
+    ordering: Extract<QuestionAnswer, { kind: "ordering" }>,
+    from: number,
+    to: number,
+  ) => {
+    const last = ordering.items.length - 1;
+    const text = ordering.items[from].content
+      .map((node) => (node.type === "text" ? node.text : node.latex))
+      .join("")
+      .trim();
+    if (to === 0) focusLabel.current = "Mover item 1 para baixo";
+    else if (to === last) focusLabel.current = `Mover item ${to + 1} para cima`;
+    onChange(reorderOrdering(ordering, from, to));
+    setOrderingStatus(`${text || "Item"} movido para a posição ${to + 1} de ${last + 1}`);
+  };
   switch (answer.kind) {
     case "multipleChoice":
       return (
@@ -312,6 +335,7 @@ export function AnswerEditor({
     case "ordering":
       return (
         <div ref={rootRef} className="flex flex-col gap-2" data-testid="answer-ordering">
+          <p role="status" className="sr-only">{orderingStatus}</p>
           {answer.items.map((item, index) => (
             <div key={item.id} className="flex items-center gap-2 min-w-0">
               <span className="text-xs text-surface-ink-faint w-5">{index + 1}.</span>
@@ -322,10 +346,10 @@ export function AnswerEditor({
                 placeholder="Item"
                 ariaLabel={`Item ${index + 1}`}
               />
-              <IconButton onClick={() => onChange(reorderOrdering(answer, index, index - 1))} title="Mover para cima" label={`Mover item ${index + 1} para cima`} disabled={disabled || index === 0}>
+              <IconButton onClick={() => moveOrderingItem(answer, index, index - 1)} title="Mover para cima" label={`Mover item ${index + 1} para cima`} disabled={disabled || index === 0}>
                 <ArrowUp className="w-3.5 h-3.5" />
               </IconButton>
-              <IconButton onClick={() => onChange(reorderOrdering(answer, index, index + 1))} title="Mover para baixo" label={`Mover item ${index + 1} para baixo`} disabled={disabled || index === answer.items.length - 1}>
+              <IconButton onClick={() => moveOrderingItem(answer, index, index + 1)} title="Mover para baixo" label={`Mover item ${index + 1} para baixo`} disabled={disabled || index === answer.items.length - 1}>
                 <ArrowDown className="w-3.5 h-3.5" />
               </IconButton>
               <IconButton onClick={() => removeItem(removeOrderingItem(answer, item.id), index, answer.items.length, (n) => `Remover item ${n + 1}`)} title="Remover item" label={`Remover item ${index + 1}`} disabled={disabled}>
