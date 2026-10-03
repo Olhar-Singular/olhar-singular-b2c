@@ -45,6 +45,15 @@ describe("PageSheet", () => {
     expect(mesa.className).not.toMatch(/max-h-\[calc\(/);
   });
 
+  it("a moldura da folha não rola na vertical (achado 1104)", () => {
+    render(<PageSheet toolbar={null}><span>x</span></PageSheet>);
+    const frame = screen.getByTestId("page-sheet").parentElement!.parentElement!;
+    // Com só `overflow-x-auto`, o eixo Y vira `auto` pela regra do CSS: 1 px de
+    // excesso sobre a altura fixa da caixa interna já desenha uma segunda barra.
+    expect(frame.className).toContain("overflow-x-auto");
+    expect(frame.className).toContain("overflow-y-hidden");
+  });
+
   it("mantém a barra visível enquanto a página rola (sticky)", () => {
     render(<PageSheet toolbar={<div>BARRA</div>}><span>x</span></PageSheet>);
     const bar = screen.getByText("BARRA").parentElement!;

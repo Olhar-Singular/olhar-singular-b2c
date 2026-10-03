@@ -956,7 +956,7 @@ export function PageSheet({
               prometido pelo CSS que não podia acontecer.
             */
             className={cn(
-              "overflow-x-auto",
+              "overflow-x-auto overflow-y-hidden",
               needsKeyboardScroll &&
                 "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
             )}
@@ -966,6 +966,11 @@ export function PageSheet({
               seja ele mesmo focável. Sem isto o Tab pulava da folha direto
               para os botões do rodapé e o texto escondido ficava
               inalcançável por teclado (WCAG 2.1.1).
+
+              Achado 1104: `overflow-y-hidden` explícito. Com só `overflow-x-auto`
+              o CSS promove o eixo Y a `auto`, e qualquer fração de pixel além da
+              altura fixa da caixa interna (ex.: com o card aberto) vira uma
+              segunda barra vertical na mesa. Só a página rola (achado 0008).
             */
             tabIndex={needsKeyboardScroll ? 0 : undefined}
             role={needsKeyboardScroll ? "region" : undefined}
