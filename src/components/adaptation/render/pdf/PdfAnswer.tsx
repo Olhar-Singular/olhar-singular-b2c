@@ -432,9 +432,6 @@ export function PdfAnswer({
         // ter a mesma altura de linha (achado 0607).
         padding: TABLE_CELL_PADDING_PT,
       } as const;
-      // Altura de uma linha de uma só linha de texto: corpo x entrelinha, mais
-      // o recuo das duas bordas da célula e o fio que ela desenha embaixo.
-      const rowHeightPt = baseFontSize * BASE_LINE_HEIGHT + 2 * TABLE_CELL_PADDING_PT + RULE_WIDTH_PT;
       return (
         <>
           {/*
@@ -447,7 +444,7 @@ export function PdfAnswer({
             imediatamente acima da tabela: é esse irmão que o react-pdf empurra
             para a folha seguinte, levando a tabela inteira junto.
           */}
-          <View minPresenceAhead={2 * rowHeightPt + RULE_WIDTH_PT} />
+          <View minPresenceAhead={tableLeadPresencePt(baseFontSize)} />
           <View
             style={{
               borderTopWidth: RULE_WIDTH_PT,
@@ -487,6 +484,17 @@ export function PdfAnswer({
       );
     }
   }
+}
+
+/**
+ * Papel que o INÍCIO da tabela pede abaixo do que vem antes dela: o cabeçalho
+ * mais uma linha de dados, cada uma de uma só linha de texto (corpo x
+ * entrelinha, recuo das duas bordas da célula e o fio de baixo), mais o fio de
+ * cima da moldura. Usado pelo guard do 0193 aqui e pelo da questão (0515).
+ */
+export function tableLeadPresencePt(baseFontSize: number): number {
+  const rowHeightPt = baseFontSize * BASE_LINE_HEIGHT + 2 * TABLE_CELL_PADDING_PT + RULE_WIDTH_PT;
+  return 2 * rowHeightPt + RULE_WIDTH_PT;
 }
 
 export default PdfAnswer;

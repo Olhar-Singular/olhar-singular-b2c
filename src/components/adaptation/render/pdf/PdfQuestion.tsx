@@ -27,7 +27,7 @@ import { View, Text } from "@react-pdf/renderer";
 import type { Block } from "@/lib/adaptation/canonical/schema";
 import { nodeStyleToPdf, pageBreakBefore } from "./nodeStyleToPdf";
 import { PdfRichText } from "./PdfRichText";
-import { PdfAnswer } from "./PdfAnswer";
+import { PdfAnswer, tableLeadPresencePt } from "./PdfAnswer";
 import { PdfBlock } from "./PdfBlock";
 import { PdfParagraph } from "./PdfLeafBlocks";
 import { questionNumbers } from "../questionNumbering";
@@ -158,19 +158,61 @@ export function PdfQuestion({
       </View>
     );
 
+  /** `gapBelow`: a junta até a resposta, que a questão-tabela tira daqui (0515). */
+  const instructionView = (gapBelow: number) =>
+    block.instruction && (
+      <View style={{ marginBottom: gapBelow }}>
+        <Text style={{ fontStyle: "italic", color: INK_MUTED, ...pdfTextSize(elementSizes.instruction) }}>
+          <PdfRichText content={block.instruction} fontSize={elementSizes.instruction} />
+        </Text>
+      </View>
+    );
+
+  const answerView = <PdfAnswer answer={block.answer} elementSizes={elementSizes} baseFontSize={baseFontSize} />;
+
+  /**
+   * Questão-tabela (achado 0515): o guard do 0193 mora DENTRO da resposta e,
+   * ao empurrar a tabela para a folha seguinte, deixava número, enunciado e
+   * instrução sozinhos no pé da folha. Aqui o grupo enunciado + instrução
+   * exige, abaixo dele, o papel do cabeçalho + uma linha, e desce inteiro
+   * quando ele falta.
+   *
+   * O grupo e a resposta saem como IRMÃOS no fluxo de quem contém a questão
+   * (fragmento, não uma `View` única): o react-pdf só quebra antes de um nó
+   * que tem irmão anterior, então dentro da `View` da questão o grupo, primeiro
+   * filho, nunca desceria. Fora dela, no topo da folha, o próprio react-pdf
+   * recusa a quebra (não gera folha em branco).
+   *
+   * A junta abaixo da instrução vira recuo de cima da resposta: o react-pdf
+   * soma a margem de baixo de um nó à presença que ele exige, e a margem que
+   * transbordava o pé da folha empurrava SÓ a instrução para a folha seguinte,
+   * deixando o enunciado sozinho. A tabela longa continua fatiável linha a
+   * linha (0702): nada aqui é `wrap={false}`.
+   */
+  if (block.answer.kind === "table") {
+    const nodeStyle = nodeStyleToPdf(block.style);
+    const gapAbove = block.instruction ? QUESTION_INNER_GAP_PT : 0;
+    return (
+      <>
+        <View
+          minPresenceAhead={tableLeadPresencePt(baseFontSize) + gapAbove}
+          style={{ flexDirection: "column", ...nodeStyle, marginBottom: 0 }}
+        >
+          {body}
+          {instructionView(0)}
+        </View>
+        <View style={{ flexDirection: "column", marginBottom: blockGap, ...nodeStyle, paddingTop: gapAbove }}>
+          {answerView}
+        </View>
+      </>
+    );
+  }
+
   return (
     <View style={{ flexDirection: "column", marginBottom: blockGap, ...nodeStyleToPdf(block.style) }}>
       {body}
-
-      {block.instruction && (
-        <View style={{ marginBottom: QUESTION_INNER_GAP_PT }}>
-          <Text style={{ fontStyle: "italic", color: INK_MUTED, ...pdfTextSize(elementSizes.instruction) }}>
-            <PdfRichText content={block.instruction} fontSize={elementSizes.instruction} />
-          </Text>
-        </View>
-      )}
-
-      <PdfAnswer answer={block.answer} elementSizes={elementSizes} baseFontSize={baseFontSize} />
+      {instructionView(QUESTION_INNER_GAP_PT)}
+      {answerView}
     </View>
   );
 }
