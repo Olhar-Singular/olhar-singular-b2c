@@ -154,8 +154,18 @@ vi.mock("./steps/upload-exam/StepUploadExam", () => ({
 }));
 
 vi.mock("./steps/barriers/StepBarrierSelection", () => ({
-  StepBarrierSelection: ({ onNext }: { onNext: () => void }) => (
-    <button data-testid="barriers-next" onClick={onNext}>barriers</button>
+  StepBarrierSelection: ({ onNext, updateData }: { onNext: () => void; updateData: (p: object) => void }) => (
+    <>
+      <button data-testid="barriers-next" onClick={onNext}>barriers</button>
+      <button
+        data-testid="barriers-pick-tea"
+        onClick={() =>
+          updateData({ barriers: [{ dimension: "tea", barrier_key: "tea_abstracao", is_active: true }] })
+        }
+      >
+        pick tea
+      </button>
+    </>
   ),
 }));
 
@@ -780,6 +790,46 @@ describe("CanonicalAdaptationWizard", () => {
     fireEvent.click(screen.getByTestId("do-generate"));
     // fresh document (content reset to "gerado")
     expect(screen.getByTestId("edit-content")).toHaveTextContent("gerado");
+  });
+
+  // --- 0457 · o aviso do Regerar diz o que acontece e quanto custa ----------
+  it("regenerate dialog tells the old version stays saved and shows the credit cost", () => {
+    renderWithProviders(<CanonicalAdaptationWizard />);
+    fireEvent.click(screen.getByTestId("pick-type"));
+    fireEvent.click(screen.getByTestId("input-next"));
+    fireEvent.click(screen.getByTestId("barriers-pick-tea"));
+    fireEvent.click(screen.getByTestId("barriers-next"));
+    fireEvent.click(screen.getByTestId("do-generate"));
+
+    fireEvent.click(screen.getByRole("button", { name: /Regerar/i }));
+    const dialog = screen.getByRole("alertdialog");
+    expect(dialog).not.toHaveTextContent(/substituída|serão perdidas/i);
+    expect(dialog).toHaveTextContent(/continua salva em Adaptações/i);
+    expect(dialog).toHaveTextContent(/12 créditos/);
+  });
+
+  it("regenerate dialog omits the cost for exempt (courtesy) accounts", () => {
+    vi.mocked(useAuth).mockReturnValue({
+      user: { id: "u1" },
+      profile: {
+        access_kind: "exempt",
+        plan_credits: 0,
+        plan_period_end: null,
+        credit_balance: 0,
+        trial_started_at: null,
+        must_set_password: false,
+      },
+    } as never);
+    try {
+      renderWithProviders(<CanonicalAdaptationWizard />);
+      advanceToReview();
+      fireEvent.click(screen.getByRole("button", { name: /Regerar/i }));
+      const dialog = screen.getByRole("alertdialog");
+      expect(dialog).toHaveTextContent(/continua salva em Adaptações/i);
+      expect(dialog).not.toHaveTextContent(/créditos/);
+    } finally {
+      vi.mocked(useAuth).mockImplementation(() => ({ user: { id: "u1" } }) as never);
+    }
   });
 
   it("cancelling the regenerate dialog keeps the current document", () => {

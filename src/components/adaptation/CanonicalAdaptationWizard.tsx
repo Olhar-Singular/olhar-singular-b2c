@@ -42,6 +42,8 @@ import { shouldOfferRestore } from "@/lib/adaptation/persistence/restoreDecision
 import { useAdaptationDraft } from "@/hooks/useAdaptationDraft";
 import { useFolders, useCreateFolder } from "@/hooks/useFolders";
 import { useMarkReady } from "@/hooks/useAdaptations";
+import { computeAccess } from "@/lib/domain/access";
+import { calcAdaptationCost } from "@/lib/domain/barriers";
 import type { AdaptationResult, CanonicalDocument, DocumentHeader, PageStyle } from "@/lib/adaptation/canonical/schema";
 
 const STEPS = [
@@ -100,7 +102,7 @@ const SAVE_STATUS_LABEL: Record<string, string> = {
 
 export default function CanonicalAdaptationWizard({ editMode }: Props = {}) {
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
   const markReady = useMarkReady();
   const { data: folders = [] } = useFolders();
   const createFolder = useCreateFolder();
@@ -160,6 +162,14 @@ export default function CanonicalAdaptationWizard({ editMode }: Props = {}) {
    */
   const [maxStepReached, setMaxStepReached] = useState(editMode ? REVIEW_INDEX : 0);
   const [confirmRegenerate, setConfirmRegenerate] = useState(false);
+  // Regerar jumps straight back to "Gerar", skipping the Barreiras step where
+  // the price is shown, so its confirmation is the only decision point: it
+  // carries the same adaptation cost (0457). Courtesy accounts never pay.
+  const regenerateCost = computeAccess(profile, new Date())?.unlimited
+    ? null
+    : calcAdaptationCost([
+        ...new Set(data.barriers.filter((b) => b.is_active).map((b) => b.dimension).filter(Boolean)),
+      ]);
   /**
    * Set while the editor cannot convert the sheet to the canonical model, i.e.
    * while edits are NOT reaching the autosave. It overrides the save status:
@@ -900,7 +910,9 @@ export default function CanonicalAdaptationWizard({ editMode }: Props = {}) {
           <AlertDialogHeader>
             <AlertDialogTitle>Regerar adaptação?</AlertDialogTitle>
             <AlertDialogDescription>
-              A adaptação atual será substituída por uma nova. As edições serão perdidas.
+              Uma nova versão será gerada a partir da mesma atividade e das mesmas barreiras. A versão
+              atual, com as suas edições, continua salva em Adaptações.
+              {regenerateCost !== null && <> Custo: <strong>{regenerateCost} créditos</strong>.</>}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter className="flex-col">
