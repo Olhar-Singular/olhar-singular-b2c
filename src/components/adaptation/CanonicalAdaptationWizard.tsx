@@ -491,6 +491,10 @@ export default function CanonicalAdaptationWizard({ editMode }: Props = {}) {
    * opened (at `onOpenAutoFocus` the focus has not moved yet: usually the
    * sidebar link that tried to leave) and hand it back on close, falling back
    * to the step region when that element is gone.
+   *
+   * 0614 · The regenerate and restore alert dialogs are opened by state too
+   * (no AlertDialogTrigger) and dropped the focus on <body> the same way, so
+   * they spread the same props.
    */
   const guardOpenerRef = useRef<HTMLElement | null>(null);
   const guardDialogFocusProps = {
@@ -972,7 +976,7 @@ export default function CanonicalAdaptationWizard({ editMode }: Props = {}) {
           if (!open) dismissRestore();
         }}
       >
-        <AlertDialogContent>
+        <AlertDialogContent {...guardDialogFocusProps}>
           <AlertDialogHeader>
             <AlertDialogTitle>Recuperar alterações não salvas?</AlertDialogTitle>
             <AlertDialogDescription>
@@ -987,7 +991,7 @@ export default function CanonicalAdaptationWizard({ editMode }: Props = {}) {
       </AlertDialog>
 
       <AlertDialog open={confirmRegenerate} onOpenChange={setConfirmRegenerate}>
-        <AlertDialogContent>
+        <AlertDialogContent {...guardDialogFocusProps}>
           <AlertDialogHeader>
             <AlertDialogTitle>Regerar adaptação?</AlertDialogTitle>
             <AlertDialogDescription>

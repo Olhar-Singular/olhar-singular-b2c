@@ -893,6 +893,34 @@ describe("CanonicalAdaptationWizard", () => {
     expect(screen.getByTestId("edit-content")).toHaveTextContent("EDITADO");
   });
 
+  /**
+   * 0614 · The regenerate dialog is opened by state, with no AlertDialogTrigger,
+   * so Radix focused a null trigger on close and the focus fell to <body>.
+   * Cancelling (or Escape) must hand the focus back to the "Regerar" button.
+   */
+  it("returns focus to the Regerar button when the regenerate dialog is cancelled", async () => {
+    renderWithProviders(<CanonicalAdaptationWizard />);
+    advanceToReview();
+    const regenerate = screen.getByRole("button", { name: /Regerar/i });
+    regenerate.focus();
+    fireEvent.click(regenerate);
+    const dialog = screen.getByRole("alertdialog");
+    fireEvent.click(within(dialog).getByRole("button", { name: /Cancelar/i }));
+    await waitFor(() => expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument());
+    await waitFor(() => expect(document.activeElement).toBe(regenerate));
+  });
+
+  it("returns focus to the Regerar button when the regenerate dialog is escaped", async () => {
+    renderWithProviders(<CanonicalAdaptationWizard />);
+    advanceToReview();
+    const regenerate = screen.getByRole("button", { name: /Regerar/i });
+    regenerate.focus();
+    fireEvent.click(regenerate);
+    fireEvent.keyDown(screen.getByRole("alertdialog"), { key: "Escape" });
+    await waitFor(() => expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument());
+    await waitFor(() => expect(document.activeElement).toBe(regenerate));
+  });
+
   it("export step copies and restarts back to the first step", async () => {
     const writeText = vi.fn().mockResolvedValue(undefined);
     Object.assign(navigator, { clipboard: { writeText } });
@@ -1307,6 +1335,21 @@ describe("CanonicalAdaptationWizard", () => {
     });
     // No prompt was ever shown.
     expect(screen.queryByText(/Recuperar alterações não salvas/i)).not.toBeInTheDocument();
+  });
+
+  // 0614 · Same trigger-less close as the regenerate dialog: nothing opened it
+  // from a focusable control, so the focus lands on the step region, not <body>.
+  it("moves focus to the step region when the restore dialog is discarded", async () => {
+    vi.mocked(mirror.readMirror).mockResolvedValue({
+      draftId: "edit-1",
+      result: mirrorResult("RECUPERADO"),
+      savedAt: Date.parse("2026-02-01T00:00:00Z"),
+    });
+    renderWithProviders(<CanonicalAdaptationWizard editMode={editSeed()} />);
+    const dialog = await screen.findByRole("alertdialog");
+    fireEvent.click(within(dialog).getByRole("button", { name: /Descartar/i }));
+    await waitFor(() => expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument());
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByTestId("step-region")));
   });
 
   it("does not prompt when no mirror exists", async () => {
