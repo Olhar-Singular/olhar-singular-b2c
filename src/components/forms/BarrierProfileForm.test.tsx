@@ -127,4 +127,27 @@ describe("BarrierProfileForm", () => {
     render(<BarrierProfileForm onSubmit={vi.fn()} />);
     expect(screen.queryByRole("button", { name: /Cancelar/i })).toBeNull();
   });
+
+  it("rejects a name that already exists, ignoring case and outer spaces (0386)", async () => {
+    const onSubmit = vi.fn();
+    render(<BarrierProfileForm onSubmit={onSubmit} existingNames={["Aluno Teste (verify)", null]} />);
+    const input = screen.getByLabelText(/Nome do perfil/i);
+    fireEvent.change(input, { target: { value: "  aluno teste (VERIFY) " } });
+    fireEvent.click(screen.getAllByRole("checkbox")[0]);
+    fireEvent.click(screen.getByRole("button", { name: /Salvar perfil/i }));
+    const msg = await screen.findByText(/Já existe um perfil com esse nome/i);
+    expect(msg).toHaveAttribute("role", "alert");
+    expect(input).toHaveAttribute("aria-invalid", "true");
+    expect(input).toHaveAccessibleDescription(/Já existe um perfil com esse nome/i);
+    expect(onSubmit).not.toHaveBeenCalled();
+  });
+
+  it("accepts a name that differs from every existing one (0386)", async () => {
+    const onSubmit = vi.fn().mockResolvedValue(undefined);
+    render(<BarrierProfileForm onSubmit={onSubmit} existingNames={["Aluno Teste (verify)"]} />);
+    fireEvent.change(screen.getByLabelText(/Nome do perfil/i), { target: { value: "Outro aluno" } });
+    fireEvent.click(screen.getAllByRole("checkbox")[0]);
+    fireEvent.click(screen.getByRole("button", { name: /Salvar perfil/i }));
+    await waitFor(() => expect(onSubmit).toHaveBeenCalled());
+  });
 });

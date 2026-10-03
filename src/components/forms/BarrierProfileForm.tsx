@@ -1,3 +1,4 @@
+import { useMemo } from "react";
 import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -9,13 +10,30 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 
-const schema = z.object({
+const baseSchema = z.object({
   name: z.string().min(1, "Nome do perfil é obrigatório"),
   barriers: z.array(z.string()).min(1, "Selecione pelo menos uma barreira"),
   observation: z.string().max(2000).nullable(),
 });
 
-export type BarrierProfileFormValues = z.infer<typeof schema>;
+export type BarrierProfileFormValues = z.infer<typeof baseSchema>;
+
+const normalizeName = (name: string) => name.trim().toLocaleLowerCase("pt-BR");
+
+/** 0386: two profiles whose names differ only by case or outer spaces are
+ * indistinguishable in the profile select, so a colliding name is rejected. */
+function buildSchema(existingNames: ReadonlyArray<string | null>) {
+  const taken = new Set(existingNames.filter((n): n is string => !!n).map(normalizeName));
+  return baseSchema.superRefine((values, ctx) => {
+    if (taken.has(normalizeName(values.name))) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["name"],
+        message: "Já existe um perfil com esse nome",
+      });
+    }
+  });
+}
 
 interface Props {
   defaultValues?: Partial<BarrierProfileFormValues>;
@@ -23,9 +41,13 @@ interface Props {
   isPending?: boolean;
   /** When given, the fixed footer shows a "Cancelar" button that calls it. */
   onCancel?: () => void;
+  /** Names of the user's other profiles; a name matching one (ignoring case and
+   * outer spaces) is rejected. When editing, leave out the profile's own name. */
+  existingNames?: ReadonlyArray<string | null>;
 }
 
-export function BarrierProfileForm({ defaultValues, onSubmit, isPending, onCancel }: Props) {
+export function BarrierProfileForm({ defaultValues, onSubmit, isPending, onCancel, existingNames = [] }: Props) {
+  const schema = useMemo(() => buildSchema(existingNames), [existingNames]);
   const { control, handleSubmit, watch, register, formState: { errors } } = useForm<BarrierProfileFormValues>({
     resolver: zodResolver(schema),
     defaultValues: { name: "", barriers: [], observation: null, ...defaultValues },

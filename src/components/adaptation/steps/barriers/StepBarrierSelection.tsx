@@ -288,6 +288,7 @@ export function StepBarrierSelection({ data, updateData, onNext, onPrev }: Props
             <DialogTitle>Criar perfil de barreira</DialogTitle>
           </DialogHeader>
           <BarrierProfileForm
+            existingNames={profiles.map((p) => p.name)}
             onSubmit={handleCreateProfile}
             isPending={createProfile.isPending}
             onCancel={() => setCreatingProfile(false)}

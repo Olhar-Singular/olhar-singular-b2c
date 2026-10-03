@@ -537,6 +537,18 @@ describe("StepBarrierSelection", () => {
       );
     });
 
+    it("blocks creating a profile whose name already exists (0386)", async () => {
+      const user = userEvent.setup();
+      renderStep();
+      await user.click(screen.getByRole("button", { name: /novo/i }));
+      await waitFor(() => screen.getByRole("dialog"));
+      await user.type(screen.getByLabelText(/Nome do perfil/i), "aluno tea");
+      await user.click(within(screen.getByRole("dialog")).getAllByRole("checkbox")[0]);
+      await user.click(screen.getByRole("button", { name: /salvar perfil/i }));
+      expect(await screen.findByText(/Já existe um perfil com esse nome/i)).toBeInTheDocument();
+      expect(mockMutateAsync).not.toHaveBeenCalled();
+    });
+
     it("dialog closes after successful submission", async () => {
       const user = userEvent.setup();
       vi.mocked(useBarrierProfiles).mockReturnValue({ data: [], isLoading: false } as never);

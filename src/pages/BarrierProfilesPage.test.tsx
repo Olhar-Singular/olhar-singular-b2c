@@ -160,6 +160,27 @@ describe("BarrierProfilesPage", () => {
     await waitFor(() => expect(mockCreate).toHaveBeenCalled());
   });
 
+  it("blocks creating a profile whose name already exists (0386)", async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await user.click(screen.getByRole("button", { name: /novo perfil/i }));
+    await user.type(screen.getByLabelText(/Nome do perfil/i), "perfil tea");
+    await user.click(screen.getAllByRole("checkbox")[0]);
+    await user.click(screen.getByRole("button", { name: /Salvar perfil/i }));
+    expect(await screen.findByText(/Já existe um perfil com esse nome/i)).toBeInTheDocument();
+    expect(mockCreate).not.toHaveBeenCalled();
+  });
+
+  it("lets a profile keep its own name when editing (0386)", async () => {
+    mockUpdate.mockResolvedValue(undefined);
+    const user = userEvent.setup();
+    renderPage();
+    await user.click(screen.getByRole("button", { name: /editar/i }));
+    await user.click(screen.getByRole("button", { name: /Salvar perfil/i }));
+    await waitFor(() => expect(mockUpdate).toHaveBeenCalled());
+    expect(screen.queryByText(/Já existe um perfil com esse nome/i)).toBeNull();
+  });
+
   it("prefills an empty name when editing a profile that has no name (line 189 ?? branch)", async () => {
     const user = userEvent.setup();
     const m = await import("@/hooks/useBarrierProfiles");

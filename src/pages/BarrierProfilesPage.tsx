@@ -189,6 +189,7 @@ export default function BarrierProfilesPage() {
                 ? { name: editing.name ?? "", barriers: editing.barriers, observation: editing.observation }
                 : undefined
             }
+            existingNames={profiles.filter((p) => p.id !== editing?.id).map((p) => p.name)}
             onSubmit={handleSubmit}
             isPending={create.isPending || update.isPending}
             onCancel={() => setDialogOpen(false)}
