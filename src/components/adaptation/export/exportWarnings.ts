@@ -194,6 +194,67 @@ export function pdfUnsupportedCharacters(document: CanonicalDocument): string[] 
 }
 
 /**
+ * Item de resposta sem conteúdo (achado 1105).
+ *
+ * Os "+ Afirmação / + Opção / + Par / + Item" do card criam o item com
+ * `content: []`, e todas as saídas mapeiam todo item: o vazio vira `( ) V ( ) F`
+ * sem afirmação, caixa sem rótulo, par sem coluna B, `____` sem item. O defeito
+ * a fechar aqui é o silêncio: o professor fica sabendo antes de o arquivo sair.
+ * Só os tipos de resposta em LISTA entram (V/F, caixas, associação, ordenação);
+ * alternativa e célula de tabela têm o próprio tratamento. Texto só de espaço
+ * conta como vazio; fórmula sozinha não.
+ */
+function isEmptyRichText(rich: RichText): boolean {
+  return rich.every((inline) => inline.type === "text" && inline.text.trim() === "");
+}
+
+function answerHasEmptyItem(answer: Extract<Block, { type: "question" }>["answer"]): boolean {
+  switch (answer.kind) {
+    case "trueFalse":
+    case "checkbox":
+    case "ordering":
+      return answer.items.some((item) => isEmptyRichText(item.content));
+    case "matching":
+      return answer.pairs.some((pair) => isEmptyRichText(pair.left) || isEmptyRichText(pair.right));
+    default:
+      return false;
+  }
+}
+
+/** A questão, ou qualquer questão aninhada no enunciado dela, tem item vazio? */
+function questionHasEmptyItem(question: Extract<Block, { type: "question" }>): boolean {
+  return everyBlock([question]).some(
+    (block) => block.type === "question" && answerHasEmptyItem(block.answer),
+  );
+}
+
+/** "1, B2 e 3": só chamada com dois rótulos ou mais. */
+function joinLabels(labels: string[]): string {
+  return `${labels.slice(0, -1).join(", ")} e ${labels[labels.length - 1]}`;
+}
+
+/**
+ * Rotula pela questão de topo, com o MESMO número que a folha imprime
+ * (`customNumber` ou o ordinal entre as questões do documento).
+ */
+export function emptyItemWarnings(document: CanonicalDocument): string[] {
+  let questionCount = 0;
+  const labels: string[] = [];
+  for (const block of document.blocks) {
+    if (block.type !== "question") continue;
+    questionCount += 1;
+    if (questionHasEmptyItem(block)) labels.push(block.customNumber ?? String(questionCount));
+  }
+  if (labels.length === 0) return [];
+  return labels.length === 1
+    ? [`A questão ${labels[0]} tem um item vazio: ele sai como um marcador sem texto na folha.`]
+    : [
+        `As questões ${joinLabels(labels)} têm itens vazios: eles saem como marcadores sem ` +
+          "texto na folha.",
+      ];
+}
+
+/**
  * O que o PDF não carrega fiel.
  *
  * Mostrado ANTES do download, do mesmo jeito que o Word já fazia. Enquanto o
@@ -204,7 +265,7 @@ export function pdfExportWarnings(
   document: CanonicalDocument,
   pageStyle?: PageStyle,
 ): string[] {
-  const warnings: string[] = [];
+  const warnings: string[] = emptyItemWarnings(document);
 
   // O `alt` é o campo de acessibilidade da imagem na folha, mas o
   // `@react-pdf/renderer` não gera PDF marcado (sem `/StructTreeRoot`, sem

@@ -85,6 +85,7 @@ import {
 import { indexToLetter } from "../render/letters";
 import {
   documentHasMath,
+  emptyItemWarnings,
   everyBlock,
   mathLossWarnings,
   MATH_TYPOGRAPHY_WARNING,
@@ -823,7 +824,8 @@ export function docxExportWarnings(
   pageStyle?: PageStyle,
 ): string[] {
   const blocks = everyBlock(document.blocks);
-  const warnings: string[] = [];
+  // Item de resposta vazio: a mesma frase do PDF (achado 1105).
+  const warnings: string[] = emptyItemWarnings(document);
 
   if (blocks.some((b) => b.type === "image")) {
     warnings.push(

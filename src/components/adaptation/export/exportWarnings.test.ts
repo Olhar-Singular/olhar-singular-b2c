@@ -375,3 +375,108 @@ describe("aviso de perda da fórmula com texto alternativo (0803)", () => {
     );
   });
 });
+
+describe("aviso de item vazio nas respostas (1105)", () => {
+  const stem = (n: number) => [
+    { id: id(n), type: "paragraph" as const, content: [{ type: "text" as const, text: "q" }] },
+  ];
+  const filled = (text: string) => [{ type: "text" as const, text }];
+
+  it("item de V/F sem conteúdo gera o aviso, no PDF e no Word, com o número da questão", () => {
+    const document = doc([
+      {
+        id: id(1),
+        type: "question",
+        stem: stem(2),
+        answer: {
+          kind: "trueFalse",
+          items: [
+            { id: id(3), content: filled("A Terra gira."), value: true },
+            { id: id(4), content: [], value: false },
+          ],
+        },
+      },
+    ]);
+    const expected = "A questão 1 tem um item vazio: ele sai como um marcador sem texto na folha.";
+    expect(pdfExportWarnings(document)).toContain(expected);
+    expect(docxExportWarnings(document)).toContain(expected);
+  });
+
+  it("cobre caixas, ordenação e o lado vazio de um par; respeita o número autoral e só espaço conta como vazio", () => {
+    const document = doc([
+      {
+        id: id(1),
+        type: "question",
+        stem: stem(2),
+        answer: {
+          kind: "checkbox",
+          items: [{ id: id(3), content: filled("   "), checked: false }],
+        },
+      },
+      {
+        id: id(4),
+        type: "question",
+        customNumber: "B2",
+        stem: stem(5),
+        answer: {
+          kind: "matching",
+          pairs: [{ id: id(6), left: filled("Urso"), right: [] }],
+        },
+      },
+      {
+        id: id(7),
+        type: "question",
+        stem: stem(8),
+        answer: {
+          kind: "ordering",
+          items: [
+            { id: id(9), content: [], position: 0 },
+            { id: id(10), content: [], position: 1 },
+          ],
+        },
+      },
+    ]);
+    const warnings = pdfExportWarnings(document);
+    expect(warnings).toContain(
+      "As questões 1, B2 e 3 têm itens vazios: eles saem como marcadores sem texto na folha.",
+    );
+  });
+
+  it("aninhada no enunciado conta, e fórmula sozinha não é item vazio", () => {
+    const document = doc([
+      {
+        id: id(1),
+        type: "question",
+        stem: [
+          {
+            id: id(2),
+            type: "question",
+            stem: stem(3),
+            answer: { kind: "checkbox", items: [{ id: id(4), content: [], checked: true }] },
+          },
+        ],
+        answer: {
+          kind: "trueFalse",
+          items: [{ id: id(5), content: [{ type: "inlineMath", latex: "x" }], value: true }],
+        },
+      },
+    ]);
+    expect(docxExportWarnings(document).filter((w) => /vazio/.test(w))).toEqual([
+      "A questão 1 tem um item vazio: ele sai como um marcador sem texto na folha.",
+    ]);
+  });
+
+  it("documento com todos os itens preenchidos e respostas de outros tipos não avisa", () => {
+    const document = doc([
+      {
+        id: id(1),
+        type: "question",
+        stem: stem(2),
+        answer: { kind: "trueFalse", items: [{ id: id(3), content: filled("ok"), value: true }] },
+      },
+      { id: id(4), type: "question", stem: stem(5), answer: { kind: "open" } },
+    ]);
+    expect(pdfExportWarnings(document)).toEqual([]);
+    expect(docxExportWarnings(document)).toEqual([]);
+  });
+});
