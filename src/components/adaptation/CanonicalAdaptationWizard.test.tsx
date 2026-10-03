@@ -1693,6 +1693,38 @@ describe("CanonicalAdaptationWizard — navigation guard", () => {
   });
 
   /**
+   * 0462 · The guard also arms for a pending subject/folder (`filingDirty`), and
+   * those columns are written only by `handleSave`, never by the autosave flush.
+   * "Voltar e salvar" must then run the real save (create the new folder, then
+   * markReady), and the text must say what would be lost.
+   */
+  it("runs the full save on 'Voltar e salvar' when subject/folder are pending", async () => {
+    mockCreateFolder.mockResolvedValue({ id: "f-novo", name: "7º ano A" });
+    mockNavGuard.mockReturnValue({ state: "blocked", reset: vi.fn(), proceed: vi.fn() });
+    renderWithProviders(<CanonicalAdaptationWizard />);
+    advanceToReview();
+    fireEvent.click(screen.getByTestId("review-file"));
+    fireEvent.click(screen.getByTestId("review-name-folder"));
+    expect(screen.getByText(/matéria e a pasta escolhidas não serão salvas/i)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /Voltar e salvar/i }));
+    await waitFor(() => expect(mockCreateFolder).toHaveBeenCalledWith("7º ano A"));
+    await waitFor(() =>
+      expect(mockMarkReady).toHaveBeenCalledWith(
+        expect.objectContaining({ subject: "Geografia", folderId: "f-novo" }),
+      ),
+    );
+  });
+
+  it("only flushes on 'Voltar e salvar' when nothing but the document is pending", () => {
+    mockNavGuard.mockReturnValue({ state: "blocked", reset: vi.fn(), proceed: vi.fn() });
+    renderWithProviders(<CanonicalAdaptationWizard />);
+    advanceToReview();
+    expect(screen.queryByText(/matéria e a pasta escolhidas/i)).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /Voltar e salvar/i }));
+    expect(mockMarkReady).not.toHaveBeenCalled();
+  });
+
+  /**
    * 0460 · The guard dialogs have no DialogTrigger, so Radix's close handler
    * focused a null trigger and the focus fell to <body>. Closing must hand the
    * focus back to what had it when the guard opened (the sidebar link).

@@ -918,6 +918,8 @@ export default function CanonicalAdaptationWizard({ editMode }: Props = {}) {
             </DialogHeader>
             <p className="text-sm text-muted-foreground">
               Você tem uma adaptação não salva. O rascunho ficará disponível em Adaptações.
+              {/* 0462 · O rascunho fica, mas matéria/pasta só vão ao banco pelo salvar. */}
+              {filingDirty && " A matéria e a pasta escolhidas não serão salvas."}
             </p>
             <div className="flex justify-end gap-2 pt-2">
               <Button
@@ -925,8 +927,10 @@ export default function CanonicalAdaptationWizard({ editMode }: Props = {}) {
                 onClick={() => {
                   // 0460 · The label promises a save: retry the autosave (a
                   // failed one is still dirty, so this is a real attempt).
+                  // 0462 · A pending subject/folder is written (and a new
+                  // folder created) only by handleSave, which flushes first.
                   navGuard.reset?.();
-                  void flushPending();
+                  void (filingDirty ? handleSave() : flushPending());
                 }}
               >
                 Voltar e salvar
