@@ -734,7 +734,12 @@ export default function CanonicalAdaptationWizard({ editMode }: Props = {}) {
   };
 
   return (
-    <div className="mx-auto max-w-6xl px-4 py-6 space-y-6">
+    /* Achado 0615 (extensão do 0806): o cabeçalho mobile é `fixed` e os passos
+       Revisar e Exportar têm barra `sticky` no pé; um controle coberto por eles
+       conta como visível, então o Tab parava atrás das barras sem rolar. A
+       margem de rolagem em todo descendente do wizard (faixa de passos e
+       qualquer passo) reserva a altura das duas barras. */
+    <div className="mx-auto max-w-6xl px-4 py-6 space-y-6 [&_*]:scroll-mb-24 [&_*]:scroll-mt-16 lg:[&_*]:scroll-mt-0">
       {/* Step indicator */}
       {/* 0218: a faixa rola sozinha ate o passo ativo (0009), entao em 390px ela
           abre cortada no meio de um rotulo e sem barra de rolagem visivel (o

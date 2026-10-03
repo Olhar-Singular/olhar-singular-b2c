@@ -544,6 +544,27 @@ describe("CanonicalAdaptationWizard", () => {
   // On 390px the step strip overflows horizontally: the active chip sits outside
   // the viewport and the container stays at scrollLeft 0. The chip must scroll
   // itself into view whenever the step changes.
+  // Achado 0615: a reserva das barras (0806) vivia só na superfície do Revisar.
+  // No Exportar o "Aumentar zoom" parava atrás da barra `sticky` do pé, e os
+  // chips da faixa, sob o cabeçalho mobile `fixed`. A reserva sobe para a raiz
+  // do wizard e vale para todo focável de todo passo.
+  it("reserva a altura das barras na rolagem do foco em todo o wizard (0615)", () => {
+    renderWithProviders(<CanonicalAdaptationWizard />);
+    advanceToReview();
+    fireEvent.click(screen.getByRole("button", { name: /^Exportar$/i }));
+    const strip = screen.getByTestId("step-strip");
+    let root: HTMLElement | null = strip;
+    while (root && !root.className.split(/\s+/).includes("[&_*]:scroll-mb-24")) {
+      root = root.parentElement;
+    }
+    expect(root).not.toBeNull();
+    expect(root).toContainElement(screen.getByRole("button", { name: /Nova adaptação/i }));
+    const classes = root!.className.split(/\s+/);
+    expect(classes).toContain("[&_*]:scroll-mb-24");
+    expect(classes).toContain("[&_*]:scroll-mt-16");
+    expect(classes).toContain("lg:[&_*]:scroll-mt-0");
+  });
+
   it("the step indicator scrolls the active step into view", () => {
     const proto = window.HTMLElement.prototype;
     const originalLeft = Object.getOwnPropertyDescriptor(proto, "offsetLeft");
