@@ -95,6 +95,47 @@ describe("parseExtractionResponse", () => {
     expect(parseExtractionResponse(aiData)).toEqual([{ text: "Q1", subject: "Matemática" }]);
   });
 
+  it("turns a literal backslash-n escaped by the model into a real line break (0277)", () => {
+    const aiData = withToolCallArgs(
+      JSON.stringify({
+        questions: [
+          {
+            text: "Observe a tabela:\\n\\nFruta\\r\\nPreço",
+            subject: "Matemática",
+            options: ["a)\\nUm", "b) Dois"],
+            resolution: "Passo 1\\nPasso 2",
+          },
+        ],
+      }),
+    );
+    expect(parseExtractionResponse(aiData)).toEqual([
+      {
+        text: "Observe a tabela:\n\nFruta\nPreço",
+        subject: "Matemática",
+        options: ["a)\nUm", "b) Dois"],
+        resolution: "Passo 1\nPasso 2",
+      },
+    ]);
+  });
+
+  it("keeps backslash-n inside math delimiters (LaTeX like \\neq) untouched", () => {
+    const text = "Se $x \\neq 0$ e \\(a \\nabla b\\) então\\nfim";
+    const aiData = withToolCallArgs(JSON.stringify({ questions: [{ text, subject: "Matemática" }] }));
+    expect(parseExtractionResponse(aiData)[0].text).toBe(
+      "Se $x \\neq 0$ e \\(a \\nabla b\\) então\nfim",
+    );
+  });
+
+  it("leaves non-string fields and non-object questions as they came", () => {
+    const aiData = withToolCallArgs(
+      JSON.stringify({ questions: [{ text: 42, subject: "X", options: [1, "a\\nb"] }, null] }),
+    );
+    expect(parseExtractionResponse(aiData)).toEqual([
+      { text: 42, subject: "X", options: [1, "a\nb"] },
+      null,
+    ]);
+  });
+
   it("returns an empty array when there is no tool call", () => {
     expect(parseExtractionResponse({ choices: [{ message: {} }] })).toEqual([]);
   });

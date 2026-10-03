@@ -173,6 +173,33 @@ export interface ExtractedQuestion {
   figure_bbox?: { x: number; y: number; width: number; height: number };
 }
 
+/** Math spans ($$..$$, $..$, \(..\), \[..\]) where a backslash-n is LaTeX (\neq), not a break. */
+const MATH_SPAN = /(\$\$[\s\S]*?\$\$|\$[^$]*\$|\\\([\s\S]*?\\\)|\\\[[\s\S]*?\\\])/;
+/** A literal backslash + r/n pair the model double-escaped in the tool call arguments. */
+const LITERAL_BREAK = /\\r\\n|\\n|\\r/g;
+
+/** Turn literal "\n" sequences into real line breaks, outside math spans. */
+function unescapeLiteralBreaks(value: unknown): unknown {
+  if (typeof value !== "string") return value;
+  return value
+    .split(MATH_SPAN)
+    .map((part, i) => (i % 2 === 1 ? part : part.replace(LITERAL_BREAK, "\n")))
+    .join("");
+}
+
+/** The model sometimes escapes line breaks twice; normalize the free-text fields. */
+function normalizeQuestionBreaks(question: any): any {
+  if (!question || typeof question !== "object") return question;
+  const normalized = { ...question };
+  for (const key of ["text", "resolution"] as const) {
+    if (key in normalized) normalized[key] = unescapeLiteralBreaks(normalized[key]);
+  }
+  if (Array.isArray(normalized.options)) {
+    normalized.options = normalized.options.map(unescapeLiteralBreaks);
+  }
+  return normalized;
+}
+
 /**
  * Parse the AI gateway's raw JSON response into the extracted question list.
  * Never throws: a missing/malformed tool call yields an empty array, mirroring
@@ -184,7 +211,7 @@ export function parseExtractionResponse(aiData: unknown): ExtractedQuestion[] {
   if (!rawArgs) return [];
   try {
     const parsed = JSON.parse(rawArgs);
-    return Array.isArray(parsed.questions) ? parsed.questions : [];
+    return Array.isArray(parsed.questions) ? parsed.questions.map(normalizeQuestionBreaks) : [];
   } catch {
     return [];
   }
