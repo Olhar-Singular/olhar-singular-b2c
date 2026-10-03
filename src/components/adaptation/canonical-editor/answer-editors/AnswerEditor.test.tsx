@@ -89,6 +89,23 @@ describe("AnswerEditor — trueFalse", () => {
     render(<AnswerEditor answer={trueAnswer} onChange={vi.fn()} />);
     expect(screen.getByText("V")).toBeInTheDocument();
   });
+
+  // Achado 0805: the toggle lives on the sheet, which never follows the app
+  // theme. App tokens (bg-background / bg-primary) turned the "F" into dark
+  // paper ink on a dark teal square in dark mode (~1.2:1).
+  it.each([false, true])("paints the V/F toggle with the sheet palette (value=%s)", (value) => {
+    const a: QuestionAnswer = {
+      kind: "trueFalse",
+      items: [{ id: "33333333-3333-4333-8333-333333333333", content: t("x"), value }],
+    };
+    render(<AnswerEditor answer={a} onChange={vi.fn()} />);
+    const classes = screen.getByTitle("Alternar Verdadeiro/Falso").className.split(/\s+/);
+    expect(classes).not.toContain("bg-background");
+    expect(classes).not.toContain("bg-primary");
+    expect(classes).not.toContain("text-primary-foreground");
+    expect(classes.some((c) => c.startsWith("bg-surface-"))).toBe(true);
+    expect(classes.some((c) => c.startsWith("text-surface-") || c === "text-white")).toBe(true);
+  });
 });
 
 describe("AnswerEditor — checkbox", () => {

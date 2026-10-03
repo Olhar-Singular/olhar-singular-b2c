@@ -15,6 +15,10 @@ import { useEffect, useId, useRef, useState } from "react";
 import { Plus, Trash2, ArrowUp, ArrowDown } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { FOLHA_BUTTON } from "@/components/adaptation/canonical-editor/folhaChrome";
+
+/** Filled state of a sheet toggle: same accent as "Concluir" and the inserter "+". */
+const FOLHA_BUTTON_FILLED =
+  "border-surface-accent bg-surface-accent text-white hover:bg-surface-accent-ink hover:text-white";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -199,8 +203,11 @@ export function AnswerEditor({
               />
               <Button
                 type="button"
-                variant={item.value ? "default" : "outline"}
+                variant="outline"
                 size="sm"
+                // On the sheet, never app tokens: in dark mode they painted the
+                // "F" as paper ink on a dark teal square (achado 0805).
+                className={item.value ? FOLHA_BUTTON_FILLED : FOLHA_BUTTON}
                 onClick={() => onChange(setTrueFalseValue(answer, item.id, !item.value))}
                 disabled={disabled}
                 title="Alternar Verdadeiro/Falso"
