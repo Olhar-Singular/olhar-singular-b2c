@@ -374,7 +374,25 @@ describe("reorderOrdering", () => {
       ordering.items[0].id,
       ordering.items[1].id,
     ]);
-    expect(next.items.map((i) => i.position)).toEqual([0, 1, 2]);
+    // Achado 1101: `position` is the answer key, the array order is the printed order.
+    expect(next.items.map((i) => i.position)).toEqual([2, 0, 1]);
+  });
+
+  it("keeps each item's answer-key position (base 1 from the AI) when moving", () => {
+    const keyed: QuestionAnswer = {
+      kind: "ordering",
+      items: [
+        { id: "99999999-9999-4999-8999-999999999999", content: text("A"), position: 1 },
+        { id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", content: text("B"), position: 2 },
+        { id: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb", content: text("C"), position: 3 },
+      ],
+    };
+    const next = reorderOrdering(keyed, 0, 1);
+    expect(next.kind === "ordering" && next.items.map((i) => [i.content, i.position])).toEqual([
+      [text("B"), 2],
+      [text("A"), 1],
+      [text("C"), 3],
+    ]);
   });
 
   it("moves an item down", () => {
@@ -752,15 +770,33 @@ describe("0369 — add/remove em trueFalse, checkbox, ordering e table", () => {
     expect(removeCheckboxItem(tf, ID(1))).toBe(tf);
   });
 
-  it("ordering: adds at the end and renumbers position on remove, keeping at least one", () => {
+  it("ordering: adds at the end after the highest position and keeps the answer key on remove, keeping at least one", () => {
     const added = addOrderingItem(ord, g);
     expect(added.kind === "ordering" && added.items.at(-1)).toEqual({ id: ID(9), content: [], position: 3 });
+    // Achado 1101: base-1 key shuffled in print; "+ Item" must not collide with position 3.
+    const keyed: QuestionAnswer = {
+      kind: "ordering",
+      items: [
+        { id: ID(1), content: rt("a"), position: 3 },
+        { id: ID(2), content: rt("b"), position: 1 },
+        { id: ID(3), content: rt("c"), position: 2 },
+      ],
+    };
+    const addedKeyed = addOrderingItem(keyed, g);
+    expect(addedKeyed.kind === "ordering" && addedKeyed.items.at(-1)).toEqual({ id: ID(9), content: [], position: 4 });
+    expect(removeOrderingItem(keyed, ID(2))).toEqual({
+      kind: "ordering",
+      items: [
+        { id: ID(1), content: rt("a"), position: 3 },
+        { id: ID(3), content: rt("c"), position: 2 },
+      ],
+    });
     const removed = removeOrderingItem(ord, ID(1));
     expect(removed).toEqual({
       kind: "ordering",
       items: [
-        { id: ID(2), content: rt("b"), position: 0 },
-        { id: ID(3), content: rt("c"), position: 1 },
+        { id: ID(2), content: rt("b"), position: 1 },
+        { id: ID(3), content: rt("c"), position: 2 },
       ],
     });
     const single: QuestionAnswer = { kind: "ordering", items: [{ id: ID(1), content: [], position: 0 }] };

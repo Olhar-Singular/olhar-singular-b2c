@@ -476,7 +476,7 @@ describe("AnswerEditor — 0369 add/remove nos tipos com lista", () => {
     const onChange = vi.fn();
     render(<AnswerEditor answer={answer} onChange={onChange} />);
     fireEvent.click(screen.getAllByTitle("Remover item")[0]);
-    expect(onChange).toHaveBeenLastCalledWith({ kind: "ordering", items: [{ id: B, content: t("b"), position: 0 }] });
+    expect(onChange).toHaveBeenLastCalledWith({ kind: "ordering", items: [{ id: B, content: t("b"), position: 1 }] });
     fireEvent.click(screen.getByRole("button", { name: /^\s*Item$/ }));
     expect(onChange.mock.calls[1][0].items).toHaveLength(3);
   });

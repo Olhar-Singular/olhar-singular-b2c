@@ -170,29 +170,26 @@ export function reorderOrdering(answer: QuestionAnswer, from: number, to: number
   const next = [...items];
   const [moved] = next.splice(from, 1);
   next.splice(to, 0, moved);
-  return {
-    ...answer,
-    items: next.map((item, i) => ({ ...item, position: i })),
-  };
+  // Array order is the printed (shuffled) order; `position` is the answer key and stays put.
+  return { ...answer, items: next };
 }
 
 export function addOrderingItem(answer: QuestionAnswer, generate: Generate = newId): QuestionAnswer {
   if (answer.kind !== "ordering") return answer;
+  const position = Math.max(-1, ...answer.items.map((item) => item.position)) + 1;
   return {
     ...answer,
-    items: [...answer.items, { id: generate(), content: [], position: answer.items.length }],
+    items: [...answer.items, { id: generate(), content: [], position }],
   };
 }
 
-/** Remove e renumera `position` (0..n-1), como `reorderOrdering`. */
+/** Removes without renumbering: `position` is the answer key, the others keep their relative order. */
 export function removeOrderingItem(answer: QuestionAnswer, id: string): QuestionAnswer {
   if (answer.kind !== "ordering") return answer;
   if (answer.items.length <= 1) return answer;
   return {
     ...answer,
-    items: answer.items
-      .filter((item) => item.id !== id)
-      .map((item, i) => ({ ...item, position: i })),
+    items: answer.items.filter((item) => item.id !== id),
   };
 }
 
