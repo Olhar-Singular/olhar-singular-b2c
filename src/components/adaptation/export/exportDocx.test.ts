@@ -31,6 +31,8 @@ import {
   BASE_LINE_HEIGHT,
   ANSWER_LINE_COLOR,
   ANSWER_LINE_WIDTH_PT,
+  questionNumberColumnPt,
+  alternativeMarkerColumnPt,
 } from "../render/pageTokens";
 import { pdfFooterLabel } from "../render/footerLabel";
 import type {
@@ -916,7 +918,11 @@ describe("linhas de resposta do .docx (achado 0454)", () => {
     const rows = out.filter((p) => docxText(p).trim().length > 0 && !/^\d+\.?$/.test(docxText(p).trim()));
     expect(rows.length).toBeGreaterThan(0);
     for (const row of rows) {
-      expect(docxNodeAttrs(row, "w:ind")).toBeUndefined();
+      // O marcador nasce na margem: sem recuo, ou (múltipla escolha, achado
+      // 0524) com recuo pendente igual ao recuo, que devolve a 1ª linha a zero.
+      const ind = docxNodeAttrs(row, "w:ind");
+      if (kind === "multipleChoice") expect(ind?.left).toBe(ind?.hanging);
+      else expect(ind).toBeUndefined();
       // Item único é o último: sem o vão entre itens (achado 0519); o vão dos
       // itens anteriores é coberto no describe do 0519.
       expect(docxNodeAttrs(row, "w:spacing")).toEqual({ after: 0 });
@@ -1331,9 +1337,10 @@ describe("docxContentBlocks · quebra de página (achado 0132)", () => {
       header: {},
       pageBreakPerQuestion: true,
     });
-    // O primeiro parágrafo do bloco quebrado continua sendo o "2. " da questão.
+    // O primeiro parágrafo do bloco quebrado continua sendo o "2." da questão
+    // (seguido de tab desde o achado 0524, que pôs o número em coluna).
     const broken = blocks.find(hasPageBreak) as unknown as { root: { root?: unknown[] }[] };
-    expect(JSON.stringify(broken.root)).toContain("2. ");
+    expect(JSON.stringify(broken.root)).toContain('"2."');
   });
 });
 
@@ -2116,5 +2123,68 @@ describe("0518 · entrelinha absoluta do Word, corpo x 1,4 como no PDF", () => {
     expect(docxNodeAttrs(title, "w:spacing")).toMatchObject(atLeast(36));
     expect(docxNodeAttrs(school, "w:spacing")).toMatchObject(atLeast(22));
     expect(docxNodeAttrs(meta, "w:spacing")).toMatchObject(atLeast(20));
+  });
+});
+
+/**
+ * Achado 0524: número da questão e marcador da alternativa em COLUNA no Word,
+ * como no PDF, na prévia e no Revisar (achados 0175, 0182, 0340). O parágrafo
+ * recua a coluna inteira (`left`) e devolve a 1ª linha à margem (`hanging`); um
+ * tab leva o texto ao início da coluna, então a 2ª linha alinha com o texto e
+ * não volta para baixo do número/marcador. A largura é a mesma das outras
+ * superfícies, medida no corpo do documento.
+ */
+describe("coluna do número e do marcador no .docx (achado 0524)", () => {
+  const twips = (pt: number) => Math.round(pt * 20);
+  const hasTab = (node: unknown) => JSON.stringify(node).includes('"rootKey":"w:tab"');
+  const mcQuestion: Block = {
+    id: id(240),
+    type: "question",
+    stem: [{ id: id(241), type: "paragraph", content: text("Leia o texto") }],
+    answer: {
+      kind: "multipleChoice",
+      alternatives: [
+        { id: id(242), content: text("A energia do Sol"), correct: true },
+        { id: id(243), content: text("A energia da Lua"), correct: false },
+      ],
+    },
+  };
+
+  it("enunciado numerado: recuo pendente da largura de questionNumberColumnPt e tab após o número", () => {
+    const [numbered] = blockToDocxParagraphs(mcQuestion, 1);
+    const col = twips(questionNumberColumnPt("1", BASE_FONT_PT));
+    expect(docxNodeAttrs(numbered, "w:ind")).toEqual({ left: col, hanging: col });
+    expect(hasTab(numbered)).toBe(true);
+    expect(docxText(numbered)).toBe("1.Leia o texto");
+  });
+
+  it("alternativa: recuo pendente da largura de alternativeMarkerColumnPt e tab após o marcador", () => {
+    const out = blockToDocxParagraphs(mcQuestion, 1);
+    const rows = out.filter((p) => /^[ab]\)/.test(docxText(p)));
+    expect(rows).toHaveLength(2);
+    const col = twips(alternativeMarkerColumnPt(BASE_FONT_PT));
+    for (const row of rows) {
+      expect(docxNodeAttrs(row, "w:ind")).toEqual({ left: col, hanging: col });
+      expect(hasTab(row)).toBe(true);
+    }
+    expect(docxText(rows[0])).toBe("a)A energia do Sol");
+  });
+
+  it("a coluna acompanha o corpo do documento escolhido no Formato", () => {
+    const doc: CanonicalDocument = { blocks: [mcQuestion] } as CanonicalDocument;
+    const out = docxContentBlocks(doc, undefined, { fontSize: 24 } as never);
+    const [numbered] = out;
+    const col = twips(questionNumberColumnPt("1", 24));
+    expect(docxNodeAttrs(numbered, "w:ind")).toEqual({ left: col, hanging: col });
+    const alt = out.find((p) => /^a\)/.test(docxText(p)));
+    const altCol = twips(alternativeMarkerColumnPt(24));
+    expect(docxNodeAttrs(alt, "w:ind")).toEqual({ left: altCol, hanging: altCol });
+  });
+
+  it("corpo próprio do bloco vence o do documento na medida da coluna", () => {
+    const sized: Block = { ...mcQuestion, style: { fontSize: 32 } } as Block;
+    const [numbered] = blockToDocxParagraphs(sized, 1);
+    const col = twips(questionNumberColumnPt("1", 24));
+    expect(docxNodeAttrs(numbered, "w:ind")).toEqual({ left: col, hanging: col });
   });
 });

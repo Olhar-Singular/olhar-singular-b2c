@@ -83,6 +83,8 @@ import {
   TABLE_CELL_PADDING_PT,
   BASE_LINE_HEIGHT,
   BASE_BLOCK_SPACING_PX,
+  questionNumberColumnPt,
+  alternativeMarkerColumnPt,
 } from "../render/pageTokens";
 import { indexToLetter } from "../render/letters";
 import {
@@ -381,9 +383,29 @@ export function richTextToRuns(nodes: Inline[], inherited: RunStyle = {}): TextR
  */
 const ANSWER_ROW_SPACING = { spacing: { after: ptToTwip(ANSWER_ITEM_GAP_PT) } } as const;
 
-/** The block-level style carried into the answer rows (achado 0134). */
-type InheritedStyle = { paragraph: ParagraphStyle; run: RunStyle };
-const NO_STYLE: InheritedStyle = { paragraph: {}, run: {} };
+/**
+ * The block-level style carried into the answer rows (achado 0134). `bodyPt` é
+ * o corpo do documento (popover Formato), que mede a coluna do marcador quando
+ * o bloco não tem corpo próprio (achado 0524).
+ */
+type InheritedStyle = { paragraph: ParagraphStyle; run: RunStyle; bodyPt: number };
+const NO_STYLE: InheritedStyle = { paragraph: {}, run: {}, bodyPt: BASE_FONT_PT };
+
+/** O corpo efetivo, em pt, de um run: o próprio (meio-ponto) ou o do documento. */
+const runPt = (run: RunStyle, bodyPt: number): number =>
+  run.size !== undefined ? run.size / 2 : bodyPt;
+
+/**
+ * Achado 0524: rótulo (número da questão, marcador da alternativa) em COLUNA,
+ * como no PDF, na prévia e no Revisar. O parágrafo recua a coluna inteira e
+ * devolve só a 1ª linha à margem (recuo pendente); o tab depois do rótulo leva
+ * o texto ao início da coluna (o recuo pendente é tab stop implícito no Word e
+ * no LibreOffice). Sem isso a 2ª linha voltava para baixo do número/marcador.
+ */
+const columnIndent = (columnPt: number) => {
+  const twips = ptToTwip(columnPt);
+  return { indent: { left: twips, hanging: twips } };
+};
 
 /**
  * A caixa do checkbox é DESENHADA no Word, como no PDF (achado 0358): uma borda
@@ -430,18 +452,25 @@ function checkboxRow(content: RichText, style: InheritedStyle, last: boolean): P
   });
 }
 
-/** An answer row: an empty marker plus the item's content. */
+/**
+ * An answer row: an empty marker plus the item's content. Com `columnPt`, o
+ * marcador ocupa uma coluna dessa largura (achado 0524); sem ele, um espaço.
+ */
 function answerRow(
   marker: string,
   content: RichText,
   style: InheritedStyle,
   last: boolean,
+  columnPt?: number,
 ): Paragraph {
   return new Paragraph({
     ...style.paragraph,
     ...answerRowSpacing(style, last),
+    ...(columnPt === undefined ? {} : columnIndent(columnPt)),
     children: [
-      new TextRun({ ...style.run, text: `${marker} ` }),
+      columnPt === undefined
+        ? new TextRun({ ...style.run, text: `${marker} ` })
+        : new TextRun({ ...style.run, children: [marker, new Tab()] }),
       ...richTextToRuns(content, style.run),
     ],
   });
@@ -571,7 +600,13 @@ function answerToDocx(
     case "multipleChoice":
       return answer.alternatives.map((alternative, i, all) =>
         // No ✔ on the correct one — the gabarito stays hidden, as in the PDF.
-        answerRow(`${indexToLetter(i)})`, alternative.content, style, isLast(i, all.length)),
+        answerRow(
+          `${indexToLetter(i)})`,
+          alternative.content,
+          style,
+          isLast(i, all.length),
+          alternativeMarkerColumnPt(runPt(style.run, style.bodyPt)),
+        ),
       );
     case "trueFalse":
       return answer.items.map((item, i, all) =>
@@ -660,6 +695,7 @@ export function blockToDocxParagraphs(
   number: number,
   blockGapTwips: number = DEFAULT_BLOCK_GAP_TWIPS,
   keepWithNext = false,
+  bodyPt: number = BASE_FONT_PT,
 ): DocxBlock[] {
   // `block.style` projetado no docx: alinhamento em todo parágrafo do bloco,
   // `spacingAfter` só no último, cor/corpo/fonte herdados pelos runs. Sem
@@ -802,7 +838,7 @@ export function blockToDocxParagraphs(
       const position = block.enunciadoPosition ?? "below";
       // Partes da questão: todas presas à seguinte; só o fecho usa `para`.
       const kept: ParagraphStyle = { ...para, ...KEEP_WITH_NEXT };
-      const keptInherited: InheritedStyle = { paragraph: kept, run };
+      const keptInherited: InheritedStyle = { paragraph: kept, run, bodyPt };
       const hasEnunciado = block.enunciado != null && block.enunciado.length > 0;
       const enunciado = hasEnunciado
         ? [
@@ -830,13 +866,18 @@ export function blockToDocxParagraphs(
             }
           : {},
       );
+      // Número em coluna, medida no corpo de quem hospeda o rótulo (achado 0524).
       const numbered = new Paragraph({
         ...kept,
         ...firstSpacing,
-        children: [new TextRun({ ...run, text: `${label}. `, bold: true }), ...firstRuns],
+        ...columnIndent(questionNumberColumnPt(label, runPt(run, bodyPt))),
+        children: [
+          new TextRun({ ...run, bold: true, children: [`${label}.`, new Tab()] }),
+          ...firstRuns,
+        ],
       });
       const stemRest = (first?.type === "paragraph" ? restStem : block.stem).flatMap((child) =>
-        blockToDocxParagraphs(child, 1, QUESTION_INNER_GAP_TWIPS, true),
+        blockToDocxParagraphs(child, 1, QUESTION_INNER_GAP_TWIPS, true, bodyPt),
       );
 
       return [
@@ -1115,7 +1156,13 @@ export function docxContentBlocks(
   let questionIndex = 0;
   return document.blocks.flatMap((block, i) => {
     if (block.type === "question") questionIndex++;
-    const paragraphs = blockToDocxParagraphs(block, questionIndex, blockGapTwips);
+    const paragraphs = blockToDocxParagraphs(
+      block,
+      questionIndex,
+      blockGapTwips,
+      false,
+      pageStyle?.fontSize ?? BASE_FONT_PT,
+    );
     const forceBreak =
       (settings.pageBreakPerQuestion && breaks[i]) || block.style?.pageBreakBefore === true;
     return forceBreak ? withPageBreak(paragraphs) : paragraphs;
