@@ -33,6 +33,7 @@ import {
   ANSWER_LINE_WIDTH_PT,
   questionNumberColumnPt,
   alternativeMarkerColumnPt,
+  resolveElementFontSizes,
 } from "../render/pageTokens";
 import { FOOTER_COLOR, FOOTER_FONT_SIZE_PT, pdfFooterLabel } from "../render/footerLabel";
 import type {
@@ -2247,5 +2248,64 @@ describe("coluna do número e do marcador no .docx (achado 0524)", () => {
     const [numbered] = blockToDocxParagraphs(sized, 1);
     const col = twips(questionNumberColumnPt("1", 24));
     expect(docxNodeAttrs(numbered, "w:ind")).toEqual({ left: col, hanging: col });
+  });
+});
+
+/**
+ * Achado 0527: o "Tamanho do texto" do Formato escalava só o corpo do Word
+ * (`docDefaults`). Título, instrução, rótulo APOIO e legenda ficavam em corpo
+ * fixo: a 21pt de corpo o título saía em 18pt, MENOR que o enunciado. As outras
+ * superfícies resolvem os quatro por `resolveElementFontSizes` sobre o corpo.
+ */
+describe("0527 · título, instrução, APOIO e legenda do Word acompanham o corpo do documento", () => {
+  const BODY_PT = 21;
+  const sizes = resolveElementFontSizes({
+    fontFamily: undefined,
+    fontSize: BODY_PT,
+    blockSpacing: 16,
+  });
+  const half = (pt: number) => Math.round(pt * 2);
+  const sz = (node: unknown) =>
+    docxRunProps(node)
+      .filter((p) => p.key === "w:sz")
+      .map((p) => p.val);
+  const contentFor = (block: Block) =>
+    docxContentBlocks({ blocks: [block] } as CanonicalDocument, undefined, {
+      fontSize: BODY_PT,
+    } as never);
+
+  it.each([1, 2, 3] as const)("título nível %i escala pelo corpo e nunca fica menor que ele", (level) => {
+    const [h] = contentFor({ id: id(527), type: "heading", level, content: text("Prova") } as Block);
+    const expected = half(sizes[`heading${level}`]);
+    expect(sz(h)).toContain(expected);
+    expect(expected).toBeGreaterThan(BODY_PT * 2);
+  });
+
+  it("instrução da questão escala pelo corpo", () => {
+    const out = contentFor({
+      id: id(528),
+      type: "question",
+      stem: [{ id: id(529), type: "paragraph", content: text("Enunciado") }],
+      instruction: text("Marque a alternativa correta."),
+      answer: { kind: "open", answerLines: 1 },
+    } as Block);
+    const instr = out.find((b) => docxText(b).includes("Marque a alternativa"));
+    expect(sz(instr)).toContain(half(sizes.instruction));
+  });
+
+  it("rótulo APOIO e legenda escalam pelo corpo", () => {
+    const [label] = contentFor({
+      id: id(530),
+      type: "scaffolding",
+      items: ["passo"],
+    } as Block);
+    expect(sz(label)).toContain(half(sizes.caption));
+    const [, legenda] = contentFor({
+      id: id(531),
+      type: "image",
+      src: "https://e.com/a.png",
+      caption: text("Fig"),
+    } as Block);
+    expect(sz(legenda)).toContain(half(sizes.caption));
   });
 });

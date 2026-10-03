@@ -65,12 +65,12 @@ import {
 import {
   BASE_FONT_PT,
   ELEMENT_FONT_RATIOS,
+  resolveElementFontSizes,
   DEFAULT_FONT_FAMILY_TOKEN,
   DEFAULT_INK,
   SCAFFOLDING_BG,
   SCAFFOLDING_BORDER,
   SCAFFOLDING_LABEL,
-  HEADING_PT,
   PAGE_MARGIN_PT,
   RULE_COLOR,
   RULE_WIDTH_PT,
@@ -113,8 +113,6 @@ export type DocxBlock = Paragraph | Table;
 
 /** Monospace face for LaTeX source, mirroring the PDF's MATH_PDF_STYLE. */
 const MATH_FONT = "Courier New";
-/** Question instruction/enunciado size in half-points (10.5pt, as in the PDF). */
-const SUB_SIZE = 21;
 /**
  * Tinta do texto no Word: o MESMO `DEFAULT_INK` das outras três superfícies,
  * sem o `#` (a unidade do docx é o hex cru). Vale para o título e, via
@@ -126,8 +124,26 @@ const SUB_SIZE = 21;
  * enquanto edita (achado 0166).
  */
 const DOCX_INK = DEFAULT_INK.slice(1);
-/** Caption size in half-points — the sheet's `caption` element size (10pt). */
-const CAPTION_SIZE = Math.round(ELEMENT_FONT_RATIOS.caption * BASE_FONT_PT * 2);
+/**
+ * Corpo do título, da instrução e da legenda/rótulo APOIO em meios-pontos,
+ * derivados do corpo do documento pelo MESMO `resolveElementFontSizes` que a
+ * folha, a prévia e o PDF leem. Antes eram constantes no base de 12pt: o
+ * "Tamanho do texto" do Formato só movia o corpo, e a 21pt o título saía em
+ * 18pt, menor que o enunciado, com a instrução em 10,5pt (achado 0527).
+ */
+function elementHalfPoints(bodyPt: number) {
+  const sizes = resolveElementFontSizes({
+    fontFamily: undefined,
+    fontSize: bodyPt,
+    blockSpacing: BASE_BLOCK_SPACING_PX,
+  });
+  const half = (pt: number) => Math.round(pt * 2);
+  return {
+    heading: { 1: half(sizes.heading1), 2: half(sizes.heading2), 3: half(sizes.heading3) },
+    instruction: half(sizes.instruction),
+    caption: half(sizes.caption),
+  };
+}
 
 /**
  * Moldura + fundo da caixa do andaime, com os tokens compartilhados das outras
@@ -704,6 +720,7 @@ export function blockToDocxParagraphs(
   // `spacingAfter`, o último parágrafo leva o vão do documento, como o
   // `blockGap` do PDF (achado 0269).
   const { paragraph: ownPara, spacing: ownSpacing, run } = nodeStyleToDocx(block.style);
+  const sizes = elementHalfPoints(bodyPt);
   // Bloco dentro de uma questão (stem): cada parágrafo dele anda com o seguinte.
   const para: ParagraphStyle = keepWithNext ? { ...ownPara, ...KEEP_WITH_NEXT } : ownPara;
   // Corpo próprio do bloco: a linha dele vai em todo parágrafo (achado 0518).
@@ -730,11 +747,11 @@ export function blockToDocxParagraphs(
         new Paragraph({
           heading: level,
           ...para,
-          spacing: { ...lineSpacing(run.size ?? Math.round(HEADING_PT[block.level] * 2)), ...spacing.spacing },
+          spacing: { ...lineSpacing(run.size ?? sizes.heading[block.level]), ...spacing.spacing },
           children: richTextToRuns(block.content, {
             bold: true,
             color: DOCX_INK,
-            size: Math.round(HEADING_PT[block.level] * 2),
+            size: sizes.heading[block.level],
             // O `block.style` vence os defaults do título (achado 0134).
             ...run,
           }),
@@ -786,8 +803,8 @@ export function blockToDocxParagraphs(
           // O tamanho que a professora escolheu no bloco continua vencendo.
           new Paragraph({
             ...imagePara,
-            spacing: { ...lineSpacing(run.size ?? CAPTION_SIZE), ...spacing.spacing },
-            children: richTextToRuns(block.caption!, { ...run, size: run.size ?? CAPTION_SIZE }),
+            spacing: { ...lineSpacing(run.size ?? sizes.caption), ...spacing.spacing },
+            children: richTextToRuns(block.caption!, { ...run, size: run.size ?? sizes.caption }),
           }),
         );
       }
@@ -803,7 +820,7 @@ export function blockToDocxParagraphs(
           ...SCAFFOLDING_BOX,
           ...para,
           spacing: {
-            ...lineSpacing(CAPTION_SIZE),
+            ...lineSpacing(sizes.caption),
             ...(block.items.length > 0 ? {} : { after: spacing.spacing.after }),
           },
           children: [
@@ -811,7 +828,7 @@ export function blockToDocxParagraphs(
               ...run,
               text: SCAFFOLDING_LABEL.toUpperCase(),
               bold: true,
-              size: CAPTION_SIZE,
+              size: sizes.caption,
             }),
           ],
         }),
@@ -891,11 +908,11 @@ export function blockToDocxParagraphs(
           ? [
               new Paragraph({
                 ...kept,
-                spacing: { ...lineSpacing(run.size ?? SUB_SIZE), after: QUESTION_PART_GAP_TWIPS },
+                spacing: { ...lineSpacing(run.size ?? sizes.instruction), after: QUESTION_PART_GAP_TWIPS },
                 children: richTextToRuns(block.instruction, {
                   ...run,
                   italics: true,
-                  size: run.size ?? SUB_SIZE,
+                  size: run.size ?? sizes.instruction,
                 }),
               }),
             ]

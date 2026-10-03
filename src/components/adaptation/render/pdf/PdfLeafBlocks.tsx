@@ -60,8 +60,8 @@ type DividerBlock = Extract<Block, { type: "divider" }>;
  * Corpo do título, em pt. Vem de `elementSizes` — o mesmo resolvedor que
  * alimenta as `--doc-fs-heading*` da tela —, e não mais da constante
  * `HEADING_PT`, que era absoluta e não acompanhava o "Tamanho do texto" do
- * popover Formato (achado 0412). `HEADING_PT` continua sendo a PROPORÇÃO de
- * origem (via `HEADING_FONT_RATIOS`) e o valor que o Word lê (achado 0164).
+ * popover Formato (achado 0412). `HEADING_PT` continua sendo só a PROPORÇÃO
+ * de origem (via `HEADING_FONT_RATIOS`); o Word lê o mesmo resolvedor (0527).
  */
 function headingSizePt(level: 1 | 2 | 3, elementSizes: ElementFontSizesPt): number {
   return level === 1 ? elementSizes.heading1 : level === 2 ? elementSizes.heading2 : elementSizes.heading3;

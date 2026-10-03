@@ -28,11 +28,10 @@ export const PAGE_HEIGHT_PT = 842;
 export const BASE_FONT_PT = 12;
 
 /**
- * Corpo do TÍTULO por nível, em pontos (text-2xl/xl/lg da tela = 24/20/18px
- * convertidos px→pt). Ponto único do PDF (`PdfHeading`) e do Word
- * (`blockToDocxParagraphs`): sem ele o .docx caía no estilo `Heading1` da lib
- * `docx` e o título saía em 16pt azul, enquanto o PDF imprimia 18pt preto
- * (achado 0164).
+ * Corpo do TÍTULO por nível no corpo base de 12pt, em pontos (text-2xl/xl/lg
+ * da tela = 24/20/18px convertidos px→pt). Hoje é só a ORIGEM das proporções
+ * de `HEADING_FONT_RATIOS`: PDF, telas e Word (achados 0412 e 0527) resolvem o
+ * título por `resolveElementFontSizes`, que escala com o corpo do documento.
  */
 export const HEADING_PT: Record<1 | 2 | 3, number> = { 1: 18, 2: 15, 3: 13.5 };
 /** Entrelinha base (multiplicador). */
