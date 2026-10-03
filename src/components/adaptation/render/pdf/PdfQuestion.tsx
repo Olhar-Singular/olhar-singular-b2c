@@ -31,7 +31,14 @@ import { PdfAnswer, tableLeadPresencePt } from "./PdfAnswer";
 import { PdfBlock } from "./PdfBlock";
 import { PdfParagraph } from "./PdfLeafBlocks";
 import { questionNumbers } from "../questionNumbering";
-import { BASE_FONT_PT, INK_MUTED, pdfTextSize, questionNumberColumnPt } from "../pageTokens";
+import {
+  BASE_FONT_PT,
+  INK_MUTED,
+  PAGE_HEIGHT_PT,
+  PAGE_MARGIN_PT,
+  pdfTextSize,
+  questionNumberColumnPt,
+} from "../pageTokens";
 import { resolveElementFontSizes, resolvePageStyle, type ElementFontSizesPt } from "../pageStyle";
 
 type QuestionBlock = Extract<Block, { type: "question" }>;
@@ -57,6 +64,17 @@ const DEFAULT_ELEMENT_SIZES = resolveElementFontSizes(resolvePageStyle());
  * blocos para folhas onde o arquivo nao os punha.
  */
 const QUESTION_INNER_GAP_PT = 6;
+
+/**
+ * Presença à frente do marco do grupo abertura + APOIO (achado 0530): a área
+ * útil da folha. O react-pdf a limita ao fim do último irmão do grupo (a
+ * caixa), então ela pede "o grupo inteiro" sempre que o grupo cabe numa folha.
+ * Grupo maior que a folha: pede só a folha, e no topo dela isso já está
+ * cumprido, então não há descida para uma folha em branco. O `- 1` absorve o
+ * arredondamento do token: o A4 do react-pdf tem 841,89pt, não 842, e a
+ * presença de uma folha cheia ficava 0,11pt acima do que a folha oferece.
+ */
+const KEEP_WITH_SCAFFOLDING_PT = PAGE_HEIGHT_PT - 2 * PAGE_MARGIN_PT - 1;
 
 export function PdfQuestion({
   block,
@@ -139,12 +157,43 @@ export function PdfQuestion({
     />
   ));
 
+  const leadView = enunciadoLeads ? (
+    enunciadoView(numberRun)
+  ) : (
+    <PdfParagraph block={leadingStem} blockGap={QUESTION_INNER_GAP_PT} numberPrefix={numberRun} baseFontSize={baseFontSize} />
+  );
+  const afterLead = paragraphLeads ? 1 : 0;
+  const nextAfterLead = block.stem[afterLead];
+
+  /**
+   * APOIO logo depois do texto de abertura (achado 0530). A caixa é
+   * indivisível (0177) e o react-pdf quebra ANTES dela quando não cabe,
+   * deixando número + enunciado sozinhos no pé da folha. No grupo abertura +
+   * caixa, um marco de altura zero exige à frente a presença do grupo inteiro
+   * (`KEEP_WITH_SCAFFOLDING_PT`) e, quando ela falta, o grupo desce junto. O
+   * react-pdf só quebra antes de um nó com irmão anterior, daí o segundo
+   * marco abrindo o grupo. Nada vira `wrap={false}`: abertura longa continua
+   * fatiável e nada é cortado.
+   */
+  const leadKeepsScaffolding =
+    nextAfterLead?.type === "scaffolding" && !pageBreakBefore(nextAfterLead.style);
+
+  const leadGroup = leadKeepsScaffolding ? (
+    <View>
+      <View style={{ height: 0 }} />
+      <View style={{ height: 0 }} minPresenceAhead={KEEP_WITH_SCAFFOLDING_PT} />
+      {leadView}
+      {stemBlocks[afterLead]}
+    </View>
+  ) : (
+    leadView
+  );
+
   const body =
     enunciadoLeads || paragraphLeads ? (
       <View style={{ paddingLeft: numberColumn }}>
-        {enunciadoLeads ? enunciadoView(numberRun) : null}
-        {paragraphLeads ? <PdfParagraph block={leadingStem} blockGap={QUESTION_INNER_GAP_PT} numberPrefix={numberRun} baseFontSize={baseFontSize} /> : null}
-        {paragraphLeads ? stemBlocks.slice(1) : stemBlocks}
+        {leadGroup}
+        {stemBlocks.slice(afterLead + (leadKeepsScaffolding ? 1 : 0))}
         {position === "below" && enunciadoView()}
       </View>
     ) : (
