@@ -580,9 +580,10 @@
 }
 .tiptap:not(.rich-text-field) > h2,
 .tiptap:not(.rich-text-field) > h3 {
+  /* Sem cor nem faixa de fundo (achado 0389): previa, PDF e Word imprimem o
+     titulo de secao na tinta do papel. A marca de "Secao" e so o rotulo
+     ::before e o filete ::after, fora do fluxo do texto. */
   font-weight: 700;
-  color: hsl(var(--primary));
-  background-color: hsl(var(--primary) / 0.06);
 }
 .tiptap:not(.rich-text-field) > h2::after,
 .tiptap:not(.rich-text-field) > h3::after {

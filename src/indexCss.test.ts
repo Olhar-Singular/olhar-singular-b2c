@@ -44,6 +44,16 @@ describe("index.css — blocos de topo do editor canonico", () => {
     expect(body).not.toMatch(/(^|[\s;])color\s*:/);
   });
 
+  it("nao recolore nem pinta faixa no titulo de secao h2/h3 (achado 0389)", () => {
+    // Previa, PDF e Word imprimem o h2/h3 na tinta do papel e sem fundo; a
+    // distincao de "Secao" fica so no rotulo ::before e no filete ::after.
+    for (const tag of ["h2", "h3"]) {
+      const body = ruleBody(`.tiptap:not(.rich-text-field) > ${tag}`);
+      expect(body).not.toMatch(/(^|[\s;])color\s*:/);
+      expect(body).not.toMatch(/background(-color)?\s*:/);
+    }
+  });
+
   it("nao rotula todo paragrafo de topo como 'Instrução'", () => {
     expect(ruleBody(".tiptap:not(.rich-text-field) > p::before")).not.toMatch(
       /Instrução/,
