@@ -77,6 +77,16 @@ describe("StepBarrierSelection", () => {
     vi.mocked(useCreateBarrierProfile).mockReturnValue({ mutateAsync: mockMutateAsync, isPending: false } as never);
   });
 
+  it("does not draw a permanent ring on the Adaptar CTA that mimics the focus indicator", () => {
+    renderStep();
+    const cta = screen.getByRole("button", { name: "Adaptar" });
+    const permanentRing = cta.className
+      .split(/\s+/)
+      .filter((c) => /^(hover:)?ring(-offset)?(-\d|-primary|$)/.test(c));
+    expect(permanentRing).toEqual([]);
+    expect(cta.className).toContain("focus-visible:ring-2");
+  });
+
   it("renders the barrier step heading", () => {
     renderStep();
     expect(screen.getByRole("heading", { name: /barreiras de aprendizagem/i })).toBeInTheDocument();

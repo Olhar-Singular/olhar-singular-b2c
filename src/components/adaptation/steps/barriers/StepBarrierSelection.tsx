@@ -240,7 +240,7 @@ export function StepBarrierSelection({ data, updateData, onNext, onPrev }: Props
         <Button
           onClick={handleNext}
           aria-label="Adaptar"
-          className="gap-2 shadow-md shadow-primary/40 ring-2 ring-primary/30 ring-offset-2 hover:shadow-lg hover:shadow-primary/50 hover:ring-primary/50 transition-all duration-200"
+          className="gap-2 shadow-md shadow-primary/40 hover:shadow-lg hover:shadow-primary/50 transition-all duration-200"
         >
           <Sparkles className="w-4 h-4" />
           Adaptar
