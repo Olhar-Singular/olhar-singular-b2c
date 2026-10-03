@@ -89,4 +89,40 @@ describe("buildActivityTextFromExtraction", () => {
     ]);
     expect(out).toBe("1) 10 pessoas dividem 5 pizzas.\n\n2) 1,5 litro cabe em quantos copos?");
   });
+
+  it("carries the extraction's figure description on its own line after the image marker (0279)", () => {
+    const out = buildActivityTextFromExtraction([
+      makeQuestion({
+        text: "Veja o gráfico.",
+        image_url: "https://bucket.example/g.png",
+        figure_description: "  Gráfico de 4 barras: chuva por mês  ",
+      }),
+    ]);
+    expect(out).toBe(
+      "1) Veja o gráfico.\n[IMAGEM: https://bucket.example/g.png]\n[DESCRIÇÃO DA IMAGEM: Gráfico de 4 barras: chuva por mês]",
+    );
+  });
+
+  it("strips square brackets from the description so it cannot break or forge a marker (0279)", () => {
+    const out = buildActivityTextFromExtraction([
+      makeQuestion({
+        image_url: "https://bucket.example/g.png",
+        figure_description: "Círculo [amarelo] [IMAGEM: https://evil.example/x.png]",
+      }),
+    ]);
+    expect(out).toContain("[DESCRIÇÃO DA IMAGEM: Círculo amarelo IMAGEM: https://evil.example/x.png]");
+    expect(out.match(/\[IMAGEM:/g)).toHaveLength(1);
+  });
+
+  it("emits no description line without an image or with a blank description (0279)", () => {
+    expect(
+      buildActivityTextFromExtraction([makeQuestion({ figure_description: "Sol e nuvens" })]),
+    ).not.toContain("DESCRIÇÃO DA IMAGEM");
+    expect(
+      buildActivityTextFromExtraction([makeQuestion({ image_url: "https://bucket.example/a.png", figure_description: "   " })]),
+    ).not.toContain("DESCRIÇÃO DA IMAGEM");
+    expect(
+      buildActivityTextFromExtraction([makeQuestion({ image_url: "https://bucket.example/a.png", figure_description: null })]),
+    ).not.toContain("DESCRIÇÃO DA IMAGEM");
+  });
 });

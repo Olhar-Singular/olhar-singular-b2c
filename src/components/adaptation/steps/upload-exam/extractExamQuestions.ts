@@ -11,6 +11,7 @@ type RawExtractedQuestion = {
   has_figure?: boolean;
   image_page?: number;
   figure_bbox?: { x: number; y: number; width: number; height: number };
+  figure_description?: string;
 };
 
 /** PDF pages are rasterized whole (crop needed); DOCX images are already isolated per-figure. */
@@ -86,7 +87,13 @@ export async function extractExamQuestions(
   const resolved: ExamExtractedQuestion[] = [];
   for (const q of rawQuestions) {
     const image_url = await resolveImageUrl(exam.fileType, q, exam.pageImages, userId);
-    resolved.push({ text: q.text, options: q.options && q.options.length > 0 ? q.options : null, image_url });
+    const question: ExamExtractedQuestion = {
+      text: q.text,
+      options: q.options && q.options.length > 0 ? q.options : null,
+      image_url,
+    };
+    if (image_url && q.figure_description) question.figure_description = q.figure_description;
+    resolved.push(question);
   }
   extractionCache.set(exam, resolved);
   return { status: "ok", questions: resolved, charged: true };

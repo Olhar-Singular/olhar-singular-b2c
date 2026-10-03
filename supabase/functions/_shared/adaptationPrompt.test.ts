@@ -183,6 +183,15 @@ describe("buildSystemPrompt", () => {
     expect(prompt).toContain("NÃO deixe o marcador literal");
   });
 
+  it("grounds the image alt on the extraction description and forbids inventing or revealing the answer (0279)", () => {
+    const prompt = buildSystemPrompt([{ dimension: "tea" }]);
+    expect(prompt).toContain("[DESCRIÇÃO DA IMAGEM:");
+    expect(prompt).toContain("Você NÃO vê a imagem");
+    expect(prompt).toContain("NUNCA revele a resposta");
+    expect(prompt).toContain("Figura da questão N");
+    expect(prompt).not.toContain("um \"alt\" curto e descritivo");
+  });
+
   it("forbids inventing images and tells the model to describe in text instead", () => {
     const prompt = buildSystemPrompt([{ dimension: "tea" }]);
     expect(prompt).toContain("NUNCA invente");

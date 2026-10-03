@@ -171,6 +171,40 @@ describe("extractExamQuestions", () => {
     });
   });
 
+  it("keeps the extraction's figure_description for a resolved figure (0279)", async () => {
+    const exam: UploadedExam = { ...pdfExam, pageImages: ["data:image/jpeg;base64,PAGE1"] };
+    autoCropFromBboxMock.mockResolvedValue("data:image/png;base64,CROPPED");
+    invokeMock.mockResolvedValueOnce({
+      data: {
+        questions: [
+          {
+            text: "Com figura",
+            has_figure: true,
+            image_page: 1,
+            figure_bbox: { x: 0, y: 0, width: 1, height: 1 },
+            figure_description: "Círculo amarelo sobre fundo azul",
+          },
+          { text: "Sem figura", figure_description: "não deveria vazar" },
+        ],
+      },
+      error: null,
+    });
+    const result = await extractExamQuestions(exam, "user-1");
+    expect(result).toEqual({
+      status: "ok",
+      questions: [
+        {
+          text: "Com figura",
+          options: null,
+          image_url: "https://bucket.example/img.png",
+          figure_description: "Círculo amarelo sobre fundo azul",
+        },
+        { text: "Sem figura", options: null, image_url: null },
+      ],
+      charged: true,
+    });
+  });
+
   it("uses the DOCX image directly (no bbox crop) for a DOCX figure", async () => {
     const exam: UploadedExam = {
       fileName: "prova.docx",

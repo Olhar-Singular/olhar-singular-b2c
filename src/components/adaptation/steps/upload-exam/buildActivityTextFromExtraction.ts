@@ -2,6 +2,8 @@ export type ExamExtractedQuestion = {
   text: string;
   options?: string[] | null;
   image_url?: string | null;
+  /** What the vision extraction saw in the figure; the only real description the text-only adaptation gets. */
+  figure_description?: string | null;
 };
 
 /**
@@ -19,7 +21,9 @@ const LEADING_QUESTION_LABEL = /^\s*(?:(?:quest[aã]o|q)\s*\d+\s*[.):\-–]?|\d+
  * Mirrors the `[IMAGEM: <url>]` marker convention of `buildActivityText.ts` (the
  * bank-picker equivalent): `image_url` is expected to already be a resolved,
  * uploaded URL (figure cropping/upload happens before this call), not a raw
- * bounding box. A label already present in `q.text` is dropped so the numbering is
+ * bounding box. The extraction's `figure_description` follows the marker as
+ * `[DESCRIÇÃO DA IMAGEM: ...]`, since adapt-activity never sees the image and
+ * would otherwise invent the alt text. A label already present in `q.text` is dropped so the numbering is
  * not doubled ("1) 1) ...").
  */
 export function buildActivityTextFromExtraction(questions: ExamExtractedQuestion[]): string {
@@ -31,6 +35,10 @@ export function buildActivityTextFromExtraction(questions: ExamExtractedQuestion
       }
       if (q.image_url) {
         text += `\n[IMAGEM: ${q.image_url}]`;
+        // Brackets are stripped so the description can neither close its own
+        // marker early nor forge an [IMAGEM:] marker for imageSourceGuard.
+        const description = (q.figure_description ?? "").replace(/[[\]]/g, "").trim();
+        if (description) text += `\n[DESCRIÇÃO DA IMAGEM: ${description}]`;
       }
       return text;
     })
