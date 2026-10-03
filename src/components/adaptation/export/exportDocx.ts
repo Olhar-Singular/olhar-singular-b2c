@@ -230,6 +230,8 @@ type ParagraphStyle = {
  * pé da página e as alternativas órfãs na seguinte. Quando a cadeia não cabe
  * numa página vazia, o próprio Word ignora o `keepNext` e parte a questão, então
  * a questão maior que uma folha não some (o risco que bloqueou o 0702 no PDF).
+ * Exceção (achado 1109): as linhas de dados da tabela não entram na cadeia; o
+ * LibreOffice empurra a cadeia inteira para a folha seguinte antes de partir.
  */
 const KEEP_WITH_NEXT = { keepNext: true, keepLines: true } as const;
 
@@ -554,6 +556,12 @@ function answerToDocx(
     case "table": {
       const [header, ...body] = answer.rows;
       if (!header) return [];
+      // Achado 1109: só o cabeçalho herda o `keepNext` da questão, prendendo o
+      // enunciado/instrução e ele à 1ª linha de dados. Nas linhas de dados o
+      // `keepNext` encadeava a tabela inteira num bloco só, e a questão-tabela
+      // maior que uma folha era empurrada toda para a seguinte, deixando o pé
+      // da folha em branco; a integridade de cada linha já vem do `cantSplit`.
+      const { keepNext: _keepNext, ...dataCellParagraph } = style.paragraph;
       const row = (cells: RichText[], bold: boolean) =>
         new TableRow({
           // `tableHeader` é o que faz o Word repetir a primeira linha no topo de
@@ -569,7 +577,7 @@ function answerToDocx(
               new TableCell({
                 children: [
                   new Paragraph({
-                    ...style.paragraph,
+                    ...(bold ? style.paragraph : dataCellParagraph),
                     ...spacingWith(lineFor(style.run.size)),
                     children: richTextToRuns(cell, { ...style.run, bold }),
                   }),

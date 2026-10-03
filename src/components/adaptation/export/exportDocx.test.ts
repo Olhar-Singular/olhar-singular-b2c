@@ -1915,6 +1915,41 @@ describe("0271 · a questão não se parte na virada do Word", () => {
     expect(hasTag(closing, "w:keepNext")).toBe(false);
   });
 
+  it("1109 · a tabela só prende o cabeçalho à 1ª linha; as linhas de dados não se encadeiam", () => {
+    // Com keepNext em toda célula a tabela inteira virava um bloco indivisível:
+    // a questão-tabela maior que uma folha era empurrada inteira para a seguinte.
+    const out = blockToDocxParagraphs(
+      q(
+        {
+          kind: "table",
+          rows: [
+            [text("Etapa"), text("O que fazer")],
+            [text("1"), text("ler")],
+            [text("2"), text("grifar")],
+            [text("3"), text("responder")],
+          ],
+        } as QuestionAnswer,
+        { instruction: text("Complete a tabela.") } as Partial<Block>,
+      ),
+      1,
+    );
+    const table = out.find((b) => b instanceof Table) as Table;
+    const [header, ...body] = (table as unknown as { root: TableRow[] }).root.filter(
+      (n) => (n as unknown as { rootKey?: string }).rootKey === "w:tr",
+    );
+    // O cabeçalho anda com a 1ª linha de dados (e o enunciado/instrução, antes da
+    // tabela, continua preso a ele).
+    expect(hasTag(header, "w:keepNext")).toBe(true);
+    expect(body).toHaveLength(3);
+    for (const row of body) {
+      expect(hasTag(row, "w:keepNext")).toBe(false);
+      // a linha continua inteira pela própria tag da linha
+      expect(hasTag(row, "w:cantSplit")).toBe(true);
+    }
+    const before = out.slice(0, out.indexOf(table));
+    for (const p of before) expect(hasTag(p, "w:keepNext")).toBe(true);
+  });
+
   it("bloco solto fora de questão não ganha keepNext", () => {
     const out = blockToDocxParagraphs(
       { id: id(95), type: "paragraph", content: text("texto de apoio") },
