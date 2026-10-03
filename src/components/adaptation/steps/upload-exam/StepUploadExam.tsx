@@ -176,7 +176,16 @@ export function StepUploadExam({ data, updateData, onNext, onLoadingChange }: Pr
     e.preventDefault();
     setDragging(false);
     if (dropDisabled) return;
-    const file = e.dataTransfer.files?.[0];
+    const files = e.dataTransfer.files;
+    // One exam per adaptation: refuse the batch out loud instead of silently
+    // keeping files[0] and discarding the rest (the teacher would pay for one
+    // and believe all were sent).
+    if (files.length > 1) {
+      setAnnouncement("");
+      setError(`Envie um arquivo por vez: você soltou ${files.length} arquivos. Solte só o que quer adaptar.`);
+      return;
+    }
+    const file = files[0];
     if (file) void handleFile(file);
   }
 

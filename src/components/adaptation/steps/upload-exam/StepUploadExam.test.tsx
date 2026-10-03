@@ -295,6 +295,21 @@ describe("StepUploadExam", () => {
       expect(parsePdfMock).not.toHaveBeenCalled();
     });
 
+    // Regression (0283): dropping several files used only files[0] and silently
+    // discarded the rest (even a valid PDF behind an invalid first file).
+    it("refuses a multi-file drop with an explicit alert instead of silently using the first", async () => {
+      const updateData = vi.fn();
+      renderWithProviders(<StepUploadExam data={baseData} updateData={updateData} onNext={vi.fn()} onPrev={vi.fn()} />);
+      const files = [pdfFile("parte-1.pdf"), pdfFile("parte-2.pdf")];
+      expect(fireEvent.drop(dropzone(), { dataTransfer: { files } })).toBe(false);
+      expect(await screen.findByRole("alert")).toHaveTextContent(
+        "Envie um arquivo por vez: você soltou 2 arquivos. Solte só o que quer adaptar.",
+      );
+      await flushMicrotasks();
+      expect(parsePdfMock).not.toHaveBeenCalled();
+      expect(updateData).not.toHaveBeenCalled();
+    });
+
     it("ignores a second drop while the first file is still being parsed", async () => {
       const pending = deferred<{ text: string; pageImages: string[] }>();
       parsePdfMock.mockReturnValue(pending.promise);
