@@ -74,8 +74,17 @@ const TABS: { key: Tab; label: string; icon: React.ElementType }[] = [
   { key: "banco", label: "Banco de Questões", icon: Database },
 ];
 
-// Most recent questions shown in the bank picker.
-const BANK_QUERY_LIMIT = 50;
+// 1131: the bank search runs here, over the whole (owner-scoped) list, like
+// the bank page: accent- and case-insensitive, over statement, subject and
+// topic, and with `%`/`_` as plain characters (no LIKE wildcards).
+function foldForSearch(value: string): string {
+  return value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+}
+
+function matchesBankSearch(q: BankQuestion, term: string): boolean {
+  return [q.text, q.subject, q.topic].some((field) => !!field && foldForSearch(field).includes(term));
+}
+
 // Debounce (ms) before re-running the bank search as the user types.
 const BANK_SEARCH_DEBOUNCE_MS = 300;
 // Id of the "Colar Texto" validation message, referenced by the textarea.
@@ -137,9 +146,7 @@ export function StepActivityInput({ data, updateData, onNext, onPrev }: Props) {
     let query = supabase
       .from("question_bank")
       .select("id, text, subject, topic, difficulty, image_url, options")
-      .order("created_at", { ascending: false })
-      .limit(BANK_QUERY_LIMIT);
-    if (bankSearch.trim()) query = query.ilike("text", `%${bankSearch.trim()}%`);
+      .order("created_at", { ascending: false });
     if (filterSubject !== "all") query = query.eq("subject", filterSubject);
     if (filterDifficulty !== "all") query = query.eq("difficulty", filterDifficulty);
     const { data: rows, error } = await query;
@@ -154,7 +161,12 @@ export function StepActivityInput({ data, updateData, onNext, onPrev }: Props) {
       setBankQuestions((rows as BankQuestion[]) || []);
     }
     setBankLoading(false);
-  }, [bankSearch, filterSubject, filterDifficulty]);
+  }, [filterSubject, filterDifficulty]);
+
+  const bankSearchTerm = foldForSearch(bankSearch.trim());
+  const visibleBankQuestions = bankSearchTerm
+    ? bankQuestions.filter((q) => matchesBankSearch(q, bankSearchTerm))
+    : bankQuestions;
 
   useEffect(() => {
     if (!showBankModal) return;
@@ -479,11 +491,11 @@ export function StepActivityInput({ data, updateData, onNext, onPrev }: Props) {
               <p role="alert" className="text-sm text-destructive-strong py-8 text-center">
                 Erro ao carregar o banco de questões. Tente novamente.
               </p>
-            ) : bankQuestions.length === 0 ? (
+            ) : visibleBankQuestions.length === 0 ? (
               <p className="text-sm text-muted-foreground py-8 text-center">Nenhuma questão encontrada.</p>
             ) : (
               <div className="space-y-2 flex-1 overflow-y-auto px-1 py-1">
-                {bankQuestions.map((q) => {
+                {visibleBankQuestions.map((q) => {
                   const isAdded = addedIds.has(q.id);
                   const isSelected = isAdded || checked.has(q.id);
                   return (

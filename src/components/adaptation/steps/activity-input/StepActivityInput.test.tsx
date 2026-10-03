@@ -294,19 +294,58 @@ describe("StepActivityInput — tab visibility", () => {
 // ── fetchBankQuestions filters (lines 116-120) ─────────────────────────────
 
 describe("StepActivityInput — fetchBankQuestions filters", () => {
-  it("applies ilike filter when bankSearch is non-empty", async () => {
-    bankQuestionsResult.data = [
-      { id: "q1", text: "Questão de Física", subject: "Física", topic: null, difficulty: null, image_url: null, options: null },
-    ];
+  // 1131: the search runs in the browser, over the same fields as the bank
+  // page, accent-insensitive, and never turns `%`/`_` into LIKE wildcards.
+  function openBankDialog() {
     render(<StepActivityInput data={baseData} updateData={vi.fn()} onNext={vi.fn()} onPrev={vi.fn()} />);
     fireEvent.click(screen.getByRole("button", { name: /Banco de Questões/i }));
     fireEvent.click(screen.getByRole("button", { name: /Abrir Banco de Questões/i }));
-    await waitFor(() => screen.getByRole("dialog"));
-    const searchInput = screen.getByPlaceholderText("Buscar questões...");
-    fireEvent.change(searchInput, { target: { value: "Física" } });
-    await waitFor(() => {
-      expect(fromChain.ilike).toHaveBeenCalledWith("text", "%Física%");
-    });
+  }
+  const searchRows = [
+    { id: "s1", text: "Explique o processo de fotossíntese.", subject: "Ciências", topic: null, difficulty: null, image_url: null, options: null },
+    { id: "s2", text: "Qual é a capital do Brasil?", subject: "Geografia", topic: "Capitais", difficulty: null, image_url: null, options: null },
+    { id: "s3", text: "Palavra comprida", subject: "Português", topic: "Ortografia", difficulty: null, image_url: null, options: null },
+    { id: "s4", text: "Aumentou 50% do preço", subject: "Matemática", topic: null, difficulty: null, image_url: null, options: null },
+  ];
+
+  it("finds a question typed without accents (1131)", async () => {
+    bankQuestionsResult.data = searchRows;
+    openBankDialog();
+    await waitFor(() => screen.getByText("Qual é a capital do Brasil?"));
+    fireEvent.change(screen.getByPlaceholderText("Buscar questões..."), { target: { value: "fotossintese" } });
+    await waitFor(() => expect(screen.queryByText("Qual é a capital do Brasil?")).toBeNull());
+    expect(screen.getByText("Explique o processo de fotossíntese.")).toBeInTheDocument();
+    expect(fromChain.ilike).not.toHaveBeenCalled();
+  });
+
+  it("matches subject and topic like the bank page (1131)", async () => {
+    bankQuestionsResult.data = searchRows;
+    openBankDialog();
+    await waitFor(() => screen.getByText("Palavra comprida"));
+    fireEvent.change(screen.getByPlaceholderText("Buscar questões..."), { target: { value: "ortografia" } });
+    await waitFor(() => expect(screen.queryByText("Qual é a capital do Brasil?")).toBeNull());
+    expect(screen.getByText("Palavra comprida")).toBeInTheDocument();
+    fireEvent.change(screen.getByPlaceholderText("Buscar questões..."), { target: { value: "  GEOGRAFIA " } });
+    await waitFor(() => screen.getByText("Qual é a capital do Brasil?"));
+    expect(screen.queryByText("Palavra comprida")).toBeNull();
+  });
+
+  it("treats % and _ as literal characters (1131)", async () => {
+    bankQuestionsResult.data = searchRows;
+    openBankDialog();
+    await waitFor(() => screen.getByText("Palavra comprida"));
+    fireEvent.change(screen.getByPlaceholderText("Buscar questões..."), { target: { value: "_" } });
+    await waitFor(() => expect(screen.getByText("Nenhuma questão encontrada.")).toBeInTheDocument());
+    fireEvent.change(screen.getByPlaceholderText("Buscar questões..."), { target: { value: "50%" } });
+    await waitFor(() => screen.getByText("Aumentou 50% do preço"));
+    expect(screen.queryByText("Palavra comprida")).toBeNull();
+  });
+
+  it("does not cap the bank list at a fixed number of rows (1131)", async () => {
+    bankQuestionsResult.data = searchRows;
+    openBankDialog();
+    await waitFor(() => screen.getByText("Palavra comprida"));
+    expect(fromChain.limit).not.toHaveBeenCalledWith(50);
   });
 
   it("applies eq filter when subject filter is set to a specific subject", async () => {
@@ -416,14 +455,12 @@ describe("StepActivityInput — the add button and toast count what enters (1130
   it("keeps a checked question when the filter hides it, adds it and counts it", async () => {
     bankQuestionsResult.data = [
       { id: "q7", text: "Resolva: x/2 + 3 = 7", subject: "Matemática", topic: null, difficulty: "medio", image_url: null, options: null },
+      { id: "q8", text: "Fotossíntese", subject: "Ciências", topic: null, difficulty: null, image_url: null, options: null },
     ];
     const updateData = openBank(baseData);
     await waitFor(() => screen.getByText("Resolva: x/2 + 3 = 7"));
     fireEvent.click(screen.getByText("Resolva: x/2 + 3 = 7"));
-    // New search result no longer contains the checked question.
-    bankQuestionsResult.data = [
-      { id: "q8", text: "Fotossíntese", subject: "Ciências", topic: null, difficulty: null, image_url: null, options: null },
-    ];
+    // The search no longer shows the checked question.
     fireEvent.change(screen.getByPlaceholderText("Buscar questões..."), { target: { value: "Foto" } });
     await waitFor(() => screen.getByText("Fotossíntese"));
     expect(screen.queryByText("Resolva: x/2 + 3 = 7")).toBeNull();
