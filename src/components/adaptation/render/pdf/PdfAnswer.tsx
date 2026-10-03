@@ -38,6 +38,7 @@ import {
   TABLE_CELL_PADDING_PT,
   TRUE_FALSE_MARKER_GAP_PT,
   TRUE_FALSE_MARKER_TEXT,
+  RULE_COLOR,
   RULE_WIDTH_PT,
   CHECKBOX_BOX_PT,
   CHECKBOX_BOX_BORDER_PT,
@@ -426,7 +427,7 @@ export function PdfAnswer({
         flexBasis: 0,
         borderRightWidth: RULE_WIDTH_PT,
         borderBottomWidth: RULE_WIDTH_PT,
-        borderColor: "#999999",
+        borderColor: RULE_COLOR,
         // Recuo e traço vêm de pageTokens: a prévia do Exportar mede o próprio
         // DOM para contar as folhas, então a célula das duas superfícies precisa
         // ter a mesma altura de linha (achado 0607).
@@ -449,7 +450,7 @@ export function PdfAnswer({
             style={{
               borderTopWidth: RULE_WIDTH_PT,
               borderLeftWidth: RULE_WIDTH_PT,
-              borderColor: "#999999",
+              borderColor: RULE_COLOR,
             }}
           >
             {header && (

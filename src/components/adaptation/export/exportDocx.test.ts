@@ -642,6 +642,36 @@ describe("B15 · conteúdo que precisa chegar ao Word", () => {
     expect(widths.every((w) => w > 1000)).toBe(true);
   });
 
+  it("table pinta a moldura com a tinta e a espessura de régua do documento (0522)", () => {
+    // Achado 0522: sem `borders` a lib emite `<w:tblBorders>` single com
+    // `w:color="auto"` (preto), enquanto o PDF e a tela usam a régua do documento.
+    const table = blockToDocxParagraphs(
+      q({ kind: "table", rows: [[text("A"), text("B")], [text("c"), text("d")]] }),
+      1,
+    ).find((b) => b instanceof Table) as unknown as { root: unknown[] };
+    const tblPr = table.root.find(
+      (n) => (n as { rootKey?: string }).rootKey === "w:tblPr",
+    ) as { root: unknown[] };
+    const borders = tblPr.root.find(
+      (n) => (n as { rootKey?: string }).rootKey === "w:tblBorders",
+    ) as { root: unknown[] };
+    expect(borders).toBeDefined();
+    const edges = borders.root
+      .map((e) => (e as { rootKey?: string }).rootKey!)
+      .filter((k) => k !== "_attr");
+    expect(edges.sort()).toEqual(
+      ["w:bottom", "w:insideH", "w:insideV", "w:left", "w:right", "w:top"].sort(),
+    );
+    for (const edge of borders.root) {
+      const key = (edge as { rootKey?: string }).rootKey!;
+      if (key === "_attr") continue;
+      const attrs = docxNodeAttrs(edge, key);
+      expect(attrs?.style).toBe("single");
+      expect(attrs?.color).toBe(RULE_COLOR.slice(1));
+      expect(attrs?.size).toBe(Math.round(RULE_WIDTH_PT * 8));
+    }
+  });
+
   it("table declara o recuo da célula de TABLE_CELL_PADDING_PT nos quatro lados", () => {
     // Achado 0268: sem `w:tblCellMar` o Word aplica o default dele (108 twips à
     // esquerda/direita, 0 em cima/embaixo) e a célula quebra uma palavra antes

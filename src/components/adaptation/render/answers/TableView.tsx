@@ -11,7 +11,7 @@
 import type { CSSProperties } from "react";
 import type { QuestionAnswer } from "@/lib/adaptation/canonical/schema";
 import { RichTextView } from "../RichTextView";
-import { TABLE_CELL_PADDING_PX, RULE_WIDTH_PX, BASE_LINE_HEIGHT } from "../pageTokens";
+import { TABLE_CELL_PADDING_PX, RULE_COLOR, RULE_WIDTH_PX, BASE_LINE_HEIGHT } from "../pageTokens";
 
 type TableAnswer = Extract<QuestionAnswer, { kind: "table" }>;
 
@@ -26,6 +26,9 @@ const TABLE_STYLE: CSSProperties = { tableLayout: "fixed" };
 const CELL_STYLE: CSSProperties = {
   padding: `${TABLE_CELL_PADDING_PX}px`,
   borderWidth: `${RULE_WIDTH_PX}px`,
+  // Achado 0522: a tinta é a régua do documento, não o `border-border` do
+  // chrome do app (1,33:1 sobre o papel); a mesma do PDF e do Word.
+  borderColor: RULE_COLOR,
   lineHeight: BASE_LINE_HEIGHT,
 };
 
@@ -51,7 +54,7 @@ export function TableView({ answer }: { answer: TableAnswer }) {
               <th
                 key={c}
                 style={CELL_STYLE}
-                className="border border-border text-left align-top font-semibold"
+                className="border text-left align-top font-semibold"
               >
                 <RichTextView content={cell} />
               </th>
@@ -63,7 +66,7 @@ export function TableView({ answer }: { answer: TableAnswer }) {
         {body.map((row, r) => (
           <tr key={r}>
             {row.map((cell, c) => (
-              <td key={c} style={CELL_STYLE} className="border border-border align-top">
+              <td key={c} style={CELL_STYLE} className="border align-top">
                 <RichTextView content={cell} />
               </td>
             ))}

@@ -468,6 +468,25 @@ function matchingColumnWidths(): number[] {
   const text = Math.floor((DOCX_CONTENT_WIDTH_TWIPS - MATCHING_LINK_COLUMN_TWIPS) / 2);
   return [text, DOCX_CONTENT_WIDTH_TWIPS - 2 * text, text];
 }
+/**
+ * Moldura da questão-tabela (achado 0522): sem `borders` a lib emite
+ * `<w:tblBorders>` single com `w:color="auto"`, e o Word pinta preto enquanto
+ * o PDF e a tela traçam a régua do documento. Mesma tinta e espessura dos
+ * outros traços (`RULE_COLOR`/`RULE_WIDTH_PT`, em oitavos de ponto).
+ */
+const TABLE_RULE_EDGE = {
+  style: BorderStyle.SINGLE,
+  size: Math.round(RULE_WIDTH_PT * 8),
+  color: RULE_COLOR.slice(1),
+} as const;
+const TABLE_RULE_BORDERS = {
+  top: TABLE_RULE_EDGE,
+  bottom: TABLE_RULE_EDGE,
+  left: TABLE_RULE_EDGE,
+  right: TABLE_RULE_EDGE,
+  insideHorizontal: TABLE_RULE_EDGE,
+  insideVertical: TABLE_RULE_EDGE,
+} as const;
 const NO_EDGE = { style: BorderStyle.NONE, size: 0, color: "auto" } as const;
 const NO_TABLE_BORDERS = {
   top: NO_EDGE,
@@ -628,6 +647,7 @@ function answerToDocx(
           // dos lados, 0 em cima/embaixo) e quebra a célula uma palavra antes da
           // folha, da prévia e do PDF; o recuo vem do mesmo ponto único (3pt).
           margins: TABLE_CELL_MARGINS,
+          borders: TABLE_RULE_BORDERS,
           rows: [row(header, true), ...body.map((cells) => row(cells, false))],
         }),
       ];

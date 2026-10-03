@@ -27,6 +27,7 @@ import {
   TRUE_FALSE_MARKER_GAP_PX,
   TRUE_FALSE_MARKER_TEXT,
   TABLE_CELL_PADDING_PX,
+  RULE_COLOR,
   RULE_WIDTH_PX,
   BASE_LINE_HEIGHT,
 } from "@/components/adaptation/render/pageTokens";
@@ -76,6 +77,8 @@ const TABLE_LAYOUT_STYLE: CSSProperties = { tableLayout: "fixed" };
 const TABLE_CELL_STYLE: CSSProperties = {
   padding: `${TABLE_CELL_PADDING_PX}px`,
   borderWidth: `${RULE_WIDTH_PX}px`,
+  // Achado 0522: tinta da régua do documento, a mesma do PDF e do Word.
+  borderColor: RULE_COLOR,
   lineHeight: BASE_LINE_HEIGHT,
 };
 
@@ -258,7 +261,7 @@ export function AnswerPreview({ answer, onChange, disabled = false }: AnswerPrev
                     key={ci}
                     scope="col"
                     style={TABLE_CELL_STYLE}
-                    className="border border-surface-line-2 text-left align-top font-semibold"
+                    className="border text-left align-top font-semibold"
                   >
                     <PreviewField
                       value={cell}
@@ -279,7 +282,7 @@ export function AnswerPreview({ answer, onChange, disabled = false }: AnswerPrev
                   <td
                     key={ci}
                     style={TABLE_CELL_STYLE}
-                    className="border border-surface-line-2 align-top"
+                    className="border align-top"
                   >
                     <PreviewField
                       value={cell}

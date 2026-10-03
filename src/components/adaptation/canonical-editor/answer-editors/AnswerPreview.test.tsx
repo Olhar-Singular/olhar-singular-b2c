@@ -6,6 +6,7 @@ import { ALTERNATIVE_MARKER_CLASS } from "@/components/adaptation/render/answers
 import {
   INK_MUTED,
   ORDERING_MARKER_TEXT,
+  RULE_COLOR,
   TRUE_FALSE_MARKER_GAP_PX,
   TRUE_FALSE_MARKER_TEXT,
 } from "@/components/adaptation/render/pageTokens";
@@ -249,6 +250,15 @@ describe("AnswerPreview — table", () => {
       expect(th.className).toContain("font-semibold");
     }
     expect(table.querySelectorAll("tbody tr")).toHaveLength(1);
+  });
+
+  // 0522: a borda vinha do token de chrome do app (quase invisível sobre o
+  // papel); a folha usa a régua do documento, a mesma do PDF e do Word.
+  it("paints every cell border with the document rule color", () => {
+    render(<AnswerPreview answer={answer} onChange={vi.fn()} />);
+    const cells = screen.getByTestId("answer-preview-table").querySelectorAll("th, td");
+    expect(cells).toHaveLength(4);
+    for (const cell of cells) expect(cell).toHaveStyle({ borderColor: RULE_COLOR });
   });
 
   it("names the column in each body cell label so a screen reader says what the value is", () => {
