@@ -34,6 +34,8 @@ import {
   questionNumberColumnPt,
   alternativeMarkerColumnPt,
   resolveElementFontSizes,
+  scaffoldingStepColumnPt,
+  SCAFFOLDING_PADDING_PT,
 } from "../render/pageTokens";
 import { FOOTER_COLOR, FOOTER_FONT_SIZE_PT, pdfFooterLabel } from "../render/footerLabel";
 import type {
@@ -2363,5 +2365,78 @@ describe("0528 · quebra de linha dentro do run vira <w:br/> no Word", () => {
     );
     expect(countKey(paragraphs, "w:br")).toBe(2);
     expect(paragraphs.map(docxText).join("")).toBe("Tabela:MaçãBanana");
+  });
+});
+
+/**
+ * Achado 0529: no Word só o 1º parágrafo da questão entrava na coluna do texto
+ * (0524). O resto do enunciado e a caixa do APOIO voltavam à margem, sob o
+ * número, e os passos do APOIO não tinham coluna do ordinal nem respiro dentro
+ * da moldura. No PDF todo o enunciado fica em `paddingLeft: numberColumn`, a
+ * caixa tem `SCAFFOLDING_PADDING_PT` e cada passo a coluna do ordinal.
+ */
+describe("0529 · resto do enunciado e APOIO na coluna da questão no Word", () => {
+  const twips = (pt: number) => Math.round(pt * 20);
+  const hasTab = (node: unknown) => JSON.stringify(node).includes('"rootKey":"w:tab"');
+  const pad = twips(SCAFFOLDING_PADDING_PT);
+  const step = twips(scaffoldingStepColumnPt("1", BASE_FONT_PT));
+  const question: Block = {
+    id: id(5290),
+    type: "question",
+    stem: [
+      { id: id(5291), type: "paragraph", content: text("Leia o texto") },
+      { id: id(5292), type: "paragraph", content: text("Banco de palavras: sol, chuva") },
+      { id: id(5293), type: "scaffolding", items: ["Pense nas etapas", "Responda"] },
+    ],
+    answer: { kind: "open", answerLines: 1 },
+  };
+
+  it("parágrafos do enunciado depois do primeiro recuam a coluna do número", () => {
+    const out = blockToDocxParagraphs(question, 2);
+    const col = twips(questionNumberColumnPt("2", BASE_FONT_PT));
+    const banco = out.find((p) => docxText(p).startsWith("Banco de palavras"));
+    expect(docxNodeAttrs(banco, "w:ind")).toEqual({ left: col });
+  });
+
+  it("a caixa do APOIO dentro da questão começa na coluna do texto, com respiro interno", () => {
+    const out = blockToDocxParagraphs(question, 2);
+    const col = twips(questionNumberColumnPt("2", BASE_FONT_PT));
+    const label = out.find((p) => docxText(p) === "APOIO");
+    const passo = out.find((p) => docxText(p).endsWith("Pense nas etapas"));
+    for (const p of [label, passo]) {
+      expect(docxNodeAttrs(p, "w:ind")).toEqual({ left: col + pad + step, hanging: step, right: pad });
+    }
+  });
+
+  it("cada passo do APOIO usa a coluna do ordinal com tab, e a moldura afasta o texto", () => {
+    const [label, passo] = blockToDocxParagraphs(
+      { id: id(5294), type: "scaffolding", items: ["Pense nas etapas", "Responda"] },
+      1,
+    );
+    expect(docxNodeAttrs(passo, "w:ind")).toEqual({ left: pad + step, hanging: step, right: pad });
+    expect(docxNodeAttrs(label, "w:ind")).toEqual({ left: pad + step, hanging: step, right: pad });
+    expect(hasTab(passo)).toBe(true);
+    expect(docxText(passo)).toBe("1.Pense nas etapas");
+    expect(docxNodeAttrs(passo, "w:left")).toMatchObject({ space: Math.round(SCAFFOLDING_PADDING_PT) });
+  });
+
+  it("questão aninhada no enunciado soma a coluna da questão de fora", () => {
+    const nested: Block = {
+      ...question,
+      stem: [
+        { id: id(5295), type: "paragraph", content: text("Leia") },
+        {
+          id: id(5296),
+          type: "question",
+          stem: [{ id: id(5297), type: "paragraph", content: text("Sub") }],
+          answer: { kind: "open", answerLines: 1 },
+        },
+      ],
+    } as Block;
+    const out = blockToDocxParagraphs(nested, 2);
+    const outer = twips(questionNumberColumnPt("2", BASE_FONT_PT));
+    const inner = twips(questionNumberColumnPt("1", BASE_FONT_PT));
+    const sub = out.find((p) => docxText(p) === "1.Sub");
+    expect(docxNodeAttrs(sub, "w:ind")).toEqual({ left: outer + inner, hanging: inner });
   });
 });

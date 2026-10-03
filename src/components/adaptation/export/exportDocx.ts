@@ -87,6 +87,8 @@ import {
   BASE_BLOCK_SPACING_PX,
   questionNumberColumnPt,
   alternativeMarkerColumnPt,
+  scaffoldingStepColumnPt,
+  SCAFFOLDING_PADDING_PT,
 } from "../render/pageTokens";
 import { indexToLetter } from "../render/letters";
 import {
@@ -156,12 +158,19 @@ const SCAFFOLDING_EDGE = {
   size: 4,
   color: SCAFFOLDING_BORDER.slice(1),
 } as const;
+/**
+ * Respiro entre a moldura e o texto, o `padding` da caixa no PDF (achado 0529).
+ * `w:space` é em pt; nas laterais a moldura sai PARA FORA do recuo do texto, por
+ * isso os passos recuam esse mesmo respiro dos dois lados (ver `scaffolding`).
+ */
+const SCAFFOLDING_SPACE_PT = Math.round(SCAFFOLDING_PADDING_PT);
+const SCAFFOLDING_SIDE = { ...SCAFFOLDING_EDGE, space: SCAFFOLDING_SPACE_PT } as const;
 const SCAFFOLDING_BOX = {
   border: {
-    top: SCAFFOLDING_EDGE,
-    bottom: SCAFFOLDING_EDGE,
-    left: SCAFFOLDING_EDGE,
-    right: SCAFFOLDING_EDGE,
+    top: SCAFFOLDING_SIDE,
+    bottom: SCAFFOLDING_SIDE,
+    left: SCAFFOLDING_SIDE,
+    right: SCAFFOLDING_SIDE,
   },
   shading: { type: ShadingType.CLEAR, fill: SCAFFOLDING_BG.slice(1) },
 } as const;
@@ -725,6 +734,7 @@ export function blockToDocxParagraphs(
   blockGapTwips: number = DEFAULT_BLOCK_GAP_TWIPS,
   keepWithNext = false,
   bodyPt: number = BASE_FONT_PT,
+  columnTwips = 0,
 ): DocxBlock[] {
   // `block.style` projetado no docx: alinhamento em todo parágrafo do bloco,
   // `spacingAfter` só no último, cor/corpo/fonte herdados pelos runs. Sem
@@ -733,7 +743,12 @@ export function blockToDocxParagraphs(
   const { paragraph: ownPara, spacing: ownSpacing, run } = nodeStyleToDocx(block.style);
   const sizes = elementHalfPoints(bodyPt);
   // Bloco dentro de uma questão (stem): cada parágrafo dele anda com o seguinte.
-  const para: ParagraphStyle = keepWithNext ? { ...ownPara, ...KEEP_WITH_NEXT } : ownPara;
+  // Dentro do enunciado, o bloco anda na coluna do texto da questão, como o
+  // `paddingLeft: numberColumn` do PDF (achado 0529).
+  const column: ParagraphStyle = columnTwips > 0 ? { indent: { left: columnTwips } } : {};
+  const para: ParagraphStyle = keepWithNext
+    ? { ...ownPara, ...column, ...KEEP_WITH_NEXT }
+    : { ...ownPara, ...column };
   // Corpo próprio do bloco: a linha dele vai em todo parágrafo (achado 0518).
   const line = lineFor(run.size);
   const lineOnly = spacingWith(line);
@@ -822,14 +837,27 @@ export function blockToDocxParagraphs(
       return paragraphs;
     }
 
-    case "scaffolding":
+    case "scaffolding": {
       // Caixa rotulada, como PdfScaffolding a desenha: o rótulo é a única coisa
       // que nomeia o bloco no impresso (achado 0155) e a moldura é o que separa
       // os passos do corpo das questões (achado 0163).
+      //
+      // Achado 0529: cada passo tem a coluna do ordinal (recuo pendente + tab,
+      // como o número da questão no 0524) e o texto recua o respiro da moldura.
+      // Todos os parágrafos da caixa levam o MESMO recuo: é ele que faz o Word
+      // juntar as bordas numa caixa só. A coluna é a do maior ordinal.
+      const stepTwips = ptToTwip(
+        scaffoldingStepColumnPt(String(Math.max(block.items.length, 1)), runPt(run, bodyPt)),
+      );
+      const padTwips = ptToTwip(SCAFFOLDING_SPACE_PT);
+      const boxIndent = {
+        indent: { left: columnTwips + padTwips + stepTwips, hanging: stepTwips, right: padTwips },
+      };
       return [
         new Paragraph({
           ...SCAFFOLDING_BOX,
           ...para,
+          ...boxIndent,
           spacing: {
             ...lineSpacing(sizes.caption),
             ...(block.items.length > 0 ? {} : { after: spacing.spacing.after }),
@@ -848,11 +876,13 @@ export function blockToDocxParagraphs(
             new Paragraph({
               ...SCAFFOLDING_BOX,
               ...para,
+              ...boxIndent,
               ...(i === block.items.length - 1 ? spacing : lineOnly),
-              children: [new TextRun({ ...run, text: `${i + 1}. ${item}` })],
+              children: [new TextRun({ ...run, children: [`${i + 1}.`, new Tab(), item] })],
             }),
         ),
       ];
+    }
 
     case "divider":
       // Régua de verdade, não texto: `w:pBdr` é a mesma primitiva que a caixa do
@@ -897,17 +927,29 @@ export function blockToDocxParagraphs(
           : {},
       );
       // Número em coluna, medida no corpo de quem hospeda o rótulo (achado 0524).
+      const numberPt = questionNumberColumnPt(label, runPt(run, bodyPt));
+      const numberIndent = columnIndent(numberPt);
       const numbered = new Paragraph({
         ...kept,
         ...firstSpacing,
-        ...columnIndent(questionNumberColumnPt(label, runPt(run, bodyPt))),
+        // Questão aninhada: a coluna dela começa na coluna da de fora (0529).
+        indent: { ...numberIndent.indent, left: columnTwips + numberIndent.indent.left },
         children: [
           new TextRun({ ...run, bold: true, children: [`${label}.`, new Tab()] }),
           ...firstRuns,
         ],
       });
       const stemRest = (first?.type === "paragraph" ? restStem : block.stem).flatMap((child) =>
-        blockToDocxParagraphs(child, 1, QUESTION_INNER_GAP_TWIPS, true, bodyPt),
+        // O resto do enunciado fica na coluna do texto, não volta para baixo
+        // do número (achado 0529).
+        blockToDocxParagraphs(
+          child,
+          1,
+          QUESTION_INNER_GAP_TWIPS,
+          true,
+          bodyPt,
+          columnTwips + ptToTwip(numberPt),
+        ),
       );
 
       return [
