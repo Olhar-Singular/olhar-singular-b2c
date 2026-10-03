@@ -41,6 +41,13 @@ export function StepBarrierSelection({ data, updateData, onNext, onPrev }: Props
   const [creatingProfile, setCreatingProfile] = useState(false);
   const [selectNewest, setSelectNewest] = useState(false);
   const selectRef = useRef<HTMLSelectElement>(null);
+  // 1122: the dialog is opened by state, with no `DialogTrigger`, so Radix
+  // would restore focus to `<body>` on close. Closing hands it back to the
+  // button that opened it; after a profile is created it goes to the select,
+  // which may only appear once the list refetches (first profile ever).
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const createdProfileRef = useRef(false);
+  const focusSelectPendingRef = useRef(false);
 
   const activeDimensions = [...new Set(
     data.barriers.filter((b) => b.is_active).map((b) => b.dimension).filter(Boolean),
@@ -94,12 +101,30 @@ export function StepBarrierSelection({ data, updateData, onNext, onPrev }: Props
     setSelectNewest(false);
   }, [selectNewest, profiles, handleProfileChange]);
 
+  useEffect(() => {
+    if (!focusSelectPendingRef.current || !selectRef.current) return;
+    focusSelectPendingRef.current = false;
+    selectRef.current.focus();
+  }, [profiles]);
+
+  function handleDialogCloseAutoFocus(event: Event) {
+    event.preventDefault();
+    if (!createdProfileRef.current) {
+      triggerRef.current?.focus();
+      return;
+    }
+    createdProfileRef.current = false;
+    if (selectRef.current) selectRef.current.focus();
+    else focusSelectPendingRef.current = true;
+  }
+
   async function handleCreateProfile(values: BarrierProfileFormValues) {
     await createProfile.mutateAsync({
       name: values.name,
       barriers: values.barriers,
       observation: values.observation,
     });
+    createdProfileRef.current = true;
     setCreatingProfile(false);
     setSelectNewest(true);
   }
@@ -146,7 +171,7 @@ export function StepBarrierSelection({ data, updateData, onNext, onPrev }: Props
         {profiles.length === 0 ? (
           <div className="flex items-center gap-3">
             <p className="text-sm text-muted-foreground">Nenhum perfil criado.</p>
-            <Button size="sm" variant="outline" onClick={() => setCreatingProfile(true)}>
+            <Button ref={triggerRef} size="sm" variant="outline" onClick={() => setCreatingProfile(true)}>
               <Plus className="w-3 h-3 mr-1" /> Criar perfil
             </Button>
           </div>
@@ -169,7 +194,7 @@ export function StepBarrierSelection({ data, updateData, onNext, onPrev }: Props
                 </option>
               ))}
             </select>
-            <Button size="sm" variant="outline" onClick={() => setCreatingProfile(true)}>
+            <Button ref={triggerRef} size="sm" variant="outline" onClick={() => setCreatingProfile(true)}>
               <Plus className="w-3 h-3 mr-1" /> Novo
             </Button>
           </div>
@@ -249,7 +274,10 @@ export function StepBarrierSelection({ data, updateData, onNext, onPrev }: Props
 
       {/* Inline profile creation dialog */}
       <Dialog open={creatingProfile} onOpenChange={setCreatingProfile}>
-        <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
+        <DialogContent
+          className="max-w-lg max-h-[85vh] overflow-y-auto"
+          onCloseAutoFocus={handleDialogCloseAutoFocus}
+        >
           <DialogHeader>
             <DialogTitle>Criar perfil de barreira</DialogTitle>
           </DialogHeader>

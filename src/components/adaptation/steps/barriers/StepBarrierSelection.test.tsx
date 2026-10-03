@@ -592,4 +592,70 @@ describe("StepBarrierSelection", () => {
       expect(screen.getByRole("button", { name: /salvando/i })).toBeDisabled();
     });
   });
+
+  /**
+   * 1122: the dialog is opened by state, with no `DialogTrigger`, so Radix
+   * restores focus to `previouslyFocusedElement`, which ends up being `<body>`.
+   * Closing must hand focus back to the button that opened it; after a profile
+   * is created, focus goes to the select showing the new profile.
+   */
+  describe("focus return when the dialog closes (1122)", () => {
+    async function fillAndSave(user: ReturnType<typeof userEvent.setup>, name: string) {
+      await user.type(screen.getByLabelText(/Nome do perfil/i), name);
+      await user.click(within(screen.getByRole("dialog")).getAllByRole("checkbox")[0]);
+      await user.click(screen.getByRole("button", { name: /salvar perfil/i }));
+    }
+
+    it("returns focus to '+ Novo' when the dialog is dismissed with Escape", async () => {
+      renderStep();
+      const novo = screen.getByRole("button", { name: /novo/i });
+      fireEvent.click(novo);
+      const dialog = await screen.findByRole("dialog");
+      fireEvent.keyDown(dialog, { key: "Escape" });
+      await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+      expect(document.activeElement).toBe(novo);
+    });
+
+    it("returns focus to 'Criar perfil' when the dialog is closed by the X", async () => {
+      vi.mocked(useBarrierProfiles).mockReturnValue({ data: [], isLoading: false } as never);
+      renderStep();
+      const trigger = screen.getByRole("button", { name: /criar perfil/i });
+      fireEvent.click(trigger);
+      await screen.findByRole("dialog");
+      fireEvent.click(screen.getByRole("button", { name: /close/i }));
+      await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+      expect(document.activeElement).toBe(trigger);
+    });
+
+    it("focuses the profile select after creating a profile from '+ Novo'", async () => {
+      const user = userEvent.setup();
+      renderStep();
+      fireEvent.click(screen.getByRole("button", { name: /novo/i }));
+      await screen.findByRole("dialog");
+      await fillAndSave(user, "Outro");
+      await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+      await waitFor(() => expect(document.activeElement).toBe(screen.getByLabelText(/Perfil de barreira/i)));
+    });
+
+    it("focuses the profile select once it appears after creating the first profile", async () => {
+      const user = userEvent.setup();
+      vi.mocked(useBarrierProfiles).mockReturnValue({ data: [], isLoading: false } as never);
+      const { rerender } = renderStep();
+      fireEvent.click(screen.getByRole("button", { name: /criar perfil/i }));
+      await screen.findByRole("dialog");
+      await fillAndSave(user, "Primeiro");
+      await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+      expect(document.activeElement).toBe(document.body);
+
+      const newProfile = { id: "new-1", user_id: "u1", barriers: ["tea_abstracao"], name: "Primeiro", observation: null, created_at: "2026-06-18" };
+      vi.mocked(useBarrierProfiles).mockReturnValue({ data: [newProfile], isLoading: false } as never);
+      const qc2 = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+      rerender(
+        <QueryClientProvider client={qc2}>
+          <MemoryRouter><StepBarrierSelection data={baseData} updateData={mockUpdateData} onNext={mockOnNext} onPrev={mockOnPrev} /></MemoryRouter>
+        </QueryClientProvider>,
+      );
+      await waitFor(() => expect(document.activeElement).toBe(screen.getByLabelText(/Perfil de barreira/i)));
+    });
+  });
 });
