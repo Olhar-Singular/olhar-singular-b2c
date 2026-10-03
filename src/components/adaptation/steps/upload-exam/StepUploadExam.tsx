@@ -188,12 +188,15 @@ export function StepUploadExam({ data, updateData, onNext, onLoadingChange }: Pr
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
+        // border-input (not the default --border) keeps the control's boundary
+        // at 3:1 (WCAG 1.4.11). No opacity when attached: the area then carries
+        // the success message, which must keep its 4.5:1 text contrast.
         className={`border-2 border-dashed rounded-lg p-8 text-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ${
           attached
-            ? "cursor-not-allowed opacity-60"
+            ? "cursor-not-allowed border-input"
             : dragging
               ? "cursor-pointer border-primary bg-primary/5"
-              : "cursor-pointer hover:border-primary hover:bg-primary/5"
+              : "cursor-pointer border-input hover:border-primary hover:bg-primary/5"
         }`}
       >
         <input

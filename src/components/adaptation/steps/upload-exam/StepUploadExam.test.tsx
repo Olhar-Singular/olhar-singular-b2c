@@ -223,6 +223,26 @@ describe("StepUploadExam", () => {
   // Regression (1114): the dropzone says "Arraste ... aqui" but had no drag
   // handlers, so dropping a file let the browser open it in the tab, taking the
   // teacher out of the app and losing Tipo/Atividade.
+  describe("1118: dropzone contrast", () => {
+    it("draws the dashed border with the 3:1 --input token, not the faint --border", () => {
+      renderWithProviders(<StepUploadExam data={baseData} updateData={vi.fn()} onNext={vi.fn()} onPrev={vi.fn()} />);
+      expect(screen.getByRole("button", { name: /Escolher arquivo PDF ou Word/i })).toHaveClass("border-input");
+    });
+
+    it("does not fade the 'Arquivo pronto para adaptar' confirmation with opacity once attached", () => {
+      renderWithProviders(
+        <StepUploadExam data={{ ...baseData, uploadedExam: attachedExam() }} updateData={vi.fn()} onNext={vi.fn()} onPrev={vi.fn()} />,
+      );
+      const zone = screen.getByRole("button", { name: /Escolher arquivo PDF ou Word/i });
+      expect(zone.className).not.toMatch(/\bopacity-/);
+      let el: HTMLElement | null = screen.getByText("Arquivo pronto para adaptar");
+      while (el) {
+        expect(el.className).not.toMatch(/\bopacity-/);
+        el = el.parentElement;
+      }
+    });
+  });
+
   describe("drag and drop", () => {
     function dropzone() {
       return (document.querySelector("input[data-upload-input]") as HTMLInputElement).parentElement!;
