@@ -6,7 +6,13 @@
  * - Word (.docx): `pageImages` are the figures embedded in the document (not
  *   pages), so the dialog shows the extracted `text` and labels each image as
  *   "Figura N" (achado 0280). No extra parsing here.
+ *
+ * The dialog is state-controlled (no `DialogTrigger`), so Radix would restore
+ * focus to a null trigger and drop it on `<body>`. `restoreFocusRef` hands the
+ * opener back on close (achado 0281, same pattern as MetadataDrawer/0349).
  */
+
+import type { RefObject } from "react";
 
 import {
   Dialog,
@@ -18,6 +24,7 @@ import {
 type Props = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  restoreFocusRef?: RefObject<HTMLElement>;
   pageImages: string[];
   fileType?: "pdf" | "docx";
   text?: string;
@@ -59,10 +66,25 @@ function DocxContent({ text, figures }: { text: string; figures: string[] }) {
   );
 }
 
-export function OriginalExamDialog({ open, onOpenChange, pageImages, fileType, text = "" }: Props) {
+export function OriginalExamDialog({
+  open,
+  onOpenChange,
+  restoreFocusRef,
+  pageImages,
+  fileType,
+  text = "",
+}: Props) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto">
+      <DialogContent
+        className="max-w-3xl max-h-[85vh] overflow-y-auto"
+        onCloseAutoFocus={(event) => {
+          const trigger = restoreFocusRef?.current;
+          if (!trigger) return;
+          event.preventDefault();
+          trigger.focus();
+        }}
+      >
         <DialogHeader>
           <DialogTitle>Prova original</DialogTitle>
         </DialogHeader>

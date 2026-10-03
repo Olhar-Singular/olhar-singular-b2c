@@ -995,6 +995,22 @@ describe("StepReview", () => {
       expect(screen.getByRole("img")).toHaveAttribute("src", "data:image/png;base64,P1");
     });
 
+    /**
+     * 0281: o diálogo é aberto por estado, sem `DialogTrigger`; o Radix focava
+     * `triggerRef.current` (null) e o foco caía no `<body>` ao fechar.
+     */
+    it("devolve o foco ao botão 'Ver prova original' ao fechar o diálogo (0281)", async () => {
+      setup({
+        originalExam: { file: new File(["x"], "prova.pdf"), pageImages: [], userId: "user-1" },
+      });
+      const button = screen.getByRole("button", { name: /Ver prova original/i });
+      button.focus();
+      fireEvent.click(button);
+      fireEvent.keyDown(screen.getByRole("dialog"), { key: "Escape" });
+      await waitFor(() => expect(screen.queryByText("Prova original")).not.toBeInTheDocument());
+      expect(document.activeElement).toBe(screen.getByRole("button", { name: /Ver prova original/i }));
+    });
+
     it("passes the Word text and type into the dialog (achado 0280)", () => {
       setup({
         originalExam: {

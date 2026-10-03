@@ -178,6 +178,7 @@ export function StepReview({
   // 0349 — a gaveta não tem `SheetTrigger` (é controlada), então o gatilho para
   // onde o foco volta no fechamento tem que ser entregue à mão.
   const aboutTriggerRef = useRef<HTMLButtonElement>(null);
+  const originalTriggerRef = useRef<HTMLButtonElement>(null);
   const surfaceRef = useRef<HTMLDivElement>(null);
   const [originalOpen, setOriginalOpen] = useState(false);
   // Local: whether the "Nova pasta…" field is open. The NAME goes up so the
@@ -477,6 +478,7 @@ export function StepReview({
           />
           {originalExam && (
             <Button
+              ref={originalTriggerRef}
               size="sm"
               variant="ghost"
               onClick={() => setOriginalOpen(true)}
@@ -516,6 +518,7 @@ export function StepReview({
         <OriginalExamDialog
           open={originalOpen}
           onOpenChange={setOriginalOpen}
+          restoreFocusRef={originalTriggerRef}
           pageImages={originalExam.pageImages}
           fileType={originalExam.fileType}
           text={originalExam.text}

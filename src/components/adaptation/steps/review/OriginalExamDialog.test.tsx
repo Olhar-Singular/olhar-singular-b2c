@@ -1,5 +1,6 @@
+import React from "react";
 import { describe, it, expect, vi } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { OriginalExamDialog } from "./OriginalExamDialog";
 
 function setup(over: Partial<React.ComponentProps<typeof OriginalExamDialog>> = {}) {
@@ -71,5 +72,45 @@ describe("OriginalExamDialog", () => {
       setup({ fileType: "docx", pageImages: [] });
       expect(screen.getByText(/Nenhum conteúdo disponível/i)).toBeInTheDocument();
     });
+  });
+});
+
+/**
+ * 0281: diálogo controlado sem `DialogTrigger` larga o foco no `<body>` ao fechar.
+ * O gatilho chega por `restoreFocusRef` e é devolvido no `onCloseAutoFocus`
+ * (mesmo padrão do MetadataDrawer, 0349).
+ */
+describe("OriginalExamDialog: devolução de foco ao gatilho (0281)", () => {
+  function Harness({ withRef }: { withRef: boolean }) {
+    const triggerRef = React.useRef<HTMLButtonElement>(null);
+    const [open, setOpen] = React.useState(true);
+    return (
+      <>
+        <button ref={triggerRef} onClick={() => setOpen(true)}>
+          Ver prova original
+        </button>
+        <OriginalExamDialog
+          open={open}
+          onOpenChange={setOpen}
+          restoreFocusRef={withRef ? triggerRef : undefined}
+          pageImages={[]}
+        />
+      </>
+    );
+  }
+
+  it("devolve o foco ao gatilho ao fechar", async () => {
+    render(<Harness withRef />);
+    fireEvent.click(screen.getByRole("button", { name: "Close" }));
+    await waitFor(() =>
+      expect(document.activeElement).toBe(screen.getByRole("button", { name: "Ver prova original" })),
+    );
+  });
+
+  it("sem gatilho informado, deixa o Radix cuidar do foco", async () => {
+    render(<Harness withRef={false} />);
+    fireEvent.click(screen.getByRole("button", { name: "Close" }));
+    await waitFor(() => expect(screen.queryByText("Prova original")).not.toBeInTheDocument());
+    expect(document.activeElement).not.toBe(screen.getByRole("button", { name: "Ver prova original" }));
   });
 });
