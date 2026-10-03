@@ -264,14 +264,26 @@ describe("StepUploadExam", () => {
     parsePdfMock.mockRejectedValueOnce("plain string failure");
     renderWithProviders(<StepUploadExam data={baseData} updateData={vi.fn()} onNext={vi.fn()} onPrev={vi.fn()} />);
     selectFile(pdfFile());
-    await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent(/Falha ao processar o arquivo/i));
+    await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent(/Não foi possível ler este arquivo/i));
   });
 
-  it("surfaces a thrown Error's message when parsing fails", async () => {
-    parsePdfMock.mockRejectedValueOnce(new Error("PDF corrompido"));
+  it("shows a pt-BR message instead of the raw pdf.js error for a corrupted PDF (1113)", async () => {
+    parsePdfMock.mockRejectedValueOnce(new Error("Invalid PDF structure."));
     renderWithProviders(<StepUploadExam data={baseData} updateData={vi.fn()} onNext={vi.fn()} onPrev={vi.fn()} />);
     selectFile(pdfFile());
-    await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent(/PDF corrompido/i));
+    const alert = await screen.findByRole("alert");
+    expect(alert).toHaveTextContent(/Não foi possível ler este arquivo/i);
+    expect(alert).not.toHaveTextContent(/Invalid PDF structure/i);
+  });
+
+  it("shows a pt-BR message instead of the raw JSZip error for a corrupted DOCX (1113)", async () => {
+    detectFileTypeMock.mockReturnValue("docx");
+    extractDocxWithImagesMock.mockRejectedValueOnce(new Error("Corrupted zip: can't find end of central directory"));
+    renderWithProviders(<StepUploadExam data={baseData} updateData={vi.fn()} onNext={vi.fn()} onPrev={vi.fn()} />);
+    selectFile(pdfFile());
+    const alert = await screen.findByRole("alert");
+    expect(alert).toHaveTextContent(/Não foi possível ler este arquivo/i);
+    expect(alert).not.toHaveTextContent(/Corrupted zip/i);
   });
 
   it("disables Voltar while processing", async () => {

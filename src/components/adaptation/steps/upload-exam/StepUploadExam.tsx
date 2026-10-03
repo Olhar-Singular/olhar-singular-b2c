@@ -16,6 +16,11 @@ type Props = {
 
 const MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024;
 
+// pdf.js / JSZip throw raw English messages ("Invalid PDF structure.",
+// "Corrupted zip: ..."); the teacher gets this instead, the detail stays in the console.
+const PARSE_ERROR_MESSAGE =
+  "Não foi possível ler este arquivo. Ele pode estar corrompido: abra no Word e salve de novo, ou exporte o PDF outra vez, e envie novamente.";
+
 export function StepUploadExam({ data, updateData, onNext, onLoadingChange }: Props) {
   const [processing, setProcessing] = useState(false);
   const [error, setError] = useState("");
@@ -97,7 +102,7 @@ export function StepUploadExam({ data, updateData, onNext, onLoadingChange }: Pr
     } catch (e) {
       console.error("Exam parsing error:", e);
       if (!mountedRef.current) return;
-      setError(e instanceof Error ? e.message : "Falha ao processar o arquivo. Tente novamente.");
+      setError(PARSE_ERROR_MESSAGE);
     } finally {
       if (mountedRef.current) {
         setProcessing(false);
