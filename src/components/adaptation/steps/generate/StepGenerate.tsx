@@ -14,7 +14,6 @@ import { Loader2, Coins } from "lucide-react";
 import { Link } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { toast } from "sonner";
 import { isNetworkError, parseEdgeFnError } from "@/lib/utils/errors";
 import { useAuth } from "@/hooks/useAuth";
 import { insufficientCreditsMessage } from "@/lib/domain/access";
@@ -91,6 +90,22 @@ export function StepGenerate({ data, onResult, onNext, onPrev, onLoadingChange, 
   const abortRef = useRef<AbortController | null>(null);
   const startedRef = useRef(false);
   const [messageIndex, setMessageIndex] = useState(0);
+  /**
+   * Ação principal de cada tela de erro (0471). "Tentar novamente" desmonta a si
+   * mesmo ao trocar para a espera, e o efeito de foco do wizard só roda quando o
+   * passo muda: sem pousar o foco aqui, ele cai no <body> e o próximo Tab
+   * recomeça no topo da página.
+   */
+  const retryRef = useRef<HTMLButtonElement>(null);
+  const subscribeRef = useRef<HTMLAnchorElement>(null);
+
+  // The error state is set before `loading` drops, so wait for the error screen
+  // to actually be on the page before moving focus into it.
+  useEffect(() => {
+    if (loading) return;
+    if (creditError) subscribeRef.current?.focus();
+    else if (failed) retryRef.current?.focus();
+  }, [creditError, failed, loading]);
 
   // Rotates the loading copy so a long wait (real generations run for minutes)
   // doesn't sit on one static line — resets to the first message whenever a
@@ -229,7 +244,6 @@ export function StepGenerate({ data, onResult, onNext, onPrev, onLoadingChange, 
       const reason = parseEdgeFnError(e, "Erro ao gerar adaptação.");
       setFailed(true);
       setFailReason(reason);
-      toast.error(reason);
     } finally {
       /* v8 ignore next -- AbortController race */
       if (!controller.signal.aborted) {
@@ -289,7 +303,6 @@ export function StepGenerate({ data, onResult, onNext, onPrev, onLoadingChange, 
       const reason = parseEdgeFnError(e, "Erro ao gerar adaptação.");
       setFailed(true);
       setFailReason(reason);
-      toast.error(reason);
       setLoading(false);
       onLoadingChange?.(false);
       return;
@@ -391,10 +404,10 @@ export function StepGenerate({ data, onResult, onNext, onPrev, onLoadingChange, 
     return (
       <div className="flex flex-col items-center justify-center py-20 gap-4 text-center">
         <Coins className="w-10 h-10 text-muted-foreground" />
-        <p className="text-destructive font-medium">{creditError}</p>
+        <p role="alert" className="text-destructive font-medium">{creditError}</p>
         <div className="flex gap-2">
           <Button asChild>
-            <Link to="/assinar">Assinar</Link>
+            <Link ref={subscribeRef} to="/assinar">Assinar</Link>
           </Button>
           <Button asChild variant="outline">
             <Link to="/creditos">Comprar créditos extras</Link>
@@ -415,7 +428,7 @@ export function StepGenerate({ data, onResult, onNext, onPrev, onLoadingChange, 
           <p className="text-destructive font-medium">Não foi possível gerar a adaptação.</p>
           <p className="text-sm text-destructive">{failReason}</p>
         </div>
-        <Button onClick={generate}>Tentar novamente</Button>
+        <Button ref={retryRef} onClick={generate}>Tentar novamente</Button>
         {onRestorePrevious && (
           <Button variant="outline" onClick={onRestorePrevious} className="ml-2">
             Voltar para a adaptação atual

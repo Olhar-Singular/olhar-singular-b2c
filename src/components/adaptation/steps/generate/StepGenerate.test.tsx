@@ -400,13 +400,12 @@ describe("StepGenerate", () => {
     });
 
     it("relê saldo e extrato quando a adaptação falha (a reserva pode ter sido debitada)", async () => {
-      const { toast } = await import("sonner");
       invokeMock.mockResolvedValueOnce({
         data: null,
         error: { context: { status: 500, json: async () => ({ error: "boom" }) } },
       });
       const { mockRefresh, invalidate } = await renderWithSpies();
-      await waitFor(() => expect(toast.error).toHaveBeenCalledWith("boom"));
+      expect(await screen.findByRole("alert")).toHaveTextContent("boom");
       expect(mockRefresh).toHaveBeenCalled();
       expect(invalidate).toHaveBeenCalledWith({ queryKey: ["credit_transactions"] });
     });
@@ -427,7 +426,6 @@ describe("StepGenerate", () => {
   });
 
   it("shows a retry screen and re-runs generation on a generic failure", async () => {
-    const { toast } = await import("sonner");
     invokeMock
       .mockResolvedValueOnce({ data: null, error: { context: { status: 500, json: async () => ({ error: "boom" }) } } })
       .mockResolvedValueOnce(okResponse());
@@ -435,7 +433,7 @@ describe("StepGenerate", () => {
     renderWithProviders(
       <StepGenerate data={baseData} onResult={onResult} onNext={vi.fn()} onPrev={vi.fn()} />,
     );
-    await waitFor(() => expect(toast.error).toHaveBeenCalledWith("boom"));
+    expect(await screen.findByRole("alert")).toHaveTextContent("boom");
     fireEvent.click(screen.getByRole("button", { name: /Tentar novamente/i }));
     await waitFor(() => expect(onResult).toHaveBeenCalledWith(result, SERVER_ROW));
   });
@@ -534,17 +532,73 @@ describe("StepGenerate", () => {
     });
   });
 
+  /**
+   * Regressão 0471: os desfechos de erro do Passo 4 não chegavam a quem usa teclado
+   * ou leitor de tela. O 402 trocava a tela em silêncio, "Tentar novamente" se
+   * desmontava levando o foco para o <body>, e a falha genérica era anunciada duas
+   * vezes (alerta + toast).
+   */
+  describe("anuncia e foca as telas de erro (0471)", () => {
+    it("anuncia a falta de créditos num alerta e foca Assinar", async () => {
+      invokeMock.mockResolvedValueOnce({
+        data: null,
+        error: { context: { status: 402, json: async () => ({ error: "no" }) } },
+      });
+      renderWithProviders(
+        <StepGenerate data={baseData} onResult={vi.fn()} onNext={vi.fn()} onPrev={vi.fn()} />,
+      );
+      const alert = await screen.findByRole("alert");
+      expect(alert).toHaveTextContent(/Seus créditos acabaram/i);
+      await waitFor(() => expect(screen.getByRole("link", { name: "Assinar" })).toHaveFocus());
+    });
+
+    it("foca Tentar novamente na tela de falha, inclusive depois de uma nova tentativa", async () => {
+      invokeMock
+        .mockResolvedValueOnce({ data: null, error: { context: { status: 500, json: async () => ({ error: "boom" }) } } })
+        .mockResolvedValueOnce({ data: null, error: { context: { status: 500, json: async () => ({ error: "boom2" }) } } });
+      renderWithProviders(
+        <StepGenerate data={baseData} onResult={vi.fn()} onNext={vi.fn()} onPrev={vi.fn()} />,
+      );
+      const retry = await screen.findByRole("button", { name: /Tentar novamente/i });
+      await waitFor(() => expect(retry).toHaveFocus());
+      fireEvent.click(retry);
+      await screen.findByText("boom2");
+      await waitFor(() => expect(screen.getByRole("button", { name: /Tentar novamente/i })).toHaveFocus());
+    });
+
+    it("anuncia a falha uma vez só: o alerta da tela, sem toast", async () => {
+      const { toast } = await import("sonner");
+      invokeMock.mockResolvedValueOnce({
+        data: null,
+        error: { context: { status: 500, json: async () => ({ error: "boom" }) } },
+      });
+      renderWithProviders(
+        <StepGenerate data={baseData} onResult={vi.fn()} onNext={vi.fn()} onPrev={vi.fn()} />,
+      );
+      expect(await screen.findByRole("alert")).toHaveTextContent("boom");
+      expect(toast.error).not.toHaveBeenCalled();
+    });
+
+    it("não duplica o anúncio quando a leitura do arquivo falha", async () => {
+      const { toast } = await import("sonner");
+      extractExamQuestionsMock.mockRejectedValueOnce(new Error("falhou a leitura"));
+      renderWithProviders(
+        <StepGenerate data={uploadData} onResult={vi.fn()} onNext={vi.fn()} onPrev={vi.fn()} />,
+      );
+      expect(await screen.findByRole("alert")).toHaveTextContent("falhou a leitura");
+      expect(toast.error).not.toHaveBeenCalled();
+    });
+  });
+
   it("uses the fallback message when the error body has no error field", async () => {
-    const { toast } = await import("sonner");
     invokeMock.mockResolvedValueOnce({ data: null, error: { context: { status: 500, json: async () => ({}) } } });
     renderWithProviders(
       <StepGenerate data={baseData} onResult={vi.fn()} onNext={vi.fn()} onPrev={vi.fn()} />,
     );
-    await waitFor(() => expect(toast.error).toHaveBeenCalledWith("Falha na adaptação"));
+    expect(await screen.findByRole("alert")).toHaveTextContent("Falha na adaptação");
   });
 
   it("uses the fallback message when the error context json throws", async () => {
-    const { toast } = await import("sonner");
     invokeMock.mockResolvedValueOnce({
       data: null,
       error: { context: { status: 500, json: async () => { throw new Error("parse"); } } },
@@ -552,20 +606,18 @@ describe("StepGenerate", () => {
     renderWithProviders(
       <StepGenerate data={baseData} onResult={vi.fn()} onNext={vi.fn()} onPrev={vi.fn()} />,
     );
-    await waitFor(() => expect(toast.error).toHaveBeenCalledWith("Falha na adaptação"));
+    expect(await screen.findByRole("alert")).toHaveTextContent("Falha na adaptação");
   });
 
   it("uses the fallback message when the error has no context", async () => {
-    const { toast } = await import("sonner");
     invokeMock.mockResolvedValueOnce({ data: null, error: { message: "network" } });
     renderWithProviders(
       <StepGenerate data={baseData} onResult={vi.fn()} onNext={vi.fn()} onPrev={vi.fn()} />,
     );
-    await waitFor(() => expect(toast.error).toHaveBeenCalledWith("Falha na adaptação"));
+    expect(await screen.findByRole("alert")).toHaveTextContent("Falha na adaptação");
   });
 
   it("shows the connection message when invoke fails to reach the server (0380)", async () => {
-    const { toast } = await import("sonner");
     // Offline, supabase-js resolves with a FunctionsFetchError whose context is
     // the fetch TypeError, not a Response.
     const fetchError = Object.assign(new Error("Failed to send a request to the Edge Function"), {
@@ -576,7 +628,7 @@ describe("StepGenerate", () => {
     renderWithProviders(
       <StepGenerate data={baseData} onResult={vi.fn()} onNext={vi.fn()} onPrev={vi.fn()} />,
     );
-    await waitFor(() => expect(toast.error).toHaveBeenCalledWith(MSG_NETWORK));
+    expect(await screen.findByRole("alert")).toHaveTextContent(MSG_NETWORK);
     expect(await screen.findByText(MSG_NETWORK)).toBeInTheDocument();
   });
 
@@ -676,16 +728,15 @@ describe("StepGenerate", () => {
     expect(invokeMock).not.toHaveBeenCalled();
   });
 
-  it("surfaces the extraction's own error (e.g. AI rate limit) via toast", async () => {
-    const { toast } = await import("sonner");
+  it("surfaces the extraction's own error (e.g. AI rate limit) on the failure screen", async () => {
     extractExamQuestionsMock.mockRejectedValueOnce(
       new Error("Limite de requisições IA atingido. Tente novamente em alguns minutos."),
     );
     renderWithProviders(
       <StepGenerate data={uploadData} onResult={vi.fn()} onNext={vi.fn()} onPrev={vi.fn()} />,
     );
-    await waitFor(() =>
-      expect(toast.error).toHaveBeenCalledWith("Limite de requisições IA atingido. Tente novamente em alguns minutos."),
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Limite de requisições IA atingido. Tente novamente em alguns minutos.",
     );
     expect(invokeMock).not.toHaveBeenCalled();
   });
