@@ -91,6 +91,9 @@ export function StepBarrierSelection({ data, updateData, onNext, onPrev }: Props
     // it here is what makes it reach the AI at all: StepGenerate sends
     // `data.observationNotes`, and nothing else ever writes that field on a
     // fresh adaptation (rowMapping only rehydrates it for a saved one).
+    // A profile is now chosen (by the select or right after creating one), so
+    // a pending validation error about it is stale; handleNext re-validates.
+    setError("");
     updateData({
       barrierProfileId: profileId,
       barriers,

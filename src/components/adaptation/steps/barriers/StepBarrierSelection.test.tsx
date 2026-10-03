@@ -284,6 +284,26 @@ describe("StepBarrierSelection", () => {
     expect(select).not.toHaveAttribute("aria-describedby");
   });
 
+  it("clears the 'select a profile' error as soon as a profile is picked, without clicking Adaptar again", async () => {
+    const user = userEvent.setup();
+    renderStep();
+    await user.click(screen.getByRole("button", { name: /adaptar/i }));
+    expect(screen.getByRole("alert")).toHaveTextContent(/selecione um perfil/i);
+    await user.selectOptions(screen.getByRole("combobox"), "prof-1");
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    const select = screen.getByRole("combobox");
+    expect(select).not.toHaveAttribute("aria-invalid");
+    expect(select).not.toHaveAttribute("aria-describedby");
+  });
+
+  it("keeps the error when the empty option is picked", async () => {
+    const user = userEvent.setup();
+    renderStep();
+    await user.click(screen.getByRole("button", { name: /adaptar/i }));
+    await user.selectOptions(screen.getByRole("combobox"), "");
+    expect(screen.getByRole("alert")).toHaveTextContent(/selecione um perfil/i);
+  });
+
   it("shows error when profile has no barriers and user clicks Adaptar", async () => {
     const user = userEvent.setup();
     renderStep({ ...baseData, barrierProfileId: "prof-1", barriers: [] });
