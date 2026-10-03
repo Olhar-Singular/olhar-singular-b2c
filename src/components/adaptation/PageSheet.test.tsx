@@ -1404,6 +1404,32 @@ describe("PageSheet", () => {
       });
     });
 
+    /*
+      Achado 0521: a régua tem margem própria (`my-3`, 12px) e o empurrão é
+      aplicado SUBSTITUINDO essa margem. A caminhada somava o branco inteiro ao
+      deslocamento, mas o fluxo só crescia `branco - 12`, e cada quebra perdia
+      12px: da Q4 em diante a questão começava antes da virada.
+    */
+    it("desconta a margem que o empurrão substitui ao acumular as réguas (achado 0521)", () => {
+      const style = document.createElement("style");
+      style.textContent = ".adaptar-page-break { margin-bottom: 12px; }";
+      document.head.appendChild(style);
+      try {
+        withLayout(1400, () => {
+          render(folha(true, [500, 700]));
+          const primeiro = PAGE_MARGIN_PX + PAGE_CONTENT_HEIGHT_PX - (500 + 30);
+          expect(
+            Number.parseFloat(screen.getByTestId("quebra-700").style.marginBottom),
+          ).toBeCloseTo(
+            PAGE_MARGIN_PX + 2 * PAGE_CONTENT_HEIGHT_PX - (700 + primeiro - 12 + 30),
+            2,
+          );
+        });
+      } finally {
+        style.remove();
+      }
+    });
+
     it("não puxa o conteúdo para trás quando a régua atravessa a virada", () => {
       withLayout(1200, () => {
         render(folha(true, [1060]));

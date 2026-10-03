@@ -516,6 +516,7 @@ export function PageSheet({
           top: (rect.top - sheetTop) / scale - PAGE_MARGIN_PX,
           bottom: (rect.bottom - sheetTop) / scale - PAGE_MARGIN_PX,
           height: 0,
+          ownMargin: 0,
         };
       });
       /*
@@ -564,6 +565,9 @@ export function PageSheet({
                 top: cut,
                 bottom: cut,
                 height: el.getBoundingClientRect().height / scale,
+                // Achado 0521: a margem própria da régua (`my-3`), que o
+                // empurrão vai SUBSTITUIR (medida aqui, já com o inline zerado).
+                ownMargin: Number.parseFloat(getComputedStyle(el).marginBottom) || 0,
               },
             ];
           }
@@ -596,7 +600,15 @@ export function PageSheet({
             const pageEnd = Math.ceil(top / PAGE_CONTENT_HEIGHT_PX) * PAGE_CONTENT_HEIGHT_PX;
             const spacer = Math.max(0, pageEnd - (top + item.height));
             pushes.push({ el: item.el, kind: "break", spacer });
-            shift += spacer;
+            /*
+              Achado 0521: o empurrão entra como `marginBottom` inline, que
+              TROCA a margem própria da régua em vez de somar a ela. O fluxo
+              medido já traz essa margem, então o que ele cresce de fato é
+              `spacer - ownMargin`; somar o `spacer` inteiro perdia 12px por
+              quebra, cumulativos, e da Q4 em diante a questão começava antes
+              da virada.
+            */
+            shift += spacer - item.ownMargin;
             total += 1;
             pageTop = top + item.height + spacer;
             return;
