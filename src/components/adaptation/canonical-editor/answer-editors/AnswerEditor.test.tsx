@@ -161,6 +161,14 @@ describe("AnswerEditor — ordering", () => {
     fireEvent.click(screen.getAllByTitle("Mover para cima")[1]);
     expect(onChange).toHaveBeenCalledTimes(3);
   });
+
+  it("disables moving the first item up and the last item down (1103)", () => {
+    render(<AnswerEditor answer={answer} onChange={vi.fn()} />);
+    expect(screen.getByLabelText("Mover item 1 para cima")).toBeDisabled();
+    expect(screen.getByLabelText("Mover item 1 para baixo")).toBeEnabled();
+    expect(screen.getByLabelText("Mover item 2 para cima")).toBeEnabled();
+    expect(screen.getByLabelText("Mover item 2 para baixo")).toBeDisabled();
+  });
 });
 
 describe("AnswerEditor — fillBlank", () => {

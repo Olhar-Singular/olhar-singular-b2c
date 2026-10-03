@@ -322,10 +322,10 @@ export function AnswerEditor({
                 placeholder="Item"
                 ariaLabel={`Item ${index + 1}`}
               />
-              <IconButton onClick={() => onChange(reorderOrdering(answer, index, index - 1))} title="Mover para cima" label={`Mover item ${index + 1} para cima`} disabled={disabled}>
+              <IconButton onClick={() => onChange(reorderOrdering(answer, index, index - 1))} title="Mover para cima" label={`Mover item ${index + 1} para cima`} disabled={disabled || index === 0}>
                 <ArrowUp className="w-3.5 h-3.5" />
               </IconButton>
-              <IconButton onClick={() => onChange(reorderOrdering(answer, index, index + 1))} title="Mover para baixo" label={`Mover item ${index + 1} para baixo`} disabled={disabled}>
+              <IconButton onClick={() => onChange(reorderOrdering(answer, index, index + 1))} title="Mover para baixo" label={`Mover item ${index + 1} para baixo`} disabled={disabled || index === answer.items.length - 1}>
                 <ArrowDown className="w-3.5 h-3.5" />
               </IconButton>
               <IconButton onClick={() => removeItem(removeOrderingItem(answer, item.id), index, answer.items.length, (n) => `Remover item ${n + 1}`)} title="Remover item" label={`Remover item ${index + 1}`} disabled={disabled}>
