@@ -1,6 +1,8 @@
+import React from "react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, waitFor, within } from "@testing-library/react";
 import { StepReview } from "./StepReview";
+import { EMPTY_FOLDER_NAME_MESSAGE, NEW_FOLDER_HINT } from "./newFolderField";
 import { TITLE_FIELD_HINT, TITLE_FIELD_LABEL } from "@/components/adaptation/titleField";
 import { PageBreakMarker } from "@/components/adaptation/canonical-editor/page-break/pageBreakDecoration";
 import { OriginalDocExtension } from "@/components/adaptation/canonical-editor/originalDocExtension";
@@ -652,7 +654,131 @@ describe("StepReview", () => {
       fireEvent.click(screen.getByRole("option", { name: /Nova pasta/i }));
       const field = await screen.findByLabelText("Nome da nova pasta");
       expect(field).not.toHaveAttribute("aria-invalid", "true");
-      expect(field).not.toHaveAttribute("aria-describedby");
+      // 0513: sem erro, a descrição diz QUANDO a pasta nasce (no salvar).
+      expect(field).toHaveAccessibleDescription(NEW_FOLDER_HINT);
+    });
+
+    describe("Enter e nome vazio no campo de nova pasta (0513)", () => {
+      /** Harness: o nome é controlado pelo pai, como no wizard. */
+      function Harness(props: { onSave?: () => void; newFolderError?: string | null }) {
+        const [name, setName] = React.useState("");
+        return (
+          <StepReview
+            document={DOC}
+            metadata={METADATA}
+            onDocumentChange={vi.fn()}
+            onRegenerate={vi.fn()}
+            onNext={vi.fn()}
+            onPrev={vi.fn()}
+            folders={FOLDERS}
+            newFolder={name}
+            onNewFolderChange={setName}
+            newFolderError={props.newFolderError ?? null}
+            canSave
+            onSave={props.onSave}
+          />
+        );
+      }
+
+      async function openField() {
+        fireEvent.click(screen.getByLabelText("Pasta"));
+        await waitFor(() => screen.getByRole("option", { name: /Nova pasta/i }));
+        fireEvent.click(screen.getByRole("option", { name: /Nova pasta/i }));
+        return screen.findByLabelText("Nome da nova pasta");
+      }
+
+      beforeEach(() => {
+        useCanonicalEditor.mockReturnValue({ editor: fakeEditor });
+      });
+
+      it("Enter com nome válido fecha o campo e mostra a pasta pendente no gatilho", async () => {
+        render(<Harness />);
+        const field = await openField();
+        fireEvent.change(field, { target: { value: "  Turma A  " } });
+        fireEvent.keyDown(field, { key: "Enter" });
+        await waitFor(() =>
+          expect(screen.queryByLabelText("Nome da nova pasta")).not.toBeInTheDocument(),
+        );
+        const trigger = screen.getByLabelText("Pasta");
+        expect(trigger).toHaveTextContent("Turma A (nova)");
+        expect(trigger).toHaveFocus();
+      });
+
+      it("Enter com o campo vazio mantém o campo aberto e diz por quê", async () => {
+        render(<Harness />);
+        const field = await openField();
+        fireEvent.keyDown(field, { key: "Enter" });
+        expect(screen.getByLabelText("Nome da nova pasta")).toBe(field);
+        expect(field).toHaveAttribute("aria-invalid", "true");
+        expect(field).toHaveAccessibleDescription(EMPTY_FOLDER_NAME_MESSAGE);
+      });
+
+      it("Enter só com espaços também é recusado, e digitar limpa o aviso", async () => {
+        render(<Harness />);
+        const field = await openField();
+        fireEvent.change(field, { target: { value: "   " } });
+        fireEvent.keyDown(field, { key: "Enter" });
+        expect(field).toHaveAttribute("aria-invalid", "true");
+        fireEvent.change(field, { target: { value: "   T" } });
+        expect(field).not.toHaveAttribute("aria-invalid", "true");
+      });
+
+      it("Salvar com o campo aberto e vazio não passa calado", async () => {
+        const onSave = vi.fn();
+        render(<Harness onSave={onSave} />);
+        const field = await openField();
+        fireEvent.click(screen.getByRole("button", { name: /Salvar adaptação/i }));
+        expect(onSave).not.toHaveBeenCalled();
+        expect(field).toHaveAttribute("aria-invalid", "true");
+        expect(field).toHaveFocus();
+      });
+
+      it("Salvar com nome no campo segue para o salvar", async () => {
+        const onSave = vi.fn();
+        render(<Harness onSave={onSave} />);
+        const field = await openField();
+        fireEvent.change(field, { target: { value: "Turma A" } });
+        fireEvent.click(screen.getByRole("button", { name: /Salvar adaptação/i }));
+        expect(onSave).toHaveBeenCalled();
+      });
+
+      it("Escape depois do aviso fecha e, ao reabrir, o aviso some", async () => {
+        render(<Harness />);
+        let field = await openField();
+        fireEvent.keyDown(field, { key: "Enter" });
+        fireEvent.keyDown(field, { key: "Escape" });
+        await waitFor(() =>
+          expect(screen.queryByLabelText("Nome da nova pasta")).not.toBeInTheDocument(),
+        );
+        field = await openField();
+        expect(field).not.toHaveAttribute("aria-invalid", "true");
+      });
+
+      it("reabre o campo quando o salvar recusa o nome pendente", async () => {
+        const { rerender } = render(<Harness />);
+        const field = await openField();
+        fireEvent.change(field, { target: { value: "6º ano B" } });
+        fireEvent.keyDown(field, { key: "Enter" });
+        await waitFor(() =>
+          expect(screen.queryByLabelText("Nome da nova pasta")).not.toBeInTheDocument(),
+        );
+        rerender(<Harness newFolderError="Já existe a pasta “6º ano B”." />);
+        const reopened = await screen.findByLabelText("Nome da nova pasta");
+        expect(reopened).toHaveValue("6º ano B");
+        expect(reopened).toHaveAccessibleDescription("Já existe a pasta “6º ano B”.");
+      });
+
+      it("escolher outra pasta descarta o nome pendente", async () => {
+        render(<Harness />);
+        const field = await openField();
+        fireEvent.change(field, { target: { value: "Turma A" } });
+        fireEvent.keyDown(field, { key: "Enter" });
+        await waitFor(() => expect(screen.getByLabelText("Pasta")).toHaveTextContent("Turma A (nova)"));
+        fireEvent.click(screen.getByLabelText("Pasta"));
+        await waitFor(() => screen.getByRole("option", { name: "Recuperação" }));
+        fireEvent.click(screen.getByRole("option", { name: "Recuperação" }));
+        expect(screen.getByLabelText("Pasta")).not.toHaveTextContent("Turma A");
+      });
     });
 
     it("does not break without folder handlers", async () => {

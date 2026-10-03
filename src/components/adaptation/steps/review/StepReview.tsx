@@ -19,6 +19,7 @@ import {
 import { AppearancePopover } from "./AppearancePopover";
 import { MetadataDrawer } from "./MetadataDrawer";
 import { OriginalExamDialog } from "./OriginalExamDialog";
+import { EMPTY_FOLDER_NAME_MESSAGE, NEW_FOLDER_HINT } from "./newFolderField";
 import { SelectionBubble } from "@/components/adaptation/canonical-editor/SelectionBubble";
 import { SELECTION_BUBBLE_TIPPY_OPTIONS } from "@/components/adaptation/canonical-editor/selectionBubbleTippy";
 import { resolvePageStyle } from "@/components/adaptation/render/pageStyle";
@@ -165,6 +166,7 @@ export function StepReview({
 }: Props) {
   const titleHintId = useId();
   const newFolderErrorId = useId();
+  const newFolderHintId = useId();
   const [aboutOpen, setAboutOpen] = useState(false);
   // 0349 — a gaveta não tem `SheetTrigger` (é controlada), então o gatilho para
   // onde o foco volta no fechamento tem que ser entregue à mão.
@@ -186,6 +188,16 @@ export function StepReview({
   useEffect(() => {
     setCreatingFolder(false);
   }, [folderId]);
+  // 0513: Enter confirmed the name and closed the field, but the save refused
+  // it (repeated name). Reopen it, or the reason has nowhere to show up.
+  useEffect(() => {
+    if (newFolderError) setCreatingFolder(true);
+  }, [newFolderError]);
+  // 0513: Enter / Salvar found the field empty. Local because it never needs
+  // the parent: the name is simply missing.
+  const [folderNameMissing, setFolderNameMissing] = useState(false);
+  const folderFieldError =
+    newFolderError ?? (folderNameMissing ? EMPTY_FOLDER_NAME_MESSAGE : null);
   const newFolderRef = useRef<HTMLInputElement>(null);
   const focusNewFolder = useRef(false);
   const folderTriggerRef = useRef<HTMLButtonElement>(null);
@@ -196,11 +208,16 @@ export function StepReview({
    * Select é o sentinela NEW_FOLDER. Por isso o rótulo é calculado aqui em vez
    * de deixar o Radix imprimir o item selecionado.
    */
-  const folderLabel = folders.find((f) => f.id === folderId)?.name ?? "Sem pasta";
+  const pendingFolder = newFolder.trim();
+  const folderLabel =
+    !creatingFolder && pendingFolder
+      ? `${pendingFolder} (nova)`
+      : (folders.find((f) => f.id === folderId)?.name ?? "Sem pasta");
 
   /** Escape cancela o modo transitório (APG) e devolve o foco ao gatilho. */
   const cancelNewFolder = () => {
     setCreatingFolder(false);
+    setFolderNameMissing(false);
     onNewFolderChange?.("");
     folderTriggerRef.current?.focus();
   };
@@ -327,10 +344,12 @@ export function StepReview({
                 // 0509: só abre o campo. A pasta atual fica intacta até um
                 // nome ser salvo, para o Escape ter o que devolver.
                 focusNewFolder.current = true;
+                setFolderNameMissing(false);
                 setCreatingFolder(true);
                 return;
               }
               setCreatingFolder(false);
+              setFolderNameMissing(false);
               onNewFolderChange?.("");
               onFolderChange?.(v === NO_FOLDER ? null : v);
             }}
@@ -365,12 +384,29 @@ export function StepReview({
               ref={newFolderRef}
               autoFocus
               aria-label="Nome da nova pasta"
-              aria-invalid={newFolderError ? true : undefined}
-              aria-describedby={newFolderError ? newFolderErrorId : undefined}
+              aria-invalid={folderFieldError ? true : undefined}
+              aria-describedby={folderFieldError ? newFolderErrorId : newFolderHintId}
+              title={NEW_FOLDER_HINT}
               placeholder="Ex.: 6º ano B"
               value={newFolder}
-              onChange={(e) => onNewFolderChange?.(e.target.value)}
+              onChange={(e) => {
+                setFolderNameMissing(false);
+                onNewFolderChange?.(e.target.value);
+              }}
               onKeyDown={(e) => {
+                // 0513: Enter confirma o nome. Válido, fecha o campo e o
+                // gatilho mostra a pasta pendente (criada no salvar); vazio,
+                // o campo fica aberto e diz por quê.
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  if (!pendingFolder) {
+                    setFolderNameMissing(true);
+                    return;
+                  }
+                  setCreatingFolder(false);
+                  folderTriggerRef.current?.focus();
+                  return;
+                }
                 if (e.key !== "Escape") return;
                 // Sem `stopPropagation` o Escape sobe e fecha o diálogo/wizard
                 // em volta, o que perderia bem mais do que o campo.
@@ -381,9 +417,14 @@ export function StepReview({
               className="mr-1 h-7 w-36 border-surface-chrome-line bg-surface-paper text-xs text-surface-ink aria-[invalid=true]:border-destructive"
             />
           )}
-          {creatingFolder && newFolderError && (
+          {creatingFolder && folderFieldError && (
             <span id={newFolderErrorId} role="alert" className="mr-1 text-xs font-medium text-destructive">
-              {newFolderError}
+              {folderFieldError}
+            </span>
+          )}
+          {creatingFolder && (
+            <span id={newFolderHintId} className="sr-only">
+              {NEW_FOLDER_HINT}
             </span>
           )}
 
@@ -537,7 +578,14 @@ export function StepReview({
           <Button
             variant="outline"
             onClick={() => {
-              if (!saving) onSave?.();
+              if (saving) return;
+              // 0513: campo de nova pasta aberto e vazio não salva calado.
+              if (creatingFolder && !pendingFolder) {
+                setFolderNameMissing(true);
+                newFolderRef.current?.focus();
+                return;
+              }
+              onSave?.();
             }}
             disabled={!canSave}
             aria-disabled={saving || undefined}
