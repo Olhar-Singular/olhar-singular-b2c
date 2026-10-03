@@ -39,7 +39,10 @@ export function StepBarrierSelection({ data, updateData, onNext, onPrev }: Props
   const createProfile = useCreateBarrierProfile();
   const [error, setError] = useState("");
   const [creatingProfile, setCreatingProfile] = useState(false);
-  const [selectNewest, setSelectNewest] = useState(false);
+  // 0383: id of the profile just created, selected once the refetched list
+  // contains it. Picking `profiles[0]` right after the mutation grabbed the
+  // previous profile, because the list had not refetched yet.
+  const [pendingProfileId, setPendingProfileId] = useState<string | null>(null);
   const selectRef = useRef<HTMLSelectElement>(null);
   // 1122: the dialog is opened by state, with no `DialogTrigger`, so Radix
   // would restore focus to `<body>` on close. Closing hands it back to the
@@ -96,10 +99,10 @@ export function StepBarrierSelection({ data, updateData, onNext, onPrev }: Props
   }, [profiles, updateData]);
 
   useEffect(() => {
-    if (!selectNewest || profiles.length === 0) return;
-    handleProfileChange(profiles[0].id);
-    setSelectNewest(false);
-  }, [selectNewest, profiles, handleProfileChange]);
+    if (!pendingProfileId || !profiles.some((p) => p.id === pendingProfileId)) return;
+    handleProfileChange(pendingProfileId);
+    setPendingProfileId(null);
+  }, [pendingProfileId, profiles, handleProfileChange]);
 
   useEffect(() => {
     if (!focusSelectPendingRef.current || !selectRef.current) return;
@@ -119,14 +122,14 @@ export function StepBarrierSelection({ data, updateData, onNext, onPrev }: Props
   }
 
   async function handleCreateProfile(values: BarrierProfileFormValues) {
-    await createProfile.mutateAsync({
+    const created = await createProfile.mutateAsync({
       name: values.name,
       barriers: values.barriers,
       observation: values.observation,
     });
     createdProfileRef.current = true;
     setCreatingProfile(false);
-    setSelectNewest(true);
+    setPendingProfileId(created.id);
   }
 
   // Both validation failures are about the profile field, so the message is

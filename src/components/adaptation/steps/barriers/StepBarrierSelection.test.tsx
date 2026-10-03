@@ -18,7 +18,7 @@ const mockBarrierProfiles = [
   },
 ];
 
-const mockMutateAsync = vi.fn().mockResolvedValue(undefined);
+const mockMutateAsync = vi.fn().mockResolvedValue({ id: "new-1" });
 
 vi.mock("@/hooks/useBarrierProfiles", () => ({
   useBarrierProfiles: vi.fn(() => ({
@@ -71,7 +71,7 @@ function renderStep(data: WizardData = baseData) {
 describe("StepBarrierSelection", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockMutateAsync.mockResolvedValue(undefined);
+    mockMutateAsync.mockResolvedValue({ id: "new-1" });
     mockUseAuth.mockReturnValue({ profile: { access_kind: "legacy", credit_balance: 30, plan_credits: 0, plan_period_end: null } });
     vi.mocked(useBarrierProfiles).mockReturnValue({ data: mockBarrierProfiles, isLoading: false } as never);
     vi.mocked(useCreateBarrierProfile).mockReturnValue({ mutateAsync: mockMutateAsync, isPending: false } as never);
@@ -549,8 +549,39 @@ describe("StepBarrierSelection", () => {
       );
     });
 
+    it("selects the profile just created, not the previous one, when other profiles exist (0383)", async () => {
+      const user = userEvent.setup();
+      const created = { id: "new-2", user_id: "user-1", barriers: ["tea_abstracao"], name: "Perfil Caca R15", observation: null, created_at: "2026-06-18" };
+      mockMutateAsync.mockResolvedValue(created);
+      const { rerender } = renderStep();
+
+      fireEvent.click(screen.getByRole("button", { name: /novo/i }));
+      await screen.findByRole("dialog");
+      await user.type(screen.getByLabelText(/Nome do perfil/i), "Perfil Caca R15");
+      await user.click(within(screen.getByRole("dialog")).getAllByRole("checkbox")[0]);
+      await user.click(screen.getByRole("button", { name: /salvar perfil/i }));
+      await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+
+      // The list has not refetched yet: the previous profile must not be picked.
+      expect(mockUpdateData).not.toHaveBeenCalledWith(expect.objectContaining({ barrierProfileId: "prof-1" }));
+
+      vi.mocked(useBarrierProfiles).mockReturnValue({ data: [created, ...mockBarrierProfiles], isLoading: false } as never);
+      const qc2 = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+      rerender(
+        <QueryClientProvider client={qc2}>
+          <MemoryRouter><StepBarrierSelection data={baseData} updateData={mockUpdateData} onNext={mockOnNext} onPrev={mockOnPrev} /></MemoryRouter>
+        </QueryClientProvider>,
+      );
+
+      await waitFor(() =>
+        expect(mockUpdateData).toHaveBeenCalledWith(expect.objectContaining({ barrierProfileId: "new-2" })),
+      );
+      expect(mockUpdateData).not.toHaveBeenCalledWith(expect.objectContaining({ barrierProfileId: "prof-1" }));
+    });
+
     it("auto-select: maps unknown key to dimension 'other' when profiles refetch", async () => {
       const user = userEvent.setup();
+      mockMutateAsync.mockResolvedValue({ id: "p-unk" });
       vi.mocked(useBarrierProfiles).mockReturnValue({ data: [], isLoading: false } as never);
       const { rerender } = renderStep();
 

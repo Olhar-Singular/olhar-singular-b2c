@@ -41,14 +41,14 @@ function buildChain(overrides: Record<string, unknown> = {}) {
     select: vi.fn(),
     eq: vi.fn(),
     order: vi.fn().mockResolvedValue({ data: mockProfiles, error: null }),
-    insert: vi.fn().mockResolvedValue({ data: [mockProfiles[0]], error: null }),
+    insert: vi.fn(),
     update: vi.fn(),
     delete: vi.fn(),
     single: vi.fn().mockResolvedValue({ data: mockProfiles[0], error: null }),
     ...overrides,
   };
   // chain returns self
-  (["select", "eq", "update", "delete"] as const).forEach((k) => {
+  (["select", "eq", "insert", "update", "delete"] as const).forEach((k) => {
     if (typeof base[k] === "function") {
       (base[k] as ReturnType<typeof vi.fn>).mockReturnValue(base);
     }
@@ -87,13 +87,14 @@ describe("useBarrierProfiles", () => {
 describe("useCreateBarrierProfile", () => {
   beforeEach(() => vi.clearAllMocks());
 
-  it("calls insert with barriers and observation", async () => {
+  it("calls insert with barriers and observation and resolves with the created row (0383)", async () => {
     const chain = buildChain();
     vi.mocked(supabase.from).mockReturnValue(chain as never);
     const { result } = renderHook(() => useCreateBarrierProfile(), { wrapper });
 
+    let created: unknown;
     await act(async () => {
-      await result.current.mutateAsync({
+      created = await result.current.mutateAsync({
         barriers: ["dislexia_leitura"],
         observation: "Obs teste",
       });
@@ -107,12 +108,13 @@ describe("useCreateBarrierProfile", () => {
         user_id: "u1",
       })
     );
+    expect(created).toEqual(mockProfiles[0]);
   });
 
   it("toasts an error when the insert fails", async () => {
     const { toast } = await import("sonner");
     const chain = buildChain({
-      insert: vi.fn().mockResolvedValue({ data: null, error: { message: "fail-insert" } }),
+      single: vi.fn().mockResolvedValue({ data: null, error: { message: "fail-insert" } }),
     });
     vi.mocked(supabase.from).mockReturnValue(chain as never);
     const { result } = renderHook(() => useCreateBarrierProfile(), { wrapper });
