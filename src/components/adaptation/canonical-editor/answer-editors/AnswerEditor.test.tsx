@@ -906,15 +906,14 @@ describe("AnswerEditor — foco ao adicionar e remover itens (1102)", () => {
     expect(screen.getByLabelText(field(4))).toHaveFocus();
   });
 
-  it("lixeira no mínimo (1 item) não muda nada nem rouba o foco", () => {
+  it("lixeira no mínimo (1 item) sai desabilitada e não muda nada (1107)", () => {
     const onChange = vi.fn();
     const single: QuestionAnswer = { kind: "trueFalse", items: [{ id: id(1), content: t("x"), value: true }] };
     render(<AnswerEditor answer={single} onChange={onChange} />);
     const trash = screen.getByRole("button", { name: "Remover afirmação 1" });
-    trash.focus();
+    expect(trash).toBeDisabled();
     fireEvent.click(trash);
     expect(onChange).not.toHaveBeenCalled();
-    expect(trash).toHaveFocus();
   });
 
   it("não rouba o foco se a resposta mudar sem o item alvo", () => {
@@ -950,5 +949,48 @@ describe("AnswerEditor — foco ao adicionar e remover itens (1102)", () => {
       fireEvent.click(screen.getByRole("button", { name: "Remover lacuna" }));
       expect(screen.getByRole("button", { name: /^\s*Lacuna$/ })).toHaveFocus();
     });
+  });
+});
+
+/**
+ * Achado 1107: no mínimo a op recusa remover (devolve a mesma resposta), mas a
+ * lixeira seguia habilitada e o clique era inerte, sem aviso. Como as setas da
+ * ordenação (1103), a lixeira do último item e da última linha/coluna sai desabilitada.
+ */
+describe("AnswerEditor — lixeira desabilitada no mínimo (1107)", () => {
+  const id = "11111111-0000-4000-8000-000000000000";
+  const singles: Array<{ name: string; answer: QuestionAnswer; trash: string }> = [
+    { name: "multipleChoice", answer: { kind: "multipleChoice", alternatives: [{ id, content: t("a"), correct: true }] }, trash: `Remover alternativa ${indexToLetter(0)}` },
+    { name: "trueFalse", answer: { kind: "trueFalse", items: [{ id, content: t("v"), value: true }] }, trash: "Remover afirmação 1" },
+    { name: "checkbox", answer: { kind: "checkbox", items: [{ id, content: t("c"), checked: false }] }, trash: "Remover opção 1" },
+    { name: "matching", answer: { kind: "matching", pairs: [{ id, left: t("l"), right: t("r") }] }, trash: "Remover par 1" },
+    { name: "ordering", answer: { kind: "ordering", items: [{ id, content: t("o"), position: 0 }] }, trash: "Remover item 1" },
+  ];
+
+  it.each(singles)("$name: com 1 item, a lixeira sai desabilitada", ({ answer, trash }) => {
+    render(<AnswerEditor answer={answer} onChange={vi.fn()} />);
+    expect(screen.getByRole("button", { name: trash })).toBeDisabled();
+  });
+
+  it("com 2 itens as lixeiras seguem habilitadas", () => {
+    const two: QuestionAnswer = {
+      kind: "trueFalse",
+      items: [1, 2].map((n) => ({ id: `${n}${id.slice(1)}`, content: t(`v${n}`), value: true })),
+    };
+    render(<AnswerEditor answer={two} onChange={vi.fn()} />);
+    expect(screen.getByRole("button", { name: "Remover afirmação 1" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Remover afirmação 2" })).toBeEnabled();
+  });
+
+  it("tabela 1x1: remover a coluna e a linha do cabeçalho saem desabilitadas", () => {
+    render(<AnswerEditor answer={{ kind: "table", rows: [[t("Agua")]] }} onChange={vi.fn()} />);
+    expect(screen.getByRole("button", { name: "Remover coluna 1" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Remover linha do cabeçalho" })).toBeDisabled();
+  });
+
+  it("tabela 2x2 segue com as lixeiras habilitadas", () => {
+    render(<AnswerEditor answer={{ kind: "table", rows: [[t("a"), t("b")], [t("c"), t("d")]] }} onChange={vi.fn()} />);
+    expect(screen.getByRole("button", { name: "Remover coluna 1" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Remover linha do cabeçalho" })).toBeEnabled();
   });
 });

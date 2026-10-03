@@ -161,11 +161,11 @@ export function AnswerEditor({
   /**
    * Achado 1102: a lixeira vive dentro da linha que apaga (chaveada por `id`);
    * sem isto o botão focado desmontava e o foco caía no `<body>`. Remover foca a
-   * lixeira do item que ocupou o lugar (ou a do anterior, se era o último); no
-   * mínimo a op devolve a mesma resposta e nada muda. Adicionar foca o campo criado.
+   * lixeira do item que ocupou o lugar (ou a do anterior, se era o último).
+   * Adicionar foca o campo criado. No mínimo (1 item) a lixeira sai desabilitada
+   * (achado 1107), então nunca chega aqui com a op recusando.
    */
   const removeItem = (next: QuestionAnswer, index: number, length: number, trashLabel: (i: number) => string) => {
-    if (next === answer) return;
     focusLabel.current = trashLabel(Math.min(index, length - 2));
     onChange(next);
   };
@@ -221,7 +221,7 @@ export function AnswerEditor({
                 placeholder="Alternativa"
                 ariaLabel={`Alternativa ${indexToLetter(i)}`}
               />
-              <IconButton onClick={() => removeItem(removeAlternative(answer, alt.id), i, answer.alternatives.length, (n) => `Remover alternativa ${indexToLetter(n)}`)} title="Remover alternativa" label={`Remover alternativa ${indexToLetter(i)}`} disabled={disabled}>
+              <IconButton onClick={() => removeItem(removeAlternative(answer, alt.id), i, answer.alternatives.length, (n) => `Remover alternativa ${indexToLetter(n)}`)} title="Remover alternativa" label={`Remover alternativa ${indexToLetter(i)}`} disabled={disabled || answer.alternatives.length <= 1}>
                 <Trash2 className="w-3.5 h-3.5" />
               </IconButton>
             </div>
@@ -258,7 +258,7 @@ export function AnswerEditor({
               >
                 {item.value ? "V" : "F"}
               </Button>
-              <IconButton onClick={() => removeItem(removeTrueFalseItem(answer, item.id), i, answer.items.length, (n) => `Remover afirmação ${n + 1}`)} title="Remover afirmação" label={`Remover afirmação ${i + 1}`} disabled={disabled}>
+              <IconButton onClick={() => removeItem(removeTrueFalseItem(answer, item.id), i, answer.items.length, (n) => `Remover afirmação ${n + 1}`)} title="Remover afirmação" label={`Remover afirmação ${i + 1}`} disabled={disabled || answer.items.length <= 1}>
                 <Trash2 className="w-3.5 h-3.5" />
               </IconButton>
             </div>
@@ -290,7 +290,7 @@ export function AnswerEditor({
                 placeholder="Opção"
                 ariaLabel={`Opção ${i + 1}`}
               />
-              <IconButton onClick={() => removeItem(removeCheckboxItem(answer, item.id), i, answer.items.length, (n) => `Remover opção ${n + 1}`)} title="Remover opção" label={`Remover opção ${i + 1}`} disabled={disabled}>
+              <IconButton onClick={() => removeItem(removeCheckboxItem(answer, item.id), i, answer.items.length, (n) => `Remover opção ${n + 1}`)} title="Remover opção" label={`Remover opção ${i + 1}`} disabled={disabled || answer.items.length <= 1}>
                 <Trash2 className="w-3.5 h-3.5" />
               </IconButton>
             </div>
@@ -321,7 +321,7 @@ export function AnswerEditor({
                 placeholder="Coluna B"
                 ariaLabel={`Coluna B, par ${i + 1}`}
               />
-              <IconButton onClick={() => removeItem(removeMatchingPair(answer, pair.id), i, answer.pairs.length, (n) => `Remover par ${n + 1}`)} title="Remover par" label={`Remover par ${i + 1}`} disabled={disabled}>
+              <IconButton onClick={() => removeItem(removeMatchingPair(answer, pair.id), i, answer.pairs.length, (n) => `Remover par ${n + 1}`)} title="Remover par" label={`Remover par ${i + 1}`} disabled={disabled || answer.pairs.length <= 1}>
                 <Trash2 className="w-3.5 h-3.5" />
               </IconButton>
             </div>
@@ -352,7 +352,7 @@ export function AnswerEditor({
               <IconButton onClick={() => moveOrderingItem(answer, index, index + 1)} title="Mover para baixo" label={`Mover item ${index + 1} para baixo`} disabled={disabled || index === answer.items.length - 1}>
                 <ArrowDown className="w-3.5 h-3.5" />
               </IconButton>
-              <IconButton onClick={() => removeItem(removeOrderingItem(answer, item.id), index, answer.items.length, (n) => `Remover item ${n + 1}`)} title="Remover item" label={`Remover item ${index + 1}`} disabled={disabled}>
+              <IconButton onClick={() => removeItem(removeOrderingItem(answer, item.id), index, answer.items.length, (n) => `Remover item ${n + 1}`)} title="Remover item" label={`Remover item ${index + 1}`} disabled={disabled || answer.items.length <= 1}>
                 <Trash2 className="w-3.5 h-3.5" />
               </IconButton>
             </div>
@@ -447,23 +447,25 @@ export function AnswerEditor({
         </div>
       );
 
-    case "table":
+    case "table": {
+      const tableWidth = Math.max(0, ...answer.rows.map((r) => r.length));
       return (
         <div ref={rootRef} className="flex flex-col gap-1.5" data-testid="answer-table">
           <p role="status" className="sr-only">{tableStatus}</p>
           {/* Achado 0369: uma lixeira por coluna, acima dela, e uma por linha. */}
           <div className="flex gap-1 min-w-0 pr-8">
-            {Array.from({ length: Math.max(0, ...answer.rows.map((r) => r.length)) }, (_, ci) => (
+            {/* Achado 1107: a última coluna/linha não sai (a op recusa), então a lixeira fica desabilitada. */}
+            {Array.from({ length: tableWidth }, (_, ci) => (
               <div key={ci} className="flex flex-1 justify-center min-w-0">
                 <IconButton
                   onClick={(e) => {
                     const next = removeTableColumn(answer, ci);
-                    if (e.detail > 1 || next === answer) return;
+                    if (e.detail > 1) return;
                     onChange(next);
                     setTableStatus(`Coluna ${ci + 1} removida`);
                     addColumnRef.current?.focus();
                   }}
-                  title="Remover coluna" label={`Remover coluna ${ci + 1}`} disabled={disabled}>
+                  title="Remover coluna" label={`Remover coluna ${ci + 1}`} disabled={disabled || tableWidth <= 1}>
                   <Trash2 className="w-3.5 h-3.5" />
                 </IconButton>
               </div>
@@ -490,14 +492,14 @@ export function AnswerEditor({
               <IconButton
                 onClick={(e) => {
                   const next = removeTableRow(answer, ri);
-                  if (e.detail > 1 || next === answer) return;
+                  if (e.detail > 1) return;
                   onChange(next);
                   setTableStatus(ri === 0 ? "Linha do cabeçalho removida" : `Linha ${ri} removida`);
                   addRowRef.current?.focus();
                 }}
                 title="Remover linha"
                 label={ri === 0 ? "Remover linha do cabeçalho" : `Remover linha ${ri}`}
-                disabled={disabled}>
+                disabled={disabled || answer.rows.length <= 1}>
                 <Trash2 className="w-3.5 h-3.5" />
               </IconButton>
             </div>
@@ -524,6 +526,7 @@ export function AnswerEditor({
           </div>
         </div>
       );
+    }
 
     /* v8 ignore next 2 -- exhaustive switch; "open" is the only remaining kind */
     case "open":
