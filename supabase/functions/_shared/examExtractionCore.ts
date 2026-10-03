@@ -73,7 +73,7 @@ FIELD RULES:
 - "correct_answer": set ONLY if an explicit answer key appears in the document (e.g. "Gabarito: B", "Resposta: C"). Index: 0=A, 1=B, 2=C, 3=D, 4=E. Use -1 in ALL other cases — never solve or guess.
 - "resolution": short explanation (1-3 sentences)
 - "has_figure": true if the question text references a figure, diagram, graph, table, or image — even if it is not visible in the scan
-- "figure_description": describe what the figure shows, or what the question says about it if not visible
+- "figure_description": describe ONLY what is visibly printed in the figure (shapes, how many bars/items, titles, axis labels, legends and numbers that are actually written on it), or what the question says about it if not visible. NEVER name a label, category or value that is not printed in the figure: do not deduce it from the alternatives, the order of the bars or the question text (e.g. if the bars have no month names, do not call any bar "Março"). NEVER say which option answers the question, and do not compare the values the question asks the student to compare (e.g. do not say which bar is the tallest when the question asks which is the largest).
 - "image_page": which page image (1-indexed) contains the figure. 0 if no figure.
 - "figure_bbox": normalized bounding box (0.0 to 1.0) relative to page: { "x": left, "y": top, "width": width, "height": height }`;
 
@@ -99,7 +99,7 @@ export const EXTRACTION_TOOL_SCHEMA = {
               correct_answer: { type: "integer", description: "0-based index of correct answer. -1 if unknown" },
               resolution: { type: "string", description: "Short explanation (1-3 sentences)" },
               has_figure: { type: "boolean", description: "Whether question has an associated figure" },
-              figure_description: { type: "string", description: "Description of the figure" },
+              figure_description: { type: "string", description: "Description of only visible elements of the figure; never the answer to the question" },
               image_page: { type: "integer", description: "1-indexed page containing the figure. 0 if none" },
               figure_bbox: {
                 type: "object",

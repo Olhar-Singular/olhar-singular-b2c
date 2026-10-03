@@ -16,6 +16,7 @@ import {
   MAX_PAGE_IMAGES_TOTAL_CHARS,
   MAX_FILE_NAME_CHARS,
   EXTRACTION_TIMEOUT_MS,
+  EXTRACTION_TOOL_SCHEMA,
 } from "./examExtractionCore";
 
 describe("buildExtractionMessages", () => {
@@ -332,5 +333,30 @@ describe("named constants", () => {
   it("exposes an extraction timeout well under the edge runtime's own wall-clock limit", () => {
     expect(EXTRACTION_TIMEOUT_MS).toBe(100_000);
     expect(EXTRACTION_TIMEOUT_MS).toBeLessThan(400_000);
+  });
+});
+
+describe("figure_description rule (0472)", () => {
+  const ruleLine =
+    OCR_SYSTEM_PROMPT.split("\n").find((line) => line.includes('"figure_description"')) ?? "";
+
+  it("limits the description to what is printed in the figure", () => {
+    expect(ruleLine).toMatch(/ONLY what is visibly printed/);
+  });
+
+  it("forbids naming labels or values the figure does not print, e.g. taken from the alternatives", () => {
+    expect(ruleLine).toMatch(/NEVER name a label, category or value that is not printed/);
+    expect(ruleLine).toMatch(/alternatives/);
+  });
+
+  it("forbids answering the question or comparing what it asks the student to compare", () => {
+    expect(ruleLine).toMatch(/NEVER say which option answers the question/);
+    expect(ruleLine).toMatch(/compare the values the question asks the student to compare/);
+  });
+
+  it("repeats the restriction in the tool schema field description", () => {
+    const items = EXTRACTION_TOOL_SCHEMA.function.parameters.properties.questions.items;
+    expect(items.properties.figure_description.description).toMatch(/only visible elements/i);
+    expect(items.properties.figure_description.description).toMatch(/never the answer/i);
   });
 });
