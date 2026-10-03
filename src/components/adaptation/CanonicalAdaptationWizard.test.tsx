@@ -1805,6 +1805,18 @@ describe("CanonicalAdaptationWizard — navigation guard", () => {
       expect(pending).toHaveAttribute("aria-live", "polite");
     });
 
+    // 0510: amber-600 on the page background measured 2.93:1 (WCAG 1.4.3 asks
+    // 4.5:1 for 12px text). amber-700 gives 4.62:1 while keeping the alert tone.
+    it("desenha o aviso com contraste legível (amber-700, não amber-600) no tema claro", () => {
+      renderWithProviders(<CanonicalAdaptationWizard />);
+      advanceToReview();
+      fireEvent.click(screen.getByTestId("review-file"));
+
+      const pending = screen.getByTestId("filing-dirty");
+      expect(pending).toHaveClass("text-amber-700");
+      expect(pending).not.toHaveClass("text-amber-600");
+    });
+
     it("não deixa 'Rascunho salvo' ao lado de uma matéria pendente", () => {
       mockDraftStatus.value = "saved";
       renderWithProviders(<CanonicalAdaptationWizard />);

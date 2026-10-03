@@ -801,7 +801,7 @@ export default function CanonicalAdaptationWizard({ editMode }: Props = {}) {
              precedência sobre o rótulo do autosave, que fala só do blob e
              mentiria ("Rascunho salvo") sobre uma escolha pendente. */
           <p
-            className="text-xs font-medium text-amber-600 dark:text-amber-500"
+            className="text-xs font-medium text-amber-700 dark:text-amber-500"
             role="status"
             aria-live="polite"
             data-testid="filing-dirty"
