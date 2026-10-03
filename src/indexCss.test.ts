@@ -1063,3 +1063,47 @@ describe("index.css — chrome da imagem no card da questao (achado 0613)", () =
     expect(body).not.toMatch(/(^|[\s;])gap\s*:/);
   });
 });
+
+/**
+ * Rotulo dos preenchimentos primarios no tema escuro (achado 0807).
+ *
+ * No `.dark`, `--primary` foi clareado para servir de TINTA (`text-primary`)
+ * sobre `--card`, mas o mesmo token e o FUNDO do Button default, do chip do passo
+ * ativo do wizard e de todo `bg-primary text-primary-foreground`. Com o rotulo
+ * branco global, o par caia a 3,09:1. Nenhum valor de `--primary` atende os dois
+ * usos, e `--primary-foreground` global tambem pinta a sidebar (gradiente escuro),
+ * entao o rotulo escuro vale so DENTRO de quem e preenchido com `bg-primary`.
+ */
+function primaryFillInk(themeSelector: string): string {
+  const scoped = themeSelector === ":root" ? ".bg-primary" : `${themeSelector} .bg-primary`;
+  const body = ruleBody(scoped, false);
+  const override = [...body.matchAll(/--primary-foreground\s*:\s*([^;]+);/g)];
+  return override.length > 0
+    ? override[override.length - 1][1].trim()
+    : token(themeSelector, "primary-foreground");
+}
+
+describe("index.css — rotulo sobre o preenchimento primario", () => {
+  it.each([
+    [":root", "tema claro"],
+    [".dark", "tema escuro"],
+  ])("%s (%s) atinge 4,5:1 em repouso", (selector) => {
+    const ink = hslTokenToRgb(primaryFillInk(selector));
+    const fill = hslTokenToRgb(token(selector, "primary"));
+    expect(ratioRgb(ink, fill)).toBeGreaterThanOrEqual(4.5);
+  });
+
+  it(".dark mantem 4,5:1 no hover do Button default (bg-primary/90)", () => {
+    const ink = hslTokenToRgb(primaryFillInk(".dark"));
+    const fill = hslTokenToRgb(token(".dark", "primary"));
+    const pageBg = hslTokenToRgb(token(".dark", "background"));
+    expect(ratioRgb(ink, mix(fill, pageBg, 0.9))).toBeGreaterThanOrEqual(4.5);
+  });
+
+  it("mantem o --primary-foreground global do .dark legivel na sidebar", () => {
+    const ink = hslTokenToRgb(token(".dark", "primary-foreground"));
+    for (const stop of sidebarStops(".dark .gradient-sidebar")) {
+      expect(ratioRgb(ink, stop)).toBeGreaterThanOrEqual(4.5);
+    }
+  });
+});

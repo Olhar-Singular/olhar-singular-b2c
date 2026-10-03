@@ -775,3 +775,15 @@
     margin-top: calc(2.5rem / var(--folha-scale, 1));
   }
 }
+
+/* Rotulo dos preenchimentos primarios no tema escuro (achado 0807).
+ *
+ * No `.dark`, `--primary` e claro o bastante para ser TINTA (`text-primary`)
+ * sobre `--card`, e por isso o rotulo branco global sobre ele caia a 3,09:1
+ * (Button default, chip do passo ativo do wizard). Nenhum `--primary` atende os
+ * dois usos, e `--primary-foreground` global tambem pinta a sidebar escura, que
+ * precisa continuar branca. Entao o rotulo escuro vale so DENTRO de quem e
+ * preenchido com `bg-primary`: 5,9:1 em repouso e 5,2:1 no `hover:bg-primary/90`. */
+.dark .bg-primary {
+  --primary-foreground: 195 30% 8%;
+}
