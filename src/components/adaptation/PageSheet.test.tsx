@@ -1552,6 +1552,41 @@ describe("PageSheet", () => {
       });
     });
 
+    /*
+      Achado 0708: o `@react-pdf` decide a virada pela caixa MAIS a margem de
+      baixo do bloco, e todo bloco do PDF carrega o vão entre blocos
+      (`blockSpacing`) como `marginBottom`, inclusive o último. O bloco que
+      termina dentro da área útil por menos que esse vão desce inteiro no
+      arquivo; a prévia o deixava na folha e anunciava uma página a menos.
+    */
+    const rente = (pageStyle?: { blockSpacing: number }) => (
+      <PageSheet paginated toolbar={null} pageStyle={pageStyle}>
+        <div data-folha-bloco="" data-test-top="53.33" data-test-bottom="853.33" />
+        <div data-folha-bloco="" data-testid="ultimo" data-test-top="869.33" data-test-bottom="1059.33" />
+      </PageSheet>
+    );
+
+    it("empurra o bloco cuja caixa cabe mas cujo vão de baixo não cabe", () => {
+      // Fim do último bloco: 1006px no fluxo, 10px antes do pé da área útil;
+      // com o vão default de 16px, 1022px, fora — o PDF o manda para a folha 2.
+      withBlocos(1006, () => {
+        render(rente());
+        expect(screen.getByTestId("page-count")).toHaveTextContent("2 páginas A4");
+        expect(
+          Number.parseFloat(screen.getByTestId("ultimo").style.marginTop),
+        ).toBeCloseTo(PAGE_MARGIN_PX + PAGE_CONTENT_HEIGHT_PX - 869.33, 2);
+      });
+    });
+
+    it("usa o espaçamento do Formato como o vão que conta na virada", () => {
+      // Com 8px de vão, 1006 + 8 = 1014 cabe na área útil: o PDF não empurra.
+      withBlocos(1006, () => {
+        render(rente({ blockSpacing: 8 }));
+        expect(screen.getByTestId("page-count")).toHaveTextContent("1 página A4");
+        expect(screen.getByTestId("ultimo").style.marginTop).toBe("");
+      });
+    });
+
     it("não mexe no fluxo da folha do Revisar, que é contínua", () => {
       withBlocos(1930, () => {
         render(

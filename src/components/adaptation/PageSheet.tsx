@@ -300,6 +300,8 @@ export function PageSheet({
     de rolagem obrigatória) e ganhou junto a escada de zoom do 0238: agora as
     duas superfícies abrem ajustadas e sobem por escolha do professor.
   */
+  // O mesmo vão que o PDF converte em `marginBottom` (achado 0708).
+  const blockGapPx = resolvePageStyle(pageStyle).blockSpacing;
   useLayoutEffect(() => {
     const frame = frameRef.current;
     const fit = () => {
@@ -530,8 +532,14 @@ export function PageSheet({
           // Achado 0507: bloco mais alto que a área útil não cabe inteiro em
           // folha nenhuma; o arquivo o começa onde está e o parte. Empurrá-lo
           // só queimaria o pé da folha e inventaria uma folha que o PDF não tem.
+          /*
+            Achado 0708: o `@react-pdf` vira pela caixa MAIS a margem de baixo
+            (`getEndOfPresence`), e todo bloco do PDF leva o vão entre blocos
+            como `marginBottom`, até o último. O bloco que termina a menos de um
+            vão do pé desce no arquivo; aqui ele tem que descer também.
+          */
           if (
-            item.bottom + shift - pageTop > PAGE_CONTENT_HEIGHT_PX &&
+            item.bottom + blockGapPx + shift - pageTop > PAGE_CONTENT_HEIGHT_PX &&
             top > pageTop + 0.5 &&
             item.bottom - item.top <= PAGE_CONTENT_HEIGHT_PX
           ) {
@@ -674,7 +682,7 @@ export function PageSheet({
     return () => observer.disconnect();
     // `scale` entra nas dependências porque o efeito lê rects já escalados: sem
     // ele a contagem ficaria presa na escala do render anterior.
-  }, [paginated, children, scale]);
+  }, [paginated, children, scale, blockGapPx]);
 
   /*
     Régua da virada de página: uma linha no fim da área imprimível de cada folha
