@@ -1116,6 +1116,23 @@ describe("StepActivityInput — bank dialog never claims empty before querying (
     await within(dialog).findByText("Questão de Física");
     expect(within(dialog).getByPlaceholderText("Buscar questões...")).toHaveValue("");
   });
+
+  // 0535: 'Limpar filtros' unmounts itself, so focus must land on the search
+  // field instead of falling back to the dialog container.
+  it("focuses the search field after 'Limpar filtros'", async () => {
+    bankQuestionsResult.data = [
+      { id: "s1", text: "Questão de Física", subject: "Física", topic: null, difficulty: null, image_url: null, options: null },
+    ];
+    openBankDialog();
+    const dialog = await screen.findByRole("dialog");
+    await within(dialog).findByText("Questão de Física");
+    fireEvent.change(within(dialog).getByPlaceholderText("Buscar questões..."), { target: { value: "zzz" } });
+    const clear = await within(dialog).findByRole("button", { name: /Limpar filtros/i });
+    clear.focus();
+    fireEvent.click(clear);
+    await within(dialog).findByText("Questão de Física");
+    expect(within(dialog).getByPlaceholderText("Buscar questões...")).toHaveFocus();
+  });
 });
 
 /**

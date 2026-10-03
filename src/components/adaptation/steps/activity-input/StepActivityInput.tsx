@@ -137,6 +137,7 @@ export function StepActivityInput({ data, updateData, onNext, onPrev }: Props) {
 
   const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const bankSearchInputRef = useRef<HTMLInputElement>(null);
 
   // ── Bank query ────────────────────────────────────────────────────────────
 
@@ -182,6 +183,13 @@ export function StepActivityInput({ data, updateData, onNext, onPrev }: Props) {
     setShowBankModal(false);
     setChecked(new Map());
     clearBankFilters();
+  }
+
+  // 0535: the 'Limpar filtros' button unmounts itself, so send focus to the
+  // search field instead of letting it fall back to the dialog container.
+  function clearBankFiltersAndFocusSearch() {
+    clearBankFilters();
+    bankSearchInputRef.current?.focus();
   }
 
   function switchToPasteText() {
@@ -497,6 +505,7 @@ export function StepActivityInput({ data, updateData, onNext, onPrev }: Props) {
               <div className="relative flex-1 min-w-[200px]">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                 <Input
+                  ref={bankSearchInputRef}
                   value={bankSearch}
                   onChange={(e) => setBankSearch(e.target.value)}
                   placeholder="Buscar questões..."
@@ -530,7 +539,7 @@ export function StepActivityInput({ data, updateData, onNext, onPrev }: Props) {
             ) : visibleBankQuestions.length === 0 && bankFiltered ? (
               <div className="py-8 text-center space-y-3">
                 <p className="text-sm text-muted-foreground">Nenhuma questão encontrada para esta busca ou filtro.</p>
-                <Button variant="outline" size="sm" onClick={clearBankFilters}>Limpar filtros</Button>
+                <Button variant="outline" size="sm" onClick={clearBankFiltersAndFocusSearch}>Limpar filtros</Button>
               </div>
             ) : visibleBankQuestions.length === 0 ? (
               <div className="py-8 text-center space-y-3">
