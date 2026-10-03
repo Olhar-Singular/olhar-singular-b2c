@@ -139,25 +139,45 @@ export function AnswerEditor({
    * remoção; o segundo clique de um duplo clique é ignorado; e adicionar leva o
    * foco à primeira célula criada, como o "+ Lacuna" (0370).
    */
-  const tableRef = useRef<HTMLDivElement>(null);
   const addRowRef = useRef<HTMLButtonElement>(null);
   const addColumnRef = useRef<HTMLButtonElement>(null);
   const [tableStatus, setTableStatus] = useState("");
-  const focusTableCell = useRef<string | null>(null);
+  /**
+   * Foco pendente por nome acessível, procurado dentro do card quando a resposta
+   * re-renderizada trouxer o alvo (célula da tabela, 0267; itens das listas, 1102).
+   */
+  const rootRef = useRef<HTMLDivElement>(null);
+  const focusLabel = useRef<string | null>(null);
   useEffect(() => {
-    const label = focusTableCell.current;
-    if (!label || !tableRef.current) return;
-    const cell = Array.from(tableRef.current.querySelectorAll<HTMLElement>("[aria-label]")).find(
+    const label = focusLabel.current;
+    if (!label || !rootRef.current) return;
+    const target = Array.from(rootRef.current.querySelectorAll<HTMLElement>("[aria-label]")).find(
       (el) => el.getAttribute("aria-label") === label,
     );
-    if (!cell) return;
-    focusTableCell.current = null;
-    cell.focus();
+    if (!target) return;
+    focusLabel.current = null;
+    target.focus();
   }, [answer]);
+  /**
+   * Achado 1102: a lixeira vive dentro da linha que apaga (chaveada por `id`);
+   * sem isto o botão focado desmontava e o foco caía no `<body>`. Remover foca a
+   * lixeira do item que ocupou o lugar (ou a do anterior, se era o último); no
+   * mínimo a op devolve a mesma resposta e nada muda. Adicionar foca o campo criado.
+   */
+  const removeItem = (next: QuestionAnswer, index: number, length: number, trashLabel: (i: number) => string) => {
+    if (next === answer) return;
+    focusLabel.current = trashLabel(Math.min(index, length - 2));
+    onChange(next);
+  };
+  const addItem = (next: QuestionAnswer, length: number, fieldLabel: (i: number) => string) => {
+    focusLabel.current = fieldLabel(length);
+    onChange(next);
+  };
+  const addGapRef = useRef<HTMLButtonElement>(null);
   switch (answer.kind) {
     case "multipleChoice":
       return (
-        <div className="flex flex-col gap-2" data-testid="answer-multipleChoice">
+        <div ref={rootRef} className="flex flex-col gap-2" data-testid="answer-multipleChoice">
           {answer.alternatives.map((alt, i) => (
             <div key={alt.id} className="flex items-center gap-2 min-w-0">
               <label className={MARKER_TARGET}>
@@ -178,12 +198,12 @@ export function AnswerEditor({
                 placeholder="Alternativa"
                 ariaLabel={`Alternativa ${indexToLetter(i)}`}
               />
-              <IconButton onClick={() => onChange(removeAlternative(answer, alt.id))} title="Remover alternativa" label={`Remover alternativa ${indexToLetter(i)}`} disabled={disabled}>
+              <IconButton onClick={() => removeItem(removeAlternative(answer, alt.id), i, answer.alternatives.length, (n) => `Remover alternativa ${indexToLetter(n)}`)} title="Remover alternativa" label={`Remover alternativa ${indexToLetter(i)}`} disabled={disabled}>
                 <Trash2 className="w-3.5 h-3.5" />
               </IconButton>
             </div>
           ))}
-          <Button type="button" variant="outline" size="sm" className={cn("self-start gap-1", FOLHA_BUTTON)} onClick={() => onChange(addAlternative(answer))} disabled={disabled}>
+          <Button type="button" variant="outline" size="sm" className={cn("self-start gap-1", FOLHA_BUTTON)} onClick={() => addItem(addAlternative(answer), answer.alternatives.length, (n) => `Alternativa ${indexToLetter(n)}`)} disabled={disabled}>
             <Plus className="w-3.5 h-3.5" /> Alternativa
           </Button>
         </div>
@@ -191,7 +211,7 @@ export function AnswerEditor({
 
     case "trueFalse":
       return (
-        <div className="flex flex-col gap-2" data-testid="answer-trueFalse">
+        <div ref={rootRef} className="flex flex-col gap-2" data-testid="answer-trueFalse">
           {answer.items.map((item, i) => (
             <div key={item.id} className="flex items-center gap-2 min-w-0">
               <RichTextField
@@ -215,12 +235,12 @@ export function AnswerEditor({
               >
                 {item.value ? "V" : "F"}
               </Button>
-              <IconButton onClick={() => onChange(removeTrueFalseItem(answer, item.id))} title="Remover afirmação" label={`Remover afirmação ${i + 1}`} disabled={disabled}>
+              <IconButton onClick={() => removeItem(removeTrueFalseItem(answer, item.id), i, answer.items.length, (n) => `Remover afirmação ${n + 1}`)} title="Remover afirmação" label={`Remover afirmação ${i + 1}`} disabled={disabled}>
                 <Trash2 className="w-3.5 h-3.5" />
               </IconButton>
             </div>
           ))}
-          <Button type="button" variant="outline" size="sm" className={cn("self-start gap-1", FOLHA_BUTTON)} onClick={() => onChange(addTrueFalseItem(answer))} disabled={disabled}>
+          <Button type="button" variant="outline" size="sm" className={cn("self-start gap-1", FOLHA_BUTTON)} onClick={() => addItem(addTrueFalseItem(answer), answer.items.length, (n) => `Afirmação ${n + 1}`)} disabled={disabled}>
             <Plus className="w-3.5 h-3.5" /> Afirmação
           </Button>
         </div>
@@ -228,7 +248,7 @@ export function AnswerEditor({
 
     case "checkbox":
       return (
-        <div className="flex flex-col gap-2" data-testid="answer-checkbox">
+        <div ref={rootRef} className="flex flex-col gap-2" data-testid="answer-checkbox">
           {answer.items.map((item, i) => (
             <div key={item.id} className="flex items-center gap-2 min-w-0">
               <label className={MARKER_TARGET}>
@@ -247,12 +267,12 @@ export function AnswerEditor({
                 placeholder="Opção"
                 ariaLabel={`Opção ${i + 1}`}
               />
-              <IconButton onClick={() => onChange(removeCheckboxItem(answer, item.id))} title="Remover opção" label={`Remover opção ${i + 1}`} disabled={disabled}>
+              <IconButton onClick={() => removeItem(removeCheckboxItem(answer, item.id), i, answer.items.length, (n) => `Remover opção ${n + 1}`)} title="Remover opção" label={`Remover opção ${i + 1}`} disabled={disabled}>
                 <Trash2 className="w-3.5 h-3.5" />
               </IconButton>
             </div>
           ))}
-          <Button type="button" variant="outline" size="sm" className={cn("self-start gap-1", FOLHA_BUTTON)} onClick={() => onChange(addCheckboxItem(answer))} disabled={disabled}>
+          <Button type="button" variant="outline" size="sm" className={cn("self-start gap-1", FOLHA_BUTTON)} onClick={() => addItem(addCheckboxItem(answer), answer.items.length, (n) => `Opção ${n + 1}`)} disabled={disabled}>
             <Plus className="w-3.5 h-3.5" /> Opção
           </Button>
         </div>
@@ -260,7 +280,7 @@ export function AnswerEditor({
 
     case "matching":
       return (
-        <div className="flex flex-col gap-2" data-testid="answer-matching">
+        <div ref={rootRef} className="flex flex-col gap-2" data-testid="answer-matching">
           {answer.pairs.map((pair, i) => (
             <div key={pair.id} className="flex items-center gap-2 min-w-0">
               <RichTextField
@@ -278,12 +298,12 @@ export function AnswerEditor({
                 placeholder="Coluna B"
                 ariaLabel={`Coluna B, par ${i + 1}`}
               />
-              <IconButton onClick={() => onChange(removeMatchingPair(answer, pair.id))} title="Remover par" label={`Remover par ${i + 1}`} disabled={disabled}>
+              <IconButton onClick={() => removeItem(removeMatchingPair(answer, pair.id), i, answer.pairs.length, (n) => `Remover par ${n + 1}`)} title="Remover par" label={`Remover par ${i + 1}`} disabled={disabled}>
                 <Trash2 className="w-3.5 h-3.5" />
               </IconButton>
             </div>
           ))}
-          <Button type="button" variant="outline" size="sm" className={cn("self-start gap-1", FOLHA_BUTTON)} onClick={() => onChange(addMatchingPair(answer))} disabled={disabled}>
+          <Button type="button" variant="outline" size="sm" className={cn("self-start gap-1", FOLHA_BUTTON)} onClick={() => addItem(addMatchingPair(answer), answer.pairs.length, (n) => `Coluna A, par ${n + 1}`)} disabled={disabled}>
             <Plus className="w-3.5 h-3.5" /> Par
           </Button>
         </div>
@@ -291,7 +311,7 @@ export function AnswerEditor({
 
     case "ordering":
       return (
-        <div className="flex flex-col gap-2" data-testid="answer-ordering">
+        <div ref={rootRef} className="flex flex-col gap-2" data-testid="answer-ordering">
           {answer.items.map((item, index) => (
             <div key={item.id} className="flex items-center gap-2 min-w-0">
               <span className="text-xs text-surface-ink-faint w-5">{index + 1}.</span>
@@ -308,12 +328,12 @@ export function AnswerEditor({
               <IconButton onClick={() => onChange(reorderOrdering(answer, index, index + 1))} title="Mover para baixo" label={`Mover item ${index + 1} para baixo`} disabled={disabled}>
                 <ArrowDown className="w-3.5 h-3.5" />
               </IconButton>
-              <IconButton onClick={() => onChange(removeOrderingItem(answer, item.id))} title="Remover item" label={`Remover item ${index + 1}`} disabled={disabled}>
+              <IconButton onClick={() => removeItem(removeOrderingItem(answer, item.id), index, answer.items.length, (n) => `Remover item ${n + 1}`)} title="Remover item" label={`Remover item ${index + 1}`} disabled={disabled}>
                 <Trash2 className="w-3.5 h-3.5" />
               </IconButton>
             </div>
           ))}
-          <Button type="button" variant="outline" size="sm" className={cn("self-start gap-1", FOLHA_BUTTON)} onClick={() => onChange(addOrderingItem(answer))} disabled={disabled}>
+          <Button type="button" variant="outline" size="sm" className={cn("self-start gap-1", FOLHA_BUTTON)} onClick={() => addItem(addOrderingItem(answer), answer.items.length, (n) => `Item ${n + 1}`)} disabled={disabled}>
             <Plus className="w-3.5 h-3.5" /> Item
           </Button>
         </div>
@@ -321,7 +341,7 @@ export function AnswerEditor({
 
     case "fillBlank":
       return (
-        <div className="flex flex-col gap-2" data-testid="answer-fillBlank">
+        <div ref={rootRef} className="flex flex-col gap-2" data-testid="answer-fillBlank">
           {answer.gaps.map((gap, index) => (
             <div key={gap.id} className="flex flex-col gap-1">
               <div className="flex items-center gap-2">
@@ -340,8 +360,15 @@ export function AnswerEditor({
                 />
                 <IconButton
                   onClick={() => {
-                    onChange(removeGap(answer, gap.id));
+                    const next = removeGap(answer, gap.id);
+                    const { gaps } = next as typeof answer;
+                    // 1102: foco no campo da lacuna que ocupou o lugar (ou da
+                    // anterior); sem lacunas, no "+ Lacuna", que não desmonta.
+                    const neighbour = gaps[Math.min(index, gaps.length - 1)];
+                    if (neighbour) focusGapId.current = neighbour.id;
+                    onChange(next);
                     onGapRemoved?.(index);
+                    if (!neighbour) addGapRef.current?.focus();
                   }}
                   title="Remover lacuna"
                   disabled={disabled}
@@ -381,6 +408,7 @@ export function AnswerEditor({
             variant="outline"
             size="sm"
             className={cn("self-start gap-1", FOLHA_BUTTON)}
+            ref={addGapRef}
             onClick={() => {
               const next = addGap(answer);
               const { gaps } = next as typeof answer;
@@ -397,7 +425,7 @@ export function AnswerEditor({
 
     case "table":
       return (
-        <div ref={tableRef} className="flex flex-col gap-1.5" data-testid="answer-table">
+        <div ref={rootRef} className="flex flex-col gap-1.5" data-testid="answer-table">
           <p role="status" className="sr-only">{tableStatus}</p>
           {/* Achado 0369: uma lixeira por coluna, acima dela, e uma por linha. */}
           <div className="flex gap-1 min-w-0 pr-8">
@@ -454,7 +482,7 @@ export function AnswerEditor({
             <Button type="button" variant="outline" size="sm" className={cn("gap-1", FOLHA_BUTTON)} ref={addRowRef}
               onClick={() => {
                 const next = addTableRow(answer) as typeof answer;
-                focusTableCell.current = tableCellLabel(next.rows[0][0], next.rows.length - 2, 0);
+                focusLabel.current = tableCellLabel(next.rows[0][0], next.rows.length - 2, 0);
                 onChange(next);
               }}
               disabled={disabled}>
@@ -463,7 +491,7 @@ export function AnswerEditor({
             <Button type="button" variant="outline" size="sm" className={cn("gap-1", FOLHA_BUTTON)} ref={addColumnRef}
               onClick={() => {
                 const next = addTableColumn(answer) as typeof answer;
-                focusTableCell.current = `Cabeçalho da coluna ${next.rows[0].length}`;
+                focusLabel.current = `Cabeçalho da coluna ${next.rows[0].length}`;
                 onChange(next);
               }}
               disabled={disabled}>

@@ -3,6 +3,7 @@ import { useState } from "react";
 import { render, screen, fireEvent } from "@testing-library/react";
 import type { RichText, QuestionAnswer } from "@/lib/adaptation/canonical/schema";
 import { AnswerEditor } from "./AnswerEditor";
+import { indexToLetter } from "@/components/adaptation/render/letters";
 
 // Mock RichTextField: render a plain textbox keyed by ariaLabel and expose an
 // onChange that emits a single text run, so we can drive the content fields
@@ -758,5 +759,126 @@ describe("AnswerEditor — foco depois de mexer na tabela (0267)", () => {
     expect(document.body).toHaveFocus();
     rerender(<AnswerEditor answer={{ kind: "open", answerLines: 1 }} onChange={vi.fn()} />);
     expect(document.body).toHaveFocus();
+  });
+});
+
+/**
+ * Achado 1102: a lixeira vive dentro da linha que apaga (chaveada por `id`), então
+ * remover desmontava o botão focado e o foco caía no `<body>`; e os "+ X" deixavam
+ * o foco no próprio botão. Remover leva o foco à lixeira do item que ocupou o
+ * lugar (ou à do anterior, se era o último); adicionar leva ao campo criado.
+ */
+describe("AnswerEditor — foco ao adicionar e remover itens (1102)", () => {
+  const id = (n: number) => `${String(n).repeat(8)}-0000-4000-8000-000000000000`;
+  const cases: Array<{ name: string; start: QuestionAnswer; add: RegExp; remove: (n: number) => string; field: (n: number) => string }> = [
+    {
+      name: "multipleChoice",
+      start: { kind: "multipleChoice", alternatives: [1, 2, 3].map((n) => ({ id: id(n), content: t(`a${n}`), correct: n === 1 })) },
+      add: /^\s*Alternativa$/,
+      remove: (n) => `Remover alternativa ${indexToLetter(n - 1)}`,
+      field: (n) => `Alternativa ${indexToLetter(n - 1)}`,
+    },
+    {
+      name: "trueFalse",
+      start: { kind: "trueFalse", items: [1, 2, 3].map((n) => ({ id: id(n), content: t(`v${n}`), value: true })) },
+      add: /^\s*Afirmação$/,
+      remove: (n) => `Remover afirmação ${n}`,
+      field: (n) => `Afirmação ${n}`,
+    },
+    {
+      name: "checkbox",
+      start: { kind: "checkbox", items: [1, 2, 3].map((n) => ({ id: id(n), content: t(`c${n}`), checked: false })) },
+      add: /^\s*Opção$/,
+      remove: (n) => `Remover opção ${n}`,
+      field: (n) => `Opção ${n}`,
+    },
+    {
+      name: "matching",
+      start: { kind: "matching", pairs: [1, 2, 3].map((n) => ({ id: id(n), left: t(`l${n}`), right: t(`r${n}`) })) },
+      add: /^\s*Par$/,
+      remove: (n) => `Remover par ${n}`,
+      field: (n) => `Coluna A, par ${n}`,
+    },
+    {
+      name: "ordering",
+      start: { kind: "ordering", items: [1, 2, 3].map((n) => ({ id: id(n), content: t(`o${n}`), position: n - 1 })) },
+      add: /^\s*Item$/,
+      remove: (n) => `Remover item ${n}`,
+      field: (n) => `Item ${n}`,
+    },
+  ];
+
+  function Harness({ start }: { start: QuestionAnswer }) {
+    const [value, setValue] = useState<QuestionAnswer>(start);
+    return <AnswerEditor answer={value} onChange={setValue} />;
+  }
+
+  it.each(cases)("$name: remover do meio foca a lixeira do item seguinte", ({ start, remove }) => {
+    render(<Harness start={start} />);
+    const trash = screen.getByRole("button", { name: remove(2) });
+    trash.focus();
+    fireEvent.click(trash);
+    expect(document.body).not.toHaveFocus();
+    expect(screen.getByRole("button", { name: remove(2) })).toHaveFocus();
+  });
+
+  it.each(cases)("$name: remover o último foca a lixeira do anterior", ({ start, remove }) => {
+    render(<Harness start={start} />);
+    const trash = screen.getByRole("button", { name: remove(3) });
+    trash.focus();
+    fireEvent.click(trash);
+    expect(screen.getByRole("button", { name: remove(2) })).toHaveFocus();
+  });
+
+  it.each(cases)("$name: + X foca o campo do item criado", ({ start, add, field }) => {
+    render(<Harness start={start} />);
+    fireEvent.click(screen.getByRole("button", { name: add }));
+    expect(screen.getByLabelText(field(4))).toHaveFocus();
+  });
+
+  it("lixeira no mínimo (1 item) não muda nada nem rouba o foco", () => {
+    const onChange = vi.fn();
+    const single: QuestionAnswer = { kind: "trueFalse", items: [{ id: id(1), content: t("x"), value: true }] };
+    render(<AnswerEditor answer={single} onChange={onChange} />);
+    const trash = screen.getByRole("button", { name: "Remover afirmação 1" });
+    trash.focus();
+    fireEvent.click(trash);
+    expect(onChange).not.toHaveBeenCalled();
+    expect(trash).toHaveFocus();
+  });
+
+  it("não rouba o foco se a resposta mudar sem o item alvo", () => {
+    const { rerender } = render(<AnswerEditor answer={cases[1].start} onChange={vi.fn()} />);
+    fireEvent.click(screen.getByRole("button", { name: /^\s*Afirmação$/ }));
+    rerender(<AnswerEditor answer={{ ...cases[1].start }} onChange={vi.fn()} />);
+    expect(document.body).toHaveFocus();
+  });
+
+  describe("fillBlank", () => {
+    const gaps: QuestionAnswer = {
+      kind: "fillBlank",
+      gaps: [1, 2, 3].map((n) => ({ id: id(n), answer: `g${n}` })),
+    };
+
+    it("remover do meio foca o campo Resposta da lacuna seguinte", () => {
+      render(<Harness start={gaps} />);
+      const trash = screen.getAllByRole("button", { name: "Remover lacuna" })[1];
+      trash.focus();
+      fireEvent.click(trash);
+      expect(screen.getByLabelText("Lacuna 2")).toHaveFocus();
+      expect((screen.getByLabelText("Lacuna 2") as HTMLInputElement).value).toBe("g3");
+    });
+
+    it("remover o último foca o campo da lacuna anterior", () => {
+      render(<Harness start={gaps} />);
+      fireEvent.click(screen.getAllByRole("button", { name: "Remover lacuna" })[2]);
+      expect(screen.getByLabelText("Lacuna 2")).toHaveFocus();
+    });
+
+    it("remover a única lacuna foca o + Lacuna", () => {
+      render(<Harness start={{ kind: "fillBlank", gaps: [{ id: id(1), answer: "g" }] }} />);
+      fireEvent.click(screen.getByRole("button", { name: "Remover lacuna" }));
+      expect(screen.getByRole("button", { name: /^\s*Lacuna$/ })).toHaveFocus();
+    });
   });
 });
