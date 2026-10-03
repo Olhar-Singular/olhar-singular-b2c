@@ -2260,6 +2260,45 @@ describe("CanonicalAdaptationWizard — navigation guard", () => {
       expect(screen.getByText(label)).toBeInTheDocument();
     });
 
+    /**
+     * 0465: "Erro ao salvar"/"Conflito" saíam no mesmo cinza de "Rascunho
+     * salvo", e o aviso de matéria/pasta os escondia. O erro do autosave é o
+     * caso em que a edição NÃO está no banco: tom de erro, e nunca escondido.
+     */
+    it.each([
+      ["error", "Erro ao salvar"],
+      ["conflict", "Conflito: recarregue"],
+    ])("pinta o estado %s do autosave com o tom de erro", (status, label) => {
+      mockDraftStatus.value = status;
+      renderWithProviders(<CanonicalAdaptationWizard />);
+      advanceToReview();
+
+      const el = screen.getByText(label);
+      expect(el).toHaveClass("text-destructive-strong", "font-medium");
+      expect(el).not.toHaveClass("text-muted-foreground");
+    });
+
+    it("mantém 'Rascunho salvo' no tom neutro", () => {
+      mockDraftStatus.value = "saved";
+      renderWithProviders(<CanonicalAdaptationWizard />);
+      advanceToReview();
+
+      expect(screen.getByText("Rascunho salvo")).toHaveClass("text-muted-foreground");
+    });
+
+    it.each([
+      ["error", "Erro ao salvar"],
+      ["conflict", "Conflito: recarregue"],
+    ])("não deixa a matéria pendente esconder o estado %s do autosave", (status, label) => {
+      mockDraftStatus.value = status;
+      renderWithProviders(<CanonicalAdaptationWizard />);
+      advanceToReview();
+      fireEvent.click(screen.getByTestId("review-file"));
+
+      expect(screen.getByText(label)).toBeInTheDocument();
+      expect(screen.getByTestId("filing-dirty")).toBeInTheDocument();
+    });
+
     it("não mostra 'Rascunho salvo' fora do Revisar/Exportar", () => {
       mockDraftStatus.value = "saved";
       renderWithProviders(<CanonicalAdaptationWizard />);

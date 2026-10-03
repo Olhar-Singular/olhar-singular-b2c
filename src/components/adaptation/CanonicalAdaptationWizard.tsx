@@ -278,8 +278,8 @@ export default function CanonicalAdaptationWizard({ editMode }: Props = {}) {
    * quebrada, erro de rede ou conflito. Só estes prendem a barra de status no
    * topo; "Salvando…"/"Rascunho salvo" seguem rolando com a página.
    */
-  const savingHasError =
-    captureFailure !== null || saveStatus === "error" || saveStatus === "conflict";
+  const autosaveFailed = saveStatus === "error" || saveStatus === "conflict";
+  const savingHasError = captureFailure !== null || autosaveFailed;
 
   /**
    * 0239 · A guarda de saída fala do que NÃO está no banco.
@@ -865,29 +865,47 @@ export default function CanonicalAdaptationWizard({ editMode }: Props = {}) {
           >
             Alterações não estão sendo salvas: desfaça a última edição
           </p>
-        ) : draftId && filingDirty ? (
-          /* Matéria/pasta escolhidas e ainda não persistidas: este aviso tem
-             precedência sobre o rótulo do autosave, que fala só do blob e
-             mentiria ("Rascunho salvo") sobre uma escolha pendente. */
-          <p
-            className="text-xs font-medium text-amber-700 dark:text-amber-500"
-            role="status"
-            aria-live="polite"
-            data-testid="filing-dirty"
-          >
-            Matéria e pasta não salvas (clique em Salvar adaptação)
-          </p>
         ) : (
-          draftId &&
-          saveStatus !== "idle" &&
-          (savingHasError || (stepIndex >= REVIEW_INDEX && stepIndex <= EXPORT_INDEX)) && (
-            <p
-              className="text-xs text-muted-foreground"
-              role="status"
-              aria-live="polite"
-            >
-              {SAVE_STATUS_LABEL[saveStatus]}
-            </p>
+          draftId && (
+            /* 0465: an autosave error/conflict means the edit is NOT in the
+               database, so it gets the error tone and is never hidden by the
+               subject/folder notice; both show side by side. The notice still
+               wins over the calm labels ("Rascunho salvo" would lie about a
+               pending choice). */
+            <div className="flex flex-wrap items-center justify-end gap-x-3">
+              {autosaveFailed && (
+                <p
+                  className="text-xs font-medium text-destructive-strong"
+                  role="status"
+                  aria-live="polite"
+                >
+                  {SAVE_STATUS_LABEL[saveStatus]}
+                </p>
+              )}
+              {filingDirty ? (
+                <p
+                  className="text-xs font-medium text-amber-700 dark:text-amber-500"
+                  role="status"
+                  aria-live="polite"
+                  data-testid="filing-dirty"
+                >
+                  Matéria e pasta não salvas (clique em Salvar adaptação)
+                </p>
+              ) : (
+                !autosaveFailed &&
+                saveStatus !== "idle" &&
+                stepIndex >= REVIEW_INDEX &&
+                stepIndex <= EXPORT_INDEX && (
+                  <p
+                    className="text-xs text-muted-foreground"
+                    role="status"
+                    aria-live="polite"
+                  >
+                    {SAVE_STATUS_LABEL[saveStatus]}
+                  </p>
+                )
+              )}
+            </div>
           )
         )}
       </div>
