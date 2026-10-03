@@ -38,6 +38,30 @@ describe("BarrierProfileForm", () => {
     expect(onSubmit).not.toHaveBeenCalled();
   });
 
+  it("links the name error to the input and announces it", async () => {
+    render(<BarrierProfileForm onSubmit={vi.fn()} />);
+    const input = screen.getByLabelText(/Nome do perfil/i);
+    expect(input).not.toHaveAttribute("aria-invalid", "true");
+    fireEvent.click(screen.getByRole("button", { name: /Salvar perfil/i }));
+    const msg = await screen.findByText(/Nome do perfil é obrigatório/i);
+    expect(input).toHaveAttribute("aria-invalid", "true");
+    expect(input).toHaveAccessibleDescription(/Nome do perfil é obrigatório/i);
+    expect(msg).toHaveAttribute("role", "alert");
+  });
+
+  it("shows the barriers error right under the group heading, linked and announced", async () => {
+    render(<BarrierProfileForm onSubmit={vi.fn()} />);
+    fireEvent.change(screen.getByLabelText(/Nome do perfil/i), { target: { value: "Perfil" } });
+    fireEvent.click(screen.getByRole("button", { name: /Salvar perfil/i }));
+    const msg = await screen.findByText(/pelo menos uma barreira/i);
+    expect(msg).toHaveAttribute("role", "alert");
+    const group = screen.getByRole("group", { name: /Barreiras de aprendizagem/i });
+    expect(group).toHaveAccessibleDescription(/pelo menos uma barreira/i);
+    // Error must come before the first checkbox, not after the whole list.
+    const firstCheckbox = screen.getAllByRole("checkbox")[0];
+    expect(msg.compareDocumentPosition(firstCheckbox) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
   it("submits with selected barriers when valid", async () => {
     const onSubmit = vi.fn().mockResolvedValue(undefined);
     render(<BarrierProfileForm onSubmit={onSubmit} />);

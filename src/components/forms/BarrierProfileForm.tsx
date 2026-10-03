@@ -38,10 +38,14 @@ export function BarrierProfileForm({ defaultValues, onSubmit, isPending }: Props
         <Input
           id="profile-name"
           placeholder="Ex.: Aluno com TEA, turma 5A"
+          aria-invalid={errors.name ? true : undefined}
+          aria-describedby={errors.name ? "profile-name-error" : undefined}
           {...register("name")}
         />
         {errors.name && (
-          <p className="text-sm text-destructive">{errors.name.message}</p>
+          <p id="profile-name-error" role="alert" className="text-sm text-destructive">
+            {errors.name.message}
+          </p>
         )}
       </div>
 
@@ -49,11 +53,25 @@ export function BarrierProfileForm({ defaultValues, onSubmit, isPending }: Props
         control={control}
         name="barriers"
         render={({ field }) => (
-          <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <span className="text-sm font-medium">Barreiras de aprendizagem</span>
-              {selected.length > 0 && (
-                <Badge variant="secondary">{selected.length} selecionada(s)</Badge>
+          <div
+            role="group"
+            aria-labelledby="profile-barriers-label"
+            aria-describedby={errors.barriers ? "profile-barriers-error" : undefined}
+            className="space-y-4"
+          >
+            <div className="space-y-1">
+              <div className="flex items-center justify-between">
+                <span id="profile-barriers-label" className="text-sm font-medium">
+                  Barreiras de aprendizagem
+                </span>
+                {selected.length > 0 && (
+                  <Badge variant="secondary">{selected.length} selecionada(s)</Badge>
+                )}
+              </div>
+              {errors.barriers && (
+                <p id="profile-barriers-error" role="alert" className="text-sm text-destructive">
+                  {errors.barriers.message}
+                </p>
               )}
             </div>
 
@@ -79,10 +97,6 @@ export function BarrierProfileForm({ defaultValues, onSubmit, isPending }: Props
                 ))}
               </div>
             ))}
-
-            {errors.barriers && (
-              <p className="text-sm text-destructive">{errors.barriers.message}</p>
-            )}
           </div>
         )}
       />
