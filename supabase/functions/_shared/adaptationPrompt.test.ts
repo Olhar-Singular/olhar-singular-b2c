@@ -344,3 +344,25 @@ describe("trueFalse contract (0388)", () => {
     expect(prompt()).toMatch(/NUNCA[^.]*"Verdadeiro"[^.]*"Falso"/);
   });
 });
+
+// 0393: on the paste path (no fidelityMode) the "nothing is removed" rule did
+// not exist, so the AI silently dropped the teacher's evaluation criteria,
+// deadline and glossary. The rule must hold on every path, and any removal has
+// to be named in the justification the teacher reads.
+describe("content preservation on every path (0393)", () => {
+  const prompt = () => buildSystemPrompt([{ dimension: "tdah" }]);
+
+  it("forbids dropping the teacher's informative blocks even without fidelityMode", () => {
+    expect(prompt()).toContain("PRESERVAÇÃO DO CONTEÚDO DO PROFESSOR");
+    expect(prompt()).toMatch(/critérios de avaliação[^.]*prazos[^.]*glossários/i);
+    expect(prompt()).toMatch(/NUNCA remova[^.]*em silêncio/);
+  });
+
+  it("requires listing every removed block, and why, in pedagogical_justification", () => {
+    expect(prompt()).toMatch(/"pedagogical_justification"[^.]*o que saiu e por quê/);
+  });
+
+  it("does not read 'describe an informative table' as licence to drop its values", () => {
+    expect(prompt()).toMatch(/descrevê-la em parágrafos NÃO autoriza omitir/);
+  });
+});
