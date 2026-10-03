@@ -15,7 +15,7 @@ import { Link } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { parseEdgeFnError } from "@/lib/utils/errors";
+import { isNetworkError, parseEdgeFnError } from "@/lib/utils/errors";
 import { useAuth } from "@/hooks/useAuth";
 import { extractExamQuestions } from "../upload-exam/extractExamQuestions";
 import { buildActivityTextFromExtraction, type ExamExtractedQuestion } from "../upload-exam/buildActivityTextFromExtraction";
@@ -160,6 +160,9 @@ export function StepGenerate({ data, onResult, onNext, onPrev, onLoadingChange, 
     if (controller.signal.aborted) return;
 
     if (fnError) {
+      // The request never reached the server: keep the original error so
+      // parseEdgeFnError can say it is the connection, not the adaptation.
+      if (isNetworkError(fnError)) throw fnError;
       const context = (fnError as { context?: Response }).context;
       if (context?.status === 402) {
         setCreditError(OUT_OF_CREDITS_MESSAGE);

@@ -12,6 +12,9 @@ export const MSG_NETWORK = "Sem conexão com o servidor. Verifique sua internet.
 export function isNetworkError(err: unknown): boolean {
   if (err instanceof TypeError) return true;
   if (!(err instanceof Error)) return false;
+  // supabase-js resolves invoke() with this when the request never reached the
+  // server (offline, DNS, CORS); its message matches none of the patterns below.
+  if (err.name === "FunctionsFetchError") return true;
   const lower = (err.message ?? "").toLowerCase();
   return NETWORK_PATTERNS.some((p) => lower.includes(p));
 }

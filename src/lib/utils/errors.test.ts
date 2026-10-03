@@ -20,6 +20,13 @@ describe("isNetworkError", () => {
     expect(isNetworkError(new Error("Load failed"))).toBe(true);
   });
 
+  it("returns true for the supabase FunctionsFetchError (request never reached the server)", () => {
+    const err = Object.assign(new Error("Failed to send a request to the Edge Function"), {
+      name: "FunctionsFetchError",
+    });
+    expect(isNetworkError(err)).toBe(true);
+  });
+
   it("returns false for non-network errors", () => {
     expect(isNetworkError(new Error("Invalid login credentials"))).toBe(false);
     expect(isNetworkError(new Error("some database error"))).toBe(false);

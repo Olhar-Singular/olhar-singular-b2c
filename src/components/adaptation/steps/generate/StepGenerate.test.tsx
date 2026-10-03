@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { screen, fireEvent, waitFor, act } from "@testing-library/react";
 import { createTestQueryClient, renderWithProviders } from "@/test/helpers";
 import { StepGenerate } from "./StepGenerate";
+import { MSG_NETWORK } from "@/lib/utils/errors";
 import { validateDocument } from "@/lib/adaptation/canonical/validate";
 import type { AdaptationResult } from "@/lib/adaptation/canonical/schema";
 import type { UploadedExam, WizardData } from "@/lib/adaptation/wizard/wizardState";
@@ -469,6 +470,22 @@ describe("StepGenerate", () => {
       <StepGenerate data={baseData} onResult={vi.fn()} onNext={vi.fn()} onPrev={vi.fn()} />,
     );
     await waitFor(() => expect(toast.error).toHaveBeenCalledWith("Falha na adaptação"));
+  });
+
+  it("shows the connection message when invoke fails to reach the server (0380)", async () => {
+    const { toast } = await import("sonner");
+    // Offline, supabase-js resolves with a FunctionsFetchError whose context is
+    // the fetch TypeError, not a Response.
+    const fetchError = Object.assign(new Error("Failed to send a request to the Edge Function"), {
+      name: "FunctionsFetchError",
+      context: new TypeError("Failed to fetch"),
+    });
+    invokeMock.mockResolvedValueOnce({ data: null, error: fetchError });
+    renderWithProviders(
+      <StepGenerate data={baseData} onResult={vi.fn()} onNext={vi.fn()} onPrev={vi.fn()} />,
+    );
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith(MSG_NETWORK));
+    expect(await screen.findByText(MSG_NETWORK)).toBeInTheDocument();
   });
 
   it("calls onLoadingChange(true) when generation starts and onLoadingChange(false) when done", async () => {
