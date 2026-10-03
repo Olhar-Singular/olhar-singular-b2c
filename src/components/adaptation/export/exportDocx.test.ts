@@ -1782,3 +1782,52 @@ describe("0269 · entrelinha e vão entre blocos no Word", () => {
     });
   });
 });
+
+describe("0271 · a questão não se parte na virada do Word", () => {
+  const hasTag = (node: unknown, rootKey: string): boolean => {
+    if (Array.isArray(node)) return node.some((n) => hasTag(n, rootKey));
+    if (node === null || typeof node !== "object") return false;
+    if ((node as { rootKey?: string }).rootKey === rootKey) return true;
+    return Object.values(node as Record<string, unknown>).some((v) => hasTag(v, rootKey));
+  };
+
+  it("todo parágrafo da questão, menos o de fecho, anda com o seguinte e não parte as linhas", () => {
+    const out = blockToDocxParagraphs(
+      q(
+        {
+          kind: "multipleChoice",
+          alternatives: [
+            { id: id(92), content: text("A energia do Sol"), correct: true },
+            { id: id(93), content: text("O vento"), correct: false },
+          ],
+        } as QuestionAnswer,
+        {
+          stem: [
+            { id: id(91), type: "paragraph", content: text("primeiro do stem") },
+            { id: id(94), type: "paragraph", content: text("segundo do stem") },
+          ],
+          enunciado: text("Leia o texto."),
+          instruction: text("Marque a correta."),
+        } as Partial<Block>,
+      ),
+      1,
+    );
+    const closing = out[out.length - 1];
+    const body = out.slice(0, -1);
+    expect(body.length).toBeGreaterThanOrEqual(6);
+    for (const p of body) {
+      expect(hasTag(p, "w:keepNext")).toBe(true);
+      expect(hasTag(p, "w:keepLines")).toBe(true);
+    }
+    // O fecho não se prende à questão seguinte: só a questão é a unidade.
+    expect(hasTag(closing, "w:keepNext")).toBe(false);
+  });
+
+  it("bloco solto fora de questão não ganha keepNext", () => {
+    const out = blockToDocxParagraphs(
+      { id: id(95), type: "paragraph", content: text("texto de apoio") },
+      1,
+    );
+    expect(hasTag(out, "w:keepNext")).toBe(false);
+  });
+});

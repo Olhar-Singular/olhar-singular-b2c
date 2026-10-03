@@ -217,7 +217,21 @@ type RunStyle = {
 };
 
 /** Paragraph properties a `NodeStyle` contributes. */
-type ParagraphStyle = { alignment?: (typeof ALIGNMENT)[keyof typeof ALIGNMENT] };
+type ParagraphStyle = {
+  alignment?: (typeof ALIGNMENT)[keyof typeof ALIGNMENT];
+  keepNext?: boolean;
+  keepLines?: boolean;
+};
+
+/**
+ * Achado 0271: a questão é a unidade da folha impressa também no Word. Todo
+ * parágrafo dela, menos o de fecho, anda com o seguinte (`w:keepNext`) e não se
+ * parte ao meio (`w:keepLines`); sem isso o Word deixava número + enunciado no
+ * pé da página e as alternativas órfãs na seguinte. Quando a cadeia não cabe
+ * numa página vazia, o próprio Word ignora o `keepNext` e parte a questão, então
+ * a questão maior que uma folha não some (o risco que bloqueou o 0702 no PDF).
+ */
+const KEEP_WITH_NEXT = { keepNext: true, keepLines: true } as const;
 
 /** `NodeStyle.align` → OOXML `w:jc` (note: `justify` is `both` in the docx lib). */
 const ALIGNMENT = {
@@ -547,16 +561,18 @@ export function blockToDocxParagraphs(
   block: Block,
   number: number,
   blockGapTwips: number = DEFAULT_BLOCK_GAP_TWIPS,
+  keepWithNext = false,
 ): DocxBlock[] {
   // `block.style` projetado no docx: alinhamento em todo parágrafo do bloco,
   // `spacingAfter` só no último, cor/corpo/fonte herdados pelos runs. Sem
   // `spacingAfter`, o último parágrafo leva o vão do documento, como o
   // `blockGap` do PDF (achado 0269).
-  const { paragraph: para, spacing: ownSpacing, run } = nodeStyleToDocx(block.style);
+  const { paragraph: ownPara, spacing: ownSpacing, run } = nodeStyleToDocx(block.style);
+  // Bloco dentro de uma questão (stem): cada parágrafo dele anda com o seguinte.
+  const para: ParagraphStyle = keepWithNext ? { ...ownPara, ...KEEP_WITH_NEXT } : ownPara;
   const spacing: { spacing: { after: number } } = {
     spacing: ownSpacing.spacing ?? { after: blockGapTwips },
   };
-  const inherited: InheritedStyle = { paragraph: para, run };
 
   switch (block.type) {
     case "heading": {
@@ -680,11 +696,14 @@ export function blockToDocxParagraphs(
     case "question": {
       const label = block.customNumber ?? String(number);
       const position = block.enunciadoPosition ?? "below";
+      // Partes da questão: todas presas à seguinte; só o fecho usa `para`.
+      const kept: ParagraphStyle = { ...para, ...KEEP_WITH_NEXT };
+      const keptInherited: InheritedStyle = { paragraph: kept, run };
       const hasEnunciado = block.enunciado != null && block.enunciado.length > 0;
       const enunciado = hasEnunciado
         ? [
             new Paragraph({
-              ...para,
+              ...kept,
               children: richTextToRuns(block.enunciado!, run),
               spacing: { after: QUESTION_PART_GAP_TWIPS },
             }),
@@ -708,12 +727,12 @@ export function blockToDocxParagraphs(
             }
           : {};
       const numbered = new Paragraph({
-        ...para,
+        ...kept,
         ...firstSpacing,
         children: [new TextRun({ ...run, text: `${label}. `, bold: true }), ...firstRuns],
       });
       const stemRest = (first?.type === "paragraph" ? restStem : block.stem).flatMap((child) =>
-        blockToDocxParagraphs(child, 1, QUESTION_INNER_GAP_TWIPS),
+        blockToDocxParagraphs(child, 1, QUESTION_INNER_GAP_TWIPS, true),
       );
 
       return [
@@ -724,7 +743,7 @@ export function blockToDocxParagraphs(
         ...(block.instruction
           ? [
               new Paragraph({
-                ...para,
+                ...kept,
                 spacing: { after: QUESTION_PART_GAP_TWIPS },
                 children: richTextToRuns(block.instruction, {
                   ...run,
@@ -734,7 +753,7 @@ export function blockToDocxParagraphs(
               }),
             ]
           : []),
-        ...answerToDocx(block.answer, inherited),
+        ...answerToDocx(block.answer, keptInherited),
         // O parágrafo que fecha a questão é o último do bloco: é nele que o
         // `spacingAfter` do `block.style` cabe (achado 0134). Vazio, ele já
         // ocupa uma linha; com a altura EXATA do vão, a questão fecha com o
