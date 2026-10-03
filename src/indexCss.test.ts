@@ -1107,3 +1107,29 @@ describe("index.css — rotulo sobre o preenchimento primario", () => {
     }
   });
 });
+
+/**
+ * Contraste do token --input (achado 0273, WCAG 1.4.11).
+ *
+ * `--input` pinta o trilho do Switch desligado (`data-[state=unchecked]:bg-input`)
+ * e a borda de Input/Textarea/Select/Button outline. O polegar do Switch e
+ * `bg-background` sobre o trilho, entao o par trilho x --background e ao mesmo
+ * tempo "controle x fundo" e "polegar x trilho". Em 87% (claro) e 42% (escuro)
+ * os pares davam ~1,2:1 e 2,49:1: a pilula desligada e a borda dos campos sumiam.
+ */
+describe("index.css — contraste do --input (trilho do switch e borda dos campos)", () => {
+  it.each([
+    [":root", "background"],
+    [":root", "card"],
+    [":root", "popover"],
+    [":root", "muted"],
+    [":root", "secondary"],
+    [".dark", "background"],
+    [".dark", "card"],
+    [".dark", "popover"],
+    [".dark", "muted"],
+  ])("%s: --input atinge 3:1 sobre --%s", (selector, surface) => {
+    const ratio = contrastRatio(token(selector, "input"), token(selector, surface));
+    expect(ratio).toBeGreaterThanOrEqual(3);
+  });
+});
