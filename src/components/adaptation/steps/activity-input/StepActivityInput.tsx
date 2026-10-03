@@ -175,8 +175,17 @@ export function StepActivityInput({ data, updateData, onNext, onPrev }: Props) {
     setFilterDifficulty("all");
   }
 
-  function switchToPasteText() {
+  // 0534: selection, search and filters live in the step, so every way of
+  // closing the dialog resets them. Reopening starts with the whole bank and
+  // nothing checked, never with a stale filter or an abandoned selection.
+  function closeBankModal() {
     setShowBankModal(false);
+    setChecked(new Map());
+    clearBankFilters();
+  }
+
+  function switchToPasteText() {
+    closeBankModal();
     setTab("manual");
   }
 
@@ -229,6 +238,10 @@ export function StepActivityInput({ data, updateData, onNext, onPrev }: Props) {
   // Questions already in the activity are shown as added and cannot be
   // checked again, so the add button never counts a no-op duplicate.
   const addedIds = new Set(data.selectedQuestions.map((q) => q.id));
+  // 0534: a checked question survives a search/filter that hides it (1130),
+  // so say how many the add button counts that are not on screen.
+  const visibleIds = new Set(visibleBankQuestions.map((q) => q.id));
+  const hiddenCheckedCount = [...checked.keys()].filter((id) => !visibleIds.has(id)).length;
 
   function toggleQuestion(q: BankQuestion) {
     if (addedIds.has(q.id)) return;
@@ -268,8 +281,7 @@ export function StepActivityInput({ data, updateData, onNext, onPrev }: Props) {
     // skips generation while a result is present, so changing the question set
     // without clearing it would silently reuse the adaptation of the old set.
     updateData({ selectedQuestions: merged, activityText: buildActivityText(merged), result: null });
-    setShowBankModal(false);
-    setChecked(new Map());
+    closeBankModal();
     toast.success(`${newQuestions.length} questão(ões) adicionada(s)`);
   }
 
@@ -461,7 +473,13 @@ export function StepActivityInput({ data, updateData, onNext, onPrev }: Props) {
       </div>
 
       {/* Bank Modal */}
-      <Dialog open={showBankModal} onOpenChange={setShowBankModal}>
+      <Dialog
+        open={showBankModal}
+        onOpenChange={(open) => {
+          /* v8 ignore next -- Radix controlado sem trigger nunca chama onOpenChange(true) */
+          if (!open) closeBankModal();
+        }}
+      >
         <DialogContent
           className="max-w-3xl max-h-[85vh] flex flex-col"
           onCloseAutoFocus={(event) => {
@@ -593,6 +611,11 @@ export function StepActivityInput({ data, updateData, onNext, onPrev }: Props) {
               </div>
             )}
 
+            {hiddenCheckedCount > 0 && (
+              <p className="text-xs text-muted-foreground text-center shrink-0">
+                {hiddenCheckedCount} selecionada(s) fora deste filtro
+              </p>
+            )}
             <Button
               onClick={confirmBankSelection}
               disabled={checked.size === 0}

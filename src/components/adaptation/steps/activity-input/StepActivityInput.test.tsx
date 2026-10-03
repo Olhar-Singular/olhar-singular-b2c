@@ -1117,3 +1117,83 @@ describe("StepActivityInput — bank dialog never claims empty before querying (
     expect(within(dialog).getByPlaceholderText("Buscar questões...")).toHaveValue("");
   });
 });
+
+/**
+ * 0534: the bank dialog state (selection, search, filters) lives in the step,
+ * so closing the dialog must reset it. Otherwise an abandoned selection comes
+ * back checked, an old search hides most of the bank, and a selection hidden by
+ * the filter is added without the user seeing it.
+ */
+describe("StepActivityInput — the bank dialog starts clean on every opening (0534)", () => {
+  const q7 = { id: "q7", text: "Resolva: x/2 + 3 = 7", subject: "Matemática", topic: null, difficulty: "medio", image_url: null, options: null };
+  const q8 = { id: "q8", text: "Fotossíntese", subject: "Ciências", topic: null, difficulty: null, image_url: null, options: null };
+
+  function renderOnBankTab(data: WizardData = baseData) {
+    render(<StepActivityInput data={data} updateData={vi.fn()} onNext={vi.fn()} onPrev={vi.fn()} />);
+    fireEvent.click(screen.getByRole("button", { name: /Banco de Questões/i }));
+  }
+
+  async function openDialog() {
+    fireEvent.click(screen.getByRole("button", { name: /Abrir Banco de Questões/i }));
+    return screen.findByRole("dialog", { name: /Selecionar Questões/i });
+  }
+
+  async function closeWithEscape(dialog: HTMLElement) {
+    fireEvent.keyDown(dialog, { key: "Escape" });
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+  }
+
+  it("drops a selection abandoned by closing the dialog", async () => {
+    bankQuestionsResult.data = [q7, q8];
+    renderOnBankTab();
+    let dialog = await openDialog();
+    fireEvent.click(await within(dialog).findByText("Fotossíntese"));
+    expect(within(dialog).getByRole("button", { name: /Adicionar 1/i })).toBeEnabled();
+    await closeWithEscape(dialog);
+
+    dialog = await openDialog();
+    const card = await within(dialog).findByRole("checkbox", { name: /Fotossíntese/ });
+    expect(card).toHaveAttribute("aria-checked", "false");
+    expect(within(dialog).getByRole("button", { name: /Adicionar 0/i })).toBeDisabled();
+  });
+
+  it("clears the search and the filters when the dialog closes", async () => {
+    bankQuestionsResult.data = [q7, q8];
+    renderOnBankTab();
+    let dialog = await openDialog();
+    fireEvent.change(within(dialog).getByPlaceholderText("Buscar questões..."), { target: { value: "Foto" } });
+    fireEvent.click(within(dialog).getByRole("combobox", { name: "Filtrar por matéria" }));
+    fireEvent.click(await screen.findByRole("option", { name: "Matemática" }));
+    await closeWithEscape(dialog);
+
+    dialog = await openDialog();
+    expect(within(dialog).getByPlaceholderText("Buscar questões...")).toHaveValue("");
+    expect(within(dialog).getByRole("combobox", { name: "Filtrar por matéria" })).toHaveTextContent("Todas");
+    await within(dialog).findByText("Fotossíntese");
+    expect(within(dialog).getByText("Resolva: x/2 + 3 = 7")).toBeInTheDocument();
+  });
+
+  it("clears the search after adding questions too", async () => {
+    bankQuestionsResult.data = [q7, q8];
+    renderOnBankTab();
+    let dialog = await openDialog();
+    fireEvent.change(within(dialog).getByPlaceholderText("Buscar questões..."), { target: { value: "Foto" } });
+    fireEvent.click(await within(dialog).findByText("Fotossíntese"));
+    fireEvent.click(within(dialog).getByRole("button", { name: /Adicionar 1/i }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+
+    dialog = await openDialog();
+    expect(within(dialog).getByPlaceholderText("Buscar questões...")).toHaveValue("");
+  });
+
+  it("says how many selected questions the current search or filter hides", async () => {
+    bankQuestionsResult.data = [q7, q8];
+    renderOnBankTab();
+    const dialog = await openDialog();
+    fireEvent.click(await within(dialog).findByText("Resolva: x/2 + 3 = 7"));
+    expect(within(dialog).queryByText(/fora deste filtro/)).toBeNull();
+    fireEvent.change(within(dialog).getByPlaceholderText("Buscar questões..."), { target: { value: "Foto" } });
+    await within(dialog).findByText("Fotossíntese");
+    expect(within(dialog).getByText("1 selecionada(s) fora deste filtro")).toBeInTheDocument();
+  });
+});
