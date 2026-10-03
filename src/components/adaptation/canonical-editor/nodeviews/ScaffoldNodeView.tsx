@@ -11,10 +11,10 @@
  * então nenhum dos dois usa token de chrome apagado (achado 0160).
  */
 
-import { useId } from "react";
+import { useId, useLayoutEffect, useRef } from "react";
 import { Plus, Trash2 } from "lucide-react";
 import { NodeViewWrapper, type NodeViewProps } from "@tiptap/react";
-import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { setStep, addStep, removeStep } from "./scaffoldOps";
 import {
@@ -27,6 +27,70 @@ import {
 import { deleteNodeAndRefocus } from "./nodeViewUtils";
 import { FOLHA_BUTTON, FOLHA_GHOST, FOLHA_RAIL, FOLHA_RAIL_HOST, FOLHA_SELECTED, FOLHA_TOUCH_TARGET } from "../folhaChrome";
 import { cn } from "@/lib/utils";
+
+/*
+  0620 — o passo era um `<input>` de uma linha: o papel quebra o passo
+  (ScaffoldingView `<li>`, PDF `<Text>` com flexShrink) e o Revisar mostrava só
+  o pedaço que cabia no campo. O campo vira um `<textarea>` de uma linha que
+  cresce com o conteúdo (`field-sizing: content`; sem suporte, a altura segue o
+  `scrollHeight`). O passo continua sendo string de uma linha: Enter não quebra
+  e quebras coladas viram espaço.
+*/
+function supportsFieldSizing(): boolean {
+  return globalThis.CSS?.supports?.("field-sizing", "content") === true;
+}
+
+function useAutoHeight(value: string) {
+  const ref = useRef<HTMLTextAreaElement>(null);
+  useLayoutEffect(() => {
+    const el = ref.current as HTMLTextAreaElement;
+    if (supportsFieldSizing()) return;
+    el.style.height = "auto";
+    el.style.height = `${el.scrollHeight}px`;
+  }, [value]);
+  return ref;
+}
+
+type StepFieldProps = {
+  id: string;
+  index: number;
+  value: string;
+  disabled: boolean;
+  onValueChange: (value: string) => void;
+};
+
+function StepField({ id, index, value, disabled, onValueChange }: StepFieldProps) {
+  const ref = useAutoHeight(value);
+  return (
+    <Textarea
+      ref={ref}
+      id={id}
+      name="scaffold-step"
+      rows={1}
+      value={value}
+      disabled={disabled}
+      onKeyDown={(e) => {
+        if (e.key === "Enter") e.preventDefault();
+      }}
+      onChange={(e) => onValueChange(e.target.value.replace(/\r?\n/g, " "))}
+      placeholder="Passo"
+      aria-label={`Passo ${index + 1}`}
+      /*
+        0113 — `h-10` + `py-2` do campo do app contra uma linha de lista
+        impressa: ~18px por passo que só existiam no Revisar. A borda fica (é o
+        que diz que dá para digitar ali, achado 0342); a altura passa a ser a do
+        texto (`min-h-0` desfaz o `min-h-[80px]` do Textarea).
+        0619 — o texto do passo é impresso no corpo do documento (prévia e PDF),
+        então herda o tamanho da folha em vez do tamanho fixo do campo do app.
+      */
+      className={cn(
+        "h-auto min-h-0 py-0 resize-none overflow-hidden [field-sizing:content]",
+        "text-[length:inherit] md:text-[length:inherit]",
+        "border-surface-line bg-surface-paper text-surface-ink placeholder:text-surface-ink-faint",
+      )}
+    />
+  );
+}
 
 export function ScaffoldNodeView({ node, updateAttributes, editor, deleteNode, getPos, selected }: NodeViewProps) {
   const items = node.attrs.items as string[];
@@ -90,32 +154,16 @@ export function ScaffoldNodeView({ node, updateAttributes, editor, deleteNode, g
       </p>
       <div className="flex flex-col gap-1.5">
         {items.map((item, index) => (
-          <div key={index} className="flex items-center gap-2">
+          <div key={index} className="flex items-start gap-2">
             <span data-testid={`scaffold-step-ordinal-${index}`} style={{ color: DEFAULT_INK }}>
               {index + 1}.
             </span>
-            <Input
+            <StepField
               id={`${stepIdPrefix}-${index}`}
-              name="scaffold-step"
+              index={index}
               value={item}
               disabled={disabled}
-              onChange={(e) => updateAttributes({ items: setStep(items, index, e.target.value) })}
-              placeholder="Passo"
-              aria-label={`Passo ${index + 1}`}
-              /*
-                0113 — `h-10` + `py-2` do `<Input>` do app contra uma linha de
-                lista impressa: ~18px por passo que só existiam no Revisar. A
-                borda fica (é o que diz que dá para digitar ali, achado 0342);
-                a altura passa a ser a do texto.
-                0619 — o texto do passo é impresso no corpo do documento (prévia
-                e PDF), então herda o tamanho da folha em vez do `text-base
-                md:text-sm` fixo do `<Input>`; assim segue o Formato > Tamanho.
-              */
-              className={cn(
-                "h-auto py-0",
-                "text-[length:inherit] md:text-[length:inherit]",
-                "border-surface-line bg-surface-paper text-surface-ink placeholder:text-surface-ink-faint",
-              )}
+              onValueChange={(value) => updateAttributes({ items: setStep(items, index, value) })}
             />
             <Button
               type="button"
