@@ -1048,3 +1048,18 @@ describe("index.css — rotulo do bloco de topo cabe no vao (achado 0265)", () =
     expect(labelBox(16).size).toBe(9);
   });
 });
+
+describe("index.css — chrome da imagem no card da questao (achado 0613)", () => {
+  const selector =
+    '[data-question-expanded="true"] [data-testid="image-controls"]';
+
+  it("reabre o rail no card aberto", () => {
+    expect(ruleBody(selector)).toMatch(/display\s*:\s*flex/);
+  });
+
+  it("nao empilha o rail em coluna (subiria sobre o cabecalho do card)", () => {
+    const body = ruleBody(selector);
+    expect(body).not.toMatch(/flex-direction/);
+    expect(body).not.toMatch(/(^|[\s;])gap\s*:/);
+  });
+});

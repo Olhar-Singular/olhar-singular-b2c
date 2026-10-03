@@ -686,9 +686,12 @@
 
 /* Image controls (alignment, legenda, alt text) inside a question are hidden
  * in preview mode and only revealed when the card is open (editar questão).
- * Top-level images (not inside a question) always show their controls. */
+ * Top-level images (not inside a question) always show their controls.
+ * Only `display` is restored: the rail's own classes (FOLHA_RAIL) lay it out
+ * in a row. A column here, combined with -translate-y-full, pushed the stack
+ * over the card header and out of its overflow-hidden box (achado 0613). */
 [data-testid="question-node"] [data-testid="image-controls"] { display: none; }
-[data-question-expanded="true"] [data-testid="image-controls"] { display: flex; flex-direction: column; gap: 0.5rem; }
+[data-question-expanded="true"] [data-testid="image-controls"] { display: flex; }
 
 /* Fórmula inline cuja descrição acessível ficou para trás (achado 0437). O
    sublinhado ondulado do achado 0436 era `text-decoration` no gatilho e nunca
