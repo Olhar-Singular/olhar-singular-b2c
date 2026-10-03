@@ -82,6 +82,8 @@ type Props = {
   /** Name typed for a folder that does not exist yet; created on save. */
   newFolder?: string;
   onNewFolderChange?: (name: string) => void;
+  /** Why the typed folder name was refused (e.g. it repeats a folder); tied to the field. */
+  newFolderError?: string | null;
   /**
    * Degrau de zoom da folha, guardado pelo wizard (achado 0251). O passo é
    * desmontado a cada troca de passo, então a escolha do professor só sobrevive
@@ -153,6 +155,7 @@ export function StepReview({
   onFolderChange,
   newFolder = "",
   onNewFolderChange,
+  newFolderError = null,
   zoomIndex,
   onZoomIndexChange,
   canSave = false,
@@ -161,6 +164,7 @@ export function StepReview({
   originalExam = null,
 }: Props) {
   const titleHintId = useId();
+  const newFolderErrorId = useId();
   const [aboutOpen, setAboutOpen] = useState(false);
   // 0349 — a gaveta não tem `SheetTrigger` (é controlada), então o gatilho para
   // onde o foco volta no fechamento tem que ser entregue à mão.
@@ -361,6 +365,8 @@ export function StepReview({
               ref={newFolderRef}
               autoFocus
               aria-label="Nome da nova pasta"
+              aria-invalid={newFolderError ? true : undefined}
+              aria-describedby={newFolderError ? newFolderErrorId : undefined}
               placeholder="Ex.: 6º ano B"
               value={newFolder}
               onChange={(e) => onNewFolderChange?.(e.target.value)}
@@ -372,8 +378,13 @@ export function StepReview({
                 e.stopPropagation();
                 cancelNewFolder();
               }}
-              className="mr-1 h-7 w-36 border-surface-chrome-line bg-surface-paper text-xs text-surface-ink"
+              className="mr-1 h-7 w-36 border-surface-chrome-line bg-surface-paper text-xs text-surface-ink aria-[invalid=true]:border-destructive"
             />
+          )}
+          {creatingFolder && newFolderError && (
+            <span id={newFolderErrorId} role="alert" className="mr-1 text-xs font-medium text-destructive">
+              {newFolderError}
+            </span>
           )}
 
           <Select

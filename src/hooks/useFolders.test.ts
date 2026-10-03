@@ -57,14 +57,27 @@ describe("useCreateFolder", () => {
     expect(toast.success).toHaveBeenCalled();
   });
 
-  it("explains a duplicate name instead of failing silently", async () => {
-    vi.mocked(repo.createFolder).mockRejectedValue(new Error("duplicate key"));
+  it("states a duplicate name (23505) affirmatively", async () => {
+    vi.mocked(repo.createFolder).mockRejectedValue(
+      Object.assign(new Error("duplicate key"), { code: "23505" }),
+    );
+    const { toast } = await import("sonner");
+    const { result } = renderHook(() => useCreateFolder(), { wrapper });
+    await act(async () => {
+      await result.current.mutateAsync("Turma A").catch(() => undefined);
+    });
+    expect(toast.error).toHaveBeenCalledWith("Já existe a pasta “Turma A”.");
+  });
+
+  // 0512: any other failure (RLS, null user…) must not suggest a duplicate.
+  it("does not blame a duplicate name for other failures", async () => {
+    vi.mocked(repo.createFolder).mockRejectedValue(new Error("permission denied"));
     const { toast } = await import("sonner");
     const { result } = renderHook(() => useCreateFolder(), { wrapper });
     await act(async () => {
       await result.current.mutateAsync("x").catch(() => undefined);
     });
-    expect(toast.error).toHaveBeenCalled();
+    expect(toast.error).toHaveBeenCalledWith("Não foi possível criar a pasta. Tente de novo.");
   });
 });
 

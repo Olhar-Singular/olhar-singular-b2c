@@ -41,6 +41,7 @@ import { readMirror, clearMirror, type MirrorEntry } from "@/lib/adaptation/pers
 import { shouldOfferRestore } from "@/lib/adaptation/persistence/restoreDecision";
 import { useAdaptationDraft } from "@/hooks/useAdaptationDraft";
 import { useFolders, useCreateFolder } from "@/hooks/useFolders";
+import { findFolderByName, duplicateFolderMessage, isDuplicateFolderError } from "@/lib/domain/folderName";
 import { useMarkReady } from "@/hooks/useAdaptations";
 import { computeAccess } from "@/lib/domain/access";
 import { calcAdaptationCost } from "@/lib/domain/barriers";
@@ -145,6 +146,8 @@ export default function CanonicalAdaptationWizard({ editMode }: Props = {}) {
   /** Pasta escolhida (id) e/ou nome de uma pasta nova, criada só ao salvar. */
   const [folderId, setFolderId] = useState<string | null>(editMode?.folderId ?? null);
   const [newFolder, setNewFolder] = useState("");
+  // 0512: why the typed folder name was refused, shown in the field itself.
+  const [newFolderError, setNewFolderError] = useState<string | null>(null);
 
   const [data, setData] = useState<WizardData>(
     editMode ? editMode.initialData : INITIAL_WIZARD_DATA,
@@ -566,13 +569,22 @@ export default function CanonicalAdaptationWizard({ editMode }: Props = {}) {
     let targetFolder = folderId;
     const wanted = newFolder.trim();
     if (wanted) {
+      // 0512: a lista de pastas já está na tela; nome repetido (comparado como
+      // o índice único compara, lower(btrim)) é recusado no campo, sem rede.
+      const existing = findFolderByName(folders, wanted);
+      if (existing) {
+        setNewFolderError(duplicateFolderMessage(existing.name));
+        return;
+      }
       try {
         const created = await createFolder.mutateAsync(wanted);
         targetFolder = created.id;
         setFolderId(created.id);
         setNewFolder("");
-      } catch {
-        // useCreateFolder já mostrou o motivo (nome repetido, rede…).
+      } catch (err) {
+        // useCreateFolder já mostrou o motivo no toast. Uma pasta criada em
+        // outra aba (23505) também fica dita junto do campo.
+        if (isDuplicateFolderError(err)) setNewFolderError(duplicateFolderMessage(wanted));
         return;
       }
     }
@@ -600,7 +612,7 @@ export default function CanonicalAdaptationWizard({ editMode }: Props = {}) {
     // at the time it was last rebuilt, so picking a subject and pressing
     // Salvar would file the adaptation under the PREVIOUS one — or under
     // nothing at all, on the first pick.
-  }, [draftId, currentUpdatedAt, flush, markReady, handleConflict, syncUpdatedAt, subject, folderId, newFolder, createFolder]);
+  }, [draftId, currentUpdatedAt, flush, markReady, handleConflict, syncUpdatedAt, subject, folderId, newFolder, createFolder, folders]);
 
   const renderStep = () => {
     const uploadedExam = activeUploadedExam(data);
@@ -681,11 +693,13 @@ export default function CanonicalAdaptationWizard({ editMode }: Props = {}) {
               setFolderId(id);
             }}
             newFolder={newFolder}
+            newFolderError={newFolderError}
             onNewFolderChange={(name) => {
               if (name === newFolder) return;
               setIsSaved(false);
               setFilingDirty(true);
               setNewFolder(name);
+              setNewFolderError(null);
             }}
             canSave={!!draftId}
             saving={markReady.isPending}

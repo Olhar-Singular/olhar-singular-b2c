@@ -634,6 +634,27 @@ describe("StepReview", () => {
       expect(onNewFolderChange).toHaveBeenCalledWith("7º ano A");
     });
 
+    // 0512: a repeated name is reported IN the field, not only in a toast.
+    it("ties the folder-name error to the field", async () => {
+      setup({ folders: FOLDERS, newFolderError: "Já existe a pasta “6º ano B”." });
+      fireEvent.click(screen.getByLabelText("Pasta"));
+      await waitFor(() => screen.getByRole("option", { name: /Nova pasta/i }));
+      fireEvent.click(screen.getByRole("option", { name: /Nova pasta/i }));
+      const field = await screen.findByLabelText("Nome da nova pasta");
+      expect(field).toHaveAttribute("aria-invalid", "true");
+      expect(field).toHaveAccessibleDescription("Já existe a pasta “6º ano B”.");
+    });
+
+    it("leaves the folder-name field valid without an error", async () => {
+      setup({ folders: FOLDERS });
+      fireEvent.click(screen.getByLabelText("Pasta"));
+      await waitFor(() => screen.getByRole("option", { name: /Nova pasta/i }));
+      fireEvent.click(screen.getByRole("option", { name: /Nova pasta/i }));
+      const field = await screen.findByLabelText("Nome da nova pasta");
+      expect(field).not.toHaveAttribute("aria-invalid", "true");
+      expect(field).not.toHaveAttribute("aria-describedby");
+    });
+
     it("does not break without folder handlers", async () => {
       setup({ folders: FOLDERS });
       fireEvent.click(screen.getByLabelText("Pasta"));

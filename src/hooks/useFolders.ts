@@ -18,6 +18,7 @@ import {
 import { adaptationKeys } from "@/hooks/useAdaptations";
 import { useAuth } from "@/hooks/useAuth";
 import { parseDbError } from "@/lib/utils/errors";
+import { duplicateFolderMessage, isDuplicateFolderError } from "@/lib/domain/folderName";
 
 export const folderKeys = {
   all: ["adaptation_folders"] as const,
@@ -43,8 +44,14 @@ export function useCreateFolder() {
       qc.invalidateQueries({ queryKey: folderKeys.list() });
       toast.success("Pasta criada.");
     },
-    onError: (err: Error) =>
-      toast.error(parseDbError(err, "Erro ao criar a pasta. Já existe uma com esse nome?")),
+    // 0512: only the unique index's 23505 is a repeated name; any other
+    // failure must not send the teacher hunting for a duplicate.
+    onError: (err: Error, name: string) =>
+      toast.error(
+        isDuplicateFolderError(err)
+          ? duplicateFolderMessage(name)
+          : parseDbError(err, "Não foi possível criar a pasta. Tente de novo."),
+      ),
   });
 }
 

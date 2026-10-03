@@ -253,6 +253,7 @@ vi.mock("./steps/review/StepReview", () => ({
     onFolderChange,
     newFolder,
     onNewFolderChange,
+    newFolderError,
     canSave,
     onSave,
     zoomIndex,
@@ -275,6 +276,7 @@ vi.mock("./steps/review/StepReview", () => ({
     onFolderChange?: (id: string | null) => void;
     newFolder?: string;
     onNewFolderChange?: (n: string) => void;
+    newFolderError?: string | null;
     canSave?: boolean;
     onSave?: () => void;
     zoomIndex?: number;
@@ -298,6 +300,10 @@ vi.mock("./steps/review/StepReview", () => ({
         nomear pasta
       </button>
       <button data-testid="review-unpick-folder" onClick={() => onFolderChange?.(null)}>sem pasta</button>
+      <pre data-testid="review-new-folder-error">{newFolderError ?? ""}</pre>
+      <button data-testid="review-name-dup-folder" onClick={() => onNewFolderChange?.("  6º ANO b ")}>
+        nomear pasta repetida
+      </button>
       <button data-testid="review-clear-new-folder" onClick={() => onNewFolderChange?.("")}>
         limpar nome da pasta
       </button>
@@ -1813,6 +1819,59 @@ describe("CanonicalAdaptationWizard — navigation guard", () => {
       fireEvent.click(screen.getByTestId("review-save"));
       await waitFor(() => expect(mockCreateFolder).toHaveBeenCalled());
       expect(mockMarkReady).not.toHaveBeenCalled();
+    });
+
+    // 0512: the folder list is already on screen, so a repeated name (compared
+    // the way the unique index does, lower(btrim)) is refused in the field,
+    // before any request, and the save stops there.
+    it("refuses a name that repeats an existing folder before calling the server", async () => {
+      renderWithProviders(<CanonicalAdaptationWizard />);
+      advanceToReview();
+      fireEvent.click(screen.getByTestId("review-name-dup-folder"));
+      fireEvent.click(screen.getByTestId("review-save"));
+      await waitFor(() =>
+        expect(screen.getByTestId("review-new-folder-error")).toHaveTextContent(
+          "Já existe a pasta “6º ano B”.",
+        ),
+      );
+      expect(mockCreateFolder).not.toHaveBeenCalled();
+      expect(mockMarkReady).not.toHaveBeenCalled();
+    });
+
+    it("shows the server's duplicate (23505) in the field too", async () => {
+      mockCreateFolder.mockRejectedValue(Object.assign(new Error("dup"), { code: "23505" }));
+      renderWithProviders(<CanonicalAdaptationWizard />);
+      advanceToReview();
+      fireEvent.click(screen.getByTestId("review-name-folder"));
+      fireEvent.click(screen.getByTestId("review-save"));
+      await waitFor(() =>
+        expect(screen.getByTestId("review-new-folder-error")).toHaveTextContent(
+          "Já existe a pasta “7º ano A”.",
+        ),
+      );
+      expect(mockMarkReady).not.toHaveBeenCalled();
+    });
+
+    it("leaves the field clean when the creation fails for another reason", async () => {
+      mockCreateFolder.mockRejectedValue(new Error("permission denied"));
+      renderWithProviders(<CanonicalAdaptationWizard />);
+      advanceToReview();
+      fireEvent.click(screen.getByTestId("review-name-folder"));
+      fireEvent.click(screen.getByTestId("review-save"));
+      await waitFor(() => expect(mockCreateFolder).toHaveBeenCalled());
+      expect(screen.getByTestId("review-new-folder-error")).toHaveTextContent("");
+    });
+
+    it("clears the field error once the name is edited", async () => {
+      renderWithProviders(<CanonicalAdaptationWizard />);
+      advanceToReview();
+      fireEvent.click(screen.getByTestId("review-name-dup-folder"));
+      fireEvent.click(screen.getByTestId("review-save"));
+      await waitFor(() =>
+        expect(screen.getByTestId("review-new-folder-error")).not.toHaveTextContent(""),
+      );
+      fireEvent.click(screen.getByTestId("review-name-folder"));
+      expect(screen.getByTestId("review-new-folder-error")).toHaveTextContent("");
     });
 
     it("marks the adaptation ready from the Revisar step", async () => {
