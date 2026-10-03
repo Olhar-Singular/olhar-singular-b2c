@@ -18,9 +18,11 @@
  */
 
 import { View, Text, Canvas } from "@react-pdf/renderer";
-import type { QuestionAnswer } from "@/lib/adaptation/canonical/schema";
+import type { QuestionAnswer, RichText } from "@/lib/adaptation/canonical/schema";
 import { indexToLetter } from "../letters";
+import { MONO_ADVANCE_EM } from "../mathAtom";
 import { PdfRichText } from "./PdfRichText";
+import { mathPdfInlineStyle } from "./mathToPdfText";
 import { resolveElementFontSizes, resolvePageStyle, type ElementFontSizesPt } from "../pageStyle";
 import {
   ANSWER_LINE_COLOR,
@@ -44,6 +46,7 @@ import {
   CHECKBOX_BOX_BORDER_PT,
   CHECKBOX_BOX_RADIUS_PT,
   CHECKBOX_BOX_COLOR,
+  mathPdfFontSizePt,
 } from "../pageTokens";
 
 // O vão entre itens vem de pageTokens para o papel imprimir o mesmo passo que as
@@ -93,6 +96,35 @@ const TF_MARKER = { marginRight: TRUE_FALSE_MARKER_GAP_PT, flexShrink: 0 } as co
 // do marcador V/F (achado 0359): sem `width`, o Yoga mede o próprio marcador e
 // o vão vem do `marginRight`, então a coluna escala sozinha com corpo e família.
 const ORDERING_MARKER = { marginRight: ALTERNATIVE_MARKER_GAP_PT, flexShrink: 0 } as const;
+
+/**
+ * Marcador na linha de base do item que abre com fórmula (achado 0391).
+ *
+ * O marcador é um <Text> IRMÃO da coluna do item, alinhado pelo topo: a linha de
+ * base de cada um é o topo da linha mais a maior ascendente dos seus runs. Quando
+ * o item abre com fórmula inline, o run de Courier (maior que o corpo) aumenta a
+ * ascendente da primeira linha do item e o texto desce ~4,5pt, enquanto o
+ * marcador fica onde estava: na ordenação os traços alternavam de altura dentro
+ * da mesma lista. O 0428 resolveu o número da questão levando o número para
+ * dentro do <Text> do enunciado, mas aqui isso custaria o recuo pendente (as
+ * linhas seguintes do item alinhadas na coluna do conteúdo, como nas telas).
+ *
+ * Então o marcador ganha um run FANTASMA no mesmo estilo da fórmula: um espaço
+ * final, sem tinta, que dá à primeira linha do marcador a mesma ascendente da
+ * primeira linha do item. Só quando o item ABRE com fórmula, o único caso em que
+ * é certo que a fórmula está na primeira linha (uma fórmula numa linha seguinte
+ * não mexe na linha de base do topo). O espaço é monoespaçado, então o avanço é
+ * conhecido: a coluna fixa do `a)` o deixa transbordar sem tinta, e as colunas
+ * medidas (V/F e ordenação) descontam o avanço do vão para o item não andar.
+ */
+const opensWithMath = (content: RichText) => content[0]?.type === "inlineMath";
+const ghostAdvancePt = (fontSizePt: number) => MONO_ADVANCE_EM * mathPdfFontSizePt(fontSizePt);
+const markerGhost = (content: RichText, fontSizePt: number) =>
+  opensWithMath(content) ? <Text style={mathPdfInlineStyle(fontSizePt)}> </Text> : null;
+/** Vão da coluna medida, descontado o avanço do fantasma quando ele existe. */
+const ghostGap = (gapPt: number, content: RichText, fontSizePt: number) => ({
+  marginRight: opensWithMath(content) ? gapPt - ghostAdvancePt(fontSizePt) : gapPt,
+});
 
 /**
  * Painter mínimo do `Canvas` do @react-pdf (o pacote tipa como `any`): só os
@@ -327,7 +359,10 @@ export function PdfAnswer({
         <View>
           {answer.alternatives.map((alt, i, all) => (
             <View key={alt.id} style={rowStyle(i, all.length)}>
-              <Text style={MARKER}>{indexToLetter(i)})</Text>
+              <Text style={MARKER}>
+                {indexToLetter(i)})
+                {markerGhost(alt.content, elementSizes.alternative)}
+              </Text>
               <View style={FLEX}>
                 <Text style={itemStyle}>
                   <PdfRichText content={alt.content} fontSize={elementSizes.alternative} />
@@ -342,7 +377,15 @@ export function PdfAnswer({
         <View>
           {answer.items.map((item, i, all) => (
             <View key={item.id} style={rowStyle(i, all.length)}>
-              <Text style={TF_MARKER}>{TRUE_FALSE_MARKER_TEXT}</Text>
+              <Text
+                style={{
+                  ...TF_MARKER,
+                  ...ghostGap(TRUE_FALSE_MARKER_GAP_PT, item.content, elementSizes.alternative),
+                }}
+              >
+                {TRUE_FALSE_MARKER_TEXT}
+                {markerGhost(item.content, elementSizes.alternative)}
+              </Text>
               <View style={FLEX}>
                 <Text style={itemStyle}>
                   <PdfRichText content={item.content} fontSize={elementSizes.alternative} />
@@ -399,7 +442,16 @@ export function PdfAnswer({
         <View>
           {answer.items.map((item, i, all) => (
             <View key={item.id} style={rowStyle(i, all.length)}>
-              <Text style={{ ...itemStyle, ...ORDERING_MARKER }}>____</Text>
+              <Text
+                style={{
+                  ...itemStyle,
+                  ...ORDERING_MARKER,
+                  ...ghostGap(ALTERNATIVE_MARKER_GAP_PT, item.content, elementSizes.alternative),
+                }}
+              >
+                ____
+                {markerGhost(item.content, elementSizes.alternative)}
+              </Text>
               <View style={FLEX}>
                 <Text style={itemStyle}>
                   <PdfRichText content={item.content} fontSize={elementSizes.alternative} />
