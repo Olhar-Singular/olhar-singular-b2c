@@ -7,9 +7,29 @@
  * `richTextMarks` helper so it stays unit-tested.
  */
 
+import { Fragment } from "react";
+
 import type { RichText } from "@/lib/adaptation/canonical/schema";
 import { renderLatexToHtml } from "@/lib/domain/latexRenderer";
 import { marksToClassName, textRunStyle } from "./richTextMarks";
+
+/**
+ * Achado 0621: the read-only sheet sits in `white-space: normal`, which
+ * collapses a "\n" inside a run into a space. Revisar, PDF and Word all keep
+ * the break, so emit an explicit <br>. A <br> (instead of `pre-line` on the
+ * span) leaves space handling untouched (achado 0453) and cannot override a
+ * parent's `nowrap`.
+ */
+function textWithBreaks(text: string) {
+  const lines = text.split("\n");
+  if (lines.length === 1) return text;
+  return lines.map((line, j) => (
+    <Fragment key={j}>
+      {j > 0 && <br />}
+      {line}
+    </Fragment>
+  ));
+}
 
 export function RichTextView({ content }: { content: RichText }) {
   return (
@@ -31,7 +51,7 @@ export function RichTextView({ content }: { content: RichText }) {
         const className = marksToClassName(run.marks);
         return (
           <span key={i} className={className || undefined} style={textRunStyle(run.color, run.fontSize)}>
-            {run.text}
+            {textWithBreaks(run.text)}
           </span>
         );
       })}
