@@ -236,7 +236,7 @@ export function StepUploadExam({ data, updateData, onNext, onLoadingChange }: Pr
         <div className="flex items-center justify-between gap-3 rounded-lg border bg-muted/40 p-3">
           <div className="flex items-center gap-2 min-w-0">
             <FileText className="w-4 h-4 text-primary shrink-0" />
-            <p className="text-sm font-medium truncate font-serif">{attached.fileName}</p>
+            <p className="text-sm font-medium truncate">{attached.fileName}</p>
           </div>
           <Button
             variant="ghost"

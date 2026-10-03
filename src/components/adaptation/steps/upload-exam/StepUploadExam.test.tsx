@@ -159,6 +159,12 @@ describe("StepUploadExam", () => {
     expect(onNext).toHaveBeenCalled();
   });
 
+  it("renders the attached file name in the UI font, not a serif fallback (1119)", () => {
+    const attachedData: WizardData = { ...baseData, uploadedExam: attachedExam() };
+    renderWithProviders(<StepUploadExam data={attachedData} updateData={vi.fn()} onNext={vi.fn()} onPrev={vi.fn()} />);
+    expect(screen.getByText("prova.pdf")).not.toHaveClass("font-serif");
+  });
+
   it("clicking the dropzone opens the file picker", () => {
     const clickSpy = vi.spyOn(HTMLInputElement.prototype, "click").mockImplementation(() => {});
     renderWithProviders(<StepUploadExam data={baseData} updateData={vi.fn()} onNext={vi.fn()} onPrev={vi.fn()} />);
