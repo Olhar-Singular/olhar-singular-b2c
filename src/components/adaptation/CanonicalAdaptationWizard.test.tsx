@@ -2176,6 +2176,48 @@ describe("CanonicalAdaptationWizard — navigation guard", () => {
       },
     );
 
+    /**
+     * 0461: "Voltar" do Revisar levava ao Passo 4 e o aviso de erro sumia, porque
+     * a barra só falava do autosave entre Revisar e Exportar. Uma nova tentativa
+     * ("Voltar e salvar" do guard) que falhava ali ficava calada. Erro e matéria
+     * pendente aparecem em qualquer passo; "Salvando…/Rascunho salvo" não.
+     */
+    it.each([
+      ["error", "Erro ao salvar"],
+      ["conflict", "Conflito: recarregue"],
+    ])("mantém o estado %s do autosave visível ao voltar para o Passo 4", (status, label) => {
+      mockDraftStatus.value = status;
+      renderWithProviders(<CanonicalAdaptationWizard />);
+      advanceToReview();
+      expect(screen.getByText(label)).toBeInTheDocument();
+
+      fireEvent.click(screen.getByRole("button", { name: "Voltar" }));
+
+      expect(screen.getByText(/Passo 4 de/)).toBeInTheDocument();
+      expect(screen.getByText(label)).toBeInTheDocument();
+    });
+
+    it("não mostra 'Rascunho salvo' fora do Revisar/Exportar", () => {
+      mockDraftStatus.value = "saved";
+      renderWithProviders(<CanonicalAdaptationWizard />);
+      advanceToReview();
+      expect(screen.getByText("Rascunho salvo")).toBeInTheDocument();
+
+      fireEvent.click(screen.getByRole("button", { name: "Voltar" }));
+
+      expect(screen.queryByText("Rascunho salvo")).not.toBeInTheDocument();
+    });
+
+    it("mantém o aviso de matéria pendente ao voltar para o Passo 4", () => {
+      renderWithProviders(<CanonicalAdaptationWizard />);
+      advanceToReview();
+      fireEvent.click(screen.getByTestId("review-file"));
+
+      fireEvent.click(screen.getByRole("button", { name: "Voltar" }));
+
+      expect(screen.getByTestId("filing-dirty")).toBeInTheDocument();
+    });
+
     it("não gruda a barra num estado tranquilo de salvamento", () => {
       mockDraftStatus.value = "saved";
       renderWithProviders(<CanonicalAdaptationWizard />);

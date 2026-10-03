@@ -841,7 +841,10 @@ export default function CanonicalAdaptationWizard({ editMode }: Props = {}) {
         >
           Passo {stepIndex + 1} de {STEPS.length}
         </p>
-        {/* Autosave status — shown once a draft exists and from the review step on. */}
+        {/* Autosave status — shown once a draft exists. 0461: error states and
+            pending subject/folder show on EVERY step (going back from Revisar
+            used to hide them, and a failed retry from the exit guard was
+            silent); "Salvando…"/"Rascunho salvo" stay limited to Revisar/Exportar. */}
         {captureFailure !== null ? (
           <p
             className="text-xs font-medium text-destructive-strong"
@@ -852,7 +855,7 @@ export default function CanonicalAdaptationWizard({ editMode }: Props = {}) {
           >
             Alterações não estão sendo salvas: desfaça a última edição
           </p>
-        ) : draftId && stepIndex >= REVIEW_INDEX && stepIndex <= EXPORT_INDEX && filingDirty ? (
+        ) : draftId && filingDirty ? (
           /* Matéria/pasta escolhidas e ainda não persistidas: este aviso tem
              precedência sobre o rótulo do autosave, que fala só do blob e
              mentiria ("Rascunho salvo") sobre uma escolha pendente. */
@@ -866,9 +869,8 @@ export default function CanonicalAdaptationWizard({ editMode }: Props = {}) {
           </p>
         ) : (
           draftId &&
-          stepIndex >= REVIEW_INDEX &&
-          stepIndex <= EXPORT_INDEX &&
-          saveStatus !== "idle" && (
+          saveStatus !== "idle" &&
+          (savingHasError || (stepIndex >= REVIEW_INDEX && stepIndex <= EXPORT_INDEX)) && (
             <p
               className="text-xs text-muted-foreground"
               role="status"
