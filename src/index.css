@@ -269,6 +269,51 @@
   }
 }
 
+/* Fallback for Poppins (landing headings): Arial Bold scaled to Poppins metrics,
+   so the font swap does not reflow the page (cold-load CLS was 0.139). Measured
+   in Chrome: Poppins is ~7% wider than Arial Bold; ascent 105%, descent 35%,
+   line gap 10%, each divided by the 1.07 size-adjust. */
+@font-face {
+  font-family: "Poppins Fallback";
+  src: local("Arial Bold"), local("Arial-BoldMT"), local("Liberation Sans Bold"), local("Arimo Bold");
+  font-weight: 600 700;
+  size-adjust: 107%;
+  ascent-override: 98%;
+  descent-override: 33%;
+  line-gap-override: 9%;
+}
+
+/* Landing page theme. Scoped to the .landing wrapper: fixed light palette that
+   ignores .dark, and no global token is touched. Contrast ratios are noted per
+   token; teal is decorative only, white text goes on teal-deep. */
+@layer base {
+  .landing {
+    color-scheme: light;
+    --lp-ink: #16282B;          /* text, focus */
+    --lp-ink-2: #3C5457;
+    --lp-muted: #5A7376;
+    --lp-bg: #F8FAFA;
+    --lp-surface: #FFFFFF;
+    --lp-border: #E2EBEB;
+    --lp-teal: #0FB5A0;         /* decorative / icon background only, never white text on it */
+    --lp-teal-deep: #0A7F87;    /* background with white text (4.77:1) */
+    --lp-teal-text: #0A6F76;    /* text/link on light (5.65:1) */
+    --lp-teal-hover: #085A60;
+    --lp-teal-tint: #E4F5F3;
+    --lp-orange: #FF8A3D;       /* CTA, --lp-ink text on it (6.52:1) */
+    --lp-orange-hover: #FF7A22;
+    --lp-dark: #0F3134;         /* dark section (closing) */
+    background-color: var(--lp-bg);
+    color: var(--lp-ink);
+    font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+    font-size: 17px;
+    line-height: 1.6;
+  }
+  .landing :focus-visible { outline: 3px solid var(--lp-ink); outline-offset: 3px; }
+  .landing .lp-on-dark :focus-visible { outline-color: #fff; }
+  .landing h1, .landing h2, .landing h3, .landing h4 { font-family: Poppins, "Poppins Fallback", ui-sans-serif, system-ui, sans-serif; font-weight: 600; line-height: 1.2; text-wrap: pretty; }
+}
+
 /* Respect prefers-reduced-motion */
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {

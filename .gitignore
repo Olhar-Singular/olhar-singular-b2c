@@ -50,3 +50,6 @@ coverage
 # env efêmero do make fn-serve-mp-test
 .env.mp-test
 .vercel
+
+# Material da LP nova: o .docx carrega o token do Meta CAPI (segredo), nunca versionar
+new_lp/*.docx

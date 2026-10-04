@@ -5,6 +5,8 @@
 import { addDays, format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import type { Access } from "@/lib/domain/access";
+import { ADAPTATION_CREDITS } from "@/lib/domain/barriers";
+import type { CreditPackageView } from "@/hooks/useCredits";
 import type { LastChargeView, PlanView, SubscriptionStatus, SubscriptionView } from "@/hooks/useSubscription";
 
 export function formatBrl(value: number) {
@@ -23,16 +25,37 @@ export const DEFAULT_PLANS: PlanView[] = [
   { id: "avancado",     slug: "avancado",     name: "Avançado",     priceBrl: 99.9, monthlyCredits: 900, highlight: false, adminOnly: false },
 ];
 
-// An adaptation costs 5 to 12 credits depending on the barrier (adaptationCost.ts).
+// An adaptation costs 5, 8 or 12 credits depending on the barrier (adaptationCost.ts).
+export const ADAPTATION_COST_LABEL = `${ADAPTATION_CREDITS.low}, ${ADAPTATION_CREDITS.medium} ou ${ADAPTATION_CREDITS.high}`;
+
 export function adaptationsRange(credits: number): string {
-  return `${Math.floor(credits / 12)} a ${Math.floor(credits / 5)} adaptações por mês`;
+  return `${Math.floor(credits / ADAPTATION_CREDITS.high)} a ${Math.floor(credits / ADAPTATION_CREDITS.low)} adaptações por mês`;
 }
+
+// Unused extras (not the subscription, which has REFUND_WINDOW_DAYS) are refundable for this many days.
+export const EXTRAS_REFUND_DAYS = 7;
 
 // The admin-only smoke plan is hidden on the landing page even for a logged-in
 // super-admin: it is public copy, not a checkout.
 export function publicPlans(plans: PlanView[] | undefined): PlanView[] {
   const visible = (plans ?? []).filter((p) => !p.adminOnly);
   return visible.length > 0 ? visible : DEFAULT_PLANS;
+}
+
+// Mirror of the seeded `credit_packages` rows (extra credits, never expire),
+// shown until the catalogue loads (and if it never does). The ids are display
+// placeholders, not row uuids: nothing here may reach a checkout.
+export const DEFAULT_PACKAGES: CreditPackageView[] = [
+  { id: "extra-30",  credits: 30,  amountBrl: 9.9,  label: "Básico",       highlight: false, adminOnly: false },
+  { id: "extra-120", credits: 120, amountBrl: 29.9, label: "Profissional", highlight: true,  adminOnly: false },
+  { id: "extra-300", credits: 300, amountBrl: 59.9, label: "Avançado",     highlight: false, adminOnly: false },
+];
+
+// Same rule as publicPlans: RLS hides the admin-only smoke package from anon,
+// but a logged-in super-admin sees it, and public copy is not a checkout.
+export function publicPackages(rows: CreditPackageView[] | undefined): CreditPackageView[] {
+  const visible = (rows ?? []).filter((p) => !p.adminOnly);
+  return visible.length > 0 ? visible : DEFAULT_PACKAGES;
 }
 
 // Picks the plan from ?plano=, falling back to the highlighted one, then the first.

@@ -5,6 +5,7 @@ import {
   trackAddPaymentInfo,
   trackBeginCheckout,
   trackConsentUpdated,
+  trackCtaClick,
   trackPaywallShown,
   trackPurchase,
   trackSelectPlan,
@@ -48,4 +49,12 @@ describe("funnel events", () => {
     expect(window.dataLayer?.[1]).toEqual({ event: "paywall_shown", reason: "no_credits" });
     expect(window.dataLayer?.[2]).toEqual({ event: "consent_updated", analytics: "granted", ads: "granted" });
   });
+
+  it.each(["header", "hero", "planos", "fechamento", "barra-mobile"] as const)(
+    "trackCtaClick pushes cta_click with the origin %s",
+    (origem) => {
+      trackCtaClick(origem);
+      expect(window.dataLayer?.at(-1)).toEqual({ event: "cta_click", origem });
+    },
+  );
 });

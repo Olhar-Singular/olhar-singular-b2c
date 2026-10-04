@@ -75,6 +75,13 @@ export function trackPaywallShown(reason: "no_credits" | "trial_expired"): void 
   pushEvent("paywall_shown", { reason });
 }
 
+export type CtaOrigem = "header" | "hero" | "planos" | "fechamento" | "barra-mobile";
+
+/** Landing CTA click. The Meta Pixel `Lead` is fired from GTM on this event (docs/analytics-gtm-meta-pixel.md). */
+export function trackCtaClick(origem: CtaOrigem): void {
+  pushEvent("cta_click", { origem });
+}
+
 export function trackConsentUpdated(consent: Consent): void {
   pushEvent("consent_updated", { analytics: consent.analytics_storage, ads: consent.ad_storage });
 }

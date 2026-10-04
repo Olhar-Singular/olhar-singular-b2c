@@ -1,57 +1,86 @@
-import { ArrowRight } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import heroImg from "@/assets/hero-classroom.png";
+import LandingCta from "./LandingCta";
+import turmaDiversa from "@/assets/landing/turma-diversa.webp";
+import { TRIAL_CREDITS, TRIAL_DAYS } from "@/lib/domain/subscriptionUi";
 
-export default function HeroSection() {
+interface HeroSectionProps {
+  /**
+   * Optional presentation video. Must be self-hosted (same origin): the CSP
+   * has no media-src and its frame-src allows no external video provider, so a
+   * YouTube/Vimeo embed would be blocked. Without it the hero shows the photo.
+   */
+  videoUrl?: string;
+}
+
+// React 18 does not know the camelCase `fetchPriority` prop (React 19 does) and
+// warns in dev, so the hint goes through as the lowercase HTML attribute.
+const HIGH_PRIORITY = { fetchpriority: "high" };
+
+const MEDIA_FRAME =
+  "mx-auto mt-8 max-w-3xl overflow-hidden rounded-2xl bg-lp-dark shadow-[0_18px_50px_rgba(10,127,135,0.18)]";
+
+export default function HeroSection({ videoUrl }: HeroSectionProps) {
   return (
-    <section className="pt-24 relative overflow-hidden">
-      <div className="gradient-hero">
-        <div className="max-w-6xl mx-auto px-4 py-16 lg:py-24 relative z-10">
-          <div className="grid lg:grid-cols-2 gap-10 items-center">
-            {/* Text side */}
-            <div>
-              <Badge variant="secondary" className="mb-5 text-xs font-medium">
-                Planos mensais e créditos avulsos, sem fidelidade
-              </Badge>
-              <h1 className="text-4xl sm:text-5xl lg:text-[3.25rem] font-extrabold text-primary-foreground leading-tight mb-5">
-                Adapte atividades para qualquer barreira de aprendizagem em minutos
-              </h1>
-              <p className="text-lg text-primary-foreground/80 leading-relaxed mb-8 max-w-lg">
-                Ferramenta de IA pedagógica para professores que querem incluir de verdade.
-                Sem diagnóstico, sem laudo. Foco nas barreiras observáveis em sala.
-              </p>
-              <div className="flex flex-col sm:flex-row gap-3">
-                <a href="#precos">
-                  <Button size="lg" className="bg-white text-primary hover:bg-white/90 font-semibold gap-2 w-full sm:w-auto">
-                    Ver planos
-                    <ArrowRight className="w-4 h-4" aria-hidden="true" />
-                  </Button>
-                </a>
-                <a href="#como-funciona">
-                  <Button size="lg" variant="outline" className="border-white text-white bg-white/20 hover:bg-white/30 font-semibold w-full sm:w-auto">
-                    Ver como funciona
-                  </Button>
-                </a>
-              </div>
-            </div>
+    <section
+      aria-labelledby="h-hero"
+      className="bg-[radial-gradient(1200px_480px_at_50%_-160px,#E4F5F3,#F8FAFA)] px-5 pb-[clamp(32px,5vw,64px)] pt-[clamp(24px,5vw,56px)]"
+    >
+      <div className="mx-auto max-w-[900px] text-center">
+        <p className="mb-5 inline-block rounded-full bg-lp-teal-tint px-4 py-2 text-sm font-semibold uppercase tracking-[0.04em] text-lp-teal-text">
+          Olhar Singular
+        </p>
+        <h1
+          id="h-hero"
+          className="text-pretty font-poppins text-[length:clamp(30px,6.2vw,52px)] tracking-[-0.02em] text-lp-ink"
+        >
+          Sua aula é a mesma para 30 alunos. Mas nem todos aprendem do mesmo jeito.
+        </h1>
+        <p className="mx-auto mt-5 max-w-[700px] text-[length:clamp(17px,2.3vw,20px)] text-lp-ink-2">
+          Adapte uma prova, um texto ou um exercício a partir das barreiras que você já observa em sala. Sem diagnóstico, sem laudo.
+        </p>
 
-            {/* Image side */}
-            <div className="hidden lg:block">
-              <img
-                src={heroImg}
-                alt="Professora auxiliando alunos em sala de aula inclusiva"
-                className="w-full max-w-lg mx-auto rounded-2xl shadow-2xl"
-                loading="eager"
-                width="1024"
-                height="1024"
-              />
-            </div>
-          </div>
+        <div className="mt-7 flex flex-col items-center gap-3">
+          <LandingCta
+            to="/assinar?trial=1"
+            origem="hero"
+            className="min-h-[52px] px-8 py-4 text-[length:clamp(17px,2.4vw,21px)] shadow-[0_10px_26px_rgba(255,138,61,0.4)]"
+          >
+            Testar {TRIAL_DAYS} dias grátis
+          </LandingCta>
+          <p className="max-w-[560px] text-[15px] text-lp-ink-2">
+            Cartão obrigatório. Nada é cobrado por {TRIAL_DAYS} dias; cancele antes do {TRIAL_DAYS + 1}º dia e não paga
+            nada. {TRIAL_CREDITS} créditos para testar.
+          </p>
+          <a
+            href="#como-funciona"
+            className="inline-flex min-h-[44px] items-center px-2 font-poppins font-semibold text-lp-teal-text underline underline-offset-4 hover:text-lp-teal-hover motion-reduce:transition-none"
+          >
+            Ver como funciona
+          </a>
         </div>
-        <svg className="w-full block" viewBox="0 0 1440 60" preserveAspectRatio="none" aria-hidden="true">
-          <path d="M0,30 C360,70 1080,0 1440,30 L1440,60 L0,60 Z" fill="hsl(var(--background))" />
-        </svg>
+
+        <div className={MEDIA_FRAME}>
+          {videoUrl ? (
+            <video
+              controls
+              preload="none"
+              poster={turmaDiversa}
+              src={videoUrl}
+              aria-label="Vídeo de apresentação do Olhar Singular"
+              className="aspect-video w-full object-cover"
+            />
+          ) : (
+            <img
+              src={turmaDiversa}
+              alt="Sala de aula com alunos diversos fazendo atividade, e uma professora agachada ajudando um menino"
+              width={1040}
+              height={784}
+              loading="eager"
+              {...HIGH_PRIORITY}
+              decoding="async"
+              className="h-auto w-full"
+            />
+          )}
+        </div>
       </div>
     </section>
   );

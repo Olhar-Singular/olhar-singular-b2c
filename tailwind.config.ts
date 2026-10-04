@@ -15,8 +15,28 @@ export default {
     extend: {
       fontFamily: {
         sans: ['"Plus Jakarta Sans"', 'system-ui', 'sans-serif'],
+        // Landing page only (.landing wrapper in index.css).
+        poppins: ['Poppins', '"Poppins Fallback"', 'ui-sans-serif', 'system-ui', 'sans-serif'],
+        inter: ['Inter', 'ui-sans-serif', 'system-ui', 'sans-serif'],
       },
       colors: {
+        // Landing page palette: maps the --lp-* tokens defined on .landing.
+        lp: {
+          ink: "var(--lp-ink)",
+          "ink-2": "var(--lp-ink-2)",
+          muted: "var(--lp-muted)",
+          bg: "var(--lp-bg)",
+          surface: "var(--lp-surface)",
+          border: "var(--lp-border)",
+          teal: "var(--lp-teal)",
+          "teal-deep": "var(--lp-teal-deep)",
+          "teal-text": "var(--lp-teal-text)",
+          "teal-hover": "var(--lp-teal-hover)",
+          "teal-tint": "var(--lp-teal-tint)",
+          orange: "var(--lp-orange)",
+          "orange-hover": "var(--lp-orange-hover)",
+          dark: "var(--lp-dark)",
+        },
         border: "hsl(var(--border))",
         input: "hsl(var(--input))",
         ring: "hsl(var(--ring))",

@@ -46,6 +46,8 @@ export interface AnalyticsConfig {
   ga4ApiSecret?: string;
   metaPixelId?: string;
   metaCapiToken?: string;
+  /** Transient: routes the events to the "Test events" tab in Meta Events Manager. */
+  metaTestEventCode?: string;
 }
 
 const META_EVENT_NAMES: Record<AnalyticsEventName, string> = {
@@ -64,6 +66,7 @@ export function readAnalyticsConfig(env: { get(name: string): string | undefined
     ga4ApiSecret: env.get("GA4_API_SECRET") || undefined,
     metaPixelId: env.get("META_PIXEL_ID") || undefined,
     metaCapiToken: env.get("META_CAPI_TOKEN") || undefined,
+    metaTestEventCode: env.get("META_TEST_EVENT_CODE")?.trim() || undefined,
   };
 }
 
@@ -170,7 +173,12 @@ export async function sendAnalyticsEvents(
   if (config.metaPixelId && config.metaCapiToken) {
     const url = `https://graph.facebook.com/v19.0/${encodeURIComponent(config.metaPixelId)}/events?access_token=${encodeURIComponent(config.metaCapiToken)}`;
     for (const event of events) {
-      jobs.push(buildMetaPayload(event, now).then((payload) => postWithTimeout(fetchFn, url, payload, log)));
+      jobs.push(
+        buildMetaPayload(event, now).then((payload) =>
+          // test_event_code is a sibling of `data`, not part of the event itself.
+          postWithTimeout(fetchFn, url, config.metaTestEventCode ? { ...payload, test_event_code: config.metaTestEventCode } : payload, log),
+        ),
+      );
     }
   }
 

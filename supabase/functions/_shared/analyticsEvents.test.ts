@@ -34,6 +34,52 @@ describe("readAnalyticsConfig", () => {
   });
 });
 
+describe("META_TEST_EVENT_CODE", () => {
+  const withEnv = (vars: Record<string, string>) => ({ get: (n: string) => vars[n] });
+
+  it("is read into the config and treated as missing when absent or empty", () => {
+    expect(readAnalyticsConfig(withEnv({ META_TEST_EVENT_CODE: "TEST123" })).metaTestEventCode).toBe("TEST123");
+    expect(readAnalyticsConfig(withEnv({})).metaTestEventCode).toBeUndefined();
+    expect(readAnalyticsConfig(withEnv({ META_TEST_EVENT_CODE: "" })).metaTestEventCode).toBeUndefined();
+  });
+
+  it("ignores surrounding whitespace, so a blank secret never reroutes production events", () => {
+    expect(readAnalyticsConfig(withEnv({ META_TEST_EVENT_CODE: "   " })).metaTestEventCode).toBeUndefined();
+    expect(readAnalyticsConfig(withEnv({ META_TEST_EVENT_CODE: " TEST123 \n" })).metaTestEventCode).toBe("TEST123");
+  });
+
+  it("goes at the top level of the Meta body, next to data, only when configured", async () => {
+    const fetchFn = vi.fn(async () => new Response("{}", { status: 200 })) as unknown as typeof fetch;
+    const metaBody = () => {
+      const calls = (fetchFn as unknown as ReturnType<typeof vi.fn>).mock.calls as [string, RequestInit][];
+      const call = calls.find(([url]) => url.startsWith("https://graph.facebook.com"));
+      return JSON.parse(call![1].body as string) as Record<string, unknown>;
+    };
+    const base = { metaPixelId: "px", metaCapiToken: "tok" };
+
+    await sendAnalyticsEvents([event()], { ...base, metaTestEventCode: "TEST123" }, fetchFn, vi.fn(), NOW);
+    expect(metaBody()).toMatchObject({ test_event_code: "TEST123" });
+    expect(metaBody().data).toHaveLength(1);
+
+    (fetchFn as unknown as ReturnType<typeof vi.fn>).mockClear();
+    await sendAnalyticsEvents([event()], base, fetchFn, vi.fn(), NOW);
+    expect(metaBody()).not.toHaveProperty("test_event_code");
+  });
+
+  it("never reaches the GA4 body", async () => {
+    const fetchFn = vi.fn(async () => new Response("{}", { status: 200 })) as unknown as typeof fetch;
+    await sendAnalyticsEvents(
+      [event()],
+      { ga4MeasurementId: "G-1", ga4ApiSecret: "sec", metaTestEventCode: "TEST123" },
+      fetchFn,
+      vi.fn(),
+      NOW,
+    );
+    const calls = (fetchFn as unknown as ReturnType<typeof vi.fn>).mock.calls as [string, RequestInit][];
+    expect(calls[0][1].body as string).not.toContain("test_event_code");
+  });
+});
+
 describe("sha256Hex", () => {
   it("normalises and hashes", async () => {
     expect(await sha256Hex(" Ana@Example.com ")).toBe(await sha256Hex("ana@example.com"));

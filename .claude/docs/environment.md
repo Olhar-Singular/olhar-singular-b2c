@@ -21,7 +21,8 @@ DATABASE_URL=                  # Connection string completa (remoto)
 > functions locais (`make fn-serve` lê o `.env` raiz — não há mais `supabase/functions/.env`).
 > Guarda também os segredos de backend (`AI_API_KEY`, `ACCESS_TOKEN_MP_PROD`,
 > `VERIFY_TOKEN_MP_PROD`, `APP_URL`, `CHECKOUT_HASH_SECRET`, `GA4_MEASUREMENT_ID`, `GA4_API_SECRET`,
-> `META_PIXEL_ID`, `META_CAPI_TOKEN`,
+> `META_PIXEL_ID`, `META_CAPI_TOKEN`, `META_TEST_EVENT_CODE` (opcional e transitório: só enquanto
+> valida a CAPI na aba "Testar eventos"; setup do GTM em `docs/analytics-gtm-meta-pixel.md`),
 > `RESEND_API_KEY` e `EMAIL_FROM` (e-mail transacional via Resend, `_shared/email.ts`: sem a
 > chave nenhum e-mail sai e o envio vira um warn `not_configured`; `EMAIL_FROM` é o remetente
 > "Nome <endereço>" num domínio verificado, padrão `Olhar Singular <contato@olharsingular.com>`),
