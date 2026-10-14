@@ -166,4 +166,13 @@ describe("dispatchAnalytics", () => {
     await dispatchAnalytics(Promise.resolve(), { EdgeRuntime: {} });
     await dispatchAnalytics(Promise.resolve());
   });
+
+  it("delegates to dispatchInBackground: a failing send is swallowed with a label, never handed raw to waitUntil", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    const waitUntil = vi.fn();
+    await dispatchAnalytics(Promise.reject(new Error("boom")), { EdgeRuntime: { waitUntil } });
+    await expect(waitUntil.mock.calls[0][0] as Promise<unknown>).resolves.toBeUndefined();
+    expect(warn).toHaveBeenCalledWith("background: task failed", "Error");
+    warn.mockRestore();
+  });
 });

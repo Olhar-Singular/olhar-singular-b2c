@@ -3,6 +3,8 @@
 // throws, respects the consent captured with the attribution, and gives up
 // after 3 seconds. event_id equals the browser event's, so both ends dedupe.
 
+import { dispatchInBackground, type WaitUntilHost } from "./background.ts";
+
 export interface ConsentLike {
   analytics_storage?: string;
   ad_storage?: string;
@@ -119,22 +121,13 @@ export async function buildMetaPayload(event: AnalyticsEvent, now: Date): Promis
 
 export const ANALYTICS_TIMEOUT_MS = 3000;
 
-interface WaitUntilHost {
-  EdgeRuntime?: { waitUntil?: (p: Promise<unknown>) => void };
-}
-
 /**
- * Keeps the analytics send off the response path: on the Supabase edge runtime
- * the promise is handed to EdgeRuntime.waitUntil (runs after the response);
- * elsewhere it is awaited so nothing is lost. Never throws.
+ * Keeps the analytics send off the response path (EdgeRuntime.waitUntil on the
+ * edge runtime, awaited elsewhere). Kept as a named export for the callers;
+ * the mechanism lives in background.ts, shared with the transactional e-mails.
  */
-export async function dispatchAnalytics(send: Promise<void>, host: WaitUntilHost = globalThis as WaitUntilHost): Promise<void> {
-  const waitUntil = host.EdgeRuntime?.waitUntil;
-  if (typeof waitUntil === "function") {
-    waitUntil(send);
-    return;
-  }
-  await send;
+export function dispatchAnalytics(send: Promise<void>, host?: WaitUntilHost): Promise<void> {
+  return dispatchInBackground(send, host);
 }
 
 async function postWithTimeout(fetchFn: typeof fetch, url: string, body: unknown, log: (m: string, ...a: unknown[]) => void): Promise<void> {
