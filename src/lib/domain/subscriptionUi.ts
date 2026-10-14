@@ -113,7 +113,7 @@ export function isCardTrial(sub: SubscriptionView | null | undefined): boolean {
 
 // Version of the Terms of Use the checkout records on the profile. Bump when
 // the legal text changes; the pages under /termos show the same value.
-export const TERMS_VERSION = "2026-09.2";
+export const TERMS_VERSION = "2026-10.2";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 
@@ -139,10 +139,13 @@ export const ACCOUNT_FORM_MESSAGES: Record<AccountFormError, string> = {
   name: "Informe seu nome completo.",
   email: "Informe um e-mail válido.",
   email_mismatch: "Os e-mails não coincidem. Confira antes de continuar: é por ele que você entra na plataforma.",
-  terms: "É preciso aceitar os Termos de Uso e a Política de Privacidade.",
+  terms: "É preciso aceitar os Termos de Uso, a Política de Privacidade e a Política de Reembolso.",
 };
 
 export const REFUND_WINDOW_DAYS = 30;
+
+// Unused extras (not the subscription, which has REFUND_WINDOW_DAYS) are refundable for this many days.
+export const EXTRAS_REFUND_DAYS = 7;
 
 // Decision 5: the last approved charge can always be refunded by the user,
 // while the subscription is live or up to 30 days after cancelling it.

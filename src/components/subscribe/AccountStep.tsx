@@ -84,10 +84,14 @@ export default function AccountStep({ onConfirm, initial }: Props) {
           Li e aceito os{" "}
           <Link to="/termos" className="underline" target="_blank" rel="noreferrer">
             Termos de Uso
-          </Link>{" "}
-          e a{" "}
+          </Link>
+          , a{" "}
           <Link to="/privacidade" className="underline" target="_blank" rel="noreferrer">
             Política de Privacidade
+          </Link>{" "}
+          e a{" "}
+          <Link to="/reembolso" className="underline" target="_blank" rel="noreferrer">
+            Política de Reembolso
           </Link>
           .
         </Label>
