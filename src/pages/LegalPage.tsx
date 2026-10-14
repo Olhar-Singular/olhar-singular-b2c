@@ -22,12 +22,7 @@ export default function LegalPage() {
             <header className="space-y-2">
               <h1 className="text-3xl font-bold text-foreground">{doc.title}</h1>
               <p className="text-muted-foreground">{doc.intro}</p>
-              <p className="text-xs text-muted-foreground">
-                Última atualização: {doc.updatedAt}. Versão {TERMS_VERSION}.
-              </p>
-              <p role="note" className="text-xs rounded-md bg-amber-50 text-amber-900 px-3 py-2">
-                Rascunho em revisão jurídica. Versão {TERMS_VERSION}.
-              </p>
+              <p className="text-xs text-muted-foreground">Versão {TERMS_VERSION}.</p>
             </header>
             {doc.sections.map((section) => (
               <section key={section.title} className="space-y-2">

@@ -3,7 +3,7 @@ import { screen, within } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { render } from "@testing-library/react";
 import LegalPage from "./LegalPage";
-import { isLegalSlug, LEGAL_DOCS, LEGAL_ENTITY, LEGAL_NOTICE_DAYS, LEGAL_UPDATED_AT } from "@/lib/domain/legalDocs";
+import { isLegalSlug, LEGAL_DOCS, LEGAL_ENTITY, LEGAL_NOTICE_DAYS } from "@/lib/domain/legalDocs";
 import { EXTRAS_REFUND_DAYS, REFUND_WINDOW_DAYS, TERMS_VERSION, TRIAL_CREDITS, TRIAL_DAYS } from "@/lib/domain/subscriptionUi";
 
 vi.mock("@/assets/logo-olho-transparent.png", () => ({ default: "stub://logo.png" }));
@@ -40,12 +40,12 @@ describe("isLegalSlug", () => {
 });
 
 describe("LegalPage", () => {
-  it("renders the terms with the draft notice, the update date and links to the other documents", () => {
+  it("renders the terms with the version, no draft notice, no update date and links to the other documents", () => {
     renderAt("/termos");
     expect(screen.getByRole("heading", { level: 1, name: "Termos de Uso" })).toBeInTheDocument();
-    expect(screen.getByRole("note")).toHaveTextContent(/Rascunho/);
-    expect(screen.getByRole("note")).toHaveTextContent(TERMS_VERSION);
-    expect(screen.getByText(`Última atualização: ${LEGAL_UPDATED_AT}. Versão ${TERMS_VERSION}.`)).toBeInTheDocument();
+    expect(screen.getByText(`Versão ${TERMS_VERSION}.`)).toBeInTheDocument();
+    expect(screen.queryByRole("note")).toBeNull();
+    expect(screen.queryByText(/Rascunho|revisão jurídica|Última atualização/)).toBeNull();
     expect(screen.getByText(/OLHAR SINGULAR/)).toBeInTheDocument();
     const others = within(screen.getByRole("navigation", { name: "Outros documentos" }));
     expect(others.getByRole("link", { name: "Política de Privacidade" })).toHaveAttribute("href", "/privacidade");
@@ -72,10 +72,10 @@ describe("LegalPage", () => {
 });
 
 describe("LEGAL_DOCS", () => {
-  it("every document carries the same update date and unique, numbered section titles", () => {
+  it("every document has unique, numbered section titles and no update date", () => {
     for (const slug of ["termos", "privacidade", "reembolso"] as const) {
       const doc = LEGAL_DOCS[slug];
-      expect(doc.updatedAt).toBe(LEGAL_UPDATED_AT);
+      expect(doc).not.toHaveProperty("updatedAt");
       const titles = doc.sections.map((s) => s.title);
       expect(new Set(titles).size).toBe(titles.length);
       titles.forEach((title, i) => expect(title).toMatch(new RegExp(`^${i + 1}\\. `)));
@@ -88,8 +88,10 @@ describe("LEGAL_DOCS", () => {
   it("was bumped with the October 2026 clause changes (confirmation e-mail, trial reminder, cookie preferences) and the version passes the checkout filter", () => {
     expect(TERMS_VERSION).toBe("2026-10.2");
     expect(TERMS_VERSION).toMatch(TERMS_VERSION_RE);
-    expect(LEGAL_UPDATED_AT).toBe("14 de outubro de 2026");
     expect(JSON.stringify(LEGAL_DOCS)).not.toMatch(DASHES);
+    expect(JSON.stringify(LEGAL_DOCS)).not.toMatch(/data de atualização/);
+    expect(JSON.stringify(LEGAL_DOCS.termos)).toContain("A versão vigente consta no topo desta página.");
+    expect(JSON.stringify(LEGAL_DOCS.privacidade)).toContain("A versão vigente consta no topo desta página.");
   });
 
   it("interpolates every constant: no undefined or NaN leaks into the legal text (extras refund window included)", () => {
@@ -177,7 +179,7 @@ describe("LEGAL_DOCS", () => {
     expect(acceptance).toMatch(/créditos são liberados quando a aprovação chegar/);
     expect(acceptance).toMatch(/"Esqueci minha senha" na tela de acesso/);
     expect(acceptance).toContain(LEGAL_ENTITY.site);
-    expect(acceptance).toMatch(/com a versão e a data de atualização/);
+    expect(acceptance).toMatch(/permanecem disponíveis em [^,]+, com a versão vigente, e podem ser salvos/);
     expect(acceptance).toMatch(/checkout de criação da Conta/);
     expect(acceptance).toMatch(/vinculad[oa] à versão aceita na criação da Conta ou, nas contas criadas por convite, à versão vigente no primeiro acesso, e às alterações comunicadas na forma da cláusula 17/);
   });

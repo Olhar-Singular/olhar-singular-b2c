@@ -1,5 +1,5 @@
-// Legal texts shown at /termos, /privacidade and /reembolso. Drafts until the
-// legal review lands. The version shown is the one the checkout records on
+// Legal texts shown at /termos, /privacidade and /reembolso, approved by the
+// lawyer on 2026-10-14. The version shown is the one the checkout records on
 // profiles.terms_version, so both move together.
 //
 // Every clause here mirrors a real behaviour of the product (checkout, trial,
@@ -26,8 +26,6 @@ interface Section {
 export interface LegalDoc {
   title: string;
   intro: string;
-  /** Human-readable date printed under the title ("Última atualização"). */
-  updatedAt: string;
   sections: Section[];
 }
 
@@ -46,8 +44,6 @@ export const LEGAL_ENTITY = {
   email: SUPPORT_EMAIL,
   site: "professor.olharsingular.com",
 } as const;
-
-export const LEGAL_UPDATED_AT = "14 de outubro de 2026";
 
 // Minimum notice for changes that touch price, credits, refund rules, rights or
 // obligations. One number, quoted by every clause that promises a notice.
@@ -74,7 +70,6 @@ const STUDENT_DATA_BAN =
 export const LEGAL_DOCS: Record<LegalSlug, LegalDoc> = {
   termos: {
     title: "Termos de Uso",
-    updatedAt: LEGAL_UPDATED_AT,
     intro:
       "Estes Termos de Uso regulam o acesso e a utilização da plataforma Olhar Singular, ferramenta pedagógica de apoio à adaptação de atividades escolares com inteligência artificial. Leia com atenção: ao criar uma conta, assinar um plano, iniciar o teste grátis ou utilizar a plataforma, você declara que leu, compreendeu e concorda com estes Termos, com a Política de Privacidade e com a Política de Reembolso.",
     sections: [
@@ -93,7 +88,7 @@ export const LEGAL_DOCS: Record<LegalSlug, LegalDoc> = {
           "2.2. O aceite destes Termos é registrado no checkout de criação da Conta (assinatura ou Teste Grátis) por meio da caixa de seleção \"Li e aceito\", que apresenta os links para o texto integral dos três documentos. Ficam gravados em nossos sistemas a versão aceita e a data e hora do aceite. Quem já tem Conta e contrata um plano depois não repete o aceite: permanece vinculado à versão aceita na criação da Conta ou, nas contas criadas por convite, à versão vigente no primeiro acesso, e às alterações comunicadas na forma da cláusula 17. Para contas criadas por convite da equipe, o aceite é manifestado no primeiro acesso à Plataforma, e a versão vigente pode ser consultada a qualquer momento nesta página.",
           "2.3. Se você não concordar com qualquer condição destes Termos, não utilize a Plataforma.",
           "2.4. Ao aceitar, você declara que as informações fornecidas são verdadeiras e atuais, que usará a Plataforma apenas para fins lícitos e compatíveis com estes Termos e que é o titular do cartão informado ou está autorizado pelo titular a utilizá-lo. Se o cartão for de outra pessoa, você declara ter dado a ela ciência da Política de Privacidade quanto ao tratamento do CPF e dos dados do pagamento.",
-          `2.5. Enviamos ao e-mail da Conta (ou, se ele não puder ser lido, ao e-mail informado no pagamento) um e-mail de confirmação da contratação, que é o seu comprovante, nos seguintes momentos: quando o pagamento é aprovado na hora no checkout ou o Teste Grátis é iniciado; quando a operadora deixa o cartão em análise no checkout e a aprovação chega depois; e quando uma assinatura encerrada é reativada por uma nova cobrança aprovada. Não há novo e-mail de confirmação nas renovações mensais nem na primeira cobrança do Teste Grátis, já anunciada na confirmação inicial e no lembrete da cláusula 6.2. O e-mail informa: o plano; o valor; os créditos por mês; a data da primeira cobrança (no Teste Grátis) ou a indicação de que a cobrança foi feita no dia; a regra das cobranças seguintes (todo mês, na mesma data); a versão destes Termos aceita, quando disponível no momento do envio; e os links para estes Termos, para a Política de Privacidade, para a Política de Reembolso e para a área Créditos, onde o cancelamento é feito. Guarde este e-mail. Contas novas recebem também, no e-mail cadastrado, o link de acesso para definir a senha, mesmo com o cartão em análise; nesse caso, os créditos são liberados quando a aprovação chegar e, se o link não chegar, um novo pode ser pedido pela opção "Esqueci minha senha" na tela de acesso. Estes Termos, a Política de Privacidade e a Política de Reembolso permanecem disponíveis em ${LEGAL_ENTITY.site}, com a versão e a data de atualização, e podem ser salvos ou impressos a qualquer momento.`,
+          `2.5. Enviamos ao e-mail da Conta (ou, se ele não puder ser lido, ao e-mail informado no pagamento) um e-mail de confirmação da contratação, que é o seu comprovante, nos seguintes momentos: quando o pagamento é aprovado na hora no checkout ou o Teste Grátis é iniciado; quando a operadora deixa o cartão em análise no checkout e a aprovação chega depois; e quando uma assinatura encerrada é reativada por uma nova cobrança aprovada. Não há novo e-mail de confirmação nas renovações mensais nem na primeira cobrança do Teste Grátis, já anunciada na confirmação inicial e no lembrete da cláusula 6.2. O e-mail informa: o plano; o valor; os créditos por mês; a data da primeira cobrança (no Teste Grátis) ou a indicação de que a cobrança foi feita no dia; a regra das cobranças seguintes (todo mês, na mesma data); a versão destes Termos aceita, quando disponível no momento do envio; e os links para estes Termos, para a Política de Privacidade, para a Política de Reembolso e para a área Créditos, onde o cancelamento é feito. Guarde este e-mail. Contas novas recebem também, no e-mail cadastrado, o link de acesso para definir a senha, mesmo com o cartão em análise; nesse caso, os créditos são liberados quando a aprovação chegar e, se o link não chegar, um novo pode ser pedido pela opção "Esqueci minha senha" na tela de acesso. Estes Termos, a Política de Privacidade e a Política de Reembolso permanecem disponíveis em ${LEGAL_ENTITY.site}, com a versão vigente, e podem ser salvos ou impressos a qualquer momento.`,
         ],
       },
       {
@@ -234,7 +229,7 @@ export const LEGAL_DOCS: Record<LegalSlug, LegalDoc> = {
       {
         title: "17. Alterações destes Termos",
         paragraphs: [
-          `17.1. Podemos alterar estes Termos. Alterações que afetem preço, cota ou custo em créditos, regras de reembolso, direitos ou obrigações entram em vigor no mínimo ${LEGAL_NOTICE_DAYS} dias após o aviso enviado ao seu e-mail e exibido na Plataforma; nesse prazo você pode cancelar a assinatura e encerrar a Conta sem qualquer ônus. Correções de erro material e melhorias de clareza que não alterem direitos valem na data da publicação. A versão vigente e a data de atualização constam no topo desta página.`,
+          `17.1. Podemos alterar estes Termos. Alterações que afetem preço, cota ou custo em créditos, regras de reembolso, direitos ou obrigações entram em vigor no mínimo ${LEGAL_NOTICE_DAYS} dias após o aviso enviado ao seu e-mail e exibido na Plataforma; nesse prazo você pode cancelar a assinatura e encerrar a Conta sem qualquer ônus. Correções de erro material e melhorias de clareza que não alterem direitos valem na data da publicação. A versão vigente consta no topo desta página.`,
           "17.2. O uso da Plataforma após a vigência de uma alteração relevante, da qual você foi avisado na forma da cláusula 17.1, representa aceite da nova versão. Se você não concordar, cancele a assinatura e solicite o encerramento da Conta antes da data de vigência.",
           "17.3. Versão atual: " + TERMS_VERSION + ".",
         ],
@@ -252,7 +247,6 @@ export const LEGAL_DOCS: Record<LegalSlug, LegalDoc> = {
   },
   privacidade: {
     title: "Política de Privacidade",
-    updatedAt: LEGAL_UPDATED_AT,
     intro:
       "Esta Política de Privacidade explica como o Olhar Singular coleta, utiliza, compartilha, armazena e protege os dados pessoais de quem visita o site, cria uma conta ou utiliza a plataforma, em conformidade com a Lei Geral de Proteção de Dados Pessoais (Lei nº 13.709/2018, LGPD), com o Marco Civil da Internet (Lei nº 12.965/2014) e com o Código de Defesa do Consumidor (Lei nº 8.078/1990).",
     sections: [
@@ -384,7 +378,7 @@ export const LEGAL_DOCS: Record<LegalSlug, LegalDoc> = {
       {
         title: "15. Alterações desta Política",
         paragraphs: [
-          `15.1. Podemos atualizar esta Política para refletir mudanças na plataforma, nos fornecedores ou na legislação. Alterações que ampliem o tratamento, mudem finalidades ou acrescentem compartilhamentos serão comunicadas por e-mail e por aviso na plataforma com antecedência mínima de ${LEGAL_NOTICE_DAYS} dias, e, quando dependerem de consentimento, ele será solicitado novamente. A data de atualização consta no topo desta página. Quando a faixa de cookies mudar, o seu consentimento será solicitado novamente.`,
+          `15.1. Podemos atualizar esta Política para refletir mudanças na plataforma, nos fornecedores ou na legislação. Alterações que ampliem o tratamento, mudem finalidades ou acrescentem compartilhamentos serão comunicadas por e-mail e por aviso na plataforma com antecedência mínima de ${LEGAL_NOTICE_DAYS} dias, e, quando dependerem de consentimento, ele será solicitado novamente. A versão vigente consta no topo desta página. Quando a faixa de cookies mudar, o seu consentimento será solicitado novamente.`,
         ],
       },
       {
@@ -397,7 +391,6 @@ export const LEGAL_DOCS: Record<LegalSlug, LegalDoc> = {
   },
   reembolso: {
     title: "Política de Reembolso",
-    updatedAt: LEGAL_UPDATED_AT,
     intro:
       "Esta Política de Reembolso estabelece as regras de arrependimento, cancelamento, estorno e cobranças indevidas na plataforma Olhar Singular, em conformidade com o Código de Defesa do Consumidor (Lei nº 8.078/1990) e com o Decreto nº 7.962/2013. Ela complementa os Termos de Uso e é aceita junto com eles no checkout.",
     sections: [
