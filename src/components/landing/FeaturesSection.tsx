@@ -4,7 +4,7 @@ const FEATURES = [
   {
     icon: Wand2,
     title: "Adaptação com IA",
-    desc: "Transforme provas, exercícios e atividades em versões adaptadas em segundos.",
+    desc: "Transforme provas, exercícios e atividades em versões adaptadas em minutos.",
   },
   {
     icon: MessageSquare,
@@ -14,7 +14,7 @@ const FEATURES = [
   {
     icon: Users,
     title: "Perfis de barreira",
-    desc: "Salve os perfis dos seus alunos e adapte com mais agilidade na próxima vez.",
+    desc: "Salve perfis de barreira, sem identificar o aluno, e adapte com mais agilidade na próxima vez.",
   },
   {
     icon: History,

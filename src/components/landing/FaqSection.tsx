@@ -21,7 +21,7 @@ function buildFaq(trialPlan: PlanView) {
     },
     {
       q: "Quanto vale 1 crédito?",
-      a: "Uma adaptação custa de 5 a 12 créditos, conforme a complexidade das barreiras. Extrair questões de uma prova custa 5. Iniciar uma conversa com a ISA custa 3 créditos, e as mensagens seguintes na mesma conversa não debitam.",
+      a: "Uma adaptação custa de 5 a 12 créditos, conforme a complexidade das barreiras. Extrair questões de uma prova custa 5. Iniciar uma conversa com a ISA custa 3 créditos, e as mensagens seguintes na mesma conversa não debitam, até o limite de mensagens por conversa indicado na tela.",
     },
     {
       q: "Os créditos expiram?",
@@ -37,7 +37,7 @@ function buildFaq(trialPlan: PlanView) {
     },
     {
       q: "Posso cancelar quando quiser?",
-      a: "Sim, em Créditos, com um clique. Você não é mais cobrado e continua usando os créditos do plano até o fim do período já pago. Os extras continuam com você. Durante o teste grátis, cancelar encerra o acesso na hora e nada é cobrado.",
+      a: "Sim, em Créditos, com um clique. Você não é mais cobrado e continua usando os créditos do plano até o fim do período já pago. Os extras continuam com você. No teste grátis, cancelando até o dia anterior ao da primeira cobrança, o acesso encerra na hora e nada é cobrado.",
     },
     {
       q: "Como troco de plano?",

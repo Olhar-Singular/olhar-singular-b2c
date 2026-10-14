@@ -106,6 +106,12 @@ describe("PricingSection", () => {
     ]);
   });
 
+  it("promises access once the card is approved, not unconditional immediate access (Termos 2.5: a card under review waits)", () => {
+    renderWithProviders(<PricingSection />);
+    expect(screen.getAllByText("Acesso assim que o cartão é aprovado")).toHaveLength(3);
+    expect(screen.queryByText(/Acesso imediato/)).toBeNull();
+  });
+
   it("mentions the extra packages as one-off top-ups", () => {
     renderWithProviders(<PricingSection />);
     expect(screen.getByText(/30 por R\$ 9,90/)).toBeInTheDocument();

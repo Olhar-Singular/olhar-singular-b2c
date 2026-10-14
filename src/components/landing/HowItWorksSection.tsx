@@ -1,4 +1,5 @@
 import { ArrowRight, Wand2 } from "lucide-react";
+import { MAX_ACTIVITY_CHARS } from "@/lib/domain/activityLimits";
 
 const STEPS = [
   {
@@ -9,7 +10,7 @@ const STEPS = [
   {
     n: "02",
     title: "Cole sua atividade",
-    desc: "Insira o texto da prova, exercício ou trabalho. Aceita até 10 000 caracteres.",
+    desc: `Insira o texto da prova, exercício ou trabalho. Aceita até ${MAX_ACTIVITY_CHARS.toLocaleString("pt-BR")} caracteres.`,
   },
   {
     n: "03",

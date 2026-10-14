@@ -1,7 +1,10 @@
 import { screen } from "@testing-library/react";
 import { describe, it, expect, vi } from "vitest";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import LandingPage from "./LandingPage";
 import { renderWithProviders } from "@/test/helpers";
+import { cheapestPublicPlan, DEFAULT_PLANS, formatBrl } from "@/lib/domain/subscriptionUi";
 
 // The pricing grid falls back to the seeded catalogue while the query is loading.
 vi.mock("@/hooks/useSubscription", () => ({ usePlans: () => ({ data: undefined, isLoading: true }) }));
@@ -34,6 +37,15 @@ describe("LandingPage", () => {
     expect(screen.queryByText(/R\$\s*19,90/)).toBeNull();
     expect(screen.getAllByText(/R\$\s*59,90/).length).toBeGreaterThan(0);
     expect(screen.getByText(/R\$\s*99,90/)).toBeInTheDocument();
+  });
+
+  it("index.html advertises the real cheapest plan in the search and share descriptions, never the retired R$ 19,90 (Termos 5.1)", () => {
+    const html = readFileSync(join(process.cwd(), "index.html"), "utf8");
+    const price = formatBrl(cheapestPublicPlan(DEFAULT_PLANS)!.priceBrl).replace(/\s/g, " ");
+    const descriptions = [...html.matchAll(/<meta (?:name|property)="(?:description|og:description)" content="([^"]*)"/g)].map((m) => m[1]);
+    expect(descriptions).toHaveLength(2);
+    for (const description of descriptions) expect(description).toContain(`a partir de ${price}`);
+    expect(html).not.toMatch(/19,90/);
   });
 
   it("never promises free signup credits or credits that never expire", () => {

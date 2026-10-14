@@ -98,7 +98,7 @@ export default function PricingSection() {
                 </li>
                 <li className="flex items-center gap-2">
                   <CheckCircle2 className="w-4 h-4 shrink-0" aria-hidden="true" />
-                  Acesso imediato
+                  Acesso assim que o cartão é aprovado
                 </li>
               </ul>
               <Link to={`/assinar?plano=${plan.slug}`} onClick={() => trackSelectPlan(plan)}>

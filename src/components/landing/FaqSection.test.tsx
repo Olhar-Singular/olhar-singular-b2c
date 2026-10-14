@@ -38,6 +38,14 @@ describe("FaqSection", () => {
     expect(screen.getByText(/5 a 12 créditos/i)).toBeInTheDocument();
   });
 
+  it("says ISA messages inside a conversation are free only up to the per-conversation limit (Termos 5.5)", () => {
+    renderWithProviders(<FaqSection />);
+    fireEvent.click(screen.getByRole("button", { name: /Quanto vale 1 crédito/i }));
+    expect(
+      screen.getByText(/as mensagens seguintes na mesma conversa não debitam, até o limite de mensagens por conversa indicado na tela\./),
+    ).toBeInTheDocument();
+  });
+
   it("collapses again on second click", () => {
     renderWithProviders(<FaqSection />);
     const button = screen.getByRole("button", { name: /créditos expiram/i });
@@ -64,7 +72,11 @@ describe("FaqSection (subscription)", () => {
     expect(screen.getByText(/No 8º dia cobramos R\$ 39,90/)).toBeInTheDocument();
     expect(screen.getByText(/um teste por CPF/i)).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Posso cancelar quando quiser?" }));
-    expect(screen.getByText(/Durante o teste grátis, cancelar encerra o acesso na hora/)).toBeInTheDocument();
+    // Termos 6.3: only a cancel up to the day before the first charge is guaranteed to cost nothing.
+    expect(
+      screen.getByText(/No teste grátis, cancelando até o dia anterior ao da primeira cobrança, o acesso encerra na hora e nada é cobrado\./),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/Durante o teste grátis, cancelar encerra o acesso na hora/)).toBeNull();
   });
 
   it("follows the catalogue for the plan the trial converts to, instead of a hardcoded price/name/quota", async () => {
