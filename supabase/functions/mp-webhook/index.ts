@@ -12,6 +12,11 @@ import { handleSubscriptionWebhook, type SubscriptionWebhookDeps } from "../_sha
 import { dispatchAnalytics, readAnalyticsConfig, sendAnalyticsEvents, type AnalyticsEvent, type AttributionLike } from "../_shared/analyticsEvents.ts";
 import { cancelPreapprovalAtMp, mpRequest } from "../_shared/mpHttp.ts";
 import { errorResponse } from "../_shared/publicError.ts";
+import { dispatchInBackground } from "../_shared/background.ts";
+import { readEmailConfig } from "../_shared/email.ts";
+import { sendSubscriptionConfirmation } from "../_shared/subscriptionEmails.ts";
+import { sendConfirmationAfterWebhook, type WebhookSubscriptionRaw } from "../_shared/webhookConfirmation.ts";
+import { normalizeAppUrl } from "../_shared/appUrl.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -137,6 +142,42 @@ serve(async (req) => {
           ));
         }
       }
+      // Contract confirmation for a subscription that went live HERE (pending at
+      // the checkout → 'activated'; closed row paid again → 'reactivated'):
+      // decided in sendConfirmationAfterWebhook, sent in the background, never
+      // awaited, a no-op without RESEND_API_KEY. This glue only reads the rows.
+      void dispatchInBackground(sendConfirmationAfterWebhook(outcome, {
+        loadSubscription: async (subscriptionId): Promise<WebhookSubscriptionRaw | null> => {
+          const { data: sub, error } = await admin
+            .from("subscriptions")
+            .select("user_id, payer_email, trial_ends_at, current_period_start, plans(name, price_brl, monthly_credits)")
+            .eq("id", subscriptionId)
+            .maybeSingle();
+          if (error) throw new Error(`confirmation subscription lookup failed: ${error.message}`);
+          if (!sub) return null;
+          const { data: profile } = await admin.from("profiles").select("full_name, terms_version").eq("id", sub.user_id).maybeSingle();
+          // The account e-mail is the official channel (Termos 16.1); the card's payer_email is the fallback.
+          const { data: account } = await admin.auth.admin.getUserById(sub.user_id);
+          // A to-one embed arrives as an object; the untyped client infers an array, so accept both.
+          const embedded = (sub as unknown as { plans?: WebhookSubscriptionRaw["plan"] | WebhookSubscriptionRaw["plan"][] }).plans;
+          const plan = (Array.isArray(embedded) ? embedded[0] : embedded) ?? null;
+          return {
+            account_email: account?.user?.email ?? null,
+            payer_email: sub.payer_email,
+            trial_ends_at: sub.trial_ends_at,
+            current_period_start: sub.current_period_start,
+            plan,
+            profile: profile ?? null,
+          };
+        },
+        send: (input) => sendSubscriptionConfirmation(
+          { fetch, config: readEmailConfig(Deno.env), log: (message, ...args) => console.warn(message, ...args), info: (message, ...args) => console.log(message, ...args) },
+          input,
+        ),
+        log: (message, ...args) => console.warn(message, ...args),
+        appUrl: normalizeAppUrl(Deno.env.get("APP_URL")),
+      }).then(() => undefined));
+
       return json({ received: true, ...(outcome.handled ? { result: outcome.result } : { ignored: outcome.reason }) });
     }
 
