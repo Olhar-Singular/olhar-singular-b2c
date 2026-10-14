@@ -67,6 +67,8 @@ export interface AdminUser {
   subscription?: AdminSubscription | null;
   /** Number of invoices with refunded_at across the user's subscriptions. Absent on an old backend. */
   refund_count?: number;
+  /** Invited by an admin and never accepted. Absent on an old backend. */
+  invite_pending?: boolean;
 }
 
 export interface AdminDashboardData {
@@ -97,6 +99,12 @@ export interface CreateUserInput {
 export interface ChangeEmailInput {
   userId: string;
   email: string;
+}
+
+/** Send a pending invite again. Only userId reaches the server; email is for the toast. */
+export interface ResendInviteInput {
+  userId: string;
+  email: string | null;
 }
 
 /** Change a user's access kind (never 'subscriber') or extend a running trial. */

@@ -10,6 +10,7 @@ import {
   useCreateUser,
   useChangeEmail,
   useAdminCancelSubscription,
+  useResendInvite,
 } from "./useAdminDashboard";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -346,6 +347,53 @@ describe("useChangeEmail", () => {
     mockInvoke.mockResolvedValue({ data: null, error: new Error("falhou") });
     await act(async () => {
       try { await result.current.mutateAsync({ userId: "u1", email: "novo@x.com" }); } catch { /* expected */ }
+    });
+    expect(toast.error).toHaveBeenCalledWith("falhou");
+  });
+});
+
+describe("useResendInvite", () => {
+  it("invokes admin-resend-invite with the user id only, invalidates and toasts the e-mail", async () => {
+    mockInvoke.mockResolvedValue({ data: { success: true }, error: null });
+    const { qc, wrapper } = makeWrapper();
+    const invalidateSpy = vi.spyOn(qc, "invalidateQueries");
+    const { result } = renderHook(() => useResendInvite(), { wrapper });
+    await act(async () => {
+      await result.current.mutateAsync({ userId: "u1", email: "ana@x.com" });
+    });
+    expect(mockInvoke).toHaveBeenCalledWith("admin-resend-invite", { body: { userId: "u1" } });
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ["admin", "dashboard"] });
+    expect(toast.success).toHaveBeenCalledWith("Convite reenviado para ana@x.com.");
+  });
+
+  it("toasts without an address when the row has none", async () => {
+    mockInvoke.mockResolvedValue({ data: { success: true }, error: null });
+    const { wrapper } = makeWrapper();
+    const { result } = renderHook(() => useResendInvite(), { wrapper });
+    await act(async () => {
+      await result.current.mutateAsync({ userId: "u1", email: null });
+    });
+    expect(toast.success).toHaveBeenCalledWith("Convite reenviado.");
+  });
+
+  it("translates the function's error codes", async () => {
+    const { wrapper } = makeWrapper();
+    const { result } = renderHook(() => useResendInvite(), { wrapper });
+    for (const [code, message] of [
+      ["invite_already_accepted", "Esta pessoa já aceitou o convite. Ela entra pelo login ou pelo Esqueci a senha."],
+      ["not_invited", "Esta conta não foi criada por convite."],
+      ["rate_limited", "Limite de envio de e-mails atingido. Tente de novo em alguns minutos."],
+    ]) {
+      mockInvoke.mockResolvedValue({ data: null, error: fnError(code) });
+      await act(async () => {
+        try { await result.current.mutateAsync({ userId: "u1", email: "ana@x.com" }); } catch { /* expected */ }
+      });
+      expect(toast.error).toHaveBeenCalledWith(message);
+    }
+
+    mockInvoke.mockResolvedValue({ data: null, error: new Error("falhou") });
+    await act(async () => {
+      try { await result.current.mutateAsync({ userId: "u1", email: "ana@x.com" }); } catch { /* expected */ }
     });
     expect(toast.error).toHaveBeenCalledWith("falhou");
   });

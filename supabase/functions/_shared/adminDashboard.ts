@@ -7,6 +7,8 @@ export interface AuthUserLite {
   last_sign_in_at?: string | null;
   banned_until?: string | null;
   created_at?: string | null;
+  invited_at?: string | null;
+  email_confirmed_at?: string | null;
 }
 
 export interface ProfileLite {
@@ -104,6 +106,8 @@ export interface AdminUserRow {
   subscription: AdminSubscriptionRow | null;
   /** Number of invoices with refunded_at across all of the user's subscriptions. */
   refund_count: number;
+  /** Invited by an admin and never accepted: the invite can be sent again. */
+  invite_pending: boolean;
 }
 
 // One row per user: the live one wins; otherwise the newest attempt.
@@ -242,6 +246,7 @@ export function mergeUserRows(
       is_super_admin: profile?.is_super_admin ?? false,
       subscription: subscriptionById.get(u.id) ?? null,
       refund_count: refundCountByUser.get(u.id) ?? 0,
+      invite_pending: !!u.invited_at && !u.email_confirmed_at,
     };
   });
 }

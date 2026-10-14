@@ -29,6 +29,16 @@ describe("adminAccessState", () => {
     expect(adminAccessState(user({ is_active: false, access_kind: "exempt" }), NOW)).toBe("inactive");
   });
 
+  it("a pending invite reads Convite pendente, whatever the kind it was invited with", () => {
+    expect(adminAccessState(user({ access_kind: "trial", invite_pending: true }), NOW)).toBe("invite_pending");
+    expect(adminAccessState(user({ access_kind: "exempt", invite_pending: true }), NOW)).toBe("invite_pending");
+    expect(ACCESS_STATE_LABELS.invite_pending).toBe("Convite pendente");
+  });
+
+  it("a ban still wins over a pending invite", () => {
+    expect(adminAccessState(user({ is_active: false, invite_pending: true }), NOW)).toBe("inactive");
+  });
+
   it("exempt is exempt regardless of balances", () => {
     expect(adminAccessState(user({ access_kind: "exempt" }), NOW)).toBe("exempt");
   });

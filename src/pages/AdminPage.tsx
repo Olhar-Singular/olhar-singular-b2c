@@ -6,6 +6,7 @@ import {
   useCreateUser,
   useChangeEmail,
   useAdminCancelSubscription,
+  useResendInvite,
 } from "@/hooks/useAdminDashboard";
 import { StatCards } from "@/components/admin/StatCards";
 import { CostChart } from "@/components/admin/CostChart";
@@ -26,6 +27,7 @@ export default function AdminPage() {
   const createUser = useCreateUser();
   const changeEmail = useChangeEmail();
   const cancelSubscription = useAdminCancelSubscription();
+  const resendInvite = useResendInvite();
 
   return (
     <div className="mx-auto max-w-6xl space-y-6 p-4 lg:p-8">
@@ -71,9 +73,12 @@ export default function AdminPage() {
               onSetAccess={(input) => setAccess.mutate(input)}
               onChangeEmail={(input) => changeEmail.mutateAsync(input)}
               onCancelSubscription={(input) => cancelSubscription.mutate(input)}
+              onResendInvite={(input) => resendInvite.mutate(input)}
               isUpdating={setStatus.isPending}
               isGranting={grant.isPending}
-              isSettingAccess={setAccess.isPending || changeEmail.isPending || cancelSubscription.isPending}
+              isSettingAccess={
+                setAccess.isPending || changeEmail.isPending || cancelSubscription.isPending || resendInvite.isPending
+              }
             />
           </TabsContent>
           <TabsContent value="subscriptions">

@@ -109,6 +109,7 @@ describe("mergeUserRows", () => {
       is_super_admin: true,
       subscription: null,
       refund_count: 0,
+      invite_pending: false,
     });
   });
 
@@ -147,7 +148,26 @@ describe("mergeUserRows", () => {
       is_super_admin: false,
       subscription: null,
       refund_count: 0,
+      invite_pending: false,
     });
+  });
+
+  it("flags an invite that was sent and never accepted", () => {
+    const rows = mergeUserRows(
+      [
+        { id: "pending", invited_at: "2026-10-09T00:00:00Z", email_confirmed_at: null },
+        { id: "accepted", invited_at: "2026-10-09T00:00:00Z", email_confirmed_at: "2026-10-09T01:00:00Z" },
+        { id: "checkout", invited_at: null, email_confirmed_at: "2026-10-09T01:00:00Z" },
+      ],
+      [],
+      [],
+      NOW,
+    );
+    expect(rows.map((r) => [r.id, r.invite_pending])).toEqual([
+      ["pending", true],
+      ["accepted", false],
+      ["checkout", false],
+    ]);
   });
 
   it("masks the CPF to its last two digits and tolerates malformed values", () => {

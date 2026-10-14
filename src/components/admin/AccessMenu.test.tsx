@@ -28,15 +28,25 @@ describe("AccessMenu", () => {
   let onSetAccess: ReturnType<typeof vi.fn>;
   let onChangeEmail: ReturnType<typeof vi.fn>;
   let onCancelSubscription: ReturnType<typeof vi.fn>;
+  let onResendInvite: ReturnType<typeof vi.fn>;
   beforeEach(() => {
     onSetAccess = vi.fn();
     onChangeEmail = vi.fn();
     onCancelSubscription = vi.fn();
+    onResendInvite = vi.fn();
   });
 
   async function open(u = user()) {
     const ue = userEvent.setup();
-    render(<AccessMenu user={u} onSetAccess={onSetAccess} onChangeEmail={onChangeEmail} onCancelSubscription={onCancelSubscription} />);
+    render(
+      <AccessMenu
+        user={u}
+        onSetAccess={onSetAccess}
+        onChangeEmail={onChangeEmail}
+        onCancelSubscription={onCancelSubscription}
+        onResendInvite={onResendInvite}
+      />,
+    );
     await ue.click(screen.getByRole("button", { name: /alterar acesso de ana/i }));
     await screen.findByRole("menu");
     return ue;
@@ -183,6 +193,31 @@ describe("AccessMenu", () => {
     it("disables the cancel item without a live subscription", async () => {
       await open(user({ subscription: { status: "cancelled", plan_name: null, price_brl: 0, next_payment_date: null, current_period_end: null, mp_preapproval_id: null, trial_ends_at: null, first_payment_confirmed: true, last_charge: null } }));
       expect(screen.getByRole("menuitem", { name: /cancelar assinatura/i })).toHaveAttribute("aria-disabled", "true");
+    });
+
+    it("resends a pending invite in one click", async () => {
+      const ue = await open(user({ access_kind: "trial", invite_pending: true }));
+      await ue.click(screen.getByRole("menuitem", { name: /reenviar convite/i }));
+      expect(onResendInvite).toHaveBeenCalledWith({ userId: "u1", email: "ana@x.com" });
+    });
+
+    it("offers the resend only while the invite is pending", async () => {
+      await open(user({ invite_pending: false }));
+      expect(screen.queryByRole("menuitem", { name: /reenviar convite/i })).toBeNull();
+    });
+
+    it("does not offer the resend to an inactive (banned) account", async () => {
+      await open(user({ invite_pending: true, is_active: false }));
+      expect(screen.queryByRole("menuitem", { name: /reenviar convite/i })).toBeNull();
+    });
+
+    it("tolerates a missing resend handler", async () => {
+      const ue = userEvent.setup();
+      render(<AccessMenu user={user({ invite_pending: true })} onSetAccess={onSetAccess} />);
+      await ue.click(screen.getByRole("button", { name: /alterar acesso de ana/i }));
+      await screen.findByRole("menu");
+      await ue.click(screen.getByRole("menuitem", { name: /reenviar convite/i }));
+      await waitFor(() => expect(screen.queryByRole("menu")).toBeNull());
     });
 
     it("works without the optional handlers", async () => {

@@ -59,7 +59,7 @@ serve(async (req) => {
 
     const summary = (summaryRes.data?.[0] ?? {}) as { total_usd?: number | string; today_usd?: number | string; month_usd?: number | string };
 
-    // Auth users (email, last_sign_in_at, banned_until) — paginated.
+    // Auth users (email, last_sign_in_at, banned_until, invite state) — paginated.
     const authUsers: AuthUserLite[] = [];
     let page = 1;
     // eslint-disable-next-line no-constant-condition
@@ -77,6 +77,8 @@ serve(async (req) => {
           last_sign_in_at: u.last_sign_in_at ?? null,
           banned_until: (u as { banned_until?: string | null }).banned_until ?? null,
           created_at: u.created_at ?? null,
+          invited_at: u.invited_at ?? null,
+          email_confirmed_at: u.email_confirmed_at ?? null,
         });
       }
       if (batch.length < USERS_PER_PAGE) break;

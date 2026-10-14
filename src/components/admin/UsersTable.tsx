@@ -25,7 +25,7 @@ import {
 } from "@/lib/utils/adminAccess";
 import { GrantCreditsButton } from "@/components/admin/GrantCreditsButton";
 import { AccessMenu } from "@/components/admin/AccessMenu";
-import type { AdminUser, SetUserStatusInput, GrantCreditsInput, SetAccessInput, ChangeEmailInput } from "@/types/admin";
+import type { AdminUser, SetUserStatusInput, GrantCreditsInput, SetAccessInput, ChangeEmailInput, ResendInviteInput } from "@/types/admin";
 
 interface UsersTableProps {
   users: AdminUser[];
@@ -34,6 +34,7 @@ interface UsersTableProps {
   onSetAccess?: (input: SetAccessInput) => void;
   onChangeEmail?: (input: ChangeEmailInput) => void | Promise<unknown>;
   onCancelSubscription?: (input: { userId: string }) => void;
+  onResendInvite?: (input: ResendInviteInput) => void;
   isUpdating?: boolean;
   isGranting?: boolean;
   isSettingAccess?: boolean;
@@ -52,6 +53,7 @@ const STATE_BADGE: Record<AdminAccessState, "default" | "secondary" | "destructi
   exempt: "secondary",
   legacy: "outline",
   blocked: "destructive",
+  invite_pending: "outline",
   inactive: "destructive",
 };
 
@@ -62,6 +64,7 @@ export function UsersTable({
   onSetAccess = () => {},
   onChangeEmail = () => {},
   onCancelSubscription = () => {},
+  onResendInvite,
   isUpdating = false,
   isGranting = false,
   isSettingAccess = false,
@@ -170,6 +173,7 @@ export function UsersTable({
                         onSetAccess={onSetAccess}
                         onChangeEmail={onChangeEmail}
                         onCancelSubscription={onCancelSubscription}
+                        onResendInvite={onResendInvite}
                         disabled={user.is_super_admin || isSettingAccess}
                       />
                     </div>

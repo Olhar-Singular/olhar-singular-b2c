@@ -9,6 +9,7 @@ import type {
   SetAccessInput,
   CreateUserInput,
   ChangeEmailInput,
+  ResendInviteInput,
 } from "@/types/admin";
 
 const DASHBOARD_KEY = ["admin", "dashboard"] as const;
@@ -47,6 +48,9 @@ const ADMIN_ERRORS: Record<string, string> = {
   not_a_trial: "Só é possível estender o teste de uma conta em período de teste já iniciado.",
   trial_limit_reached: "O período de teste não pode passar de 90 dias no total.",
   card_trial: "Teste com cartão: a cobrança do 8º dia é fixa no Mercado Pago e não pode ser adiada. Conceda créditos extras ou cancele o teste.",
+  invite_already_accepted: "Esta pessoa já aceitou o convite. Ela entra pelo login ou pelo Esqueci a senha.",
+  not_invited: "Esta conta não foi criada por convite.",
+  rate_limited: "Limite de envio de e-mails atingido. Tente de novo em alguns minutos.",
 };
 
 async function adminError(error: unknown, fallback: string): Promise<Error> {
@@ -101,6 +105,24 @@ export function useCreateUser() {
       toast.success(`Convite enviado para ${variables.email}.`);
     },
     onError: (err: Error) => toast.error(parseEdgeFnError(err, "Erro ao enviar o convite. Tente novamente.")),
+  });
+}
+
+// A pending invite whose link expired or got lost: same e-mail, fresh link
+// (the old one stops working). Only the id travels; the e-mail is for the toast.
+export function useResendInvite() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ userId }: ResendInviteInput) => {
+      const { data, error } = await supabase.functions.invoke("admin-resend-invite", { body: { userId } });
+      if (error) throw await adminError(error, "Erro ao reenviar o convite. Tente novamente.");
+      return data as { success: boolean };
+    },
+    onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries({ queryKey: DASHBOARD_KEY });
+      toast.success(variables.email ? `Convite reenviado para ${variables.email}.` : "Convite reenviado.");
+    },
+    onError: (err: Error) => toast.error(parseEdgeFnError(err, "Erro ao reenviar o convite. Tente novamente.")),
   });
 }
 

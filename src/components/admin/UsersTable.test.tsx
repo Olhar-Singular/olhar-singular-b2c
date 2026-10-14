@@ -217,6 +217,19 @@ describe("UsersTable", () => {
     expect(onSetAccess).toHaveBeenCalledWith({ userId: "u1", kind: "legacy" });
   });
 
+  it("badges a pending invite and forwards the resend from the row menu", async () => {
+    const ue = userEvent.setup();
+    const onResendInvite = vi.fn();
+    const pending = [{ ...users[0], access_kind: "trial", plan_period_end: null, invite_pending: true }];
+    render(<UsersTable users={pending} onToggleStatus={onToggleStatus} onGrantCredits={onGrantCredits} onResendInvite={onResendInvite} />);
+    expect(screen.getByTestId("access-u1")).toHaveTextContent("Convite pendente");
+    expect(screen.getByRole("option", { name: "Convite pendente" })).toBeInTheDocument();
+
+    await ue.click(screen.getByRole("button", { name: /alterar acesso de alice/i }));
+    await ue.click(await screen.findByRole("menuitem", { name: /reenviar convite/i }));
+    expect(onResendInvite).toHaveBeenCalledWith({ userId: "u1", email: "alice@x.com" });
+  });
+
   it("shows the subscription column and forwards e-mail and cancel actions", async () => {
     const ue = userEvent.setup();
     const onChangeEmail = vi.fn();

@@ -31,7 +31,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { userDisplayName } from "@/lib/utils/adminFormat";
 import { isCardTrialUser } from "@/lib/utils/adminAccess";
-import type { AdminUser, ChangeEmailInput, SetAccessInput } from "@/types/admin";
+import type { AdminUser, ChangeEmailInput, ResendInviteInput, SetAccessInput } from "@/types/admin";
 
 interface AccessMenuProps {
   user: AdminUser;
@@ -39,6 +39,7 @@ interface AccessMenuProps {
   /** Resolves when saved; a rejection keeps the dialog (and the typed value) open. */
   onChangeEmail?: (input: ChangeEmailInput) => void | Promise<unknown>;
   onCancelSubscription?: (input: { userId: string }) => void;
+  onResendInvite?: (input: ResendInviteInput) => void;
   disabled?: boolean;
 }
 
@@ -61,6 +62,7 @@ export function AccessMenu({
   onSetAccess,
   onChangeEmail = () => {},
   onCancelSubscription = () => {},
+  onResendInvite = () => {},
   disabled = false,
 }: AccessMenuProps) {
   const [pendingKind, setPendingKind] = useState<keyof typeof KIND_LABELS | null>(null);
@@ -140,6 +142,12 @@ export function AccessMenu({
           ))}
           <DropdownMenuSeparator />
           <DropdownMenuLabel>Conta</DropdownMenuLabel>
+          {/* No confirmation: the resend only swaps the link (the old one stops working). */}
+          {user.invite_pending && user.is_active && (
+            <DropdownMenuItem onSelect={() => onResendInvite({ userId: user.id, email: user.email })}>
+              Reenviar convite
+            </DropdownMenuItem>
+          )}
           <DropdownMenuItem onSelect={() => setEmailOpen(true)}>Alterar e-mail</DropdownMenuItem>
           <DropdownMenuItem disabled={!hasLiveSubscription} onSelect={() => setConfirmCancel(true)}>
             Cancelar assinatura

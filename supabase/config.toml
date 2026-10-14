@@ -32,6 +32,10 @@ secret = "env(GOOGLE_CLIENT_SECRET)"
 # o fluxo "Verifique seu e-mail" / botão Reenviar nunca aparece.
 [auth.email]
 enable_confirmations = true
+# Validade dos links de e-mail (convite, recuperação, link de acesso do checkout):
+# 24 h, o máximo do Supabase. Paridade com produção, onde o valor é ajustado no
+# Dashboard (Auth → Providers → Email → Email OTP Expiration), nunca por config push.
+otp_expiry = 86400
 
 # E-mail de confirmação de cadastro com a identidade da Olhar Singular (paleta + logo).
 # Disparado tanto no signUp quanto no botão "Reenviar" da tela de cadastro

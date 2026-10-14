@@ -17,6 +17,7 @@ vi.mock("@/components/admin/UsersTable", () => ({
     onSetAccess,
     onChangeEmail,
     onCancelSubscription,
+    onResendInvite,
     isUpdating,
     isSettingAccess,
   }: {
@@ -26,6 +27,7 @@ vi.mock("@/components/admin/UsersTable", () => ({
     onSetAccess: (i: unknown) => void;
     onChangeEmail: (i: unknown) => void;
     onCancelSubscription: (i: unknown) => void;
+    onResendInvite: (i: unknown) => void;
     isUpdating: boolean;
     isSettingAccess: boolean;
   }) => (
@@ -35,6 +37,7 @@ vi.mock("@/components/admin/UsersTable", () => ({
       <button onClick={() => onSetAccess({ userId: "u1", kind: "exempt" })}>access</button>
       <button onClick={() => onChangeEmail({ userId: "u1", email: "n@x.com" })}>email</button>
       <button onClick={() => onCancelSubscription({ userId: "u1" })}>cancel-sub</button>
+      <button onClick={() => onResendInvite({ userId: "u1", email: "a@x.com" })}>resend-invite</button>
     </div>
   ),
 }));
@@ -57,6 +60,7 @@ vi.mock("@/hooks/useAdminDashboard", () => ({
   useCreateUser: vi.fn(),
   useChangeEmail: vi.fn(),
   useAdminCancelSubscription: vi.fn(),
+  useResendInvite: vi.fn(),
 }));
 
 import {
@@ -67,6 +71,7 @@ import {
   useCreateUser,
   useChangeEmail,
   useAdminCancelSubscription,
+  useResendInvite,
 } from "@/hooks/useAdminDashboard";
 
 const dashboard = {
@@ -91,6 +96,7 @@ let setAccessMutate: ReturnType<typeof vi.fn>;
 let createMutateAsync: ReturnType<typeof vi.fn>;
 let changeEmailMutate: ReturnType<typeof vi.fn>;
 let cancelMutate: ReturnType<typeof vi.fn>;
+let resendMutate: ReturnType<typeof vi.fn>;
 beforeEach(() => {
   mutate = vi.fn();
   grantMutate = vi.fn();
@@ -98,12 +104,14 @@ beforeEach(() => {
   createMutateAsync = vi.fn(async () => ({ success: true }));
   changeEmailMutate = vi.fn();
   cancelMutate = vi.fn();
+  resendMutate = vi.fn();
   vi.mocked(useSetUserStatus).mockReturnValue({ mutate, isPending: false } as never);
   vi.mocked(useGrantCredits).mockReturnValue({ mutate: grantMutate, isPending: false } as never);
   vi.mocked(useSetAccess).mockReturnValue({ mutate: setAccessMutate, isPending: false } as never);
   vi.mocked(useCreateUser).mockReturnValue({ mutateAsync: createMutateAsync, isPending: false } as never);
   vi.mocked(useChangeEmail).mockReturnValue({ mutateAsync: changeEmailMutate, isPending: false } as never);
   vi.mocked(useAdminCancelSubscription).mockReturnValue({ mutate: cancelMutate, isPending: false } as never);
+  vi.mocked(useResendInvite).mockReturnValue({ mutate: resendMutate, isPending: false } as never);
 });
 
 describe("AdminPage", () => {
@@ -148,6 +156,9 @@ describe("AdminPage", () => {
     fireEvent.click(screen.getByText("cancel-sub"));
     expect(cancelMutate).toHaveBeenCalledWith({ userId: "u1" });
 
+    fireEvent.click(screen.getByText("resend-invite"));
+    expect(resendMutate).toHaveBeenCalledWith({ userId: "u1", email: "a@x.com" });
+
     fireEvent.click(screen.getByTestId("create-user"));
     expect(createMutateAsync).toHaveBeenCalledWith({ email: "a@x.com", fullName: "A B", mode: "trial" });
   });
@@ -169,6 +180,13 @@ describe("AdminPage", () => {
 
   it("marks the table busy while any account mutation is in flight", () => {
     vi.mocked(useChangeEmail).mockReturnValue({ mutateAsync: changeEmailMutate, isPending: true } as never);
+    mockDashboard({ data: dashboard });
+    render(<AdminPage />);
+    expect(screen.getByTestId("userstable").getAttribute("data-setting")).toBe("true");
+  });
+
+  it("marks the table busy while an invite is being resent", () => {
+    vi.mocked(useResendInvite).mockReturnValue({ mutate: resendMutate, isPending: true } as never);
     mockDashboard({ data: dashboard });
     render(<AdminPage />);
     expect(screen.getByTestId("userstable").getAttribute("data-setting")).toBe("true");
