@@ -7,6 +7,10 @@ import { cancelPreapprovalAtMp, mpRequest } from "../_shared/mpHttp.ts";
 import { clientIp, hashIdentifier } from "../_shared/checkoutGuard.ts";
 import { parseAccountInput, runAnonymousCheckout, type CheckoutDeps } from "../_shared/accountProvision.ts";
 import { dispatchAnalytics, readAnalyticsConfig, sendAnalyticsEvents, type AttributionLike } from "../_shared/analyticsEvents.ts";
+import { dispatchInBackground } from "../_shared/background.ts";
+import { normalizeAppUrl } from "../_shared/appUrl.ts";
+import { readEmailConfig } from "../_shared/email.ts";
+import { sendSubscriptionConfirmation } from "../_shared/subscriptionEmails.ts";
 import { errorResponse } from "../_shared/publicError.ts";
 
 const corsHeaders = {
@@ -66,7 +70,7 @@ serve(async (req) => {
     const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
     const serviceKey      = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const mpAccessToken   = Deno.env.get("ACCESS_TOKEN_MP_PROD")!;
-    const appUrl          = Deno.env.get("APP_URL") ?? "http://localhost:8080";
+    const appUrl          = normalizeAppUrl(Deno.env.get("APP_URL"));
     // Hashes of e-mail/IP in checkout_attempts; the service key is the fallback
     // so the guard works before the dedicated secret exists.
     const hashSecret      = Deno.env.get("CHECKOUT_HASH_SECRET") ?? serviceKey;
@@ -118,7 +122,7 @@ serve(async (req) => {
         return data;
       },
       loadProfile: async (userId) => {
-        const { data } = await admin.from("profiles").select("access_kind, is_super_admin").eq("id", userId).maybeSingle();
+        const { data } = await admin.from("profiles").select("access_kind, is_super_admin, full_name").eq("id", userId).maybeSingle();
         return data;
       },
       findLiveSubscription: async (userId) => {
@@ -305,7 +309,7 @@ serve(async (req) => {
 
     if (!outcome.ok) return json({ error: FLOW_ERRORS[outcome.error], code: outcome.error }, outcome.httpStatus);
 
-    const { result, accountCreated } = outcome;
+    const { result, accountCreated, recipient } = outcome;
 
     if (result.status !== "rejected") {
       // Server-side conversion (GA4 MP / Meta CAPI); no-op without secrets.
@@ -340,12 +344,39 @@ serve(async (req) => {
     }
     // No session in the answer: a new account logs in through the e-mail link
     // (signInWithOtp on the client), proving it owns the address.
-    return json({
+    const response = json({
       status: result.status,
       subscriptionId: result.subscriptionId,
       accountCreated,
       ...(result.trialEndsAt ? { trialEndsAt: result.trialEndsAt } : {}),
     });
+
+    if (result.status === "authorized") {
+      // Proof of contract (Decreto 7.962 art. 4): built after the answer, handed
+      // to the background, never awaited; a no-op without RESEND_API_KEY. A
+      // pending card gets nothing here: the webhook that settles it is the
+      // place for that. Logs name the subscription, never the addressee.
+      void dispatchInBackground(
+        sendSubscriptionConfirmation(
+          { fetch, config: readEmailConfig(Deno.env), log: (message, ...args) => console.warn(message, ...args), info: (message, ...args) => console.log(message, ...args) },
+          {
+            to: recipient.email,
+            fullName: recipient.fullName,
+            planName: result.planName,
+            priceBrl: result.priceBrl,
+            monthlyCredits: result.monthlyCredits,
+            trial: !!result.trialEndsAt,
+            trialEndsAt: result.trialEndsAt ? new Date(result.trialEndsAt) : null,
+            chargedAt: new Date(),
+            termsVersion: account?.termsVersion ?? null,
+            appUrl,
+          },
+        ).then((sent) => {
+          if (!sent.ok) console.warn("subscribe: confirmation e-mail not sent", result.subscriptionId, sent.reason);
+        }),
+      );
+    }
+    return response;
   } catch (e) {
     // The deps above throw with raw Postgres/GoTrue text: logged, never sent.
     return errorResponse(e, { label: "subscribe error:", headers: corsHeaders });

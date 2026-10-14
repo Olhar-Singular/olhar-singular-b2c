@@ -72,7 +72,7 @@ describe("runSubscribe", () => {
       cardBrand: "master",
       cardLastFour: "1234",
     });
-    expect(result).toEqual({ ok: true, status: "authorized", subscriptionId: "sub-1", planSlug: "profissional", priceBrl: 59.9 });
+    expect(result).toEqual({ ok: true, status: "authorized", subscriptionId: "sub-1", planSlug: "profissional", planName: "Profissional", priceBrl: 59.9, monthlyCredits: 480, subscriberName: null });
   });
 
   it("leaves a pending preapproval for the webhook to activate", async () => {
@@ -82,7 +82,7 @@ describe("runSubscribe", () => {
     const result = await runSubscribe(input(), d);
     expect(d.markPending).toHaveBeenCalledWith({ subscriptionId: "sub-1", preapprovalId: "pre-2", mpStatus: "pending" });
     expect(d.activate).not.toHaveBeenCalled();
-    expect(result).toEqual({ ok: true, status: "pending", subscriptionId: "sub-1", planSlug: "profissional", priceBrl: 59.9 });
+    expect(result).toEqual({ ok: true, status: "pending", subscriptionId: "sub-1", planSlug: "profissional", planName: "Profissional", priceBrl: 59.9, monthlyCredits: 480, subscriberName: null });
   });
 
   it("rejects the subscription when MP declines the card (2xx with another status)", async () => {
@@ -91,7 +91,7 @@ describe("runSubscribe", () => {
     });
     const result = await runSubscribe(input(), d);
     expect(d.reject).toHaveBeenCalledWith({ subscriptionId: "sub-1", detail: "cancelled" });
-    expect(result).toEqual({ ok: true, status: "rejected", subscriptionId: "sub-1", detail: "cancelled", planSlug: "profissional", priceBrl: 59.9 });
+    expect(result).toEqual({ ok: true, status: "rejected", subscriptionId: "sub-1", detail: "cancelled", planSlug: "profissional", planName: "Profissional", priceBrl: 59.9, monthlyCredits: 480, subscriberName: null });
   });
 
   it("rejects the subscription on an HTTP error, keeping MP's message as detail", async () => {
@@ -113,7 +113,7 @@ describe("runSubscribe", () => {
     expect(d.postPreapproval).toHaveBeenCalledTimes(1);
     expect(d.searchPreapprovalByRef).toHaveBeenCalledWith("sub-1");
     expect(d.activate).toHaveBeenCalledWith(expect.objectContaining({ preapprovalId: "pre-9" }));
-    expect(result).toEqual({ ok: true, status: "authorized", subscriptionId: "sub-1", planSlug: "profissional", priceBrl: 59.9 });
+    expect(result).toEqual({ ok: true, status: "authorized", subscriptionId: "sub-1", planSlug: "profissional", planName: "Profissional", priceBrl: 59.9, monthlyCredits: 480, subscriberName: null });
   });
 
   it("rejects when the network failed and nothing was created at MP", async () => {
@@ -171,7 +171,7 @@ describe("runSubscribe", () => {
     const result = await runSubscribe(input(), d);
     expect(d.cancelPreapproval).toHaveBeenCalledWith("pre-1");
     expect(d.reject).toHaveBeenCalledWith({ subscriptionId: "sub-1", detail: "duplicate_live_subscription" });
-    expect(result).toEqual({ ok: true, status: "rejected", subscriptionId: "sub-1", detail: "duplicate_live_subscription", planSlug: "profissional", priceBrl: 59.9 });
+    expect(result).toEqual({ ok: true, status: "rejected", subscriptionId: "sub-1", detail: "duplicate_live_subscription", planSlug: "profissional", planName: "Profissional", priceBrl: 59.9, monthlyCredits: 480, subscriberName: null });
   });
 
   it("still rejects the row when the orphan preapproval cannot be cancelled, and logs it", async () => {
@@ -234,8 +234,29 @@ describe("runSubscribe (trial with card)", () => {
     expect(d.activate).toHaveBeenCalledWith(expect.objectContaining({ subscriptionId: "sub-1", preapprovalId: "pre-1" }));
     expect(result).toEqual({
       ok: true, status: "authorized", subscriptionId: "sub-1",
-      planSlug: "basico", priceBrl: 39.9, trialEndsAt: "2026-09-22T21:52:15.000Z",
+      planSlug: "basico", planName: "Básico", priceBrl: 39.9, monthlyCredits: 300, subscriberName: null, trialEndsAt: "2026-09-22T21:52:15.000Z",
     });
+  });
+
+  // The confirmation e-mail (subscriptionEmails.ts) is written from the result,
+  // never from a second plan/profile lookup in index.ts.
+  it("exposes the plan's name and monthly credits and the subscriber's profile name on every settled result", async () => {
+    const named = deps({ loadProfile: vi.fn(async () => ({ access_kind: "legacy", is_super_admin: false, full_name: "Ana Souza" })) });
+    expect(await runSubscribe(input(), named)).toMatchObject({ status: "authorized", planName: "Profissional", monthlyCredits: 480, subscriberName: "Ana Souza" });
+
+    const trialRun = deps({ loadProfile: vi.fn(async () => ({ access_kind: "legacy", is_super_admin: false, full_name: "Ana Souza" })) });
+    expect(await runSubscribe(input({ trial: true, now: NOW }), trialRun)).toMatchObject({ planName: "Básico", monthlyCredits: 300, subscriberName: "Ana Souza" });
+
+    const pending = deps({
+      loadProfile: vi.fn(async () => ({ access_kind: "legacy", is_super_admin: false, full_name: "Ana Souza" })),
+      postPreapproval: vi.fn(async () => ({ ok: true, status: 201, json: { id: "pre-2", status: "pending" } })),
+    });
+    expect(await runSubscribe(input(), pending)).toMatchObject({ status: "pending", planName: "Profissional", subscriberName: "Ana Souza" });
+
+    // A profile without a name (or a dep that does not select it) yields null, never undefined.
+    expect(await runSubscribe(input(), deps())).toMatchObject({ subscriberName: null });
+    const unnamed = deps({ loadProfile: vi.fn(async () => ({ access_kind: "legacy", is_super_admin: false, full_name: null })) });
+    expect(await runSubscribe(input(), unnamed)).toMatchObject({ subscriberName: null });
   });
 
   it("carries trialEndsAt on a pending trial too", async () => {
@@ -245,7 +266,7 @@ describe("runSubscribe (trial with card)", () => {
     const result = await runSubscribe(input({ trial: true, now: NOW }), d);
     expect(result).toEqual({
       ok: true, status: "pending", subscriptionId: "sub-1",
-      planSlug: "basico", priceBrl: 39.9, trialEndsAt: "2026-09-22T21:52:15.000Z",
+      planSlug: "basico", planName: "Básico", priceBrl: 39.9, monthlyCredits: 300, subscriberName: null, trialEndsAt: "2026-09-22T21:52:15.000Z",
     });
   });
 

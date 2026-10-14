@@ -42,7 +42,8 @@ export interface SubscribeDeps {
   loadPlan(slug: string): Promise<PlanRow | null>;
   /** The trial's plan is decided here, never by the client: cheapest active, not admin_only. */
   loadCheapestPublicPlan(): Promise<PlanRow | null>;
-  loadProfile(userId: string): Promise<{ access_kind: string; is_super_admin: boolean } | null>;
+  /** full_name feeds the confirmation e-mail; a dep that does not select it yields subscriberName null. */
+  loadProfile(userId: string): Promise<{ access_kind: string; is_super_admin: boolean; full_name?: string | null } | null>;
   /** Live rows (authorized/past_due/paused) AND fresh pending attempts. */
   findLiveSubscription(userId: string): Promise<{ id: string; status: string } | null>;
   /** Closes pending rows older than the grace window so a fresh attempt is possible. */
@@ -73,17 +74,22 @@ export interface SubscribeDeps {
   log(message: string, ...args: unknown[]): void;
 }
 
-interface ChosenPlan {
+/** What the confirmation e-mail needs about the contract, straight from the rows the flow loaded. */
+interface ContractFacts {
   /** The plan the server actually used (for a trial it is not the requested slug). */
   planSlug: string;
+  planName: string;
   priceBrl: number;
+  monthlyCredits: number;
+  /** profiles.full_name of the subscriber, null when empty or not selected. */
+  subscriberName: string | null;
 }
 
 export type SubscribeResult =
   | ({ ok: true; status: "authorized" | "pending"; subscriptionId: string;
        /** Trial with card: ISO of the first charge. Absent on a paid-from-day-one attempt. */
-       trialEndsAt?: string } & ChosenPlan)
-  | ({ ok: true; status: "rejected"; subscriptionId: string; detail: string } & ChosenPlan)
+       trialEndsAt?: string } & ContractFacts)
+  | ({ ok: true; status: "rejected"; subscriptionId: string; detail: string } & ContractFacts)
   | { ok: false; error: "invalid_plan" | "exempt_user" | "already_subscribed" | "attempt_in_progress" | "profile_not_found"; httpStatus: number };
 
 function toPlanLike(row: PlanRow): PlanLike {
@@ -109,7 +115,13 @@ export async function runSubscribe(input: SubscribeInput, deps: SubscribeDeps): 
     return { ok: false, error: "invalid_plan", httpStatus: 400 };
   }
   const plan = toPlanLike(planRow);
-  const chosen: ChosenPlan = { planSlug: plan.slug, priceBrl: plan.priceBrl };
+  const chosen: ContractFacts = {
+    planSlug: plan.slug,
+    planName: plan.name,
+    priceBrl: plan.priceBrl,
+    monthlyCredits: plan.monthlyCredits,
+    subscriberName: profile.full_name || null,
+  };
   // The trial's first charge: computed here (never by the client) and written on
   // the row before MP is called, so activation knows it is a trial whichever
   // path reaches it (synchronous authorized or the webhook).

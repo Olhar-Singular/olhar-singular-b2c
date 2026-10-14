@@ -83,9 +83,10 @@ describe("runAnonymousCheckout", () => {
     expect(d.recordProfileFacts).toHaveBeenCalledWith({ userId: "new-user", cpf: "12345678909", termsVersion: "2026-09" });
     expect(out).toEqual({
       ok: true,
-      result: { ok: true, status: "authorized", subscriptionId: "sub-1", planSlug: "profissional", priceBrl: 59.9 },
+      result: { ok: true, status: "authorized", subscriptionId: "sub-1", planSlug: "profissional", planName: "Profissional", priceBrl: 59.9, monthlyCredits: 480, subscriberName: null },
       userId: "new-user",
       accountCreated: true,
+      recipient: { email: "a.na+x@gmail.com", fullName: "Ana Souza" },
     });
     expect(JSON.stringify(out)).not.toMatch(/token/i);
   });
@@ -102,9 +103,10 @@ describe("runAnonymousCheckout", () => {
     const out = await runAnonymousCheckout(anonymous(), d);
     expect(out).toEqual({
       ok: true,
-      result: { ok: true, status: "rejected", subscriptionId: "sub-1", detail: "cancelled", planSlug: "profissional", priceBrl: 59.9 },
+      result: { ok: true, status: "rejected", subscriptionId: "sub-1", detail: "cancelled", planSlug: "profissional", planName: "Profissional", priceBrl: 59.9, monthlyCredits: 480, subscriberName: null },
       userId: "new-user",
       accountCreated: true,
+      recipient: { email: "a.na+x@gmail.com", fullName: "Ana Souza" },
     });
     expect(d.recordAttempt).toHaveBeenLastCalledWith(expect.any(String), expect.any(String), "rejected");
     expect(d.recordProfileFacts).not.toHaveBeenCalled();
@@ -118,6 +120,23 @@ describe("runAnonymousCheckout", () => {
     expect(d.subscribeDeps.insertSubscription).toHaveBeenCalledWith(expect.objectContaining({ userId: "u1", payerEmail: "u1@x.com" }));
     expect(d.recordProfileFacts).toHaveBeenCalledWith({ userId: "u1", cpf: "12345678909", termsVersion: null });
     expect(out).toMatchObject({ ok: true, userId: "u1", accountCreated: false });
+  });
+
+  // Who gets the confirmation e-mail, decided here (tested) instead of in index.ts.
+  it("exposes the recipient: the account's name and e-mail when anonymous, the user's e-mail and profile name when logged in", async () => {
+    const anonymousOut = await runAnonymousCheckout(anonymous(), deps());
+    expect(anonymousOut).toMatchObject({ ok: true, recipient: { email: "a.na+x@gmail.com", fullName: "Ana Souza" } });
+
+    const d = deps();
+    d.subscribeDeps.loadProfile = vi.fn(async () => ({ access_kind: "subscriber", is_super_admin: false, full_name: "Bia Lima" }));
+    const loggedOut = await runAnonymousCheckout(anonymous({ user: { id: "u1", email: "u1@x.com" }, account: null }), d);
+    expect(loggedOut).toMatchObject({ ok: true, recipient: { email: "u1@x.com", fullName: "Bia Lima" } });
+
+    const nameless = await runAnonymousCheckout(anonymous({ user: { id: "u1", email: "u1@x.com" }, account: null }), deps());
+    expect(nameless).toMatchObject({ ok: true, recipient: { email: "u1@x.com", fullName: null } });
+
+    const rejected = await runAnonymousCheckout(anonymous(), deps({}, { id: "pre-3", status: "cancelled" }));
+    expect(rejected).toMatchObject({ ok: true, result: { status: "rejected" }, recipient: { email: "a.na+x@gmail.com", fullName: "Ana Souza" } });
   });
 
   it("prefers the JWT user over an account block sent alongside", async () => {

@@ -68,8 +68,14 @@ export interface CheckoutDeps {
   log(message: string, ...args: unknown[]): void;
 }
 
+/** Who the confirmation e-mail goes to: the checkout's account, or the logged-in user and their profile name. */
+export interface Recipient {
+  email: string;
+  fullName: string | null;
+}
+
 export type CheckoutResult =
-  | { ok: true; result: Extract<SubscribeResult, { ok: true }>; userId: string; accountCreated: boolean }
+  | { ok: true; result: Extract<SubscribeResult, { ok: true }>; userId: string; accountCreated: boolean; recipient: Recipient }
   | {
       ok: false;
       error:
@@ -142,6 +148,8 @@ export async function runAnonymousCheckout(input: CheckoutInput, deps: CheckoutD
 
   await deps.recordAttempt(ipHash, emailHash, result.status);
 
+  const recipient: Recipient = { email, fullName: input.account?.fullName ?? result.subscriberName };
+
   if (result.status === "rejected") {
     if (input.trial && accountCreated) {
       // The trial account holds nothing worth keeping yet: no CPF, no terms,
@@ -158,7 +166,7 @@ export async function runAnonymousCheckout(input: CheckoutInput, deps: CheckoutD
       }
     }
     // The account (if just created, and not deleted above) stays: decision 14.
-    return { ok: true, result, userId, accountCreated };
+    return { ok: true, result, userId, accountCreated, recipient };
   }
 
   // Money (or a pending validation) happened: record the contractual facts.
@@ -168,5 +176,5 @@ export async function runAnonymousCheckout(input: CheckoutInput, deps: CheckoutD
     termsVersion: input.account?.termsVersion ?? null,
   });
 
-  return { ok: true, result, userId, accountCreated };
+  return { ok: true, result, userId, accountCreated, recipient };
 }
