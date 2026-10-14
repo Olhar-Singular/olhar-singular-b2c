@@ -1,6 +1,7 @@
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import logoImg from "@/assets/logo-olho-transparent.png";
+import { CookiePreferencesButton } from "@/components/common/CookiePreferencesButton";
 
 // Minimal chrome for public pages that are not the landing (checkout, legal):
 // brand, "Entrar", and the legal footer. No marketing anchors, no sidebar.
@@ -28,6 +29,7 @@ export default function PublicShell({ children }: { children: React.ReactNode })
             <Link to="/termos" className="hover:text-foreground">Termos de Uso</Link>
             <Link to="/privacidade" className="hover:text-foreground">Privacidade</Link>
             <Link to="/reembolso" className="hover:text-foreground">Reembolso</Link>
+            <CookiePreferencesButton className="hover:text-foreground" />
           </nav>
         </div>
       </footer>

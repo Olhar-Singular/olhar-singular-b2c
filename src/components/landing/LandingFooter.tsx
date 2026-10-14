@@ -1,5 +1,6 @@
 import { Link } from "react-router-dom";
 import logoImg from "@/assets/logo-olho-transparent.png";
+import { CookiePreferencesButton } from "@/components/common/CookiePreferencesButton";
 
 export default function LandingFooter() {
   return (
@@ -15,6 +16,7 @@ export default function LandingFooter() {
           <Link to="/termos" className="hover:text-foreground transition-colors">Termos de Uso</Link>
           <Link to="/privacidade" className="hover:text-foreground transition-colors">Privacidade</Link>
           <Link to="/reembolso" className="hover:text-foreground transition-colors">Reembolso</Link>
+          <CookiePreferencesButton className="hover:text-foreground transition-colors" />
         </nav>
       </div>
       <p className="text-xs text-muted-foreground text-center mt-4 px-4">

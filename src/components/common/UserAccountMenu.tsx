@@ -1,6 +1,7 @@
+import { useRef } from "react";
 import { Link } from "react-router-dom";
 import { useTheme } from "next-themes";
-import { Coins, LogOut, Mail, Moon } from "lucide-react";
+import { Coins, Cookie, LogOut, Mail, Moon } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -10,6 +11,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Switch } from "@/components/ui/switch";
+import { CookiePreferencesButton } from "@/components/common/CookiePreferencesButton";
 import { useAuth } from "@/hooks/useAuth";
 import { SUPPORT_EMAIL } from "@/lib/constants";
 
@@ -32,11 +34,19 @@ export function UserAccountMenu({ onLogout }: Props) {
   const { user, profile } = useAuth();
   const { theme, setTheme } = useTheme();
   const isDark = theme === "dark";
+  // Radix moves the focus back to the trigger when the menu closes (after the
+  // exit animation). After "Preferências de cookies" the focus belongs to the
+  // reopened consent banner, so that one close keeps its hands off.
+  const leaveFocusToBanner = useRef(false);
+  // The banner hands the focus back here after the decision: the menu item
+  // that asked is gone with the menu by then.
+  const triggerRef = useRef<HTMLButtonElement>(null);
 
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <button
+          ref={triggerRef}
           aria-label="Menu da conta"
           className="flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-medium text-primary-foreground/70 hover:text-primary-foreground hover:bg-white/10 w-full transition-colors"
         >
@@ -46,7 +56,16 @@ export function UserAccountMenu({ onLogout }: Props) {
           <span className="truncate">{user?.email}</span>
         </button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="start" className="w-64">
+      <DropdownMenuContent
+        align="start"
+        className="w-64"
+        onCloseAutoFocus={(event) => {
+          if (leaveFocusToBanner.current) {
+            event.preventDefault();
+            leaveFocusToBanner.current = false;
+          }
+        }}
+      >
         <DropdownMenuLabel className="text-xs font-normal text-muted-foreground truncate">
           {user?.email}
         </DropdownMenuLabel>
@@ -70,6 +89,18 @@ export function UserAccountMenu({ onLogout }: Props) {
             aria-label="Alternar tema escuro"
           />
         </div>
+        <DropdownMenuItem
+          asChild
+          onSelect={() => {
+            leaveFocusToBanner.current = true;
+          }}
+        >
+          <CookiePreferencesButton
+            className="w-full"
+            icon={<Cookie className="w-4 h-4 mr-2" aria-hidden="true" />}
+            returnFocusTo={triggerRef}
+          />
+        </DropdownMenuItem>
 
         <DropdownMenuSeparator />
         <DropdownMenuLabel>Suporte</DropdownMenuLabel>

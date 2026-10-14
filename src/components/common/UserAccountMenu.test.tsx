@@ -1,10 +1,16 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { screen, fireEvent, waitFor } from "@testing-library/react";
 import { UserAccountMenu } from "./UserAccountMenu";
-import { renderWithProviders, buildAuthState } from "@/test/helpers";
+import { renderWithProviders, buildAuthState, flushPromises } from "@/test/helpers";
 import { SUPPORT_EMAIL } from "@/lib/constants";
+import { DENIED_ALL, resetConsentSession, storeConsent, subscribeConsentReopen } from "@/lib/analytics/consent";
+import { ConsentBanner } from "./ConsentBanner";
 
 vi.mock("@/hooks/useAuth", () => ({ useAuth: vi.fn() }));
+vi.mock("@/lib/analytics/boot", async (orig) => {
+  const actual = await orig<typeof import("@/lib/analytics/boot")>();
+  return { ...actual, bootAnalytics: vi.fn() };
+});
 import { useAuth } from "@/hooks/useAuth";
 
 const setThemeMock = vi.fn();
@@ -120,6 +126,60 @@ describe("UserAccountMenu", () => {
       const link = screen.getByRole("menuitem", { name: /Entrar em contato/i });
       expect(link.closest("a")).toHaveAttribute("href", `mailto:${SUPPORT_EMAIL}`);
     });
+  });
+
+  it("lists Preferências de cookies as a menu item before Suporte; selecting it reopens the banner, closes the menu and leaves the focus for the banner", async () => {
+    resetConsentSession();
+    const onReopen = vi.fn();
+    const unsubscribe = subscribeConsentReopen(onReopen);
+    setAuth();
+    renderWithProviders(<UserAccountMenu onLogout={vi.fn()} />);
+    openMenu();
+    const item = await screen.findByRole("menuitem", { name: "Preferências de cookies" });
+    expect(item.tagName).toBe("BUTTON");
+    const menuText = screen.getByRole("menu").textContent ?? "";
+    expect(menuText.indexOf("Preferências de cookies")).toBeLessThan(menuText.indexOf("Suporte"));
+    expect(menuText.indexOf("Preferências de cookies")).toBeGreaterThan(menuText.indexOf("Tema escuro"));
+
+    fireEvent.click(item);
+    expect(onReopen).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect(screen.queryByRole("menu")).toBeNull());
+    await flushPromises();
+    expect(screen.getByRole("button", { name: /menu da conta/i })).not.toHaveFocus();
+    unsubscribe();
+  });
+
+  it("gets the focus back on the trigger once the visitor decides on the banner it reopened (WCAG 2.4.3)", async () => {
+    resetConsentSession();
+    storeConsent(window.localStorage, DENIED_ALL);
+    setAuth();
+    renderWithProviders(
+      <>
+        <UserAccountMenu onLogout={vi.fn()} />
+        <ConsentBanner />
+      </>,
+    );
+    expect(screen.queryByRole("dialog")).toBeNull();
+    openMenu();
+    fireEvent.click(await screen.findByRole("menuitem", { name: "Preferências de cookies" }));
+    await waitFor(() => expect(screen.queryByRole("menu")).toBeNull());
+    await flushPromises();
+    expect(screen.getByRole("button", { name: "Só essenciais" })).toHaveFocus();
+
+    fireEvent.click(screen.getByRole("button", { name: "Aceitar" }));
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(screen.getByRole("button", { name: /menu da conta/i })).toHaveFocus();
+    window.localStorage.clear();
+    resetConsentSession();
+  });
+
+  it("still returns the focus to the trigger when the menu closes by any other item", async () => {
+    setAuth();
+    renderWithProviders(<UserAccountMenu onLogout={vi.fn()} />);
+    openMenu();
+    fireEvent.click(await screen.findByRole("menuitem", { name: /^Sair$/i }));
+    await waitFor(() => expect(screen.queryByRole("menu")).toBeNull());
+    await waitFor(() => expect(screen.getByRole("button", { name: /menu da conta/i })).toHaveFocus());
   });
 
   it("clicking Sair calls onLogout", async () => {

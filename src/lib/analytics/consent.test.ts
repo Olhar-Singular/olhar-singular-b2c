@@ -1,5 +1,19 @@
-import { describe, it, expect } from "vitest";
-import { browserStorage, CONSENT_STORAGE_KEY, CONSENT_VERSION, DENIED_ALL, GRANTED_ALL, readStoredConsent, storeConsent } from "./consent";
+import { beforeEach, describe, it, expect, vi } from "vitest";
+import {
+  browserStorage,
+  CONSENT_STORAGE_KEY,
+  CONSENT_VERSION,
+  DENIED_ALL,
+  GRANTED_ALL,
+  consentReopenInvoker,
+  hasDecidedConsent,
+  readStoredConsent,
+  requestConsentReopen,
+  resetConsentSession,
+  storeConsent,
+  subscribeConsent,
+  subscribeConsentReopen,
+} from "./consent";
 
 function memoryStorage(initial: Record<string, string> = {}) {
   const map = new Map(Object.entries(initial));
@@ -44,5 +58,106 @@ describe("consent storage", () => {
     Object.defineProperty(window, "localStorage", { get() { throw new Error("blocked"); }, configurable: true });
     expect(browserStorage()).toBeNull();
     Object.defineProperty(window, "localStorage", original!);
+  });
+});
+
+describe("consent decision in this page session", () => {
+  beforeEach(() => resetConsentSession());
+
+  it("is undecided until a decision is stored, then decided", () => {
+    const storage = memoryStorage();
+    expect(hasDecidedConsent(storage)).toBe(false);
+    storeConsent(storage, DENIED_ALL);
+    expect(hasDecidedConsent(storage)).toBe(true);
+  });
+
+  it("counts a stored decision from an earlier visit", () => {
+    const storage = memoryStorage();
+    storeConsent(storage, GRANTED_ALL);
+    resetConsentSession();
+    expect(hasDecidedConsent(storage)).toBe(true);
+  });
+
+  it("counts a decision made while storage is unavailable (the banner is gone for this session)", () => {
+    storeConsent(null, GRANTED_ALL);
+    expect(hasDecidedConsent(null)).toBe(true);
+    resetConsentSession();
+    expect(hasDecidedConsent(null)).toBe(false);
+  });
+
+  it("notifies subscribers on every decision until they unsubscribe", () => {
+    const listener = vi.fn();
+    const unsubscribe = subscribeConsent(listener);
+    storeConsent(memoryStorage(), GRANTED_ALL);
+    expect(listener).toHaveBeenCalledTimes(1);
+    unsubscribe();
+    storeConsent(memoryStorage(), DENIED_ALL);
+    expect(listener).toHaveBeenCalledTimes(1);
+  });
+
+  it("still notifies when the write throws (private mode)", () => {
+    const listener = vi.fn();
+    subscribeConsent(listener);
+    storeConsent({ setItem: () => { throw new Error("quota"); } }, GRANTED_ALL);
+    expect(listener).toHaveBeenCalledTimes(1);
+    expect(hasDecidedConsent(null)).toBe(true);
+  });
+});
+
+describe("reopening the consent banner (Preferências de cookies)", () => {
+  beforeEach(() => resetConsentSession());
+
+  it("remembers who asked for the reopen (to hand the focus back) until the next decision", () => {
+    expect(consentReopenInvoker()).toBeNull();
+    const invoker = document.createElement("button");
+    requestConsentReopen(invoker);
+    expect(consentReopenInvoker()).toBe(invoker);
+    storeConsent(memoryStorage(), DENIED_ALL);
+    expect(consentReopenInvoker()).toBeNull();
+  });
+
+  it("accepts a reopen with nobody to return the focus to", () => {
+    const storage = memoryStorage();
+    storeConsent(storage, GRANTED_ALL);
+    requestConsentReopen();
+    expect(consentReopenInvoker()).toBeNull();
+    expect(hasDecidedConsent(storage)).toBe(false);
+    requestConsentReopen(null);
+    expect(consentReopenInvoker()).toBeNull();
+  });
+
+  it("counts as undecided while reopened, even over a stored decision, until the visitor decides again", () => {
+    const storage = memoryStorage();
+    storeConsent(storage, GRANTED_ALL);
+    expect(hasDecidedConsent(storage)).toBe(true);
+    requestConsentReopen();
+    expect(hasDecidedConsent(storage)).toBe(false);
+    expect(readStoredConsent(storage)).toEqual(GRANTED_ALL);
+    storeConsent(storage, DENIED_ALL);
+    expect(hasDecidedConsent(storage)).toBe(true);
+    expect(readStoredConsent(storage)).toEqual(DENIED_ALL);
+  });
+
+  it("notifies reopen subscribers on every request until they unsubscribe, without waking decision subscribers", () => {
+    const onReopen = vi.fn();
+    const onDecision = vi.fn();
+    const unsubscribe = subscribeConsentReopen(onReopen);
+    subscribeConsent(onDecision);
+    requestConsentReopen();
+    requestConsentReopen();
+    expect(onReopen).toHaveBeenCalledTimes(2);
+    expect(onDecision).not.toHaveBeenCalled();
+    unsubscribe();
+    requestConsentReopen();
+    expect(onReopen).toHaveBeenCalledTimes(2);
+  });
+
+  it("is forgotten by the test reset helper, invoker included", () => {
+    const storage = memoryStorage();
+    storeConsent(storage, GRANTED_ALL);
+    requestConsentReopen(document.createElement("button"));
+    resetConsentSession();
+    expect(hasDecidedConsent(storage)).toBe(true);
+    expect(consentReopenInvoker()).toBeNull();
   });
 });

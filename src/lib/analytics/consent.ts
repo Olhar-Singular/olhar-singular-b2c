@@ -55,14 +55,74 @@ export function readStoredConsent(storage: Pick<Storage, "getItem"> | null): Con
   }
 }
 
+// A decision made in this page session also counts when the storage refused the
+// write: the banner is gone for the session, so whatever waited on it can go on.
+let decidedThisSession = false;
+const decisionListeners = new Set<() => void>();
+
+// "Preferências de cookies" reopens the banner over a stored decision (LGPD
+// art. 8 §5 / art. 18 IX). Until the visitor decides again, consent counts as
+// undecided for whatever hides behind the banner, while the stored decision
+// itself stays in force (nothing is revoked until they click).
+let reopenRequested = false;
+let reopenInvoker: HTMLElement | null = null;
+const reopenListeners = new Set<() => void>();
+
 export function storeConsent(storage: Pick<Storage, "setItem"> | null, consent: Consent, now: Date = new Date()): void {
-  if (!storage) return;
+  decidedThisSession = true;
+  reopenRequested = false;
+  reopenInvoker = null;
   try {
-    const stored: StoredConsent = { version: CONSENT_VERSION, consent, decidedAt: now.toISOString() };
-    storage.setItem(CONSENT_STORAGE_KEY, JSON.stringify(stored));
+    if (storage) {
+      const stored: StoredConsent = { version: CONSENT_VERSION, consent, decidedAt: now.toISOString() };
+      storage.setItem(CONSENT_STORAGE_KEY, JSON.stringify(stored));
+    }
   } catch {
     // Private mode or full storage: the banner will simply ask again next time.
   }
+  decisionListeners.forEach((listener) => listener());
+}
+
+/** True once the visitor decided, now or on an earlier visit, and the banner is not reopened (it is no longer up). */
+export function hasDecidedConsent(storage: Pick<Storage, "getItem"> | null): boolean {
+  return !reopenRequested && (decidedThisSession || readStoredConsent(storage) !== null);
+}
+
+export function subscribeConsent(listener: () => void): () => void {
+  decisionListeners.add(listener);
+  return () => {
+    decisionListeners.delete(listener);
+  };
+}
+
+/**
+ * Asks the banner to show again, over any stored decision. Stays open until the
+ * next storeConsent. `returnTo` is who asked (the link or the menu trigger): the
+ * banner hands the focus back to it after the decision (WCAG 2.4.3).
+ */
+export function requestConsentReopen(returnTo: HTMLElement | null = null): void {
+  reopenRequested = true;
+  reopenInvoker = returnTo;
+  reopenListeners.forEach((listener) => listener());
+}
+
+/** The element that asked for the current reopen, or null (no reopen, or nobody to return the focus to). */
+export function consentReopenInvoker(): HTMLElement | null {
+  return reopenInvoker;
+}
+
+export function subscribeConsentReopen(listener: () => void): () => void {
+  reopenListeners.add(listener);
+  return () => {
+    reopenListeners.delete(listener);
+  };
+}
+
+/** Test helper, like resetDataLayer: forgets the in-session decision and any pending reopen. */
+export function resetConsentSession(): void {
+  decidedThisSession = false;
+  reopenRequested = false;
+  reopenInvoker = null;
 }
 
 /** localStorage when the browser exposes it, else null (SSR, tests, lockdown). */
