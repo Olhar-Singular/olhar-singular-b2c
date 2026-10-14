@@ -43,6 +43,13 @@ supabase/functions/
 │   ├── subscriptionActionDeps.ts # wiring Supabase+MP dos deps acima (compartilhado por cancel e update-card)
 │   ├── refundFlow.ts    # runRefundLastCharge(input, deps): MP primeiro, cancela o preapproval, depois confirm_refund
 │   ├── refundDeps.ts    # buildRefundDeps(admin, mpAccessToken, fetch, now): wiring das RPCs refund_last_charge/confirm_refund + MP
+│   ├── background.ts    # dispatchInBackground(task, host): EdgeRuntime.waitUntil na edge, await fora; nunca lança (analytics e e-mails)
+│   ├── email.ts         # readEmailConfig(env) (RESEND_API_KEY/EMAIL_FROM) + sendEmail(deps, message): Resend via fetch, timeout 5s, nunca lança, log sem destinatário
+│   ├── subscriptionEmails.ts # buildSubscriptionConfirmationEmail (puro, pt-BR, sem travessão) + sendSubscriptionConfirmation; formatBrl/formatDateBr (America/Sao_Paulo), escapeHtml, greeting
+│   ├── trialReminder.ts # buildTrialReminderEmail + runTrialReminders(deps { claim, release, sendEmail, log, appUrl }) → { claimed, sent, failed }; toTrialReminderRow (linha da RPC claim_trial_reminders)
+│   ├── cronAuth.ts      # authorizeCron(authHeader, CRON_SECRET) → ok | unauthorized | misconfigured (timingSafeEqual de mpSignature.ts); functions chamadas pelo pg_cron
+│   ├── webhookConfirmation.ts # sendConfirmationAfterWebhook(outcome, deps): confirmação da contratação quando o mp-webhook ativa a assinatura (activated | reactivated); nunca lança
+│   ├── appUrl.ts        # normalizeAppUrl(APP_URL): sem barra final, fallback http://localhost:8080
 │   ├── checkoutGuard.ts # normalizeEmail, hashIdentifier (HMAC), clientIp, decideCheckoutAccess (429/503), isValidCpf/extractCpf
 │   ├── accountProvision.ts # parseAccountInput + runAnonymousCheckout (rate limit, createUser, runSubscribe, CPF/termos, magic link só com pagamento)
 │   ├── setInitialPassword.ts # parsePasswordInput + runSetInitialPassword (senha, flag, revoga outras sessões)
