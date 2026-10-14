@@ -7,11 +7,6 @@ export type Json =
   | Json[]
 
 export type Database = {
-  // Allows to automatically instantiate createClient with right options
-  // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
-  __InternalSupabase: {
-    PostgrestVersion: "14.5"
-  }
   graphql_public: {
     Tables: {
       [_ in never]: never
@@ -769,6 +764,7 @@ export type Database = {
           status: string
           status_detail: string | null
           trial_ends_at: string | null
+          trial_reminder_sent_at: string | null
           updated_at: string
           user_id: string
         }
@@ -791,6 +787,7 @@ export type Database = {
           status?: string
           status_detail?: string | null
           trial_ends_at?: string | null
+          trial_reminder_sent_at?: string | null
           updated_at?: string
           user_id: string
         }
@@ -813,6 +810,7 @@ export type Database = {
           status?: string
           status_detail?: string | null
           trial_ends_at?: string | null
+          trial_reminder_sent_at?: string | null
           updated_at?: string
           user_id?: string
         }
@@ -895,6 +893,19 @@ export type Database = {
         Args: { p_cancelled_at: string; p_subscription_id: string }
         Returns: Json
       }
+      claim_trial_reminders: {
+        Args: { p_window?: string }
+        Returns: {
+          full_name: string
+          monthly_credits: number
+          payer_email: string
+          plan_name: string
+          price_brl: number
+          subscription_id: string
+          trial_ends_at: string
+          user_id: string
+        }[]
+      }
       clawback_subscription: {
         Args: { p_subscription_id: string }
         Returns: Json
@@ -932,6 +943,7 @@ export type Database = {
         }
         Returns: Json
       }
+      invoke_send_trial_reminders: { Args: never; Returns: undefined }
       log_admin_action: {
         Args: {
           p_action: string
@@ -976,6 +988,10 @@ export type Database = {
         }
         Returns: Json
       }
+      release_trial_reminder: {
+        Args: { p_subscription_id: string }
+        Returns: boolean
+      }
       renew_subscription: {
         Args: { p_invoice: Json; p_subscription_id: string }
         Returns: Json
@@ -1011,12 +1027,12 @@ export type Tables<
   DefaultSchemaTableNameOrOptions extends
     | keyof (DefaultSchema["Tables"] & DefaultSchema["Views"])
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends (DefaultSchemaTableNameOrOptions extends {
+  TableName extends DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
         DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])
-    : never) = never,
+    : never = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -1040,11 +1056,11 @@ export type TablesInsert<
   DefaultSchemaTableNameOrOptions extends
     | keyof DefaultSchema["Tables"]
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends (DefaultSchemaTableNameOrOptions extends {
+  TableName extends DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
-    : never) = never,
+    : never = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -1065,11 +1081,11 @@ export type TablesUpdate<
   DefaultSchemaTableNameOrOptions extends
     | keyof DefaultSchema["Tables"]
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends (DefaultSchemaTableNameOrOptions extends {
+  TableName extends DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
-    : never) = never,
+    : never = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -1090,11 +1106,11 @@ export type Enums<
   DefaultSchemaEnumNameOrOptions extends
     | keyof DefaultSchema["Enums"]
     | { schema: keyof DatabaseWithoutInternals },
-  EnumName extends (DefaultSchemaEnumNameOrOptions extends {
+  EnumName extends DefaultSchemaEnumNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"]
-    : never) = never,
+    : never = never,
 > = DefaultSchemaEnumNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -1107,11 +1123,11 @@ export type CompositeTypes<
   PublicCompositeTypeNameOrOptions extends
     | keyof DefaultSchema["CompositeTypes"]
     | { schema: keyof DatabaseWithoutInternals },
-  CompositeTypeName extends (PublicCompositeTypeNameOrOptions extends {
+  CompositeTypeName extends PublicCompositeTypeNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"]
-    : never) = never,
+    : never = never,
 > = PublicCompositeTypeNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -1128,3 +1144,4 @@ export const Constants = {
     Enums: {},
   },
 } as const
+

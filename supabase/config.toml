@@ -73,3 +73,9 @@ verify_jwt = false
 # exigir JWT. A função trata a Authorization como opcional e faz o rate limit.
 [functions.subscribe]
 verify_jwt = false
+
+# Chamada pelo pg_cron (via pg_net), sem JWT de usuário: a autenticação é o
+# header Authorization: Bearer <CRON_SECRET>, comparado em tempo constante na
+# própria função (_shared/cronAuth.ts).
+[functions.send-trial-reminders]
+verify_jwt = false

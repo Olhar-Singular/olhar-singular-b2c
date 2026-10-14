@@ -57,7 +57,7 @@ const SUB_ROW = {
   next_payment_date: "2026-10-12T12:00:00Z", current_period_start: "2026-09-12T12:00:00Z",
   current_period_end: "2026-10-12T12:00:00Z", cancel_requested_at: null, cancelled_at: null,
   card_brand: "master", card_last_four: "1234", first_payment_confirmed: true, attribution: null,
-  trial_ends_at: null,
+  trial_ends_at: null, trial_reminder_sent_at: null,
   created_at: "2026-09-12T12:00:00Z", updated_at: "2026-09-12T12:00:00Z", plans: PLAN_ROW,
 };
 
