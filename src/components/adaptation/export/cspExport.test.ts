@@ -77,3 +77,10 @@ describe("production CSP (vercel.json) — in-app PDF preview iframe", () => {
     expect(csp["frame-src"]).toContain("'self'");
   });
 });
+
+describe("Content-Security-Policy: landing videos", () => {
+  it("allows media from the same origin and from Supabase Storage (the landing bucket), and nowhere else", () => {
+    const csp = getCsp();
+    expect(csp["media-src"]).toEqual(["'self'", "https://*.supabase.co"]);
+  });
+});

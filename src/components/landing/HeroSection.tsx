@@ -4,9 +4,10 @@ import { TRIAL_CREDITS, TRIAL_DAYS } from "@/lib/domain/subscriptionUi";
 
 interface HeroSectionProps {
   /**
-   * Optional presentation video. Must be self-hosted (same origin): the CSP
-   * has no media-src and its frame-src allows no external video provider, so a
-   * YouTube/Vimeo embed would be blocked. Without it the hero shows the photo.
+   * Optional presentation video. Must come from our origin or from Supabase
+   * Storage (the CSP media-src allows nothing else) and its frame-src allows no
+   * external video provider, so a YouTube/Vimeo embed would be blocked. Without
+   * it the hero shows the photo.
    */
   videoUrl?: string;
 }
@@ -42,7 +43,7 @@ export default function HeroSection({ videoUrl }: HeroSectionProps) {
           <LandingCta
             to="/assinar?trial=1"
             origem="hero"
-            className="min-h-[52px] px-8 py-4 text-[length:clamp(17px,2.4vw,21px)] shadow-[0_10px_26px_rgba(255,138,61,0.4)]"
+            className="min-h-[52px] px-8 py-4 text-[length:clamp(17px,2.4vw,21px)] shadow-[0_10px_26px_rgba(10,127,135,0.35)]"
           >
             Testar {TRIAL_DAYS} dias grátis
           </LandingCta>

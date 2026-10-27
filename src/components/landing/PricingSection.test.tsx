@@ -167,7 +167,8 @@ describe("PricingSection", () => {
     it("pins the Popular badge to the card edge so it takes no layout space", () => {
       renderWithProviders(<PricingSection />);
       const badge = screen.getByText("Popular");
-      expect(badge).toHaveClass("absolute");
+      expect(badge).toHaveClass("absolute", "bg-lp-teal-deep", "text-white");
+      expect(badge.className).not.toMatch(/orange/);
       expect(badge).not.toHaveClass("self-start");
       expect(badge.closest("article")).toHaveClass("relative");
     });

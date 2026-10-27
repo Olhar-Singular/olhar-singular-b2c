@@ -1,4 +1,4 @@
-import turmaDiversa from "@/assets/landing/turma-diversa.webp";
+import professoraPlanejando from "@/assets/landing/professora-planejando.webp";
 
 const PAINS = [
   {
@@ -20,10 +20,10 @@ export default function PainSection() {
     <section aria-labelledby="h-dor" className="px-5 py-[clamp(40px,6vw,80px)]">
       <div className="mx-auto grid max-w-[1160px] grid-cols-[repeat(auto-fit,minmax(min(300px,100%),1fr))] items-center gap-[clamp(24px,4vw,48px)]">
         <img
-          src={turmaDiversa}
-          alt="Professora ajudando alunos em uma sala de aula diversa e inclusiva"
-          width={1040}
-          height={784}
+          src={professoraPlanejando}
+          alt="Professora sentada diante do notebook, com uma pilha de provas para adaptar, numa sala de aula vazia"
+          width={1000}
+          height={750}
           loading="lazy"
           decoding="async"
           className="h-auto w-full rounded-2xl border border-lp-border"

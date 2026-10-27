@@ -10,6 +10,14 @@ vi.mock("@/assets/landing/turma-diversa.webp", () => ({ default: "stub://turma-d
 const DASHES = new RegExp(`[${String.fromCharCode(0x2013, 0x2014)}]`);
 
 describe("HeroSection", () => {
+  it("gives the primary CTA a teal glow, not the retired orange one", () => {
+    renderWithProviders(<HeroSection />);
+    const cta = screen.getByRole("link", { name: /testar/i });
+    expect(cta).toHaveClass("bg-lp-teal-deep", "text-white");
+    expect(cta.className).toMatch(/shadow-\[0_10px_26px_rgba\(10,127,135,0\.35\)\]/);
+    expect(cta.className).not.toMatch(/255,138,61|orange/);
+  });
+
   beforeEach(() => {
     window.dataLayer = [];
   });

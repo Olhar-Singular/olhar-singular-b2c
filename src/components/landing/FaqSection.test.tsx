@@ -193,7 +193,7 @@ describe("FaqSection (subscription)", () => {
 
   it("caps the free follow-up messages of an ISA conversation at the limit shown on screen (Termos)", async () => {
     renderWithProviders(<FaqSection />);
-    const panel = await openQuestion('Quanto vale 1 crédito?'.replace(/^'|'$/g, ""));
+    const panel = await openQuestion("Quanto vale 1 crédito?");
     expect(
       within(panel).getByText(/não custam, até o limite de mensagens por conversa indicado na tela/),
     ).toBeInTheDocument();

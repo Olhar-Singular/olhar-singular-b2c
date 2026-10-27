@@ -32,9 +32,6 @@ export function adaptationsRange(credits: number): string {
   return `${Math.floor(credits / ADAPTATION_CREDITS.high)} a ${Math.floor(credits / ADAPTATION_CREDITS.low)} adaptações por mês`;
 }
 
-// Unused extras (not the subscription, which has REFUND_WINDOW_DAYS) are refundable for this many days.
-export const EXTRAS_REFUND_DAYS = 7;
-
 // The admin-only smoke plan is hidden on the landing page even for a logged-in
 // super-admin: it is public copy, not a checkout.
 export function publicPlans(plans: PlanView[] | undefined): PlanView[] {

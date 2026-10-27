@@ -285,7 +285,8 @@
 
 /* Landing page theme. Scoped to the .landing wrapper: fixed light palette that
    ignores .dark, and no global token is touched. Contrast ratios are noted per
-   token; teal is decorative only, white text goes on teal-deep. */
+   token; white text goes on teal-deep (the CTA on light sections); bright teal
+   carries ink text only (the CTA on the dark band, icon backgrounds). */
 @layer base {
   .landing {
     color-scheme: light;
@@ -300,8 +301,6 @@
     --lp-teal-text: #0A6F76;    /* text/link on light (5.65:1) */
     --lp-teal-hover: #085A60;
     --lp-teal-tint: #E4F5F3;
-    --lp-orange: #FF8A3D;       /* CTA, --lp-ink text on it (6.52:1) */
-    --lp-orange-hover: #FF7A22;
     --lp-dark: #0F3134;         /* dark section (closing) */
     background-color: var(--lp-bg);
     color: var(--lp-ink);

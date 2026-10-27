@@ -33,8 +33,6 @@ export default {
           "teal-text": "var(--lp-teal-text)",
           "teal-hover": "var(--lp-teal-hover)",
           "teal-tint": "var(--lp-teal-tint)",
-          orange: "var(--lp-orange)",
-          "orange-hover": "var(--lp-orange-hover)",
           dark: "var(--lp-dark)",
         },
         border: "hsl(var(--border))",

@@ -82,6 +82,13 @@ export function trackCtaClick(origem: CtaOrigem): void {
   pushEvent("cta_click", { origem });
 }
 
+export type LandingVideoId = "depoimento" | "mito";
+
+/** First play of a landing video (once per page view and video). */
+export function trackVideoPlay(video: LandingVideoId): void {
+  pushEvent("video_play", { video });
+}
+
 export function trackConsentUpdated(consent: Consent): void {
   pushEvent("consent_updated", { analytics: consent.analytics_storage, ads: consent.ad_storage });
 }

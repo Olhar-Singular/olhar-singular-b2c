@@ -56,8 +56,6 @@ describe(".landing theme in index.css", () => {
     "--lp-teal-text": "#0A6F76",
     "--lp-teal-hover": "#085A60",
     "--lp-teal-tint": "#E4F5F3",
-    "--lp-orange": "#FF8A3D",
-    "--lp-orange-hover": "#FF7A22",
     "--lp-dark": "#0F3134",
   };
 
@@ -140,8 +138,6 @@ describe("tailwind theme.extend for the landing", () => {
       "teal-text": "var(--lp-teal-text)",
       "teal-hover": "var(--lp-teal-hover)",
       "teal-tint": "var(--lp-teal-tint)",
-      orange: "var(--lp-orange)",
-      "orange-hover": "var(--lp-orange-hover)",
       dark: "var(--lp-dark)",
     });
   });
@@ -160,5 +156,16 @@ describe("tailwind theme.extend for the landing", () => {
     });
     expect(extend.colors.border).toBe("hsl(var(--border))");
     expect(extend.colors.primary.DEFAULT).toBe("hsl(var(--primary))");
+  });
+});
+
+
+describe("landing palette", () => {
+  it("has no orange token left: the CTA is the brand teal (teal-deep on light, bright teal on dark)", () => {
+    expect(css).not.toMatch(/--lp-orange/);
+    const lp = (tailwindConfig as { theme?: { extend?: { colors?: { lp?: Record<string, string> } } } }).theme?.extend?.colors?.lp ?? {};
+    expect(Object.keys(lp).some((key) => /orange/.test(key))).toBe(false);
+    expect(lp["teal-deep"]).toBe("var(--lp-teal-deep)");
+    expect(lp["teal"]).toBe("var(--lp-teal)");
   });
 });

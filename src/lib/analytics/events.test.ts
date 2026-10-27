@@ -6,6 +6,7 @@ import {
   trackBeginCheckout,
   trackConsentUpdated,
   trackCtaClick,
+  trackVideoPlay,
   trackPaywallShown,
   trackPurchase,
   trackSelectPlan,
@@ -57,4 +58,12 @@ describe("funnel events", () => {
       expect(window.dataLayer?.at(-1)).toEqual({ event: "cta_click", origem });
     },
   );
+});
+
+describe("landing video events", () => {
+  it("trackVideoPlay pushes video_play with the video id", () => {
+    window.dataLayer = [];
+    trackVideoPlay("mito");
+    expect(window.dataLayer).toEqual([{ event: "video_play", video: "mito" }]);
+  });
 });

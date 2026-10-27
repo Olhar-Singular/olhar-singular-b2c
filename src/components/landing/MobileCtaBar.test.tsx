@@ -69,7 +69,7 @@ describe("MobileCtaBar", () => {
     renderWithProviders(<MobileCtaBar />);
     const cta = screen.getByRole("link", { name: CTA_NAME });
     expect(cta).toHaveAttribute("href", "/assinar?trial=1");
-    expect(cta).toHaveClass("min-h-[52px]", "w-full", "bg-lp-orange");
+    expect(cta).toHaveClass("min-h-[52px]", "w-full", "bg-lp-teal-deep", "text-white");
     expect(cta).not.toHaveClass("min-h-[44px]");
   });
 

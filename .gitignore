@@ -51,5 +51,5 @@ coverage
 .env.mp-test
 .vercel
 
-# Material da LP nova: o .docx carrega o token do Meta CAPI (segredo), nunca versionar
-new_lp/*.docx
+# Material da LP nova (export de referência + .docx com o token do Meta CAPI): nunca versionar
+new_lp/

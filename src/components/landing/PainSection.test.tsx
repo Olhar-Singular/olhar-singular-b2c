@@ -3,7 +3,9 @@ import { screen, within } from "@testing-library/react";
 import PainSection from "./PainSection";
 import { renderWithProviders } from "@/test/helpers";
 
-vi.mock("@/assets/landing/turma-diversa.webp", () => ({ default: "stub://turma-diversa.webp" }));
+vi.mock("@/assets/landing/professora-planejando.webp", () => ({
+  default: "stub://professora-planejando.webp",
+}));
 
 describe("PainSection", () => {
   it("is a region labelled by its h2 heading", () => {
@@ -35,13 +37,12 @@ describe("PainSection", () => {
     ).toBeInTheDocument();
   });
 
-  it("shows the classroom image with alt, fixed dimensions and lazy loading", () => {
+  it("shows the teacher planning at the laptop, not the hero classroom, with alt, fixed dimensions and lazy loading", () => {
     renderWithProviders(<PainSection />);
-    const img = screen.getByRole("img", { name: /professora ajudando alunos/i });
-    expect(img).toHaveAttribute("alt", expect.stringMatching(/sala (de aula )?diversa e inclusiva/i));
-    expect(img).toHaveAttribute("src", "stub://turma-diversa.webp");
-    expect(img).toHaveAttribute("width", "1040");
-    expect(img).toHaveAttribute("height", "784");
+    const img = screen.getByRole("img", { name: /professora.*notebook/i });
+    expect(img).toHaveAttribute("src", "stub://professora-planejando.webp");
+    expect(img).toHaveAttribute("width", "1000");
+    expect(img).toHaveAttribute("height", "750");
     expect(img).toHaveAttribute("loading", "lazy");
     expect(img).toHaveAttribute("decoding", "async");
   });

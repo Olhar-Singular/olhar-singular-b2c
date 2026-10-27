@@ -21,6 +21,7 @@ conv prova-impressa  232401 "680x>"
 conv perfis-celular  232413 "680x>"
 conv historico       232425 "680x>"
 conv justificativa   232608 "680x>"
+conv professora-planejando 231958 "1000x>" "1003x752+0+0"   # 4:3 from the left (laptop + teacher)
 
 for f in "$OUT"/*.webp; do
   printf '%s %s %s bytes\n' "$(basename "$f")" "$(identify -format '%wx%h' "$f")" "$(stat -c%s "$f")"

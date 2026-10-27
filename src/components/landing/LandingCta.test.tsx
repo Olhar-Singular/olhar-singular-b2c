@@ -50,7 +50,7 @@ describe("LandingCta", () => {
     expect(window.dataLayer).toHaveLength(1);
   });
 
-  it("primary variant is the default and carries the orange button classes", () => {
+  it("primary variant is the default: the brand teal (teal-deep) with white text", () => {
     renderWithProviders(
       <LandingCta to="/assinar" origem="hero">
         Primário
@@ -58,16 +58,30 @@ describe("LandingCta", () => {
     );
     const link = screen.getByRole("link", { name: "Primário" });
     for (const cls of [
-      "bg-lp-orange",
-      "text-lp-ink",
+      "bg-lp-teal-deep",
+      "text-white",
       "font-poppins",
       "font-semibold",
       "rounded-2xl",
       "min-h-[44px]",
-      "hover:bg-lp-orange-hover",
+      "hover:bg-lp-teal-hover",
     ]) {
       expect(link).toHaveClass(cls);
     }
+    expect(link.className).not.toMatch(/orange/);
+  });
+
+  it("on-dark variant keeps the green on dark bands: bright teal with ink text, never teal-deep (it would sink into the band)", () => {
+    renderWithProviders(
+      <LandingCta to="/assinar" origem="fechamento" variant="on-dark">
+        Escuro
+      </LandingCta>,
+    );
+    const link = screen.getByRole("link", { name: "Escuro" });
+    for (const cls of ["bg-lp-teal", "text-lp-ink", "rounded-2xl", "min-h-[44px]", "hover:brightness-95"]) {
+      expect(link).toHaveClass(cls);
+    }
+    expect(link).not.toHaveClass("bg-lp-teal-deep", "text-white");
   });
 
   it("merges an extra className", () => {
@@ -77,10 +91,10 @@ describe("LandingCta", () => {
       </LandingCta>,
     );
     const link = screen.getByRole("link", { name: "Largo" });
-    expect(link).toHaveClass("w-full", "sm:w-auto", "bg-lp-orange");
+    expect(link).toHaveClass("w-full", "sm:w-auto", "bg-lp-teal-deep");
   });
 
-  it("ghost variant uses the teal text and not the orange background", () => {
+  it("ghost variant uses the teal text and no filled background", () => {
     renderWithProviders(
       <LandingCta to="/auth" origem="header" variant="ghost">
         Entrar
@@ -88,7 +102,7 @@ describe("LandingCta", () => {
     );
     const link = screen.getByRole("link", { name: "Entrar" });
     expect(link).toHaveClass("text-lp-teal-text");
-    expect(link.className).not.toContain("bg-lp-orange");
+    expect(link.className).not.toMatch(/bg-lp-teal-deep|bg-lp-teal\b|bg-lp-orange/);
   });
 
   it("ghost variant still tracks the click", () => {

@@ -43,6 +43,15 @@ describe("FinalCtaSection", () => {
     );
   });
 
+  it("uses the on-dark CTA: bright teal with ink text and a teal glow, so the button stands out of the dark band", () => {
+    renderWithProviders(<FinalCtaSection />);
+    const cta = screen.getByRole("link", { name: /testar/i });
+    expect(cta).toHaveClass("bg-lp-teal", "text-lp-ink");
+    expect(cta).not.toHaveClass("bg-lp-teal-deep", "text-white");
+    expect(cta.className).toMatch(/shadow-\[0_10px_26px_rgba\(15,181,160,0\.35\)\]/);
+    expect(cta.className).not.toMatch(/255,138,61/);
+  });
+
   it("makes the call to action a large touch target", () => {
     renderWithProviders(<FinalCtaSection />);
     const cta = screen.getByRole("link", { name: /testar/i });

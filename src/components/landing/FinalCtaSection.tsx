@@ -40,7 +40,8 @@ export default function FinalCtaSection() {
         <LandingCta
           to="/assinar?trial=1"
           origem="fechamento"
-          className="mt-7 min-h-[52px] px-8 py-5 text-[length:clamp(17px,2.2vw,21px)] shadow-[0_10px_26px_rgba(255,138,61,0.35)]"
+          variant="on-dark"
+          className="mt-7 min-h-[52px] px-8 py-5 text-[length:clamp(17px,2.2vw,21px)] shadow-[0_10px_26px_rgba(15,181,160,0.35)]"
         >
           Testar {TRIAL_DAYS} dias grátis
         </LandingCta>

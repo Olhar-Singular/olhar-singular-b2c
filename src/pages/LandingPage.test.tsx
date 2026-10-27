@@ -12,14 +12,16 @@ import { renderWithProviders } from "@/test/helpers";
 vi.mock("@/hooks/useSubscription", () => ({ usePlans: () => ({ data: undefined, isLoading: true }) }));
 vi.mock("@/hooks/useCredits", () => ({ usePackages: () => ({ data: undefined, isLoading: true }) }));
 
-// Heading ids of the ten sections, in the order the page must present them.
+// Heading ids of the twelve sections, in the order the page must present them.
 const SECTION_ORDER = [
   "h-hero",
   "h-prova",
   "h-dor",
+  "h-videos",
   "h-como",
   "h-recebe",
   "h-isa",
+  "h-depoimentos",
   "h-etica",
   "h-planos",
   "h-faq",
@@ -105,7 +107,7 @@ describe("LandingPage", () => {
   });
 
   describe("composition", () => {
-    it("puts the ten sections directly under main, in the designed order", () => {
+    it("puts the twelve sections directly under main, in the designed order", () => {
       const { container } = renderLanding();
       const main = mainOf(container);
       expect(Array.from(main.children).map((el) => `${el.tagName}:${el.getAttribute("aria-labelledby")}`)).toEqual(
@@ -220,6 +222,37 @@ describe("LandingPage", () => {
       renderLanding();
       expect(within(screen.getByRole("contentinfo")).getByText(/decisão final/i)).toBeInTheDocument();
     });
+  });
+});
+
+describe("proof section images", () => {
+  it("shows the original sheet and the sheet adapted by the platform, 4:5 each, instead of the placeholders", () => {
+    renderWithProviders(<LandingPage />);
+    const region = screen.getByRole("region", { name: "Veja o que a IA entrega" });
+    const images = within(region).getAllByRole("img");
+    expect(images).toHaveLength(2);
+    const [before, after] = images;
+    expect(before).toHaveAccessibleName(/original/i);
+    expect(after).toHaveAccessibleName(/adaptad/i);
+    for (const image of images) {
+      expect(image).toHaveAttribute("width", "1200");
+      expect(image).toHaveAttribute("height", "1500");
+      expect(image).toHaveAttribute("loading", "lazy");
+      expect(image.getAttribute("src")).toMatch(/prova-(antes|depois)/);
+    }
+    expect(within(region).queryByText(/Imagem da atividade/)).toBeNull();
+  });
+});
+
+describe("images", () => {
+  it("never shows the same photo twice on the page (the logo is the only repeat)", () => {
+    renderWithProviders(<LandingPage />);
+    const sources = screen
+      .getAllByRole("img")
+      .map((img) => img.getAttribute("src"))
+      .filter((src): src is string => !!src && !src.includes("logo-olho"));
+    expect(sources.length).toBeGreaterThan(5);
+    expect(new Set(sources).size).toBe(sources.length);
   });
 });
 

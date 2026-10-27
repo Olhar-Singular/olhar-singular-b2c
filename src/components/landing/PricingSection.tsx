@@ -93,7 +93,7 @@ export default function PricingSection() {
           {plans.map((plan) => (
             <article key={plan.id} className={plan.highlight ? CARD_HIGHLIGHT : CARD_PLAIN}>
               {plan.highlight && (
-                <span className="absolute -top-3.5 left-6 rounded-full bg-lp-orange px-3 py-1.5 font-poppins text-xs font-bold uppercase tracking-wider text-lp-ink">
+                <span className="absolute -top-3.5 left-6 rounded-full bg-lp-teal-deep px-3 py-1.5 font-poppins text-xs font-bold uppercase tracking-wider text-white">
                   Popular
                 </span>
               )}

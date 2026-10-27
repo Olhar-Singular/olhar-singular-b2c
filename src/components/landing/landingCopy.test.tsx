@@ -237,6 +237,25 @@ describe("landing copy regression", () => {
       expect(offenders).toEqual([]);
     });
 
+    it("makes every video click-to-play, served from our Storage bucket and labelled", () => {
+      const { container } = renderCopy();
+      const clips = Array.from(container.querySelectorAll("video"));
+      expect(clips.length).toBeGreaterThan(0);
+      const offenders = clips.flatMap((video) => {
+        const missing = [
+          !video.hasAttribute("controls") && "controls",
+          video.getAttribute("preload") !== "none" && "preload=none",
+          !video.hasAttribute("playsinline") && "playsinline",
+          !(video.getAttribute("poster") ?? "").trim() && "poster",
+          !/\/storage\/v1\/object\/public\/landing\/videos\//.test(video.getAttribute("src") ?? "") && "landing bucket src",
+          !(video.getAttribute("aria-label") ?? "").trim() && "aria-label",
+          video.hasAttribute("autoplay") && "no autoplay",
+        ].filter(Boolean);
+        return missing.length > 0 ? [`${video.getAttribute("src")}: ${missing.join(", ")}`] : [];
+      });
+      expect(offenders).toEqual([]);
+    });
+
     it("uses no inline style anywhere (Tailwind and the lp tokens only)", () => {
       const { container } = renderCopy();
       expect(container.querySelectorAll("[style]")).toHaveLength(0);

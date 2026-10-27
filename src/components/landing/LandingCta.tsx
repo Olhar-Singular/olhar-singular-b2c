@@ -6,7 +6,8 @@ import { trackCtaClick, type CtaOrigem } from "@/lib/analytics/events";
 interface LandingCtaProps {
   to: string;
   origem: CtaOrigem;
-  variant?: "primary" | "ghost";
+  /** `on-dark` keeps the green on the dark band: bright teal with ink text (teal-deep would sink into it). */
+  variant?: "primary" | "ghost" | "on-dark";
   className?: string;
   onClick?: () => void;
   children: ReactNode;
@@ -17,8 +18,11 @@ interface LandingCtaProps {
 const BASE =
   "inline-flex min-h-[44px] items-center justify-center gap-2 font-poppins font-semibold transition-colors motion-reduce:transition-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-lp-ink";
 
+// Brand teal everywhere: teal-deep with white text on light sections (4.77:1),
+// bright teal with ink text on the dark band (5.9:1 on the button, 5.4:1 against the band).
 const VARIANTS = {
-  primary: "rounded-2xl bg-lp-orange px-6 py-3 text-lp-ink hover:bg-lp-orange-hover",
+  primary: "rounded-2xl bg-lp-teal-deep px-6 py-3 text-white hover:bg-lp-teal-hover",
+  "on-dark": "rounded-2xl bg-lp-teal px-6 py-3 text-lp-ink hover:brightness-95",
   ghost: "px-2 text-lp-teal-text underline-offset-4 hover:underline",
 } as const;
 
