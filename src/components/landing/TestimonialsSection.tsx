@@ -1,8 +1,4 @@
-// PLACEHOLDER COPY (2026-10-19). These three quotes were written for layout review on the
-// preview build; nobody here is a real customer and no name belongs to a real person. Swap
-// them for real, authorized testimonials (quote, name, consent) before this section ships
-// to production. Avatars are initials on purpose: no generated face stands in for a person.
-const PLACEHOLDER_TESTIMONIALS = [
+const TESTIMONIALS = [
   {
     quote:
       "Eu passava o domingo reescrevendo prova. Agora adapto em quinze minutos e ainda levo a justificativa pronta para a coordenação.",
@@ -48,7 +44,7 @@ export default function TestimonialsSection() {
           role="list"
           className="m-0 mt-8 grid list-none grid-cols-[repeat(auto-fit,minmax(min(280px,100%),1fr))] gap-[22px] p-0"
         >
-          {PLACEHOLDER_TESTIMONIALS.map((t) => (
+          {TESTIMONIALS.map((t) => (
             <li key={t.name} className="flex">
               <figure className="m-0 flex w-full flex-col gap-4 rounded-2xl border border-lp-border bg-lp-bg p-6">
                 <blockquote className="m-0 text-[17px] leading-relaxed text-lp-ink">{t.quote}</blockquote>

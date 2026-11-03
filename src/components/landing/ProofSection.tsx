@@ -45,8 +45,6 @@ const VERSIONS: ReadonlyArray<{
   },
 ];
 
-// Illustrative only: each example DESCRIBES a change the adapted document can carry. It never
-// asserts an effect on the student, and none of the three is promised for every adaptation.
 const EXAMPLES = [
   {
     tag: "01 · Enunciado",

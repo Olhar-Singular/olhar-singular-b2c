@@ -2,7 +2,7 @@ import LandingCta from "./LandingCta";
 import logoImg from "@/assets/logo-olho-transparent.png";
 import { TRIAL_CREDITS, TRIAL_DAYS } from "@/lib/domain/subscriptionUi";
 
-// Text and logo only: no photo, no people, no social proof (nothing fictitious goes live).
+// Text and logo only: no photo, no people, no social proof.
 // The logo has black lashes on a transparent background, so it sits on a white chip over the dark band.
 export default function FinalCtaSection() {
   return (

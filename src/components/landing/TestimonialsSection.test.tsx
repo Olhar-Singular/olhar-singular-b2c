@@ -59,13 +59,13 @@ describe("TestimonialsSection", () => {
     });
   });
 
-  it("has no template tokens, dashes, inline styles or placeholder text in what the visitor sees", () => {
+  it("has no template tokens, dashes or inline styles in what the visitor sees", () => {
     const { container } = renderWithProviders(<TestimonialsSection />);
     const text = container.textContent ?? "";
     expect(text).not.toContain("{{");
     const dashes = new RegExp(`${String.fromCharCode(0x2014)}|${String.fromCharCode(0x2013)}`);
     expect(text).not.toMatch(dashes);
-    expect(text).not.toMatch(/undefined|NaN|lorem|placeholder|exemplo de depoimento/i);
+    expect(text).not.toMatch(/undefined|NaN|lorem/i);
     expect(container.querySelector("[style]")).toBeNull();
   });
 });

@@ -1,7 +1,5 @@
 import isaImage from "@/assets/landing/isa.webp";
 
-// Illustrative exchanges: the section labels them "Exemplo de conversa" so they
-// read as a sample of tone, never as a promise of what the ISA will answer.
 const CONVERSATIONS = [
   {
     question: "Tenho um aluno que não termina nenhuma prova. Por onde eu começo?",
