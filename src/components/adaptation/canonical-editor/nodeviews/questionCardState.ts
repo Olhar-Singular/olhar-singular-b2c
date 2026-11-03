@@ -9,6 +9,12 @@
  *
  * The store is keyed by the editor instance (a WeakMap), so multiple editors on a
  * page never share expansion state and the store is GC'd with its editor.
+ *
+ * Achado 1106: the open card buffers its edits locally until Concluir. Switching
+ * to another card used to just swap the id, unmounting the open card together
+ * with its buffer — edits vanished silently. The open card now registers a leave
+ * handler, and `expand(otherId)` runs it (committing the buffer) before swapping.
+ * `collapse()` (Concluir / Cancelar / Esc already decided) only drops it.
  */
 
 import { useCallback, useSyncExternalStore } from "react";
@@ -18,6 +24,11 @@ export interface QuestionCardStore {
   getExpandedId(): string | null;
   expand(id: string): void;
   collapse(): void;
+  /**
+   * Registers what the open card must do before another card takes its place.
+   * Returns an unregister that only clears it if it is still the current one.
+   */
+  setLeaveHandler(handler: () => void): () => void;
   subscribe(listener: () => void): () => void;
 }
 
@@ -26,6 +37,7 @@ const stores = new WeakMap<object, QuestionCardStore>();
 function createStore(): QuestionCardStore {
   let expandedId: string | null = null;
   const listeners = new Set<() => void>();
+  let leaveHandler: (() => void) | null = null;
   const set = (next: string | null) => {
     if (next === expandedId) return;
     expandedId = next;
@@ -33,8 +45,24 @@ function createStore(): QuestionCardStore {
   };
   return {
     getExpandedId: () => expandedId,
-    expand: (id) => set(id),
-    collapse: () => set(null),
+    expand: (id) => {
+      if (expandedId !== null && expandedId !== id && leaveHandler) {
+        const leave = leaveHandler;
+        leaveHandler = null;
+        leave();
+      }
+      set(id);
+    },
+    collapse: () => {
+      leaveHandler = null;
+      set(null);
+    },
+    setLeaveHandler: (handler) => {
+      leaveHandler = handler;
+      return () => {
+        if (leaveHandler === handler) leaveHandler = null;
+      };
+    },
     subscribe: (listener) => {
       listeners.add(listener);
       return () => {
@@ -63,5 +91,6 @@ export function useQuestionCard(editor: Editor, id: string) {
   const expanded = useSyncExternalStore(store.subscribe, () => store.getExpandedId() === id);
   const expand = useCallback(() => store.expand(id), [store, id]);
   const collapse = useCallback(() => store.collapse(), [store]);
-  return { expanded, expand, collapse };
+  const setLeaveHandler = useCallback((handler: () => void) => store.setLeaveHandler(handler), [store]);
+  return { expanded, expand, collapse, setLeaveHandler };
 }

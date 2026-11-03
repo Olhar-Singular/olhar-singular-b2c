@@ -100,7 +100,7 @@ describe("QuestionPreview", () => {
     expect(screen.getByTestId("answer-preview-multipleChoice")).toBeInTheDocument();
     expect(screen.queryByTestId("answer-multipleChoice")).not.toBeInTheDocument();
     // gabarito hidden: no correct-answer control on the folha (D5)
-    expect(screen.queryByLabelText("Marcar como correta")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/como correta$/)).not.toBeInTheDocument();
   });
 
   it("forwards inline alternative edits", () => {
@@ -163,6 +163,15 @@ describe("QuestionPreview", () => {
     expect(btn.className).toContain("w-7");
     expect(btn.className).not.toContain("h-5");
     expect(btn.className).not.toContain("w-5");
+  });
+
+  it("remove-instruction button keeps 24px of target on a scaled folha (achado 0802)", () => {
+    setup({ instruction: [{ type: "text", text: "x" }] });
+    const btn = screen.getByLabelText("Remover instrução");
+    // Os 28px declarados viajam dentro do `transform: scale()` da folha: em
+    // 0,845 chegam ao dedo com 23,7px e no piso (0,4) com 11px. A contra-escala
+    // do `folha-touch-target` é o que devolve os 24 x 24 CSS px do SC 2.5.8.
+    expect(btn.className).toMatch(/(^|\s)folha-touch-target(\s|$)/);
   });
 
   it("remove-instruction button is chrome gated by hover/focus, not printed on the folha", () => {

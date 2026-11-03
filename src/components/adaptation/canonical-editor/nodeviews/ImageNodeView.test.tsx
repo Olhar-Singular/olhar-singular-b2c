@@ -46,8 +46,8 @@ vi.mock("@/lib/adaptation/canonical/ids", async (importOriginal) => {
 });
 
 vi.mock("@/components/editor/ImageResizer", () => ({
-  default: ({ alt, onResize }: { alt: string; onResize: (w: number) => void }) => (
-    <button data-testid="resizer" data-alt={alt} onClick={() => onResize(123)}>resizer</button>
+  default: ({ alt, columnWidth, onResize }: { alt: string; columnWidth?: number; onResize: (w: number) => void }) => (
+    <button data-testid="resizer" data-alt={alt} data-column-width={columnWidth} onClick={() => onResize(123)}>resizer</button>
   ),
 }));
 
@@ -295,6 +295,16 @@ describe("ImageNodeView", () => {
     }
   });
 
+  it("passa a coluna medida como teto da alça de redimensionar (achado 0612)", () => {
+    const widthSpy = vi.spyOn(HTMLElement.prototype, "clientWidth", "get").mockReturnValue(666);
+    try {
+      renderImage({ width: 762 });
+      expect(screen.getByTestId("resizer")).toHaveAttribute("data-column-width", "666");
+    } finally {
+      widthSpy.mockRestore();
+    }
+  });
+
   it("sempre mostra os controles de alinhamento + trocar imagem", () => {
     const { props } = makeProps({ alignment: "left" });
     render(<ImageNodeView {...props} />);
@@ -353,6 +363,29 @@ describe("ImageNodeView", () => {
     expect(screen.getByRole("button", { name: "Centralizar" }).className).toMatch(
       /(^|\s)folha-touch-target(\s|$)/,
     );
+  });
+
+  /*
+    Achado 0381: o 0236 levou o piso só aos botões de ícone do rail. Os de
+    tamanho `sm` (36px declarados) chegavam a 15px de altura na folha a 42%
+    (390px), inclusive "Excluir imagem", a ação destrutiva do rail.
+  */
+  it("todo botão sm do rail sobrevive a escala da folha (achado 0381)", () => {
+    const { props } = makeProps({ caption: null }, true, { file: pdfFile() });
+    render(<ImageNodeView {...props} />);
+    for (const name of ["Excluir imagem", "Trocar ou adicionar imagem", "Adicionar legenda", "Recortar do original"]) {
+      expect(screen.getByRole("button", { name }).className).toMatch(/(^|\s)folha-touch-target(\s|$)/);
+    }
+  });
+
+  /*
+    Achado 0381: o piso de alvo não resolve o corpo do campo de alt: o `text-xs`
+    chegava à tela com ~5px a 42%. O campo sai da escala da folha (mesma
+    ferramenta do card da questão, 0374), ficando legível no tamanho do app.
+  */
+  it("o campo de texto alternativo sai da escala da folha (achado 0381)", () => {
+    renderImage();
+    expect(screen.getByLabelText("Texto alternativo").className).toMatch(/(^|\s)folha-chrome-unscaled(\s|$)/);
   });
 
   it("clicar remover legenda chama updateAttributes com null", () => {
@@ -545,6 +578,26 @@ describe("ImageNodeView", () => {
 
     fireEvent.change(field, { target: { value: "gráfico de barras" } });
     expect(updateAttributes).toHaveBeenCalledWith({ alt: "gráfico de barras" });
+  });
+
+  /**
+   * 0618 — o campo só se identificava pelo placeholder: com o alt preenchido (o
+   * caso normal) sobrava uma caixa com "retangulo cinza" sem nada dizendo o que
+   * era (WCAG 3.3.2). O rótulo visível volta compacto, NA MESMA linha do rail
+   * (restrição do 0113: não ocupar faixa de papel), ligado ao campo por
+   * `htmlFor` e fora da árvore acessível (0337/0339: o chrome mora dentro do
+   * `contenteditable`; o nome programático segue vindo do `aria-label`).
+   */
+  it("mantém um rótulo visível ligado ao campo de texto alternativo quando ele tem valor (achado 0618)", () => {
+    const { container } = renderImage({ alt: "retangulo cinza" });
+    const input = container.querySelector('input[name="image-alt"]') as HTMLInputElement;
+    expect(input.value).toBe("retangulo cinza");
+    expect(input.labels).toHaveLength(1);
+    const label = input.labels![0];
+    expect(label.textContent).toBe("Texto alternativo");
+    expect(label).toHaveAttribute("aria-hidden", "true");
+    expect(label.closest(".folha-rail")).toBe(input.closest(".folha-rail"));
+    expect(input.getAttribute("title")).toMatch(/leitor de tela/i);
   });
 
   it("desabilita o campo de texto alternativo quando o editor é read-only", () => {
@@ -882,5 +935,22 @@ describe("ImageNodeView — chrome de edição fora do fluxo da folha (0113)", (
   it("a legenda impressa continua no fluxo, sem cabeçalho de edição em volta", () => {
     const { getByTestId } = renderImage({ caption: [{ type: "text", text: "Figura 1" }] });
     expect(getByTestId("image-caption-text").closest(".folha-rail")).toBeNull();
+  });
+});
+
+describe("ImageNodeView — remover legenda x excluir imagem (0264)", () => {
+  it("não desenha a mesma lixeira para remover a legenda e para excluir a imagem", () => {
+    renderImage({ caption: [{ type: "text", text: "cap" }] });
+    const removeCaption = screen.getByRole("button", { name: "Remover legenda" });
+    const deleteImage = screen.getByRole("button", { name: "Excluir imagem" });
+    expect(deleteImage.querySelector("svg.lucide-trash2")).not.toBeNull();
+    expect(removeCaption.querySelector("svg.lucide-trash2")).toBeNull();
+    expect(removeCaption.querySelector("svg.lucide-captions-off")).not.toBeNull();
+  });
+
+  it("dá tooltip igual ao nome acessível nos dois botões", () => {
+    renderImage({ caption: [{ type: "text", text: "cap" }] });
+    expect(screen.getByRole("button", { name: "Remover legenda" })).toHaveAttribute("title", "Remover legenda");
+    expect(screen.getByRole("button", { name: "Excluir imagem" })).toHaveAttribute("title", "Excluir imagem");
   });
 });

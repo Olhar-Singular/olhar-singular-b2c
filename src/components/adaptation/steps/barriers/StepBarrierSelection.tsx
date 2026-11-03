@@ -12,7 +12,7 @@ import {
 import { ArrowLeft, Sparkles, User, Coins, Plus } from "lucide-react";
 import { useBarrierProfiles, useCreateBarrierProfile } from "@/hooks/useBarrierProfiles";
 import { useAuth } from "@/hooks/useAuth";
-import { canAfford, computeAccess } from "@/lib/domain/access";
+import { canAfford, computeAccess, insufficientCreditsLead } from "@/lib/domain/access";
 import {
   BARRIER_DIMENSIONS,
   COMPLEXITY_LABELS,
@@ -39,8 +39,18 @@ export function StepBarrierSelection({ data, updateData, onNext, onPrev }: Props
   const createProfile = useCreateBarrierProfile();
   const [error, setError] = useState("");
   const [creatingProfile, setCreatingProfile] = useState(false);
-  const [selectNewest, setSelectNewest] = useState(false);
+  // 0383: id of the profile just created, selected once the refetched list
+  // contains it. Picking `profiles[0]` right after the mutation grabbed the
+  // previous profile, because the list had not refetched yet.
+  const [pendingProfileId, setPendingProfileId] = useState<string | null>(null);
   const selectRef = useRef<HTMLSelectElement>(null);
+  // 1122: the dialog is opened by state, with no `DialogTrigger`, so Radix
+  // would restore focus to `<body>` on close. Closing hands it back to the
+  // button that opened it; after a profile is created it goes to the select,
+  // which may only appear once the list refetches (first profile ever).
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const createdProfileRef = useRef(false);
+  const focusSelectPendingRef = useRef(false);
 
   const activeDimensions = [...new Set(
     data.barriers.filter((b) => b.is_active).map((b) => b.dimension).filter(Boolean),
@@ -81,6 +91,9 @@ export function StepBarrierSelection({ data, updateData, onNext, onPrev }: Props
     // it here is what makes it reach the AI at all: StepGenerate sends
     // `data.observationNotes`, and nothing else ever writes that field on a
     // fresh adaptation (rowMapping only rehydrates it for a saved one).
+    // A profile is now chosen (by the select or right after creating one), so
+    // a pending validation error about it is stale; handleNext re-validates.
+    setError("");
     updateData({
       barrierProfileId: profileId,
       barriers,
@@ -89,19 +102,37 @@ export function StepBarrierSelection({ data, updateData, onNext, onPrev }: Props
   }, [profiles, updateData]);
 
   useEffect(() => {
-    if (!selectNewest || profiles.length === 0) return;
-    handleProfileChange(profiles[0].id);
-    setSelectNewest(false);
-  }, [selectNewest, profiles, handleProfileChange]);
+    if (!pendingProfileId || !profiles.some((p) => p.id === pendingProfileId)) return;
+    handleProfileChange(pendingProfileId);
+    setPendingProfileId(null);
+  }, [pendingProfileId, profiles, handleProfileChange]);
+
+  useEffect(() => {
+    if (!focusSelectPendingRef.current || !selectRef.current) return;
+    focusSelectPendingRef.current = false;
+    selectRef.current.focus();
+  }, [profiles]);
+
+  function handleDialogCloseAutoFocus(event: Event) {
+    event.preventDefault();
+    if (!createdProfileRef.current) {
+      triggerRef.current?.focus();
+      return;
+    }
+    createdProfileRef.current = false;
+    if (selectRef.current) selectRef.current.focus();
+    else focusSelectPendingRef.current = true;
+  }
 
   async function handleCreateProfile(values: BarrierProfileFormValues) {
-    await createProfile.mutateAsync({
+    const created = await createProfile.mutateAsync({
       name: values.name,
       barriers: values.barriers,
       observation: values.observation,
     });
+    createdProfileRef.current = true;
     setCreatingProfile(false);
-    setSelectNewest(true);
+    setPendingProfileId(created.id);
   }
 
   // Both validation failures are about the profile field, so the message is
@@ -146,7 +177,7 @@ export function StepBarrierSelection({ data, updateData, onNext, onPrev }: Props
         {profiles.length === 0 ? (
           <div className="flex items-center gap-3">
             <p className="text-sm text-muted-foreground">Nenhum perfil criado.</p>
-            <Button size="sm" variant="outline" onClick={() => setCreatingProfile(true)}>
+            <Button ref={triggerRef} size="sm" variant="outline" onClick={() => setCreatingProfile(true)}>
               <Plus className="w-3 h-3 mr-1" /> Criar perfil
             </Button>
           </div>
@@ -162,14 +193,14 @@ export function StepBarrierSelection({ data, updateData, onNext, onPrev }: Props
               value={data.barrierProfileId ?? ""}
               onChange={(e) => handleProfileChange(e.target.value)}
             >
-              <option value="">— Selecionar perfil —</option>
+              <option value="">Selecionar perfil</option>
               {profiles.map((p) => (
                 <option key={p.id} value={p.id}>
                   {p.name || "Perfil sem nome"}
                 </option>
               ))}
             </select>
-            <Button size="sm" variant="outline" onClick={() => setCreatingProfile(true)}>
+            <Button ref={triggerRef} size="sm" variant="outline" onClick={() => setCreatingProfile(true)}>
               <Plus className="w-3 h-3 mr-1" /> Novo
             </Button>
           </div>
@@ -204,14 +235,14 @@ export function StepBarrierSelection({ data, updateData, onNext, onPrev }: Props
         ) : (
           <div
             className={`flex items-center gap-2 p-3 rounded-lg border ${
-              affordable ? "bg-amber-50 border-amber-200" : "bg-destructive/10 border-destructive/30"
+              affordable ? "bg-warning-surface border-warning-border" : "bg-destructive/10 border-destructive/30"
             }`}
           >
-            <Coins className={`w-4 h-4 shrink-0 ${affordable ? "text-amber-600" : "text-destructive"}`} />
-            <p className={`text-sm ${affordable ? "text-amber-800" : "text-destructive"}`}>
+            <Coins className={`w-4 h-4 shrink-0 ${affordable ? "text-warning-icon" : "text-destructive"}`} />
+            <p className={`text-sm ${affordable ? "text-warning-ink" : "text-destructive"}`}>
               Esta adaptação consumirá{" "}
               <strong>{totalCost} créditos</strong>
-              <span className={`ml-1 ${affordable ? "text-amber-600" : ""}`}>
+              <span className={"ml-1"}>
                 (complexidade {COMPLEXITY_LABELS[complexityTier]})
               </span>
               {extractionCost > 0 && (
@@ -221,7 +252,7 @@ export function StepBarrierSelection({ data, updateData, onNext, onPrev }: Props
               )}
               {!affordable && (
                 <span className="block mt-1">
-                  Seus créditos acabaram.{" "}
+                  {insufficientCreditsLead(access?.total ?? null, totalCost)}{" "}
                   <Link to="/assinar" className="underline font-medium">Assinar</Link>
                   {" ou "}
                   <Link to="/creditos" className="underline font-medium">comprar créditos extras</Link>
@@ -240,7 +271,7 @@ export function StepBarrierSelection({ data, updateData, onNext, onPrev }: Props
         <Button
           onClick={handleNext}
           aria-label="Adaptar"
-          className="gap-2 shadow-md shadow-primary/40 ring-2 ring-primary/30 ring-offset-2 hover:shadow-lg hover:shadow-primary/50 hover:ring-primary/50 transition-all duration-200"
+          className="gap-2 shadow-md shadow-primary/40 hover:shadow-lg hover:shadow-primary/50 transition-all duration-200"
         >
           <Sparkles className="w-4 h-4" />
           Adaptar
@@ -249,13 +280,18 @@ export function StepBarrierSelection({ data, updateData, onNext, onPrev }: Props
 
       {/* Inline profile creation dialog */}
       <Dialog open={creatingProfile} onOpenChange={setCreatingProfile}>
-        <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
+        <DialogContent
+          className="flex max-h-[85vh] max-w-lg flex-col overflow-hidden"
+          onCloseAutoFocus={handleDialogCloseAutoFocus}
+        >
           <DialogHeader>
             <DialogTitle>Criar perfil de barreira</DialogTitle>
           </DialogHeader>
           <BarrierProfileForm
+            existingNames={profiles.map((p) => p.name)}
             onSubmit={handleCreateProfile}
             isPending={createProfile.isPending}
+            onCancel={() => setCreatingProfile(false)}
           />
         </DialogContent>
       </Dialog>

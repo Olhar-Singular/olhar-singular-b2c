@@ -61,6 +61,24 @@ const fontUrl = (file) => fileURLToPath(new URL(`../public/fonts/${file}`, impor
  */
 const FAMILIES = [
   {
+    family: "Liberation Sans",
+    fonts: [
+      { src: fontUrl("LiberationSans-Regular.ttf"), fontWeight: "normal", fontStyle: "normal" },
+      { src: fontUrl("LiberationSans-Bold.ttf"), fontWeight: "bold", fontStyle: "normal" },
+      { src: fontUrl("LiberationSans-Italic.ttf"), fontWeight: "normal", fontStyle: "italic" },
+      { src: fontUrl("LiberationSans-BoldItalic.ttf"), fontWeight: "bold", fontStyle: "italic" },
+    ],
+  },
+  {
+    family: "Liberation Serif",
+    fonts: [
+      { src: fontUrl("LiberationSerif-Regular.ttf"), fontWeight: "normal", fontStyle: "normal" },
+      { src: fontUrl("LiberationSerif-Bold.ttf"), fontWeight: "bold", fontStyle: "normal" },
+      { src: fontUrl("LiberationSerif-Italic.ttf"), fontWeight: "normal", fontStyle: "italic" },
+      { src: fontUrl("LiberationSerif-BoldItalic.ttf"), fontWeight: "bold", fontStyle: "italic" },
+    ],
+  },
+  {
     family: "Atkinson Hyperlegible",
     fonts: [
       { src: fontUrl("AtkinsonHyperlegible-Regular.ttf"), fontWeight: "normal", fontStyle: "normal" },
@@ -244,6 +262,27 @@ async function main() {
       );
     }
     console.log(`✓ all ${pages.length} family×variant pages carry ink above the floor`);
+
+    // 6. Embedding check (0445): every font the file USES has to travel inside
+    //    it. A built-in Type 1 (Helvetica/Times/Courier) is only referenced, so
+    //    the school's printer substitutes whatever it has and the paper comes
+    //    out with other metrics, other line breaks, another page count.
+    const fonts = spawnSync("pdffonts", [pdfPath], { encoding: "utf8" });
+    if (fonts.status !== 0) fail(`pdffonts exited ${fonts.status}:\n${fonts.stderr || fonts.stdout}`);
+    // Columns: name type encoding emb sub uni object ID
+    const notEmbedded = fonts.stdout
+      .split("\n")
+      .slice(2)
+      .map((line) => line.trim().split(/\s+/))
+      .filter((cols) => cols.length >= 4 && cols[3] === "no")
+      .map((cols) => cols[0]);
+    if (notEmbedded.length) {
+      fail(
+        `font(s) NOT embedded in the PDF: ${notEmbedded.join(", ")}\n` +
+          `--- pdffonts ---\n${fonts.stdout}`,
+      );
+    }
+    console.log("✓ every font used by the document is embedded (pdffonts emb = yes)");
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }

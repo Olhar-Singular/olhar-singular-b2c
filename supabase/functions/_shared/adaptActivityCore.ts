@@ -14,6 +14,7 @@ import {
   buildAdaptationResult,
 } from "../../../src/lib/adaptation/canonical/ai.ts";
 import type { AdaptationResult } from "../../../src/lib/adaptation/canonical/schema.ts";
+import { findLabelOnlyTrueFalseItems } from "./trueFalseGuard.ts";
 
 /** A chat message in the OpenAI-compatible format used by the AI gateway. */
 export interface ChatMessage {
@@ -82,7 +83,8 @@ export type InterpretResult = InterpretSuccess | InterpretFailure;
  * Failure modes (all returned as `{ ok: false, errors }`, never thrown):
  *  - the content is not valid JSON;
  *  - the JSON does not satisfy the AI activity schema;
- *  - normalization/domain validation rejects the document.
+ *  - normalization/domain validation rejects the document;
+ *  - a trueFalse question lists the V/F options as its items (trueFalseGuard).
  */
 export function interpretAiResponse(rawContent: string): InterpretResult {
   let json: unknown;
@@ -100,6 +102,8 @@ export function interpretAiResponse(rawContent: string): InterpretResult {
 
   try {
     const result = buildAdaptationResult(parsed.value);
+    const trueFalseErrors = findLabelOnlyTrueFalseItems(result);
+    if (trueFalseErrors.length > 0) return { ok: false, errors: trueFalseErrors };
     return { ok: true, result };
   } catch (e) {
     const reason = e instanceof Error ? e.message : "unknown error";

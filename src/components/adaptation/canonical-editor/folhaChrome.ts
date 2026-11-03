@@ -37,7 +37,7 @@ export const FOLHA_GHOST =
  * 0336, mesma raiz do 0420). Aceso só por hover, o excesso é um relance.
  *
  * A classe marcadora `folha-rail` não pinta nada: é o gancho que o hospedeiro
- * observa (`has-[.folha-rail:focus-within]`) para reservar o vão enquanto o rail
+ * observa (`.folha-rail-host:has(.folha-rail :focus-visible)`) para reservar o vão enquanto o rail
  * está aceso pelo teclado, estado em que não existe hover para o excesso "sumir
  * sozinho" (achado 0338).
  *
@@ -76,7 +76,9 @@ export const FOLHA_RAIL =
  * opaca, e quem chega por teclado não tem hover para o excesso sumir sozinho —
  * ele fica sobre a última linha do bloco de cima pelas paradas todas do rail
  * (achado 0338). Por isso a reserva também vale enquanto o foco está DENTRO do
- * rail (`:has(.folha-rail:focus-within)`). Continua sendo só um estado
+ * rail (`:has(.folha-rail :focus-visible)`: só o foco de TECLADO; o foco que o
+ * `mousedown` põe no botão não pode mover o alvo sob o ponteiro, achado 0263).
+ * Continua sendo só um estado
  * transitório e provocado pelo próprio usuário de teclado — em repouso a folha
  * segue medindo `my-3`, como 0102/0113 exigem, e o hover não reserva nada, para
  * não empurrar texto sob o ponteiro (0413).
@@ -101,9 +103,19 @@ export const FOLHA_RAIL_HOST =
  * `PageSheet` publica, e `min-*` faz o botão crescer só o que a escala tirou —
  * na folha em tamanho real nada muda.
  *
- * Vale para todo controle de ÍCONE da folha; os `size="sm"` (36px) já passam.
+ * Vale para todo controle da folha, inclusive os `size="sm"` (36px): eles só
+ * passam com escala >= 0,67, e na folha ajustada de 390px (42%) chegam a 15px
+ * de altura (achado 0616).
  */
 export const FOLHA_TOUCH_TARGET = "folha-touch-target";
+
+/**
+ * Caixa que desfaz a escala da folha para chrome DENSO desenhado dentro dela
+ * (achado 0374): o card de estrutura da questão é formulário do app e, na
+ * folha ajustada de 390px (42%), encolhia inteiro a alvos de 6 a 15px. A regra
+ * (index.css) aplica `zoom: 1 / --folha-scale`; com a folha em 1 nada muda.
+ */
+export const FOLHA_CHROME_UNSCALED = "folha-chrome-unscaled";
 
 /**
  * Campo de texto (`<Input>` shadcn) que vive SOBRE a folha.

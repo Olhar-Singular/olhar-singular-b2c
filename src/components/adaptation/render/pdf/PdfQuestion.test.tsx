@@ -333,3 +333,31 @@ describe("PdfQuestion — a coluna do enunciado (0175)", () => {
     expect(textIndentOf(PdfQuestion({ block, number: 3 }), "3.")).toBeUndefined();
   });
 });
+
+/**
+ * Vao instrucao -> resposta e enunciado -> parte seguinte (achado 0270).
+ *
+ * O papel usava `marginBottom: 4` (4 pt = 5,33 px) depois da instrucao e do
+ * enunciado; as duas telas usam 8 px (`space-y-2` no QuestionView, `mt-2` no
+ * host da resposta da folha). A previa pagina sobre essa geometria, entao
+ * cada questao com instrucao media 2,67 px a mais que o arquivo e o erro
+ * acumulava ate empurrar um bloco para outra folha so na previa.
+ */
+describe("PdfQuestion — vao depois da instrucao e do enunciado", () => {
+  const block: Extract<Block, { type: "question" }> = {
+    id: id(1),
+    type: "question",
+    stem: [{ id: id(2), type: "paragraph", content: rt("Qual e a capital?") }],
+    enunciado: rt("Leia com atencao."),
+    instruction: rt("Marque a correta."),
+    answer: { kind: "open" },
+  };
+
+  it("usa o vao interno da questao (6 pt = 8 px) entre a instrucao e a resposta", () => {
+    expect(gapAfter(PdfQuestion({ block, number: 1 }), "Marque a correta.")).toBe(6);
+  });
+
+  it("usa o mesmo vao interno depois do enunciado", () => {
+    expect(gapAfter(PdfQuestion({ block, number: 1 }), "Leia com atencao.")).toBe(6);
+  });
+});

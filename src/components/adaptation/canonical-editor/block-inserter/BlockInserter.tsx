@@ -20,8 +20,10 @@
  * dividem o mesmo retângulo.
  *
  * Cada "+" recebe de `gapLabel` um nome acessível dizendo onde a inserção cai
- * (achado 0220): como a camada é um overlay fora do fluxo, na ordem de foco os
- * botões aparecem todos juntos no fim, longe do bloco que cada um toca.
+ * (achado 0220). Como a camada é um overlay fora do fluxo, na ordem do DOM os
+ * botões ficam todos juntos no fim, longe do bloco que cada um toca; por isso o
+ * Tab dentro do invólucro é redirecionado pela sequência de `gapFocusOrder`,
+ * que põe cada "+" no limite do seu bloco (achado 0274).
  *
  * The component must be placed inside a `position: relative` ancestor that wraps
  * the `EditorContent` (so `inset-0` lines the layer up with the editor DOM).
@@ -31,6 +33,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { Editor } from "@tiptap/react";
 import { topLevelGaps, type BlockGap } from "./topLevelGaps";
 import { gapLabel } from "./gapLabel";
+import { collectEditorStops, interleaveGapStops } from "./gapFocusOrder";
 import { runInserterAction } from "./insertAtPos";
 import { BlockInserterMenu } from "./BlockInserterMenu";
 import type { InserterItem } from "./blockInserterItems";
@@ -108,6 +111,44 @@ export function BlockInserter({ editor }: { editor: Editor }) {
     };
   }, [editor, recompute]);
 
+  /*
+    Achado 0274: Tab segue a ordem do documento, com cada "+" entre o último
+    focável do bloco de cima e o primeiro do bloco de baixo. Escuta em bolha no
+    invólucro `relative` (pai do overlay): Tab que o editor já tratou chega com
+    `defaultPrevented` e é respeitado. Nas pontas da sequência (raiz do editor
+    com Shift, último "+" sem Shift) o caminho nativo já é o certo.
+  */
+  useEffect(() => {
+    const layer = layerRef.current;
+    const container = layer?.parentElement;
+    /* v8 ignore next -- the overlay always mounts inside its wrapper */
+    if (!layer || !container) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "Tab" || event.defaultPrevented) return;
+      if (event.altKey || event.ctrlKey || event.metaKey) return;
+      const gaps = topLevelGaps(editor.state.doc);
+      const pluses = Array.from(
+        layer.querySelectorAll<HTMLElement>("[data-block-gap] button"),
+      );
+      const anchors = gaps.map((gap) =>
+        gap.followingPos == null ? null : editor.view.nodeDOM(gap.followingPos),
+      );
+      const order = interleaveGapStops(collectEditorStops(editor.view.dom), anchors, pluses);
+      const from = order.indexOf(document.activeElement as HTMLElement);
+      if (from < 0) return;
+      const step = event.shiftKey ? -1 : 1;
+      for (let i = from + step; i >= 0 && i < order.length; i += step) {
+        order[i].focus();
+        if (document.activeElement === order[i]) {
+          event.preventDefault();
+          return;
+        }
+      }
+    };
+    container.addEventListener("keydown", onKeyDown);
+    return () => container.removeEventListener("keydown", onKeyDown);
+  }, [editor]);
+
   const handlePick = (gap: BlockGap, item: InserterItem) => {
     runInserterAction(editor, gap, item.action);
   };
@@ -118,18 +159,35 @@ export function BlockInserter({ editor }: { editor: Editor }) {
         <div
           key={gap.index}
           data-block-gap={gap.index}
-          className="group pointer-events-none absolute inset-x-0 flex h-4 -translate-y-1/2 items-center gap-1"
+          className="group pointer-events-none absolute inset-x-0 flex h-4 -translate-y-1/2 items-center"
           style={{ top }}
         >
-          <span className="h-px flex-1 bg-surface-accent opacity-0 transition-opacity group-hover:opacity-40" />
           <span
             /*
               Achado 0207: hover é a única forma de revelar o "+" em ponteiro
               fino; em toque não existe hover e o botão ficava invisível na
               folha inteira. `@media (hover: none)` dá a afordância permanente
               a quem não tem ponteiro, sem poluir o desktop.
+
+              Achado 0608: mas essa afordância permanente, somada ao alvo de
+              toque contra-escalado do 0236 (`.folha-touch-target` devolve 24px
+              de TELA, o que a 0,42 vira ~57px de LAYOUT), pintava um círculo
+              OPACO no meio da coluna, em repouso, sobre a primeira linha do
+              bloco seguinte — a faixa é ancorada no limite do bloco e mede
+              `h-4`, então o botão transbordava ~21px para cada lado dela. E,
+              sendo o único `pointer-events-auto` que sobrou depois do 0180, o
+              toque nessas palavras abria o menu em vez de pôr o cursor: o mesmo
+              buraco do 0180, agora no próprio botão.
+
+              Por isso o alvo sai do fluxo da faixa e vai para a GOTEIRA da
+              folha (`right-full`: borda direita do botão colada na borda
+              esquerda da coluna), onde mora a margem de 40pt (~53px) da página.
+              Assim ele cresce com a escala sem nunca cobrir papel impresso, e o
+              critério do achado passa a valer em toda a escada de zoom. A faixa
+              continua ancorada no limite do bloco, só que agora ela é
+              exclusivamente a linha-guia — decorativa e sem ponteiro.
             */
-            className="pointer-events-auto opacity-0 transition-opacity focus-within:opacity-100 group-hover:opacity-100 [@media(hover:none)]:opacity-100"
+            className="pointer-events-auto absolute right-full top-1/2 -translate-y-1/2 opacity-0 transition-opacity focus-within:opacity-100 group-hover:opacity-100 [@media(hover:none)]:opacity-100"
           >
             <BlockInserterMenu gap={gap} label={label} onPick={(item) => handlePick(gap, item)} />
           </span>

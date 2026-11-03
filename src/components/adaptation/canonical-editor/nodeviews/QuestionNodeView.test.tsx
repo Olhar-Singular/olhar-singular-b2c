@@ -22,9 +22,13 @@ vi.mock("@/components/editor/ImageManagerModal", () => ({
 
 const buildMoveTransaction = vi.fn();
 const buildStemImagesTransaction = vi.fn();
+const buildAddGapTransaction = vi.fn();
+const buildRemoveGapTransaction = vi.fn();
 vi.mock("./blockTransactions", () => ({
   buildMoveTransaction: (...args: unknown[]) => buildMoveTransaction(...args),
   buildStemImagesTransaction: (...args: unknown[]) => buildStemImagesTransaction(...args),
+  buildAddGapTransaction: (...args: unknown[]) => buildAddGapTransaction(...args),
+  buildRemoveGapTransaction: (...args: unknown[]) => buildRemoveGapTransaction(...args),
 }));
 
 const canMoveUp = vi.fn();
@@ -210,7 +214,7 @@ describe("QuestionNodeView — preview at rest", () => {
   it("hides the gabarito in the preview (no correct-answer control)", () => {
     const { props } = makeProps(mc);
     render(<QuestionNodeView {...props} />);
-    expect(screen.queryByLabelText("Marcar como correta")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/como correta$/)).not.toBeInTheDocument();
     expect(screen.queryByTestId("answer-multipleChoice")).not.toBeInTheDocument();
   });
 
@@ -674,12 +678,22 @@ describe("QuestionNodeView — card open / commit / cancel", () => {
     fireEvent.click(screen.getByLabelText("Editar questão"));
     expect(screen.getByTestId("question-card")).toBeInTheDocument();
     expect(screen.getByTestId("answer-multipleChoice")).toBeInTheDocument();
-    expect(screen.getByLabelText("Marcar como correta")).toBeInTheDocument();
+    expect(screen.getByLabelText("Marcar alternativa a como correta")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Concluir" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Cancelar edição" })).toBeInTheDocument();
     expect(screen.queryByTestId("answer-preview-multipleChoice")).not.toBeInTheDocument();
     // snapshot is taken from the node
     expect((props.node as unknown as { toJSON: ReturnType<typeof vi.fn> }).toJSON).toHaveBeenCalled();
+  });
+
+  // Achado 0363: abrir o card pelo teclado desmontava o lápis que recebeu o
+  // Enter e ninguém assumia o foco, que caía no <body>.
+  it("não larga o foco no <body> ao abrir o card (achado 0363)", () => {
+    const { props } = makeProps(mc);
+    render(<QuestionNodeView {...props} />);
+    fireEvent.click(screen.getByLabelText("Editar questão"));
+    expect(document.activeElement).not.toBe(document.body);
+    expect(screen.getByTestId("question-card")).toContainElement(document.activeElement as HTMLElement);
   });
 
   it("Concluir writes the local answer + instruction + enunciado to the document via updateAttributes", () => {
@@ -728,6 +742,39 @@ describe("QuestionNodeView — card open / commit / cancel", () => {
     expect(dispatch).toHaveBeenCalled(); // restore transaction
   });
 
+  // Achado 0364: fechar o card desmonta o card inteiro com o foco dentro dele, e
+  // o navegador devolve ao <body> — os outros overlays do passo Revisar (popover
+  // Formato, gaveta de metadados, diálogo de excluir) todos devolvem ao gatilho.
+  it.each([
+    ["Escape", () => fireEvent.keyDown(document, { key: "Escape" })],
+    ["Cancelar", () => fireEvent.click(screen.getByRole("button", { name: "Cancelar edição" }))],
+    ["Concluir", () => fireEvent.click(screen.getByRole("button", { name: "Concluir" }))],
+  ])("devolve o foco ao lápis ao fechar o card por %s (achado 0364)", (_saida, fechar) => {
+    const { props } = makeProps(mc);
+    render(<QuestionNodeView {...props} />);
+    fireEvent.click(screen.getByLabelText("Editar questão"));
+    fechar();
+    expect(screen.queryByTestId("question-card")).not.toBeInTheDocument();
+    expect(document.activeElement).toBe(screen.getByLabelText("Editar questão"));
+  });
+
+  // Achado 0466: o listener do Escape era registrado só quando `expanded` mudava
+  // e guardava o `handleCancel` daquele render. Com o enunciado editado no card,
+  // o nó cresce, e o Escape trocava só o trecho [pos, pos + tamanho ANTIGO]: o
+  // resto do enunciado sobrava como uma questão fantasma, o nodeview era
+  // recriado e o foco caía no <body>. O Escape tem de usar o nó atual, igual ao
+  // "Cancelar".
+  it("Escape restaura o nó pelo tamanho ATUAL depois de o enunciado mudar (achado 0466)", () => {
+    const { props, mockTr } = makeProps(mc);
+    const { rerender } = render(<QuestionNodeView {...props} />);
+    fireEvent.click(screen.getByLabelText("Editar questão"));
+    const grown = { ...props.node, nodeSize: 14 } as unknown as NodeViewProps["node"];
+    rerender(<QuestionNodeView {...props} node={grown} />);
+    fireEvent.keyDown(document, { key: "Escape" });
+    expect(mockTr.replaceWith).toHaveBeenCalledWith(100, 114, expect.anything());
+    expect(document.activeElement).toBe(screen.getByLabelText("Editar questão"));
+  });
+
   it("ignores non-Escape keys while the card is open", () => {
     const { props } = makeProps(mc);
     render(<QuestionNodeView {...props} />);
@@ -774,6 +821,93 @@ describe("QuestionNodeView — card open / commit / cancel", () => {
   });
 });
 
+// Achado 1106: abrir o card de outra questão trocava o id expandido e
+// desmontava o card aberto junto com o buffer (resposta, instrução, número),
+// sem Concluir nem Cancelar: as edições sumiam em silêncio.
+describe("QuestionNodeView — trocar de card (achado 1106)", () => {
+  const sharedEditor = () =>
+    ({
+      isEditable: true,
+      state: {
+        doc: {
+          descendants() {},
+          forEach(fn: (node: { attrs: Record<string, unknown> }, offset: number) => void) {
+            fn({ attrs: { id: "q-a" } }, 0);
+            fn({ attrs: { id: "q-b" } }, 100);
+          },
+        },
+        schema: { nodeFromJSON: vi.fn().mockReturnValue({}) },
+        tr: { replaceWith: vi.fn().mockReturnThis() },
+      },
+      view: { dispatch: vi.fn() },
+      storage: { originalDoc: { snapshots: new Map() } },
+    }) as unknown as NodeViewProps["editor"];
+
+  const checkbox = SEEDS.find((s) => s.kind === "checkbox")!;
+
+  it("grava as edições do card aberto antes de abrir o card de outra questão", () => {
+    const editor = sharedEditor();
+    const a = makeProps(checkbox, { id: "q-a", editor });
+    const b = makeProps(mc, { id: "q-b", editor });
+    render(
+      <>
+        <QuestionNodeView {...a.props} />
+        <QuestionNodeView {...b.props} />
+      </>,
+    );
+    fireEvent.click(screen.getAllByLabelText("Editar questão")[0]);
+    fireEvent.click(screen.getByLabelText("Remover opção 2"));
+    // o lápis que sobra é o da questão B
+    fireEvent.click(screen.getByLabelText("Editar questão"));
+
+    expect(a.updateAttributes).toHaveBeenCalledWith({
+      answer: expect.objectContaining({
+        kind: "checkbox",
+        items: [expect.objectContaining({ id: "55555555-5555-4555-8555-555555555555" })],
+      }),
+      instruction: null,
+      enunciado: null,
+      enunciadoPosition: "below",
+      customNumber: null,
+    });
+    expect(b.updateAttributes).not.toHaveBeenCalled();
+    // um card só, e é o da B
+    expect(screen.getAllByTestId("question-card")).toHaveLength(1);
+    expect(screen.getAllByTestId("question-node")[1]).toContainElement(screen.getByTestId("question-card"));
+  });
+
+  it("deixa o foco no card novo, sem devolvê-lo ao lápis da questão que fechou", () => {
+    const editor = sharedEditor();
+    const a = makeProps(checkbox, { id: "q-a", editor });
+    const b = makeProps(mc, { id: "q-b", editor });
+    render(
+      <>
+        <QuestionNodeView {...a.props} />
+        <QuestionNodeView {...b.props} />
+      </>,
+    );
+    fireEvent.click(screen.getAllByLabelText("Editar questão")[0]);
+    fireEvent.click(screen.getByLabelText("Editar questão"));
+    expect(screen.getByTestId("question-card")).toContainElement(document.activeElement as HTMLElement);
+  });
+
+  it("Concluir e Cancelar não gravam de novo quando outro card abre depois", () => {
+    const editor = sharedEditor();
+    const a = makeProps(checkbox, { id: "q-a", editor });
+    const b = makeProps(mc, { id: "q-b", editor });
+    render(
+      <>
+        <QuestionNodeView {...a.props} />
+        <QuestionNodeView {...b.props} />
+      </>,
+    );
+    fireEvent.click(screen.getAllByLabelText("Editar questão")[0]);
+    fireEvent.click(screen.getByRole("button", { name: "Cancelar edição" }));
+    fireEvent.click(screen.getAllByLabelText("Editar questão")[1]);
+    expect(a.updateAttributes).not.toHaveBeenCalled();
+  });
+});
+
 describe("QuestionNodeView — customNumber", () => {
   it("shows customNumber override in the preview ordinal", () => {
     const { props } = makeProps(mc);
@@ -804,6 +938,28 @@ describe("QuestionNodeView — data-question-expanded attribute", () => {
     render(<QuestionNodeView {...props} />);
     fireEvent.click(screen.getByLabelText("Editar questão"));
     expect(screen.getByTestId("question-node")).toHaveAttribute("data-question-expanded", "true");
+  });
+});
+
+/*
+  Achado 0374: o card de estrutura e um formulario do app desenhado DENTRO do
+  `transform: scale()` da folha. Em 390px a folha abre a 42% e o card inteiro
+  ia junto: alvos de 6 a 15px e corpo de texto a ~6px. O card mora numa caixa
+  que desfaz a escala da folha (`.folha-chrome-unscaled`, index.css).
+*/
+describe("QuestionNodeView — card de estrutura fora da escala da folha (achado 0374)", () => {
+  it("desenha o card aberto numa caixa que desfaz a escala da folha", () => {
+    const { props } = makeProps(mc);
+    render(<QuestionNodeView {...props} />);
+    fireEvent.click(screen.getByLabelText("Editar questão"));
+    const card = screen.getByTestId("question-card");
+    expect(card.closest(".folha-chrome-unscaled")).not.toBeNull();
+  });
+
+  it("nao desfaz a escala da previa impressa", () => {
+    const { props } = makeProps(mc);
+    const { container } = render(<QuestionNodeView {...props} />);
+    expect(container.querySelector(".folha-chrome-unscaled")).toBeNull();
   });
 });
 
@@ -883,5 +1039,51 @@ describe("QuestionNodeView — foco ao sair da confirmação sem excluir (achado
     render(<QuestionNodeView {...props} />);
     fireEvent.click(screen.getByLabelText("Adicionar imagem à questão"));
     expect(modalRestoreFocusRef?.current).toBe(screen.getByLabelText("Adicionar imagem à questão"));
+  });
+});
+
+/**
+ * Achado 0503: `+ Lacuna` e `Remover lacuna` mexiam só no gabarito; o `___`
+ * impresso no enunciado ficava para trás, e remover a lacuna do meio deslocava
+ * silenciosamente todos os gabaritos seguintes.
+ */
+describe("QuestionNodeView — lacuna impressa x gabarito (achado 0503)", () => {
+  const fb: QuestionAnswer = {
+    kind: "fillBlank",
+    gaps: [
+      { id: "cccccccc-cccc-4ccc-8ccc-cccccccccccc", answer: "evaporacao" },
+      { id: "dddddddd-dddd-4ddd-8ddd-dddddddddddd", answer: "condensacao" },
+    ],
+  };
+
+  it("+ Lacuna insere o ___ correspondente no enunciado", () => {
+    const { props, dispatch } = makeProps(fb);
+    const tr = { add: true };
+    buildAddGapTransaction.mockReturnValue(tr);
+    render(<QuestionNodeView {...props} />);
+    fireEvent.click(screen.getByLabelText("Editar questão"));
+    fireEvent.click(screen.getByText("Lacuna"));
+    expect(buildAddGapTransaction).toHaveBeenCalledWith(props.editor.state, 100);
+    expect(dispatch).toHaveBeenCalledWith(tr);
+  });
+
+  it("Remover lacuna apaga o ___ daquela posição no enunciado", () => {
+    const { props, dispatch } = makeProps(fb);
+    const tr = { remove: true };
+    buildRemoveGapTransaction.mockReturnValue(tr);
+    render(<QuestionNodeView {...props} />);
+    fireEvent.click(screen.getByLabelText("Editar questão"));
+    fireEvent.click(screen.getAllByTitle("Remover lacuna")[1]);
+    expect(buildRemoveGapTransaction).toHaveBeenCalledWith(props.editor.state, 100, 1);
+    expect(dispatch).toHaveBeenCalledWith(tr);
+  });
+
+  it("não despacha nada quando o enunciado não comporta a lacuna", () => {
+    const { props, dispatch } = makeProps(fb);
+    buildAddGapTransaction.mockReturnValue(null);
+    render(<QuestionNodeView {...props} />);
+    fireEvent.click(screen.getByLabelText("Editar questão"));
+    fireEvent.click(screen.getByText("Lacuna"));
+    expect(dispatch).not.toHaveBeenCalled();
   });
 });

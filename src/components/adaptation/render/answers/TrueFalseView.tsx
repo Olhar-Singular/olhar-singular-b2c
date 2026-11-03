@@ -1,21 +1,34 @@
 /**
  * TrueFalseView — read-only render of true/false statements.
- * Answer key is hidden: blank "(  ) V  (  ) F" markers shown instead of the
+ * Answer key is hidden: blank "( ) V ( ) F" markers shown instead of the
  * authored value. Mirrors PdfAnswer (trueFalse).
  */
 
 import type { QuestionAnswer } from "@/lib/adaptation/canonical/schema";
+import {
+  ANSWER_ITEM_GAP_PX,
+  TRUE_FALSE_MARKER_GAP_PX,
+  TRUE_FALSE_MARKER_TEXT,
+} from "@/components/adaptation/render/pageTokens";
 import { RichTextView } from "../RichTextView";
 
 type TrueFalseAnswer = Extract<QuestionAnswer, { kind: "trueFalse" }>;
 
 export function TrueFalseView({ answer }: { answer: TrueFalseAnswer }) {
   return (
-    <ul data-testid="answer-trueFalse" className="space-y-2">
+    <ul
+      data-testid="answer-trueFalse"
+      className="flex flex-col"
+      style={{ rowGap: `${ANSWER_ITEM_GAP_PX}px` }}
+    >
       {answer.items.map((item) => (
-        <li key={item.id} className="flex items-start gap-3">
+        <li
+          key={item.id}
+          className="flex items-start"
+          style={{ columnGap: `${TRUE_FALSE_MARKER_GAP_PX}px` }}
+        >
           <span className="shrink-0 font-medium" aria-label="Marque Verdadeiro ou Falso">
-            (  ) V  (  ) F
+            {TRUE_FALSE_MARKER_TEXT}
           </span>
           <span className="flex-1">
             <RichTextView content={item.content} />

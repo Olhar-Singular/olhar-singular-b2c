@@ -44,6 +44,16 @@ describe("index.css — blocos de topo do editor canonico", () => {
     expect(body).not.toMatch(/(^|[\s;])color\s*:/);
   });
 
+  it("nao recolore nem pinta faixa no titulo de secao h2/h3 (achado 0389)", () => {
+    // Previa, PDF e Word imprimem o h2/h3 na tinta do papel e sem fundo; a
+    // distincao de "Secao" fica so no rotulo ::before e no filete ::after.
+    for (const tag of ["h2", "h3"]) {
+      const body = ruleBody(`.tiptap:not(.rich-text-field) > ${tag}`);
+      expect(body).not.toMatch(/(^|[\s;])color\s*:/);
+      expect(body).not.toMatch(/background(-color)?\s*:/);
+    }
+  });
+
   it("nao rotula todo paragrafo de topo como 'Instrução'", () => {
     expect(ruleBody(".tiptap:not(.rich-text-field) > p::before")).not.toMatch(
       /Instrução/,
@@ -131,9 +141,9 @@ const wizardSource = readFileSync(
   "utf8",
 );
 
-/** Classes do ramo `i <= maxStepReached` (passo ja alcancado) do indicador de passos. */
+/** Classes do ramo `i <= stepCeiling` (passo ja alcancado) do indicador de passos. */
 function completedChipClasses(): string {
-  const match = wizardSource.match(/i <= maxStepReached\s*\?\s*"([^"]+)"/);
+  const match = wizardSource.match(/i <= stepCeiling\s*\?\s*"([^"]+)"/);
   expect(match, "ramo do chip concluido nao encontrado no wizard").not.toBeNull();
   return match![1];
 }
@@ -838,8 +848,34 @@ describe("index.css — alvo de toque do chrome da folha (achado 0236)", () => {
 
   it("cresce a mesma reserva quando o teclado acende o rail", () => {
     expect(
-      ruleBody(".folha-rail-host:has(.folha-rail:focus-within)"),
+      ruleBody(".folha-rail-host:has(.folha-rail :focus-visible)"),
     ).toMatch(/margin-top:\s*calc\(2\.5rem\s*\/\s*var\(--folha-scale/);
+  });
+
+  /**
+   * Achado 0263: o Chrome foca o `<button>` no `mousedown`. Com a reserva
+   * presa a `:focus-within`, o proprio clique de mouse ligava os 2,5rem de
+   * margem entre o `mousedown` e o `mouseup`: a questao e o rail desciam 24 a
+   * 28px, o `mouseup` caia fora do botao e o `click` nunca chegava ao lapis.
+   * A reserva tem de reagir so ao foco de teclado (`:focus-visible`), que e o
+   * caso do 0338; o foco posto por ponteiro nao pode mexer na margem.
+   */
+  it("nao reserva o vao com o foco que o clique de mouse cria (achado 0263)", () => {
+    expect(css).not.toMatch(/\.folha-rail-host:has\(\.folha-rail:focus-within\)/);
+  });
+});
+
+/**
+ * Achado 0374: o card de estrutura da questao e chrome do app, nao conteudo
+ * impresso, mas vive dentro do `transform: scale()` da folha. A caixa dele
+ * desfaz a escala com `zoom` (que, ao contrario do transform, mexe no layout:
+ * a altura reservada acompanha) e a largura percentual continua a da coluna.
+ */
+describe("index.css — card de estrutura fora da escala da folha (achado 0374)", () => {
+  it("desfaz o --folha-scale com zoom", () => {
+    expect(ruleBody(".folha-chrome-unscaled")).toMatch(
+      /zoom:\s*calc\(1\s*\/\s*var\(--folha-scale,\s*1\)\)/,
+    );
   });
 });
 
@@ -918,5 +954,241 @@ describe("index.css — anel de foco de input/textarea (achado 0422)", () => {
     // A regra global traz `rounded-sm`; herdar isso aqui achataria o
     // `rounded-md` do proprio Input.
     expect(regraDe("input:focus-visible").corpo).not.toMatch(/rounded-sm/);
+  });
+});
+
+/**
+ * Esquema de cor nativo da raiz (achado 0505 da caca autonoma).
+ *
+ * O tema escuro so trocava cores de tokens. Como nenhuma superficie acima da
+ * folha declarava `color-scheme`, o NAVEGADOR continuava pintando de claro tudo
+ * que desenha sozinho: barra de rolagem, calendario do input[type=date] do
+ * Exportar, autofill, caret e ::selection. A folha do `PageSheet` ja se protegia
+ * com `[color-scheme:light]` (papel e branco nos dois temas); a raiz nunca se
+ * declarou. Declarar nos dois lados torna o `light` da folha uma decisao de
+ * verdade em vez de coincidencia com o padrao do navegador.
+ */
+describe("index.css — color-scheme da raiz", () => {
+  it(":root declara color-scheme: light", () => {
+    expect(themeBody(":root")).toMatch(/color-scheme\s*:\s*light\s*;/);
+  });
+
+  it(".dark declara color-scheme: dark", () => {
+    expect(themeBody(".dark")).toMatch(/color-scheme\s*:\s*dark\s*;/);
+  });
+});
+
+describe("index.html — meta color-scheme", () => {
+  const html = readFileSync(path.resolve(__dirname, "../index.html"), "utf8");
+
+  it("anuncia os dois esquemas antes de o React montar", () => {
+    const meta = html.match(/<meta\s+name="color-scheme"\s+content="([^"]+)"/);
+    expect(meta, "meta color-scheme ausente no index.html").not.toBeNull();
+    expect(meta![1]).toMatch(/\blight\b/);
+    expect(meta![1]).toMatch(/\bdark\b/);
+  });
+});
+
+/**
+ * Rotulo de tipo do bloco de topo preso ao bloco que rotula (achado 0265).
+ *
+ * O rotulo ("TÍTULO"/"SEÇÃO"/"PARÁGRAFO", 9 px) vive no vao ACIMA do bloco, mas
+ * o vao e `--doc-block-spacing`, que o popover Formato move de 8 a 40 px. Com
+ * `top: -0.85rem` fixo ele ficava a 2,4 px do bloco de cima e 4,6 px do proprio
+ * bloco no padrao (lia-se como legenda do vizinho) e, com vao de 12 px ou
+ * menos, era pintado sobre a ultima linha do bloco de cima.
+ *
+ * Modelo geometrico: avalia a regra do ::before para cada vao possivel e exige
+ * que o rotulo, quando desenhado, caiba no vao e fique mais perto do proprio
+ * bloco que do vizinho. Quando o vao nao comporta isso, o rotulo some.
+ */
+describe("index.css — rotulo do bloco de topo cabe no vao (achado 0265)", () => {
+  /** Avalia uma expressao CSS de comprimento (px/rem/calc/clamp/min/max) para um vao. */
+  function evalLength(expr: string, gapPx: number): number {
+    const js = expr
+      .replace(/var\(--doc-block-spacing,\s*1rem\)/g, `(${gapPx})`)
+      .replace(/(-?[\d.]+)rem/g, (_, n) => `(${Number(n) * 16})`)
+      .replace(/(-?[\d.]+)px/g, "($1)")
+      .replace(/calc\(/g, "(")
+      .replace(/clamp\(/g, "__clamp(")
+      .replace(/\bmin\(/g, "Math.min(")
+      .replace(/\bmax\(/g, "Math.max(");
+    expect(js, `expressao CSS nao suportada: ${expr}`).toMatch(/^[\d\s.+\-*/(),a-zA-Z_]*$/);
+    const clamp = (lo: number, v: number, hi: number) => Math.min(Math.max(lo, v), hi);
+    return new Function("__clamp", `return ${js};`)(clamp) as number;
+  }
+
+  /** Caixa do rotulo relativa ao topo do bloco (negativo = acima). */
+  function labelBox(gapPx: number): { top: number; bottom: number; size: number } {
+    const body = ruleBody(".tiptap:not(.rich-text-field) > p::before");
+    expect(body).toMatch(/line-height:\s*1\s*;/);
+    const size = evalLength(body.match(/font-size:\s*([^;]+);/)![1].trim(), gapPx);
+    const top = body.match(/(?:^|[\s;])top:\s*([^;]+);/);
+    if (top) {
+      const t = evalLength(top[1].trim(), gapPx);
+      return { top: t, bottom: t + size, size };
+    }
+    const bottom = body.match(/(?:^|[\s;])bottom:\s*calc\(100%\s*\+\s*([^;]+)\)\s*;/);
+    expect(bottom, `posicao do rotulo nao reconhecida: ${body}`).not.toBeNull();
+    const b = -evalLength(bottom![1].trim(), gapPx);
+    return { top: b - size, bottom: b, size };
+  }
+
+  // Faixa do popover Formato (AppearancePopover: SPACING_MIN_PX..SPACING_MAX_PX).
+  const gaps = Array.from({ length: 33 }, (_, i) => 8 + i);
+
+  it.each(gaps)("vao de %i px: o rotulo nao invade o bloco de cima", (gap) => {
+    const box = labelBox(gap);
+    if (box.size === 0) return;
+    expect(box.top, "rotulo sobrepoe o bloco de cima").toBeGreaterThanOrEqual(-gap);
+    expect(box.bottom, "rotulo sobrepoe o proprio bloco").toBeLessThanOrEqual(0);
+  });
+
+  it.each(gaps)("vao de %i px: o rotulo fica mais perto do proprio bloco", (gap) => {
+    const box = labelBox(gap);
+    if (box.size === 0) return;
+    const toOwn = -box.bottom;
+    const toAbove = box.top + gap;
+    expect(toOwn, `rotulo a ${toAbove}px do bloco de cima e ${toOwn}px do seu`).toBeLessThan(
+      toAbove,
+    );
+  });
+
+  it("no espacamento padrao (16 px) o rotulo continua visivel, em 9 px", () => {
+    expect(labelBox(16).size).toBe(9);
+  });
+});
+
+describe("index.css — chrome da imagem no card da questao (achado 0613)", () => {
+  const selector =
+    '[data-question-expanded="true"] [data-testid="image-controls"]';
+
+  it("reabre o rail no card aberto", () => {
+    expect(ruleBody(selector)).toMatch(/display\s*:\s*flex/);
+  });
+
+  it("nao empilha o rail em coluna (subiria sobre o cabecalho do card)", () => {
+    const body = ruleBody(selector);
+    expect(body).not.toMatch(/flex-direction/);
+    expect(body).not.toMatch(/(^|[\s;])gap\s*:/);
+  });
+});
+
+/**
+ * Rotulo dos preenchimentos primarios no tema escuro (achado 0807).
+ *
+ * No `.dark`, `--primary` foi clareado para servir de TINTA (`text-primary`)
+ * sobre `--card`, mas o mesmo token e o FUNDO do Button default, do chip do passo
+ * ativo do wizard e de todo `bg-primary text-primary-foreground`. Com o rotulo
+ * branco global, o par caia a 3,09:1. Nenhum valor de `--primary` atende os dois
+ * usos, e `--primary-foreground` global tambem pinta a sidebar (gradiente escuro),
+ * entao o rotulo escuro vale so DENTRO de quem e preenchido com `bg-primary`.
+ */
+function primaryFillInk(themeSelector: string): string {
+  const scoped = themeSelector === ":root" ? ".bg-primary" : `${themeSelector} .bg-primary`;
+  const body = ruleBody(scoped, false);
+  const override = [...body.matchAll(/--primary-foreground\s*:\s*([^;]+);/g)];
+  return override.length > 0
+    ? override[override.length - 1][1].trim()
+    : token(themeSelector, "primary-foreground");
+}
+
+describe("index.css — rotulo sobre o preenchimento primario", () => {
+  it.each([
+    [":root", "tema claro"],
+    [".dark", "tema escuro"],
+  ])("%s (%s) atinge 4,5:1 em repouso", (selector) => {
+    const ink = hslTokenToRgb(primaryFillInk(selector));
+    const fill = hslTokenToRgb(token(selector, "primary"));
+    expect(ratioRgb(ink, fill)).toBeGreaterThanOrEqual(4.5);
+  });
+
+  it(".dark mantem 4,5:1 no hover do Button default (bg-primary/90)", () => {
+    const ink = hslTokenToRgb(primaryFillInk(".dark"));
+    const fill = hslTokenToRgb(token(".dark", "primary"));
+    const pageBg = hslTokenToRgb(token(".dark", "background"));
+    expect(ratioRgb(ink, mix(fill, pageBg, 0.9))).toBeGreaterThanOrEqual(4.5);
+  });
+
+  it("mantem o --primary-foreground global do .dark legivel na sidebar", () => {
+    const ink = hslTokenToRgb(token(".dark", "primary-foreground"));
+    for (const stop of sidebarStops(".dark .gradient-sidebar")) {
+      expect(ratioRgb(ink, stop)).toBeGreaterThanOrEqual(4.5);
+    }
+  });
+});
+
+/**
+ * Contraste do token --input (achado 0273, WCAG 1.4.11).
+ *
+ * `--input` pinta o trilho do Switch desligado (`data-[state=unchecked]:bg-input`)
+ * e a borda de Input/Textarea/Select/Button outline. O polegar do Switch e
+ * `bg-background` sobre o trilho, entao o par trilho x --background e ao mesmo
+ * tempo "controle x fundo" e "polegar x trilho". Em 87% (claro) e 42% (escuro)
+ * os pares davam ~1,2:1 e 2,49:1: a pilula desligada e a borda dos campos sumiam.
+ */
+describe("index.css — contraste do --input (trilho do switch e borda dos campos)", () => {
+  it.each([
+    [":root", "background"],
+    [":root", "card"],
+    [":root", "popover"],
+    [":root", "muted"],
+    [":root", "secondary"],
+    [".dark", "background"],
+    [".dark", "card"],
+    [".dark", "popover"],
+    [".dark", "muted"],
+  ])("%s: --input atinge 3:1 sobre --%s", (selector, surface) => {
+    const ratio = contrastRatio(token(selector, "input"), token(selector, surface));
+    expect(ratio).toBeGreaterThanOrEqual(3);
+  });
+});
+
+/**
+ * Aviso de custo do passo Barreiras (achado 1120).
+ *
+ * O aviso "Esta adaptacao consumira N creditos (complexidade ...)" era pintado com
+ * ambar literal do Tailwind (`bg-amber-50`, `text-amber-600`): ficava um bloco creme
+ * no tema escuro e o trecho "(complexidade ...)" dava 3,07:1 sobre o fundo. Agora
+ * usa tokens --warning-* com variante escura.
+ */
+describe("aviso de custo do passo Barreiras (achado 1120)", () => {
+  const source = readSource("./components/adaptation/steps/barriers/StepBarrierSelection.tsx");
+
+  it("nao usa ambar literal do Tailwind (nao acompanharia o tema)", () => {
+    expect(source).not.toMatch(/\b(?:bg|text|border)-amber-\d+/);
+  });
+
+  it("pinta o aviso com os tokens --warning-*", () => {
+    expect(source).toMatch(/bg-warning-surface/);
+    expect(source).toMatch(/border-warning-border/);
+    expect(source).toMatch(/text-warning-ink/);
+  });
+
+  it.each([
+    [":root", "tema claro"],
+    [".dark", "tema escuro"],
+  ])("%s (%s): tinta do aviso atinge 4,5:1 sobre o fundo do aviso", (theme) => {
+    expect(
+      contrastRatio(token(theme, "warning-ink"), token(theme, "warning-surface")),
+    ).toBeGreaterThanOrEqual(4.5);
+  });
+
+  it.each([
+    [":root", "tema claro"],
+    [".dark", "tema escuro"],
+  ])("%s (%s): icone e borda do aviso atingem 3:1 (WCAG 1.4.11)", (theme) => {
+    expect(
+      contrastRatio(token(theme, "warning-icon"), token(theme, "warning-surface")),
+    ).toBeGreaterThanOrEqual(3);
+  });
+
+  it("o fundo do aviso no tema escuro e escuro (nao um bloco creme)", () => {
+    expect(relativeLuminance(token(".dark", "warning-surface"))).toBeLessThan(
+      relativeLuminance(token(".dark", "foreground")),
+    );
+    expect(
+      contrastRatio(token(".dark", "foreground"), token(".dark", "warning-surface")),
+    ).toBeGreaterThanOrEqual(4.5);
   });
 });

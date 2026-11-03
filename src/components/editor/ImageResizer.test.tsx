@@ -352,4 +352,125 @@ describe("ImageResizer", () => {
     expect(indicator.className).toContain("text-surface-ink-soft");
     expect(indicator.className).not.toMatch(/text-muted-foreground/);
   });
+
+  /**
+   * 0611 — o resizer copiava `initialWidth` para estado local só na montagem.
+   * Ctrl+Z revertia o atributo `width` do nó, o NodeView re-renderizava com a
+   * largura antiga e a folha continuava desenhando a do arraste (e o próximo
+   * toque na alça partia do valor local, ressuscitando o tamanho desfeito).
+   */
+  describe("0611 — largura do documento é a fonte de verdade fora do arraste", () => {
+    it("redesenha a largura quando o documento muda (desfazer/refazer)", () => {
+      const { rerender } = render(<ImageResizer src="https://x.png" alt="a" initialWidth={762} onResize={vi.fn()} />);
+      rerender(<ImageResizer src="https://x.png" alt="a" initialWidth={300} onResize={vi.fn()} />);
+      const wrapper = screen.getByRole("img").parentElement as HTMLElement;
+      expect(wrapper.style.width).toBe("300px");
+      expect(screen.getByRole("slider")).toHaveAttribute("aria-valuenow", "300");
+      expect(screen.getByText("300px")).toBeInTheDocument();
+    });
+
+    it("volta ao padrão quando o documento zera a largura (trocar imagem)", () => {
+      const { rerender } = render(<ImageResizer src="https://x.png" alt="a" initialWidth={500} onResize={vi.fn()} />);
+      rerender(<ImageResizer src="https://y.png" alt="a" onResize={vi.fn()} />);
+      expect((screen.getByRole("img").parentElement as HTMLElement).style.width).toBe("300px");
+    });
+
+    it("o próximo passo do teclado parte da largura do documento", () => {
+      const onResize = vi.fn();
+      const { rerender } = render(<ImageResizer src="https://x.png" alt="a" initialWidth={762} onResize={onResize} />);
+      rerender(<ImageResizer src="https://x.png" alt="a" initialWidth={300} onResize={onResize} />);
+      fireEvent.keyDown(screen.getByRole("slider"), { key: "ArrowLeft" });
+      expect(onResize).toHaveBeenLastCalledWith(290);
+    });
+
+    it("não atropela a largura provisória durante um arraste em curso", () => {
+      const onResize = vi.fn();
+      const { rerender } = render(<ImageResizer src="https://x.png" alt="a" initialWidth={300} onResize={onResize} />);
+      const handle = screen.getByRole("slider");
+      fireEvent.mouseDown(handle, { clientX: 0 });
+      act(() => {
+        fireEvent.mouseMove(document, { clientX: 100 });
+      });
+      rerender(<ImageResizer src="https://x.png" alt="a" initialWidth={250} onResize={onResize} />);
+      expect((screen.getByRole("img").parentElement as HTMLElement).style.width).toBe("400px");
+      act(() => {
+        fireEvent.mouseUp(document);
+      });
+      expect(onResize).toHaveBeenLastCalledWith(400);
+    });
+  });
+  /**
+   * 0612 — o teto do gesto era uma constante de 800 px, mas o desenho é
+   * cortado na coluna (`max-w-full`). Entre a coluna (~666 px no enunciado) e
+   * 800, o arraste gravava e a alça anunciava larguras que nenhuma superfície
+   * desenha, e o teclado tinha uma faixa morta. O teto é a coluna medida.
+   */
+  describe("0612 — o teto do gesto é a coluna em que a figura é desenhada", () => {
+    const slider = () => screen.getByRole("slider", { name: /redimensionar imagem/i });
+
+    it("o arraste não grava largura maior que a coluna", () => {
+      const onResize = vi.fn();
+      render(<ImageResizer src="https://x.png" alt="a" initialWidth={300} columnWidth={666} onResize={onResize} />);
+      drag(100, 5000);
+      expect(onResize).toHaveBeenCalledWith(666);
+      expect(slider()).toHaveAttribute("aria-valuemax", "666");
+      expect(slider()).toHaveAttribute("aria-valuenow", "666");
+    });
+
+    it("anuncia a largura desenhada quando o documento pede mais que a coluna", () => {
+      render(<ImageResizer src="https://x.png" alt="a" initialWidth={762} columnWidth={666} onResize={vi.fn()} />);
+      expect(slider()).toHaveAttribute("aria-valuenow", "666");
+      expect(slider()).toHaveAttribute("aria-valuetext", "666 pixels de largura");
+      expect(slider()).toHaveAttribute("aria-valuemax", "666");
+      expect(screen.getByText("666px")).toBeInTheDocument();
+      // O documento continua respeitado (0303/0308): o pedido segue no wrapper.
+      expect((screen.getByRole("img").parentElement as HTMLElement).style.width).toBe("762px");
+    });
+
+    it("o teclado encolhe a partir da largura desenhada, sem faixa morta", () => {
+      const onResize = vi.fn();
+      render(<ImageResizer src="https://x.png" alt="a" initialWidth={762} columnWidth={666} onResize={onResize} />);
+      fireEvent.keyDown(slider(), { key: "ArrowLeft" });
+      expect(onResize).toHaveBeenLastCalledWith(656);
+    });
+
+    it("crescer além da coluna não reescreve o pedido do documento (0308)", () => {
+      const onResize = vi.fn();
+      render(<ImageResizer src="https://x.png" alt="a" initialWidth={2400} columnWidth={666} onResize={onResize} />);
+      fireEvent.keyDown(slider(), { key: "ArrowRight" });
+      expect(onResize).toHaveBeenLastCalledWith(2400);
+      drag(100, 900);
+      expect(onResize).toHaveBeenLastCalledWith(2400);
+    });
+
+    it("o arraste para encolher parte da largura desenhada", () => {
+      const onResize = vi.fn();
+      render(<ImageResizer src="https://x.png" alt="a" initialWidth={762} columnWidth={666} onResize={onResize} />);
+      drag(500, 400);
+      expect(onResize).toHaveBeenLastCalledWith(566);
+    });
+
+    it("Home e End levam ao mínimo e à coluna, como o padrão de slider", () => {
+      const onResize = vi.fn();
+      render(<ImageResizer src="https://x.png" alt="a" initialWidth={300} columnWidth={666} onResize={onResize} />);
+      fireEvent.keyDown(slider(), { key: "End" });
+      expect(onResize).toHaveBeenLastCalledWith(666);
+      fireEvent.keyDown(slider(), { key: "Home" });
+      expect(onResize).toHaveBeenLastCalledWith(50);
+    });
+
+    it("sem coluna medida, End vai ao teto de reserva", () => {
+      const onResize = vi.fn();
+      render(<ImageResizer src="https://x.png" alt="a" initialWidth={300} onResize={onResize} />);
+      fireEvent.keyDown(slider(), { key: "End" });
+      expect(onResize).toHaveBeenLastCalledWith(800);
+    });
+
+    it("o selo de largura fica dentro da figura, sem pintar sobre a legenda", () => {
+      render(<ImageResizer src="https://x.png" alt="a" initialWidth={250} onResize={vi.fn()} />);
+      const indicator = screen.getByText("250px");
+      expect(indicator.className).not.toMatch(/-bottom-/);
+      expect(indicator.className).toContain("bottom-1");
+    });
+  });
 });

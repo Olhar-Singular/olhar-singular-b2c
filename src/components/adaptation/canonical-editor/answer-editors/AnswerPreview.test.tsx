@@ -3,6 +3,13 @@ import { render, screen, fireEvent } from "@testing-library/react";
 import type { RichText, QuestionAnswer } from "@/lib/adaptation/canonical/schema";
 import { AnswerPreview } from "./AnswerPreview";
 import { ALTERNATIVE_MARKER_CLASS } from "@/components/adaptation/render/answers/markerColumn";
+import {
+  INK_MUTED,
+  ORDERING_MARKER_TEXT,
+  RULE_COLOR,
+  TRUE_FALSE_MARKER_GAP_PX,
+  TRUE_FALSE_MARKER_TEXT,
+} from "@/components/adaptation/render/pageTokens";
 
 // Mock RichTextField as a plain textbox keyed by ariaLabel, so we can drive the
 // inline content edits without the real ProseMirror editor.
@@ -39,7 +46,7 @@ describe("AnswerPreview — multipleChoice", () => {
     expect(screen.queryAllByTestId("preview-bullet")).toHaveLength(0);
     expect(screen.getAllByLabelText(/^Alternativa /)).toHaveLength(2);
     // the correct alternative must be indistinguishable from the rest (D5)
-    expect(screen.queryByLabelText("Marcar como correta")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/como correta$/)).not.toBeInTheDocument();
     expect(screen.queryByText("✔")).not.toBeInTheDocument();
   });
 
@@ -97,9 +104,19 @@ describe("AnswerPreview — checkbox", () => {
     const onChange = vi.fn();
     render(<AnswerPreview answer={answer} onChange={onChange} />);
     expect(screen.getByTestId("preview-bullet")).toHaveAttribute("data-shape", "square");
-    expect(screen.queryByLabelText("Marcar opção")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/^Marcar opção/)).not.toBeInTheDocument();
     fireEvent.change(screen.getByLabelText("Opção 1"), { target: { value: "x" } });
     expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ kind: "checkbox" }));
+  });
+
+  // Regressão 0356: a folha do Revisar diagramava os itens em duas colunas a
+  // partir de 640px, enquanto a prévia do Exportar, o PDF e o Word imprimem um
+  // item por linha. O bloco dobrava de altura na impressão.
+  it("lays the items out in a single column, like the printed surfaces", () => {
+    render(<AnswerPreview answer={answer} onChange={vi.fn()} />);
+    const container = screen.getByTestId("answer-preview-checkbox");
+    expect(container.className).not.toMatch(/grid-cols-2/);
+    expect(container.className).toMatch(/\bflex-col\b/);
   });
 });
 
@@ -113,8 +130,7 @@ describe("AnswerPreview — trueFalse", () => {
     const onChange = vi.fn();
     render(<AnswerPreview answer={answer} onChange={onChange} />);
     expect(screen.getByLabelText("Afirmação 1")).toBeInTheDocument();
-    expect(screen.getByText("V")).toBeInTheDocument();
-    expect(screen.getByText("F")).toBeInTheDocument();
+    expect(screen.getByText(TRUE_FALSE_MARKER_TEXT, { collapseWhitespace: false })).toBeInTheDocument();
     expect(screen.queryByTitle("Alternar Verdadeiro/Falso")).not.toBeInTheDocument();
     fireEvent.change(screen.getByLabelText("Afirmação 1"), { target: { value: "y" } });
     expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ kind: "trueFalse" }));
@@ -128,6 +144,23 @@ describe("AnswerPreview — trueFalse", () => {
     expect(row.firstElementChild?.textContent).toMatch(/V.*F/);
     // V/F must NOT be the last element — that would mean content pushed it to the right edge.
     expect(row.lastElementChild?.textContent).not.toMatch(/V.*F/);
+  });
+
+  // Achado 0357: a folha do Revisar desenhava dois círculos vazados V/F, enquanto
+  // a prévia do Exportar, o PDF e o Word imprimem "( ) V ( ) F". Círculo é o
+  // desenho de escolha única (rádio) e as afirmações do V/F são independentes —
+  // o marcador da folha passa a ser o MESMO texto do papel, do mesmo token.
+  it("imprime o marcador do papel, sem círculo de escolha única", () => {
+    const { container } = render(<AnswerPreview answer={answer} onChange={vi.fn()} />);
+    const marker = screen.getByText(TRUE_FALSE_MARKER_TEXT, { collapseWhitespace: false });
+    expect(marker).toBeInTheDocument();
+    expect(container.querySelector(".rounded-full")).toBeNull();
+  });
+
+  it("deixa o vão do token entre o marcador e a afirmação", () => {
+    render(<AnswerPreview answer={answer} onChange={vi.fn()} />);
+    const row = screen.getByTestId("answer-preview-trueFalse").firstElementChild as HTMLElement;
+    expect(row.style.columnGap).toBe(`${TRUE_FALSE_MARKER_GAP_PX}px`);
   });
 });
 
@@ -148,6 +181,16 @@ describe("AnswerPreview — ordering", () => {
     fireEvent.change(screen.getByLabelText("Item 1"), { target: { value: "z" } });
     expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ kind: "ordering" }));
   });
+
+  it("desenha o espaço de numerar como o mesmo `____` das superfícies impressas", () => {
+    render(<AnswerPreview answer={answer} onChange={vi.fn()} />);
+    const marks = screen.getAllByTestId("preview-order-box");
+    expect(marks).toHaveLength(2);
+    for (const mark of marks) {
+      expect(mark).toHaveTextContent(ORDERING_MARKER_TEXT);
+      expect(mark.className).not.toMatch(/border/);
+    }
+  });
 });
 
 describe("AnswerPreview — matching", () => {
@@ -167,17 +210,103 @@ describe("AnswerPreview — matching", () => {
     fireEvent.change(screen.getByLabelText("Coluna B, par 1"), { target: { value: "R" } });
     expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ kind: "matching" }));
   });
+
+  it("inks the arrow with the document token, not the faint chrome ink (achado 0447)", () => {
+    render(<AnswerPreview answer={answer} onChange={vi.fn()} />);
+    const arrow = screen.getByText("↔");
+    expect(arrow.className).not.toContain("text-surface-ink-faint");
+    expect(arrow).toHaveStyle({ color: INK_MUTED });
+  });
 });
 
 describe("AnswerPreview — table", () => {
-  const answer: QuestionAnswer = { kind: "table", rows: [[t("a"), t("b")]] };
+  const answer: QuestionAnswer = {
+    kind: "table",
+    rows: [
+      [t("Substância"), t("Estado")],
+      [t("Água"), t("Líquido")],
+    ],
+  };
 
   it("renders editable cells in a grid", () => {
     const onChange = vi.fn();
     render(<AnswerPreview answer={answer} onChange={onChange} />);
-    expect(screen.getByLabelText("Célula linha 1 coluna 1")).toBeInTheDocument();
-    fireEvent.change(screen.getByLabelText("Célula linha 1 coluna 2"), { target: { value: "z" } });
+    expect(screen.getByLabelText("Cabeçalho da coluna 1")).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText("Célula, Estado, linha 1"), { target: { value: "z" } });
     expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ kind: "table" }));
+  });
+
+  // 0604: as outras três superfícies (prévia, PDF, Word) tratam rows[0] como
+  // cabeçalho; a de edição desenhava tudo em <td> com o mesmo peso, então o
+  // professor editava sem ver qual linha vira cabeçalho no arquivo.
+  it("renders rows[0] as a real header row, like the preview / PDF / Word", () => {
+    render(<AnswerPreview answer={answer} onChange={vi.fn()} />);
+    const table = screen.getByTestId("answer-preview-table");
+    expect(table.tHead).not.toBeNull();
+    const headers = table.querySelectorAll("th");
+    expect(headers).toHaveLength(2);
+    for (const th of headers) {
+      expect(th).toHaveAttribute("scope", "col");
+      expect(th.className).toContain("font-semibold");
+    }
+    expect(table.querySelectorAll("tbody tr")).toHaveLength(1);
+  });
+
+  // 0522: a borda vinha do token de chrome do app (quase invisível sobre o
+  // papel); a folha usa a régua do documento, a mesma do PDF e do Word.
+  it("paints every cell border with the document rule color", () => {
+    render(<AnswerPreview answer={answer} onChange={vi.fn()} />);
+    const cells = screen.getByTestId("answer-preview-table").querySelectorAll("th, td");
+    expect(cells).toHaveLength(4);
+    for (const cell of cells) expect(cell).toHaveStyle({ borderColor: RULE_COLOR });
+  });
+
+  it("names the column in each body cell label so a screen reader says what the value is", () => {
+    render(<AnswerPreview answer={answer} onChange={vi.fn()} />);
+    expect(screen.getByLabelText("Célula, Substância, linha 1")).toBeInTheDocument();
+    expect(screen.getByLabelText("Célula, Estado, linha 1")).toBeInTheDocument();
+  });
+
+  it("falls back to the column number when the header cell has no plain text", () => {
+    const mathHeader: QuestionAnswer = {
+      kind: "table",
+      rows: [
+        [[{ type: "inlineMath", latex: "x^2", alt: "x ao quadrado" }], []],
+        [t("1"), t("2")],
+      ],
+    };
+    render(<AnswerPreview answer={mathHeader} onChange={vi.fn()} />);
+    expect(screen.getByLabelText("Célula linha 1 coluna 1")).toBeInTheDocument();
+    expect(screen.getByLabelText("Célula linha 1 coluna 2")).toBeInTheDocument();
+  });
+
+  it("renders a header-only table without an empty body", () => {
+    render(<AnswerPreview answer={{ kind: "table", rows: [[t("só")]] }} onChange={vi.fn()} />);
+    const table = screen.getByTestId("answer-preview-table");
+    expect(table.querySelectorAll("th")).toHaveLength(1);
+    expect(table.querySelectorAll("tbody tr")).toHaveLength(0);
+  });
+
+  it("edits the header row in place, writing back to rows[0]", () => {
+    const onChange = vi.fn();
+    render(<AnswerPreview answer={answer} onChange={onChange} />);
+    fireEvent.change(screen.getByLabelText("Cabeçalho da coluna 2"), { target: { value: "Fase" } });
+    expect(onChange).toHaveBeenCalledWith(
+      expect.objectContaining({ rows: [[t("Substância"), t("Fase")], [t("Água"), t("Líquido")]] })
+    );
+  });
+
+  it("labels by coordinate a body cell whose column has no header", () => {
+    const ragged: QuestionAnswer = { kind: "table", rows: [[t("A")], [t("1"), t("2")]] };
+    render(<AnswerPreview answer={ragged} onChange={vi.fn()} />);
+    expect(screen.getByLabelText("Célula linha 1 coluna 2")).toBeInTheDocument();
+  });
+
+  it("renders nothing structural when there are no rows", () => {
+    render(<AnswerPreview answer={{ kind: "table", rows: [] }} onChange={vi.fn()} />);
+    const table = screen.getByTestId("answer-preview-table");
+    expect(table.tHead).toBeNull();
+    expect(table.querySelectorAll("tr")).toHaveLength(0);
   });
 });
 

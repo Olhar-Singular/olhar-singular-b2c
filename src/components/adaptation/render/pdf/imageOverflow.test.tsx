@@ -11,7 +11,7 @@ import { describe, it, expect } from "vitest";
 import zlib from "node:zlib";
 import { pdf } from "@react-pdf/renderer";
 import layoutDocument from "@react-pdf/layout";
-import FontStore from "@react-pdf/font";
+import { createPdfFontStore } from "@/test/pdfFontStore";
 import { AdaptationPdf } from "./AdaptationPdf";
 import type { CanonicalDocument } from "@/lib/adaptation/canonical/schema";
 
@@ -69,7 +69,7 @@ async function layoutImage(doc: CanonicalDocument): Promise<Box> {
   inst.updateContainer(AdaptationPdf({ document: doc }));
   const layout = await layoutDocument(
     (inst as unknown as { container: { document: unknown } }).container.document,
-    new (FontStore as unknown as { new (): unknown })() as never,
+    createPdfFontStore() as never,
   );
   const box = imageBox(layout);
   if (!box) throw new Error("no IMAGE box in computed layout");

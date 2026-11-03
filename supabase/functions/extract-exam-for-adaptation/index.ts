@@ -11,6 +11,7 @@ import {
 import {
   buildExtractionMessages,
   parseExtractionResponse,
+  parseExtractionHeader,
   validateExamExtractionRequest,
   EXTRACTION_COST,
   EXTRACTION_TOOL_SCHEMA,
@@ -179,6 +180,8 @@ serve(async (req) => {
       // Never throws: a malformed tool call reads as "no questions". The AI
       // call happened either way, so it is charged like extract-questions does.
       const questions = parseExtractionResponse(aiData);
+      // The title and general instruction live outside the questions (0473).
+      const { title, intro } = parseExtractionHeader(aiData);
 
       // The result exists: the charge is final. Settle BEFORE responding so the
       // job never refunds a delivered extraction.
@@ -192,7 +195,7 @@ serve(async (req) => {
         console.error("Settle failed for user:", user.id, "reservation:", requestId, e);
       }
 
-      return json({ questions, source_file_name: pdfFileName, credits_charged: creditsCharged });
+      return json({ questions, title, intro, source_file_name: pdfFileName, credits_charged: creditsCharged });
     } catch (inner) {
       // Backstop: an unexpected failure after the charge must still refund.
       await reverseReservation();

@@ -6,6 +6,8 @@ import { canonicalToProseMirror } from "@/lib/adaptation/tiptap/fromCanonical";
 import { proseMirrorToCanonical } from "@/lib/adaptation/tiptap/toCanonical";
 import type { CanonicalDocument } from "@/lib/adaptation/canonical/schema";
 import {
+  buildAddGapTransaction,
+  buildRemoveGapTransaction,
   buildMoveTransaction,
   buildSiblingImagesTransaction,
   buildStemImagesTransaction,
@@ -211,5 +213,106 @@ describe("buildSiblingImagesTransaction (real schema)", () => {
         { id: uid(22), src: "https://example.com/b.png", alt: "", alignment: "center" },
       ]),
     ).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// buildAddGapTransaction / buildRemoveGapTransaction (achado 0503)
+// ---------------------------------------------------------------------------
+
+describe("gap ↔ stem sync (real schema)", () => {
+  const fb = (n: number, content: unknown[]): CanonicalDocument["blocks"][number] =>
+    ({
+      id: uid(n),
+      type: "question",
+      answer: { kind: "fillBlank", gaps: [] },
+      stem: [{ id: uid(n * 100), type: "paragraph", content }],
+    }) as CanonicalDocument["blocks"][number];
+
+  const text = (t: string) => ({ type: "text", text: t });
+
+  /**
+   * Achado 0370: o `___` novo era colado no fim cego do bloco, depois do ponto
+   * final ("pela ___ . ___"), deixando uma lacuna órfã fora da frase.
+   */
+  it("inserts the new blank before the stem's final punctuation", () => {
+    const state = makeState({ schemaVersion: 1, blocks: [fb(30, [text("A agua evapora pela ___ .")])] });
+    const tr = buildAddGapTransaction(state, posOfChild(state.doc, 0));
+    expect(tr).not.toBeNull();
+    const next = state.apply(tr!);
+    expect(next.doc.child(0).textContent).toBe("A agua evapora pela ___ ___ .");
+  });
+
+  it.each([
+    ["Complete a frase?", "Complete a frase ___?"],
+    ["Complete:  ", "Complete ___:  "],
+    ["Termina sem pontuação", "Termina sem pontuação ___"],
+    ["Termina com espaço ", "Termina com espaço ___ "],
+    ["?!", "___?!"],
+  ])("places the blank before the trailing punctuation of %j", (stem, expected) => {
+    const state = makeState({ schemaVersion: 1, blocks: [fb(36, [text(stem)])] });
+    const next = state.apply(buildAddGapTransaction(state, posOfChild(state.doc, 0))!);
+    expect(next.doc.child(0).textContent).toBe(expected);
+  });
+
+  it("appends after a trailing inline formula (no text tail to step over)", () => {
+    const state = makeState({
+      schemaVersion: 1,
+      blocks: [fb(37, [text("Calcule "), { type: "inlineMath", latex: "x^2" }])],
+    });
+    const next = state.apply(buildAddGapTransaction(state, posOfChild(state.doc, 0))!);
+    const para = next.doc.child(0).child(0);
+    expect(para.lastChild!.text).toBe(" ___");
+    expect(para.childCount).toBe(3);
+  });
+
+  it("does not prepend a space when the stem is empty", () => {
+    const state = makeState({ schemaVersion: 1, blocks: [fb(31, [])] });
+    const next = state.apply(buildAddGapTransaction(state, posOfChild(state.doc, 0))!);
+    expect(next.doc.child(0).textContent).toBe("___");
+  });
+
+  it("returns null when the stem has no text block to hold the blank", () => {
+    const state = makeState({
+      schemaVersion: 1,
+      blocks: [
+        {
+          id: uid(32),
+          type: "question",
+          answer: { kind: "fillBlank", gaps: [] },
+          stem: [{ id: uid(3200), type: "image", src: "https://example.com/a.png", alt: "" }],
+        } as CanonicalDocument["blocks"][number],
+      ],
+    });
+    expect(buildAddGapTransaction(state, posOfChild(state.doc, 0))).toBeNull();
+  });
+
+  it("returns null when the block at the position is not a question", () => {
+    const state = makeState({ schemaVersion: 1, blocks: [p(33)] });
+    expect(buildAddGapTransaction(state, posOfChild(state.doc, 0))).toBeNull();
+    expect(buildRemoveGapTransaction(state, posOfChild(state.doc, 0), 0)).toBeNull();
+  });
+
+  it("removes the blank at the given index, keeping the others in order", () => {
+    const state = makeState({
+      schemaVersion: 1,
+      blocks: [fb(34, [text("Sobe pela ___ , desce pela ___ e cai como ___ .")])],
+    });
+    const next = state.apply(buildRemoveGapTransaction(state, posOfChild(state.doc, 0), 1)!);
+    expect(next.doc.child(0).textContent).toBe("Sobe pela ___ , desce pela  e cai como ___ .");
+  });
+
+  it("removes a blank that is split across two text runs", () => {
+    const state = makeState({
+      schemaVersion: 1,
+      blocks: [fb(35, [text("Cai como _"), { type: "text", text: "__", marks: ["bold"] }, text(" aqui.")])],
+    });
+    const next = state.apply(buildRemoveGapTransaction(state, posOfChild(state.doc, 0), 0)!);
+    expect(next.doc.child(0).textContent).toBe("Cai como  aqui.");
+  });
+
+  it("returns null when there is no blank at the given index", () => {
+    const state = makeState({ schemaVersion: 1, blocks: [fb(36, [text("Sem lacuna nenhuma.")])] });
+    expect(buildRemoveGapTransaction(state, posOfChild(state.doc, 0), 0)).toBeNull();
   });
 });

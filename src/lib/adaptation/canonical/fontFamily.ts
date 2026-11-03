@@ -9,14 +9,21 @@
  *   - `fontFamilyToPdf`  → a @react-pdf family name
  *   - `fontFamilyToDocx` → a Word font name (resolved on the reader's machine)
  *
- * The classic tokens `sans/serif/mono` map to @react-pdf built-ins (no
- * registration). The accessibility tokens (`atkinson/lexend/opendyslexic`) map
- * to families that MUST be registered with `Font.register` in `render/pdf/`
- * (see `registerFonts.ts`) and self-hosted via `@font-face` for the screen —
- * rendering an unregistered family (or an unregistered weight/style variant of
- * a registered one) makes the PDF export throw "Could not resolve font"; there
- * is NO fallback to a built-in. `georgia/arial` are system fonts on screen and
- * map to the closest built-in in the PDF.
+ * EVERY text family MUST be registered with `Font.register` in `render/pdf/`
+ * (see `registerFonts.ts`) from a real `.ttf`, and self-hosted via `@font-face`
+ * for the screen — rendering an unregistered family (or an unregistered
+ * weight/style variant of a registered one) makes the PDF export throw "Could
+ * not resolve font"; there is NO fallback to a built-in.
+ *
+ * The @react-pdf built-ins (Helvetica / Times-Roman) are deliberately NOT used
+ * for text: a built-in is a Type 1 font the PDF references but does not carry
+ * (`pdffonts` → `emb: no`), so the file prints with whatever substitute the
+ * reader's machine happens to have — different metrics, different line breaks,
+ * different page count from the one the preview promised (achado 0445). The
+ * classic tokens (`sans/arial` → Liberation Sans, `serif/georgia` → Liberation
+ * Serif) therefore map to shipped, metric-compatible files. Only `mono` still
+ * maps to the Courier built-in: it is the family the PDF draws FORMULAS in, and
+ * the cap-height compensation in `pageTokens.ts` is calibrated on that metric.
  */
 
 /** The logical font tokens stored in `NodeStyle.fontFamily` / `pageStyle.fontFamily`. */
@@ -87,19 +94,23 @@ const CSS_STACKS: Record<FontFamilyToken, string> = {
 };
 
 /**
- * The matching @react-pdf family for each token. Accessibility families are the
- * names registered in `registerFonts.ts`; `georgia/arial` approximate to the
- * closest built-in (no font file shipped for them).
+ * The matching @react-pdf family for each token — all of them names registered
+ * in `registerFonts.ts`, except `mono` (see the module header).
+ *
+ * Liberation Sans is metrically compatible with Arial/Helvetica and Liberation
+ * Serif with Times New Roman/Times-Roman, so swapping the built-ins for the
+ * shipped files does not reflow a single saved document; it only makes the
+ * layout survive the trip to another machine.
  */
 const PDF_FAMILIES: Record<FontFamilyToken, string> = {
-  sans: "Helvetica",
-  serif: "Times-Roman",
+  sans: "Liberation Sans",
+  serif: "Liberation Serif",
   mono: "Courier",
   atkinson: "Atkinson Hyperlegible",
   lexend: "Lexend",
   opendyslexic: "OpenDyslexic",
-  georgia: "Times-Roman",
-  arial: "Helvetica",
+  georgia: "Liberation Serif",
+  arial: "Liberation Sans",
 };
 
 /** True when `v` is one of the logical font tokens. */

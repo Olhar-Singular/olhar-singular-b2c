@@ -75,9 +75,15 @@ type Props = {
   /** Document-level presentation style (font, size, spacing). Comes from pageStyle in the result. */
   pageStyle?: PageStyle;
   /**
-   * Avisa o pai a cada mudança do switch "Quebra de página por questão", para que
-   * a prévia irmã possa desenhar a quebra. O estado continua morando aqui (é uma
-   * escolha de exportação, não vai para o documento salvo).
+   * Valor controlado do switch "Quebra de página por questão". Quando o pai o
+   * fornece, ele é a única fonte de verdade (achado 0517: o estado local morria
+   * a cada troca de passo do wizard). Sem ele, o painel guarda o valor sozinho.
+   * Continua sendo escolha de exportação: não entra no documento salvo.
+   */
+  pageBreakPerQuestion?: boolean;
+  /**
+   * Avisa o pai a cada mudança do switch, para que a prévia irmã possa desenhar
+   * a quebra e para que a escolha sobreviva à troca de passo.
    */
   onPageBreakPerQuestionChange?: (value: boolean) => void;
   /** Override the PDF download trigger (used in tests). */
@@ -91,13 +97,15 @@ export function ExportPanel({
   header = {},
   onHeaderChange = () => {},
   pageStyle,
+  pageBreakPerQuestion: controlledPageBreak,
   onPageBreakPerQuestionChange = () => {},
   onDownload = downloadPdf,
   onDownloadWord = downloadDocx,
 }: Props) {
-  // Page-break is a transient, export-only choice (not persisted); the header
-  // is lifted to the parent so it survives save.
-  const [pageBreakPerQuestion, setPageBreakPerQuestion] = useState(false);
+  // Page-break is an export-only choice (not persisted in the document). When
+  // the parent controls it, the parent's value wins (single source of truth).
+  const [localPageBreak, setPageBreakPerQuestion] = useState(false);
+  const pageBreakPerQuestion = controlledPageBreak ?? localPageBreak;
   const [exporting, setExporting] = useState(false);
   const [exportingWord, setExportingWord] = useState(false);
   /**
@@ -130,6 +138,7 @@ export function ExportPanel({
    * o botão volta a ser focável).
    */
   const pdfTriggerRef = useRef<HTMLButtonElement>(null);
+  const copyTriggerRef = useRef<HTMLButtonElement>(null);
   const wordTriggerRef = useRef<HTMLButtonElement>(null);
   const restoreFocusRef = useRef<"pdf" | "word" | null>(null);
 
@@ -176,6 +185,11 @@ export function ExportPanel({
   };
 
   const runPdfExport = async () => {
+    // 0360 — armar a restauração AQUI (e não só no caminho do diálogo) cobre
+    // também a exportação direta, que é o caso normal: documento sem imagem e
+    // sem fórmula baixa sem aviso nenhum, e `setExporting(true)` desabilita o
+    // próprio botão focado, jogando o foco do teclado no `<body>`.
+    restoreFocusRef.current = "pdf";
     setExporting(true);
     try {
       await onDownload(document, { header, pageBreakPerQuestion }, pageStyle);
@@ -197,6 +211,9 @@ export function ExportPanel({
   };
 
   const runWordExport = async () => {
+    // 0360 — mesma armação do PDF: o caminho direto também precisa devolver o
+    // foco ao gatilho quando a geração termina.
+    restoreFocusRef.current = "word";
     setExportingWord(true);
     try {
       // As MESMAS opções que o PDF recebe: sem o `pageBreakPerQuestion` o Word
@@ -228,12 +245,11 @@ export function ExportPanel({
     const { format } = pending;
     setPending(null);
     if (format === "copy") {
-      // O botão "Copiar" nunca fica desabilitado, então o Radix devolve o foco
-      // a ele sozinho: nada a restaurar à mão aqui.
+      // O botão "Copiar" nunca fica desabilitado: quem devolve o foco a ele é
+      // o `onCloseAutoFocus` do diálogo, já no fechamento (0376).
       void runCopy();
       return;
     }
-    restoreFocusRef.current = format;
     if (format === "pdf") void runPdfExport();
     else void runWordExport();
   };
@@ -302,7 +318,7 @@ export function ExportPanel({
               type="date"
               value={header.date ?? ""}
               onChange={(e) => setField("date", e.target.value)}
-              className="cursor-pointer pr-10 hover:border-primary/60 focus-visible:border-primary transition-colors duration-200 [&::-webkit-calendar-picker-indicator]:opacity-0 [&::-webkit-calendar-picker-indicator]:absolute [&::-webkit-calendar-picker-indicator]:inset-0 [&::-webkit-calendar-picker-indicator]:w-full [&::-webkit-calendar-picker-indicator]:h-full [&::-webkit-calendar-picker-indicator]:cursor-pointer"
+              className="pr-10 hover:border-primary/60 focus-visible:border-primary transition-colors duration-200 [&::-webkit-calendar-picker-indicator]:opacity-0 [&::-webkit-calendar-picker-indicator]:absolute [&::-webkit-calendar-picker-indicator]:inset-y-0 [&::-webkit-calendar-picker-indicator]:right-0 [&::-webkit-calendar-picker-indicator]:w-10 [&::-webkit-calendar-picker-indicator]:h-full [&::-webkit-calendar-picker-indicator]:m-0 [&::-webkit-calendar-picker-indicator]:p-0 [&::-webkit-calendar-picker-indicator]:cursor-pointer"
             />
             <CalendarDays className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground transition-colors duration-200 group-hover:text-primary" />
           </div>
@@ -322,7 +338,7 @@ export function ExportPanel({
       </div>
 
       <div className="flex flex-wrap gap-2">
-        <Button variant="outline" onClick={handleCopy}>
+        <Button ref={copyTriggerRef} variant="outline" onClick={handleCopy}>
           <Copy className="mr-1 h-4 w-4" /> Copiar
         </Button>
         <Button ref={pdfTriggerRef} variant="outline" onClick={handleExport} disabled={exporting}>
@@ -340,7 +356,32 @@ export function ExportPanel({
 
       <AlertDialog open={pending !== null} onOpenChange={(open) => !open && setPending(null)}>
         {shown !== null && (
-          <AlertDialogContent>
+          <AlertDialogContent
+            /*
+              0361 — o diálogo é aberto por estado, sem `AlertDialogTrigger`:
+              o `triggerRef` do Radix fica `null` e, ao fechar, o foco cai no
+              `<body>`. Só o caminho de confirmar devolvia o gatilho (0419, via
+              `restoreFocusRef`); quem lê que a fórmula não sobrevive e decide
+              NÃO baixar era jogado para o topo da página, a dezenas de
+              tabulações do botão que acabou de apertar. Aqui tratamos as saídas
+              de desistir (`Escape` e "Cancelar"), que não desabilitam o gatilho
+              e portanto podem focá-lo já.
+            */
+            onCloseAutoFocus={(event) => {
+              // No caminho de confirmar o gatilho fica `disabled` no mesmo
+              // commit: focar aqui é no-op e quem devolve o foco é o efeito
+              // acima, quando a geração termina (0419). O "Copiar" nunca
+              // desabilita, mas o Radix NÃO o devolve sozinho: o handler padrão
+              // faz `preventDefault` e foca o `triggerRef`, `null` aqui (0376).
+              // Então ele é focado já, em qualquer saída.
+              event.preventDefault();
+              // O Radix dispara este evento num timeout: o painel inteiro pode
+              // já ter desmontado (troca de passo, navegação), e aí não há
+              // gatilho para focar.
+              const triggerRefs = { copy: copyTriggerRef, pdf: pdfTriggerRef, word: wordTriggerRef };
+              triggerRefs[shown.format].current?.focus();
+            }}
+          >
             <AlertDialogHeader>
               <AlertDialogTitle>{WARNING_COPY[shown.format].title}</AlertDialogTitle>
               <AlertDialogDescription asChild>

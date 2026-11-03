@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { screen, fireEvent, waitFor, act } from "@testing-library/react";
 import { createTestQueryClient, renderWithProviders } from "@/test/helpers";
 import { StepGenerate } from "./StepGenerate";
+import { MSG_NETWORK } from "@/lib/utils/errors";
 import { validateDocument } from "@/lib/adaptation/canonical/validate";
 import type { AdaptationResult } from "@/lib/adaptation/canonical/schema";
 import type { UploadedExam, WizardData } from "@/lib/adaptation/wizard/wizardState";
@@ -319,6 +320,97 @@ describe("StepGenerate", () => {
     expect(screen.getByRole("link", { name: /^Assinar$/ })).toHaveAttribute("href", "/assinar");
   });
 
+  describe("mensagem de saldo insuficiente (0470)", () => {
+    it("states the balance and the cost the 402 reports, and offers both ways out", async () => {
+      invokeMock.mockResolvedValueOnce({
+        data: null,
+        error: { context: { status: 402, json: async () => ({ reason: "insufficient_credits", balance: 10, required: 12 }) } },
+      });
+      renderWithProviders(
+        <StepGenerate data={baseData} onResult={vi.fn()} onNext={vi.fn()} onPrev={vi.fn()} />,
+      );
+      await waitFor(() =>
+        expect(
+          screen.getByText(
+            "Você tem 10 créditos; esta adaptação custa 12. Assine um plano ou compre créditos extras para continuar.",
+          ),
+        ).toBeInTheDocument(),
+      );
+    });
+
+    it("says the credits ran out when the 402 reports a zero balance", async () => {
+      invokeMock.mockResolvedValueOnce({
+        data: null,
+        error: { context: { status: 402, json: async () => ({ reason: "insufficient_credits", balance: 0, required: 12 }) } },
+      });
+      renderWithProviders(
+        <StepGenerate data={baseData} onResult={vi.fn()} onNext={vi.fn()} onPrev={vi.fn()} />,
+      );
+      await waitFor(() =>
+        expect(
+          screen.getByText("Seus créditos acabaram. Assine um plano ou compre créditos extras para continuar."),
+        ).toBeInTheDocument(),
+      );
+    });
+
+    it("falls back to the generic sentence when the 402 body cannot be read", async () => {
+      invokeMock.mockResolvedValueOnce({
+        data: null,
+        error: { context: { status: 402, json: async () => { throw new Error("consumed"); } } },
+      });
+      renderWithProviders(
+        <StepGenerate data={baseData} onResult={vi.fn()} onNext={vi.fn()} onPrev={vi.fn()} />,
+      );
+      await waitFor(() =>
+        expect(
+          screen.getByText("Seus créditos acabaram. Assine um plano ou compre créditos extras para continuar."),
+        ).toBeInTheDocument(),
+      );
+    });
+  });
+
+  /**
+   * Regressão 0469: o saldo só era relido após uma geração bem-sucedida. No 402 e
+   * numa falha (que pode ter debitado a reserva), a sidebar e a faixa de créditos
+   * ficavam com o valor em cache justamente quando ele pode estar errado.
+   */
+  describe("relê o saldo também quando a geração não dá certo (0469)", () => {
+    const renderWithSpies = async (data = baseData) => {
+      const mockRefresh = vi.fn().mockResolvedValue(undefined);
+      const { useAuth } = await import("@/hooks/useAuth");
+      vi.mocked(useAuth).mockReturnValueOnce({ user: { id: "user-1" }, refreshProfile: mockRefresh } as never);
+      const queryClient = createTestQueryClient();
+      const invalidate = vi.spyOn(queryClient, "invalidateQueries");
+      renderWithProviders(
+        <StepGenerate data={data} onResult={vi.fn()} onNext={vi.fn()} onPrev={vi.fn()} />,
+        { queryClient },
+      );
+      return { mockRefresh, invalidate };
+    };
+
+    it("relê saldo e extrato no 402", async () => {
+      invokeMock.mockResolvedValueOnce({
+        data: null,
+        error: { context: { status: 402, json: async () => ({ error: "no" }) } },
+      });
+      const { mockRefresh, invalidate } = await renderWithSpies();
+      await waitFor(() => expect(screen.getByText(/Seus créditos acabaram/i)).toBeInTheDocument());
+      expect(mockRefresh).toHaveBeenCalled();
+      expect(invalidate).toHaveBeenCalledWith({ queryKey: ["credit_transactions"] });
+    });
+
+    it("relê saldo e extrato quando a adaptação falha (a reserva pode ter sido debitada)", async () => {
+      invokeMock.mockResolvedValueOnce({
+        data: null,
+        error: { context: { status: 500, json: async () => ({ error: "boom" }) } },
+      });
+      const { mockRefresh, invalidate } = await renderWithSpies();
+      expect(await screen.findByRole("alert")).toHaveTextContent("boom");
+      expect(mockRefresh).toHaveBeenCalled();
+      expect(invalidate).toHaveBeenCalledWith({ queryKey: ["credit_transactions"] });
+    });
+  });
+
   it("returns to the previous step from the credit-error screen", async () => {
     const onPrev = vi.fn();
     invokeMock.mockResolvedValueOnce({
@@ -334,7 +426,6 @@ describe("StepGenerate", () => {
   });
 
   it("shows a retry screen and re-runs generation on a generic failure", async () => {
-    const { toast } = await import("sonner");
     invokeMock
       .mockResolvedValueOnce({ data: null, error: { context: { status: 500, json: async () => ({ error: "boom" }) } } })
       .mockResolvedValueOnce(okResponse());
@@ -342,7 +433,7 @@ describe("StepGenerate", () => {
     renderWithProviders(
       <StepGenerate data={baseData} onResult={onResult} onNext={vi.fn()} onPrev={vi.fn()} />,
     );
-    await waitFor(() => expect(toast.error).toHaveBeenCalledWith("boom"));
+    expect(await screen.findByRole("alert")).toHaveTextContent("boom");
     fireEvent.click(screen.getByRole("button", { name: /Tentar novamente/i }));
     await waitFor(() => expect(onResult).toHaveBeenCalledWith(result, SERVER_ROW));
   });
@@ -441,17 +532,73 @@ describe("StepGenerate", () => {
     });
   });
 
+  /**
+   * Regressão 0471: os desfechos de erro do Passo 4 não chegavam a quem usa teclado
+   * ou leitor de tela. O 402 trocava a tela em silêncio, "Tentar novamente" se
+   * desmontava levando o foco para o <body>, e a falha genérica era anunciada duas
+   * vezes (alerta + toast).
+   */
+  describe("anuncia e foca as telas de erro (0471)", () => {
+    it("anuncia a falta de créditos num alerta e foca Assinar", async () => {
+      invokeMock.mockResolvedValueOnce({
+        data: null,
+        error: { context: { status: 402, json: async () => ({ error: "no" }) } },
+      });
+      renderWithProviders(
+        <StepGenerate data={baseData} onResult={vi.fn()} onNext={vi.fn()} onPrev={vi.fn()} />,
+      );
+      const alert = await screen.findByRole("alert");
+      expect(alert).toHaveTextContent(/Seus créditos acabaram/i);
+      await waitFor(() => expect(screen.getByRole("link", { name: "Assinar" })).toHaveFocus());
+    });
+
+    it("foca Tentar novamente na tela de falha, inclusive depois de uma nova tentativa", async () => {
+      invokeMock
+        .mockResolvedValueOnce({ data: null, error: { context: { status: 500, json: async () => ({ error: "boom" }) } } })
+        .mockResolvedValueOnce({ data: null, error: { context: { status: 500, json: async () => ({ error: "boom2" }) } } });
+      renderWithProviders(
+        <StepGenerate data={baseData} onResult={vi.fn()} onNext={vi.fn()} onPrev={vi.fn()} />,
+      );
+      const retry = await screen.findByRole("button", { name: /Tentar novamente/i });
+      await waitFor(() => expect(retry).toHaveFocus());
+      fireEvent.click(retry);
+      await screen.findByText("boom2");
+      await waitFor(() => expect(screen.getByRole("button", { name: /Tentar novamente/i })).toHaveFocus());
+    });
+
+    it("anuncia a falha uma vez só: o alerta da tela, sem toast", async () => {
+      const { toast } = await import("sonner");
+      invokeMock.mockResolvedValueOnce({
+        data: null,
+        error: { context: { status: 500, json: async () => ({ error: "boom" }) } },
+      });
+      renderWithProviders(
+        <StepGenerate data={baseData} onResult={vi.fn()} onNext={vi.fn()} onPrev={vi.fn()} />,
+      );
+      expect(await screen.findByRole("alert")).toHaveTextContent("boom");
+      expect(toast.error).not.toHaveBeenCalled();
+    });
+
+    it("não duplica o anúncio quando a leitura do arquivo falha", async () => {
+      const { toast } = await import("sonner");
+      extractExamQuestionsMock.mockRejectedValueOnce(new Error("falhou a leitura"));
+      renderWithProviders(
+        <StepGenerate data={uploadData} onResult={vi.fn()} onNext={vi.fn()} onPrev={vi.fn()} />,
+      );
+      expect(await screen.findByRole("alert")).toHaveTextContent("falhou a leitura");
+      expect(toast.error).not.toHaveBeenCalled();
+    });
+  });
+
   it("uses the fallback message when the error body has no error field", async () => {
-    const { toast } = await import("sonner");
     invokeMock.mockResolvedValueOnce({ data: null, error: { context: { status: 500, json: async () => ({}) } } });
     renderWithProviders(
       <StepGenerate data={baseData} onResult={vi.fn()} onNext={vi.fn()} onPrev={vi.fn()} />,
     );
-    await waitFor(() => expect(toast.error).toHaveBeenCalledWith("Falha na adaptação"));
+    expect(await screen.findByRole("alert")).toHaveTextContent("Falha na adaptação");
   });
 
   it("uses the fallback message when the error context json throws", async () => {
-    const { toast } = await import("sonner");
     invokeMock.mockResolvedValueOnce({
       data: null,
       error: { context: { status: 500, json: async () => { throw new Error("parse"); } } },
@@ -459,16 +606,30 @@ describe("StepGenerate", () => {
     renderWithProviders(
       <StepGenerate data={baseData} onResult={vi.fn()} onNext={vi.fn()} onPrev={vi.fn()} />,
     );
-    await waitFor(() => expect(toast.error).toHaveBeenCalledWith("Falha na adaptação"));
+    expect(await screen.findByRole("alert")).toHaveTextContent("Falha na adaptação");
   });
 
   it("uses the fallback message when the error has no context", async () => {
-    const { toast } = await import("sonner");
     invokeMock.mockResolvedValueOnce({ data: null, error: { message: "network" } });
     renderWithProviders(
       <StepGenerate data={baseData} onResult={vi.fn()} onNext={vi.fn()} onPrev={vi.fn()} />,
     );
-    await waitFor(() => expect(toast.error).toHaveBeenCalledWith("Falha na adaptação"));
+    expect(await screen.findByRole("alert")).toHaveTextContent("Falha na adaptação");
+  });
+
+  it("shows the connection message when invoke fails to reach the server (0380)", async () => {
+    // Offline, supabase-js resolves with a FunctionsFetchError whose context is
+    // the fetch TypeError, not a Response.
+    const fetchError = Object.assign(new Error("Failed to send a request to the Edge Function"), {
+      name: "FunctionsFetchError",
+      context: new TypeError("Failed to fetch"),
+    });
+    invokeMock.mockResolvedValueOnce({ data: null, error: fetchError });
+    renderWithProviders(
+      <StepGenerate data={baseData} onResult={vi.fn()} onNext={vi.fn()} onPrev={vi.fn()} />,
+    );
+    expect(await screen.findByRole("alert")).toHaveTextContent(MSG_NETWORK);
+    expect(await screen.findByText(MSG_NETWORK)).toBeInTheDocument();
   });
 
   it("calls onLoadingChange(true) when generation starts and onLoadingChange(false) when done", async () => {
@@ -544,6 +705,35 @@ describe("StepGenerate", () => {
     expect(invokeMock.mock.calls[0][1].body.original_activity).toBe("1) Primeira");
   });
 
+  it("sends the exam's title and general instruction before the questions (0473)", async () => {
+    extractExamQuestionsMock.mockResolvedValueOnce({
+      status: "ok",
+      questions: [{ text: "Primeira", options: null, image_url: null }],
+      header: { title: "Atividade de Matematica - Feira", intro: "Responda." },
+    });
+    invokeMock.mockResolvedValueOnce(okResponse());
+    renderWithProviders(
+      <StepGenerate data={uploadData} onResult={vi.fn()} onNext={vi.fn()} onPrev={vi.fn()} />,
+    );
+    await waitFor(() => expect(invokeMock).toHaveBeenCalled());
+    expect(invokeMock.mock.calls[0][1].body.original_activity).toBe(
+      "Atividade de Matematica - Feira\n\nResponda.\n\n1) Primeira",
+    );
+  });
+
+  it("keeps the exam's title when the 12-question warning is confirmed (0473)", async () => {
+    const questions = Array.from({ length: 13 }, (_, i) => ({ text: `Questão ${i + 1}`, options: null, image_url: null }));
+    extractExamQuestionsMock.mockResolvedValueOnce({ status: "ok", questions, header: { title: "Prova da Feira" } });
+    invokeMock.mockResolvedValueOnce(okResponse());
+    renderWithProviders(
+      <StepGenerate data={uploadData} onResult={vi.fn()} onNext={vi.fn()} onPrev={vi.fn()} />,
+    );
+    await waitFor(() => screen.getByText(/13 questões/i));
+    fireEvent.click(screen.getByRole("button", { name: /^continuar$/i }));
+    await waitFor(() => expect(invokeMock).toHaveBeenCalled());
+    expect(invokeMock.mock.calls[0][1].body.original_activity as string).toMatch(/^Prova da Feira\n\n1\) Questão 1/);
+  });
+
   it("shows the adaptation loading message once extraction has finished", async () => {
     extractExamQuestionsMock.mockResolvedValueOnce({
       status: "ok",
@@ -567,16 +757,15 @@ describe("StepGenerate", () => {
     expect(invokeMock).not.toHaveBeenCalled();
   });
 
-  it("surfaces the extraction's own error (e.g. AI rate limit) via toast", async () => {
-    const { toast } = await import("sonner");
+  it("surfaces the extraction's own error (e.g. AI rate limit) on the failure screen", async () => {
     extractExamQuestionsMock.mockRejectedValueOnce(
       new Error("Limite de requisições IA atingido. Tente novamente em alguns minutos."),
     );
     renderWithProviders(
       <StepGenerate data={uploadData} onResult={vi.fn()} onNext={vi.fn()} onPrev={vi.fn()} />,
     );
-    await waitFor(() =>
-      expect(toast.error).toHaveBeenCalledWith("Limite de requisições IA atingido. Tente novamente em alguns minutos."),
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Limite de requisições IA atingido. Tente novamente em alguns minutos.",
     );
     expect(invokeMock).not.toHaveBeenCalled();
   });
@@ -617,6 +806,20 @@ describe("StepGenerate", () => {
       expect(screen.getByRole("link", { name: /Comprar créditos extras/i })).toHaveAttribute("href", "/creditos");
       expect(invokeMock).not.toHaveBeenCalled();
       expect(onLoadingChange).toHaveBeenLastCalledWith(false);
+    });
+
+    it("states the balance and the whole cost (reading + adaptation) when the extraction is refused (0470)", async () => {
+      extractExamQuestionsMock.mockResolvedValueOnce({ status: "insufficient_credits", balance: 10 });
+      renderWithProviders(
+        <StepGenerate data={uploadData} onResult={vi.fn()} onNext={vi.fn()} onPrev={vi.fn()} />,
+      );
+      await waitFor(() =>
+        expect(
+          screen.getByText(
+            "Você tem 10 créditos; esta adaptação custa 17. Assine um plano ou compre créditos extras para continuar.",
+          ),
+        ).toBeInTheDocument(),
+      );
     });
 
     it("refreshes the balance and the statement right after a charged extraction", async () => {
@@ -747,6 +950,54 @@ describe("StepGenerate", () => {
       );
       act(() => { vi.advanceTimersByTime(2800 * 5); }); // 5 = ADAPTING_MESSAGES.length
       expect(screen.getByText("ISA está adaptando a atividade...")).toBeInTheDocument();
+    });
+
+    /**
+     * Regressão 0362: a espera era muda para leitor de tela. O anúncio precisa ser
+     * ESTÁVEL — a copy rotativa a cada 2,8 s não pode viver numa região viva, senão
+     * troca o silêncio por um despejo de frases durante minutos.
+     */
+    describe("anuncia a espera numa região viva estável (0362)", () => {
+      it("anuncia uma vez que a geração começou, sem recitar a copy rotativa", () => {
+        invokeMock.mockImplementation(() => new Promise(() => undefined));
+        renderWithProviders(
+          <StepGenerate data={baseData} onResult={vi.fn()} onNext={vi.fn()} onPrev={vi.fn()} />,
+        );
+        const status = screen.getByRole("status");
+        expect(status).toHaveTextContent("Gerando a adaptação. Isso pode levar alguns minutos.");
+        const announced = status.textContent;
+        act(() => { vi.advanceTimersByTime(2800 * 3); });
+        expect(screen.getByRole("status").textContent).toBe(announced);
+        expect(screen.getByRole("status")).not.toHaveTextContent(/Desenho Universal/i);
+      });
+
+      it("mantém a copy rotativa fora de qualquer região viva", () => {
+        invokeMock.mockImplementation(() => new Promise(() => undefined));
+        renderWithProviders(
+          <StepGenerate data={baseData} onResult={vi.fn()} onNext={vi.fn()} onPrev={vi.fn()} />,
+        );
+        const rotating = screen.getByText("ISA está adaptando a atividade...");
+        expect(rotating).toHaveAttribute("aria-live", "off");
+      });
+
+      it("esconde o spinner decorativo e marca a espera com aria-busy", () => {
+        invokeMock.mockImplementation(() => new Promise(() => undefined));
+        const { container } = renderWithProviders(
+          <StepGenerate data={baseData} onResult={vi.fn()} onNext={vi.fn()} onPrev={vi.fn()} />,
+        );
+        expect(container.querySelector("svg.animate-spin")).toHaveAttribute("aria-hidden", "true");
+        expect(container.querySelector("[aria-busy='true']")).not.toBeNull();
+      });
+
+      it("troca o anúncio quando a fase é a extração do arquivo", () => {
+        extractExamQuestionsMock.mockImplementation(() => new Promise(() => undefined));
+        renderWithProviders(
+          <StepGenerate data={uploadData} onResult={vi.fn()} onNext={vi.fn()} onPrev={vi.fn()} />,
+        );
+        expect(screen.getByRole("status")).toHaveTextContent(
+          "Lendo a atividade enviada. Isso pode levar alguns minutos.",
+        );
+      });
     });
 
     it("rotates a separate message pool during extraction, reset to its own first message on phase change", () => {

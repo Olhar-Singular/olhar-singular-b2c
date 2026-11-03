@@ -224,3 +224,34 @@ describe("buildReaskMessages", () => {
     expect(msgs[1]).toEqual(nextReaskMessage(errors));
   });
 });
+
+describe("interpretAiResponse — trueFalse items that are only V/F labels (0388)", () => {
+  it("rejects the output so the model is reasked", () => {
+    const labels = {
+      blocks: [
+        {
+          type: "question",
+          stem: [
+            { type: "paragraph", content: [{ type: "text", text: "A afirmação é verdadeira ou falsa?" }] },
+            { type: "blockMath", latex: "\\frac{3}{4} > \\frac{2}{3}" },
+          ],
+          answer: {
+            kind: "trueFalse",
+            items: [
+              { content: [{ type: "text", text: "Verdadeiro" }], value: true },
+              { content: [{ type: "text", text: "Falso" }], value: false },
+            ],
+          },
+        },
+      ],
+      strategies_applied: ["s"],
+      pedagogical_justification: "j",
+      implementation_tips: ["t"],
+    };
+    const result = interpretAiResponse(JSON.stringify(labels));
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.errors.join(" ")).toMatch(/trueFalse/);
+    }
+  });
+});

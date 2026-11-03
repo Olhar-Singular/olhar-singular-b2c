@@ -96,6 +96,178 @@ const SHEET_WIDTH_PX = 794;
  */
 const CHROME_SELECTOR = "[data-folha-chrome]";
 
+/**
+ * Bloco IMPRESSO do documento, marcado pelo renderizador de leitura (achado 0701).
+ *
+ * É o que traduz para a tela a única regra de corte que o arquivo conhece: o
+ * `@react-pdf` nunca parte uma `View`, então o bloco que não cabe inteiro na
+ * folha desce todo para a seguinte e o pé da anterior fica em branco. Sem
+ * conhecer onde cada bloco começa e termina, a prévia só sabia dividir a altura
+ * do fluxo pela área útil — e o branco perdido em cada virada (dezenas de px,
+ * cumulativos) fazia o contador anunciar menos folhas do que o arquivo emite.
+ *
+ * Bloco ANINHADO não conta: o parágrafo do enunciado dentro da questão viaja
+ * com ela: quem decide a virada é o bloco de topo, como a `View` de topo no PDF.
+ */
+const BLOCK_SELECTOR = "[data-folha-bloco]";
+
+/**
+ * Bloco impresso que é TÍTULO de seção (achado 0392): ele anda com o bloco que
+ * encabeça e nunca fica sozinho no pé da folha.
+ */
+const HEADING_ATTR = "data-folha-titulo";
+
+/**
+ * Tabela impressa, marcada pelo renderizador de leitura (achado 0262).
+ *
+ * O arquivo repete o cabeçalho no topo de cada folha em que a tabela continua:
+ * no PDF a linha de cabeçalho é `fixed` e no .docx ela leva `tblHeader`. O
+ * `<thead>` do HTML só se repete em impressão de verdade, e esta folha não é
+ * impressão — é um fluxo contínuo paginado por régua desenhada. Sem repetir
+ * aqui, a tela que existe para mostrar o arquivo mostrava a tabela sem rótulo
+ * de coluna depois da virada, e a contagem de folhas não reservava a altura que
+ * o cabeçalho gasta em cada folha nova (o mesmo mecanismo do 0607, por outra
+ * fonte de altura).
+ */
+const TABLE_SELECTOR = "[data-folha-tabela]";
+
+/**
+ * Marca o filho de um bloco alto que esta folha empurrou para a folha seguinte
+ * (achado 1137). O valor é o `marginTop` inline que ele tinha antes, para a
+ * remedida devolvê-lo intacto.
+ */
+const PIECE_PUSH_ATTR = "data-folha-empurrado";
+
+/** Marca a cópia do cabeçalho que esta folha injeta na virada (achado 0262). */
+const REPEATED_HEADER_ATTR = "data-folha-thead-repetido";
+
+/**
+ * Marca o vão que esta folha injeta antes da cópia do cabeçalho (achado 1108):
+ * o branco no pé da folha que a linha que não cabe deixa para trás. O valor do
+ * atributo é a altura pedida, em px, para a remedida reconhecer o próprio vão.
+ */
+const ROW_SPACER_ATTR = "data-folha-espaco";
+
+/** Vão menor que isto é ruído de medida, não branco no pé da folha. */
+const SPACER_EPSILON_PX = 0.5;
+
+/**
+ * Põe uma cópia do cabeçalho no topo de cada folha em que a tabela continua, e
+ * tira as que sobraram. Devolve `true` quando mexeu no DOM — o cabeçalho
+ * repetido é FLUXO, então a paginação precisa correr de novo com ele dentro (é
+ * a altura que o contador não somava).
+ *
+ * Achado 1108: a regra é a do arquivo. A linha cuja caixa passa da régua desce
+ * inteira (`wrap={false}` no PDF, 0602), o pé da folha fica em branco (um vão
+ * marcado com `data-folha-espaco`, sem borda) e a cópia abre a folha seguinte,
+ * NA régua. Antes a âncora era a linha cujo topo, medido com a cópia já no
+ * fluxo, caía na folha seguinte: a própria cópia empurrava a linha para lá e a
+ * escolha se confirmava sozinha, com o cabeçalho em cima da régua e uma linha a
+ * mais por folha do que o PDF. Por isso a conta agora corre sobre a geometria
+ * SEM o que esta função inseriu (topo medido menos as inserções acima da linha)
+ * e simula a descida linha a linha.
+ *
+ * Idempotente de propósito: se âncoras e vãos já são os que deviam ser, não toca
+ * em nada e devolve `false`, senão a remedida nunca convergiria.
+ */
+const syncRepeatedTableHeaders = (sheet: HTMLElement, scale: number) => {
+  const sheetTop = sheet.getBoundingClientRect().top;
+  // Posição na mesma geometria não escalada em que as réguas são desenhadas
+  // (`PAGE_MARGIN_PX + N x PAGE_CONTENT_HEIGHT_PX`).
+  const topOf = (el: HTMLElement) => (el.getBoundingClientRect().top - sheetTop) / scale;
+  const heightOf = (el: HTMLElement) => el.getBoundingClientRect().height / scale;
+  const pageOf = (y: number) => Math.floor((y - PAGE_MARGIN_PX) / PAGE_CONTENT_HEIGHT_PX);
+  const ruleOf = (page: number) => PAGE_MARGIN_PX + (page + 1) * PAGE_CONTENT_HEIGHT_PX;
+  const isInserted = (el: Element) =>
+    el.hasAttribute(REPEATED_HEADER_ATTR) || el.hasAttribute(ROW_SPACER_ATTR);
+  let changed = false;
+  sheet.querySelectorAll<HTMLElement>(TABLE_SELECTOR).forEach((table) => {
+    const header = table.querySelector<HTMLElement>("thead > tr");
+    const body = table.querySelector<HTMLElement>("tbody");
+    if (!header || !body) return;
+    const headerHeight = heightOf(header);
+    // Altura já inserida acima da linha corrente (medida) e a que o plano
+    // acrescenta até ela (simulada).
+    let inserted = 0;
+    let planned = 0;
+    let page = pageOf(topOf(header));
+    const plan: { anchor: HTMLElement; spacer: number }[] = [];
+    Array.from(body.querySelectorAll<HTMLElement>(":scope > tr")).forEach((row) => {
+      if (isInserted(row)) {
+        inserted += heightOf(row);
+        return;
+      }
+      const top = topOf(row) - inserted + planned;
+      const height = heightOf(row);
+      let rowPage = pageOf(top);
+      if (rowPage > page) {
+        // Começa já numa folha nova (na régua, ou depois de uma linha mais alta
+        // que a folha, que o arquivo também parte): só ganha o cabeçalho.
+        plan.push({ anchor: row, spacer: 0 });
+        planned += headerHeight;
+      } else if (
+        top + height > ruleOf(rowPage) + SPACER_EPSILON_PX &&
+        height + headerHeight <= PAGE_CONTENT_HEIGHT_PX
+      ) {
+        // Atravessa a régua e cabe numa folha: desce inteira, atrás da cópia.
+        const spacer = ruleOf(rowPage) - top;
+        plan.push({ anchor: row, spacer });
+        planned += spacer + headerHeight;
+        rowPage += 1;
+      }
+      page = Math.max(page, rowPage);
+    });
+    const clones = Array.from(
+      body.querySelectorAll<HTMLElement>(`:scope > tr[${REPEATED_HEADER_ATTR}]`),
+    );
+    const spacerBefore = (clone: HTMLElement) => {
+      const prev = clone.previousElementSibling;
+      return prev?.hasAttribute(ROW_SPACER_ATTR) ? Number(prev.getAttribute(ROW_SPACER_ATTR)) : 0;
+    };
+    const wanted = (spacer: number) => (spacer > SPACER_EPSILON_PX ? spacer : 0);
+    const spacers = body.querySelectorAll(`:scope > tr[${ROW_SPACER_ATTR}]`).length;
+    const settled =
+      clones.length === plan.length &&
+      spacers === plan.filter(({ spacer }) => wanted(spacer) > 0).length &&
+      plan.every(
+        ({ anchor, spacer }, i) =>
+          clones[i].nextElementSibling === anchor &&
+          Math.abs(spacerBefore(clones[i]) - wanted(spacer)) <= SPACER_EPSILON_PX,
+      );
+    if (settled) return;
+    body.querySelectorAll(`:scope > tr[${REPEATED_HEADER_ATTR}], :scope > tr[${ROW_SPACER_ATTR}]`)
+      .forEach((el) => el.remove());
+    const columns = header.children.length;
+    plan.forEach(({ anchor, spacer }) => {
+      if (wanted(spacer) > 0) {
+        // Linha sem borda nem conteúdo: o branco do pé da folha, como no
+        // arquivo, sem o fio da célula atravessando (o erro que o 0261 temia).
+        const gap = document.createElement("tr");
+        gap.setAttribute(ROW_SPACER_ATTR, String(spacer));
+        gap.setAttribute("aria-hidden", "true");
+        const cell = document.createElement("td");
+        cell.colSpan = columns;
+        cell.style.height = `${spacer}px`;
+        cell.style.padding = "0";
+        cell.style.border = "none";
+        gap.appendChild(cell);
+        body.insertBefore(gap, anchor);
+      }
+      const clone = header.cloneNode(true) as HTMLElement;
+      clone.setAttribute(REPEATED_HEADER_ATTR, "");
+      body.insertBefore(clone, anchor);
+    });
+    changed = true;
+  });
+  return changed;
+};
+
+/** Os marcados que não estão dentro de outro marcado do mesmo tipo. */
+const topLevel = (content: HTMLElement, selector: string) =>
+  Array.from(content.querySelectorAll<HTMLElement>(selector))
+    // `parentElement` nunca é nulo: todo achado do seletor é descendente de `content`.
+    .filter((el) => el.parentElement!.closest(selector) === null);
+
 /** Valor de `getComputedStyle` em px; ausente (jsdom, `auto`) vale zero. */
 const px = (value: string) => Number.parseFloat(value) || 0;
 
@@ -107,9 +279,7 @@ const px = (value: string) => Number.parseFloat(value) || 0;
  * descontar o filho de novo encolheria o papel abaixo do que o arquivo tem.
  */
 const editorChromeHeight = (content: HTMLElement) =>
-  Array.from(content.querySelectorAll<HTMLElement>(CHROME_SELECTOR))
-    // `parentElement` nunca é nulo: todo achado do seletor é descendente de `content`.
-    .filter((el) => el.parentElement!.closest(CHROME_SELECTOR) === null)
+  topLevel(content, CHROME_SELECTOR)
     .reduce((sum, el) => {
       const style = getComputedStyle(el);
       return sum + el.offsetHeight + px(style.marginTop) + px(style.marginBottom);
@@ -215,6 +385,8 @@ export function PageSheet({
     de rolagem obrigatória) e ganhou junto a escada de zoom do 0238: agora as
     duas superfícies abrem ajustadas e sobem por escolha do professor.
   */
+  // O mesmo vão que o PDF converte em `marginBottom` (achado 0708).
+  const blockGapPx = resolvePageStyle(pageStyle).blockSpacing;
   useLayoutEffect(() => {
     const frame = frameRef.current;
     const fit = () => {
@@ -282,7 +454,7 @@ export function PageSheet({
       vale 1) e o contador de folhas.
     */
     const sheet = sheetRef.current;
-    const measure = () => {
+    const layoutPass = () => {
       /*
         Achado 0135: o empurrão da quebra (no fim desta função) é ele próprio
         fluxo, então toda medida começa DESFAZENDO o da passada anterior. Sem o
@@ -293,6 +465,20 @@ export function PageSheet({
       const marks = Array.from(sheet.querySelectorAll<HTMLElement>(".adaptar-page-break"));
       marks.forEach((mark) => {
         mark.style.marginBottom = "";
+      });
+      /*
+        Achado 0701: o empurrão do BLOCO que não coube (no fim desta função) é
+        fluxo pelo mesmo motivo, e é zerado pela mesma razão — medido já
+        deslocado, cada remedida empilharia mais uma folha em branco.
+      */
+      const blocks = topLevel(content, BLOCK_SELECTOR);
+      blocks.forEach((block) => {
+        block.style.marginTop = "";
+      });
+      // Achado 1137: idem para o filho de bloco alto empurrado na virada.
+      sheet.querySelectorAll<HTMLElement>(`[${PIECE_PUSH_ATTR}]`).forEach((piece) => {
+        piece.style.marginTop = piece.getAttribute(PIECE_PUSH_ATTR) as string;
+        piece.removeAttribute(PIECE_PUSH_ATTR);
       });
       /*
         Achado 0123: a altura medida é a do CONTEÚDO, nunca a da folha. A folha
@@ -335,32 +521,204 @@ export function PageSheet({
         está desenhado; o contador é que conta só o que imprime. (O papel cresce
         o EXCEDENTE desenhado, não uma folha inteira — achado 0184, abaixo.)
       */
-      const sheetsFor = (height: number) => {
-        const ends = [...cuts, height];
-        let start = 0;
-        let total = 0;
-        ends.forEach((end) => {
-          // O comprimento do trecho é medido no CONTEÚDO (do corte até o próximo),
-          // porque é isso que o leitor vê na tela; só a origem dele é que passa a
-          // ser o fim da página anterior.
-          /*
-            Achado 0153: o divisor é a área ÚTIL da página (`PAGE_CONTENT_HEIGHT_PX`),
-            não a A4 inteira. O que se mede aqui é a altura do CONTEÚDO, e o conteúdo
-            vive DENTRO das margens que `pageTokensToCss` (e o `<Page>` do react-pdf)
-            aplicam: dividir por 1123px contava os 107px de margem como texto, uma vez
-            por folha. A folha do Revisar voltava a terminar no meio de uma página sem
-            régua (o 0151 reaberto) e o contador anunciava menos folhas que o arquivo.
-            Achado 0157: a área útil passou a ser TAMBÉM o passo das réguas e da
-            altura do papel (abaixo), porque o fluxo contínuo desta folha só gasta
-            margem uma vez — contar por uma régua e desenhar por outra era o que
-            fabricava a folha em branco no fim.
-          */
-          total += Math.max(1, Math.ceil((end - start) / PAGE_CONTENT_HEIGHT_PX));
-          start = end;
+      /*
+        Achado 0701: onde cada bloco IMPRESSO começa e termina, no mesmo fluxo
+        que `printedHeight` mede (daí o desconto da margem de cima da folha,
+        que o retângulo traz e o fluxo do conteúdo não).
+      */
+      const blockBounds = blocks.map((block) => {
+        const rect = block.getBoundingClientRect();
+        return {
+          el: block,
+          kind: "block" as const,
+          top: (rect.top - sheetTop) / scale - PAGE_MARGIN_PX,
+          bottom: (rect.bottom - sheetTop) / scale - PAGE_MARGIN_PX,
+          height: 0,
+          ownMargin: 0,
+        };
+      });
+      /*
+        A paginação da prévia numa passada só, sobre o fluxo em ordem: as
+        quebras forçadas e os blocos impressos. Ela responde de uma vez pela
+        CONTAGEM, pelas réguas e pelo empurrão de cada item — contar por uma
+        conta e desenhar por outra foi o que produziu os achados 0123 e 0701.
+
+        Achado 0153/0157: o passo é a área ÚTIL da página
+        (`PAGE_CONTENT_HEIGHT_PX`), não a A4 inteira, porque o conteúdo vive
+        dentro das margens que `pageTokensToCss` (e o `<Page>` do react-pdf)
+        aplicam.
+
+        Achado 0121/0131: cada trecho entre quebras começa numa página nova,
+        como o `<View break>` do PDF.
+
+        Achado 0701: e ENTRE duas quebras o corte não cai em qualquer pixel. O
+        `@react-pdf` não parte uma `View`: o bloco que não cabe inteiro desce
+        todo para a folha seguinte e o pé da anterior fica em branco. Dividir a
+        altura do fluxo pela área útil ignorava esse branco — dezenas de px por
+        virada, e cumulativos —, então o contador anunciava "3 páginas A4" para
+        um arquivo com `Pages: 4` e a régua caía no meio de um bloco que o papel
+        nunca parte. Documento sem bloco marcado (a folha do Revisar, que é o DOM
+        do editor) não tem o que empurrar e a conta volta a ser a divisão de
+        sempre.
+      */
+      const paginate = () => {
+        // Em ordem de DOCUMENTO, que é a ordem do fluxo: ordenar pela medida
+        // empataria a régua com o bloco que ela antecede.
+        const byMark = new Map(marks.map((mark, index) => [mark, index] as const));
+        const byBlock = new Map(blockBounds.map((bounds) => [bounds.el, bounds] as const));
+        const flow = Array.from(
+          sheet.querySelectorAll<HTMLElement>(`.adaptar-page-break, ${BLOCK_SELECTOR}`),
+        ).flatMap((el) => {
+          const index = byMark.get(el);
+          if (index !== undefined) {
+            // Achado 0506: a régua entra no MESMO referencial dos blocos e de
+            // `pageTop` (o do conteúdo, sem a margem de cima). Medida na folha,
+            // a régua no pé da área útil virava a folha 53px antes da hora e
+            // contava uma folha fantasma.
+            const cut = cuts[index] - PAGE_MARGIN_PX;
+            return [
+              {
+                el,
+                kind: "break" as const,
+                top: cut,
+                bottom: cut,
+                height: el.getBoundingClientRect().height / scale,
+                // Achado 0521: a margem própria da régua (`my-3`), que o
+                // empurrão vai SUBSTITUIR (medida aqui, já com o inline zerado).
+                ownMargin: Number.parseFloat(getComputedStyle(el).marginBottom) || 0,
+              },
+            ];
+          }
+          const bounds = byBlock.get(el);
+          // Bloco ANINHADO (o enunciado dentro da questão) viaja com o de topo:
+          // quem decide a virada é o de topo, como a `View` de topo no PDF.
+          return bounds ? [bounds] : [];
         });
-        return total;
+
+        /*
+          Achado 1137: o pedaço INDIVISÍVEL de um bloco que atravessa `cut`
+          (fluxo cru, sem empurrões). Desce pelos filhos de bloco que cruzam o
+          corte até o que não tem mais nenhum: a figura, a linha da alternativa,
+          o parágrafo. Filho `inline` não conta: margem nele não move nada, e é
+          o pai (a linha) que vira inteiro.
+        */
+        const flowBox = (el: HTMLElement) => {
+          const rect = el.getBoundingClientRect();
+          return {
+            top: (rect.top - sheetTop) / scale - PAGE_MARGIN_PX,
+            bottom: (rect.bottom - sheetTop) / scale - PAGE_MARGIN_PX,
+          };
+        };
+        const crossingPiece = (root: HTMLElement, cut: number): HTMLElement => {
+          const child = (Array.from(root.children) as HTMLElement[]).find((el) => {
+            if (getComputedStyle(el).display.startsWith("inline")) return false;
+            const box = flowBox(el);
+            return box.top < cut && box.bottom > cut;
+          });
+          return child ? crossingPiece(child, cut) : root;
+        };
+
+        let pageTop = 0;
+        let total = 1;
+        let shift = 0;
+        const pushes: { el: HTMLElement; kind: "break" | "block" | "piece"; spacer: number }[] =
+          [];
+        const turnPage = () => {
+          pageTop += PAGE_CONTENT_HEIGHT_PX;
+          total += 1;
+        };
+        /*
+          Achado 0392: o título de seção de topo que acabou de ser posto na
+          folha (null quando o item anterior não é título, ou é régua). Se o
+          bloco que ele encabeça desce, o título desce junto: título nunca fecha
+          uma folha, como o `minPresenceAhead` do `PdfHeading` e o keepNext do
+          título no Word.
+        */
+        let lastHeading: { el: HTMLElement; top: number } | null = null;
+        flow.forEach((item) => {
+          const top = item.top + shift;
+          const heading = lastHeading;
+          lastHeading = null;
+          // Item que já passou da folha corrente: alcança a dele antes de
+          // qualquer conta.
+          while (top - pageTop > PAGE_CONTENT_HEIGHT_PX) turnPage();
+          if (item.kind === "break") {
+            /*
+              Achado 0135: a régua ganha, como margem inferior, o branco que
+              falta até o fim da folha em que ela caiu. O piso em 0 cobre a
+              régua que atravessa a virada — aí o branco que falta é negativo e
+              puxar o conteúdo para trás sobreporia o que já foi desenhado.
+            */
+            const pageEnd = Math.ceil(top / PAGE_CONTENT_HEIGHT_PX) * PAGE_CONTENT_HEIGHT_PX;
+            const spacer = Math.max(0, pageEnd - (top + item.height));
+            pushes.push({ el: item.el, kind: "break", spacer });
+            /*
+              Achado 0521: o empurrão entra como `marginBottom` inline, que
+              TROCA a margem própria da régua em vez de somar a ela. O fluxo
+              medido já traz essa margem, então o que ele cresce de fato é
+              `spacer - ownMargin`; somar o `spacer` inteiro perdia 12px por
+              quebra, cumulativos, e da Q4 em diante a questão começava antes
+              da virada.
+            */
+            shift += spacer - item.ownMargin;
+            total += 1;
+            pageTop = top + item.height + spacer;
+            return;
+          }
+          // Achado 0507: bloco mais alto que a área útil não cabe inteiro em
+          // folha nenhuma; o arquivo o começa onde está e o parte. Empurrá-lo
+          // só queimaria o pé da folha e inventaria uma folha que o PDF não tem.
+          /*
+            Achado 0708: o `@react-pdf` vira pela caixa MAIS a margem de baixo
+            (`getEndOfPresence`), e todo bloco do PDF leva o vão entre blocos
+            como `marginBottom`, até o último. O bloco que termina a menos de um
+            vão do pé desce no arquivo; aqui ele tem que descer também.
+          */
+          if (
+            item.bottom + blockGapPx + shift - pageTop > PAGE_CONTENT_HEIGHT_PX &&
+            top > pageTop + 0.5 &&
+            item.bottom - item.top <= PAGE_CONTENT_HEIGHT_PX
+          ) {
+            // O título só desce se não for ele mesmo quem abre a folha:
+            // descê-lo ali só queimaria uma folha inteira.
+            const lead = heading && heading.top > pageTop + 0.5 ? heading : null;
+            const spacer = Math.max(0, pageTop + PAGE_CONTENT_HEIGHT_PX - (lead ? lead.top : top));
+            turnPage();
+            pushes.push({ el: lead ? lead.el : item.el, kind: "block", spacer });
+            shift += spacer;
+          }
+          /*
+            Bloco mais alto que uma folha inteira: o papel o parte, porque não
+            há outro lugar para ele.
+
+            Achado 1137: mas o arquivo o parte ENTRE os filhos (parágrafo,
+            figura, caixa do APOIO, linha de alternativa), nunca dentro de uma
+            figura ou de uma linha. Virar no pixel passava a régua por trás da
+            figura e no meio de "b) Opção 33B". O pedaço que atravessa a virada
+            desce inteiro, como o bloco de topo do 0701; só o que sozinho é mais
+            alto que a folha continua partido no pixel, porque não cabe em
+            folha nenhuma.
+          */
+          while (item.bottom + shift - pageTop > PAGE_CONTENT_HEIGHT_PX) {
+            const pageEnd = pageTop + PAGE_CONTENT_HEIGHT_PX;
+            const piece = crossingPiece(item.el, pageEnd - shift);
+            const box = flowBox(piece);
+            if (box.bottom - box.top <= PAGE_CONTENT_HEIGHT_PX) {
+              const spacer = pageEnd - (box.top + shift);
+              // O inline TROCA a margem própria (a do `space-y`, por exemplo),
+              // então ela entra somada ao vão, como no 0521.
+              const ownMargin = Number.parseFloat(getComputedStyle(piece).marginTop) || 0;
+              pushes.push({ el: piece, kind: "piece", spacer: ownMargin + spacer });
+              shift += spacer;
+            }
+            turnPage();
+          }
+          if (item.el.hasAttribute(HEADING_ATTR)) lastHeading = { el: item.el, top: item.top + shift };
+        });
+        while (printedHeight + shift - pageTop > PAGE_CONTENT_HEIGHT_PX) turnPage();
+        return { total, pushes };
       };
-      const total = sheetsFor(printedHeight);
+      const { total, pushes } = paginate();
       /*
         Achado 0184: o excedente desenhado estica o papel, mas NÃO vira folha. A
         primeira versão do 0183 media a geometria com `sheetsFor(offsetHeight)`,
@@ -406,11 +764,24 @@ export function PageSheet({
       setSheetHeight(
         2 * PAGE_MARGIN_PX + Math.max(total * PAGE_CONTENT_HEIGHT_PX, content.offsetHeight),
       );
+      /*
+        Achado 0198: a régua só é desenhada onde o fluxo de fato vira, ou seja,
+        na PRÉVIA, a única superfície em que o empurrão do 0135/0701 é aplicado.
+        No Revisar o fluxo é contínuo de propósito (nada é deslocado e o DOM do
+        editor não marca bloco nenhum), então a linha caía num múltiplo da área
+        útil que nenhum arquivo usa: no meio de uma tabela que a prévia manda
+        inteira para a folha seguinte e que o PDF parte noutro ponto. Afirmar um
+        corte que o papel não faz é pior que não marcar nada: o professor
+        editava acreditando que a tabela sairia partida ali. O piso do papel em
+        folhas inteiras (0151/0157) continua valendo nas duas superfícies.
+      */
       setPageRules(
-        Array.from(
-          { length: total - 1 },
-          (_, page) => PAGE_MARGIN_PX + (page + 1) * PAGE_CONTENT_HEIGHT_PX,
-        ),
+        paginated
+          ? Array.from(
+              { length: total - 1 },
+              (_, page) => PAGE_MARGIN_PX + (page + 1) * PAGE_CONTENT_HEIGHT_PX,
+            )
+          : [],
       );
       /*
         Achado 0135: a régua ganha, como margem inferior, o branco que falta até
@@ -419,28 +790,40 @@ export function PageSheet({
         marca a quebra dentro do editor, e um salto rígido no meio da digitação
         atrapalharia mais do que ajuda (a folha de lá é contínua de propósito).
 
-        `shift` acumula porque as réguas seguintes já são medidas cruas (o
-        zeramento no topo da função): sem somar o que as anteriores abriram, a
-        segunda quebra calcularia a virada da folha errada. O piso em 0 cobre a
-        régua que atravessa a virada — aí o branco que falta é negativo e puxar o
-        conteúdo para trás sobreporia o que já foi desenhado.
-
-        A contagem e a altura do papel acima NÃO mudam: elas já paginavam trecho
-        a trecho (achados 0121/0131/0157), que é exatamente o lugar para onde o
-        conteúdo passa a ser empurrado.
+        Achado 0701: o BLOCO que não cabe inteiro recebe o mesmo empurrão, pelo
+        topo — é a virada automática do arquivo desenhada na tela, e com ela o
+        branco que sobra no pé da folha fica visível (que é o sinal de que vem
+        uma folha quase vazia). O vão de cada empurrão já saiu da caminhada
+        acima, a MESMA que conta as folhas e posiciona as réguas: contar por uma
+        conta e desenhar por outra era o que fazia a régua prometer uma virada
+        que o arquivo não usa.
       */
       if (paginated) {
-        let shift = 0;
-        marks.forEach((mark, index) => {
-          const cut = cuts[index] + shift;
-          const markHeight = mark.getBoundingClientRect().height / scale;
-          const pageEnd =
-            PAGE_MARGIN_PX +
-            Math.ceil((cut - PAGE_MARGIN_PX) / PAGE_CONTENT_HEIGHT_PX) * PAGE_CONTENT_HEIGHT_PX;
-          const spacer = Math.max(0, pageEnd - (cut + markHeight));
-          mark.style.marginBottom = `${spacer}px`;
-          shift += spacer;
+        pushes.forEach(({ el, kind, spacer }) => {
+          if (kind === "break") el.style.marginBottom = `${spacer}px`;
+          else {
+            if (kind === "piece") el.setAttribute(PIECE_PUSH_ATTR, el.style.marginTop);
+            el.style.marginTop = `${spacer}px`;
+          }
         });
+      }
+      /*
+        Achado 0262: só com o fluxo já empurrado dá para saber em que folha cada
+        linha da tabela caiu — é sobre ESTA geometria que o cabeçalho repetido é
+        posicionado. Só na PRÉVIA, pela mesma razão do 0198: no Revisar o fluxo
+        é contínuo de propósito e nada ali vira folha.
+      */
+      return paginated && syncRepeatedTableHeaders(sheet, scale);
+    };
+    /*
+      Achado 0262: o cabeçalho repetido é fluxo, e fluxo muda a paginação que
+      acabou de posicioná-lo. Então a passada se repete até parar de mexer no
+      DOM (no máximo três: a primeira insere, a segunda reconta com ele dentro,
+      a terceira absorve a virada que a inserção tenha criado).
+    */
+    const measure = () => {
+      for (let pass = 0; pass < 3; pass += 1) {
+        if (!layoutPass()) break;
       }
     };
     measure();
@@ -465,7 +848,7 @@ export function PageSheet({
     return () => observer.disconnect();
     // `scale` entra nas dependências porque o efeito lê rects já escalados: sem
     // ele a contagem ficaria presa na escala do render anterior.
-  }, [paginated, children, scale]);
+  }, [paginated, children, scale, blockGapPx]);
 
   /*
     Régua da virada de página: uma linha no fim da área imprimível de cada folha
@@ -474,16 +857,22 @@ export function PageSheet({
     `PAGE_MARGIN_PX + N x PAGE_CONTENT_HEIGHT_PX`, não o múltiplo de A4).
     Na prévia o conteúdo pós-quebra é empurrado até o topo da folha seguinte
     (achado 0135), então a régua marca mesmo onde o papel vira.
+
+    Achado 1110: é a ÚNICA marca de onde uma A4 acaba, então é objeto gráfico
+    estrutural (WCAG 1.4.11, 3:1). `--sf-line-2` é o traço decorativo da folha
+    (1,38:1 sobre o branco) e sumia no pé da folha e sob bordas de tabela;
+    `--sf-ink-soft` dá ~6:1 e continua sendo token da folha (light-only).
   */
-  const ruleColor = "hsl(var(--sf-line-2))";
-  const pageRulesBackground = pageRules.length
-    ? `linear-gradient(to bottom, ${pageRules
-        .map(
-          (y) =>
-            `transparent ${y - 1}px, ${ruleColor} ${y - 1}px, ${ruleColor} ${y}px, transparent ${y}px`,
-        )
-        .join(", ")})`
-    : "none";
+  /*
+    Achado 0382: e cada régua é um ELEMENTO, não uma faixa de 1px dentro de um
+    `linear-gradient` único da folha inteira. Com 4+ viradas o gradiente (5.000
+    a 9.000px, 4 paradas por virada) é amostrado pelo Chrome numa tabela de
+    cores de resolução fixa e a faixa sumia: nenhum pixel da tela era pintado,
+    em qualquer escala. A espessura é dividida pela escala da folha para dar
+    sempre pelo menos 1px de TELA; a régua termina na virada, como antes.
+  */
+  const ruleColor = "hsl(var(--sf-ink-soft))";
+  const ruleThickness = Math.max(1, 1 / scale);
 
   /*
     Achado 0222: a folha passa da mesa quando a escala trava no piso, e o que
@@ -554,7 +943,6 @@ export function PageSheet({
           decorativa) e a folha nunca termina no meio de uma página.
         */
         minHeight: `${sheetHeight}px`,
-        backgroundImage: pageRulesBackground,
         transform: `scale(${scale})`,
         /*
           Achado 0236: a escala vale para o conteúdo INTEIRO da folha, chrome de
@@ -573,6 +961,27 @@ export function PageSheet({
         Envelope do conteúdo: dá a altura NATURAL do documento, que a folha (já
         esticada até o fim da última página) não dá mais (achado 0123).
       */}
+      {pageRules.map((y) => (
+        <div
+          key={y}
+          data-testid="page-rule"
+          data-rule-y={y}
+          aria-hidden="true"
+          className="pointer-events-none"
+          style={{
+            position: "absolute",
+            left: 0,
+            right: 0,
+            top: `${y - ruleThickness}px`,
+            height: `${ruleThickness}px`,
+            background: ruleColor,
+            // Abaixo do conteúdo, como o fundo que substitui: a transform da
+            // folha cria o contexto de empilhamento, então -1 ainda fica sobre
+            // o papel.
+            zIndex: -1,
+          }}
+        />
+      ))}
       <div ref={contentRef}>{children}</div>
       {/*
         Achado 0242: o rodapé do PDF é `fixed`, sai em toda página e mora DENTRO
@@ -739,7 +1148,7 @@ export function PageSheet({
               prometido pelo CSS que não podia acontecer.
             */
             className={cn(
-              "overflow-x-auto",
+              "overflow-x-auto overflow-y-hidden",
               needsKeyboardScroll &&
                 "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
             )}
@@ -749,6 +1158,11 @@ export function PageSheet({
               seja ele mesmo focável. Sem isto o Tab pulava da folha direto
               para os botões do rodapé e o texto escondido ficava
               inalcançável por teclado (WCAG 2.1.1).
+
+              Achado 1104: `overflow-y-hidden` explícito. Com só `overflow-x-auto`
+              o CSS promove o eixo Y a `auto`, e qualquer fração de pixel além da
+              altura fixa da caixa interna (ex.: com o card aberto) vira uma
+              segunda barra vertical na mesa. Só a página rola (achado 0008).
             */
             tabIndex={needsKeyboardScroll ? 0 : undefined}
             role={needsKeyboardScroll ? "region" : undefined}

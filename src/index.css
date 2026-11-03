@@ -76,6 +76,14 @@
 
 @layer base {
   :root {
+    /* Declara o esquema para o NAVEGADOR, nao so para os tokens: barra de
+       rolagem, calendario do input[type=date], autofill, caret e ::selection
+       sao pintados por ele a partir daqui. Sem isso o tema escuro trocava as
+       cores do app e deixava todo controle nativo claro. A folha do PageSheet
+       mantem o seu [color-scheme:light] de proposito (papel e branco nos dois
+       temas), agora como decisao explicita, nao como padrao herdado. */
+    color-scheme: light;
+
     --background: 40 20% 96%;
     --foreground: 195 35% 12%;
 
@@ -126,9 +134,21 @@
        Mesmo matiz, luminosidade menor, e o hover ESCURECE. Achado 0355. */
     --destructive-surface: 0 72% 44%;
     --destructive-surface-hover: 0 72% 38%;
+    /* Aviso (ambar): o aviso de custo do passo Barreiras. Antes era ambar literal
+       do Tailwind, creme no tema escuro e com "(complexidade ...)" a 3,07:1.
+       --warning-ink >= 4,5:1 e --warning-icon >= 3:1 sobre --warning-surface.
+       Achado 1120. */
+    --warning-surface: 48 100% 96%;
+    --warning-border: 45 90% 70%;
+    --warning-ink: 26 83% 30%;
+    --warning-icon: 32 90% 38%;
 
     --border: 195 12% 87%;
-    --input: 195 12% 87%;
+    /* Trilho do Switch desligado (o polegar e --background por cima) e borda de
+       Input/Textarea/Select/Button outline. Em 87% o par com o fundo dava ~1,2:1
+       e o controle sumia: WCAG 1.4.11 pede 3:1. >= 3:1 sobre --background,
+       --card, --popover, --muted e --secondary. Achado 0273. */
+    --input: 195 12% 50%;
     --ring: 195 35% 38%;
 
     --radius: 0.75rem;
@@ -187,6 +207,10 @@
      tokens are INTENTIONALLY not overridden here — see the comment on :root's
      --sf-* block: the page sheet stays paper-white regardless of this theme. */
   .dark {
+    /* Contraparte do :root: avisa o navegador para pintar de escuro o que ele
+       desenha sozinho (rolagem, calendario nativo, autofill, caret). */
+    color-scheme: dark;
+
     --background: 195 18% 20%;
     --foreground: 40 12% 88%;
     --card: 195 18% 25%;
@@ -223,11 +247,19 @@
        o rotulo branco, so o hover precisa escurecer em vez de clarear (0355). */
     --destructive-surface: 0 55% 48%;
     --destructive-surface-hover: 0 55% 42%;
+    /* Aviso no tema escuro: fundo ambar escuro, tinta clara. Achado 1120. */
+    --warning-surface: 38 35% 22%;
+    --warning-border: 38 50% 40%;
+    --warning-ink: 45 90% 75%;
+    --warning-icon: 42 85% 60%;
     --border: 195 15% 33%;
     /* Brighter than --border: this also lights up the outline Button variant's
        border (shares --input with Input/Select/Textarea per shadcn's outline
-       recipe) — it was reading as almost invisible against --card. */
-    --input: 195 20% 42%;
+       recipe) — it was reading as almost invisible against --card. Em 42% ainda
+       dava 2,49:1 sobre --background (trilho do Switch desligado e polegar
+       sobre ele): >= 3:1 sobre --background, --card, --popover e --muted
+       (WCAG 1.4.11). Achado 0273. */
+    --input: 195 20% 58%;
     --ring: 195 38% 52%;
   }
 }
@@ -513,8 +545,16 @@
 }
 
 /* Discrete type label, pure CSS — no JS, so the coverage gate is unaffected.
-   Fica ACIMA do bloco (top negativo), dentro da margem que já separa um bloco
-   do outro, para não empurrar o texto impresso.
+   Fica ACIMA do bloco, dentro da margem que já separa um bloco do outro, para
+   não empurrar o texto impresso.
+
+   Achado 0265: a margem é `--doc-block-spacing`, que o Formato move de 8 a
+   40 px, então a posição não pode ser um `top` fixo (o antigo -0.85rem ficava a
+   2,4 px do bloco de cima no padrão e o invadia com vão de 12 px ou menos). O
+   rótulo é ancorado pelo PÉ, 2 px acima do bloco que ele nomeia, e só existe
+   quando o vão comporta os 9 px dele com folga maior para cima que para baixo
+   (vão >= 14 px); abaixo disso o `clamp` leva o corpo a 0 e ele some em vez de
+   sobrepor texto impresso.
 
    Cada rótulo publica texto alternativo VAZIO (`content: "X" / ""`, achado
    0107): `content` de ::before entra no accessible name no Chrome, então o
@@ -526,11 +566,11 @@
 .tiptap:not(.rich-text-field) > h3::before,
 .tiptap:not(.rich-text-field) > p::before {
   position: absolute;
-  top: -0.85rem;
+  bottom: calc(100% + 2px);
   /* Alinhado com o texto do bloco, que não é mais empurrado (achado 0206). */
   left: 0;
   line-height: 1;
-  font-size: 0.5625rem;
+  font-size: clamp(0px, (var(--doc-block-spacing, 1rem) - 13px) * 100, 0.5625rem);
   font-weight: 500;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -584,9 +624,10 @@
 }
 .tiptap:not(.rich-text-field) > h2,
 .tiptap:not(.rich-text-field) > h3 {
+  /* Sem cor nem faixa de fundo (achado 0389): previa, PDF e Word imprimem o
+     titulo de secao na tinta do papel. A marca de "Secao" e so o rotulo
+     ::before e o filete ::after, fora do fluxo do texto. */
   font-weight: 700;
-  color: hsl(var(--primary));
-  background-color: hsl(var(--primary) / 0.06);
 }
 .tiptap:not(.rich-text-field) > h2::after,
 .tiptap:not(.rich-text-field) > h3::after {
@@ -613,6 +654,26 @@
   border-color: var(--doc-rule-color, #767676);
 }
 
+/* O vão do filete no editor (achado 0188). O preflight do Tailwind zera a
+   margem de `hr` e a regra de espaçamento dos blocos de topo só mira
+   `h1, h2, h3, p`: o divisor era o único bloco sem vão próprio na folha do
+   Revisar, colado no bloco seguinte, enquanto a prévia e o PDF reservavam o vão
+   de bloco. Aqui a margem COLAPSA com a do vizinho, que é o que mantém um vão
+   só — a mesma conta que a prévia faz com `rowGap` e o PDF com `marginBottom`.
+   Os resets de ponta são os do achado 0186: vão é ENTRE blocos, e a folha já
+   aplica o padding da margem impressa. */
+.tiptap:not(.rich-text-field) > hr[data-type="divider"] {
+  margin: var(--doc-block-spacing, 1rem) 0;
+}
+
+.tiptap:not(.rich-text-field) > hr[data-type="divider"]:first-child {
+  margin-top: 0;
+}
+
+.tiptap:not(.rich-text-field) > hr[data-type="divider"]:last-child {
+  margin-bottom: 0;
+}
+
 /* Fórmula na folha: o `.katex` não tem NodeView nosso, então o tamanho vinha da
    folha de estilo que a própria biblioteca traz (`font-size: 1.21em`), escolhido
    por ninguém deste produto. Na tela isso desenhava a fórmula 1,12x a tinta do
@@ -623,6 +684,27 @@
    da regra da biblioteca; fora da folha, o fallback mantém o valor do KaTeX. */
 .katex.katex {
   font-size: var(--doc-fs-math, 1.21em);
+}
+
+/* O vão da fórmula em bloco (achado 0189). O subtree do KaTeX é decoração
+   (mesma leitura do achado 0438) e a folha de estilo da biblioteca traz
+   `margin: 1em 0` no `.katex-display`, vão escolhido por ninguém deste produto.
+   Na folha do Revisar ele colapsava para fora do NodeViewWrapper e sumia (certo
+   por acidente, e travado em 16 px: surdo ao controle "Espaçamento" do popover
+   Formato); na prévia do Exportar ficava contido, porque item de flex estabelece
+   contexto de formatação próprio, e a fórmula media 32 px a mais que na folha;
+   no PDF não existe (`PdfMath` gasta só `marginBottom`, achado 0407). A dupla
+   classe só sobe a especificidade acima da regra da biblioteca. */
+.katex-display.katex-display {
+  margin: 0;
+}
+
+/* Zerado o vão da biblioteca, o vão da fórmula de topo no editor passa a vir do
+   documento, como em título, parágrafo e divisória (0188) — e a margem COLAPSA
+   com a do vizinho, que é o que mantém um vão só. Os resets de ponta são os do
+   achado 0187, que já miram qualquer `[data-node-view-wrapper]` extremo. */
+.tiptap:not(.rich-text-field) > [data-testid="blockmath-node"] {
+  margin: var(--doc-block-spacing, 1rem) 0;
 }
 
 /* Keep top-level question cards spaced consistently with the new containers
@@ -669,9 +751,12 @@
 
 /* Image controls (alignment, legenda, alt text) inside a question are hidden
  * in preview mode and only revealed when the card is open (editar questão).
- * Top-level images (not inside a question) always show their controls. */
+ * Top-level images (not inside a question) always show their controls.
+ * Only `display` is restored: the rail's own classes (FOLHA_RAIL) lay it out
+ * in a row. A column here, combined with -translate-y-full, pushed the stack
+ * over the card header and out of its overflow-hidden box (achado 0613). */
 [data-testid="question-node"] [data-testid="image-controls"] { display: none; }
-[data-question-expanded="true"] [data-testid="image-controls"] { display: flex; flex-direction: column; gap: 0.5rem; }
+[data-question-expanded="true"] [data-testid="image-controls"] { display: flex; }
 
 /* Fórmula inline cuja descrição acessível ficou para trás (achado 0437). O
    sublinhado ondulado do achado 0436 era `text-decoration` no gatilho e nunca
@@ -716,6 +801,18 @@
   min-height: calc(24px / var(--folha-scale, 1));
 }
 
+/* Card de estrutura da questão fora da escala da folha (achado 0374).
+ *
+ * O card aberto pelo lápis é formulário do app, não conteúdo impresso, mas é
+ * filho do NodeView e viaja dentro do `transform: scale()` da folha: em 390px
+ * a folha abre a 42% e o card inteiro chegava ao dedo com alvos de 6 a 15px e
+ * corpo de texto a ~6px. `zoom` (e não um contra-`transform`) desfaz a escala
+ * mexendo no layout, então a altura reservada acompanha o card; a largura
+ * percentual continua a da coluna da folha. Fora da folha o fallback 1 é neutro. */
+.folha-chrome-unscaled {
+  zoom: calc(1 / var(--folha-scale, 1));
+}
+
 /* A reserva do vão do rail cresce junto (achados 0233/0338 sob o 0236).
  *
  * O rail é uma caixa OPACA ancorada acima do bloco (`-translate-y-full`): o
@@ -727,8 +824,14 @@
  * Os dois estados são os de FOLHA_RAIL_HOST: ponteiro grosso, onde o rail é
  * permanente (0232), e o foco DENTRO do rail, onde quem chega por teclado não
  * tem hover para o excesso sumir sozinho (0338). Em repouso, com ponteiro
- * fino, a folha segue medindo `my-3` (0102/0113/0413). */
-.folha-rail-host:has(.folha-rail:focus-within) {
+ * fino, a folha segue medindo `my-3` (0102/0113/0413).
+ *
+ * O foco do 0338 é o de TECLADO (`:focus-visible`), não `:focus-within`: o
+ * Chrome foca o botão já no `mousedown`, então a reserva ligada por qualquer
+ * foco descia a questão e o rail 24 a 28px entre o `mousedown` e o `mouseup`,
+ * o `mouseup` caía fora do botão e o primeiro clique no lápis não disparava
+ * (achado 0263). */
+.folha-rail-host:has(.folha-rail :focus-visible) {
   margin-top: calc(2.5rem / var(--folha-scale, 1));
 }
 
@@ -736,4 +839,16 @@
   .folha-rail-host {
     margin-top: calc(2.5rem / var(--folha-scale, 1));
   }
+}
+
+/* Rotulo dos preenchimentos primarios no tema escuro (achado 0807).
+ *
+ * No `.dark`, `--primary` e claro o bastante para ser TINTA (`text-primary`)
+ * sobre `--card`, e por isso o rotulo branco global sobre ele caia a 3,09:1
+ * (Button default, chip do passo ativo do wizard). Nenhum `--primary` atende os
+ * dois usos, e `--primary-foreground` global tambem pinta a sidebar escura, que
+ * precisa continuar branca. Entao o rotulo escuro vale so DENTRO de quem e
+ * preenchido com `bg-primary`: 5,9:1 em repouso e 5,2:1 no `hover:bg-primary/90`. */
+.dark .bg-primary {
+  --primary-foreground: 195 30% 8%;
 }

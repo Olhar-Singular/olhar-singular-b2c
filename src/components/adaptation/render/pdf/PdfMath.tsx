@@ -59,8 +59,11 @@ export function PdfMath({
   return (
     <View style={{ marginBottom, alignItems }}>
       <View>
-        {mathBlockLines(block.latex, block.alt, fontSize).map((line, i) => (
-          <Text key={i} style={{ ...mathPdfStyle(fontSize), textAlign: "left", ...textStyle }}>
+        {mathBlockLines(block.latex, fontSize).map((line, i) => (
+          <Text
+            key={i}
+            style={{ ...mathPdfStyle(fontSize), textAlign: "left", ...textStyle }}
+          >
             {line}
           </Text>
         ))}

@@ -2,10 +2,10 @@
  * O que cada formato de exportação NÃO carrega fiel.
  *
  * Mora fora de `exportDocx`/`exportPdf` porque a mesma varredura do documento
- * serve aos dois: a perda de fórmula é do Word E do PDF (o `mathToPdfText` v1
- * imprime o LaTeX cru em monoespaçada). O defeito que isto fecha não é a
- * limitação, é o silêncio: a prévia do passo Exportar mostra a fórmula
- * tipografada pelo KaTeX e o arquivo entrega `a^2 + b^2 = c^2`.
+ * serve aos dois: a perda de fórmula é do Word E do PDF (o LaTeX cru, em
+ * monoespaçada, mesmo quando o nó tem texto alternativo: achado 0803). O defeito que isto fecha não é a limitação, é o silêncio: a
+ * prévia do passo Exportar mostra a fórmula tipografada pelo KaTeX e o arquivo
+ * entrega outra coisa.
  */
 
 import {
@@ -18,6 +18,7 @@ import type {
   PageStyle,
   RichText,
 } from "@/lib/adaptation/canonical/schema";
+import { documentToPlainText } from "@/lib/adaptation/canonical/plainText";
 
 /** Walk every block, including question stems (which nest). */
 export function everyBlock(blocks: Block[]): Block[] {
@@ -86,12 +87,34 @@ function richTextsOf(block: Block): RichText[] {
  * LaTeX chegar ao arquivo sem nenhum aviso.
  */
 /**
- * A mesma frase serve ao PDF, ao Word e ao "Copiar": a perda é uma só (o LaTeX
- * cru no lugar da fórmula tipografada). Uma constante impede que uma das
- * superfícies passe a descrever a perda de outro jeito.
+ * A perda da fórmula: o LaTeX cru no lugar da fórmula tipografada. Vale para o
+ * PDF, o Word e o "Copiar", com ou sem `alt` no nó: as três saídas projetam o
+ * `latex` e nunca o texto alternativo (achado 0803).
  */
 export const MATH_LOSS_WARNING =
   "As fórmulas saem como texto LaTeX, sem formatação matemática.";
+
+/** Todo nó de fórmula do documento, inline ou de bloco. */
+function mathNodes(document: CanonicalDocument): { latex: string }[] {
+  const blocks = everyBlock(document.blocks);
+  const blockNodes = blocks
+    .filter((block) => block.type === "blockMath")
+    .map((block) => ({ latex: block.latex }));
+  const inlineNodes = blocks
+    .flatMap(richTextsOf)
+    .flatMap((rich) => rich.filter((inline) => inline.type === "inlineMath"))
+    .map((inline) => ({ latex: inline.latex }));
+  return [...blockNodes, ...inlineNodes];
+}
+
+/**
+ * O que as saídas textuais perdem da fórmula. Um ponto só para PDF, Word e
+ * "Copiar": as três imprimem o LaTeX, e o `alt` nunca substitui a equação
+ * (achado 0803, que desfez a divergência entre 0401 e 0125).
+ */
+export function mathLossWarnings(document: CanonicalDocument): string[] {
+  return documentHasMath(document) ? [MATH_LOSS_WARNING] : [];
+}
 
 /**
  * A outra metade da perda da fórmula, que o diálogo calava (achado 0415).
@@ -113,14 +136,122 @@ export const MATH_TYPOGRAPHY_WARNING =
   "corpo próprio, mesmo que você tenha escolhido outra fonte no Formato.";
 
 export function documentHasMath(document: CanonicalDocument): boolean {
-  const blocks = everyBlock(document.blocks);
-  // As duas varreduras acontecem antes do `||`: curto-circuitar no blockMath
-  // deixaria o caminho do inline sem exercício.
-  const hasBlockMath = blocks.some((block) => block.type === "blockMath");
-  const hasInlineMath = blocks
-    .flatMap(richTextsOf)
-    .some((rich) => rich.some((inline) => inline.type === "inlineMath"));
-  return hasBlockMath || hasInlineMath;
+  return mathNodes(document).length > 0;
+}
+
+/**
+ * As famílias CLÁSSICAS do PDF cobrem pouco mais que a CP1252 (0444).
+ *
+ * Enquanto elas eram as built-in Type 1 do @react-pdf, o motivo era o encoding:
+ * pedir um caractere de fora da CP1252 não levantava erro, o byte que sobrava
+ * na codificação virava OUTRO caractere — o professor via a seta na folha, via
+ * a seta na prévia e o aluno recebia aspas. Desde a 0445 elas são arquivos
+ * embutidos (Liberation), então o caractere ausente sai em branco em vez de
+ * trocado; o repertório, porém, continua latim + pontuação, sem dingbat
+ * (`✓`, `☐`) nem emoji. Só as três fontes de acessibilidade têm a cobertura
+ * larga, então o aviso segue conservador para as clássicas até a 0444 medir a
+ * cobertura real de cada arquivo.
+ *
+ * O teste é por TOKEN, não pelo nome da família no PDF: `mono` ainda cai numa
+ * built-in e as outras já não caem, mas o limite de repertório é o mesmo.
+ */
+const PDF_CLASSIC_TOKENS = new Set(["sans", "serif", "mono", "georgia", "arial"]);
+
+/**
+ * Os 27 caracteres que a CP1252 acomoda na faixa 0x80-0x9F, onde a Latin-1 tem
+ * controles: aspas curvas, travessões, reticências, bullet, marca registrada.
+ * Fora deles a tabela é ASCII imprimível mais a Latin-1 alta (acentos).
+ */
+const WINANSI_HIGH_CODES = new Set([
+  0x20ac, 0x201a, 0x0192, 0x201e, 0x2026, 0x2020, 0x2021, 0x02c6, 0x2030, 0x0160,
+  0x2039, 0x0152, 0x017d, 0x2018, 0x2019, 0x201c, 0x201d, 0x2022, 0x2013, 0x2014,
+  0x02dc, 0x2122, 0x0161, 0x203a, 0x0153, 0x017e, 0x0178,
+]);
+
+function isWinAnsi(character: string): boolean {
+  // `charCodeAt` e não `codePointAt`: fora do BMP ele devolve o SUBSTITUTO
+  // alto, que também não está na CP1252 (um emoji continua sendo reprovado) e
+  // dispensa o ramo de fallback que nenhum caractere alcança.
+  const code = character.charCodeAt(0);
+  if (code >= 0x20 && code <= 0x7e) return true;
+  if (code >= 0xa0 && code <= 0xff) return true;
+  return WINANSI_HIGH_CODES.has(code);
+}
+
+/**
+ * Os caracteres do documento que a fonte built-in do PDF não representa, sem
+ * repetição e na ordem em que aparecem.
+ *
+ * A varredura usa a MESMA projeção textual do botão "Copiar": ela já percorre
+ * todo campo que vira texto no papel (enunciado, instrução, alternativa, par de
+ * associação, célula, cabeçalho), então nenhum campo novo do schema pode
+ * escapar daqui sem escapar de lá junto. As quebras de linha que a projeção
+ * insere não são conteúdo e saem da conta.
+ */
+export function pdfUnsupportedCharacters(document: CanonicalDocument): string[] {
+  const text = documentToPlainText(document).replace(/\s/g, "");
+  return [...new Set([...text].filter((character) => !isWinAnsi(character)))];
+}
+
+/**
+ * Item de resposta sem conteúdo (achado 1105).
+ *
+ * Os "+ Afirmação / + Opção / + Par / + Item" do card criam o item com
+ * `content: []`, e todas as saídas mapeiam todo item: o vazio vira `( ) V ( ) F`
+ * sem afirmação, caixa sem rótulo, par sem coluna B, `____` sem item. O defeito
+ * a fechar aqui é o silêncio: o professor fica sabendo antes de o arquivo sair.
+ * Só os tipos de resposta em LISTA entram (V/F, caixas, associação, ordenação);
+ * alternativa e célula de tabela têm o próprio tratamento. Texto só de espaço
+ * conta como vazio; fórmula sozinha não.
+ */
+function isEmptyRichText(rich: RichText): boolean {
+  return rich.every((inline) => inline.type === "text" && inline.text.trim() === "");
+}
+
+function answerHasEmptyItem(answer: Extract<Block, { type: "question" }>["answer"]): boolean {
+  switch (answer.kind) {
+    case "trueFalse":
+    case "checkbox":
+    case "ordering":
+      return answer.items.some((item) => isEmptyRichText(item.content));
+    case "matching":
+      return answer.pairs.some((pair) => isEmptyRichText(pair.left) || isEmptyRichText(pair.right));
+    default:
+      return false;
+  }
+}
+
+/** A questão, ou qualquer questão aninhada no enunciado dela, tem item vazio? */
+function questionHasEmptyItem(question: Extract<Block, { type: "question" }>): boolean {
+  return everyBlock([question]).some(
+    (block) => block.type === "question" && answerHasEmptyItem(block.answer),
+  );
+}
+
+/** "1, B2 e 3": só chamada com dois rótulos ou mais. */
+function joinLabels(labels: string[]): string {
+  return `${labels.slice(0, -1).join(", ")} e ${labels[labels.length - 1]}`;
+}
+
+/**
+ * Rotula pela questão de topo, com o MESMO número que a folha imprime
+ * (`customNumber` ou o ordinal entre as questões do documento).
+ */
+export function emptyItemWarnings(document: CanonicalDocument): string[] {
+  let questionCount = 0;
+  const labels: string[] = [];
+  for (const block of document.blocks) {
+    if (block.type !== "question") continue;
+    questionCount += 1;
+    if (questionHasEmptyItem(block)) labels.push(block.customNumber ?? String(questionCount));
+  }
+  if (labels.length === 0) return [];
+  return labels.length === 1
+    ? [`A questão ${labels[0]} tem um item vazio: ele sai como um marcador sem texto na folha.`]
+    : [
+        `As questões ${joinLabels(labels)} têm itens vazios: eles saem como marcadores sem ` +
+          "texto na folha.",
+      ];
 }
 
 /**
@@ -134,7 +265,7 @@ export function pdfExportWarnings(
   document: CanonicalDocument,
   pageStyle?: PageStyle,
 ): string[] {
-  const warnings: string[] = [];
+  const warnings: string[] = emptyItemWarnings(document);
 
   // O `alt` é o campo de acessibilidade da imagem na folha, mas o
   // `@react-pdf/renderer` não gera PDF marcado (sem `/StructTreeRoot`, sem
@@ -149,8 +280,7 @@ export function pdfExportWarnings(
   }
 
   if (documentHasMath(document)) {
-    warnings.push(MATH_LOSS_WARNING);
-    warnings.push(MATH_TYPOGRAPHY_WARNING);
+    warnings.push(...mathLossWarnings(document), MATH_TYPOGRAPHY_WARNING);
   }
 
   // A folha mostra o itálico porque o navegador sintetiza a inclinação; o PDF
@@ -163,22 +293,74 @@ export function pdfExportWarnings(
     );
   }
 
+  // O caractere que a folha mostra tem que ser o caractere que o arquivo
+  // imprime. Enquanto o PDF não embute uma fonte com cobertura Unicode para
+  // TODO documento, o mínimo é nomear, antes do download, o que vai sair
+  // trocado (0444).
+  if (!family || PDF_CLASSIC_TOKENS.has(family)) {
+    const unsupported = pdfUnsupportedCharacters(document);
+    if (unsupported.length > 0) {
+      warnings.push(
+        `A fonte padrão do PDF não tem estes caracteres: ${unsupported.join(" ")}. ` +
+          "No arquivo eles saem trocados por outro símbolo. Troque-os por texto " +
+          "(acentos e travessão funcionam) ou escolha uma fonte de acessibilidade no Formato.",
+      );
+    }
+  }
+
   return warnings;
 }
 
 /**
- * O que o "Copiar" não carrega fiel (0411).
+ * O que o "Copiar" não carrega fiel (0411, 0377).
  *
- * `documentToPlainText` emite o LaTeX cru, byte a byte o mesmo que o PDF
- * imprime — mas o botão da cópia era o único do grupo que entregava essa perda
+ * `documentToPlainText` emite o LaTeX cru SEMPRE, como o PDF e o Word (achado
+ * 0803) — mas o botão da cópia
+ * era o único do grupo que entregava essa perda
  * calado, com um toast de sucesso, enquanto os dois vizinhos abriam um diálogo.
  * Quem copia é justamente quem vai colar num e-mail ou no Docs e imprimir sem
- * revisar. A frase é a mesma do PDF de propósito: é a mesma perda.
+ * revisar. A frase é a do LaTeX cru porque é isso que a cópia entrega, com ou
+ * sem descrição no nó.
  *
- * A cópia é texto puro, então nada aqui fala de imagem ou de fonte: o `alt`
- * nunca foi prometido e não há tipografia a perder.
+ * A cópia é `text/plain`, então tudo o que a prévia desenha e o texto não
+ * carrega entra na lista (0377), no mesmo critério do Word: a imagem vira a
+ * marcação `[Imagem]`, a tabela vira linhas com `|` e a formatação de trecho
+ * (negrito, itálico, cor, tamanho) some. Calar essas três certificava o resto
+ * como fiel. O `alt` e a fonte continuam fora: o texto alternativo VAI na
+ * marcação e não há tipografia num texto puro.
  */
+export const COPY_IMAGE_WARNING =
+  "As imagens não vão no texto copiado: cada uma vira uma marcação [Imagem] no lugar.";
+
+export const COPY_TABLE_WARNING =
+  "As tabelas saem como linhas de texto, com as células separadas por | e sem " +
+  "destacar o cabeçalho.";
+
+export const COPY_FORMATTING_WARNING =
+  "A formatação do texto não vai: negrito, itálico, sublinhado, cor e tamanho " +
+  "saem como texto comum.";
+
+function hasInlineFormatting(rich: RichText): boolean {
+  return rich.some(
+    (inline) =>
+      inline.type === "text" &&
+      ((inline.marks?.length ?? 0) > 0 ||
+        inline.color !== undefined ||
+        inline.fontSize !== undefined),
+  );
+}
+
 export function copyExportWarnings(document: CanonicalDocument): string[] {
-  if (!documentHasMath(document)) return [];
-  return [MATH_LOSS_WARNING];
+  const blocks = everyBlock(document.blocks);
+  const warnings = mathLossWarnings(document);
+  if (blocks.some((block) => block.type === "image")) {
+    warnings.push(COPY_IMAGE_WARNING);
+  }
+  if (blocks.some((block) => block.type === "question" && block.answer.kind === "table")) {
+    warnings.push(COPY_TABLE_WARNING);
+  }
+  if (blocks.flatMap(richTextsOf).some(hasInlineFormatting)) {
+    warnings.push(COPY_FORMATTING_WARNING);
+  }
+  return warnings;
 }

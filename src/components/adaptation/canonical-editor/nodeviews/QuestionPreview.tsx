@@ -15,6 +15,8 @@
 import { X } from "lucide-react";
 import type { QuestionAnswer, RichText } from "@/lib/adaptation/canonical/schema";
 import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
+import { FOLHA_TOUCH_TARGET } from "../folhaChrome";
 import { RichTextField } from "../RichTextField";
 import { AnswerPreview } from "../answer-editors/AnswerPreview";
 import { INK_MUTED } from "@/components/adaptation/render/pageTokens";
@@ -127,7 +129,15 @@ export function QuestionPreview({
               type="button"
               variant="ghost"
               size="icon"
-              className="absolute left-0 top-1/2 h-7 w-7 -translate-y-1/2 text-muted-foreground opacity-0 transition-opacity group-hover/instruction:opacity-100 group-focus-within/instruction:opacity-100 focus-visible:opacity-100"
+              className={cn(
+                "absolute left-0 top-1/2 h-7 w-7 -translate-y-1/2 text-muted-foreground opacity-0 transition-opacity group-hover/instruction:opacity-100 group-focus-within/instruction:opacity-100 focus-visible:opacity-100",
+                // Contra-escala do alvo (achado 0802): os 28px do 0005 viajam
+                // dentro do `transform` da folha e chegam ao dedo com 23,7px no
+                // ajuste à moldura (0,845) e ~11px no piso (0,4). Como o botão é
+                // `absolute` na âncora `w-0`, o `min-*` cresce só o overlay — a
+                // linha da instrução continua com a altura do texto (0321).
+                FOLHA_TOUCH_TARGET,
+              )}
               disabled={disabled}
               onClick={() => onInstructionChange(null)}
               aria-label="Remover instrução"

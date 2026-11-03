@@ -31,6 +31,7 @@ import {
   Table,
   TableRow,
   TableCell,
+  TableLayoutType,
   WidthType,
   HeadingLevel,
   AlignmentType,
@@ -41,7 +42,10 @@ import {
   TabStopType,
   TabStopPosition,
   Footer,
-  PageNumber,
+  LineRuleType,
+  BuilderElement,
+  NextAttributeComponent,
+  XmlComponent,
 } from "docx";
 import type {
   CanonicalDocument,
@@ -61,27 +65,44 @@ import {
 import {
   BASE_FONT_PT,
   ELEMENT_FONT_RATIOS,
+  resolveElementFontSizes,
   DEFAULT_FONT_FAMILY_TOKEN,
   DEFAULT_INK,
   SCAFFOLDING_BG,
   SCAFFOLDING_BORDER,
   SCAFFOLDING_LABEL,
-  HEADING_PT,
   PAGE_MARGIN_PT,
   RULE_COLOR,
   RULE_WIDTH_PT,
+  ANSWER_LINE_COLOR,
+  ANSWER_LINE_WIDTH_PT,
+  CHECKBOX_BOX_BORDER_PT,
+  CHECKBOX_BOX_COLOR,
+  TRUE_FALSE_MARKER_TEXT,
+  ORDERING_MARKER_TEXT,
+  ANSWER_ITEM_GAP_PT,
+  MATCHING_LINK_GAP_PT,
+  TABLE_CELL_PADDING_PT,
+  BASE_LINE_HEIGHT,
+  BASE_BLOCK_SPACING_PX,
+  questionNumberColumnPt,
+  alternativeMarkerColumnPt,
+  scaffoldingStepColumnPt,
+  SCAFFOLDING_PADDING_PT,
 } from "../render/pageTokens";
 import { indexToLetter } from "../render/letters";
 import {
   documentHasMath,
+  emptyItemWarnings,
   everyBlock,
-  MATH_LOSS_WARNING,
+  mathLossWarnings,
   MATH_TYPOGRAPHY_WARNING,
 } from "./exportWarnings";
 import { perQuestionBreakFlags } from "../render/perQuestionBreaks";
-import { latexLayoutAtom, readableMathText } from "../render/mathAtom";
+import { latexBalancedLines, latexLayoutAtom, MONO_ADVANCE_EM } from "../render/mathAtom";
 import { DEFAULT_PANEL_SETTINGS, formatHeaderDateBR, type PanelSettings } from "./panelSettings";
 import { HEADER_SPACING_PT } from "../render/headerSpacing";
+import { documentTitle, FALLBACK_TITLE } from "../titleField";
 import {
   FOOTER_COLOR,
   FOOTER_FONT_SIZE_PT,
@@ -94,10 +115,21 @@ export type DocxBlock = Paragraph | Table;
 
 /** Monospace face for LaTeX source, mirroring the PDF's MATH_PDF_STYLE. */
 const MATH_FONT = "Courier New";
-/** Indent (twips) for answer rows — the PDF's 22pt marker column. */
-const ANSWER_INDENT = 360;
-/** Question instruction/enunciado size in half-points (10.5pt, as in the PDF). */
-const SUB_SIZE = 21;
+
+/**
+ * Quantos caracteres de fórmula em `MATH_FONT` cabem numa coluna do Word.
+ *
+ * Mesma conta do PDF (`mathPdfMaxAtomChars`): a família é monoespaçada, então a
+ * largura em twips dividida pelo avanço fixo (`halfPoints * 10` twips por em).
+ * Sem teto o Word recebia a fórmula longa como um átomo inquebrável e, sem
+ * ponto de quebra legal, partia no meio de um comando LaTeX (achado 0390).
+ */
+function docxMathMaxAtomChars(
+  halfPoints: number,
+  columnTwips: number = DOCX_CONTENT_WIDTH_TWIPS,
+): number {
+  return Math.floor(columnTwips / (MONO_ADVANCE_EM * halfPoints * 10));
+}
 /**
  * Tinta do texto no Word: o MESMO `DEFAULT_INK` das outras três superfícies,
  * sem o `#` (a unidade do docx é o hex cru). Vale para o título e, via
@@ -109,8 +141,26 @@ const SUB_SIZE = 21;
  * enquanto edita (achado 0166).
  */
 const DOCX_INK = DEFAULT_INK.slice(1);
-/** Caption size in half-points — the sheet's `caption` element size (10pt). */
-const CAPTION_SIZE = Math.round(ELEMENT_FONT_RATIOS.caption * BASE_FONT_PT * 2);
+/**
+ * Corpo do título, da instrução e da legenda/rótulo APOIO em meios-pontos,
+ * derivados do corpo do documento pelo MESMO `resolveElementFontSizes` que a
+ * folha, a prévia e o PDF leem. Antes eram constantes no base de 12pt: o
+ * "Tamanho do texto" do Formato só movia o corpo, e a 21pt o título saía em
+ * 18pt, menor que o enunciado, com a instrução em 10,5pt (achado 0527).
+ */
+function elementHalfPoints(bodyPt: number) {
+  const sizes = resolveElementFontSizes({
+    fontFamily: undefined,
+    fontSize: bodyPt,
+    blockSpacing: BASE_BLOCK_SPACING_PX,
+  });
+  const half = (pt: number) => Math.round(pt * 2);
+  return {
+    heading: { 1: half(sizes.heading1), 2: half(sizes.heading2), 3: half(sizes.heading3) },
+    instruction: half(sizes.instruction),
+    caption: half(sizes.caption),
+  };
+}
 
 /**
  * Moldura + fundo da caixa do andaime, com os tokens compartilhados das outras
@@ -123,12 +173,19 @@ const SCAFFOLDING_EDGE = {
   size: 4,
   color: SCAFFOLDING_BORDER.slice(1),
 } as const;
+/**
+ * Respiro entre a moldura e o texto, o `padding` da caixa no PDF (achado 0529).
+ * `w:space` é em pt; nas laterais a moldura sai PARA FORA do recuo do texto, por
+ * isso os passos recuam esse mesmo respiro dos dois lados (ver `scaffolding`).
+ */
+const SCAFFOLDING_SPACE_PT = Math.round(SCAFFOLDING_PADDING_PT);
+const SCAFFOLDING_SIDE = { ...SCAFFOLDING_EDGE, space: SCAFFOLDING_SPACE_PT } as const;
 const SCAFFOLDING_BOX = {
   border: {
-    top: SCAFFOLDING_EDGE,
-    bottom: SCAFFOLDING_EDGE,
-    left: SCAFFOLDING_EDGE,
-    right: SCAFFOLDING_EDGE,
+    top: SCAFFOLDING_SIDE,
+    bottom: SCAFFOLDING_SIDE,
+    left: SCAFFOLDING_SIDE,
+    right: SCAFFOLDING_SIDE,
   },
   shading: { type: ShadingType.CLEAR, fill: SCAFFOLDING_BG.slice(1) },
 } as const;
@@ -145,6 +202,31 @@ const DIVIDER_RULE = {
       size: Math.round(RULE_WIDTH_PT * 8),
       color: RULE_COLOR.slice(1),
     },
+  },
+} as const;
+
+/**
+ * A pauta da questão aberta (achado 0523): borda inferior de um parágrafo
+ * vazio, na largura útil da coluna em qualquer fonte e corpo, com a tinta, a
+ * espessura e o traço tracejado dos tokens da pauta das outras superfícies.
+ * Antes eram 60 `_` de texto no corpo e na tinta do documento: a largura
+ * dependia do avanço do glifo e, a partir de ~15,5 pt na Arial, cada linha
+ * passava da coluna e quebrava em duas.
+ *
+ * `between` repete a mesma borda (achado 0526): parágrafos adjacentes com
+ * bordas idênticas formam um grupo no OOXML, e a `bottom` só é desenhada
+ * embaixo do último. Sem `between`, N linhas de pauta viravam uma só.
+ */
+const ANSWER_LINE_BORDER = {
+  style: BorderStyle.DASHED,
+  size: Math.round(ANSWER_LINE_WIDTH_PT * 8),
+  color: ANSWER_LINE_COLOR.slice(1),
+} as const;
+
+const ANSWER_LINE_RULE = {
+  border: {
+    between: ANSWER_LINE_BORDER,
+    bottom: ANSWER_LINE_BORDER,
   },
 } as const;
 
@@ -178,9 +260,14 @@ const DOCUMENT_LANGUAGE = "pt-BR";
 /** Pontos → twips (1/20 pt), a unidade de espaçamento do OOXML. */
 const ptToTwip = (pt: number): number => Math.round(pt * 20);
 
-/** Derive a safe .docx filename from the document header title. */
-export function docxFileName(header: DocumentHeader): string {
-  const title = header.title?.trim();
+/**
+ * Derive a safe .docx filename from the document header title.
+ *
+ * Achado 0100: with no header title, fall back to the document's first heading
+ * (`documentTitle`), the same chain the printed title and the metadata use.
+ */
+export function docxFileName(header: DocumentHeader, document?: CanonicalDocument): string {
+  const title = header.title?.trim() || (document ? documentTitle(document) : "");
   if (!title) return "atividade-adaptada.docx";
   const slug = title
     .toLowerCase()
@@ -201,7 +288,23 @@ type RunStyle = {
 };
 
 /** Paragraph properties a `NodeStyle` contributes. */
-type ParagraphStyle = { alignment?: (typeof ALIGNMENT)[keyof typeof ALIGNMENT] };
+type ParagraphStyle = {
+  alignment?: (typeof ALIGNMENT)[keyof typeof ALIGNMENT];
+  keepNext?: boolean;
+  keepLines?: boolean;
+};
+
+/**
+ * Achado 0271: a questão é a unidade da folha impressa também no Word. Todo
+ * parágrafo dela, menos o de fecho, anda com o seguinte (`w:keepNext`) e não se
+ * parte ao meio (`w:keepLines`); sem isso o Word deixava número + enunciado no
+ * pé da página e as alternativas órfãs na seguinte. Quando a cadeia não cabe
+ * numa página vazia, o próprio Word ignora o `keepNext` e parte a questão, então
+ * a questão maior que uma folha não some (o risco que bloqueou o 0702 no PDF).
+ * Exceção (achado 1109): as linhas de dados da tabela não entram na cadeia; o
+ * LibreOffice empurra a cadeia inteira para a folha seguinte antes de partir.
+ */
+const KEEP_WITH_NEXT = { keepNext: true, keepLines: true } as const;
 
 /** `NodeStyle.align` → OOXML `w:jc` (note: `justify` is `both` in the docx lib). */
 const ALIGNMENT = {
@@ -215,6 +318,44 @@ const ALIGNMENT = {
 const pxToPt = (px: number): number => px * (72 / 96);
 /** px → twips, the OOXML spacing unit (1pt = 20 twips). */
 const pxToTwips = (px: number): number => Math.round(pxToPt(px) * 20);
+
+/**
+ * Achado 0269: os vãos que o PDF desenha e o Word não tinha.
+ *
+ * - `DEFAULT_BLOCK_GAP_TWIPS`: o `blockSpacing` default do documento (16px = 12pt),
+ *   o `blockGap` que `AdaptationPdf` dá a todo bloco de topo sem `spacingAfter`.
+ * - `QUESTION_INNER_GAP_TWIPS`: 6pt entre os blocos do stem, o
+ *   `QUESTION_INNER_GAP_PT` do `PdfQuestion`.
+ * - `QUESTION_PART_GAP_TWIPS`: 6pt depois do enunciado e da instrução, o
+ *   mesmo `QUESTION_INNER_GAP_PT` que o `PdfQuestion` usa ali (achado 0270).
+ */
+const DEFAULT_BLOCK_GAP_TWIPS = pxToTwips(BASE_BLOCK_SPACING_PX);
+
+/**
+ * Achado 0518 (corrige o 0269): a entrelinha do Word em altura ABSOLUTA, o
+ * `corpo x BASE_LINE_HEIGHT` que o PDF (`pdfTextSize`) e as telas medem. O
+ * `lineRule="auto"` multiplicava a entrelinha SIMPLES da fonte (1,149 em na
+ * Arial), e a linha do Word saía 15% mais alta que no PDF: a prova virava folha
+ * antes da prévia. `atLeast`, e não `exact`, para a fórmula ou o run maior
+ * dentro da linha crescerem em vez de serem cortados. Como no PDF, que repete a
+ * razão ao lado de cada corpo, a altura sai do corpo DE CADA parágrafo; quem
+ * está no corpo do documento herda a do `pPrDefault` (`docxDocumentStyles`).
+ */
+type LineSpacing = { line?: number; lineRule?: (typeof LineRuleType)[keyof typeof LineRuleType] };
+const lineSpacing = (halfPoints: number): LineSpacing => ({
+  line: Math.round((halfPoints / 2) * BASE_LINE_HEIGHT * 20),
+  lineRule: LineRuleType.AT_LEAST,
+});
+/** A linha de um corpo próprio; sem corpo próprio, nada (herda o documento). */
+const lineFor = (halfPoints?: number): LineSpacing =>
+  halfPoints === undefined ? {} : lineSpacing(halfPoints);
+/** `{ spacing }` com a linha e o resto, ou nada quando os dois vêm vazios. */
+const spacingWith = (line: LineSpacing, rest: { after?: number } = {}) => {
+  const spacing = { ...line, ...rest };
+  return Object.keys(spacing).length > 0 ? { spacing } : {};
+};
+const QUESTION_INNER_GAP_TWIPS = ptToTwip(6);
+const QUESTION_PART_GAP_TWIPS = ptToTwip(6);
 /** An allowed palette color in the docx unit (raw hex, no `#`); `undefined` otherwise. */
 const docxColor = (color?: string): string | undefined =>
   color !== undefined && isAllowedColor(color) ? color.slice(1).toUpperCase() : undefined;
@@ -252,15 +393,20 @@ export function nodeStyleToDocx(style?: NodeStyle): {
 }
 
 export function richTextToRuns(nodes: Inline[], inherited: RunStyle = {}): TextRun[] {
-  return nodes.map((node) => {
+  return nodes.flatMap((node) => {
     if (node.type === "inlineMath") {
-      // Word has no KaTeX. Com `alt` preenchido sai a descrição legível, a
-      // mesma regra das views de tela e do PDF (achado 0401); sem ela sai o
-      // LaTeX, que ao menos mantém o conteúdo visível — dropá-lo era perda
-      // silenciosa de dado no meio da frase.
+      // Word has no KaTeX: sai o LaTeX, que ao menos mantém o conteúdo
+      // visível — dropá-lo era perda silenciosa de dado no meio da frase.
+      // Nunca o `alt`: ele é o texto alternativo da fórmula, não a fórmula
+      // (achado 0803), mesma política do PDF e do "Copiar".
       return new TextRun({
         ...inherited,
-        text: readableMathText(node) ?? latexLayoutAtom(node.latex),
+        // Com teto (achado 0390): acima da coluna o LaTeX volta quebrável nos
+        // espaços, em vez de o Word partir no meio de um comando.
+        text: latexLayoutAtom(
+          node.latex,
+          docxMathMaxAtomChars(inherited.size ?? Math.round(BASE_FONT_PT * 2)),
+        ),
         font: MATH_FONT,
       });
     }
@@ -268,9 +414,8 @@ export function richTextToRuns(nodes: Inline[], inherited: RunStyle = {}): TextR
     // que a tela (`textRunStyle`) e o PDF (`marksToPdfStyle`) usam. Ignorá-los
     // apagava o destaque que a professora pintou (achado 0134); `fontSize`
     // inline é pt, como nas outras superfícies, daí o meio-ponto por 2.
-    return new TextRun({
+    const runStyle = {
       ...inherited,
-      text: node.text,
       bold: node.marks?.includes("bold") || inherited.bold,
       italics: node.marks?.includes("italic") || inherited.italics,
       underline: node.marks?.includes("underline") ? {} : undefined,
@@ -279,25 +424,214 @@ export function richTextToRuns(nodes: Inline[], inherited: RunStyle = {}): TextR
       size: node.fontSize !== undefined && node.fontSize > 0
         ? Math.round(node.fontSize * 2)
         : inherited.size,
-    });
+    };
+    // O Word lê `\n` dentro de `<w:t>` como espaço (achado 0528): cada linha
+    // vira um run com a mesma formatação, precedido de `<w:br/>` a partir da 2ª.
+    return node.text.split("\n").map(
+      (line, i) => new TextRun({ ...runStyle, text: line, ...(i > 0 ? { break: 1 } : {}) }),
+    );
   });
 }
 
-/** The block-level style carried into the answer rows (achado 0134). */
-type InheritedStyle = { paragraph: ParagraphStyle; run: RunStyle };
-const NO_STYLE: InheritedStyle = { paragraph: {}, run: {} };
+/**
+ * Geometria de toda linha de resposta (achado 0454): nasce na margem, como o
+ * marcador da tela, da prévia e do PDF (`PdfAnswer` não recua o `ROW`), e leva
+ * depois o mesmo vão entre itens do PDF, `ANSWER_ITEM_GAP_PT`. Antes o Word
+ * recuava 18 pt e colava as linhas: as caixas do checkbox viravam uma barra.
+ */
+const ANSWER_ROW_SPACING = { spacing: { after: ptToTwip(ANSWER_ITEM_GAP_PT) } } as const;
 
-/** An answer row: an empty marker plus the item's content. */
-function answerRow(marker: string, content: RichText, style: InheritedStyle = NO_STYLE): Paragraph {
+/**
+ * The block-level style carried into the answer rows (achado 0134). `bodyPt` é
+ * o corpo do documento (popover Formato), que mede a coluna do marcador quando
+ * o bloco não tem corpo próprio (achado 0524).
+ */
+type InheritedStyle = { paragraph: ParagraphStyle; run: RunStyle; bodyPt: number };
+const NO_STYLE: InheritedStyle = { paragraph: {}, run: {}, bodyPt: BASE_FONT_PT };
+
+/** O corpo efetivo, em pt, de um run: o próprio (meio-ponto) ou o do documento. */
+const runPt = (run: RunStyle, bodyPt: number): number =>
+  run.size !== undefined ? run.size / 2 : bodyPt;
+
+/**
+ * Achado 0524: rótulo (número da questão, marcador da alternativa) em COLUNA,
+ * como no PDF, na prévia e no Revisar. O parágrafo recua a coluna inteira e
+ * devolve só a 1ª linha à margem (recuo pendente); o tab depois do rótulo leva
+ * o texto ao início da coluna (o recuo pendente é tab stop implícito no Word e
+ * no LibreOffice). Sem isso a 2ª linha voltava para baixo do número/marcador.
+ */
+const columnIndent = (columnPt: number) => {
+  const twips = ptToTwip(columnPt);
+  return { indent: { left: twips, hanging: twips } };
+};
+
+/**
+ * A caixa do checkbox é DESENHADA no Word, como no PDF (achado 0358): uma borda
+ * de run (`w:bdr`) em volta de espaços inquebráveis, em vez do texto `[ ]` que
+ * o arquivo trazia — dois colchetes finos onde as telas mostram um quadrado
+ * fechado, alvo menor para o aluno marcar com X.
+ *
+ * A borda de run é o único traço do OOXML que acompanha o corpo do documento
+ * sem posicionamento absoluto: a altura sai da linha e a largura, dos espaços.
+ * Por isso a caixa do Word é QUADRADA POR APROXIMAÇÃO (três espaços no corpo
+ * escolhido), enquanto PDF e telas leem o lado exato de `CHECKBOX_BOX_PX`. A
+ * espessura e a tinta são as mesmas das outras superfícies; a unidade da borda
+ * no OOXML é o oitavo de ponto, daí o `* 8`, como em `DIVIDER_RULE`.
+ */
+const CHECKBOX_BOX_TEXT = "\u00a0\u00a0\u00a0";
+const CHECKBOX_BOX_BORDER = {
+  style: BorderStyle.SINGLE,
+  size: Math.round(CHECKBOX_BOX_BORDER_PT * 8),
+  color: CHECKBOX_BOX_COLOR.slice(1),
+  space: 0,
+} as const;
+
+/**
+ * O vão entre itens de resposta com a linha do corpo herdado do bloco (achado
+ * 0518). Vale só ENTRE itens, como o `rowStyle` do `PdfAnswer` (achado 0707): a
+ * última linha sai com `after` zero, porque o parágrafo que fecha a questão já
+ * dá o vão de bloco, e os dois somados davam 18 pt contra 12 no PDF (achado 0519).
+ */
+const answerRowSpacing = (style: InheritedStyle, last: boolean) =>
+  spacingWith(lineFor(style.run.size), last ? { after: 0 } : ANSWER_ROW_SPACING.spacing);
+
+/** Se o item `index` é o último de `count` (o que fecha a resposta). */
+const isLast = (index: number, count: number) => index === count - 1;
+
+function checkboxRow(content: RichText, style: InheritedStyle, last: boolean): Paragraph {
   return new Paragraph({
     ...style.paragraph,
-    indent: { left: ANSWER_INDENT },
+    ...answerRowSpacing(style, last),
     children: [
-      new TextRun({ ...style.run, text: `${marker} ` }),
+      new TextRun({ ...style.run, text: CHECKBOX_BOX_TEXT, border: CHECKBOX_BOX_BORDER }),
+      new TextRun({ ...style.run, text: " " }),
       ...richTextToRuns(content, style.run),
     ],
   });
 }
+
+/**
+ * An answer row: an empty marker plus the item's content. Com `columnPt`, o
+ * marcador ocupa uma coluna dessa largura (achado 0524); sem ele, um espaço.
+ */
+function answerRow(
+  marker: string,
+  content: RichText,
+  style: InheritedStyle,
+  last: boolean,
+  columnPt?: number,
+): Paragraph {
+  return new Paragraph({
+    ...style.paragraph,
+    ...answerRowSpacing(style, last),
+    ...(columnPt === undefined ? {} : columnIndent(columnPt)),
+    children: [
+      columnPt === undefined
+        ? new TextRun({ ...style.run, text: `${marker} ` })
+        : new TextRun({ ...style.run, children: [marker, new Tab()] }),
+      ...richTextToRuns(content, style.run),
+    ],
+  });
+}
+
+/**
+ * Associação em colunas (achado 0455), espelhando a linha do PDF (`PdfAnswer`:
+ * esquerda `FLEX`, elo de largura fixa, direita `FLEX`). Antes cada par era um
+ * parágrafo `esquerda  ↔  direita`, e a seta e o termo da direita mudavam de x
+ * conforme o comprimento do termo da esquerda: no Word não havia coluna da
+ * direita para o aluno ligar.
+ *
+ * Tabela SEM bordas e de layout fixo (o Word não reajusta a grade pelo
+ * conteúdo), sem margem de célula para a coluna da esquerda nascer na margem
+ * como as outras linhas de resposta (achado 0454). O elo tem a largura de um
+ * corpo de alternativa mais o vão `MATCHING_LINK_GAP_PT` de cada lado; o resto
+ * da largura útil se divide igualmente entre as duas colunas de texto.
+ */
+const MATCHING_LINK_COLUMN_TWIPS = ptToTwip(
+  BASE_FONT_PT * ELEMENT_FONT_RATIOS.alternative + 2 * MATCHING_LINK_GAP_PT,
+);
+/** Grade [esquerda, elo, direita]; função porque a largura útil é declarada mais abaixo. */
+function matchingColumnWidths(): number[] {
+  const text = Math.floor((DOCX_CONTENT_WIDTH_TWIPS - MATCHING_LINK_COLUMN_TWIPS) / 2);
+  return [text, DOCX_CONTENT_WIDTH_TWIPS - 2 * text, text];
+}
+/**
+ * Moldura da questão-tabela (achado 0522): sem `borders` a lib emite
+ * `<w:tblBorders>` single com `w:color="auto"`, e o Word pinta preto enquanto
+ * o PDF e a tela traçam a régua do documento. Mesma tinta e espessura dos
+ * outros traços (`RULE_COLOR`/`RULE_WIDTH_PT`, em oitavos de ponto).
+ */
+const TABLE_RULE_EDGE = {
+  style: BorderStyle.SINGLE,
+  size: Math.round(RULE_WIDTH_PT * 8),
+  color: RULE_COLOR.slice(1),
+} as const;
+const TABLE_RULE_BORDERS = {
+  top: TABLE_RULE_EDGE,
+  bottom: TABLE_RULE_EDGE,
+  left: TABLE_RULE_EDGE,
+  right: TABLE_RULE_EDGE,
+  insideHorizontal: TABLE_RULE_EDGE,
+  insideVertical: TABLE_RULE_EDGE,
+} as const;
+const NO_EDGE = { style: BorderStyle.NONE, size: 0, color: "auto" } as const;
+const NO_TABLE_BORDERS = {
+  top: NO_EDGE,
+  bottom: NO_EDGE,
+  left: NO_EDGE,
+  right: NO_EDGE,
+  insideHorizontal: NO_EDGE,
+  insideVertical: NO_EDGE,
+} as const;
+
+function matchingTable(
+  pairs: Extract<Extract<Block, { type: "question" }>["answer"], { kind: "matching" }>["pairs"],
+  style: InheritedStyle,
+): Table {
+  const cell = (paragraph: Paragraph) =>
+    new TableCell({ borders: NO_TABLE_BORDERS, children: [paragraph] });
+  const side = (content: RichText, last: boolean) =>
+    cell(
+      new Paragraph({
+        ...style.paragraph,
+        ...answerRowSpacing(style, last),
+        children: richTextToRuns(content, style.run),
+      }),
+    );
+  return new Table({
+    width: { size: DOCX_CONTENT_WIDTH_TWIPS, type: WidthType.DXA },
+    columnWidths: matchingColumnWidths(),
+    layout: TableLayoutType.FIXED,
+    borders: NO_TABLE_BORDERS,
+    margins: { top: 0, bottom: 0, left: 0, right: 0 },
+    rows: pairs.map(
+      (pair, i) =>
+        new TableRow({
+          cantSplit: true,
+          children: [
+            side(pair.left, isLast(i, pairs.length)),
+            cell(
+              new Paragraph({
+                alignment: AlignmentType.CENTER,
+                ...answerRowSpacing(style, isLast(i, pairs.length)),
+                children: [new TextRun({ ...style.run, text: "↔" })],
+              }),
+            ),
+            side(pair.right, isLast(i, pairs.length)),
+          ],
+        }),
+    ),
+  });
+}
+
+/** Recuo da célula da tabela em twips, o mesmo `TABLE_CELL_PADDING_PT` do PDF. */
+const TABLE_CELL_MARGIN_TWIPS = Math.round(TABLE_CELL_PADDING_PT * 20);
+const TABLE_CELL_MARGINS = {
+  top: TABLE_CELL_MARGIN_TWIPS,
+  bottom: TABLE_CELL_MARGIN_TWIPS,
+  left: TABLE_CELL_MARGIN_TWIPS,
+  right: TABLE_CELL_MARGIN_TWIPS,
+};
 
 /**
  * The typed answer, mirroring PdfAnswer kind by kind. Exhaustive over the union
@@ -315,36 +649,39 @@ function answerToDocx(
         () =>
           new Paragraph({
             ...style.paragraph,
-            children: [new TextRun({ ...style.run, text: "_".repeat(60) })],
+            ...ANSWER_LINE_RULE,
+            ...spacingWith(lineFor(style.run.size)),
+            children: [],
           }),
       );
     }
     case "multipleChoice":
-      return answer.alternatives.map((alternative, i) =>
+      return answer.alternatives.map((alternative, i, all) =>
         // No ✔ on the correct one — the gabarito stays hidden, as in the PDF.
-        answerRow(`${indexToLetter(i)})`, alternative.content, style),
+        answerRow(
+          `${indexToLetter(i)})`,
+          alternative.content,
+          style,
+          isLast(i, all.length),
+          alternativeMarkerColumnPt(runPt(style.run, style.bodyPt)),
+        ),
       );
     case "trueFalse":
-      return answer.items.map((item) => answerRow("(  ) V  (  ) F", item.content, style));
-    case "checkbox":
-      // [ ] for every item, never [x] — `checked` is the answer key.
-      return answer.items.map((item) => answerRow("[ ]", item.content, style));
-    case "matching":
-      return answer.pairs.map(
-        (pair) =>
-          new Paragraph({
-            ...style.paragraph,
-            indent: { left: ANSWER_INDENT },
-            children: [
-              ...richTextToRuns(pair.left, style.run),
-              new TextRun({ ...style.run, text: "  ↔  " }),
-              ...richTextToRuns(pair.right, style.run),
-            ],
-          }),
+      return answer.items.map((item, i, all) =>
+        answerRow(TRUE_FALSE_MARKER_TEXT, item.content, style, isLast(i, all.length)),
       );
+    case "checkbox":
+      // Caixa vazia para todo item, nunca marcada — `checked` é o gabarito.
+      return answer.items.map((item, i, all) =>
+        checkboxRow(item.content, style, isLast(i, all.length)),
+      );
+    case "matching":
+      return [matchingTable(answer.pairs, style)];
     case "ordering":
       // Authored order, NOT sorted by `position` — sorting would reveal the answer.
-      return answer.items.map((item) => answerRow("____", item.content, style));
+      return answer.items.map((item, i, all) =>
+        answerRow(ORDERING_MARKER_TEXT, item.content, style, isLast(i, all.length)),
+      );
     case "fillBlank":
       // The gaps live inline in the stem; there is no separate answer to show
       // (same contract as PdfAnswer, which renders an empty view here).
@@ -352,23 +689,58 @@ function answerToDocx(
     case "table": {
       const [header, ...body] = answer.rows;
       if (!header) return [];
+      // Achado 1109: só o cabeçalho herda o `keepNext` da questão, prendendo o
+      // enunciado/instrução e ele à 1ª linha de dados. Nas linhas de dados o
+      // `keepNext` encadeava a tabela inteira num bloco só, e a questão-tabela
+      // maior que uma folha era empurrada toda para a seguinte, deixando o pé
+      // da folha em branco; a integridade de cada linha já vem do `cantSplit`.
+      const { keepNext: _keepNext, ...dataCellParagraph } = style.paragraph;
       const row = (cells: RichText[], bold: boolean) =>
         new TableRow({
+          // `tableHeader` é o que faz o Word repetir a primeira linha no topo de
+          // cada página em que a tabela continua (negrito não repete nada);
+          // `cantSplit` impede que a linha seja partida ao meio pela virada de
+          // folha, o mesmo contrato do `wrap={false}` no PDF (0602/0603).
+          // `tableHeader: false` ainda emite a tag (a lib só checa `undefined`),
+          // o que marcaria TODA linha como cabeçalho — daí o spread condicional.
+          ...(bold ? { tableHeader: true } : {}),
+          cantSplit: true,
           children: cells.map(
             (cell) =>
               new TableCell({
                 children: [
                   new Paragraph({
-                    ...style.paragraph,
+                    ...(bold ? style.paragraph : dataCellParagraph),
+                    ...spacingWith(lineFor(style.run.size)),
                     children: richTextToRuns(cell, { ...style.run, bold }),
                   }),
                 ],
               }),
           ),
         });
+      // Achado 0605: sem `columnWidths` a lib emite `<w:gridCol w:w="100"/>`
+      // (100 twips = 1,76mm) por coluna, uma grade que não descreve o próprio
+      // conteúdo — o Word salva no autofit e disfarça, mas quem respeita a grade
+      // declarada (conversores, Google Docs, layout fixo) desenha colunas de
+      // 1,76mm. A grade vai com a largura útil da folha dividida igualmente,
+      // pelo número de colunas da linha MAIS LARGA (é quantas `gridCol` o
+      // arquivo precisa ter).
+      const columns = Math.max(...answer.rows.map((cells) => cells.length));
+      const column = Math.floor(DOCX_CONTENT_WIDTH_TWIPS / columns);
+      const columnWidths = Array.from({ length: columns }, (_, i) =>
+        // O resto da divisão vai na última coluna: a soma tem que fechar com a
+        // largura útil, senão a grade volta a descrever uma folha que não existe.
+        i === columns - 1 ? DOCX_CONTENT_WIDTH_TWIPS - column * (columns - 1) : column,
+      );
       return [
         new Table({
           width: { size: 100, type: WidthType.PERCENTAGE },
+          columnWidths,
+          // Achado 0268: sem `w:tblCellMar` o Word usa o default dele (108 twips
+          // dos lados, 0 em cima/embaixo) e quebra a célula uma palavra antes da
+          // folha, da prévia e do PDF; o recuo vem do mesmo ponto único (3pt).
+          margins: TABLE_CELL_MARGINS,
+          borders: TABLE_RULE_BORDERS,
           rows: [row(header, true), ...body.map((cells) => row(cells, false))],
         }),
       ];
@@ -376,11 +748,33 @@ function answerToDocx(
   }
 }
 
-export function blockToDocxParagraphs(block: Block, number: number): DocxBlock[] {
+export function blockToDocxParagraphs(
+  block: Block,
+  number: number,
+  blockGapTwips: number = DEFAULT_BLOCK_GAP_TWIPS,
+  keepWithNext = false,
+  bodyPt: number = BASE_FONT_PT,
+  columnTwips = 0,
+): DocxBlock[] {
   // `block.style` projetado no docx: alinhamento em todo parágrafo do bloco,
-  // `spacingAfter` só no último, cor/corpo/fonte herdados pelos runs.
-  const { paragraph: para, spacing, run } = nodeStyleToDocx(block.style);
-  const inherited: InheritedStyle = { paragraph: para, run };
+  // `spacingAfter` só no último, cor/corpo/fonte herdados pelos runs. Sem
+  // `spacingAfter`, o último parágrafo leva o vão do documento, como o
+  // `blockGap` do PDF (achado 0269).
+  const { paragraph: ownPara, spacing: ownSpacing, run } = nodeStyleToDocx(block.style);
+  const sizes = elementHalfPoints(bodyPt);
+  // Bloco dentro de uma questão (stem): cada parágrafo dele anda com o seguinte.
+  // Dentro do enunciado, o bloco anda na coluna do texto da questão, como o
+  // `paddingLeft: numberColumn` do PDF (achado 0529).
+  const column: ParagraphStyle = columnTwips > 0 ? { indent: { left: columnTwips } } : {};
+  const para: ParagraphStyle = keepWithNext
+    ? { ...ownPara, ...column, ...KEEP_WITH_NEXT }
+    : { ...ownPara, ...column };
+  // Corpo próprio do bloco: a linha dele vai em todo parágrafo (achado 0518).
+  const line = lineFor(run.size);
+  const lineOnly = spacingWith(line);
+  const spacing: { spacing: LineSpacing & { after: number } } = {
+    spacing: { ...line, ...(ownSpacing.spacing ?? { after: blockGapTwips }) },
+  };
 
   switch (block.type) {
     case "heading": {
@@ -395,15 +789,19 @@ export function blockToDocxParagraphs(block: Block, number: number): DocxBlock[]
       // lib pinta o título de azul #2E74B5, em 16pt e SEM negrito — a única
       // linha do documento que perdia o peso, contra preto/negrito/18pt no PDF
       // e nas duas telas (achado 0164). Run vence styleId.
+      // Achado 0392: o título anda com o bloco que encabeça. O `Heading*` que a
+      // lib grava em styles.xml não traz keepNext, e o Microsoft Word (que usa
+      // o estilo do arquivo) deixava o título sozinho no pé da folha.
       return [
         new Paragraph({
           heading: level,
           ...para,
-          ...spacing,
+          ...KEEP_WITH_NEXT,
+          spacing: { ...lineSpacing(run.size ?? sizes.heading[block.level]), ...spacing.spacing },
           children: richTextToRuns(block.content, {
             bold: true,
             color: DOCX_INK,
-            size: Math.round(HEADING_PT[block.level] * 2),
+            size: sizes.heading[block.level],
             // O `block.style` vence os defaults do título (achado 0134).
             ...run,
           }),
@@ -420,13 +818,19 @@ export function blockToDocxParagraphs(block: Block, number: number): DocxBlock[]
           alignment: AlignmentType.CENTER,
           ...para,
           ...spacing,
-          children: [
-            new TextRun({
-              ...run,
-              text: readableMathText(block) ?? latexLayoutAtom(block.latex),
-              font: MATH_FONT,
-            }),
-          ],
+          // Mesma regra do inline: o LaTeX, nunca o `alt` (achado 0803). Mais
+          // larga que a coluna, a fórmula sai em linhas equilibradas partidas
+          // num espaço, como no PDF (achado 0390), cada uma um átomo.
+          children: latexBalancedLines(
+            block.latex,
+            docxMathMaxAtomChars(
+              run.size ?? Math.round(bodyPt * 2),
+              DOCX_CONTENT_WIDTH_TWIPS - columnTwips,
+            ),
+          ).map(
+            (line, i) =>
+              new TextRun({ ...run, text: line, font: MATH_FONT, ...(i > 0 ? { break: 1 } : {}) }),
+          ),
         }),
       ];
 
@@ -446,7 +850,7 @@ export function blockToDocxParagraphs(block: Block, number: number): DocxBlock[]
       const paragraphs: DocxBlock[] = [
         new Paragraph({
           ...imagePara,
-          ...(hasCaption ? {} : spacing),
+          ...(hasCaption ? lineOnly : spacing),
           children: [new TextRun({ ...run, text: label, italics: true })],
         }),
       ];
@@ -458,29 +862,45 @@ export function blockToDocxParagraphs(block: Block, number: number): DocxBlock[]
           // O tamanho que a professora escolheu no bloco continua vencendo.
           new Paragraph({
             ...imagePara,
-            ...spacing,
-            children: richTextToRuns(block.caption!, { ...run, size: run.size ?? CAPTION_SIZE }),
+            spacing: { ...lineSpacing(run.size ?? sizes.caption), ...spacing.spacing },
+            children: richTextToRuns(block.caption!, { ...run, size: run.size ?? sizes.caption }),
           }),
         );
       }
       return paragraphs;
     }
 
-    case "scaffolding":
+    case "scaffolding": {
       // Caixa rotulada, como PdfScaffolding a desenha: o rótulo é a única coisa
       // que nomeia o bloco no impresso (achado 0155) e a moldura é o que separa
       // os passos do corpo das questões (achado 0163).
+      //
+      // Achado 0529: cada passo tem a coluna do ordinal (recuo pendente + tab,
+      // como o número da questão no 0524) e o texto recua o respiro da moldura.
+      // Todos os parágrafos da caixa levam o MESMO recuo: é ele que faz o Word
+      // juntar as bordas numa caixa só. A coluna é a do maior ordinal.
+      const stepTwips = ptToTwip(
+        scaffoldingStepColumnPt(String(Math.max(block.items.length, 1)), runPt(run, bodyPt)),
+      );
+      const padTwips = ptToTwip(SCAFFOLDING_SPACE_PT);
+      const boxIndent = {
+        indent: { left: columnTwips + padTwips + stepTwips, hanging: stepTwips, right: padTwips },
+      };
       return [
         new Paragraph({
           ...SCAFFOLDING_BOX,
           ...para,
-          ...(block.items.length > 0 ? {} : spacing),
+          ...boxIndent,
+          spacing: {
+            ...lineSpacing(sizes.caption),
+            ...(block.items.length > 0 ? {} : { after: spacing.spacing.after }),
+          },
           children: [
             new TextRun({
               ...run,
               text: SCAFFOLDING_LABEL.toUpperCase(),
               bold: true,
-              size: CAPTION_SIZE,
+              size: sizes.caption,
             }),
           ],
         }),
@@ -489,11 +909,13 @@ export function blockToDocxParagraphs(block: Block, number: number): DocxBlock[]
             new Paragraph({
               ...SCAFFOLDING_BOX,
               ...para,
-              ...(i === block.items.length - 1 ? spacing : {}),
-              children: [new TextRun({ ...run, text: `${i + 1}. ${item}` })],
+              ...boxIndent,
+              ...(i === block.items.length - 1 ? spacing : lineOnly),
+              children: [new TextRun({ ...run, children: [`${i + 1}.`, new Tab(), item] })],
             }),
         ),
       ];
+    }
 
     case "divider":
       // Régua de verdade, não texto: `w:pBdr` é a mesma primitiva que a caixa do
@@ -507,13 +929,16 @@ export function blockToDocxParagraphs(block: Block, number: number): DocxBlock[]
     case "question": {
       const label = block.customNumber ?? String(number);
       const position = block.enunciadoPosition ?? "below";
+      // Partes da questão: todas presas à seguinte; só o fecho usa `para`.
+      const kept: ParagraphStyle = { ...para, ...KEEP_WITH_NEXT };
+      const keptInherited: InheritedStyle = { paragraph: kept, run, bodyPt };
       const hasEnunciado = block.enunciado != null && block.enunciado.length > 0;
       const enunciado = hasEnunciado
         ? [
             new Paragraph({
-              ...para,
+              ...kept,
               children: richTextToRuns(block.enunciado!, run),
-              spacing: { after: 60 },
+              spacing: { ...line, after: QUESTION_PART_GAP_TWIPS },
             }),
           ]
         : [];
@@ -523,12 +948,41 @@ export function blockToDocxParagraphs(block: Block, number: number): DocxBlock[]
       // vanished from the Word file.
       const [first, ...restStem] = block.stem;
       const firstRuns = first?.type === "paragraph" ? richTextToRuns(first.content, run) : [];
+      // O primeiro parágrafo do stem viaja no parágrafo do número: leva o vão
+      // interno da questão (ou o `spacingAfter` dele), como no PDF.
+      const firstSpacing = spacingWith(
+        line,
+        first?.type === "paragraph"
+          ? {
+              after:
+                nodeStyleToDocx(first.style).spacing.spacing?.after ?? QUESTION_INNER_GAP_TWIPS,
+            }
+          : {},
+      );
+      // Número em coluna, medida no corpo de quem hospeda o rótulo (achado 0524).
+      const numberPt = questionNumberColumnPt(label, runPt(run, bodyPt));
+      const numberIndent = columnIndent(numberPt);
       const numbered = new Paragraph({
-        ...para,
-        children: [new TextRun({ ...run, text: `${label}. `, bold: true }), ...firstRuns],
+        ...kept,
+        ...firstSpacing,
+        // Questão aninhada: a coluna dela começa na coluna da de fora (0529).
+        indent: { ...numberIndent.indent, left: columnTwips + numberIndent.indent.left },
+        children: [
+          new TextRun({ ...run, bold: true, children: [`${label}.`, new Tab()] }),
+          ...firstRuns,
+        ],
       });
       const stemRest = (first?.type === "paragraph" ? restStem : block.stem).flatMap((child) =>
-        blockToDocxParagraphs(child, 1),
+        // O resto do enunciado fica na coluna do texto, não volta para baixo
+        // do número (achado 0529).
+        blockToDocxParagraphs(
+          child,
+          1,
+          QUESTION_INNER_GAP_TWIPS,
+          true,
+          bodyPt,
+          columnTwips + ptToTwip(numberPt),
+        ),
       );
 
       return [
@@ -539,19 +993,30 @@ export function blockToDocxParagraphs(block: Block, number: number): DocxBlock[]
         ...(block.instruction
           ? [
               new Paragraph({
-                ...para,
+                ...kept,
+                spacing: { ...lineSpacing(run.size ?? sizes.instruction), after: QUESTION_PART_GAP_TWIPS },
                 children: richTextToRuns(block.instruction, {
                   ...run,
                   italics: true,
-                  size: run.size ?? SUB_SIZE,
+                  size: run.size ?? sizes.instruction,
                 }),
               }),
             ]
           : []),
-        ...answerToDocx(block.answer, inherited),
+        ...answerToDocx(block.answer, keptInherited),
         // O parágrafo que fecha a questão é o último do bloco: é nele que o
-        // `spacingAfter` do `block.style` cabe (achado 0134).
-        new Paragraph({ ...para, ...spacing, children: [] }),
+        // `spacingAfter` do `block.style` cabe (achado 0134). Vazio, ele já
+        // ocupa uma linha; com a altura EXATA do vão, a questão fecha com o
+        // mesmo respiro do PDF, e não uma linha de texto inteira (achado 0269).
+        new Paragraph({
+          ...para,
+          spacing: {
+            line: Math.max(spacing.spacing.after, 1),
+            lineRule: LineRuleType.EXACT,
+            after: 0,
+          },
+          children: [],
+        }),
       ];
     }
   }
@@ -573,13 +1038,14 @@ export function headerParagraphs(header: DocumentHeader): Paragraph[] {
   if (title) {
     blocks.push({
       alignment: AlignmentType.CENTER,
+      spacing: lineSpacing(HEADER_TITLE_HALF_PT),
       children: [new TextRun({ text: title, bold: true, size: HEADER_TITLE_HALF_PT })],
     });
   }
   if (school) {
     blocks.push({
       alignment: AlignmentType.CENTER,
-      spacing: { before: ptToTwip(HEADER_SPACING_PT.schoolTop) },
+      spacing: { ...lineSpacing(HEADER_SCHOOL_HALF_PT), before: ptToTwip(HEADER_SPACING_PT.schoolTop) },
       children: [new TextRun({ text: school, size: HEADER_SCHOOL_HALF_PT })],
     });
   }
@@ -595,6 +1061,7 @@ export function headerParagraphs(header: DocumentHeader): Paragraph[] {
     blocks.push({
       tabStops: [{ type: TabStopType.RIGHT, position: TabStopPosition.MAX }],
       spacing: {
+        ...lineSpacing(HEADER_META_HALF_PT),
         before: ptToTwip(HEADER_SPACING_PT.metaTop),
         after: ptToTwip(HEADER_SPACING_PT.bottomPadding),
       },
@@ -628,18 +1095,19 @@ export function docxExportWarnings(
   pageStyle?: PageStyle,
 ): string[] {
   const blocks = everyBlock(document.blocks);
-  const warnings: string[] = [];
+  // Item de resposta vazio: a mesma frase do PDF (achado 1105).
+  const warnings: string[] = emptyItemWarnings(document);
 
   if (blocks.some((b) => b.type === "image")) {
     warnings.push(
-      "As imagens não são embutidas no Word — cada uma vira uma marcação [Imagem] no lugar.",
+      "As imagens não são embutidas no Word: cada uma vira uma marcação [Imagem] no lugar.",
     );
   }
 
   // A varredura de math (inline em qualquer campo RichText, mais blockMath) é
   // a mesma do PDF e mora em `exportWarnings`.
   if (documentHasMath(document)) {
-    warnings.push(MATH_LOSS_WARNING);
+    warnings.push(...mathLossWarnings(document));
     // A fonte da fórmula é `MATH_FONT`, constante, e não a do documento: a
     // mesma perda do PDF, e a mesma frase (achado 0415).
     warnings.push(MATH_TYPOGRAPHY_WARNING);
@@ -693,6 +1161,27 @@ export function documentRunStyle(pageStyle?: PageStyle): {
 }
 
 /**
+ * Os estilos padrão do `.docx`: o run de `documentRunStyle` e a entrelinha do
+ * corpo.
+ *
+ * Achado 0269: só o run ia, então o `<w:pPrDefault/>` saía vazio e o Word caía
+ * na entrelinha simples, contra `BASE_LINE_HEIGHT` (1,4) no PDF e nas telas.
+ * Achado 0518: a entrelinha vai ABSOLUTA, `corpo x 1,4` (ver `lineSpacing`); o
+ * `lineRule` auto do 0269 multiplicava a métrica da fonte, não o corpo.
+ */
+export function docxDocumentStyles(pageStyle?: PageStyle) {
+  const run = documentRunStyle(pageStyle);
+  return {
+    default: {
+      document: {
+        run,
+        paragraph: { spacing: lineSpacing(run.size) },
+      },
+    },
+  };
+}
+
+/**
  * Os metadados do `.docx` (`docProps/core.xml`).
  *
  * Achado 0344: o `new Document(...)` ia só com `styles` e `sections`, então o
@@ -705,14 +1194,24 @@ export function documentRunStyle(pageStyle?: PageStyle): {
  * Mora fora de `downloadDocx` (que é `v8 ignore` pelos efeitos de DOM) para
  * nascer com teste, como `documentRunStyle` e `docxSectionProperties`.
  */
-export function documentMetadata(header: DocumentHeader): {
+export function documentMetadata(
+  header: DocumentHeader,
+  doc?: CanonicalDocument,
+): {
   title: string;
   creator: string;
   lastModifiedBy: string;
   description: string;
 } {
-  // Mesmo fallback que o `<Document title>` do PDF usa (AdaptationPdf.tsx).
-  const title = header.title?.trim() || "Atividade adaptada";
+  // Mesma cadeia que o `<Document title>` do PDF usa (AdaptationPdf.tsx).
+  //
+  // Achado 0192: parava no genérico porque `documentMetadata` só recebia o
+  // header — e o header nasce vazio, com o título do documento só como
+  // placeholder no passo Exportar. O `.docx` dizia "Atividade adaptada" em
+  // `dc:title` (o que o Word mostra em Propriedades) enquanto imprimia o
+  // heading no topo. Com o documento em mãos, cai na derivação da tela:
+  // header → heading → genérico.
+  const title = header.title?.trim() || (doc ? documentTitle(doc) : FALLBACK_TITLE);
   // Quem assina é o professor do cabeçalho; sem ele, o produto. Nunca a lib.
   const creator = header.teacher?.trim() || PRODUCT_NAME;
   return {
@@ -754,12 +1253,21 @@ export function withPageBreak(blocks: DocxBlock[]): DocxBlock[] {
 export function docxContentBlocks(
   document: CanonicalDocument,
   settings: PanelSettings = DEFAULT_PANEL_SETTINGS,
+  pageStyle?: PageStyle,
 ): DocxBlock[] {
   const breaks = perQuestionBreakFlags(document.blocks);
+  // O mesmo `blockSpacing` (px) que o PDF converte em `blockGap` (achado 0269).
+  const blockGapTwips = pxToTwips(pageStyle?.blockSpacing ?? BASE_BLOCK_SPACING_PX);
   let questionIndex = 0;
   return document.blocks.flatMap((block, i) => {
     if (block.type === "question") questionIndex++;
-    const paragraphs = blockToDocxParagraphs(block, questionIndex);
+    const paragraphs = blockToDocxParagraphs(
+      block,
+      questionIndex,
+      blockGapTwips,
+      false,
+      pageStyle?.fontSize ?? BASE_FONT_PT,
+    );
     const forceBreak =
       (settings.pageBreakPerQuestion && breaks[i]) || block.style?.pageBreakBefore === true;
     return forceBreak ? withPageBreak(paragraphs) : paragraphs;
@@ -779,6 +1287,14 @@ export function docxContentBlocks(
  * Mora fora de `downloadDocx` (que é `v8 ignore` pelos efeitos de DOM) para
  * nascer com teste, como `documentRunStyle` e `docxContentBlocks`.
  */
+/**
+ * Largura útil da folha A4 no .docx, em twips (1pt = 20 twips).
+ *
+ * A4 tem 595pt de largura (o mesmo `size="A4"` do react-pdf) e `PAGE_MARGIN_PT`
+ * sai de cada lado, a margem que `docxSectionProperties` escreve na seção.
+ */
+export const DOCX_CONTENT_WIDTH_TWIPS = Math.round((595 - 2 * PAGE_MARGIN_PT) * 20);
+
 export function docxSectionProperties(): {
   page: { margin: { top: number; right: number; bottom: number; left: number } };
 } {
@@ -803,6 +1319,35 @@ export function docxSectionProperties(): {
  * Mora fora de `downloadDocx` (que é `v8 ignore` pelos efeitos de DOM) para
  * nascer com teste, como `documentRunStyle` e `docxSectionProperties`.
  */
+/** `<w:instrText xml:space="preserve">CODE</w:instrText>`. */
+class FieldCode extends XmlComponent {
+  constructor(code: string) {
+    super("w:instrText");
+    this.root.push(new NextAttributeComponent({ space: { key: "xml:space", value: "preserve" } }));
+    this.root.push(code);
+  }
+}
+
+const fieldChar = (type: "begin" | "separate" | "end") =>
+  new BuilderElement({ name: "w:fldChar", attributes: { type: { key: "w:fldCharType", value: type } } });
+
+/**
+ * Um campo complexo do Word (PAGE, NUMPAGES) com run de RESULTADO próprio.
+ *
+ * Achado 0525: o `PageNumber.*` da lib emite begin/instr/separate/end num run
+ * só, sem resultado; quem resolve o campo (LibreOffice) desenhava o número com o
+ * default do documento (12pt, tinta de corpo), e não nos 8pt cinza do rodapé.
+ * Com o resultado num run formatado entre `separate` e `end`, o número herda o
+ * corpo e a cor do rodapé. O "1" é só o valor em cache: o editor recalcula.
+ */
+function docxField(code: string, style: { size: number; color: string }): TextRun[] {
+  return [
+    new TextRun({ ...style, children: [fieldChar("begin"), new FieldCode(code), fieldChar("separate")] }),
+    new TextRun({ ...style, text: "1" }),
+    new TextRun({ ...style, children: [fieldChar("end")] }),
+  ];
+}
+
 export function docxFooter(header: DocumentHeader): Footer {
   const style = { size: Math.round(FOOTER_FONT_SIZE_PT * 2), color: FOOTER_COLOR.slice(1) };
   const prefix = footerPrefixParts(header).map(
@@ -815,9 +1360,9 @@ export function docxFooter(header: DocumentHeader): Footer {
         children: [
           ...prefix,
           new TextRun({ ...style, text: "Página " }),
-          new TextRun({ ...style, children: [PageNumber.CURRENT] }),
+          ...docxField("PAGE", style),
           new TextRun({ ...style, text: " de " }),
-          new TextRun({ ...style, children: [PageNumber.TOTAL_PAGES] }),
+          ...docxField("NUMPAGES", style),
         ],
       }),
     ],
@@ -831,11 +1376,11 @@ export async function downloadDocx(
   pageStyle?: PageStyle,
 ): Promise<void> {
   const header = settings.header;
-  const contentParagraphs = docxContentBlocks(document, settings);
+  const contentParagraphs = docxContentBlocks(document, settings, pageStyle);
 
   const doc = new Document({
-    ...documentMetadata(header),
-    styles: { default: { document: { run: documentRunStyle(pageStyle) } } },
+    ...documentMetadata(header, document),
+    styles: docxDocumentStyles(pageStyle),
     sections: [
       {
         properties: docxSectionProperties(),
@@ -849,7 +1394,7 @@ export async function downloadDocx(
   const url = URL.createObjectURL(blob);
   const link = window.document.createElement("a");
   link.href = url;
-  link.download = docxFileName(header);
+  link.download = docxFileName(header, document);
   window.document.body.appendChild(link);
   link.click();
   link.remove();

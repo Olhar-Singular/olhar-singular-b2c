@@ -71,8 +71,15 @@ describe("AdaptationPdf", () => {
     expect(el.props.language).toBe("pt-BR");
   });
 
-  it("falls back to a generic title when the header has none", () => {
+  // Achado 0192: sem `header.title`, os metadados caíam no genérico enquanto a
+  // folha imprimia o heading na primeira linha. Cai na mesma derivação da tela.
+  it("falls back to the document heading when the header has no title", () => {
     const el = AdaptationPdf({ document: renderDocument, settings });
+    expect(el.props.title).toBe("Atividade de Frações");
+  });
+
+  it("falls back to a generic title when there is no heading either", () => {
+    const el = AdaptationPdf({ document: { schemaVersion: 1, blocks: [] }, settings });
     expect(el.props.title).toBe("Atividade adaptada");
   });
 
@@ -100,9 +107,10 @@ describe("AdaptationPdf", () => {
     expect(el.props.children.props.style.padding).toBe(40);
     expect(el.props.children.props.style.fontSize).toBe(12);
     // Sem fonte no pageStyle, o <Page> cai no token default — a MESMA família
-    // que a folha da tela resolve (achado 0007), e a mesma que o built-in do
-    // @react-pdf já imprimia.
-    expect(el.props.children.props.style.fontFamily).toBe("Helvetica");
+    // que a folha da tela resolve (achado 0007). Desde a 0445 ela é um arquivo
+    // que viaja dentro do PDF (Liberation Sans, métrica da Arial/Helvetica que
+    // o built-in imprimia), e não mais o built-in não embutido.
+    expect(el.props.children.props.style.fontFamily).toBe("Liberation Sans");
   });
 
   it("does NOT use settings.fontFamily for the <Page> style (font now comes from pageStyle)", () => {
@@ -129,12 +137,12 @@ describe("AdaptationPdf", () => {
     expect(types).toContain(PdfQuestion);
   });
 
-  it("renders math as its readable alt, falling back to the LaTeX source", () => {
+  it("renders math as its LaTeX source, never as the alt (0803)", () => {
     const { text } = collect(AdaptationPdf({ document: renderDocument }));
-    expect(text).toContain("a sobre b"); // inline math com alt (0401)
-    expect(text).not.toContain("\\frac{a}{b}");
-    expect(text).toContain("teorema de Pitágoras"); // block math com alt (0401)
-    expect(text).not.toContain("x^2\u00a0+\u00a0y^2\u00a0=\u00a0z^2");
+    expect(text).not.toContain("a sobre b");
+    expect(text).toContain("\\frac{a}{b}");
+    expect(text).not.toContain("teorema de Pitágoras");
+    expect(text).toContain("x^2\u00a0+\u00a0y^2\u00a0=\u00a0z^2");
   });
 
   it("aplica os tokens de página compartilhados no <Page>", () => {

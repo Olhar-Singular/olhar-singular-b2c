@@ -17,7 +17,7 @@ Plataforma educacional B2C. **Educadores adaptam atividades pedagógicas (provas
 
 | Fluxo | Página | Hook(s) | Edge function | Resumo |
 |-------|--------|---------|---------------|--------|
-| **Adaptar** | `AdaptarPage`, `EditAdaptationPage`, `MyAdaptationsPage` | `useAdaptations`, `useAdaptationDraft` | `adapt-activity`, `extract-exam-for-adaptation` (upload direto) | Wizard: Tipo → Atividade → Barreiras → Gerar (IA) → **Revisar** (superfície única Tiptap canônico: edição inline + card da questão + Aparência) → Exportar PDF. A **edge function** grava a linha em `adaptations` (draft) e o cliente só a atualiza por autosave. No upload direto, o Gerar primeiro **lê o arquivo com IA (cobrado à parte, ver gotcha de reserva)** e só então adapta. |
+| **Adaptar** | `AdaptarPage`, `EditAdaptationPage`, `MyAdaptationsPage` | `useAdaptations`, `useAdaptationDraft` | `adapt-activity`, `extract-exam-for-adaptation` (upload direto) | Wizard: Tipo → Atividade → Barreiras → Gerar (IA) → **Revisar** (superfície única Tiptap canônico: edição inline + card da questão + Aparência) → Exportar PDF. A **edge function** grava a linha em `adaptations` (draft) e o cliente só a atualiza por autosave. No upload direto, o Gerar primeiro **lê o arquivo com IA (cobrado à parte, ver gotcha de reserva)** e só então adapta; a leitura devolve também `title`/`intro` (título e instrução geral da prova), que abrem o texto enviado ao `adapt-activity`. |
 | **Perfis de barreira** | `BarrierProfilesPage` | `useBarrierProfiles` | — | Perfis (aluno + barreiras) reutilizados no passo "Barreiras". |
 | **Banco de questões** | `QuestionBankPage` | `useQuestionBank` | `extract-questions` | Extrai questões de PDF de prova. |
 | **Chat** | `ChatPage` | `useChatSessions`, `useSendMessage` | `chat` | Orientação pedagógica via IA. 3 créditos por conversa nova (máx. 10 conversas), até 20 trocas por conversa; mensagem de até 4000 caracteres (`src/lib/domain/chatLimits.ts`, espelhado em `_shared/chatTurn.ts`). Ver gotcha do chat. |
@@ -41,7 +41,7 @@ Plataforma educacional B2C. **Educadores adaptam atividades pedagógicas (provas
 
 - Saldo de crédito = coluna **`credit_balance`** (NÃO `credits`).
 - Documento adaptado vive em **`adaptations.adaptation_result->'document'`** (`->'blocks'` é o array de blocos canônicos). Coluna `content` antiga foi dropada (migration `20260604000000_adaptations_canonical`).
-- Cabeçalho do PDF (título/escola/professor/data) vive em **`adaptation_result->'header'`** — sibling opcional de `document` (additive, igual ao `pageStyle`; ausente = sem header, legacy round-trip). Editado no passo **Exportar** (`ExportPanel` é controlado pelo wizard via `setHeader`), persiste pelo autosave. A coluna **`adaptations.title`** (usada no histórico, que não lê o blob) espelha o `header.title` manual; se vazio, cai no título derivado no servidor (`deriveAdaptationTitle`, 1ª linha de `original_activity`). Logo o "Título" de Exportar **é** o título do histórico.
+- Cabeçalho do PDF (título/escola/professor/data) vive em **`adaptation_result->'header'`** — sibling opcional de `document` (additive, igual ao `pageStyle`; ausente = sem header, legacy round-trip). Editado no passo **Exportar** (`ExportPanel` é controlado pelo wizard via `setHeader`), persiste pelo autosave. A coluna **`adaptations.title`** (usada no histórico, que não lê o blob) espelha o `header.title` manual; se vazio, cai no título derivado no servidor (`deriveAdaptationTitle`: `header.title`, senão 1º `heading` do documento gerado, senão "Atividade adaptada"; a mesma derivação de `documentTitle`, que o Revisar sugere). Logo o "Título" de Exportar **é** o título do histórico.
 - **Quem cria a linha em `adaptations` é a EDGE FUNCTION, não o cliente** (migration
   `20260723160000_adaptations_request_id`). `adapt-activity` insere o rascunho via service_role
   **antes** de dar `settle` na reserva (`_shared/adaptationPersistence.ts`) e devolve
@@ -148,6 +148,12 @@ Plataforma educacional B2C. **Educadores adaptam atividades pedagógicas (provas
 - **A prévia do passo Exportar usa `PageSheet` + `pageStyle`**, igual à folha do Revisar. Renderizar
   o `CanonicalRenderer` solto mostrava a última tela antes do download na tipografia padrão do app,
   diferente do PDF que sairia.
+- **A prévia pagina no BLOCO, não no pixel** (achado 0701): o `@react-pdf` nunca parte uma `View`,
+  então o bloco que não cabe inteiro desce todo para a folha seguinte e o pé da anterior fica em
+  branco. O `BlockView` marca cada bloco impresso com `data-folha-bloco` e o `PageSheet` pagina por
+  essas marcas (contagem, réguas e empurrão saem da MESMA passada). Dividir a altura do fluxo pela
+  área útil subestimava a contagem, de forma cumulativa: "3 páginas A4" para um arquivo com
+  `Pages: 4`. A folha do **Revisar** é o DOM do editor, não tem bloco marcado e segue contínua.
 - **O editor precisa ressemear quando o documento muda por fora** (`useCanonicalEditor`): semear
   uma vez só fazia o "Recuperar" ser no-op visual — a folha seguia com o doc antigo e a 1ª tecla
   re-emitia ele, sobrescrevendo o recuperado. A guarda contra loop é o `lastDocRef` (o doc que o
@@ -247,8 +253,9 @@ Plataforma educacional B2C. **Educadores adaptam atividades pedagógicas (provas
   `request_id` segue **opcional** (a `QuestionBankPage` não manda; ausente é gerado, malformado é 400). `buildExtractionMessages` também descarta
   imagem fora da allowlist (uma URL http viraria fetch do provedor por nossa conta) e o
   `docx-utils` só extrai PNG/JPEG/WEBP. No cliente, `extractExamQuestions` manda um `request_id` novo
-  por tentativa, devolve `insufficient_credits` no 402 (o `StepGenerate` mostra a mesma tela de
-  créditos do adapt) e **reaproveita a extração paga do mesmo arquivo** (WeakMap por objeto
+  por tentativa, devolve `insufficient_credits` (com o `balance` do corpo) no 402 (o `StepGenerate` mostra a mesma tela de
+  créditos do adapt; a frase vem de `insufficientCreditsMessage` em `lib/domain/access.ts`, que só
+  diz "acabaram" com saldo 0 e, fora isso, mostra saldo e custo) e **reaproveita a extração paga do mesmo arquivo** (WeakMap por objeto
   `UploadedExam`): "Tentar novamente" após falha do adapt, o desvio das >12 questões e o Regerar não
   cobram de novo. **Quem decide se há leitura do arquivo é o MODO, não a presença do arquivo**:
   `activeUploadedExam(data)` (`wizardState.ts`) só devolve o `uploadedExam` com

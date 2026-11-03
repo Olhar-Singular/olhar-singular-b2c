@@ -1,6 +1,7 @@
-import { StrictMode } from "react";
+import { StrictMode, useState } from "react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { screen, fireEvent, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { renderWithProviders } from "@/test/helpers";
 import { StepUploadExam } from "./StepUploadExam";
 import type { WizardData } from "@/lib/adaptation/wizard/wizardState";
@@ -158,6 +159,12 @@ describe("StepUploadExam", () => {
     expect(onNext).toHaveBeenCalled();
   });
 
+  it("renders the attached file name in the UI font, not a serif fallback (1119)", () => {
+    const attachedData: WizardData = { ...baseData, uploadedExam: attachedExam() };
+    renderWithProviders(<StepUploadExam data={attachedData} updateData={vi.fn()} onNext={vi.fn()} onPrev={vi.fn()} />);
+    expect(screen.getByText("prova.pdf")).not.toHaveClass("font-serif");
+  });
+
   it("clicking the dropzone opens the file picker", () => {
     const clickSpy = vi.spyOn(HTMLInputElement.prototype, "click").mockImplementation(() => {});
     renderWithProviders(<StepUploadExam data={baseData} updateData={vi.fn()} onNext={vi.fn()} onPrev={vi.fn()} />);
@@ -179,6 +186,144 @@ describe("StepUploadExam", () => {
     clickSpy.mockRestore();
   });
 
+  // Regression (1115): the dashed area was a <div> with no role/tabindex and the
+  // file input was display:none, so keyboard and screen-reader users could not
+  // reach the only way to pick a file.
+  describe("1115: the dropzone is keyboard-operable", () => {
+    function render(data: WizardData = baseData) {
+      renderWithProviders(<StepUploadExam data={data} updateData={vi.fn()} onNext={vi.fn()} onPrev={vi.fn()} />);
+      return screen.getByRole("button", { name: data.uploadedExam ? /arquivo pronto para adaptar/i : /escolher arquivo/i });
+    }
+
+    it("exposes the area as a focusable named button reachable by Tab", async () => {
+      const user = userEvent.setup();
+      const dropzone = render();
+      expect(dropzone).toHaveAttribute("tabindex", "0");
+      for (let i = 0; i < 5 && document.activeElement !== dropzone; i++) await user.tab();
+      expect(document.activeElement).toBe(dropzone);
+    });
+
+    it("opens the file picker with Enter and Space, ignoring other keys", () => {
+      const clickSpy = vi.spyOn(HTMLInputElement.prototype, "click").mockImplementation(() => {});
+      const dropzone = render();
+      fireEvent.keyDown(dropzone, { key: "a" });
+      expect(clickSpy).not.toHaveBeenCalled();
+      fireEvent.keyDown(dropzone, { key: "Enter" });
+      expect(clickSpy).toHaveBeenCalledTimes(1);
+      fireEvent.keyDown(dropzone, { key: " " });
+      expect(clickSpy).toHaveBeenCalledTimes(2);
+      clickSpy.mockRestore();
+    });
+
+    it("is aria-disabled, out of the tab order and inert to keys once a file is attached", () => {
+      const clickSpy = vi.spyOn(HTMLInputElement.prototype, "click").mockImplementation(() => {});
+      const dropzone = render({ ...baseData, uploadedExam: attachedExam() });
+      expect(dropzone).toHaveAttribute("aria-disabled", "true");
+      expect(dropzone).toHaveAttribute("tabindex", "-1");
+      fireEvent.keyDown(dropzone, { key: "Enter" });
+      expect(clickSpy).not.toHaveBeenCalled();
+      clickSpy.mockRestore();
+    });
+  });
+
+  // Regression (1114): the dropzone says "Arraste ... aqui" but had no drag
+  // handlers, so dropping a file let the browser open it in the tab, taking the
+  // teacher out of the app and losing Tipo/Atividade.
+  describe("1118: dropzone contrast", () => {
+    it("draws the dashed border with the 3:1 --input token, not the faint --border", () => {
+      renderWithProviders(<StepUploadExam data={baseData} updateData={vi.fn()} onNext={vi.fn()} onPrev={vi.fn()} />);
+      expect(screen.getByRole("button", { name: /Escolher arquivo PDF ou Word/i })).toHaveClass("border-input");
+    });
+
+    it("does not fade the 'Arquivo pronto para adaptar' confirmation with opacity once attached", () => {
+      renderWithProviders(
+        <StepUploadExam data={{ ...baseData, uploadedExam: attachedExam() }} updateData={vi.fn()} onNext={vi.fn()} onPrev={vi.fn()} />,
+      );
+      const zone = screen.getByRole("button", { name: /Arquivo pronto para adaptar/i });
+      expect(zone.className).not.toMatch(/\bopacity-/);
+      let el: HTMLElement | null = screen.getByText("Arquivo pronto para adaptar");
+      while (el) {
+        expect(el.className).not.toMatch(/\bopacity-/);
+        el = el.parentElement;
+      }
+    });
+  });
+
+  describe("drag and drop", () => {
+    function dropzone() {
+      return (document.querySelector("input[data-upload-input]") as HTMLInputElement).parentElement!;
+    }
+
+    it("prevents the browser default on dragover and drop, and parses the dropped file", async () => {
+      const updateData = vi.fn();
+      renderWithProviders(<StepUploadExam data={baseData} updateData={updateData} onNext={vi.fn()} onPrev={vi.fn()} />);
+      const file = pdfFile();
+      expect(fireEvent.dragOver(dropzone(), { dataTransfer: { files: [file], dropEffect: "none" } })).toBe(false);
+      expect(fireEvent.drop(dropzone(), { dataTransfer: { files: [file] } })).toBe(false);
+      await waitFor(() =>
+        expect(updateData).toHaveBeenCalledWith({
+          uploadedExam: { fileName: "prova.pdf", fileType: "pdf", text: "1) Q1", pageImages: [], file },
+          result: null,
+        }),
+      );
+    });
+
+    it("highlights the zone while a file is dragged over it and clears it on leave", () => {
+      renderWithProviders(<StepUploadExam data={baseData} updateData={vi.fn()} onNext={vi.fn()} onPrev={vi.fn()} />);
+      fireEvent.dragOver(dropzone(), { dataTransfer: { files: [], dropEffect: "none" } });
+      expect(screen.getByText(/Solte o arquivo aqui/i)).toBeInTheDocument();
+      fireEvent.dragLeave(dropzone());
+      expect(screen.queryByText(/Solte o arquivo aqui/i)).not.toBeInTheDocument();
+      expect(screen.getByText(/Arraste um PDF ou Word/i)).toBeInTheDocument();
+    });
+
+    it("ignores a drop with no file, still blocking the browser default", () => {
+      renderWithProviders(<StepUploadExam data={baseData} updateData={vi.fn()} onNext={vi.fn()} onPrev={vi.fn()} />);
+      expect(fireEvent.drop(dropzone(), { dataTransfer: { files: [] } })).toBe(false);
+      expect(parsePdfMock).not.toHaveBeenCalled();
+    });
+
+    it("blocks the browser default but ignores the drop once a file is attached", () => {
+      const dataTransfer = { files: [pdfFile()], dropEffect: "copy" };
+      renderWithProviders(
+        <StepUploadExam data={{ ...baseData, uploadedExam: attachedExam() }} updateData={vi.fn()} onNext={vi.fn()} onPrev={vi.fn()} />,
+      );
+      expect(fireEvent.dragOver(dropzone(), { dataTransfer })).toBe(false);
+      expect(dataTransfer.dropEffect).toBe("none");
+      expect(screen.queryByText(/Solte o arquivo aqui/i)).not.toBeInTheDocument();
+      expect(fireEvent.drop(dropzone(), { dataTransfer })).toBe(false);
+      expect(parsePdfMock).not.toHaveBeenCalled();
+    });
+
+    // Regression (0283): dropping several files used only files[0] and silently
+    // discarded the rest (even a valid PDF behind an invalid first file).
+    it("refuses a multi-file drop with an explicit alert instead of silently using the first", async () => {
+      const updateData = vi.fn();
+      renderWithProviders(<StepUploadExam data={baseData} updateData={updateData} onNext={vi.fn()} onPrev={vi.fn()} />);
+      const files = [pdfFile("parte-1.pdf"), pdfFile("parte-2.pdf")];
+      expect(fireEvent.drop(dropzone(), { dataTransfer: { files } })).toBe(false);
+      expect(await screen.findByRole("alert")).toHaveTextContent(
+        "Envie um arquivo por vez: você soltou 2 arquivos. Solte só o que quer adaptar.",
+      );
+      await flushMicrotasks();
+      expect(parsePdfMock).not.toHaveBeenCalled();
+      expect(updateData).not.toHaveBeenCalled();
+    });
+
+    it("ignores a second drop while the first file is still being parsed", async () => {
+      const pending = deferred<{ text: string; pageImages: string[] }>();
+      parsePdfMock.mockReturnValue(pending.promise);
+      renderWithProviders(<StepUploadExam data={baseData} updateData={vi.fn()} onNext={vi.fn()} onPrev={vi.fn()} />);
+      fireEvent.drop(dropzone(), { dataTransfer: { files: [pdfFile()] } });
+      await waitFor(() => expect(screen.getByText(/Lendo o arquivo/i)).toBeInTheDocument());
+      fireEvent.drop(dropzone(), { dataTransfer: { files: [pdfFile("outra.pdf")] } });
+      await flushMicrotasks();
+      expect(parsePdfMock).toHaveBeenCalledTimes(1);
+      pending.resolve({ text: "1) Q1", pageImages: [] });
+      await waitFor(() => expect(screen.queryByText(/Lendo o arquivo/i)).not.toBeInTheDocument());
+    });
+  });
+
   it("removing the attached file clears uploadedExam and re-enables the dropzone", () => {
     const updateData = vi.fn();
     const attachedData: WizardData = {
@@ -188,6 +333,90 @@ describe("StepUploadExam", () => {
     renderWithProviders(<StepUploadExam data={attachedData} updateData={updateData} onNext={vi.fn()} onPrev={vi.fn()} />);
     fireEvent.click(screen.getByRole("button", { name: /remover arquivo/i }));
     expect(updateData).toHaveBeenCalledWith({ uploadedExam: null });
+  });
+
+  describe("1116: removing the file keeps keyboard focus and announces it", () => {
+    function Harness() {
+      const [data, setData] = useState<WizardData>({ ...baseData, uploadedExam: attachedExam() });
+      return (
+        <StepUploadExam
+          data={data}
+          updateData={(partial) => setData((d) => ({ ...d, ...partial }))}
+          onNext={vi.fn()}
+          onPrev={vi.fn()}
+        />
+      );
+    }
+
+    it("moves focus to the re-enabled dropzone instead of dropping it on <body>", async () => {
+      const user = userEvent.setup();
+      renderWithProviders(<Harness />);
+      screen.getByRole("button", { name: /remover arquivo/i }).focus();
+      await user.keyboard("{Enter}");
+      const zone = screen.getByRole("button", { name: /escolher arquivo pdf ou word/i });
+      expect(document.activeElement).toBe(zone);
+      expect(document.activeElement).not.toBe(document.body);
+    });
+
+    it("announces the removal in a polite live region", async () => {
+      const user = userEvent.setup();
+      renderWithProviders(<Harness />);
+      await user.click(screen.getByRole("button", { name: /remover arquivo/i }));
+      expect(screen.getByRole("status")).toHaveTextContent(/arquivo removido/i);
+    });
+
+    it("does not steal focus on first render without an attached file", () => {
+      renderWithProviders(<StepUploadExam data={baseData} updateData={vi.fn()} onNext={vi.fn()} onPrev={vi.fn()} />);
+      expect(document.activeElement).toBe(document.body);
+      expect(screen.getByRole("status")).toBeEmptyDOMElement();
+    });
+  });
+
+  // Regression (0282): attaching a file swapped the screen to "Arquivo pronto
+  // para adaptar" + Continuar, but the live region stayed empty, focus stayed on
+  // the now-disabled dropzone and its fixed aria-label still said "Escolher
+  // arquivo", the opposite of what had just happened.
+  describe("0282: attaching a file is announced and moves focus forward", () => {
+    function Harness({ initial = baseData }: { initial?: WizardData }) {
+      const [data, setData] = useState<WizardData>(initial);
+      return (
+        <StepUploadExam
+          data={data}
+          updateData={(partial) => setData((d) => ({ ...d, ...partial }))}
+          onNext={vi.fn()}
+          onPrev={vi.fn()}
+        />
+      );
+    }
+
+    it("announces the ready file by name in the polite live region", async () => {
+      renderWithProviders(<Harness />);
+      selectFile(pdfFile("avaliacao.pdf"));
+      await waitFor(() =>
+        expect(screen.getByRole("status")).toHaveTextContent(/arquivo avaliacao\.pdf pronto para adaptar/i),
+      );
+    });
+
+    it("moves focus to Continuar instead of leaving it on the disabled dropzone", async () => {
+      renderWithProviders(<Harness />);
+      const zone = screen.getByRole("button", { name: /escolher arquivo pdf ou word/i });
+      zone.focus();
+      selectFile(pdfFile());
+      const next = await screen.findByRole("button", { name: /continuar/i });
+      await waitFor(() => expect(document.activeElement).toBe(next));
+    });
+
+    it("drops the 'Escolher arquivo' name from the dropzone once a file is attached", () => {
+      renderWithProviders(<Harness initial={{ ...baseData, uploadedExam: attachedExam() }} />);
+      expect(screen.queryByRole("button", { name: /escolher arquivo/i })).not.toBeInTheDocument();
+      expect(screen.getByRole("button", { name: /arquivo pronto para adaptar/i })).toHaveAttribute("aria-disabled", "true");
+    });
+
+    it("does not steal focus when the step opens with a file already attached", () => {
+      renderWithProviders(<Harness initial={{ ...baseData, uploadedExam: attachedExam() }} />);
+      expect(document.activeElement).toBe(document.body);
+      expect(screen.getByRole("status")).toBeEmptyDOMElement();
+    });
   });
 
   it("ignores a change event with no selected file", () => {
@@ -201,14 +430,36 @@ describe("StepUploadExam", () => {
     parsePdfMock.mockRejectedValueOnce("plain string failure");
     renderWithProviders(<StepUploadExam data={baseData} updateData={vi.fn()} onNext={vi.fn()} onPrev={vi.fn()} />);
     selectFile(pdfFile());
-    await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent(/Falha ao processar o arquivo/i));
+    await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent(/Não foi possível ler este arquivo/i));
   });
 
-  it("surfaces a thrown Error's message when parsing fails", async () => {
-    parsePdfMock.mockRejectedValueOnce(new Error("PDF corrompido"));
+  it("shows a pt-BR message instead of the raw pdf.js error for a corrupted PDF (1113)", async () => {
+    parsePdfMock.mockRejectedValueOnce(new Error("Invalid PDF structure."));
     renderWithProviders(<StepUploadExam data={baseData} updateData={vi.fn()} onNext={vi.fn()} onPrev={vi.fn()} />);
     selectFile(pdfFile());
-    await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent(/PDF corrompido/i));
+    const alert = await screen.findByRole("alert");
+    expect(alert).toHaveTextContent(/Não foi possível ler este arquivo/i);
+    expect(alert).not.toHaveTextContent(/Invalid PDF structure/i);
+  });
+
+  it("tells the teacher the PDF is password-protected instead of calling it corrupted (0284)", async () => {
+    // pdf.js rejects with a PasswordException (identified by `name`, its prototype is not a plain Error).
+    parsePdfMock.mockRejectedValueOnce(Object.assign(Object.create(null), { name: "PasswordException", message: "No password given", code: 1 }));
+    renderWithProviders(<StepUploadExam data={baseData} updateData={vi.fn()} onNext={vi.fn()} onPrev={vi.fn()} />);
+    selectFile(pdfFile());
+    const alert = await screen.findByRole("alert");
+    expect(alert).toHaveTextContent(/protegido por senha/i);
+    expect(alert).not.toHaveTextContent(/corrompido/i);
+  });
+
+  it("shows a pt-BR message instead of the raw JSZip error for a corrupted DOCX (1113)", async () => {
+    detectFileTypeMock.mockReturnValue("docx");
+    extractDocxWithImagesMock.mockRejectedValueOnce(new Error("Corrupted zip: can't find end of central directory"));
+    renderWithProviders(<StepUploadExam data={baseData} updateData={vi.fn()} onNext={vi.fn()} onPrev={vi.fn()} />);
+    selectFile(pdfFile());
+    const alert = await screen.findByRole("alert");
+    expect(alert).toHaveTextContent(/Não foi possível ler este arquivo/i);
+    expect(alert).not.toHaveTextContent(/Corrupted zip/i);
   });
 
   it("disables Voltar while processing", async () => {

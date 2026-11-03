@@ -46,8 +46,9 @@ export function BlockMathNodeView({ node, updateAttributes, editor, deleteNode, 
   // Latex vazio é irrepresentável e o alt não sobrevive à troca da fórmula
   // (achado 0436) — ver useLatexDraft.
   const draft = useLatexDraft(latex, alt, updateAttributes);
-  // Escape fecha o editor e devolve o foco à fórmula (achado 0416).
-  const editing = useMathEditing(draft.onBlur);
+  // Escape fecha o editor e devolve o foco à fórmula (achado 0416), cancelando
+  // a edição em vez de confirmá-la (achado 0259).
+  const editing = useMathEditing({ onOpen: draft.begin, onCancel: draft.cancel });
 
   const open = editing.editing && !disabled;
 
@@ -220,7 +221,7 @@ export function BlockMathNodeView({ node, updateAttributes, editor, deleteNode, 
             disabled={disabled}
             autoFocus={editing.returnFocus}
             onClick={editing.open}
-            title={draft.altStale ? "Editar fórmula — descrição desatualizada" : "Editar fórmula"}
+            title={draft.altStale ? "Editar fórmula (descrição desatualizada)" : "Editar fórmula"}
             aria-label={
               draft.altStale
                 ? `Editar fórmula: ${draft.accessibleName} (descrição desatualizada)`

@@ -34,10 +34,15 @@ export function useCreateBarrierProfile() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (input: CreateInput) => {
-      const { error } = await supabase
+      // 0383: return the created row so callers can select it by id instead
+      // of guessing it is the first item of the (not yet refetched) list.
+      const { data, error } = await supabase
         .from("barrier_profiles")
-        .insert({ ...input, user_id: user!.id });
+        .insert({ ...input, user_id: user!.id })
+        .select()
+        .single();
       if (error) throw error;
+      return data;
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: QUERY_KEY });

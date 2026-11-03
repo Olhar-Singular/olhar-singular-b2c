@@ -118,3 +118,43 @@ describe("MetadataDrawer — devolução de foco ao gatilho (0349)", () => {
     expect(document.activeElement).not.toBe(screen.getByRole("button", { name: "Sobre" }));
   });
 });
+
+/**
+ * 0367 — o botão de fechar vem do `SheetContent` (shadcn, arquivo protegido) sem
+ * padding nem tamanho: a caixa era a do ícone, 16 x 16, abaixo dos 24 x 24 CSS px
+ * do WCAG 2.2 SC 2.5.8 (AA). A gaveta cresce o alvo de quem consome.
+ */
+describe("MetadataDrawer — alvo de toque do botão de fechar (0367)", () => {
+  it("cresce o botão injetado pelo Sheet até o piso de 24 x 24", () => {
+    setup();
+    const dialog = screen.getByRole("dialog");
+    const close = screen.getByRole("button", { name: "Close" });
+    // o alvo alcançado pelas utilitárias `[&>button]:*` é filho DIRETO do content
+    expect(close.parentElement).toBe(dialog);
+    for (const cls of [
+      "[&>button]:min-h-[24px]",
+      "[&>button]:min-w-[24px]",
+      "[&>button]:p-1",
+      "[&>button]:-m-1",
+    ]) {
+      expect(dialog).toHaveClass(cls);
+    }
+  });
+});
+
+/**
+ * 0266 — a gaveta é "somente leitura", mas a justificativa vinha numa caixa com
+ * borda nos quatro lados + `rounded-md` + fundo de papel: a silhueta do `Input`
+ * do shadcn. O professor clicava para editar. Agora é citação: filete à esquerda.
+ */
+describe("MetadataDrawer — justificativa sem silhueta de campo (0266)", () => {
+  it("não desenha a justificativa como caixa de input", () => {
+    setup();
+    const p = screen.getByText(META.justification);
+    const cls = p.className.split(/\s+/);
+    expect(cls).not.toContain("border");
+    expect(cls).not.toContain("rounded-md");
+    expect(cls).not.toContain("bg-surface-paper");
+    expect(cls).toContain("border-l-2");
+  });
+});

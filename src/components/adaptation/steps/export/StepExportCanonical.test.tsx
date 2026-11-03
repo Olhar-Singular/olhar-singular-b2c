@@ -28,16 +28,19 @@ vi.mock("@/components/adaptation/export/ExportPanel", () => ({
     pageStyle,
     header,
     onHeaderChange,
+    pageBreakPerQuestion,
     onPageBreakPerQuestionChange,
   }: {
     document: CanonicalDocument;
     pageStyle?: PageStyle;
     header?: DocumentHeader;
     onHeaderChange?: (h: DocumentHeader) => void;
+    pageBreakPerQuestion?: boolean;
     onPageBreakPerQuestionChange?: (v: boolean) => void;
   }) => (
     <div
       data-testid="export-panel"
+      data-panel-page-break={String(pageBreakPerQuestion)}
       data-page-style={pageStyle?.fontFamily ?? "none"}
       data-header-title={header?.title ?? "none"}
     >
@@ -77,6 +80,8 @@ function renderStep(overrides: Partial<React.ComponentProps<typeof StepExportCan
       onSave={vi.fn()}
       onPrev={vi.fn()}
       onRestart={vi.fn()}
+      pageBreakPerQuestion={false}
+      onPageBreakPerQuestionChange={vi.fn()}
       {...overrides}
     />,
   );
@@ -127,9 +132,17 @@ describe("StepExportCanonical", () => {
     expect(screen.getByRole("button", { name: /Salvar/i })).toBeDisabled();
   });
 
-  it("disables Salvar and shows a spinner while saving", () => {
-    renderStep({ saving: true });
-    expect(screen.getByRole("button", { name: /Salvar/i })).toBeDisabled();
+  // Regressão (caça 0511): `disabled` nativo derrubava o foco para o `<body>`.
+  it("keeps focus on Salvar while saving, ignoring clicks", () => {
+    const onSave = vi.fn();
+    renderStep({ saving: true, onSave });
+    const button = screen.getByRole("button", { name: /Salvar/i });
+    expect(button).not.toBeDisabled();
+    expect(button).toHaveAttribute("aria-disabled", "true");
+    button.focus();
+    expect(button).toHaveFocus();
+    fireEvent.click(button);
+    expect(onSave).not.toHaveBeenCalled();
   });
 
   /**
@@ -187,10 +200,18 @@ describe("StepExportCanonical", () => {
       expect(screen.getByTestId("renderer").dataset.pageBreak).toBe("false");
     });
 
-    it("propagates the page-break toggle from the panel to the preview", () => {
-      renderStep();
+    it("forwards the page-break toggle from the panel to the parent", () => {
+      const onPageBreakPerQuestionChange = vi.fn();
+      renderStep({ onPageBreakPerQuestionChange });
       fireEvent.click(screen.getByRole("button", { name: "toggle-page-break" }));
+      expect(onPageBreakPerQuestionChange).toHaveBeenCalledWith(true);
+    });
+
+    // Achado 0517: o valor vem do wizard e é o MESMO para o painel e a prévia.
+    it("feeds the controlled page-break value to both the panel and the preview", () => {
+      renderStep({ pageBreakPerQuestion: true });
       expect(screen.getByTestId("renderer").dataset.pageBreak).toBe("true");
+      expect(screen.getByTestId("export-panel").dataset.panelPageBreak).toBe("true");
     });
 
     /**
@@ -248,8 +269,20 @@ describe("StepExportCanonical", () => {
     const bar = screen.getByRole("button", { name: /Nova adaptação/i }).parentElement!;
     expect(bar.className).toMatch(/(?:^|\s)sticky(?:\s|$)/);
     expect(bar.className).toMatch(/(?:^|\s)bottom-0(?:\s|$)/);
-    expect(bar.className).toMatch(/(?:^|\s)bg-surface-chrome(?:\s|$)/);
     expect(bar.className).toMatch(/(?:^|\s)border-t(?:\s|$)/);
     expect(bar.className).toMatch(/(?:^|\s)z-\d+(?:\s|$)/);
+  });
+
+  // Achado 0504: a barra e chrome do app (fica FORA do PageSheet), mas estava
+  // pintada com os tokens da folha (--sf-*), que nao tem override no `.dark`
+  // de proposito. No tema escuro ela virava uma faixa creme acesa no rodape de
+  // uma pagina escura. Tem que usar token do app, que inverte com o tema.
+  it("pinta a barra de ações com token do app, não da folha (0504)", () => {
+    renderStep({});
+    const bar = screen.getByRole("button", { name: /Nova adaptação/i }).parentElement!;
+    expect(bar.className).not.toMatch(/(?:^|\s)bg-surface-chrome(?:\s|$)/);
+    expect(bar.className).not.toMatch(/(?:^|\s)border-surface-chrome-line(?:\s|$)/);
+    expect(bar.className).toMatch(/(?:^|\s)bg-card(?:\s|$)/);
+    expect(bar.className).toMatch(/(?:^|\s)border-border(?:\s|$)/);
   });
 });

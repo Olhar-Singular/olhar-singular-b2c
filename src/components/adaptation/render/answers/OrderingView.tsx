@@ -6,16 +6,21 @@
  */
 
 import type { QuestionAnswer } from "@/lib/adaptation/canonical/schema";
+import { ANSWER_ITEM_GAP_PX, ORDERING_MARKER_TEXT } from "../pageTokens";
 import { RichTextView } from "../RichTextView";
 
 type OrderingAnswer = Extract<QuestionAnswer, { kind: "ordering" }>;
 
 export function OrderingView({ answer }: { answer: OrderingAnswer }) {
   return (
-    <ul data-testid="answer-ordering" className="space-y-1">
+    <ul
+      data-testid="answer-ordering"
+      className="flex flex-col"
+      style={{ rowGap: `${ANSWER_ITEM_GAP_PX}px` }}
+    >
       {answer.items.map((item) => (
         <li key={item.id} className="flex items-start gap-2">
-          <span className="shrink-0 font-medium">____</span>
+          <span className="shrink-0 font-medium">{ORDERING_MARKER_TEXT}</span>
           <span className="flex-1">
             <RichTextView content={item.content} />
           </span>

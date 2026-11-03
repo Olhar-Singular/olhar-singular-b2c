@@ -17,7 +17,11 @@ vi.mock("@tiptap/react", () => ({
 // module-load-time import, so it needs breaking here too.
 vi.mock("@/components/forms/PdfPreviewModal", () => ({ default: () => null }));
 
+vi.mock("sonner", () => ({ toast: { warning: vi.fn() } }));
+
 import { useEditor, ReactNodeViewRenderer } from "@tiptap/react";
+import { toast } from "sonner";
+import { CELL_SEPARATOR } from "./pastedTables";
 
 const para = (text: string) => ({ type: "text" as const, text });
 
@@ -320,5 +324,34 @@ describe("useCanonicalEditor", () => {
     });
     renderHook(() => useCanonicalEditor({ value: docA, onChange: vi.fn() }));
     expect(() => onSel?.({ editor: {} })).not.toThrow();
+  });
+
+  const pasteTransform = () => {
+    let cfg: { editorProps?: { transformPastedHTML?: (html: string) => string } } | undefined;
+    vi.mocked(useEditor).mockImplementation((c: unknown) => {
+      cfg = c as typeof cfg;
+      return { getJSON: () => ({}) } as never;
+    });
+    renderHook(() => useCanonicalEditor({ value: docA, onChange: vi.fn() }));
+    return cfg?.editorProps?.transformPastedHTML;
+  };
+
+  it("keeps the cell boundary of a pasted table and warns about it", () => {
+    const html = pasteTransform()?.("<table><tr><td>A</td><td>B</td></tr></table>");
+    expect(html).toContain(`A${CELL_SEPARATOR}B`);
+    expect(html).not.toContain("AB");
+    expect(vi.mocked(toast.warning)).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(toast.warning).mock.calls[0][0]).toContain("tabela colada");
+  });
+
+  it("warns in the plural when several tables are pasted", () => {
+    pasteTransform()?.("<table><tr><td>A</td></tr></table><table><tr><td>B</td></tr></table>");
+    expect(vi.mocked(toast.warning).mock.calls[0][0]).toContain("As 2 tabelas coladas");
+  });
+
+  it("leaves a table-free paste untouched and silent", () => {
+    const html = "<p class=MsoNormal><b>TEXTO COLADO DO WORD</b></p>";
+    expect(pasteTransform()?.(html)).toBe(html);
+    expect(vi.mocked(toast.warning)).not.toHaveBeenCalled();
   });
 });

@@ -60,6 +60,23 @@ src/components/adaptation/render/pdf/
 - **Cor "sumindo"**: caiu no filtro `isAllowedColor` (não está na paleta do documento).
 - **Math "literal"**: é o comportamento v1 (LaTeX cru) — não é bug, é o TODO de fidelidade.
 - **Quebra de página inesperada**: revise `pageBreakBefore` e o prop `break`.
+- **Glifo faltando no arquivo (0444)**: o repertório das famílias clássicas é estreito. Nos
+  built-in Type 1 o problema era o encoding WinAnsi (**CP1252**) sem tabela Unicode: pedir um
+  caractere de fora dela (seta, sinal matemático, emoji) **não levantava erro** — o byte que
+  sobrava virava OUTRO caractere no papel. Desde a 0445 as clássicas são TTF embutidas
+  (Liberation), então o ausente sai em branco em vez de trocado, mas dingbat (`✓`, `☐`) e
+  emoji continuam fora. Nenhum mapper deve escrever esse glifo por conta própria (o elo da
+  associação é DESENHADO num `Canvas`, ver `paintMatchingLink`); o que vem do professor é
+  varrido por `pdfUnsupportedCharacters` (`export/exportWarnings.ts`) e avisado antes do
+  download. Só as três famílias de acessibilidade têm cobertura larga.
+- **Fonte do PDF (0445)**: TODA família de texto é um arquivo `.ttf` de `public/fonts/`
+  registrado em `registerFonts.ts`, e portanto viaja DENTRO do arquivo — `pdffonts` tem que
+  dizer `emb: yes` em todas. Built-in (Helvetica/Times) é só referência: o leitor da outra
+  máquina substitui a fonte, muda a métrica e muda a paginação que a prévia prometeu. A
+  única built-in que sobra é a Courier da fórmula (a compensação de caixa alta em
+  `pageTokens.ts` está calibrada nela). Os arquivos clássicos saem de
+  `scripts/build-classic-fonts.py`; `npm run test:pdf-smoke` rende um PDF de verdade e
+  confere tinta + embutimento.
 
 ## Regras ao mexer
 

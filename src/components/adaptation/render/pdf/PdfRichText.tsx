@@ -2,7 +2,8 @@
  * PdfRichText — PDF analogue of RichTextView. Projects a canonical `RichText`
  * array to react-pdf <Text> runs: text runs apply mark styles (bold/italic/
  * underline/strike) and an allowlisted color; inlineMath runs render as their
- * LaTeX source in a monospace style (v1 — see mathToPdfText).
+ * LaTeX source in a monospace style (v1 — see mathToPdfText) ou, quando o nó
+ * traz `alt`, como texto do próprio parágrafo (achado 0191).
  */
 
 import { Text } from "@react-pdf/renderer";
@@ -24,14 +25,13 @@ export function PdfRichText({
    */
   fontSize?: number;
 }) {
-  const mathStyle = mathPdfInlineStyle(fontSize);
   return (
     <>
       {content.map((run, i) => {
         if (run.type === "inlineMath") {
           return (
-            <Text key={i} style={mathStyle}>
-              {mathToPdfText(run.latex, run.alt, fontSize)}
+            <Text key={i} style={mathPdfInlineStyle(fontSize)}>
+              {mathToPdfText(run.latex, fontSize)}
             </Text>
           );
         }

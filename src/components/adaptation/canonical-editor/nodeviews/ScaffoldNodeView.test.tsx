@@ -82,6 +82,19 @@ describe("ScaffoldNodeView", () => {
     );
   });
 
+  /*
+    Achado 0616: o "+ Passo" e `size="sm"` (36px de folha) e ficou fora do piso
+    do 0236 na premissa de que "ja passa". Na folha a 42% (390px) ele chega ao
+    dedo com 15px de altura, abaixo dos 24 CSS px do WCAG 2.2 SC 2.5.8.
+  */
+  it("da ao '+ Passo' o mesmo piso de toque da lixeira vizinha (achado 0616)", () => {
+    const { props } = makeProps(["a"]);
+    render(<ScaffoldNodeView {...props} />);
+    expect(screen.getByRole("button", { name: "Passo" }).className).toMatch(
+      /(^|\s)folha-touch-target(\s|$)/,
+    );
+  });
+
   it("calls deleteNode when the delete button is clicked", () => {
     const { props, deleteNode } = makeProps(["a"]);
     render(<ScaffoldNodeView {...props} />);
@@ -204,10 +217,86 @@ describe("ScaffoldNodeView — chrome de edição fora do fluxo da folha (0113)"
     expect(campo.className).toMatch(/py-0/);
   });
 
+  it("o texto do passo herda o corpo da folha, não o 14/16px do input do app (0619)", () => {
+    const { props } = makeProps(["a"]);
+    render(<ScaffoldNodeView {...props} />);
+    const classes = screen.getByLabelText("Passo 1").className.split(/\s+/);
+    expect(classes).not.toContain("text-base");
+    expect(classes).not.toContain("md:text-sm");
+    expect(classes).toContain("text-[length:inherit]");
+    expect(classes).toContain("md:text-[length:inherit]");
+  });
+
   it("hospeda o rail no wrapper, que continua medindo o vão de sempre", () => {
     const { props } = makeProps(["a"]);
     const { getByTestId } = render(<ScaffoldNodeView {...props} />);
     expect(getByTestId("scaffold-node").className).toMatch(/relative/);
     expect(getByTestId("scaffold-node").className).toMatch(/my-3/);
+  });
+});
+
+/*
+  0620 — cada passo era um `<input>` de uma linha: o papel quebra o passo em
+  várias linhas (ScaffoldingView `<li>`, PDF `<Text>` com flexShrink), e o
+  Revisar mostrava só o pedaço que cabia no campo. O campo passa a ser um
+  `<textarea>` de uma linha que cresce com o conteúdo, sem aceitar quebra
+  manual (o passo é uma string de uma linha no modelo).
+*/
+describe("ScaffoldNodeView — passo longo quebra linha como no papel (0620)", () => {
+  const longo = "Identifique os números do problema e escreva cada um deles separado por vírgula no espaço abaixo";
+
+  it("o campo do passo é multilinha, não um input de uma linha", () => {
+    const { props } = makeProps([longo]);
+    render(<ScaffoldNodeView {...props} />);
+    const campo = screen.getByLabelText("Passo 1");
+    expect(campo.tagName).toBe("TEXTAREA");
+    expect((campo as HTMLTextAreaElement).value).toBe(longo);
+    expect(campo.getAttribute("rows")).toBe("1");
+    expect(campo.className).toMatch(/\[field-sizing:content\]/);
+    expect(campo.className).toMatch(/resize-none/);
+    expect(campo.className).toMatch(/min-h-0/);
+  });
+
+  it("Enter não insere quebra de linha no passo", () => {
+    const { props } = makeProps(["a"]);
+    render(<ScaffoldNodeView {...props} />);
+    const campo = screen.getByLabelText("Passo 1");
+    const enter = fireEvent.keyDown(campo, { key: "Enter" });
+    expect(enter).toBe(false);
+    const letra = fireEvent.keyDown(campo, { key: "b" });
+    expect(letra).toBe(true);
+  });
+
+  it("colar texto com quebras grava o passo numa linha só", () => {
+    const { props, updateAttributes } = makeProps(["a"]);
+    render(<ScaffoldNodeView {...props} />);
+    fireEvent.change(screen.getByLabelText("Passo 1"), { target: { value: "um\ndois\r\ntrês" } });
+    expect(updateAttributes).toHaveBeenCalledWith({ items: ["um dois três"] });
+  });
+
+  it("sem suporte a field-sizing, a altura acompanha o conteúdo", () => {
+    const original = globalThis.CSS;
+    vi.stubGlobal("CSS", { supports: () => false });
+    const spy = vi.spyOn(HTMLTextAreaElement.prototype, "scrollHeight", "get").mockReturnValue(72);
+    try {
+      const { props } = makeProps([longo]);
+      render(<ScaffoldNodeView {...props} />);
+      expect((screen.getByLabelText("Passo 1") as HTMLTextAreaElement).style.height).toBe("72px");
+    } finally {
+      spy.mockRestore();
+      vi.stubGlobal("CSS", original);
+    }
+  });
+
+  it("com suporte a field-sizing, não fixa altura em JS", () => {
+    const original = globalThis.CSS;
+    vi.stubGlobal("CSS", { supports: () => true });
+    try {
+      const { props } = makeProps([longo]);
+      render(<ScaffoldNodeView {...props} />);
+      expect((screen.getByLabelText("Passo 1") as HTMLTextAreaElement).style.height).toBe("");
+    } finally {
+      vi.stubGlobal("CSS", original);
+    }
   });
 });

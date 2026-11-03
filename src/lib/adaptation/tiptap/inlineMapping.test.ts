@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { inlineToPM, richTextToPM } from "./fromCanonical";
 import { pmToInline, pmToRichText } from "./toCanonical";
+import { normalizeFontSize } from "@/lib/tiptap/fontSizeExtension";
 import type { Inline, RichText } from "@/lib/adaptation/canonical/schema";
 
 /**
@@ -81,6 +82,18 @@ describe("inline mappers round-trip (RichText -> PM inline -> RichText)", () => 
     const pm = inlineToPM({ type: "text", text: "plain" } as Inline);
     expect(pm).toEqual({ type: "text", text: "plain" });
   });
+
+  it.each([11, 12, 14, 18, 20, 24])(
+    "a %ipt run pasted from Word reaches the canonical document as an exact pt value",
+    (pt) => {
+      // Word ships `font-size: 14.0pt`; the paste rule normalizes it to px and
+      // toCanonical converts it back. The round-trip must not leave noise
+      // (14.000025) in the number that is saved, previewed and printed.
+      const px = normalizeFontSize(`${pt}.0pt`);
+      const pm = { type: "text", text: "x", marks: [{ type: "textStyle", attrs: { fontSize: px } }] };
+      expect(pmToInline(pm)).toEqual({ type: "text", text: "x", fontSize: pt });
+    },
+  );
 
   it("pmToInline silently ignores a malformed fontSize (non-numeric string)", () => {
     // Tests the defensive `!isNaN(px)` branch guard in toCanonical.ts.

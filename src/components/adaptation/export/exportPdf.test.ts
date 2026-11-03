@@ -63,4 +63,23 @@ describe("pdfFileName", () => {
       "atividade-adaptada.pdf",
     );
   });
+
+  // Achado 0100: sem título, o nome do arquivo segue a MESMA cadeia do título
+  // impresso e do /Title (header.title -> primeiro heading -> genérico).
+  it("uses the document's first heading when the header title is empty", () => {
+    const withHeading: CanonicalDocument = {
+      schemaVersion: 1,
+      blocks: [
+        { id: id(2), type: "heading", level: 1, content: [{ type: "text", text: "Prova de Ciências" }] },
+        ...doc.blocks,
+      ],
+    } as CanonicalDocument;
+    expect(pdfFileName({ ...DEFAULT_PANEL_SETTINGS, header: { title: "" } }, withHeading)).toBe(
+      "prova-de-ciencias.pdf",
+    );
+    expect(
+      pdfFileName({ ...DEFAULT_PANEL_SETTINGS, header: { title: "Outra" } }, withHeading),
+    ).toBe("outra.pdf");
+    expect(pdfFileName(DEFAULT_PANEL_SETTINGS, doc)).toBe("atividade-adaptada.pdf");
+  });
 });

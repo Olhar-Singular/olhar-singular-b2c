@@ -75,7 +75,34 @@ export function setTrueFalseContent(answer: QuestionAnswer, id: string, content:
   };
 }
 
+/**
+ * Achado 0369: V/F, checkbox e ordenação não tinham add/remove, então a
+ * quantidade gerada pela IA (ou o item único de `changeAnswerKind`) era
+ * definitiva. Mesmo padrão e mesmo mínimo de 1 de `removeAlternative`.
+ */
+export function addTrueFalseItem(answer: QuestionAnswer, generate: Generate = newId): QuestionAnswer {
+  if (answer.kind !== "trueFalse") return answer;
+  return { ...answer, items: [...answer.items, { id: generate(), content: [], value: true }] };
+}
+
+export function removeTrueFalseItem(answer: QuestionAnswer, id: string): QuestionAnswer {
+  if (answer.kind !== "trueFalse") return answer;
+  if (answer.items.length <= 1) return answer;
+  return { ...answer, items: answer.items.filter((item) => item.id !== id) };
+}
+
 // checkbox ------------------------------------------------------------------
+
+export function addCheckboxItem(answer: QuestionAnswer, generate: Generate = newId): QuestionAnswer {
+  if (answer.kind !== "checkbox") return answer;
+  return { ...answer, items: [...answer.items, { id: generate(), content: [], checked: false }] };
+}
+
+export function removeCheckboxItem(answer: QuestionAnswer, id: string): QuestionAnswer {
+  if (answer.kind !== "checkbox") return answer;
+  if (answer.items.length <= 1) return answer;
+  return { ...answer, items: answer.items.filter((item) => item.id !== id) };
+}
 
 export function toggleCheckbox(answer: QuestionAnswer, id: string): QuestionAnswer {
   if (answer.kind !== "checkbox") return answer;
@@ -143,9 +170,26 @@ export function reorderOrdering(answer: QuestionAnswer, from: number, to: number
   const next = [...items];
   const [moved] = next.splice(from, 1);
   next.splice(to, 0, moved);
+  // Array order is the printed (shuffled) order; `position` is the answer key and stays put.
+  return { ...answer, items: next };
+}
+
+export function addOrderingItem(answer: QuestionAnswer, generate: Generate = newId): QuestionAnswer {
+  if (answer.kind !== "ordering") return answer;
+  const position = Math.max(-1, ...answer.items.map((item) => item.position)) + 1;
   return {
     ...answer,
-    items: next.map((item, i) => ({ ...item, position: i })),
+    items: [...answer.items, { id: generate(), content: [], position }],
+  };
+}
+
+/** Removes without renumbering: `position` is the answer key, the others keep their relative order. */
+export function removeOrderingItem(answer: QuestionAnswer, id: string): QuestionAnswer {
+  if (answer.kind !== "ordering") return answer;
+  if (answer.items.length <= 1) return answer;
+  return {
+    ...answer,
+    items: answer.items.filter((item) => item.id !== id),
   };
 }
 
@@ -159,14 +203,57 @@ export function setGapAnswer(answer: QuestionAnswer, id: string, value: string):
   };
 }
 
+/**
+ * Achado 0502: `tip` e `alternatives` chegavam da IA e nenhuma superfície os lia
+ * nem os editava. O card passa a editá-los; texto em branco apaga o campo, para
+ * não gravar `tip: ""` / `alternatives: []` no documento canônico.
+ */
+export function setGapTip(answer: QuestionAnswer, id: string, value: string): QuestionAnswer {
+  if (answer.kind !== "fillBlank") return answer;
+  return {
+    ...answer,
+    gaps: answer.gaps.map((gap) => {
+      if (gap.id !== id) return gap;
+      const next = { ...gap };
+      if (value.trim() === "") delete next.tip;
+      else next.tip = value;
+      return next;
+    }),
+  };
+}
+
+/** Lista separada por vírgula, como o professor digita no card. */
+export function setGapAlternatives(answer: QuestionAnswer, id: string, value: string): QuestionAnswer {
+  if (answer.kind !== "fillBlank") return answer;
+  const list = value
+    .split(",")
+    .map((item) => item.trim())
+    .filter((item) => item !== "");
+  return {
+    ...answer,
+    gaps: answer.gaps.map((gap) => {
+      if (gap.id !== id) return gap;
+      const next = { ...gap };
+      if (list.length === 0) delete next.alternatives;
+      else next.alternatives = list;
+      return next;
+    }),
+  };
+}
+
 export function addGap(answer: QuestionAnswer, generate: Generate = newId): QuestionAnswer {
   if (answer.kind !== "fillBlank") return answer;
   return { ...answer, gaps: [...answer.gaps, { id: generate(), answer: "" }] };
 }
 
+/**
+ * Achado 0503: remover a última lacuna é permitido. O enunciado perde o `___`
+ * correspondente junto (quem edita no editor canônico sincroniza os dois), e
+ * `buildAnswer` já cria a resposta fillBlank com `gaps: []` — recusar aqui
+ * apenas contradizia o estado inicial.
+ */
 export function removeGap(answer: QuestionAnswer, id: string): QuestionAnswer {
   if (answer.kind !== "fillBlank") return answer;
-  if (answer.gaps.length <= 1) return answer;
   return { ...answer, gaps: answer.gaps.filter((g) => g.id !== id) };
 }
 
@@ -199,6 +286,48 @@ export function setTableCell(
       ri === row ? r.map((cell, ci) => (ci === col ? content : cell)) : r
     ),
   };
+}
+
+/**
+ * Achado 0369: a tabela não ganhava nem perdia linha/coluna no card (e a troca
+ * de tipo cria uma 1x2 vazia). Crescer sempre deixa as linhas retangulares,
+ * com a largura da linha mais larga; encolher respeita o mínimo de 1x1.
+ */
+function tableWidth(rows: RichText[][]): number {
+  return Math.max(1, ...rows.map((r) => r.length));
+}
+
+function padRow(row: RichText[], width: number): RichText[] {
+  return [...row, ...Array.from({ length: width - row.length }, (): RichText => [])];
+}
+
+export function addTableRow(answer: QuestionAnswer): QuestionAnswer {
+  if (answer.kind !== "table") return answer;
+  const width = tableWidth(answer.rows);
+  return {
+    ...answer,
+    rows: [...answer.rows.map((r) => padRow(r, width)), padRow([], width)],
+  };
+}
+
+export function addTableColumn(answer: QuestionAnswer): QuestionAnswer {
+  if (answer.kind !== "table") return answer;
+  if (answer.rows.length === 0) return { ...answer, rows: [[[]]] };
+  const width = tableWidth(answer.rows) + 1;
+  return { ...answer, rows: answer.rows.map((r) => padRow(r, width)) };
+}
+
+export function removeTableRow(answer: QuestionAnswer, row: number): QuestionAnswer {
+  if (answer.kind !== "table") return answer;
+  if (answer.rows.length <= 1 || row < 0 || row >= answer.rows.length) return answer;
+  return { ...answer, rows: answer.rows.filter((_, ri) => ri !== row) };
+}
+
+export function removeTableColumn(answer: QuestionAnswer, col: number): QuestionAnswer {
+  if (answer.kind !== "table") return answer;
+  const width = tableWidth(answer.rows);
+  if (width <= 1 || col < 0 || col >= width) return answer;
+  return { ...answer, rows: answer.rows.map((r) => r.filter((_, ci) => ci !== col)) };
 }
 
 // changeAnswerKind ----------------------------------------------------------

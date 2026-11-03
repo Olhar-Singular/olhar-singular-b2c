@@ -159,7 +159,7 @@ export default function ManualQuestionEditor({ file, onFinish }: Props) {
       const f = (ev.target as HTMLInputElement).files?.[0];
       if (!f) return;
       if (f.size > 5 * 1024 * 1024) {
-        toast.error("Imagem muito grande — máximo 5 MB.");
+        toast.error("Imagem muito grande: máximo 5 MB.");
         return;
       }
       const reader = new FileReader();

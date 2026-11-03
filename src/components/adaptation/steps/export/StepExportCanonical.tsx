@@ -1,4 +1,3 @@
-import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, RotateCcw, Save, Loader2 } from "lucide-react";
 import { CanonicalRenderer } from "@/components/adaptation/render/CanonicalRenderer";
@@ -17,6 +16,13 @@ type Props = {
   onSave: () => void;
   /** Persist a change to the document header (title/school/teacher/date). */
   onHeaderChange?: (header: DocumentHeader) => void;
+  /**
+   * Switch "Quebra de página por questão", controlado pelo wizard: o passo
+   * desmonta a cada troca de passo e o estado local voltava a desligado
+   * (achado 0517). Não entra no documento salvo.
+   */
+  pageBreakPerQuestion: boolean;
+  onPageBreakPerQuestionChange: (value: boolean) => void;
   onPrev: () => void;
   onRestart: () => void;
 };
@@ -27,16 +33,17 @@ export function StepExportCanonical({
   saving,
   onSave,
   onHeaderChange,
+  pageBreakPerQuestion,
+  onPageBreakPerQuestionChange,
   onPrev,
   onRestart,
 }: Props) {
   const document = result.document;
   /*
-    Espelho do switch do ExportPanel: a escolha é só de exportação (não entra no
-    documento salvo), mas a prévia precisa dela para desenhar onde a página vira.
-    Sem isso o switch mudava o PDF e a folha aqui não mexia um pixel (achado 0110).
+    A escolha da quebra é só de exportação (não entra no documento salvo), mas a
+    prévia precisa dela para desenhar onde a página vira (achado 0110). Uma só
+    fonte de verdade, no wizard, para o painel e a prévia (achado 0517).
   */
-  const [pageBreakPerQuestion, setPageBreakPerQuestion] = useState(false);
 
   return (
     <div className="space-y-6">
@@ -47,11 +54,22 @@ export function StepExportCanonical({
         header={result.header}
         onHeaderChange={onHeaderChange}
         pageStyle={result.pageStyle}
-        onPageBreakPerQuestionChange={setPageBreakPerQuestion}
+        pageBreakPerQuestion={pageBreakPerQuestion}
+        onPageBreakPerQuestionChange={onPageBreakPerQuestionChange}
       />
 
       <div className="flex flex-wrap gap-2">
-        <Button variant="outline" onClick={onSave} disabled={!canSave || saving}>
+        {/* Achado 0511: `disabled` nativo durante o salvamento largava o foco
+            no `<body>`; em curso, só `aria-disabled` + guarda no clique. */}
+        <Button
+          variant="outline"
+          onClick={() => {
+            if (!saving) onSave();
+          }}
+          disabled={!canSave}
+          aria-disabled={saving || undefined}
+          className="aria-disabled:opacity-50"
+        >
           {saving ? (
             <Loader2 className="w-4 h-4 mr-1 animate-spin" />
           ) : (
@@ -102,8 +120,12 @@ export function StepExportCanonical({
       </PageSheet>
 
       {/* Mesma barra, mesmo achado 0156: num documento de 2.944px os CTAs do
-          passo só apareciam depois de rolar a prévia inteira. */}
-      <div className="sticky bottom-0 z-10 flex justify-between gap-2 border-t border-surface-chrome-line bg-surface-chrome px-2 py-3">
+          passo só apareciam depois de rolar a prévia inteira.
+          Achado 0504: esta barra fica FORA do `PageSheet` — é chrome do app,
+          não folha. Com os tokens `--sf-*` (que não têm override no `.dark`,
+          por desenho: o papel é branco nos dois temas) ela virava uma faixa
+          creme acesa no rodapé de uma página escura. Tokens do app, então. */}
+      <div className="sticky bottom-0 z-10 flex justify-between gap-2 border-t border-border bg-card px-2 py-3">
         <Button variant="outline" onClick={onPrev}>
           <ArrowLeft className="w-4 h-4 mr-2" /> Voltar
         </Button>

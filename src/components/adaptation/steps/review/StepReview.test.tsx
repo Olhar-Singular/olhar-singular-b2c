@@ -1,6 +1,8 @@
+import React from "react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, waitFor, within } from "@testing-library/react";
 import { StepReview } from "./StepReview";
+import { EMPTY_FOLDER_NAME_MESSAGE, NEW_FOLDER_HINT } from "./newFolderField";
 import { TITLE_FIELD_HINT, TITLE_FIELD_LABEL } from "@/components/adaptation/titleField";
 import { PageBreakMarker } from "@/components/adaptation/canonical-editor/page-break/pageBreakDecoration";
 import { OriginalDocExtension } from "@/components/adaptation/canonical-editor/originalDocExtension";
@@ -477,6 +479,32 @@ describe("StepReview", () => {
       expect(field.className).not.toMatch(/(?:^|\s)focus:ring-0(?:\s|$)/);
     });
 
+    // Achado 0801: de `sm` para cima o defeito do 0227 voltava intacto. Em
+    // 768 px o grupo da direita (`shrink-0`, com rótulo textual nos dois
+    // selects) pedia 624,6 px dos ~689 px úteis da barra e o campo do nome
+    // caía no seu piso de padding: 18 px, com o selo "Sem nome" cortado por
+    // baixo do select de pasta. O 0227 travou só a presença das classes de
+    // breakpoint, e como o jsdom não faz layout o defeito passou verde.
+    // O que falta é um piso de largura em px: com ele, e como a barra é
+    // `flex-wrap`, o grupo da direita quebra para a linha de baixo em vez de
+    // espremer o nome — em qualquer largura, não só num breakpoint chutado.
+    it("garante largura mínima real ao nome nas larguras intermediárias (0801)", () => {
+      setup({ title: "" });
+      const nameGroup = screen.getByLabelText(TITLE_FIELD_LABEL).parentElement!;
+      const bar = nameGroup.parentElement!;
+      // O piso só serve se a barra puder quebrar em duas linhas.
+      expect(bar.className).toMatch(/(?:^|\s)flex-wrap(?:\s|$)/);
+      // A partir de `sm` o nome deixa de ser `min-w-0` (o contrário de um
+      // piso) e passa a exigir uma largura absoluta.
+      const floor = /(?:^|\s)sm:min-w-\[(\d+(?:\.\d+)?)(px|rem)\]/.exec(nameGroup.className);
+      expect(floor).not.toBeNull();
+      const px = floor![2] === "rem" ? Number(floor![1]) * 16 : Number(floor![1]);
+      // 624,6 px do grupo da direita + 12 px de gap deixam ~52 px em 768 px:
+      // o piso precisa ser largo o bastante para forçar a quebra ali e ainda
+      // caber o campo (~176 px) ao lado do selo "Sem nome" (~72 px).
+      expect(px).toBeGreaterThanOrEqual(240);
+    });
+
     it("mantém o selo 'Sem nome' na mesma linha do campo, sem transbordar (0227)", () => {
       setup({ title: "" });
       const nameGroup = screen.getByLabelText(TITLE_FIELD_LABEL).parentElement!;
@@ -485,6 +513,24 @@ describe("StepReview", () => {
       // quebra dentro da própria linha em vez de exigir a largura toda.
       const controls = screen.getByLabelText("Pasta").closest("div")!;
       expect(controls.className).toMatch(/(?:^|\s)flex-wrap(?:\s|$)/);
+    });
+
+    // Achado 0532: o `flex-wrap` do grupo acima nunca era acionado. Como item
+    // `shrink-0` sem limite de largura, o grupo media o `max-content` (dois
+    // selects + quatro ícones) e, em 390 px com "Ver prova original", o ícone
+    // "Sobre esta adaptação" passava da borda do cartão (x 358-390 contra
+    // ~374). Limitado à largura da barra, os ícones quebram para baixo.
+    it("limita o grupo dos controles à largura da barra para o wrap valer (0532)", () => {
+      setup({
+        title: "",
+        originalExam: { file: new File(["x"], "prova.pdf"), pageImages: [], userId: "user-1" },
+      });
+      const controls = screen.getByLabelText("Pasta").closest("div")!;
+      expect(controls.parentElement).toBe(
+        screen.getByLabelText(TITLE_FIELD_LABEL).parentElement!.parentElement,
+      );
+      expect(controls.className).toMatch(/(?:^|\s)max-w-full(?:\s|$)/);
+      expect(controls.className).toMatch(/(?:^|\s)min-w-0(?:\s|$)/);
     });
   });
 
@@ -608,6 +654,151 @@ describe("StepReview", () => {
       expect(onNewFolderChange).toHaveBeenCalledWith("7º ano A");
     });
 
+    // 0512: a repeated name is reported IN the field, not only in a toast.
+    it("ties the folder-name error to the field", async () => {
+      setup({ folders: FOLDERS, newFolderError: "Já existe a pasta “6º ano B”." });
+      fireEvent.click(screen.getByLabelText("Pasta"));
+      await waitFor(() => screen.getByRole("option", { name: /Nova pasta/i }));
+      fireEvent.click(screen.getByRole("option", { name: /Nova pasta/i }));
+      const field = await screen.findByLabelText("Nome da nova pasta");
+      expect(field).toHaveAttribute("aria-invalid", "true");
+      expect(field).toHaveAccessibleDescription("Já existe a pasta “6º ano B”.");
+    });
+
+    it("leaves the folder-name field valid without an error", async () => {
+      setup({ folders: FOLDERS });
+      fireEvent.click(screen.getByLabelText("Pasta"));
+      await waitFor(() => screen.getByRole("option", { name: /Nova pasta/i }));
+      fireEvent.click(screen.getByRole("option", { name: /Nova pasta/i }));
+      const field = await screen.findByLabelText("Nome da nova pasta");
+      expect(field).not.toHaveAttribute("aria-invalid", "true");
+      // 0513: sem erro, a descrição diz QUANDO a pasta nasce (no salvar).
+      expect(field).toHaveAccessibleDescription(NEW_FOLDER_HINT);
+    });
+
+    describe("Enter e nome vazio no campo de nova pasta (0513)", () => {
+      /** Harness: o nome é controlado pelo pai, como no wizard. */
+      function Harness(props: { onSave?: () => void; newFolderError?: string | null }) {
+        const [name, setName] = React.useState("");
+        return (
+          <StepReview
+            document={DOC}
+            metadata={METADATA}
+            onDocumentChange={vi.fn()}
+            onRegenerate={vi.fn()}
+            onNext={vi.fn()}
+            onPrev={vi.fn()}
+            folders={FOLDERS}
+            newFolder={name}
+            onNewFolderChange={setName}
+            newFolderError={props.newFolderError ?? null}
+            canSave
+            onSave={props.onSave}
+          />
+        );
+      }
+
+      async function openField() {
+        fireEvent.click(screen.getByLabelText("Pasta"));
+        await waitFor(() => screen.getByRole("option", { name: /Nova pasta/i }));
+        fireEvent.click(screen.getByRole("option", { name: /Nova pasta/i }));
+        return screen.findByLabelText("Nome da nova pasta");
+      }
+
+      beforeEach(() => {
+        useCanonicalEditor.mockReturnValue({ editor: fakeEditor });
+      });
+
+      it("Enter com nome válido fecha o campo e mostra a pasta pendente no gatilho", async () => {
+        render(<Harness />);
+        const field = await openField();
+        fireEvent.change(field, { target: { value: "  Turma A  " } });
+        fireEvent.keyDown(field, { key: "Enter" });
+        await waitFor(() =>
+          expect(screen.queryByLabelText("Nome da nova pasta")).not.toBeInTheDocument(),
+        );
+        const trigger = screen.getByLabelText("Pasta");
+        expect(trigger).toHaveTextContent("Turma A (nova)");
+        expect(trigger).toHaveFocus();
+      });
+
+      it("Enter com o campo vazio mantém o campo aberto e diz por quê", async () => {
+        render(<Harness />);
+        const field = await openField();
+        fireEvent.keyDown(field, { key: "Enter" });
+        expect(screen.getByLabelText("Nome da nova pasta")).toBe(field);
+        expect(field).toHaveAttribute("aria-invalid", "true");
+        expect(field).toHaveAccessibleDescription(EMPTY_FOLDER_NAME_MESSAGE);
+      });
+
+      it("Enter só com espaços também é recusado, e digitar limpa o aviso", async () => {
+        render(<Harness />);
+        const field = await openField();
+        fireEvent.change(field, { target: { value: "   " } });
+        fireEvent.keyDown(field, { key: "Enter" });
+        expect(field).toHaveAttribute("aria-invalid", "true");
+        fireEvent.change(field, { target: { value: "   T" } });
+        expect(field).not.toHaveAttribute("aria-invalid", "true");
+      });
+
+      it("Salvar com o campo aberto e vazio não passa calado", async () => {
+        const onSave = vi.fn();
+        render(<Harness onSave={onSave} />);
+        const field = await openField();
+        fireEvent.click(screen.getByRole("button", { name: /Salvar adaptação/i }));
+        expect(onSave).not.toHaveBeenCalled();
+        expect(field).toHaveAttribute("aria-invalid", "true");
+        expect(field).toHaveFocus();
+      });
+
+      it("Salvar com nome no campo segue para o salvar", async () => {
+        const onSave = vi.fn();
+        render(<Harness onSave={onSave} />);
+        const field = await openField();
+        fireEvent.change(field, { target: { value: "Turma A" } });
+        fireEvent.click(screen.getByRole("button", { name: /Salvar adaptação/i }));
+        expect(onSave).toHaveBeenCalled();
+      });
+
+      it("Escape depois do aviso fecha e, ao reabrir, o aviso some", async () => {
+        render(<Harness />);
+        let field = await openField();
+        fireEvent.keyDown(field, { key: "Enter" });
+        fireEvent.keyDown(field, { key: "Escape" });
+        await waitFor(() =>
+          expect(screen.queryByLabelText("Nome da nova pasta")).not.toBeInTheDocument(),
+        );
+        field = await openField();
+        expect(field).not.toHaveAttribute("aria-invalid", "true");
+      });
+
+      it("reabre o campo quando o salvar recusa o nome pendente", async () => {
+        const { rerender } = render(<Harness />);
+        const field = await openField();
+        fireEvent.change(field, { target: { value: "6º ano B" } });
+        fireEvent.keyDown(field, { key: "Enter" });
+        await waitFor(() =>
+          expect(screen.queryByLabelText("Nome da nova pasta")).not.toBeInTheDocument(),
+        );
+        rerender(<Harness newFolderError="Já existe a pasta “6º ano B”." />);
+        const reopened = await screen.findByLabelText("Nome da nova pasta");
+        expect(reopened).toHaveValue("6º ano B");
+        expect(reopened).toHaveAccessibleDescription("Já existe a pasta “6º ano B”.");
+      });
+
+      it("escolher outra pasta descarta o nome pendente", async () => {
+        render(<Harness />);
+        const field = await openField();
+        fireEvent.change(field, { target: { value: "Turma A" } });
+        fireEvent.keyDown(field, { key: "Enter" });
+        await waitFor(() => expect(screen.getByLabelText("Pasta")).toHaveTextContent("Turma A (nova)"));
+        fireEvent.click(screen.getByLabelText("Pasta"));
+        await waitFor(() => screen.getByRole("option", { name: "Recuperação" }));
+        fireEvent.click(screen.getByRole("option", { name: "Recuperação" }));
+        expect(screen.getByLabelText("Pasta")).not.toHaveTextContent("Turma A");
+      });
+    });
+
     it("does not break without folder handlers", async () => {
       setup({ folders: FOLDERS });
       fireEvent.click(screen.getByLabelText("Pasta"));
@@ -645,6 +836,62 @@ describe("StepReview", () => {
       expect(onNewFolderChange).toHaveBeenCalledWith("");
       expect(screen.getByLabelText("Pasta")).toHaveFocus();
       expect(screen.getByLabelText("Pasta")).toHaveTextContent("Sem pasta");
+    });
+
+    it("abrir e cancelar a nova pasta não desarquiva nem perde a pasta atual (0509)", async () => {
+      const onFolderChange = vi.fn();
+      setup({ folders: FOLDERS, folderId: "f1", onFolderChange, onNewFolderChange: vi.fn() });
+      fireEvent.click(screen.getByLabelText("Pasta"));
+      await waitFor(() => screen.getByRole("option", { name: /Nova pasta/i }));
+      fireEvent.click(screen.getByRole("option", { name: /Nova pasta/i }));
+      const field = await screen.findByLabelText("Nome da nova pasta");
+      expect(onFolderChange).not.toHaveBeenCalled();
+      fireEvent.keyDown(field, { key: "Escape" });
+      await waitFor(() =>
+        expect(screen.queryByLabelText("Nome da nova pasta")).not.toBeInTheDocument(),
+      );
+      expect(onFolderChange).not.toHaveBeenCalled();
+      expect(screen.getByLabelText("Pasta")).toHaveTextContent("6º ano B");
+    });
+
+    it("fecha o campo de nova pasta quando o salvar cria a pasta e a seleciona (0508)", async () => {
+      // O wizard cria a pasta no salvar e devolve o id novo em `folderId` (e o
+      // nome vazio em `newFolder`). O campo tem que fechar: aberto e vazio, ele
+      // contradiz o gatilho e o próximo salvar tentaria criar outra pasta.
+      useCanonicalEditor.mockReturnValue({ editor: fakeEditor });
+      const base = {
+        document: DOC,
+        metadata: METADATA,
+        onDocumentChange: vi.fn(),
+        onRegenerate: vi.fn(),
+        onNext: vi.fn(),
+        onPrev: vi.fn(),
+        onFolderChange: vi.fn(),
+        onNewFolderChange: vi.fn(),
+      };
+      const { rerender } = render(
+        <StepReview {...base} folders={FOLDERS} folderId={null} newFolder="" />,
+      );
+      fireEvent.click(screen.getByLabelText("Pasta"));
+      await waitFor(() => screen.getByRole("option", { name: /Nova pasta/i }));
+      fireEvent.click(screen.getByRole("option", { name: /Nova pasta/i }));
+      await screen.findByLabelText("Nome da nova pasta");
+      rerender(
+        <StepReview {...base} folders={FOLDERS} folderId={null} newFolder="Turma A" />,
+      );
+      expect(screen.getByLabelText("Nome da nova pasta")).toBeInTheDocument();
+      rerender(
+        <StepReview
+          {...base}
+          folders={[...FOLDERS, { id: "f9", name: "Turma A" }]}
+          folderId="f9"
+          newFolder=""
+        />,
+      );
+      await waitFor(() =>
+        expect(screen.queryByLabelText("Nome da nova pasta")).not.toBeInTheDocument(),
+      );
+      expect(screen.getByLabelText("Pasta")).toHaveTextContent("Turma A");
     });
 
     it("deixa as outras teclas passarem no campo de nova pasta", async () => {
@@ -691,9 +938,21 @@ describe("StepReview", () => {
       expect(screen.getByRole("button", { name: /Salvar adaptação/i })).toBeDisabled();
     });
 
-    it("disables Salvar while a save is in flight", () => {
-      setup({ canSave: true, saving: true });
-      expect(screen.getByRole("button", { name: /Salvar adaptação/i })).toBeDisabled();
+    /**
+     * Regressão (caça 0511): o `disabled` nativo durante o salvamento derrubava o
+     * foco do próprio botão para o `<body>`. Enquanto salva, o botão fica
+     * `aria-disabled`, segura o foco e ignora o clique.
+     */
+    it("keeps focus on Salvar while a save is in flight, ignoring clicks", () => {
+      const onSave = vi.fn();
+      setup({ canSave: true, saving: true, onSave });
+      const button = screen.getByRole("button", { name: /Salvar adaptação/i });
+      expect(button).not.toBeDisabled();
+      expect(button).toHaveAttribute("aria-disabled", "true");
+      button.focus();
+      expect(button).toHaveFocus();
+      fireEvent.click(button);
+      expect(onSave).not.toHaveBeenCalled();
     });
 
     /**
@@ -736,6 +995,55 @@ describe("StepReview", () => {
       expect(screen.getByRole("img")).toHaveAttribute("src", "data:image/png;base64,P1");
     });
 
+    /**
+     * 0281: o diálogo é aberto por estado, sem `DialogTrigger`; o Radix focava
+     * `triggerRef.current` (null) e o foco caía no `<body>` ao fechar.
+     */
+    it("devolve o foco ao botão 'Ver prova original' ao fechar o diálogo (0281)", async () => {
+      setup({
+        originalExam: { file: new File(["x"], "prova.pdf"), pageImages: [], userId: "user-1" },
+      });
+      const button = screen.getByRole("button", { name: /Ver prova original/i });
+      button.focus();
+      fireEvent.click(button);
+      fireEvent.keyDown(screen.getByRole("dialog"), { key: "Escape" });
+      await waitFor(() => expect(screen.queryByText("Prova original")).not.toBeInTheDocument());
+      expect(document.activeElement).toBe(screen.getByRole("button", { name: /Ver prova original/i }));
+    });
+
+    it("passes the Word text and type into the dialog (achado 0280)", () => {
+      setup({
+        originalExam: {
+          file: new File(["x"], "prova.docx"),
+          fileType: "docx",
+          text: "1) Texto do Word",
+          pageImages: [],
+          userId: "user-1",
+        },
+      });
+      fireEvent.click(screen.getByRole("button", { name: /Ver prova original/i }));
+      expect(screen.getByTestId("original-exam-text")).toHaveTextContent("1) Texto do Word");
+    });
+
+    /**
+     * Regressão (caça 1111): em 390x844 o rótulo sempre visível de "Ver prova
+     * original" alargava o grupo `shrink-0` da barra para 524px e empurrava o
+     * hambúrguer do cabeçalho mobile para fora da tela. Abaixo de `sm` ele vira
+     * só ícone, como Regerar e Sobre, com o nome acessível preservado.
+     */
+    it("'Ver prova original' só mostra o rótulo a partir de sm, nome acessível preservado", () => {
+      setup({
+        originalExam: { file: new File(["x"], "prova.pdf"), pageImages: [], userId: "user-1" },
+      });
+      const name = "Ver prova original";
+      const button = screen.getByRole("button", { name });
+      expect(button).toHaveAttribute("aria-label", name);
+      expect(button).toHaveAttribute("title", name);
+      const label = within(button).getByText(name);
+      expect(label).toHaveClass("hidden");
+      expect(label).toHaveClass("sm:inline");
+    });
+
     it("configures UploadedExamExtension with the file, pages and userId when present", () => {
       const file = new File(["x"], "prova.pdf");
       setup({ originalExam: { file, pageImages: ["data:image/png;base64,P1"], userId: "user-1" } });
@@ -767,11 +1075,53 @@ describe("StepReview", () => {
       expect(bar.className).toMatch(/(?:^|\s)z-\d+(?:\s|$)/);
     });
 
+    // Achado 0806: com a barra grudada, o Tab dentro do card da questão parava
+    // em controles cobertos por ela, e o navegador não rolava (um alvo sob um
+    // `sticky` conta como visível). Os controles da superfície reservam a altura
+    // da barra (e a do cabeçalho mobile `fixed`, abaixo de lg) na rolagem do foco.
+    it("reserva a altura das barras na rolagem do foco da superfície (0806)", () => {
+      setup();
+      let surface: HTMLElement | null = screen.getByTestId("editor-content");
+      while (surface && !surface.className.split(/\s+/).includes("[&_*]:scroll-mb-24")) {
+        surface = surface.parentElement;
+      }
+      expect(surface).not.toBeNull();
+      expect(surface).toContainElement(screen.getByTestId("page-sheet"));
+      const classes = surface!.className.split(/\s+/);
+      expect(classes).toContain("[&_*]:scroll-mb-24");
+      expect(classes).toContain("[&_*]:scroll-mt-16");
+      expect(classes).toContain("lg:[&_*]:scroll-mt-0");
+    });
+
     it("mantém Voltar na mesma barra grudada", () => {
       setup();
       const bar = screen.getByLabelText("Voltar").parentElement!;
       expect(bar.className).toMatch(/(?:^|\s)sticky(?:\s|$)/);
     });
+
+    // Achado 0705: a barra usa a paleta do papel (clara nos dois temas), mas
+    // Voltar e Salvar eram `variant="outline"` crus, com `bg-background` /
+    // `border-input` do app: no tema escuro viravam lajes escuras sobre a faixa
+    // creme. Os secundários seguem a paleta da barra, como os da barra do topo.
+    it.each(["Voltar", "Salvar adaptação"])(
+      "pinta %s com tokens do papel, não do app (0705)",
+      (name) => {
+        setup();
+        const button = screen.getByRole("button", { name });
+        for (const token of [
+          "border-surface-chrome-line",
+          "bg-surface-paper",
+          "text-surface-ink",
+          "hover:bg-surface-mesa",
+          "hover:text-surface-ink",
+        ]) {
+          expect(button.className.split(/\s+/)).toContain(token);
+        }
+        for (const appToken of ["bg-background", "border-input", "hover:bg-accent"]) {
+          expect(button.className.split(/\s+/)).not.toContain(appToken);
+        }
+      },
+    );
   });
   // Achado 0409: WCAG 2.5.3 (Label in Name). O botão imprime "Exportar" e se
   // anunciava como "Avançar para exportação": quem usa comando de voz dizia

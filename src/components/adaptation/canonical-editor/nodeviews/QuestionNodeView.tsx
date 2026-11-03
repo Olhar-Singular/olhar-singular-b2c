@@ -36,17 +36,22 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { FOLHA_RAIL, FOLHA_RAIL_HOST, FOLHA_TOUCH_TARGET } from "../folhaChrome";
+import { FOLHA_CHROME_UNSCALED, FOLHA_RAIL, FOLHA_RAIL_HOST, FOLHA_TOUCH_TARGET } from "../folhaChrome";
 import ImageManagerModal from "@/components/editor/ImageManagerModal";
 import type { ImageItem } from "@/components/editor/imageManagerUtils";
 import type { QuestionAnswer, RichText } from "@/lib/adaptation/canonical/schema";
 import { newId } from "@/lib/adaptation/canonical/ids";
 import { deleteNodeAndRefocus, questionOrdinal } from "./nodeViewUtils";
 import { canMoveUp, canMoveDown, type MoveDirection } from "./blockMove";
-import { buildMoveTransaction, buildStemImagesTransaction } from "./blockTransactions";
+import {
+  buildAddGapTransaction,
+  buildMoveTransaction,
+  buildRemoveGapTransaction,
+  buildStemImagesTransaction,
+} from "./blockTransactions";
 import { useQuestionCard } from "./questionCardState";
 import { QuestionPreview } from "./QuestionPreview";
-import { QuestionCard } from "./QuestionCard";
+import { QuestionCard, type QuestionCardBuffer } from "./QuestionCard";
 import type { QuestionNodeJSON } from "../originalDocExtension";
 
 /**
@@ -81,22 +86,53 @@ export function QuestionNodeView({ node, updateAttributes, editor, getPos, delet
   const id = node.attrs.id as string;
   const disabled = !editor.isEditable;
 
-  const { expanded, expand, collapse } = useQuestionCard(editor, id);
+  const { expanded, expand, collapse, setLeaveHandler } = useQuestionCard(editor, id);
+
+  /**
+   * Achado 1106: abrir o card de outra questão desmontava este card com o buffer
+   * (resposta, instrução, número) sem Concluir nem Cancelar, e as edições sumiam
+   * em silêncio, enquanto as do enunciado (vivo no Tiptap) ficavam. Enquanto o
+   * card está aberto, ele registra no store o que fazer ao ser trocado: gravar o
+   * buffer como o Concluir faria, sem devolver o foco ao lápis (o card novo é
+   * quem fica com ele).
+   */
+  const bufferRef = useRef<QuestionCardBuffer | null>(null);
+  const updateAttributesRef = useRef(updateAttributes);
+  updateAttributesRef.current = updateAttributes;
+  useEffect(() => {
+    if (!expanded) return;
+    return setLeaveHandler(() => {
+      const buffer = bufferRef.current;
+      /* v8 ignore next -- defensive: the card fills the buffer on mount */
+      if (!buffer) return;
+      updateAttributesRef.current({ ...buffer });
+    });
+  }, [expanded, setLeaveHandler]);
 
   // Snapshot of the full question node JSON captured when the card is opened —
   // used by Cancel to restore the live stem content (attrs are buffered in
   // QuestionCard local state and don't need restoration on Cancel).
   const snapshotRef = useRef<QuestionNodeJSON | null>(null);
 
-  // Esc closes the open card (coordination is React/editor state, not the doc).
+  /**
+   * Achado 0364: fechar o card (Escape, Cancelar ou Concluir) desmonta o card
+   * inteiro com o elemento focado dentro dele, e o navegador devolve o foco ao
+   * `<body>`: nenhum anel na tela e nada anunciado, enquanto os outros overlays
+   * do passo Revisar (popover Formato, gaveta de metadados e o diálogo de
+   * excluir questão) devolvem ao gatilho. Os três caminhos passam por
+   * `closeCard()`, que marca a devolução; o lápis só volta ao DOM junto com a
+   * prévia, então o foco é dado no efeito seguinte ao fechamento.
+   */
+  const refocusEditRef = useRef(false);
+  const editButtonRef = useRef<HTMLButtonElement>(null);
+  const closeCard = () => {
+    refocusEditRef.current = true;
+    collapse();
+  };
   useEffect(() => {
-    if (!expanded) return;
-    const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") handleCancel();
-    };
-    document.addEventListener("keydown", onKeyDown);
-    return () => document.removeEventListener("keydown", onKeyDown);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    if (expanded || !refocusEditRef.current) return;
+    refocusEditRef.current = false;
+    editButtonRef.current?.focus();
   }, [expanded]);
 
   // Tiptap's `getPos()` can return `undefined` transiently (initial mount /
@@ -161,7 +197,7 @@ export function QuestionNodeView({ node, updateAttributes, editor, getPos, delet
       enunciadoPosition: committedEnunciadoPosition,
       customNumber: committedCustomNumber,
     });
-    collapse();
+    closeCard();
   };
 
   /** Cancelar: restore the live stem content from the snapshot, discard buffered attrs. */
@@ -176,8 +212,24 @@ export function QuestionNodeView({ node, updateAttributes, editor, getPos, delet
         editor.view.dispatch(tr);
       }
     }
-    collapse();
+    closeCard();
   };
+
+  // Esc closes the open card (coordination is React/editor state, not the doc).
+  // Achado 0466: o listener chama o `handleCancel` do render ATUAL pela ref. O
+  // do render em que o card abriu guardava o `node` daquele momento, e depois de
+  // editar o enunciado o Escape trocava só parte do nó (tamanho antigo): sobrava
+  // uma questão fantasma, o nodeview era recriado e o foco caía no <body>.
+  const cancelRef = useRef(handleCancel);
+  cancelRef.current = handleCancel;
+  useEffect(() => {
+    if (!expanded) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") cancelRef.current();
+    };
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [expanded]);
 
   /** Restaurar original: replace the entire node with the session-start snapshot. */
   const handleReset = () => {
@@ -193,6 +245,25 @@ export function QuestionNodeView({ node, updateAttributes, editor, getPos, delet
       editor.view.dispatch(tr);
     }
   };
+
+  /**
+   * Achado 0503: o card mexia só em `answer.gaps[]`. Como a lacuna impressa é o
+   * `___` do enunciado (conteúdo vivo do Tiptap), adicionar deixava gabarito
+   * sobrando e remover a lacuna do meio deslocava todos os gabaritos seguintes,
+   * sem nada na folha denunciando. Aqui o enunciado recebe a outra metade da
+   * operação — e o Cancelar do card restaura o stem pelo snapshot, então a
+   * edição continua descartável inteira.
+   */
+  const dispatchStemTr = (build: (pos: number) => ReturnType<typeof buildAddGapTransaction>) => {
+    const currentPos = getPos();
+    /* v8 ignore next -- defensive type-narrow; o card só existe com a questão no doc */
+    if (typeof currentPos !== "number") return;
+    const tr = build(currentPos);
+    if (tr) editor.view.dispatch(tr);
+  };
+  const handleGapAdded = () => dispatchStemTr((p) => buildAddGapTransaction(editor.state, p));
+  const handleGapRemoved = (index: number) =>
+    dispatchStemTr((p) => buildRemoveGapTransaction(editor.state, p, index));
 
   const onAnswerChange = (next: QuestionAnswer) => updateAttributes({ answer: next });
   const onInstructionChange = (next: RichText | null) => updateAttributes({ instruction: next });
@@ -220,6 +291,7 @@ export function QuestionNodeView({ node, updateAttributes, editor, getPos, delet
       contentEditable={false}
     >
       <Button
+        ref={editButtonRef}
         type="button"
         variant="ghost"
         size="icon"
@@ -256,18 +328,25 @@ export function QuestionNodeView({ node, updateAttributes, editor, getPos, delet
   return (
     <NodeViewWrapper className={FOLHA_RAIL_HOST} data-testid="question-node" data-question-expanded={String(expanded)}>
       {expanded ? (
-        <QuestionCard
-          num={ordinal}
-          customNumber={customNumber}
-          answer={answer}
-          instruction={instruction}
-          enunciado={enunciado}
-          enunciadoPosition={enunciadoPosition}
-          disabled={disabled}
-          onCommit={handleCommit}
-          onCancel={handleCancel}
-          stem={<NodeViewContent />}
-        />
+        // The structure card is app chrome, not printed content: undo the
+        // sheet's scale so it stays legible and tappable (finding 0374).
+        <div className={FOLHA_CHROME_UNSCALED}>
+          <QuestionCard
+            num={ordinal}
+            customNumber={customNumber}
+            answer={answer}
+            instruction={instruction}
+            enunciado={enunciado}
+            enunciadoPosition={enunciadoPosition}
+            disabled={disabled}
+            onCommit={handleCommit}
+            onCancel={handleCancel}
+            onGapAdded={handleGapAdded}
+            onGapRemoved={handleGapRemoved}
+            bufferRef={bufferRef}
+            stem={<NodeViewContent />}
+          />
+        </div>
       ) : (
         <QuestionPreview
           num={ordinal}

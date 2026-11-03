@@ -46,9 +46,12 @@ function sizedStyles(node: unknown, out: Styleish[] = []): Styleish[] {
   return out;
 }
 
+// Nó SEM `alt`: é o caminho do LaTeX cru, o único que ainda carrega a caixa da
+// fórmula dentro da linha. Com descrição o run virou texto do parágrafo e herda
+// o avanço dele por construção (achado 0191).
 const inlineContent: RichText = [
   { type: "text", text: "Considere a equação " },
-  { type: "inlineMath", latex: "x^2 + 2x + 1 = 0", alt: "x ao quadrado" },
+  { type: "inlineMath", latex: "x^2 + 2x + 1 = 0" },
   { type: "text", text: " e observe." },
 ];
 

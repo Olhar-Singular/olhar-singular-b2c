@@ -66,7 +66,23 @@ describe("extractExamQuestions", () => {
       context: { status: 402, json: async () => ({ error: "Créditos insuficientes.", reason: "insufficient_credits" }) },
     });
     invokeMock.mockResolvedValueOnce({ data: null, error: fnError });
-    await expect(extractExamQuestions(pdfExam, "user-1")).resolves.toEqual({ status: "insufficient_credits" });
+    await expect(extractExamQuestions(pdfExam, "user-1")).resolves.toEqual({ status: "insufficient_credits", balance: null });
+  });
+
+  it("carries the balance the 402 reports, so the screen can say how many credits are left (0470)", async () => {
+    const fnError = Object.assign(new Error("Edge Function returned a non-2xx status code"), {
+      context: { status: 402, json: async () => ({ reason: "insufficient_credits", balance: 10, required: 5 }) },
+    });
+    invokeMock.mockResolvedValueOnce({ data: null, error: fnError });
+    await expect(extractExamQuestions(pdfExam, "user-1")).resolves.toEqual({ status: "insufficient_credits", balance: 10 });
+  });
+
+  it("reports an unknown balance when the 402 body cannot be read", async () => {
+    const fnError = Object.assign(new Error("Edge Function returned a non-2xx status code"), {
+      context: { status: 402, json: async () => { throw new Error("consumed"); } },
+    });
+    invokeMock.mockResolvedValueOnce({ data: null, error: fnError });
+    await expect(extractExamQuestions(pdfExam, "user-1")).resolves.toEqual({ status: "insufficient_credits", balance: null });
   });
 
   it("reuses a successful extraction of the same file instead of paying for it again", async () => {
@@ -171,6 +187,40 @@ describe("extractExamQuestions", () => {
     });
   });
 
+  it("keeps the extraction's figure_description for a resolved figure (0279)", async () => {
+    const exam: UploadedExam = { ...pdfExam, pageImages: ["data:image/jpeg;base64,PAGE1"] };
+    autoCropFromBboxMock.mockResolvedValue("data:image/png;base64,CROPPED");
+    invokeMock.mockResolvedValueOnce({
+      data: {
+        questions: [
+          {
+            text: "Com figura",
+            has_figure: true,
+            image_page: 1,
+            figure_bbox: { x: 0, y: 0, width: 1, height: 1 },
+            figure_description: "Círculo amarelo sobre fundo azul",
+          },
+          { text: "Sem figura", figure_description: "não deveria vazar" },
+        ],
+      },
+      error: null,
+    });
+    const result = await extractExamQuestions(exam, "user-1");
+    expect(result).toEqual({
+      status: "ok",
+      questions: [
+        {
+          text: "Com figura",
+          options: null,
+          image_url: "https://bucket.example/img.png",
+          figure_description: "Círculo amarelo sobre fundo azul",
+        },
+        { text: "Sem figura", options: null, image_url: null },
+      ],
+      charged: true,
+    });
+  });
+
   it("uses the DOCX image directly (no bbox crop) for a DOCX figure", async () => {
     const exam: UploadedExam = {
       fileName: "prova.docx",
@@ -223,6 +273,32 @@ describe("extractExamQuestions", () => {
       status: "ok",
       questions: [{ text: "Sem figura válida", options: null, image_url: null }],
       charged: true,
+    });
+  });
+
+  describe("document header (0473)", () => {
+    it("returns the exam's title and general instruction, also on reuse", async () => {
+      invokeMock.mockResolvedValueOnce({
+        data: { title: "Atividade de Matematica - Feira", intro: "Responda.", questions: [{ text: "Q1" }] },
+        error: null,
+      });
+      const first = await extractExamQuestions(pdfExam, "user-1");
+      const second = await extractExamQuestions(pdfExam, "user-1");
+      const header = { title: "Atividade de Matematica - Feira", intro: "Responda." };
+      expect(first).toMatchObject({ status: "ok", header, charged: true });
+      expect(second).toMatchObject({ status: "ok", header, charged: false });
+    });
+
+    it("keeps only string header fields", async () => {
+      invokeMock.mockResolvedValueOnce({ data: { title: 7, intro: "Leia.", questions: [{ text: "Q1" }] }, error: null });
+      const result = await extractExamQuestions(pdfExam, "user-1");
+      expect(result).toMatchObject({ status: "ok", header: { title: null, intro: "Leia." } });
+    });
+
+    it("has no header when the file has neither title nor instruction", async () => {
+      invokeMock.mockResolvedValueOnce({ data: { title: null, questions: [{ text: "Q1" }] }, error: null });
+      const result = await extractExamQuestions(pdfExam, "user-1");
+      expect(result).not.toHaveProperty("header");
     });
   });
 });

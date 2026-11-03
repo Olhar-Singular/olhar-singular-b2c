@@ -43,6 +43,7 @@ import {
   RULE_COLOR,
   RULE_WIDTH_PT,
   BASE_FONT_PT,
+  BASE_LINE_HEIGHT,
   pdfTextSize,
 } from "../pageTokens";
 import { resolveElementFontSizes, resolvePageStyle, type ElementFontSizesPt } from "../pageStyle";
@@ -60,8 +61,8 @@ type DividerBlock = Extract<Block, { type: "divider" }>;
  * Corpo do título, em pt. Vem de `elementSizes` — o mesmo resolvedor que
  * alimenta as `--doc-fs-heading*` da tela —, e não mais da constante
  * `HEADING_PT`, que era absoluta e não acompanhava o "Tamanho do texto" do
- * popover Formato (achado 0412). `HEADING_PT` continua sendo a PROPORÇÃO de
- * origem (via `HEADING_FONT_RATIOS`) e o valor que o Word lê (achado 0164).
+ * popover Formato (achado 0412). `HEADING_PT` continua sendo só a PROPORÇÃO
+ * de origem (via `HEADING_FONT_RATIOS`); o Word lê o mesmo resolvedor (0527).
  */
 function headingSizePt(level: 1 | 2 | 3, elementSizes: ElementFontSizesPt): number {
   return level === 1 ? elementSizes.heading1 : level === 2 ? elementSizes.heading2 : elementSizes.heading3;
@@ -82,8 +83,16 @@ export function PdfHeading({
   const nodeStyle = nodeStyleToPdf(block.style);
   const { marginBottom: nodeMarginBottom, ...textStyle } = nodeStyle;
   const marginBottom = nodeMarginBottom ?? blockGap;
+  /*
+    Achado 0392: o título nunca fecha a folha. Ele exige à frente a presença de
+    DUAS linhas de corpo (o `orphans` padrão do <Text> do react-pdf não deixa
+    uma linha só no pé) mais o vão que o bloco seguinte gasta embaixo dele (o
+    react-pdf vira pela caixa MAIS a margem de baixo, achado 0708). Se não
+    couberem, o título desce com o bloco que encabeça.
+  */
+  const keepWithNext = 2 * elementSizes.stem * BASE_LINE_HEIGHT + blockGap;
   return (
-    <View style={{ marginBottom }}>
+    <View style={{ marginBottom }} minPresenceAhead={keepWithNext}>
       <Text style={{ ...pdfTextSize(headingSizePt(block.level, elementSizes)), fontWeight: "bold", ...textStyle }}>
         <PdfRichText content={block.content} fontSize={headingSizePt(block.level, elementSizes)} />
       </Text>

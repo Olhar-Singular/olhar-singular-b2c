@@ -60,9 +60,21 @@ export const ALT_STALE_MARK_CLASS = "inlinemath-alt-stale";
 const FIELD_MIN_CH = 12;
 const FIELD_MAX_CH = 48;
 
-export function inlineFieldWidth(value: string): string {
+/**
+ * Piso do alt enquanto a descrição está desatualizada (achado 0260).
+ *
+ * Amarrar a largura ao valor (0418) tem um ponto cego: a troca do LaTeX zera o
+ * `alt` (achado 0436), então o campo colapsava para o piso de 12ch no MESMO
+ * frame em que o aviso "Descrição desatualizada" pede que ele seja reescrito —
+ * e em 12ch nem o placeholder cabe. Vazio-por-invalidação é o único momento em
+ * que o campo precisa de espaço apesar de não ter conteúdo: aqui a largura vem
+ * da NECESSIDADE (a frase em português que acabou de cair), não do valor.
+ */
+const FIELD_STALE_MIN_CH = 36;
+
+export function inlineFieldWidth(value: string, minCh: number = FIELD_MIN_CH): string {
   const desired = value.length + 2;
-  return `${Math.min(Math.max(desired, FIELD_MIN_CH), FIELD_MAX_CH)}ch`;
+  return `${Math.min(Math.max(desired, minCh), FIELD_MAX_CH)}ch`;
 }
 
 export function InlineMathNodeView({ node, updateAttributes, editor, selected }: NodeViewProps) {
@@ -78,8 +90,9 @@ export function InlineMathNodeView({ node, updateAttributes, editor, selected }:
   // Latex vazio é irrepresentável e o alt não sobrevive à troca da fórmula
   // (achado 0436) — ver useLatexDraft.
   const draft = useLatexDraft(latex, alt, updateAttributes);
-  // Escape fecha o editor e devolve o foco à fórmula (achado 0416).
-  const editing = useMathEditing(draft.onBlur);
+  // Escape fecha o editor e devolve o foco à fórmula (achado 0416), cancelando
+  // a edição em vez de confirmá-la (achado 0259).
+  const editing = useMathEditing({ onOpen: draft.begin, onCancel: draft.cancel });
 
   return (
     <NodeViewWrapper
@@ -130,7 +143,7 @@ export function InlineMathNodeView({ node, updateAttributes, editor, selected }:
             name="inlinemath-alt"
             value={alt ?? ""}
             className={cn("h-6 max-w-full px-1 py-0 text-sm", FOLHA_INPUT, draft.altStale && "border-destructive")}
-            style={{ width: inlineFieldWidth(alt ?? "") }}
+            style={{ width: inlineFieldWidth(alt ?? "", draft.altStale ? FIELD_STALE_MIN_CH : FIELD_MIN_CH) }}
             onChange={(e) => draft.onAltChange(e.target.value)}
             placeholder="Texto alternativo"
             aria-label="Texto alternativo da fórmula inline"
@@ -189,7 +202,7 @@ export function InlineMathNodeView({ node, updateAttributes, editor, selected }:
           disabled={disabled}
           autoFocus={editing.returnFocus}
           onClick={editing.open}
-          title={draft.altStale ? "Editar fórmula — descrição desatualizada" : "Editar fórmula"}
+          title={draft.altStale ? "Editar fórmula (descrição desatualizada)" : "Editar fórmula"}
           aria-label={
             draft.altStale
               ? `Editar fórmula: ${draft.accessibleName} (descrição desatualizada)`

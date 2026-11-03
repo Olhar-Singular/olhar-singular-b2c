@@ -66,17 +66,33 @@ describe("QuestionCard", () => {
     expect(screen.getByText("Imagem / Conteúdo")).toBeInTheDocument();
   });
 
+  // Achado 0503: o card é quem sabe da lacuna impressa — ele repassa os avisos
+  // de `+ Lacuna` / `Remover lacuna` para quem manda no enunciado.
+  it("repassa os avisos de lacuna ao dono do enunciado", () => {
+    const onGapAdded = vi.fn();
+    const onGapRemoved = vi.fn();
+    setup({
+      answer: { kind: "fillBlank", gaps: [{ id: "cccccccc-cccc-4ccc-8ccc-cccccccccccc", answer: "g1" }] },
+      onGapAdded,
+      onGapRemoved,
+    });
+    fireEvent.click(screen.getByText("Lacuna"));
+    expect(onGapAdded).toHaveBeenCalledTimes(1);
+    fireEvent.click(screen.getAllByTitle("Remover lacuna")[0]);
+    expect(onGapRemoved).toHaveBeenCalledWith(0);
+  });
+
   it("renders the full AnswerEditor (structure controls visible)", () => {
     setup();
     expect(screen.getByTestId("answer-multipleChoice")).toBeInTheDocument();
-    expect(screen.getByLabelText("Marcar como correta")).toBeInTheDocument();
+    expect(screen.getByLabelText("Marcar alternativa a como correta")).toBeInTheDocument();
   });
 
   // --- Local state: edits are buffered, not immediately committed ---
 
   it("commits the updated answer on Concluir (answer edits are buffered locally)", () => {
     const props = setup();
-    fireEvent.change(screen.getByLabelText("Alternativa"), { target: { value: "z" } });
+    fireEvent.change(screen.getByLabelText("Alternativa a"), { target: { value: "z" } });
     fireEvent.click(screen.getByRole("button", { name: "Concluir" }));
     expect(props.onCommit).toHaveBeenCalledWith(
       expect.objectContaining({ kind: "multipleChoice" }),
@@ -389,5 +405,106 @@ describe("QuestionCard", () => {
   it("disables the number input when disabled", () => {
     setup({ num: 1, disabled: true });
     expect(screen.getByLabelText("Número da questão")).toBeDisabled();
+  });
+  // Achado 0363: o card monta no lugar do rail, e o botão que recebeu o Enter
+  // ("Editar questão") é desmontado no mesmo commit. Sem ninguém reivindicar o
+  // foco, o navegador devolve ao <body> e o usuário de teclado fica sem
+  // indicação nenhuma de onde está.
+  it("leva o foco para o primeiro controle do card ao abrir (achado 0363)", () => {
+    setup({ num: 2 });
+    expect(document.activeElement).toBe(screen.getByLabelText("Número da questão"));
+  });
+
+  it("leva o foco para o próprio card quando o número não é editável (achado 0363)", () => {
+    setup({ num: 2, disabled: true });
+    expect(document.activeElement).toBe(screen.getByTestId("question-card"));
+  });
+
+  // Achado 0368: o campo media 32x19px (w-8 sem altura propria, herdando a linha
+  // de 13px do <span>), abaixo do minimo de 24px do WCAG 2.5.8, e o unico sinal
+  // de foco era um fio de 1px trocando de tom, porque a classe zerava o outline.
+  describe("alvo e foco do número da questão (achado 0368)", () => {
+    const classesDoCampo = () => {
+      setup({ num: 2 });
+      return screen.getByLabelText("Número da questão").className.split(/\s+/);
+    };
+
+    it("tem altura de alvo de pelo menos 24px", () => {
+      const alturaEmPx = (token: string) => {
+        const m = /^(?:min-)?h-(\d+(?:\.\d+)?)$/.exec(token);
+        if (m) return Number(m[1]) * 4;
+        const arbitraria = /^(?:min-)?h-\[(\d+(?:\.\d+)?)(px|rem)\]$/.exec(token);
+        if (arbitraria) return Number(arbitraria[1]) * (arbitraria[2] === "rem" ? 16 : 1);
+        return 0;
+      };
+      const maior = Math.max(0, ...classesDoCampo().map(alturaEmPx));
+      expect(maior).toBeGreaterThanOrEqual(24);
+    });
+
+    it("não zera o outline e pinta um anel de foco de pelo menos 2px", () => {
+      const classes = classesDoCampo();
+      expect(classes).not.toContain("outline-none");
+      expect(classes).toContain("focus-visible:outline");
+      expect(classes).toContain("focus-visible:outline-2");
+    });
+  });
+});
+
+/**
+ * Achado 0373: o "remover ×" de instrução e enunciado era texto de 11px em
+ * `ink-faint` sem padding, com alvo de ~50 x 15 px (WCAG 2.2 SC 2.5.8 pede 24 px)
+ * e tinta abaixo de 4,5:1.
+ */
+describe("QuestionCard — botões de remover campo (0373)", () => {
+  const expectTarget = (el: HTMLElement) => {
+    expect(el.className).toMatch(/(^|\s)min-h-6(\s|$)/);
+    expect(el.className).toMatch(/(^|\s)min-w-6(\s|$)/);
+    expect(el.className).toMatch(/(^|\s)px-1\.5(\s|$)/);
+    expect(el.className).toMatch(/(^|\s)text-surface-ink-soft(\s|$)/);
+    expect(el.className).not.toMatch(/text-surface-ink-faint/);
+  };
+
+  it("Remover instrução tem alvo de 24 px e tinta legível", () => {
+    setup({ instruction: [{ type: "text", text: "Marque a correta." }] });
+    expectTarget(screen.getByLabelText("Remover instrução"));
+  });
+
+  it("Remover enunciado (abaixo da imagem) tem alvo de 24 px e tinta legível", () => {
+    setup({ enunciado: [{ type: "text", text: "Observe." }], enunciadoPosition: "below" });
+    expectTarget(screen.getByLabelText("Remover enunciado"));
+  });
+
+  it("Remover enunciado (acima da imagem) tem alvo de 24 px e tinta legível", () => {
+    setup({ enunciado: [{ type: "text", text: "Observe." }], enunciadoPosition: "above" });
+    expectTarget(screen.getByLabelText("Remover enunciado"));
+  });
+});
+
+/**
+ * Achado 0467: os rótulos de seção do card ("Imagem / Conteúdo", "Instrução",
+ * "Enunciado") eram 11,5 px em `ink-faint` sobre o papel branco, 2,45:1 (WCAG
+ * 2.2 AA 1.4.3 pede 4,5:1). `ink-soft` mede 5,88:1.
+ */
+describe("QuestionCard — rótulos de seção legíveis (0467)", () => {
+  const expectInk = (text: string) => {
+    const el = screen.getByText(text);
+    expect(el.className).toMatch(/(^|\s)text-surface-ink-soft(\s|$)/);
+    expect(el.className).not.toMatch(/text-surface-ink-faint/);
+  };
+
+  it("Imagem / Conteúdo e Instrução usam ink-soft", () => {
+    setup({ instruction: [{ type: "text", text: "Marque a correta." }] });
+    expectInk("Imagem / Conteúdo");
+    expectInk("Instrução");
+  });
+
+  it("Enunciado abaixo da imagem usa ink-soft", () => {
+    setup({ enunciado: [{ type: "text", text: "Observe." }], enunciadoPosition: "below" });
+    expectInk("Enunciado");
+  });
+
+  it("Enunciado acima da imagem usa ink-soft", () => {
+    setup({ enunciado: [{ type: "text", text: "Observe." }], enunciadoPosition: "above" });
+    expectInk("Enunciado");
   });
 });

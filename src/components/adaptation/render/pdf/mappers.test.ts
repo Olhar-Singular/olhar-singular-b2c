@@ -1,12 +1,13 @@
 import { describe, it, expect } from "vitest";
 import { Children, isValidElement, type ReactElement, type ReactNode } from "react";
-import { View, Text, Image } from "@react-pdf/renderer";
+import { View, Text, Image, Canvas } from "@react-pdf/renderer";
 import { PdfBlock } from "./PdfBlock";
 import { PdfAnswer } from "./PdfAnswer";
 import { PdfQuestion } from "./PdfQuestion";
 import { PdfHeading, PdfParagraph, PdfImage, PdfScaffolding } from "./PdfLeafBlocks";
 import { PdfMath } from "./PdfMath";
 import { PdfRichText } from "./PdfRichText";
+import { RULE_WIDTH_PT } from "../pageTokens";
 import type { Block, QuestionAnswer } from "@/lib/adaptation/canonical/schema";
 import {
   resolvePageStyle,
@@ -71,6 +72,28 @@ function textNodes(node: unknown, found: ReactElement[] = []): ReactElement[] {
   return found;
 }
 
+/** Todo <Canvas> da árvore (o elo desenhado da associação, a pauta da aberta). */
+function canvasNodes(node: unknown, found: ReactElement[] = []): ReactElement[] {
+  if (node === null || node === undefined || typeof node === "boolean") return found;
+  if (Array.isArray(node)) {
+    node.forEach((c) => canvasNodes(c, found));
+    return found;
+  }
+  if (isValidElement(node)) {
+    const el = node as ReactElement;
+    if (el.type === (Canvas as unknown)) {
+      found.push(el);
+      return found;
+    }
+    if (typeof el.type === "function") {
+      canvasNodes((el.type as (p: unknown) => unknown)(el.props), found);
+      return found;
+    }
+    canvasNodes((el.props as { children?: unknown }).children, found);
+  }
+  return found;
+}
+
 /** O <Text> mais externo cujo texto plano contém `needle`. */
 function textWith(node: unknown, needle: string): ReactElement {
   const hit = textNodes(node).find((t) => textOf(t).includes(needle));
@@ -93,7 +116,7 @@ describe("PdfAnswer", () => {
     expect(txt).not.toContain("✔");
   });
 
-  it("renders trueFalse without revealing the value — shows (  ) V and (  ) F markers", () => {
+  it("renders trueFalse without revealing the value — shows ( ) V and ( ) F markers", () => {
     const txt = textOf(
       PdfAnswer({
         answer: {
@@ -109,38 +132,43 @@ describe("PdfAnswer", () => {
     expect(txt).toContain("afirmação verdadeira");
     expect(txt).toContain("afirmação falsa");
     // The empty V/F markers must be present.
-    expect(txt).toContain("(  ) V");
-    expect(txt).toContain("(  ) F");
+    expect(txt).toContain("( ) V");
+    expect(txt).toContain("( ) F");
     // Must NOT reveal the authored value.
     expect(txt).not.toContain("(V)");
     expect(txt).not.toContain("(F)");
   });
 
-  it("renders checkbox with [ ] for all items — never reveals [x]", () => {
-    const txt = textOf(
-      PdfAnswer({
-        answer: {
-          kind: "checkbox",
-          items: [
-            { id: id(1), content: rt("y"), checked: true },
-            { id: id(2), content: rt("n"), checked: false },
-          ],
-        },
-      }),
-    );
-    expect(txt).toContain("[ ]");
+  it("renders checkbox with a DRAWN empty box per item — never reveals the key (0358)", () => {
+    const el = PdfAnswer({
+      answer: {
+        kind: "checkbox",
+        items: [
+          { id: id(1), content: rt("y"), checked: true },
+          { id: id(2), content: rt("n"), checked: false },
+        ],
+      },
+    });
+    const txt = textOf(el);
+    // A caixa é desenhada num <Canvas>, como a pauta: escrita, ela imprimia o
+    // colchete `[ ]` onde as duas telas mostram um quadrado fechado.
+    expect(txt).not.toContain("[");
     expect(txt).not.toContain("[x]");
+    expect(canvasNodes(el)).toHaveLength(2);
   });
 
-  it("renders matching pairs with a connector", () => {
-    const txt = textOf(
-      PdfAnswer({
-        answer: { kind: "matching", pairs: [{ id: id(1), left: rt("BR"), right: rt("Brasília") }] },
-      }),
-    );
+  it("renders matching pairs with a DRAWN connector plus a text-layer glyph (0444/0194)", () => {
+    const el = PdfAnswer({
+      answer: { kind: "matching", pairs: [{ id: id(1), left: rt("BR"), right: rt("Brasília") }] },
+    });
+    const txt = textOf(el);
     expect(txt).toContain("BR");
     expect(txt).toContain("Brasília");
+    // A tinta do elo é o <Canvas> (0444): o traço vale em qualquer família,
+    // inclusive nas de acessibilidade, que não trazem o glifo. O caractere
+    // viaja junto, invisível, só para existir na camada de texto (0194).
     expect(txt).toContain("↔");
+    expect(canvasNodes(el)).toHaveLength(1);
   });
 
   it("renders ordering items in array order without position sort or numbering", () => {
@@ -196,12 +224,16 @@ describe("PdfAnswer", () => {
   });
 
   it("draws collapsed table borders — container top/left, cells right/bottom (no doubled lines)", () => {
-    const el = PdfAnswer({
+    const root = PdfAnswer({
       answer: { kind: "table", rows: [[rt("H1"), rt("H2")], [rt("a"), rt("b")]] },
     }) as ReactElement;
+    // A tabela vem num fragmento: [fio de presença mínima (0193), tabela].
+    const el = (root.props.children as ReactElement[])[1];
     const container = el.props.style as { borderTopWidth?: number; borderLeftWidth?: number };
-    expect(container.borderTopWidth).toBe(1);
-    expect(container.borderLeftWidth).toBe(1);
+    // A espessura é `RULE_WIDTH_PT`, o traço estrutural do documento — o mesmo
+    // 1px que a prévia desenha, para as duas medirem a mesma linha (0607).
+    expect(container.borderTopWidth).toBe(RULE_WIDTH_PT);
+    expect(container.borderLeftWidth).toBe(RULE_WIDTH_PT);
     const headerRow = (el.props.children as unknown[])[0] as ReactElement;
     const headerCell = (headerRow.props.children as ReactElement[])[0];
     const cell = headerCell.props.style as {
@@ -209,8 +241,8 @@ describe("PdfAnswer", () => {
       borderBottomWidth?: number;
       borderWidth?: number;
     };
-    expect(cell.borderRightWidth).toBe(1);
-    expect(cell.borderBottomWidth).toBe(1);
+    expect(cell.borderRightWidth).toBe(RULE_WIDTH_PT);
+    expect(cell.borderBottomWidth).toBe(RULE_WIDTH_PT);
     expect(cell.borderWidth).toBeUndefined();
   });
 

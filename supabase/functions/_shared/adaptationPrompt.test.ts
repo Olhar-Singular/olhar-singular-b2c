@@ -172,6 +172,12 @@ describe("buildSystemPrompt", () => {
     expect(prompt).toContain("UMA ÚNICA versão adaptada");
   });
 
+  it("tells the model the ordering array is the printed order and must not be the answer key", () => {
+    const prompt = buildSystemPrompt([{ dimension: "tea" }]);
+    expect(prompt).toContain('Em "ordering", a ordem do array "items" é a ordem IMPRESSA');
+    expect(prompt).toContain("NUNCA liste os itens já na ordem correta");
+  });
+
   it("instructs turning an [IMAGEM: <url>] marker into an image block (exact src, alt, no literal marker)", () => {
     const prompt = buildSystemPrompt([{ dimension: "tea" }]);
     // Mentions the marker syntax and the image-block contract.
@@ -181,6 +187,15 @@ describe("buildSystemPrompt", () => {
     expect(prompt).toContain('"alt"');
     // And tells the model not to leak the literal marker.
     expect(prompt).toContain("NÃO deixe o marcador literal");
+  });
+
+  it("grounds the image alt on the extraction description and forbids inventing or revealing the answer (0279)", () => {
+    const prompt = buildSystemPrompt([{ dimension: "tea" }]);
+    expect(prompt).toContain("[DESCRIÇÃO DA IMAGEM:");
+    expect(prompt).toContain("Você NÃO vê a imagem");
+    expect(prompt).toContain("NUNCA revele a resposta");
+    expect(prompt).toContain("Figura da questão N");
+    expect(prompt).not.toContain("um \"alt\" curto e descritivo");
   });
 
   it("forbids inventing images and tells the model to describe in text instead", () => {
@@ -200,6 +215,20 @@ describe("buildSystemPrompt", () => {
     // And that block names are never valid answer kinds.
     expect(prompt).toContain('NUNCA use um nome de bloco como "answer.kind"');
     expect(prompt).toContain('"scaffolding"');
+  });
+
+  // 0474: an informative table in the stem came out as ONE paragraph with "•"
+  // and "|" glued by "\n", and the support told the student to read the
+  // "coluna 'Preço (R$)'" that the printed sheet does not have.
+  it("describes an informative table one paragraph per row, with no fake list marks (0474)", () => {
+    const prompt = buildSystemPrompt([{ dimension: "tea" }]);
+    expect(prompt).toContain('cada linha da tabela vira um "paragraph" próprio');
+    expect(prompt).toContain('NUNCA junte linhas com "\\n", "•" ou "|"');
+  });
+
+  it("forbids support/tips from pointing at columns or rows the sheet does not show (0474)", () => {
+    const prompt = buildSystemPrompt([{ dimension: "tea" }]);
+    expect(prompt).toContain('o apoio NÃO pode mandar o aluno olhar "coluna" ou "linha" da tabela');
   });
 });
 
@@ -303,5 +332,37 @@ describe("attemptTimeoutMs", () => {
 
   it("keeps the worst case inside the Supabase wall-clock limit", () => {
     expect(AI_TOTAL_BUDGET_MS).toBeLessThan(400_000);
+  });
+});
+
+describe("trueFalse contract (0388)", () => {
+  const prompt = () => buildSystemPrompt([{ dimension: "tea" }]);
+
+  it("says each item is a statement and the V/F marker is printed automatically", () => {
+    expect(prompt()).toMatch(/cada item é uma AFIRMAÇÃO/);
+    expect(prompt()).toMatch(/\( \) V \( \) F/);
+    expect(prompt()).toMatch(/NUNCA[^.]*"Verdadeiro"[^.]*"Falso"/);
+  });
+});
+
+// 0393: on the paste path (no fidelityMode) the "nothing is removed" rule did
+// not exist, so the AI silently dropped the teacher's evaluation criteria,
+// deadline and glossary. The rule must hold on every path, and any removal has
+// to be named in the justification the teacher reads.
+describe("content preservation on every path (0393)", () => {
+  const prompt = () => buildSystemPrompt([{ dimension: "tdah" }]);
+
+  it("forbids dropping the teacher's informative blocks even without fidelityMode", () => {
+    expect(prompt()).toContain("PRESERVAÇÃO DO CONTEÚDO DO PROFESSOR");
+    expect(prompt()).toMatch(/critérios de avaliação[^.]*prazos[^.]*glossários/i);
+    expect(prompt()).toMatch(/NUNCA remova[^.]*em silêncio/);
+  });
+
+  it("requires listing every removed block, and why, in pedagogical_justification", () => {
+    expect(prompt()).toMatch(/"pedagogical_justification"[^.]*o que saiu e por quê/);
+  });
+
+  it("does not read 'describe an informative table' as licence to drop its values", () => {
+    expect(prompt()).toMatch(/descrevê-la em parágrafos NÃO autoriza omitir/);
   });
 });

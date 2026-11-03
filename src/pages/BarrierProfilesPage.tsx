@@ -177,7 +177,7 @@ export default function BarrierProfilesPage() {
 
       {/* Create / Edit dialog */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="max-h-[90vh] overflow-y-auto">
+        <DialogContent className="flex max-h-[90vh] flex-col overflow-hidden">
           <DialogHeader>
             <DialogTitle>
               {editing ? "Editar perfil" : "Novo perfil de barreira"}
@@ -189,8 +189,10 @@ export default function BarrierProfilesPage() {
                 ? { name: editing.name ?? "", barriers: editing.barriers, observation: editing.observation }
                 : undefined
             }
+            existingNames={profiles.filter((p) => p.id !== editing?.id).map((p) => p.name)}
             onSubmit={handleSubmit}
             isPending={create.isPending || update.isPending}
+            onCancel={() => setDialogOpen(false)}
           />
         </DialogContent>
       </Dialog>

@@ -14,11 +14,17 @@ import { Loader2, Coins } from "lucide-react";
 import { Link } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { toast } from "sonner";
-import { parseEdgeFnError } from "@/lib/utils/errors";
+import { isNetworkError, parseEdgeFnError } from "@/lib/utils/errors";
 import { useAuth } from "@/hooks/useAuth";
+import { insufficientCreditsMessage } from "@/lib/domain/access";
+import { calcAdaptationCost } from "@/lib/domain/barriers";
+import { EXTRACTION_COST } from "@/lib/domain/extractionCost";
 import { extractExamQuestions } from "../upload-exam/extractExamQuestions";
-import { buildActivityTextFromExtraction, type ExamExtractedQuestion } from "../upload-exam/buildActivityTextFromExtraction";
+import {
+  buildActivityTextFromExtraction,
+  type ExamExtractedHeader,
+  type ExamExtractedQuestion,
+} from "../upload-exam/buildActivityTextFromExtraction";
 import type { AdaptationResult } from "@/lib/adaptation/canonical/schema";
 import { activeUploadedExam, type WizardData } from "@/lib/adaptation/wizard/wizardState";
 
@@ -64,8 +70,6 @@ type Props = {
   onRestorePrevious?: () => void;
 };
 
-const OUT_OF_CREDITS_MESSAGE = "Seus créditos acabaram. Compre créditos extras para continuar.";
-
 export function StepGenerate({ data, onResult, onNext, onPrev, onLoadingChange, onRestorePrevious }: Props) {
   const { user, refreshProfile } = useAuth();
   const queryClient = useQueryClient();
@@ -86,10 +90,28 @@ export function StepGenerate({ data, onResult, onNext, onPrev, onLoadingChange, 
   // paused here — proceeding to the paid adapt-activity call needs an explicit
   // user decision, same as the pre-upload-refactor flow did at the Atividade step.
   const [pendingExtracted, setPendingExtracted] = useState<ExamExtractedQuestion[] | null>(null);
+  // The exam's title/general instruction, kept across the >12-question detour (0473).
+  const pendingHeaderRef = useRef<ExamExtractedHeader | undefined>(undefined);
   const [totalExtracted, setTotalExtracted] = useState(0);
   const abortRef = useRef<AbortController | null>(null);
   const startedRef = useRef(false);
   const [messageIndex, setMessageIndex] = useState(0);
+  /**
+   * Ação principal de cada tela de erro (0471). "Tentar novamente" desmonta a si
+   * mesmo ao trocar para a espera, e o efeito de foco do wizard só roda quando o
+   * passo muda: sem pousar o foco aqui, ele cai no <body> e o próximo Tab
+   * recomeça no topo da página.
+   */
+  const retryRef = useRef<HTMLButtonElement>(null);
+  const subscribeRef = useRef<HTMLAnchorElement>(null);
+
+  // The error state is set before `loading` drops, so wait for the error screen
+  // to actually be on the page before moving focus into it.
+  useEffect(() => {
+    if (loading) return;
+    if (creditError) subscribeRef.current?.focus();
+    else if (failed) retryRef.current?.focus();
+  }, [creditError, failed, loading]);
 
   // Rotates the loading copy so a long wait (real generations run for minutes)
   // doesn't sit on one static line — resets to the first message whenever a
@@ -160,9 +182,25 @@ export function StepGenerate({ data, onResult, onNext, onPrev, onLoadingChange, 
     if (controller.signal.aborted) return;
 
     if (fnError) {
+      // The request never reached the server: keep the original error so
+      // parseEdgeFnError can say it is the connection, not the adaptation.
+      if (isNetworkError(fnError)) throw fnError;
       const context = (fnError as { context?: Response }).context;
       if (context?.status === 402) {
-        setCreditError(OUT_OF_CREDITS_MESSAGE);
+        // The server just said the balance does not cover the cost: the cached
+        // balance (sidebar, banner) may be stale, so re-read it.
+        refreshCredits();
+        // The 402 carries the balance and the cost: say them (0470).
+        let balance: number | null = null;
+        let required: number | null = null;
+        try {
+          const body = await context.json();
+          if (typeof body?.balance === "number") balance = body.balance;
+          if (typeof body?.required === "number") required = body.required;
+        } catch {
+          // corpo já consumido ou não-JSON: mensagem genérica
+        }
+        setCreditError(insufficientCreditsMessage(balance, required));
         return;
       }
       let errMsg = "Falha na adaptação";
@@ -206,10 +244,12 @@ export function StepGenerate({ data, onResult, onNext, onPrev, onLoadingChange, 
       /* v8 ignore next -- AbortController race */
       if ((e as Error).name === "AbortError" || controller.signal.aborted) return;
       console.error("Erro ao gerar adaptação:", e);
+      // A failure may still have charged the reservation (worker died after
+      // opening it), so the balance shown must be re-read.
+      refreshCredits();
       const reason = parseEdgeFnError(e, "Erro ao gerar adaptação.");
       setFailed(true);
       setFailReason(reason);
-      toast.error(reason);
     } finally {
       /* v8 ignore next -- AbortController race */
       if (!controller.signal.aborted) {
@@ -217,7 +257,7 @@ export function StepGenerate({ data, onResult, onNext, onPrev, onLoadingChange, 
         onLoadingChange?.(false);
       }
     }
-  }, [adaptActivity, onLoadingChange]);
+  }, [adaptActivity, onLoadingChange, refreshCredits]);
 
   const generate = useCallback(async () => {
     abortRef.current?.abort();
@@ -240,6 +280,7 @@ export function StepGenerate({ data, onResult, onNext, onPrev, onLoadingChange, 
     setLoading(true);
     onLoadingChange?.(true);
     let extracted: ExamExtractedQuestion[];
+    let header: ExamExtractedHeader | undefined;
     try {
       /* v8 ignore next -- user is always set: this step only renders inside the authenticated wizard */
       const userId = user?.id ?? "";
@@ -248,7 +289,10 @@ export function StepGenerate({ data, onResult, onNext, onPrev, onLoadingChange, 
       if (controller.signal.aborted) return;
       if (result.status === "insufficient_credits") {
         // Refused before anything was charged: same screen as the adaptation's 402.
-        setCreditError(OUT_OF_CREDITS_MESSAGE);
+        // The cost that matters is the whole one (reading + adaptation), the
+        // same total Passo 3 showed.
+        const dimensions = [...new Set(data.barriers.filter((b) => b.is_active).map((b) => b.dimension).filter(Boolean))];
+        setCreditError(insufficientCreditsMessage(result.balance, calcAdaptationCost(dimensions) + EXTRACTION_COST));
         setLoading(false);
         onLoadingChange?.(false);
         return;
@@ -259,6 +303,7 @@ export function StepGenerate({ data, onResult, onNext, onPrev, onLoadingChange, 
         throw new Error("Não foi possível identificar questões no arquivo enviado. Volte e tente outro arquivo.");
       }
       extracted = result.questions;
+      header = result.header;
     } catch (e) {
       /* v8 ignore next -- AbortController race */
       if ((e as Error).name === "AbortError" || controller.signal.aborted) return;
@@ -266,7 +311,6 @@ export function StepGenerate({ data, onResult, onNext, onPrev, onLoadingChange, 
       const reason = parseEdgeFnError(e, "Erro ao gerar adaptação.");
       setFailed(true);
       setFailReason(reason);
-      toast.error(reason);
       setLoading(false);
       onLoadingChange?.(false);
       return;
@@ -274,13 +318,14 @@ export function StepGenerate({ data, onResult, onNext, onPrev, onLoadingChange, 
 
     if (extracted.length > MAX_QUESTIONS) {
       setTotalExtracted(extracted.length);
+      pendingHeaderRef.current = header;
       setPendingExtracted(extracted);
       setLoading(false);
       onLoadingChange?.(false);
       return;
     }
 
-    await proceedToAdapt(buildActivityTextFromExtraction(extracted), controller, extracted.length);
+    await proceedToAdapt(buildActivityTextFromExtraction(extracted, header), controller, extracted.length);
   }, [data, uploadedExam, user, proceedToAdapt, onLoadingChange, refreshCredits]);
 
   function confirmTruncate() {
@@ -290,7 +335,7 @@ export function StepGenerate({ data, onResult, onNext, onPrev, onLoadingChange, 
     setPendingExtracted(null);
     /* v8 ignore next -- guard: generate() always sets abortRef before pendingExtracted can be set */
     const controller = abortRef.current ?? new AbortController();
-    void proceedToAdapt(buildActivityTextFromExtraction(truncated), controller, truncated.length);
+    void proceedToAdapt(buildActivityTextFromExtraction(truncated, pendingHeaderRef.current), controller, truncated.length);
   }
 
   /** Bails out to the Atividade step — the file stays attached, so the user can re-attach or swap it. */
@@ -322,7 +367,7 @@ export function StepGenerate({ data, onResult, onNext, onPrev, onLoadingChange, 
             <AlertDialogHeader>
               <AlertDialogTitle>Atividade com muitas questões</AlertDialogTitle>
               <AlertDialogDescription>
-                Sua atividade tem {totalExtracted} questões — o limite para essa adaptação é {MAX_QUESTIONS}. Apenas
+                Sua atividade tem {totalExtracted} questões, e o limite para essa adaptação é {MAX_QUESTIONS}. Apenas
                 as {MAX_QUESTIONS} primeiras serão adaptadas. Continuar?
               </AlertDialogDescription>
             </AlertDialogHeader>
@@ -338,13 +383,28 @@ export function StepGenerate({ data, onResult, onNext, onPrev, onLoadingChange, 
 
   if (loading) {
     const messages = phase === "extracting" ? EXTRACTING_MESSAGES : ADAPTING_MESSAGES;
+    /**
+     * Anúncio ESTÁVEL da espera (0362). A copy visível roda a cada 2,8 s; se ela
+     * vivesse na região viva, o leitor de tela recitaria uma frase nova o tempo todo
+     * durante uma geração de minutos. A região viva diz uma vez o que começou, e o
+     * texto rotativo fica explicitamente fora dela.
+     */
+    const announcement =
+      phase === "extracting"
+        ? "Lendo a atividade enviada. Isso pode levar alguns minutos."
+        : "Gerando a adaptação. Isso pode levar alguns minutos.";
     return (
-      <div className="flex flex-col items-center justify-center py-20 gap-4">
-        <Loader2 className="w-10 h-10 animate-spin text-primary" />
-        <p className="text-lg font-medium text-foreground text-center max-w-md">
+      <div className="flex flex-col items-center justify-center py-20 gap-4" aria-busy="true">
+        <Loader2 aria-hidden="true" className="w-10 h-10 animate-spin text-primary" />
+        <p role="status" className="sr-only">
+          {announcement}
+        </p>
+        <p aria-live="off" className="text-lg font-medium text-foreground text-center max-w-md">
           {messages[messageIndex % messages.length]}
         </p>
-        <p className="text-xs text-muted-foreground">Isso pode levar alguns minutos</p>
+        <p aria-live="off" className="text-xs text-muted-foreground">
+          Isso pode levar alguns minutos
+        </p>
       </div>
     );
   }
@@ -353,10 +413,10 @@ export function StepGenerate({ data, onResult, onNext, onPrev, onLoadingChange, 
     return (
       <div className="flex flex-col items-center justify-center py-20 gap-4 text-center">
         <Coins className="w-10 h-10 text-muted-foreground" />
-        <p className="text-destructive font-medium">{creditError}</p>
+        <p role="alert" className="text-destructive font-medium">{creditError}</p>
         <div className="flex gap-2">
           <Button asChild>
-            <Link to="/assinar">Assinar</Link>
+            <Link ref={subscribeRef} to="/assinar">Assinar</Link>
           </Button>
           <Button asChild variant="outline">
             <Link to="/creditos">Comprar créditos extras</Link>
@@ -377,7 +437,7 @@ export function StepGenerate({ data, onResult, onNext, onPrev, onLoadingChange, 
           <p className="text-destructive font-medium">Não foi possível gerar a adaptação.</p>
           <p className="text-sm text-destructive">{failReason}</p>
         </div>
-        <Button onClick={generate}>Tentar novamente</Button>
+        <Button ref={retryRef} onClick={generate}>Tentar novamente</Button>
         {onRestorePrevious && (
           <Button variant="outline" onClick={onRestorePrevious} className="ml-2">
             Voltar para a adaptação atual

@@ -14,6 +14,7 @@
  */
 
 import { useEffect, useRef } from "react";
+import { toast } from "sonner";
 import { useEditor, ReactNodeViewRenderer, type Editor } from "@tiptap/react";
 import type { Extensions } from "@tiptap/core";
 import type { CanonicalDocument } from "@/lib/adaptation/canonical/schema";
@@ -28,6 +29,7 @@ import {
   ScaffoldingNode,
   QuestionNode,
 } from "@/lib/adaptation/tiptap/schema";
+import { flattenPastedTables } from "./pastedTables";
 import { QuestionNodeView } from "./nodeviews/QuestionNodeView";
 import { ImageNodeView } from "./nodeviews/ImageNodeView";
 import { BlockMathNodeView } from "./nodeviews/BlockMathNodeView";
@@ -128,10 +130,32 @@ export function useCanonicalEditor({
     // aquilo é a atividade adaptada nem distinguir a folha das outras paradas do
     // passo (achado 0410, WCAG 4.1.2). Os campos aninhados já se nomeiam por
     // `RichTextField`; o container que os contém, não.
+    // `style`: o Tiptap injeta `.ProseMirror { white-space: break-spaces }`, em
+    // que o espaço no fim da linha ocupa largura e não pendura. A folha quebrava
+    // uma palavra antes da prévia (`normal`) e do PDF, que deixam o espaço final
+    // pendurar (achado 0453). `pre-wrap` preserva os espaços que o ProseMirror
+    // precisa e pendura o final; inline para vencer o CSS injetado.
     editorProps: {
       attributes: {
         spellcheck: "false",
         "aria-label": "Atividade adaptada, editor do documento",
+        style: "white-space: pre-wrap",
+      },
+      // O schema canônico não tem nó de tabela, e o parser do ProseMirror
+      // descartava `<table>/<tr>/<td>` mantendo só o texto: uma tabela 1x2 do
+      // Word virava o parágrafo "AB", sem separador e sem aviso (achado 0450).
+      // Achatamos antes do parser, preservando a fronteira das células, e
+      // avisamos que a tabela não sobreviveu como tabela.
+      transformPastedHTML: (html: string) => {
+        const { html: flattened, tables } = flattenPastedTables(html);
+        if (tables > 0) {
+          toast.warning(
+            tables === 1
+              ? "A tabela colada virou linhas de texto (células separadas por “|”). Confira antes de exportar."
+              : `As ${tables} tabelas coladas viraram linhas de texto (células separadas por “|”). Confira antes de exportar.`,
+          );
+        }
+        return flattened;
       },
     },
     onSelectionUpdate: ({ editor }) => onSelectionUpdate?.(editor),

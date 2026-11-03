@@ -272,8 +272,9 @@ describe("andaime — caixa e rótulo também no Word (achado 0163)", () => {
     const paragraphs = blockToDocxParagraphs(BLOCK, 1);
     // rótulo + um parágrafo por passo
     expect(paragraphs).toHaveLength(BLOCK.items.length + 1);
-    const json = JSON.stringify(paragraphs);
-    expect(json).toContain("1. Leia duas vezes");
-    expect(json).toContain("2. Grife as palavras-chave");
+    // Ordinal, tab e texto: o ordinal em coluna, como no PDF (achado 0529).
+    const [, first, second] = paragraphs.map((p) => JSON.stringify(p));
+    expect(first).toMatch(/"1\.".*"w:tab".*"Leia duas vezes/);
+    expect(second).toMatch(/"2\.".*"w:tab".*"Grife as palavras-chave/);
   });
 });

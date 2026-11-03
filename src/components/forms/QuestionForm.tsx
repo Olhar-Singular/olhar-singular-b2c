@@ -93,7 +93,7 @@ export default function QuestionForm({ open, onOpenChange, question, onSaved }: 
       const file = (ev.target as HTMLInputElement).files?.[0];
       if (!file) return;
       if (file.size > 5 * 1024 * 1024) {
-        toast.error("Imagem muito grande — máximo 5 MB.");
+        toast.error("Imagem muito grande: máximo 5 MB.");
         return;
       }
       const reader = new FileReader();

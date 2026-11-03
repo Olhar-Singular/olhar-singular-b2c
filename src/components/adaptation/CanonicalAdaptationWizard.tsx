@@ -41,7 +41,10 @@ import { readMirror, clearMirror, type MirrorEntry } from "@/lib/adaptation/pers
 import { shouldOfferRestore } from "@/lib/adaptation/persistence/restoreDecision";
 import { useAdaptationDraft } from "@/hooks/useAdaptationDraft";
 import { useFolders, useCreateFolder } from "@/hooks/useFolders";
+import { findFolderByName, duplicateFolderMessage, isDuplicateFolderError } from "@/lib/domain/folderName";
 import { useMarkReady } from "@/hooks/useAdaptations";
+import { computeAccess } from "@/lib/domain/access";
+import { calcAdaptationCost } from "@/lib/domain/barriers";
 import type { AdaptationResult, CanonicalDocument, DocumentHeader, PageStyle } from "@/lib/adaptation/canonical/schema";
 
 const STEPS = [
@@ -95,12 +98,12 @@ const SAVE_STATUS_LABEL: Record<string, string> = {
   saving: "Salvando…",
   saved: "Rascunho salvo",
   error: "Erro ao salvar",
-  conflict: "Conflito — recarregue",
+  conflict: "Conflito: recarregue",
 };
 
 export default function CanonicalAdaptationWizard({ editMode }: Props = {}) {
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
   const markReady = useMarkReady();
   const { data: folders = [] } = useFolders();
   const createFolder = useCreateFolder();
@@ -143,6 +146,8 @@ export default function CanonicalAdaptationWizard({ editMode }: Props = {}) {
   /** Pasta escolhida (id) e/ou nome de uma pasta nova, criada só ao salvar. */
   const [folderId, setFolderId] = useState<string | null>(editMode?.folderId ?? null);
   const [newFolder, setNewFolder] = useState("");
+  // 0512: why the typed folder name was refused, shown in the field itself.
+  const [newFolderError, setNewFolderError] = useState<string | null>(null);
 
   const [data, setData] = useState<WizardData>(
     editMode ? editMode.initialData : INITIAL_WIZARD_DATA,
@@ -160,6 +165,14 @@ export default function CanonicalAdaptationWizard({ editMode }: Props = {}) {
    */
   const [maxStepReached, setMaxStepReached] = useState(editMode ? REVIEW_INDEX : 0);
   const [confirmRegenerate, setConfirmRegenerate] = useState(false);
+  // Regerar jumps straight back to "Gerar", skipping the Barreiras step where
+  // the price is shown, so its confirmation is the only decision point: it
+  // carries the same adaptation cost (0457). Courtesy accounts never pay.
+  const regenerateCost = computeAccess(profile, new Date())?.unlimited
+    ? null
+    : calcAdaptationCost([
+        ...new Set(data.barriers.filter((b) => b.is_active).map((b) => b.dimension).filter(Boolean)),
+      ]);
   /**
    * Set while the editor cannot convert the sheet to the canonical model, i.e.
    * while edits are NOT reaching the autosave. It overrides the save status:
@@ -175,6 +188,10 @@ export default function CanonicalAdaptationWizard({ editMode }: Props = {}) {
     o ajuste: uma folha nunca ajustada continua abrindo cabendo na mesa.
   */
   const [reviewZoomIndex, setReviewZoomIndex] = useState(0);
+  // Achado 0517: a escolha "Quebra de página por questão" do Exportar mora aqui,
+  // não no passo (que desmonta a cada troca). Dura a sessão de edição; não
+  // entra no documento salvo.
+  const [pageBreakPerQuestion, setPageBreakPerQuestion] = useState(false);
   // Crash-mirror recovery: a surviving mirror newer than the loaded row means a
   // save was lost. We hold it here and prompt the user to recover it.
   const [pendingMirror, setPendingMirror] = useState<MirrorEntry | null>(null);
@@ -261,8 +278,8 @@ export default function CanonicalAdaptationWizard({ editMode }: Props = {}) {
    * quebrada, erro de rede ou conflito. Só estes prendem a barra de status no
    * topo; "Salvando…"/"Rascunho salvo" seguem rolando com a página.
    */
-  const savingHasError =
-    captureFailure !== null || saveStatus === "error" || saveStatus === "conflict";
+  const autosaveFailed = saveStatus === "error" || saveStatus === "conflict";
+  const savingHasError = captureFailure !== null || autosaveFailed;
 
   /**
    * 0239 · A guarda de saída fala do que NÃO está no banco.
@@ -338,12 +355,16 @@ export default function CanonicalAdaptationWizard({ editMode }: Props = {}) {
     // ("Exportar"/"Voltar") é desmontado junto com o passo antigo, então o foco caía
     // no <body>: o Tab seguinte recomeçava no topo da página (link de pular, logo,
     // navegação lateral) e o leitor de tela não anunciava nada, porque a rota não
-    // mudou. Pousamos o foco no contêiner do passo novo, que carrega o nome do passo
-    // — o Tab continua de dentro dele e o nome é lido na chegada.
-    // 0245: com preventScroll, senão o foco desfaz o scrollTo(0, 0) logo acima — o
-    // navegador traria a região do passo para a vista (ela nasce ~176 px abaixo do topo)
+    // mudou. O foco tem que pousar dentro do wizard, no passo novo.
+    // 0366: mas pousá-lo no contêiner do passo (que no DOM vem depois da faixa)
+    // deixava os seis chips alcançáveis só por Shift+Tab, e quem navega por teclado
+    // perdia a navegação direta entre passos que o mouse tem. Pousamos no chip do
+    // passo atual: ele anuncia o passo (aria-current="step" mais o rótulo) e mantém
+    // a faixa e o conteúdo do passo à frente na ordem de tabulação.
+    // 0245: com preventScroll, senão o foco desfaz o scrollTo(0, 0) logo acima: o
+    // navegador traria o alvo para a vista (ele nasce abaixo do topo do documento)
     // e em telas estreitas a faixa de passos acabava debaixo do cabeçalho fixo.
-    stepRegionRef.current?.focus({ preventScroll: true });
+    chip.focus({ preventScroll: true });
   }, [stepIndex, updateEdgeHints]);
 
   // O teto só sobe sozinho; quem o rebaixa é quem invalida o que havia adiante
@@ -351,6 +372,11 @@ export default function CanonicalAdaptationWizard({ editMode }: Props = {}) {
   useEffect(() => {
     setMaxStepReached((max) => Math.max(max, stepIndex));
   }, [stepIndex]);
+  // 0366: mas o teto guardado no estado só chega ao DOM na render seguinte, então o
+  // chip do passo recém-aberto nascia `disabled` por um ciclo — e elemento disabled
+  // não recebe foco, o que fazia o foco da troca de passo cair no <body> de novo.
+  // Para a render, o teto é sempre pelo menos o passo atual.
+  const stepCeiling = Math.max(maxStepReached, stepIndex);
 
   const updateData = useCallback((partial: Partial<WizardData>) => {
     setData((prev) => ({ ...prev, ...partial }));
@@ -378,18 +404,42 @@ export default function CanonicalAdaptationWizard({ editMode }: Props = {}) {
   // paid request and therefore a new row. Staying bound to the previous one
   // would autosave the new document over the old adaptation, against a token
   // that no longer describes it.
+  const editAdaptationId = editMode?.adaptationId;
   const handleResult = useCallback((result: AdaptationResult, row: GeneratedRow) => {
     // Reset isGenerating immediately when a result arrives. The real StepGenerate
     // calls onLoadingChange(false) via useEffect, but that effect may not fire when
     // the component is unmounted in the same React 18 batch as onNext(). Resetting
     // here ensures the navigation guard switches to "unsaved" mode, not "generating".
     setIsGenerating(false);
-    setData((prev) => setResult(prev, result));
+    // 0379: a Regerar replaces the CONTENT only. The name, header and Formato
+    // the teacher already chose live inside `result`, and the edge never sees
+    // them, so they are carried over from the stashed version. The autosave
+    // then writes them (and the manual title) onto the new row.
+    const adopted = stashedResult
+      ? {
+          ...result,
+          header: stashedResult.header ?? result.header,
+          pageStyle: stashedResult.pageStyle ?? result.pageStyle,
+        }
+      : result;
+    setData((prev) => setResult(prev, adopted));
     // A nova adaptação chegou: a anterior não é mais uma saída de emergência.
     setStashedResult(null);
     setDraftId(row.id);
     setDraftUpdatedAt(row.updatedAt);
-  }, []);
+    // 0456: in edit mode the URL still names the row we just left, so a reload
+    // reopened the pre-regenerate version and the paid document vanished from
+    // the screen. Rewrite the address bar in place instead of navigate():
+    // EditAdaptationPage keys the wizard on the route id, so a route change
+    // would remount it and throw away caret, scroll and zoom. The router's own
+    // history state is preserved, so back/forward keep working.
+    // 0378: the create flow (/adaptar) needs the same rewrite. The row is
+    // already durable and charged; left on /adaptar, a reload remounted the
+    // wizard at step 1 with no draftId, so nothing could bring it back.
+    if (row.id !== editAdaptationId) {
+      window.history.replaceState(window.history.state, "", `/adaptar/editar/${row.id}`);
+    }
+  }, [editAdaptationId, stashedResult]);
 
   // Every edit re-arms "unsaved". `isSaved` only ever went true before, so
   // after the first save the wizard could no longer tell that the teacher had
@@ -432,6 +482,34 @@ export default function CanonicalAdaptationWizard({ editMode }: Props = {}) {
   const flushPending = useCallback(async () => {
     await flush();
   }, [flush]);
+
+  /**
+   * 0460 · The guard dialogs are rendered by condition, with no DialogTrigger.
+   * Radix's modal close handler always focuses `triggerRef`, which is null
+   * here, so closing dropped the focus on <body> and a keyboard user restarted
+   * from the top of the page. We remember what had the focus when the dialog
+   * opened (at `onOpenAutoFocus` the focus has not moved yet: usually the
+   * sidebar link that tried to leave) and hand it back on close, falling back
+   * to the step region when that element is gone.
+   *
+   * 0614 · The regenerate and restore alert dialogs are opened by state too
+   * (no AlertDialogTrigger) and dropped the focus on <body> the same way, so
+   * they spread the same props.
+   */
+  const guardOpenerRef = useRef<HTMLElement | null>(null);
+  const restoreActionRef = useRef<HTMLButtonElement>(null);
+  const guardDialogFocusProps = {
+    onOpenAutoFocus: () => {
+      guardOpenerRef.current = document.activeElement as HTMLElement | null;
+    },
+    onCloseAutoFocus: (event: Event) => {
+      event.preventDefault();
+      const opener = guardOpenerRef.current;
+      guardOpenerRef.current = null;
+      if (opener?.isConnected && opener !== document.body) opener.focus();
+      else stepRegionRef.current?.focus();
+    },
+  };
 
   async function handleRestart() {
     await flushPending();
@@ -514,13 +592,22 @@ export default function CanonicalAdaptationWizard({ editMode }: Props = {}) {
     let targetFolder = folderId;
     const wanted = newFolder.trim();
     if (wanted) {
+      // 0512: a lista de pastas já está na tela; nome repetido (comparado como
+      // o índice único compara, lower(btrim)) é recusado no campo, sem rede.
+      const existing = findFolderByName(folders, wanted);
+      if (existing) {
+        setNewFolderError(duplicateFolderMessage(existing.name));
+        return;
+      }
       try {
         const created = await createFolder.mutateAsync(wanted);
         targetFolder = created.id;
         setFolderId(created.id);
         setNewFolder("");
-      } catch {
-        // useCreateFolder já mostrou o motivo (nome repetido, rede…).
+      } catch (err) {
+        // useCreateFolder já mostrou o motivo no toast. Uma pasta criada em
+        // outra aba (23505) também fica dita junto do campo.
+        if (isDuplicateFolderError(err)) setNewFolderError(duplicateFolderMessage(wanted));
         return;
       }
     }
@@ -548,7 +635,7 @@ export default function CanonicalAdaptationWizard({ editMode }: Props = {}) {
     // at the time it was last rebuilt, so picking a subject and pressing
     // Salvar would file the adaptation under the PREVIOUS one — or under
     // nothing at all, on the first pick.
-  }, [draftId, currentUpdatedAt, flush, markReady, handleConflict, syncUpdatedAt, subject, folderId, newFolder, createFolder]);
+  }, [draftId, currentUpdatedAt, flush, markReady, handleConflict, syncUpdatedAt, subject, folderId, newFolder, createFolder, folders]);
 
   const renderStep = () => {
     const uploadedExam = activeUploadedExam(data);
@@ -622,15 +709,20 @@ export default function CanonicalAdaptationWizard({ editMode }: Props = {}) {
             folders={folders}
             folderId={folderId}
             onFolderChange={(id) => {
+              // 0509: reemitir o mesmo valor não é uma escolha nova.
+              if (id === folderId) return;
               setIsSaved(false);
               setFilingDirty(true);
               setFolderId(id);
             }}
             newFolder={newFolder}
+            newFolderError={newFolderError}
             onNewFolderChange={(name) => {
+              if (name === newFolder) return;
               setIsSaved(false);
               setFilingDirty(true);
               setNewFolder(name);
+              setNewFolderError(null);
             }}
             canSave={!!draftId}
             saving={markReady.isPending}
@@ -639,7 +731,13 @@ export default function CanonicalAdaptationWizard({ editMode }: Props = {}) {
               // Only the file this adaptation was generated from; one left
               // attached after switching to paste/bank is not "the original".
               uploadedExam
-                ? { file: uploadedExam.file, pageImages: uploadedExam.pageImages, userId: user?.id ?? null }
+                ? {
+                    file: uploadedExam.file,
+                    fileType: uploadedExam.fileType,
+                    text: uploadedExam.text,
+                    pageImages: uploadedExam.pageImages,
+                    userId: user?.id ?? null,
+                  }
                 : null
             }
           />
@@ -654,6 +752,8 @@ export default function CanonicalAdaptationWizard({ editMode }: Props = {}) {
             saving={markReady.isPending}
             onSave={handleSave}
             onHeaderChange={handleHeaderChange}
+            pageBreakPerQuestion={pageBreakPerQuestion}
+            onPageBreakPerQuestionChange={setPageBreakPerQuestion}
             onPrev={onPrev}
             onRestart={() => void handleRestart()}
           />
@@ -662,7 +762,12 @@ export default function CanonicalAdaptationWizard({ editMode }: Props = {}) {
   };
 
   return (
-    <div className="mx-auto max-w-6xl px-4 py-6 space-y-6">
+    /* Achado 0615 (extensão do 0806): o cabeçalho mobile é `fixed` e os passos
+       Revisar e Exportar têm barra `sticky` no pé; um controle coberto por eles
+       conta como visível, então o Tab parava atrás das barras sem rolar. A
+       margem de rolagem em todo descendente do wizard (faixa de passos e
+       qualquer passo) reserva a altura das duas barras. */
+    <div className="mx-auto max-w-6xl px-4 py-6 space-y-6 [&_*]:scroll-mb-24 [&_*]:scroll-mt-16 lg:[&_*]:scroll-mt-0">
       {/* Step indicator */}
       {/* 0218: a faixa rola sozinha ate o passo ativo (0009), entao em 390px ela
           abre cortada no meio de um rotulo e sem barra de rolagem visivel (o
@@ -696,7 +801,10 @@ export default function CanonicalAdaptationWizard({ editMode }: Props = {}) {
               type="button"
               ref={i === stepIndex ? activeStepRef : undefined}
               onClick={() => goTo(i)}
-              disabled={i > maxStepReached}
+              // 1112: during a generation, leaving Gerar did not abort the request,
+              // and its response (relative onNext) dragged the teacher one step past
+              // wherever they went, or let Barreiras start a second paid generation.
+              disabled={i > stepCeiling || (isGenerating && i !== stepIndex)}
               // 0230: "você está aqui" era só a cor de fundo. O leitor de tela via seis
               // botões iguais (1.4.1 e 4.1.2 do WCAG), e em 390px a faixa rola, então o
               // texto "Passo 5 de 6" de fora nem sempre está à vista.
@@ -704,7 +812,9 @@ export default function CanonicalAdaptationWizard({ editMode }: Props = {}) {
               className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs transition-colors ${
                 i === stepIndex
                   ? "bg-primary text-primary-foreground font-bold"
-                  : i <= maxStepReached
+                  : isGenerating
+                  ? "bg-muted text-muted-foreground cursor-not-allowed font-medium"
+                  : i <= stepCeiling
                   ? "bg-primary/10 text-primary-strong hover:bg-primary/20 font-medium"
                   : "bg-muted text-muted-foreground cursor-not-allowed font-medium"
               }`}
@@ -753,7 +863,10 @@ export default function CanonicalAdaptationWizard({ editMode }: Props = {}) {
         >
           Passo {stepIndex + 1} de {STEPS.length}
         </p>
-        {/* Autosave status — shown once a draft exists and from the review step on. */}
+        {/* Autosave status — shown once a draft exists. 0461: error states and
+            pending subject/folder show on EVERY step (going back from Revisar
+            used to hide them, and a failed retry from the exit guard was
+            silent); "Salvando…"/"Rascunho salvo" stay limited to Revisar/Exportar. */}
         {captureFailure !== null ? (
           <p
             className="text-xs font-medium text-destructive-strong"
@@ -762,32 +875,49 @@ export default function CanonicalAdaptationWizard({ editMode }: Props = {}) {
             data-testid="capture-failure"
             title={captureFailure}
           >
-            Alterações não estão sendo salvas — desfaça a última edição
-          </p>
-        ) : draftId && stepIndex >= REVIEW_INDEX && stepIndex <= EXPORT_INDEX && filingDirty ? (
-          /* Matéria/pasta escolhidas e ainda não persistidas: este aviso tem
-             precedência sobre o rótulo do autosave, que fala só do blob e
-             mentiria ("Rascunho salvo") sobre uma escolha pendente. */
-          <p
-            className="text-xs font-medium text-amber-600 dark:text-amber-500"
-            role="status"
-            aria-live="polite"
-            data-testid="filing-dirty"
-          >
-            Matéria e pasta não salvas (clique em Salvar adaptação)
+            Alterações não estão sendo salvas: desfaça a última edição
           </p>
         ) : (
-          draftId &&
-          stepIndex >= REVIEW_INDEX &&
-          stepIndex <= EXPORT_INDEX &&
-          saveStatus !== "idle" && (
-            <p
-              className="text-xs text-muted-foreground"
-              role="status"
-              aria-live="polite"
-            >
-              {SAVE_STATUS_LABEL[saveStatus]}
-            </p>
+          draftId && (
+            /* 0465: an autosave error/conflict means the edit is NOT in the
+               database, so it gets the error tone and is never hidden by the
+               subject/folder notice; both show side by side. The notice still
+               wins over the calm labels ("Rascunho salvo" would lie about a
+               pending choice). */
+            <div className="flex flex-wrap items-center justify-end gap-x-3">
+              {autosaveFailed && (
+                <p
+                  className="text-xs font-medium text-destructive-strong"
+                  role="status"
+                  aria-live="polite"
+                >
+                  {SAVE_STATUS_LABEL[saveStatus]}
+                </p>
+              )}
+              {filingDirty ? (
+                <p
+                  className="text-xs font-medium text-amber-700 dark:text-amber-500"
+                  role="status"
+                  aria-live="polite"
+                  data-testid="filing-dirty"
+                >
+                  Matéria e pasta não salvas (clique em Salvar adaptação)
+                </p>
+              ) : (
+                !autosaveFailed &&
+                saveStatus !== "idle" &&
+                stepIndex >= REVIEW_INDEX &&
+                stepIndex <= EXPORT_INDEX && (
+                  <p
+                    className="text-xs text-muted-foreground"
+                    role="status"
+                    aria-live="polite"
+                  >
+                    {SAVE_STATUS_LABEL[saveStatus]}
+                  </p>
+                )
+              )}
+            </div>
           )
         )}
       </div>
@@ -805,13 +935,13 @@ export default function CanonicalAdaptationWizard({ editMode }: Props = {}) {
 
       {navGuard.state === "blocked" && isUploading && (
         <Dialog open onOpenChange={() => navGuard.reset?.()}>
-          <DialogContent>
+          <DialogContent {...guardDialogFocusProps}>
             <DialogHeader>
               <DialogTitle>O arquivo ainda está sendo processado</DialogTitle>
             </DialogHeader>
             <p className="text-sm text-muted-foreground">
               A IA ainda está lendo e extraindo a atividade enviada. Se sair agora, o processamento será perdido e
-              você vai precisar enviar o arquivo de novo — nenhum crédito foi usado nessa etapa.
+              você vai precisar enviar o arquivo de novo (nenhum crédito foi usado nessa etapa).
             </p>
             <div className="flex justify-end gap-2 pt-2">
               <Button variant="outline" onClick={() => navGuard.reset?.()}>Continuar aqui</Button>
@@ -823,12 +953,14 @@ export default function CanonicalAdaptationWizard({ editMode }: Props = {}) {
 
       {navGuard.state === "blocked" && isGenerating && !isUploading && (
         <Dialog open onOpenChange={() => navGuard.reset?.()}>
-          <DialogContent>
+          <DialogContent {...guardDialogFocusProps}>
             <DialogHeader>
               <DialogTitle>A adaptação ainda está em andamento</DialogTitle>
             </DialogHeader>
             <p className="text-sm text-muted-foreground">
-              A ISA ainda está gerando a adaptação. Se sair agora, o resultado será perdido e os créditos não serão devolvidos.
+              {/* 1125 · Leaving does not cancel the edge call: it still writes the row and charges. */}
+              A ISA ainda está gerando a adaptação. Se sair agora, a geração continua: a adaptação vai aparecer em
+              Adaptações quando ficar pronta, e os créditos serão cobrados normalmente.
             </p>
             <div className="flex justify-end gap-2 pt-2">
               <Button variant="outline" onClick={() => navGuard.reset?.()}>Continuar aqui</Button>
@@ -840,29 +972,51 @@ export default function CanonicalAdaptationWizard({ editMode }: Props = {}) {
 
       {navGuard.state === "blocked" && !isGenerating && !isUploading && (
         <Dialog open onOpenChange={() => navGuard.reset?.()}>
-          <DialogContent>
+          <DialogContent {...guardDialogFocusProps}>
             <DialogHeader>
               <DialogTitle>Sair sem salvar?</DialogTitle>
             </DialogHeader>
             <p className="text-sm text-muted-foreground">
               Você tem uma adaptação não salva. O rascunho ficará disponível em Adaptações.
+              {/* 0462 · O rascunho fica, mas matéria/pasta só vão ao banco pelo salvar. */}
+              {filingDirty && " A matéria e a pasta escolhidas não serão salvas."}
             </p>
             <div className="flex justify-end gap-2 pt-2">
-              <Button variant="outline" onClick={() => navGuard.reset?.()}>Voltar e salvar</Button>
+              <Button
+                variant="outline"
+                onClick={() => {
+                  // 0460 · The label promises a save: retry the autosave (a
+                  // failed one is still dirty, so this is a real attempt).
+                  // 0462 · A pending subject/folder is written (and a new
+                  // folder created) only by handleSave, which flushes first.
+                  navGuard.reset?.();
+                  void (filingDirty ? handleSave() : flushPending());
+                }}
+              >
+                Voltar e salvar
+              </Button>
               <Button variant="destructive" onClick={() => navGuard.proceed?.()}>Sair assim mesmo</Button>
             </div>
           </DialogContent>
         </Dialog>
       )}
 
-      <AlertDialog
-        open={!!pendingMirror}
-        onOpenChange={(open) => {
-          /* v8 ignore next -- no trigger opens this; Radix only fires open=false */
-          if (!open) dismissRestore();
-        }}
-      >
-        <AlertDialogContent>
+      {/* 0275 · The mirror is the only copy of an edit that never reached the
+          DB, so only the explicit "Descartar" button may clear it: Escape is
+          swallowed (no onOpenChange either) and the opening focus goes to
+          "Recuperar", the action that keeps the work. "Descartar" is not an
+          AlertDialogCancel because Radix treats Cancel as the safe action and
+          autofocuses it. */}
+      <AlertDialog open={!!pendingMirror}>
+        <AlertDialogContent
+          {...guardDialogFocusProps}
+          onOpenAutoFocus={(event) => {
+            guardDialogFocusProps.onOpenAutoFocus();
+            event.preventDefault();
+            restoreActionRef.current?.focus();
+          }}
+          onEscapeKeyDown={(event) => event.preventDefault()}
+        >
           <AlertDialogHeader>
             <AlertDialogTitle>Recuperar alterações não salvas?</AlertDialogTitle>
             <AlertDialogDescription>
@@ -870,18 +1024,24 @@ export default function CanonicalAdaptationWizard({ editMode }: Props = {}) {
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter className="flex-col">
-            <AlertDialogCancel onClick={dismissRestore}>Descartar</AlertDialogCancel>
-            <AlertDialogAction onClick={confirmRestore}>Recuperar</AlertDialogAction>
+            <Button variant="destructive" className="mt-2 sm:mt-0" onClick={dismissRestore}>
+              Descartar
+            </Button>
+            <AlertDialogAction ref={restoreActionRef} onClick={confirmRestore}>
+              Recuperar
+            </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
 
       <AlertDialog open={confirmRegenerate} onOpenChange={setConfirmRegenerate}>
-        <AlertDialogContent>
+        <AlertDialogContent {...guardDialogFocusProps}>
           <AlertDialogHeader>
             <AlertDialogTitle>Regerar adaptação?</AlertDialogTitle>
             <AlertDialogDescription>
-              A adaptação atual será substituída por uma nova. As edições serão perdidas.
+              Uma nova versão será gerada a partir da mesma atividade e das mesmas barreiras. A versão
+              atual, com as suas edições, continua salva em Adaptações.
+              {regenerateCost !== null && <> Custo: <strong>{regenerateCost} créditos</strong>.</>}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter className="flex-col">

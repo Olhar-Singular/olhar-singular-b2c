@@ -154,8 +154,18 @@ vi.mock("./steps/upload-exam/StepUploadExam", () => ({
 }));
 
 vi.mock("./steps/barriers/StepBarrierSelection", () => ({
-  StepBarrierSelection: ({ onNext }: { onNext: () => void }) => (
-    <button data-testid="barriers-next" onClick={onNext}>barriers</button>
+  StepBarrierSelection: ({ onNext, updateData }: { onNext: () => void; updateData: (p: object) => void }) => (
+    <>
+      <button data-testid="barriers-next" onClick={onNext}>barriers</button>
+      <button
+        data-testid="barriers-pick-tea"
+        onClick={() =>
+          updateData({ barriers: [{ dimension: "tea", barrier_key: "tea_abstracao", is_active: true }] })
+        }
+      >
+        pick tea
+      </button>
+    </>
   ),
 }));
 
@@ -243,6 +253,7 @@ vi.mock("./steps/review/StepReview", () => ({
     onFolderChange,
     newFolder,
     onNewFolderChange,
+    newFolderError,
     canSave,
     onSave,
     zoomIndex,
@@ -256,7 +267,13 @@ vi.mock("./steps/review/StepReview", () => ({
     onNext: () => void;
     onPrev: () => void;
     onCaptureFailure?: (reason: string | null) => void;
-    originalExam?: { file: File; pageImages: string[]; userId: string | null } | null;
+    originalExam?: {
+      file: File;
+      fileType?: "pdf" | "docx";
+      text?: string;
+      pageImages: string[];
+      userId: string | null;
+    } | null;
     title?: string;
     onTitleChange?: (t: string) => void;
     subject?: string | null;
@@ -265,6 +282,7 @@ vi.mock("./steps/review/StepReview", () => ({
     onFolderChange?: (id: string | null) => void;
     newFolder?: string;
     onNewFolderChange?: (n: string) => void;
+    newFolderError?: string | null;
     canSave?: boolean;
     onSave?: () => void;
     zoomIndex?: number;
@@ -287,9 +305,22 @@ vi.mock("./steps/review/StepReview", () => ({
       <button data-testid="review-name-folder" onClick={() => onNewFolderChange?.("7º ano A")}>
         nomear pasta
       </button>
+      <button data-testid="review-unpick-folder" onClick={() => onFolderChange?.(null)}>sem pasta</button>
+      <pre data-testid="review-new-folder-error">{newFolderError ?? ""}</pre>
+      <button data-testid="review-name-dup-folder" onClick={() => onNewFolderChange?.("  6º ANO b ")}>
+        nomear pasta repetida
+      </button>
+      <button data-testid="review-clear-new-folder" onClick={() => onNewFolderChange?.("")}>
+        limpar nome da pasta
+      </button>
       <button data-testid="review-save" onClick={() => onSave?.()}>salvar na revisar</button>
       <pre data-testid="review-original-exam">
-        {originalExam ? JSON.stringify({ fileName: originalExam.file.name, userId: originalExam.userId }) : "null"}
+        {originalExam ? JSON.stringify({
+              fileName: originalExam.file.name,
+              fileType: originalExam.fileType,
+              text: originalExam.text,
+              userId: originalExam.userId,
+            }) : "null"}
       </pre>
       <button
         data-testid="edit-content"
@@ -483,6 +514,26 @@ describe("CanonicalAdaptationWizard", () => {
     expect((screen.getByLabelText(TITLE_FIELD_LABEL) as HTMLInputElement).value).toBe("Prova Final");
   });
 
+  /*
+    Achado 0517: o switch "Quebra de página por questão" morava em dois
+    `useState(false)` dentro do passo Exportar, que desmonta a cada troca de
+    passo. Voltar ao Revisar e retornar desligava a escolha sem aviso, e o
+    próximo arquivo saía sem as quebras. A escolha sobe para o wizard.
+  */
+  it("SSOT: a quebra de página por questão sobrevive à ida e volta ao Revisar (achado 0517)", () => {
+    renderWithProviders(<CanonicalAdaptationWizard />);
+    advanceToReview();
+    fireEvent.click(screen.getByRole("button", { name: /^Exportar$/i }));
+
+    const toggle = () => screen.getByRole("switch", { name: /Quebra de página por questão/i });
+    fireEvent.click(toggle());
+    expect(toggle()).toHaveAttribute("aria-checked", "true");
+
+    fireEvent.click(screen.getByRole("button", { name: /Voltar/i }));
+    fireEvent.click(screen.getByRole("button", { name: /^Exportar$/i }));
+    expect(toggle()).toHaveAttribute("aria-checked", "true");
+  });
+
   it("the step indicator navigates back to a visited step", () => {
     renderWithProviders(<CanonicalAdaptationWizard />);
     advanceToReview();
@@ -524,6 +575,27 @@ describe("CanonicalAdaptationWizard", () => {
   // On 390px the step strip overflows horizontally: the active chip sits outside
   // the viewport and the container stays at scrollLeft 0. The chip must scroll
   // itself into view whenever the step changes.
+  // Achado 0615: a reserva das barras (0806) vivia só na superfície do Revisar.
+  // No Exportar o "Aumentar zoom" parava atrás da barra `sticky` do pé, e os
+  // chips da faixa, sob o cabeçalho mobile `fixed`. A reserva sobe para a raiz
+  // do wizard e vale para todo focável de todo passo.
+  it("reserva a altura das barras na rolagem do foco em todo o wizard (0615)", () => {
+    renderWithProviders(<CanonicalAdaptationWizard />);
+    advanceToReview();
+    fireEvent.click(screen.getByRole("button", { name: /^Exportar$/i }));
+    const strip = screen.getByTestId("step-strip");
+    let root: HTMLElement | null = strip;
+    while (root && !root.className.split(/\s+/).includes("[&_*]:scroll-mb-24")) {
+      root = root.parentElement;
+    }
+    expect(root).not.toBeNull();
+    expect(root).toContainElement(screen.getByRole("button", { name: /Nova adaptação/i }));
+    const classes = root!.className.split(/\s+/);
+    expect(classes).toContain("[&_*]:scroll-mb-24");
+    expect(classes).toContain("[&_*]:scroll-mt-16");
+    expect(classes).toContain("lg:[&_*]:scroll-mt-0");
+  });
+
   it("the step indicator scrolls the active step into view", () => {
     const proto = window.HTMLElement.prototype;
     const originalLeft = Object.getOwnPropertyDescriptor(proto, "offsetLeft");
@@ -701,16 +773,42 @@ describe("CanonicalAdaptationWizard", () => {
 
     advanceToReview();
 
+    // 0366: o pouso é no chip do passo atual, não mais no contêiner do passo
+    expect(document.activeElement).toHaveAttribute("aria-current", "step");
+    expect(document.activeElement).toHaveTextContent(/Revisar/);
     const region = screen.getByTestId("step-region");
-    expect(document.activeElement).toBe(region);
     expect(region).toHaveAttribute("tabindex", "-1");
     expect(region).toHaveAccessibleName("Revisar");
     expect(counter).toHaveTextContent("Passo 5 de 6");
 
     // e no caminho de volta (chip / botão Voltar) também
     fireEvent.click(screen.getByRole("button", { name: /1.*Tipo/i }));
-    expect(document.activeElement).toBe(screen.getByTestId("step-region"));
+    expect(document.activeElement).toHaveAttribute("aria-current", "step");
+    expect(document.activeElement).toHaveTextContent(/Tipo/);
     expect(screen.getByTestId("step-region")).toHaveAccessibleName("Tipo");
+  });
+
+  // 0366: o foco do 0167 pousava no contêiner do passo, que no DOM vem DEPOIS da
+  // faixa de chips: a partir dali todo Tab para frente anda para o conteúdo, e os
+  // seis chips só eram alcançáveis com Shift+Tab. Quem navega por teclado perdia a
+  // navegação direta entre passos que o mouse tem. O foco passa a pousar no chip do
+  // passo atual: ele anuncia o passo (aria-current) e deixa a faixa e o conteúdo do
+  // passo à frente na ordem de tabulação.
+  it("lands the focus on the current step chip so Tab forward still reaches the strip", () => {
+    renderWithProviders(<CanonicalAdaptationWizard />);
+    advanceToReview();
+
+    const strip = screen.getByTestId("step-strip");
+    const chips = within(strip).getAllByRole("button");
+    const current = chips.find((c) => c.getAttribute("aria-current") === "step");
+
+    expect(document.activeElement).toBe(current);
+
+    // e o conteúdo do passo continua adiante do foco, não atrás dele
+    const region = screen.getByTestId("step-region");
+    expect(
+      current!.compareDocumentPosition(region) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
   });
 
   // 0245: o foco do 0167 desfazia a rolagem do 0165. focus() sem preventScroll pede ao
@@ -721,14 +819,14 @@ describe("CanonicalAdaptationWizard", () => {
     const options: (FocusOptions | undefined)[] = [];
     const originalFocus = window.HTMLElement.prototype.focus;
     window.HTMLElement.prototype.focus = function (this: HTMLElement, opts?: FocusOptions) {
-      if (this.dataset.testid === "step-region") options.push(opts);
+      if (this.getAttribute("aria-current") === "step") options.push(opts);
       return originalFocus.call(this, opts);
     };
     try {
       renderWithProviders(<CanonicalAdaptationWizard />);
       advanceToReview();
 
-      expect(document.activeElement).toBe(screen.getByTestId("step-region"));
+      expect(document.activeElement).toHaveAttribute("aria-current", "step");
       expect(options).not.toHaveLength(0);
       for (const opts of options) expect(opts).toEqual({ preventScroll: true });
     } finally {
@@ -756,6 +854,46 @@ describe("CanonicalAdaptationWizard", () => {
     expect(screen.getByTestId("edit-content")).toHaveTextContent("gerado");
   });
 
+  // --- 0457 · o aviso do Regerar diz o que acontece e quanto custa ----------
+  it("regenerate dialog tells the old version stays saved and shows the credit cost", () => {
+    renderWithProviders(<CanonicalAdaptationWizard />);
+    fireEvent.click(screen.getByTestId("pick-type"));
+    fireEvent.click(screen.getByTestId("input-next"));
+    fireEvent.click(screen.getByTestId("barriers-pick-tea"));
+    fireEvent.click(screen.getByTestId("barriers-next"));
+    fireEvent.click(screen.getByTestId("do-generate"));
+
+    fireEvent.click(screen.getByRole("button", { name: /Regerar/i }));
+    const dialog = screen.getByRole("alertdialog");
+    expect(dialog).not.toHaveTextContent(/substituída|serão perdidas/i);
+    expect(dialog).toHaveTextContent(/continua salva em Adaptações/i);
+    expect(dialog).toHaveTextContent(/12 créditos/);
+  });
+
+  it("regenerate dialog omits the cost for exempt (courtesy) accounts", () => {
+    vi.mocked(useAuth).mockReturnValue({
+      user: { id: "u1" },
+      profile: {
+        access_kind: "exempt",
+        plan_credits: 0,
+        plan_period_end: null,
+        credit_balance: 0,
+        trial_started_at: null,
+        must_set_password: false,
+      },
+    } as never);
+    try {
+      renderWithProviders(<CanonicalAdaptationWizard />);
+      advanceToReview();
+      fireEvent.click(screen.getByRole("button", { name: /Regerar/i }));
+      const dialog = screen.getByRole("alertdialog");
+      expect(dialog).toHaveTextContent(/continua salva em Adaptações/i);
+      expect(dialog).not.toHaveTextContent(/créditos/);
+    } finally {
+      vi.mocked(useAuth).mockImplementation(() => ({ user: { id: "u1" } }) as never);
+    }
+  });
+
   it("cancelling the regenerate dialog keeps the current document", () => {
     renderWithProviders(<CanonicalAdaptationWizard />);
     advanceToReview();
@@ -764,6 +902,34 @@ describe("CanonicalAdaptationWizard", () => {
     const dialog = screen.getByRole("alertdialog");
     fireEvent.click(within(dialog).getByRole("button", { name: /Cancelar/i }));
     expect(screen.getByTestId("edit-content")).toHaveTextContent("EDITADO");
+  });
+
+  /**
+   * 0614 · The regenerate dialog is opened by state, with no AlertDialogTrigger,
+   * so Radix focused a null trigger on close and the focus fell to <body>.
+   * Cancelling (or Escape) must hand the focus back to the "Regerar" button.
+   */
+  it("returns focus to the Regerar button when the regenerate dialog is cancelled", async () => {
+    renderWithProviders(<CanonicalAdaptationWizard />);
+    advanceToReview();
+    const regenerate = screen.getByRole("button", { name: /Regerar/i });
+    regenerate.focus();
+    fireEvent.click(regenerate);
+    const dialog = screen.getByRole("alertdialog");
+    fireEvent.click(within(dialog).getByRole("button", { name: /Cancelar/i }));
+    await waitFor(() => expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument());
+    await waitFor(() => expect(document.activeElement).toBe(regenerate));
+  });
+
+  it("returns focus to the Regerar button when the regenerate dialog is escaped", async () => {
+    renderWithProviders(<CanonicalAdaptationWizard />);
+    advanceToReview();
+    const regenerate = screen.getByRole("button", { name: /Regerar/i });
+    regenerate.focus();
+    fireEvent.click(regenerate);
+    fireEvent.keyDown(screen.getByRole("alertdialog"), { key: "Escape" });
+    await waitFor(() => expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument());
+    await waitFor(() => expect(document.activeElement).toBe(regenerate));
   });
 
   it("export step copies and restarts back to the first step", async () => {
@@ -902,6 +1068,29 @@ describe("CanonicalAdaptationWizard", () => {
     expect(adoptedUpdatedAt()).toBe("2026-02-01T00:00:00Z");
   });
 
+  // --- 0379 · Regerar troca só o conteúdo: nome e Formato do professor ficam ---
+  it("keeps the teacher's title and page style on the regenerated version (0379)", async () => {
+    renderWithProviders(<CanonicalAdaptationWizard />);
+    advanceToReview();
+    await waitFor(() => expect(adoptedDraftId()).toBe("srv-1"));
+    fireEvent.click(screen.getByTestId("review-rename"));
+    fireEvent.click(screen.getByTestId("set-pagestyle"));
+    expect(screen.getByTestId("review-title")).toHaveTextContent("Prova de Geografia");
+
+    fireEvent.click(screen.getByRole("button", { name: /Regerar/i }));
+    const dialog = screen.getByRole("alertdialog");
+    fireEvent.click(within(dialog).getByRole("button", { name: /^Regerar$/i }));
+    await waitFor(() => expect(screen.getByTestId("do-generate")).toBeInTheDocument());
+    fireEvent.click(screen.getByTestId("do-generate"));
+    await waitFor(() => expect(adoptedDraftId()).toBe("srv-2"));
+
+    expect(screen.getByTestId("review-title")).toHaveTextContent("Prova de Geografia");
+    expect(JSON.parse(screen.getByTestId("review-pagestyle").textContent ?? "null")).toEqual({
+      fontFamily: "lexend",
+      fontSize: 14,
+    });
+  });
+
   // --- originalExam (Adaptar direto do arquivo) passthrough into StepReview -
 
   it("passes originalExam=null into StepReview when the adaptation has no uploadedExam (Banco de Questões)", () => {
@@ -935,7 +1124,7 @@ describe("CanonicalAdaptationWizard", () => {
       />,
     );
     expect(screen.getByTestId("review-original-exam")).toHaveTextContent(
-      JSON.stringify({ fileName: "prova.pdf", userId: "u1" }),
+      JSON.stringify({ fileName: "prova.pdf", fileType: "pdf", text: "1) Q1", userId: "u1" }),
     );
   });
 
@@ -994,8 +1183,77 @@ describe("CanonicalAdaptationWizard", () => {
       />,
     );
     expect(screen.getByTestId("review-original-exam")).toHaveTextContent(
-      JSON.stringify({ fileName: "prova.pdf", userId: null }),
+      JSON.stringify({ fileName: "prova.pdf", fileType: "pdf", text: "1) Q1", userId: null }),
     );
+  });
+
+  // --- 0456 · Regerar em modo edição troca a URL para a linha nova -----------
+
+  it("points the URL at the regenerated row in edit mode, without remounting (0456)", async () => {
+    // O Regerar grava uma linha NOVA; se a URL seguisse na antiga, um F5
+    // reabriria a versão anterior e o documento pago sumiria da tela.
+    window.history.replaceState(window.history.state, "", "/adaptar/editar/edit-1");
+    try {
+      renderWithProviders(<CanonicalAdaptationWizard editMode={editSeed()} />);
+      fireEvent.click(screen.getByRole("button", { name: /Regerar/i }));
+      const dialog = screen.getByRole("alertdialog");
+      fireEvent.click(within(dialog).getByRole("button", { name: /^Regerar$/i }));
+      await waitFor(() => expect(screen.getByTestId("do-generate")).toBeInTheDocument());
+      fireEvent.click(screen.getByTestId("do-generate"));
+      await waitFor(() => expect(adoptedDraftId()).toBe("srv-1"));
+
+      expect(window.location.pathname).toBe("/adaptar/editar/srv-1");
+      // Sem navigate: trocar a rota remontaria o wizard (key = id) e jogaria
+      // fora caret, scroll e zoom.
+      expect(mockNavigate).not.toHaveBeenCalledWith(
+        expect.stringMatching(/^\/adaptar\/editar\//),
+        expect.anything(),
+      );
+    } finally {
+      window.history.replaceState(window.history.state, "", "/");
+    }
+  });
+
+  it("leaves the URL alone when the adopted row is the one being edited (0456)", async () => {
+    window.history.replaceState(window.history.state, "", "/adaptar/editar/srv-1");
+    try {
+      renderWithProviders(
+        <CanonicalAdaptationWizard editMode={{ ...editSeed(), adaptationId: "srv-1" }} />,
+      );
+      fireEvent.click(screen.getByRole("button", { name: /Regerar/i }));
+      const dialog = screen.getByRole("alertdialog");
+      fireEvent.click(within(dialog).getByRole("button", { name: /^Regerar$/i }));
+      await waitFor(() => expect(screen.getByTestId("do-generate")).toBeInTheDocument());
+      const spy = vi.spyOn(window.history, "replaceState");
+      fireEvent.click(screen.getByTestId("do-generate"));
+      await waitFor(() => expect(adoptedDraftId()).toBe("srv-1"));
+      expect(spy).not.toHaveBeenCalled();
+      expect(window.location.pathname).toBe("/adaptar/editar/srv-1");
+      spy.mockRestore();
+    } finally {
+      window.history.replaceState(window.history.state, "", "/");
+    }
+  });
+
+  // --- 0378 · primeira geração no fluxo de criação troca a URL --------------
+
+  it("points the URL at the generated row in create mode, without navigating (0378)", async () => {
+    // A linha já foi gravada e cobrada; se a URL seguisse em /adaptar, um F5
+    // voltaria ao Passo 1 vazio e o documento pago sumiria da tela.
+    window.history.replaceState(window.history.state, "", "/adaptar");
+    try {
+      renderWithProviders(<CanonicalAdaptationWizard />);
+      advanceToReview();
+      await waitFor(() => expect(adoptedDraftId()).toBe("srv-1"));
+
+      expect(window.location.pathname).toBe("/adaptar/editar/srv-1");
+      expect(mockNavigate).not.toHaveBeenCalledWith(
+        expect.stringMatching(/^\/adaptar\/editar\//),
+        expect.anything(),
+      );
+    } finally {
+      window.history.replaceState(window.history.state, "", "/");
+    }
   });
 
   // --- C1-a crash-mirror restore -------------------------------------------
@@ -1060,6 +1318,36 @@ describe("CanonicalAdaptationWizard", () => {
     expect(screen.getByTestId("edit-content")).toHaveTextContent("gerado");
   });
 
+  // 0275 · The mirror is the only copy of an edit that never reached the DB.
+  // Escape must not discard it, and the opening focus must sit on the action
+  // that preserves the work, not on the destructive one.
+  it("Escape does not discard the mirror nor close the restore prompt", async () => {
+    vi.mocked(mirror.readMirror).mockResolvedValue({
+      draftId: "edit-1",
+      result: mirrorResult("RECUPERADO"),
+      savedAt: Date.parse("2026-02-01T00:00:00Z"),
+    });
+    renderWithProviders(<CanonicalAdaptationWizard editMode={editSeed()} />);
+    const dialog = await screen.findByRole("alertdialog");
+    fireEvent.keyDown(dialog, { key: "Escape", code: "Escape" });
+    await act(async () => {});
+    expect(mirror.clearMirror).not.toHaveBeenCalled();
+    expect(screen.getByRole("alertdialog")).toBeInTheDocument();
+  });
+
+  it("opens the restore prompt with the focus on Recuperar, not Descartar", async () => {
+    vi.mocked(mirror.readMirror).mockResolvedValue({
+      draftId: "edit-1",
+      result: mirrorResult("RECUPERADO"),
+      savedAt: Date.parse("2026-02-01T00:00:00Z"),
+    });
+    renderWithProviders(<CanonicalAdaptationWizard editMode={editSeed()} />);
+    const dialog = await screen.findByRole("alertdialog");
+    await waitFor(() =>
+      expect(document.activeElement).toBe(within(dialog).getByRole("button", { name: /Recuperar/i })),
+    );
+  });
+
   it("does not prompt and clears a mirror that matches the loaded row", async () => {
     // Nothing to recover: the row already holds exactly what the mirror does,
     // so the leftover is noise and clearing it is safe.
@@ -1088,6 +1376,21 @@ describe("CanonicalAdaptationWizard", () => {
     });
     // No prompt was ever shown.
     expect(screen.queryByText(/Recuperar alterações não salvas/i)).not.toBeInTheDocument();
+  });
+
+  // 0614 · Same trigger-less close as the regenerate dialog: nothing opened it
+  // from a focusable control, so the focus lands on the step region, not <body>.
+  it("moves focus to the step region when the restore dialog is discarded", async () => {
+    vi.mocked(mirror.readMirror).mockResolvedValue({
+      draftId: "edit-1",
+      result: mirrorResult("RECUPERADO"),
+      savedAt: Date.parse("2026-02-01T00:00:00Z"),
+    });
+    renderWithProviders(<CanonicalAdaptationWizard editMode={editSeed()} />);
+    const dialog = await screen.findByRole("alertdialog");
+    fireEvent.click(within(dialog).getByRole("button", { name: /Descartar/i }));
+    await waitFor(() => expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument());
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByTestId("step-region")));
   });
 
   it("does not prompt when no mirror exists", async () => {
@@ -1350,6 +1653,31 @@ describe("CanonicalAdaptationWizard — navigation guard", () => {
     expect(screen.getByText(/sair sem salvar/i)).toBeInTheDocument();
   });
 
+  // 1112: the step chips stayed clickable during generation. Leaving Gerar did not
+  // abort the request, its response then called the relative onNext() and dragged
+  // the teacher one step past wherever they had gone, and the Adaptar button on
+  // Barreiras could start a second paid generation in parallel.
+  it("disables the other step chips while a generation is running", () => {
+    renderWithProviders(<CanonicalAdaptationWizard />);
+    fireEvent.click(screen.getByTestId("pick-type"));
+    fireEvent.click(screen.getByTestId("input-next"));
+    fireEvent.click(screen.getByTestId("barriers-next"));
+    const chip = (name: RegExp) => screen.getByRole("button", { name });
+    expect(chip(/3.*Barreiras/i)).toBeEnabled();
+
+    fireEvent.click(screen.getByTestId("simulate-loading"));
+
+    expect(chip(/1.*Tipo/i)).toBeDisabled();
+    expect(chip(/2.*Atividade/i)).toBeDisabled();
+    expect(chip(/3.*Barreiras/i)).toBeDisabled();
+    fireEvent.click(chip(/3.*Barreiras/i));
+    expect(screen.getByTestId("simulate-loading")).toBeInTheDocument();
+
+    // and once the result lands the teacher is on Revisar with the chips back
+    fireEvent.click(screen.getByTestId("do-generate"));
+    expect(chip(/3.*Barreiras/i)).toBeEnabled();
+  });
+
   it("calls useNavigationGuard with false after saving (isSaved=true)", async () => {
     renderWithProviders(<CanonicalAdaptationWizard />);
     advanceToReview();
@@ -1422,6 +1750,20 @@ describe("CanonicalAdaptationWizard — navigation guard", () => {
     fireEvent.click(screen.getByTestId("barriers-next"));
     fireEvent.click(screen.getByTestId("simulate-loading"));
     expect(screen.getByText(/adaptação ainda está em andamento/i)).toBeInTheDocument();
+  });
+
+  // 1125 · Leaving does not cancel the edge call: the row is written and the
+  // credits are charged anyway. The dialog used to claim the result was lost.
+  it("tells the truth about leaving mid-generation: the result lands in Adaptações and is charged", () => {
+    mockNavGuard.mockReturnValue({ state: "blocked", reset: vi.fn(), proceed: vi.fn() });
+    renderWithProviders(<CanonicalAdaptationWizard />);
+    fireEvent.click(screen.getByTestId("pick-type"));
+    fireEvent.click(screen.getByTestId("input-next"));
+    fireEvent.click(screen.getByTestId("barriers-next"));
+    fireEvent.click(screen.getByTestId("simulate-loading"));
+    expect(screen.queryByText(/resultado será perdido/i)).not.toBeInTheDocument();
+    expect(screen.getByText(/vai aparecer em Adaptações/i)).toBeInTheDocument();
+    expect(screen.getByText(/créditos serão cobrados/i)).toBeInTheDocument();
   });
 
   it("shows 'O arquivo ainda está sendo processado' dialog when uploading and blocked (not the generation dialog)", () => {
@@ -1522,6 +1864,95 @@ describe("CanonicalAdaptationWizard — navigation guard", () => {
     advanceToReview();
     fireEvent.click(screen.getByRole("button", { name: /Voltar e salvar/i }));
     expect(reset).toHaveBeenCalled();
+  });
+
+  /**
+   * 0460 · "Voltar e salvar" promised a save and only dismissed the dialog: with
+   * the autosave in "Erro ao salvar" nothing retried, so the label lied.
+   */
+  it("flushes the autosave on 'Voltar e salvar' in unsaved dialog", () => {
+    mockNavGuard.mockReturnValue({ state: "blocked", reset: vi.fn(), proceed: vi.fn() });
+    renderWithProviders(<CanonicalAdaptationWizard />);
+    advanceToReview();
+    mockFlush.mockClear();
+    fireEvent.click(screen.getByRole("button", { name: /Voltar e salvar/i }));
+    expect(mockFlush).toHaveBeenCalledTimes(1);
+  });
+
+  /**
+   * 0462 · The guard also arms for a pending subject/folder (`filingDirty`), and
+   * those columns are written only by `handleSave`, never by the autosave flush.
+   * "Voltar e salvar" must then run the real save (create the new folder, then
+   * markReady), and the text must say what would be lost.
+   */
+  it("runs the full save on 'Voltar e salvar' when subject/folder are pending", async () => {
+    mockCreateFolder.mockResolvedValue({ id: "f-novo", name: "7º ano A" });
+    mockNavGuard.mockReturnValue({ state: "blocked", reset: vi.fn(), proceed: vi.fn() });
+    renderWithProviders(<CanonicalAdaptationWizard />);
+    advanceToReview();
+    fireEvent.click(screen.getByTestId("review-file"));
+    fireEvent.click(screen.getByTestId("review-name-folder"));
+    expect(screen.getByText(/matéria e a pasta escolhidas não serão salvas/i)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /Voltar e salvar/i }));
+    await waitFor(() => expect(mockCreateFolder).toHaveBeenCalledWith("7º ano A"));
+    await waitFor(() =>
+      expect(mockMarkReady).toHaveBeenCalledWith(
+        expect.objectContaining({ subject: "Geografia", folderId: "f-novo" }),
+      ),
+    );
+  });
+
+  it("only flushes on 'Voltar e salvar' when nothing but the document is pending", () => {
+    mockNavGuard.mockReturnValue({ state: "blocked", reset: vi.fn(), proceed: vi.fn() });
+    renderWithProviders(<CanonicalAdaptationWizard />);
+    advanceToReview();
+    expect(screen.queryByText(/matéria e a pasta escolhidas/i)).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /Voltar e salvar/i }));
+    expect(mockMarkReady).not.toHaveBeenCalled();
+  });
+
+  /**
+   * 0460 · The guard dialogs have no DialogTrigger, so Radix's close handler
+   * focused a null trigger and the focus fell to <body>. Closing must hand the
+   * focus back to what had it when the guard opened (the sidebar link).
+   */
+  it("returns focus to the element that had it when the guard dialog closes", async () => {
+    const { rerender } = renderWithProviders(<CanonicalAdaptationWizard />);
+    advanceToReview();
+    const sidebarLink = document.createElement("a");
+    sidebarLink.href = "/dashboard";
+    sidebarLink.textContent = "Dashboard";
+    document.body.appendChild(sidebarLink);
+    sidebarLink.focus();
+
+    mockNavGuard.mockReturnValue({ state: "blocked", reset: vi.fn(), proceed: vi.fn() });
+    rerender(<CanonicalAdaptationWizard />);
+    expect(screen.getByText(/sair sem salvar/i)).toBeInTheDocument();
+    expect(document.activeElement).not.toBe(sidebarLink);
+
+    mockNavGuard.mockReturnValue({ state: "unblocked", reset: vi.fn(), proceed: vi.fn() });
+    rerender(<CanonicalAdaptationWizard />);
+    expect(screen.queryByText(/sair sem salvar/i)).not.toBeInTheDocument();
+    // Radix restores focus on a setTimeout(0) after the scope unmounts.
+    await waitFor(() => expect(document.activeElement).toBe(sidebarLink));
+    sidebarLink.remove();
+  });
+
+  it("falls back to the step region when the opener is gone after the guard closes", async () => {
+    const { rerender } = renderWithProviders(<CanonicalAdaptationWizard />);
+    advanceToReview();
+    const sidebarLink = document.createElement("a");
+    sidebarLink.href = "/dashboard";
+    document.body.appendChild(sidebarLink);
+    sidebarLink.focus();
+
+    mockNavGuard.mockReturnValue({ state: "blocked", reset: vi.fn(), proceed: vi.fn() });
+    rerender(<CanonicalAdaptationWizard />);
+    sidebarLink.remove();
+
+    mockNavGuard.mockReturnValue({ state: "unblocked", reset: vi.fn(), proceed: vi.fn() });
+    rerender(<CanonicalAdaptationWizard />);
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByTestId("step-region")));
   });
 
   it("calls proceed() on 'Sair assim mesmo' in unsaved dialog", () => {
@@ -1630,6 +2061,59 @@ describe("CanonicalAdaptationWizard — navigation guard", () => {
       expect(mockMarkReady).not.toHaveBeenCalled();
     });
 
+    // 0512: the folder list is already on screen, so a repeated name (compared
+    // the way the unique index does, lower(btrim)) is refused in the field,
+    // before any request, and the save stops there.
+    it("refuses a name that repeats an existing folder before calling the server", async () => {
+      renderWithProviders(<CanonicalAdaptationWizard />);
+      advanceToReview();
+      fireEvent.click(screen.getByTestId("review-name-dup-folder"));
+      fireEvent.click(screen.getByTestId("review-save"));
+      await waitFor(() =>
+        expect(screen.getByTestId("review-new-folder-error")).toHaveTextContent(
+          "Já existe a pasta “6º ano B”.",
+        ),
+      );
+      expect(mockCreateFolder).not.toHaveBeenCalled();
+      expect(mockMarkReady).not.toHaveBeenCalled();
+    });
+
+    it("shows the server's duplicate (23505) in the field too", async () => {
+      mockCreateFolder.mockRejectedValue(Object.assign(new Error("dup"), { code: "23505" }));
+      renderWithProviders(<CanonicalAdaptationWizard />);
+      advanceToReview();
+      fireEvent.click(screen.getByTestId("review-name-folder"));
+      fireEvent.click(screen.getByTestId("review-save"));
+      await waitFor(() =>
+        expect(screen.getByTestId("review-new-folder-error")).toHaveTextContent(
+          "Já existe a pasta “7º ano A”.",
+        ),
+      );
+      expect(mockMarkReady).not.toHaveBeenCalled();
+    });
+
+    it("leaves the field clean when the creation fails for another reason", async () => {
+      mockCreateFolder.mockRejectedValue(new Error("permission denied"));
+      renderWithProviders(<CanonicalAdaptationWizard />);
+      advanceToReview();
+      fireEvent.click(screen.getByTestId("review-name-folder"));
+      fireEvent.click(screen.getByTestId("review-save"));
+      await waitFor(() => expect(mockCreateFolder).toHaveBeenCalled());
+      expect(screen.getByTestId("review-new-folder-error")).toHaveTextContent("");
+    });
+
+    it("clears the field error once the name is edited", async () => {
+      renderWithProviders(<CanonicalAdaptationWizard />);
+      advanceToReview();
+      fireEvent.click(screen.getByTestId("review-name-dup-folder"));
+      fireEvent.click(screen.getByTestId("review-save"));
+      await waitFor(() =>
+        expect(screen.getByTestId("review-new-folder-error")).not.toHaveTextContent(""),
+      );
+      fireEvent.click(screen.getByTestId("review-name-folder"));
+      expect(screen.getByTestId("review-new-folder-error")).toHaveTextContent("");
+    });
+
     it("marks the adaptation ready from the Revisar step", async () => {
       renderWithProviders(<CanonicalAdaptationWizard />);
       advanceToReview();
@@ -1677,6 +2161,18 @@ describe("CanonicalAdaptationWizard — navigation guard", () => {
       expect(pending).toHaveAttribute("aria-live", "polite");
     });
 
+    // 0510: amber-600 on the page background measured 2.93:1 (WCAG 1.4.3 asks
+    // 4.5:1 for 12px text). amber-700 gives 4.62:1 while keeping the alert tone.
+    it("desenha o aviso com contraste legível (amber-700, não amber-600) no tema claro", () => {
+      renderWithProviders(<CanonicalAdaptationWizard />);
+      advanceToReview();
+      fireEvent.click(screen.getByTestId("review-file"));
+
+      const pending = screen.getByTestId("filing-dirty");
+      expect(pending).toHaveClass("text-amber-700");
+      expect(pending).not.toHaveClass("text-amber-600");
+    });
+
     it("não deixa 'Rascunho salvo' ao lado de uma matéria pendente", () => {
       mockDraftStatus.value = "saved";
       renderWithProviders(<CanonicalAdaptationWizard />);
@@ -1694,6 +2190,18 @@ describe("CanonicalAdaptationWizard — navigation guard", () => {
       advanceToReview();
       fireEvent.click(screen.getByTestId("review-pick-folder"));
       expect(screen.getByTestId("filing-dirty")).toBeInTheDocument();
+    });
+
+    it("não arma o aviso nem a guarda quando pasta e nome não mudam (0509)", () => {
+      // Abrir e cancelar "+ Nova pasta…" reemite os valores que já estavam
+      // (sem pasta, nome vazio). Nada mudou, então nada fica pendente.
+      renderWithProviders(<CanonicalAdaptationWizard />);
+      advanceToReview();
+      mockNavGuard.mockClear();
+      fireEvent.click(screen.getByTestId("review-unpick-folder"));
+      fireEvent.click(screen.getByTestId("review-clear-new-folder"));
+      expect(screen.queryByTestId("filing-dirty")).not.toBeInTheDocument();
+      expect(mockNavGuard).not.toHaveBeenCalledWith(true);
     });
 
     it("avisa também ao nomear uma pasta nova", () => {
@@ -1810,6 +2318,87 @@ describe("CanonicalAdaptationWizard — navigation guard", () => {
         expect(screen.getByTestId("wizard-status-bar").className).toMatch(/sticky/);
       },
     );
+
+    /**
+     * 0461: "Voltar" do Revisar levava ao Passo 4 e o aviso de erro sumia, porque
+     * a barra só falava do autosave entre Revisar e Exportar. Uma nova tentativa
+     * ("Voltar e salvar" do guard) que falhava ali ficava calada. Erro e matéria
+     * pendente aparecem em qualquer passo; "Salvando…/Rascunho salvo" não.
+     */
+    it.each([
+      ["error", "Erro ao salvar"],
+      ["conflict", "Conflito: recarregue"],
+    ])("mantém o estado %s do autosave visível ao voltar para o Passo 4", (status, label) => {
+      mockDraftStatus.value = status;
+      renderWithProviders(<CanonicalAdaptationWizard />);
+      advanceToReview();
+      expect(screen.getByText(label)).toBeInTheDocument();
+
+      fireEvent.click(screen.getByRole("button", { name: "Voltar" }));
+
+      expect(screen.getByText(/Passo 4 de/)).toBeInTheDocument();
+      expect(screen.getByText(label)).toBeInTheDocument();
+    });
+
+    /**
+     * 0465: "Erro ao salvar"/"Conflito" saíam no mesmo cinza de "Rascunho
+     * salvo", e o aviso de matéria/pasta os escondia. O erro do autosave é o
+     * caso em que a edição NÃO está no banco: tom de erro, e nunca escondido.
+     */
+    it.each([
+      ["error", "Erro ao salvar"],
+      ["conflict", "Conflito: recarregue"],
+    ])("pinta o estado %s do autosave com o tom de erro", (status, label) => {
+      mockDraftStatus.value = status;
+      renderWithProviders(<CanonicalAdaptationWizard />);
+      advanceToReview();
+
+      const el = screen.getByText(label);
+      expect(el).toHaveClass("text-destructive-strong", "font-medium");
+      expect(el).not.toHaveClass("text-muted-foreground");
+    });
+
+    it("mantém 'Rascunho salvo' no tom neutro", () => {
+      mockDraftStatus.value = "saved";
+      renderWithProviders(<CanonicalAdaptationWizard />);
+      advanceToReview();
+
+      expect(screen.getByText("Rascunho salvo")).toHaveClass("text-muted-foreground");
+    });
+
+    it.each([
+      ["error", "Erro ao salvar"],
+      ["conflict", "Conflito: recarregue"],
+    ])("não deixa a matéria pendente esconder o estado %s do autosave", (status, label) => {
+      mockDraftStatus.value = status;
+      renderWithProviders(<CanonicalAdaptationWizard />);
+      advanceToReview();
+      fireEvent.click(screen.getByTestId("review-file"));
+
+      expect(screen.getByText(label)).toBeInTheDocument();
+      expect(screen.getByTestId("filing-dirty")).toBeInTheDocument();
+    });
+
+    it("não mostra 'Rascunho salvo' fora do Revisar/Exportar", () => {
+      mockDraftStatus.value = "saved";
+      renderWithProviders(<CanonicalAdaptationWizard />);
+      advanceToReview();
+      expect(screen.getByText("Rascunho salvo")).toBeInTheDocument();
+
+      fireEvent.click(screen.getByRole("button", { name: "Voltar" }));
+
+      expect(screen.queryByText("Rascunho salvo")).not.toBeInTheDocument();
+    });
+
+    it("mantém o aviso de matéria pendente ao voltar para o Passo 4", () => {
+      renderWithProviders(<CanonicalAdaptationWizard />);
+      advanceToReview();
+      fireEvent.click(screen.getByTestId("review-file"));
+
+      fireEvent.click(screen.getByRole("button", { name: "Voltar" }));
+
+      expect(screen.getByTestId("filing-dirty")).toBeInTheDocument();
+    });
 
     it("não gruda a barra num estado tranquilo de salvamento", () => {
       mockDraftStatus.value = "saved";

@@ -5,6 +5,10 @@ import { PAGE_CONTENT_HEIGHT_PX, PAGE_MARGIN_PX } from "./render/pageTokens";
 import { FOOTER_BOTTOM_PX } from "./render/footerLabel";
 
 describe("PageSheet", () => {
+  // Posições (px da folha) das réguas de virada desenhadas (achado 0382).
+  const ruleYs = () =>
+    screen.queryAllByTestId("page-rule").map((rule) => Number(rule.dataset.ruleY));
+
   it("renderiza a barra fixa e a folha com o conteúdo", () => {
     render(
       <PageSheet toolbar={<div>BARRA</div>}>
@@ -43,6 +47,15 @@ describe("PageSheet", () => {
     // duas barras verticais ao mesmo tempo (mesa e página).
     expect(mesa.className).not.toContain("overflow-auto");
     expect(mesa.className).not.toMatch(/max-h-\[calc\(/);
+  });
+
+  it("a moldura da folha não rola na vertical (achado 1104)", () => {
+    render(<PageSheet toolbar={null}><span>x</span></PageSheet>);
+    const frame = screen.getByTestId("page-sheet").parentElement!.parentElement!;
+    // Com só `overflow-x-auto`, o eixo Y vira `auto` pela regra do CSS: 1 px de
+    // excesso sobre a altura fixa da caixa interna já desenha uma segunda barra.
+    expect(frame.className).toContain("overflow-x-auto");
+    expect(frame.className).toContain("overflow-y-hidden");
   });
 
   it("mantém a barra visível enquanto a página rola (sticky)", () => {
@@ -294,8 +307,12 @@ describe("PageSheet", () => {
             render(
               <PageSheet paginated toolbar={null}>
                 <span>questão 1</span>
-                {/* 1016px de conteúdo vistos a 0,5 de escala (o ajuste em 397px). */}
-                <div className="adaptar-page-break" data-test-top="508" />
+                {/*
+                  1016px de conteúdo vistos a 0,5 de escala (o ajuste em 397px).
+                  O retângulo traz a margem de cima da folha (achado 0506):
+                  (1016 + 53,33) / 2.
+                */}
+                <div className="adaptar-page-break" data-test-top="534.67" />
                 <span>questão 2</span>
               </PageSheet>,
             );
@@ -410,7 +427,7 @@ describe("PageSheet", () => {
       render(<PageSheet toolbar={null}><span>x</span></PageSheet>);
       const sheet = screen.getByTestId("page-sheet");
       // Cabendo numa folha não há virada para desenhar (achado 0151).
-      expect(sheet.style.backgroundImage).toBe("none");
+      expect(ruleYs()).toEqual([]);
       // A folha cabe inteira na mesa: escala neutra (achado 0234).
       expect(sheet.style.transform).toBe("scale(1)");
       expect(screen.queryByTestId("page-count")).toBeNull();
@@ -424,7 +441,26 @@ describe("PageSheet", () => {
       expect(screen.getByTestId("page-sheet").style.minHeight).toBe("1123px");
     });
 
-    it("cresce em folhas inteiras e marca a virada também no Revisar (achado 0151)", () => {
+    /*
+      Achado 0198: a folha do Revisar é contínua de propósito (o 0135 e o 0701
+      só empurram o fluxo na prévia), então a régua desenhada nela marcava um
+      pixel da conta, não uma virada do papel: ela caía no meio de uma tabela
+      que o arquivo nunca parte ali (a prévia manda a questão inteira para a
+      folha 2, o PDF vira noutro ponto). Sem os blocos marcados no DOM do editor
+      não há como saber onde o papel vira nesta superfície, e uma linha que
+      afirma um corte inexistente é pior que linha nenhuma.
+    */
+    it("não afirma virada no Revisar, que não vira o conteúdo (achado 0198)", () => {
+      withHeight(1500, () => {
+        render(<PageSheet toolbar={null}><span>x</span></PageSheet>);
+        const sheet = screen.getByTestId("page-sheet");
+        expect(ruleYs()).toEqual([]);
+        // O papel continua crescendo em folhas inteiras (achado 0151).
+        expect(sheet.style.minHeight).toBe("2139.34px");
+      });
+    });
+
+    it("cresce em folhas inteiras também no Revisar (achado 0151)", () => {
       // O piso do 0329 fechou só a metade de baixo: passando de uma página o
       // papel do Revisar crescia num valor qualquer (1,21 folha nos pixels do
       // achado) e não havia nenhuma marca de onde a página 1 termina.
@@ -433,7 +469,8 @@ describe("PageSheet", () => {
         const sheet = screen.getByTestId("page-sheet");
         // 2 áreas úteis + as duas margens do fluxo contínuo (achado 0157).
         expect(sheet.style.minHeight).toBe("2139.34px");
-        expect(sheet.style.backgroundImage).toContain("1069.67px");
+        // Sem régua: o fluxo do Revisar não vira (achado 0198).
+        expect(ruleYs()).toEqual([]);
         // Continua sem paginar de verdade: nenhum contador de folhas.
         expect(screen.queryByTestId("page-count")).toBeNull();
       });
@@ -452,7 +489,6 @@ describe("PageSheet", () => {
         const sheet = screen.getByTestId("page-sheet");
         // 1070,7px cabem na A4 inteira, mas não nos 1016,34px de área útil.
         expect(sheet.style.minHeight).toBe("2139.34px");
-        expect(sheet.style.backgroundImage).toContain("1069.67px");
       });
     });
 
@@ -476,7 +512,8 @@ describe("PageSheet", () => {
     */
     it("não desenha folha em branco: papel e régua seguem a área útil (achado 0157)", () => {
       withHeight(1058, () => {
-        render(<PageSheet toolbar={null}><span>x</span></PageSheet>);
+        // Na prévia, que é onde a régua sobrevive ao 0198.
+        render(<PageSheet paginated toolbar={null}><span>x</span></PageSheet>);
         const sheet = screen.getByTestId("page-sheet");
         // 2 folhas de área útil + as DUAS margens do fluxo contínuo, não 2 x 1123.
         expect(sheet.style.minHeight).toBe("2139.34px");
@@ -484,8 +521,78 @@ describe("PageSheet", () => {
         // A virada cai no ponto do FLUXO onde a área imprimível da página 1
         // acaba (53,33 + 1016,34), e o conteúdo (53,33 + 1058 = 1111,33px)
         // passa dela: a folha 2 tem tinta.
-        expect(sheet.style.backgroundImage).toContain("1069.67px");
-        expect(sheet.style.backgroundImage).not.toContain("1123px");
+        expect(ruleYs()).toContain(1069.67);
+        expect(ruleYs()).not.toContain(1123);
+      });
+    });
+
+    /*
+      Achado 1110: a régua é o ÚNICO sinal de onde uma A4 termina na folha
+      contínua da prévia, e era pintada em `--sf-line-2` (1,38:1 sobre o papel
+      branco): sumia no pé da folha e sob as bordas de tabela. Marca estrutural
+      precisa de 3:1 (WCAG 1.4.11); `--sf-ink-soft` dá ~6:1 e é token da folha.
+    */
+    it("pinta a régua da virada com tinta de 3:1 sobre o papel, não o traço decorativo (achado 1110)", () => {
+      withHeight(1500, () => {
+        render(<PageSheet paginated toolbar={null}><span>x</span></PageSheet>);
+        const sheet = screen.getByTestId("page-sheet");
+        const [rule] = screen.getAllByTestId("page-rule");
+        expect(sheet).toContainElement(rule);
+        expect(rule.style.background).toBe("hsl(var(--sf-ink-soft))");
+        expect(rule.style.background).not.toContain("--sf-line-2");
+      });
+    });
+
+    /*
+      Achado 0382: a régua era uma faixa de 1px dentro de UM `linear-gradient`
+      que cobria a folha inteira (5.000 a 9.000px). Com 4+ viradas o Chrome
+      amostra o gradiente numa tabela de cores de resolução fixa e a faixa some:
+      nenhum pixel da tela era pintado, em qualquer escala. Cada virada passa a
+      ser um elemento próprio, com espessura de pelo menos 1px de TELA.
+    */
+    it("desenha cada virada como elemento próprio, não como faixa de gradiente (achado 0382)", () => {
+      withHeight(3000, () => {
+        withTops(() => {
+          render(
+            <PageSheet paginated toolbar={null}>
+              <span>questão 1 longa</span>
+              <div className="adaptar-page-break" data-test-top="1500" />
+              <span>questão 2</span>
+            </PageSheet>,
+          );
+          const sheet = screen.getByTestId("page-sheet");
+          expect(sheet.style.backgroundImage).toBe("");
+          const rules = screen.getAllByTestId("page-rule");
+          expect(rules.map((rule) => Number(rule.dataset.ruleY))).toEqual([1069.67, 2086.01, 3102.35]);
+          for (const rule of rules) {
+            expect(rule.parentElement).toBe(sheet);
+            expect(rule.getAttribute("aria-hidden")).toBe("true");
+            expect(rule.style.position).toBe("absolute");
+            expect(rule.style.left).toBe("0px");
+            expect(rule.style.right).toBe("0px");
+            expect(rule.style.background).toBe("hsl(var(--sf-ink-soft))");
+            // Escala 1: 1px de folha = 1px de tela, terminando na virada.
+            expect(rule.style.height).toBe("1px");
+            expect(Number.parseFloat(rule.style.top)).toBeCloseTo(Number(rule.dataset.ruleY) - 1, 2);
+          }
+        });
+      });
+    });
+
+    it("mantém a régua com pelo menos 1px de tela quando a folha encolhe (achado 0382)", () => {
+      withClientWidth(332, () => {
+        withHeight(1500, () => {
+          render(<PageSheet paginated toolbar={null}><span>x</span></PageSheet>);
+          const sheet = screen.getByTestId("page-sheet");
+          const factor = Number(/scale\(([\d.]+)\)/.exec(sheet.style.transform)![1]);
+          expect(factor).toBeLessThan(1);
+          const [rule] = screen.getAllByTestId("page-rule");
+          expect(Number.parseFloat(rule.style.height) * factor).toBeCloseTo(1, 5);
+          expect(Number.parseFloat(rule.style.top) + Number.parseFloat(rule.style.height)).toBeCloseTo(
+            Number(rule.dataset.ruleY),
+            5,
+          );
+        });
       });
     });
 
@@ -500,7 +607,7 @@ describe("PageSheet", () => {
         render(<PageSheet paginated toolbar={null}><span>x</span></PageSheet>);
         const sheet = screen.getByTestId("page-sheet");
         expect(screen.getByTestId("page-count")).toHaveTextContent("2 páginas A4");
-        expect(sheet.style.backgroundImage).toContain("1069.67px");
+        expect(ruleYs()).toContain(1069.67);
         // A folha vai até o fim da 2ª página: o branco que sobra fica visível.
         expect(sheet.style.minHeight).toBe("2139.34px");
       });
@@ -637,8 +744,8 @@ describe("PageSheet", () => {
           // A quebra forçada gera uma virada desenhada (antes do 0123 não saía
           // régua nenhuma); ela cai no fim da página 1, que é onde o papel acaba
           // (achado 0131 — antes era desenhada em cima do corte, em 500px).
-          expect(sheet.style.backgroundImage).toContain("1069.67px");
-          expect(sheet.style.backgroundImage).not.toContain("500px");
+          expect(ruleYs()).toContain(1069.67);
+          expect(ruleYs()).not.toContain(500);
           // A folha vai até o fim da 2ª página: o branco do fim fica visível.
           expect(sheet.style.minHeight).toBe("2139.34px");
           expect(sheet.parentElement!.style.height).toBe("2139.34px");
@@ -668,8 +775,8 @@ describe("PageSheet", () => {
           expect(sheet.style.minHeight).toBe("2139.34px");
           expect(sheet.parentElement!.style.height).toBe("2139.34px");
           // A virada fica no fim da página 1, onde o papel realmente acaba.
-          expect(sheet.style.backgroundImage).toContain("1069.67px");
-          expect(sheet.style.backgroundImage).not.toContain("1919px");
+          expect(ruleYs()).toContain(1069.67);
+          expect(ruleYs()).not.toContain(1919);
         });
       });
     });
@@ -689,17 +796,7 @@ describe("PageSheet", () => {
           // trecho 1: 1500px de conteúdo -> 2 folhas; trecho 2 começa no fim da
           // página 2 e também gasta 2. As três viradas caem no fim da área útil
           // de cada folha (achado 0157).
-          const rules = sheet.style.backgroundImage.match(/[\d.]+px/g) ?? [];
-          expect(new Set(rules)).toEqual(
-            new Set([
-              "1068.67px",
-              "1069.67px",
-              "2085.01px",
-              "2086.01px",
-              "3101.35px",
-              "3102.35px",
-            ]),
-          );
+          expect(ruleYs()).toEqual([1069.67, 2086.01, 3102.35]);
           expect(sheet.style.minHeight).toBe("4172.02px");
         });
       });
@@ -757,7 +854,8 @@ describe("PageSheet", () => {
         // A imagem do bloco carregou: o conteúdo passa da área útil da página.
         resize(1500);
         expect(sheet.style.minHeight).toBe("2139.34px");
-        expect(sheet.style.backgroundImage).toContain("1069.67px");
+        // Sem régua no Revisar (achado 0198): o papel é que responde pela medida.
+        expect(ruleYs()).toEqual([]);
         expect(sheet.parentElement!.style.height).toBe("2139.34px");
       });
     });
@@ -1199,7 +1297,7 @@ describe("PageSheet", () => {
         );
         const sheet = screen.getByTestId("page-sheet");
         expect(sheet.style.minHeight).toBe("1166.66px");
-        expect(sheet.style.backgroundImage).toBe("none");
+        expect(ruleYs()).toEqual([]);
       });
     });
 
@@ -1258,7 +1356,7 @@ describe("PageSheet", () => {
     it("não desenha régua de virada que o arquivo não tem", () => {
       withHeights(1300, () => {
         renderFolha(false);
-        expect(screen.getByTestId("page-sheet").style.backgroundImage).toBe("none");
+        expect(ruleYs()).toEqual([]);
       });
     });
 
@@ -1355,6 +1453,32 @@ describe("PageSheet", () => {
       });
     });
 
+    /*
+      Achado 0521: a régua tem margem própria (`my-3`, 12px) e o empurrão é
+      aplicado SUBSTITUINDO essa margem. A caminhada somava o branco inteiro ao
+      deslocamento, mas o fluxo só crescia `branco - 12`, e cada quebra perdia
+      12px: da Q4 em diante a questão começava antes da virada.
+    */
+    it("desconta a margem que o empurrão substitui ao acumular as réguas (achado 0521)", () => {
+      const style = document.createElement("style");
+      style.textContent = ".adaptar-page-break { margin-bottom: 12px; }";
+      document.head.appendChild(style);
+      try {
+        withLayout(1400, () => {
+          render(folha(true, [500, 700]));
+          const primeiro = PAGE_MARGIN_PX + PAGE_CONTENT_HEIGHT_PX - (500 + 30);
+          expect(
+            Number.parseFloat(screen.getByTestId("quebra-700").style.marginBottom),
+          ).toBeCloseTo(
+            PAGE_MARGIN_PX + 2 * PAGE_CONTENT_HEIGHT_PX - (700 + primeiro - 12 + 30),
+            2,
+          );
+        });
+      } finally {
+        style.remove();
+      }
+    });
+
     it("não puxa o conteúdo para trás quando a régua atravessa a virada", () => {
       withLayout(1200, () => {
         render(folha(true, [1060]));
@@ -1362,10 +1486,346 @@ describe("PageSheet", () => {
       });
     });
 
+    /*
+      Achado 0506: a régua era medida na coordenada da FOLHA (com a margem de
+      cima) e comparada com `pageTop`, que anda na do CONTEÚDO. A régua que cai
+      nos últimos `PAGE_MARGIN_PX` da área útil virava a folha 53px antes da
+      hora e o contador ganhava uma folha fantasma em branco.
+    */
+    it("não conta folha fantasma quando a régua cai no pé da área útil", () => {
+      withLayout(1200, () => {
+        // Régua termina em 1060 (folha) < 1069,67, fim da área útil da folha 1.
+        render(folha(true, [1030]));
+        expect(screen.getByTestId("page-count")).toHaveTextContent("2 páginas A4");
+      });
+    });
+
+    it("compara os blocos depois da quebra com a folha real", () => {
+      withLayout(1570, () => {
+        render(
+          <PageSheet paginated toolbar={null}>
+            <div className="adaptar-page-break" data-test-top="500" data-test-height="30" />
+            <div data-folha-bloco="" data-test-top="530" data-test-height="500" />
+            <div data-folha-bloco="" data-testid="bloco-2" data-test-top="1030" data-test-height="540" />
+          </PageSheet>,
+        );
+        // Depois da quebra o bloco 2 vai de 1516,34 a 2056,34 no fluxo: passa
+        // do fim da folha 2 (2032,68) e tem que descer inteiro.
+        expect(
+          Number.parseFloat(screen.getByTestId("bloco-2").style.marginTop),
+        ).toBeCloseTo(2 * PAGE_CONTENT_HEIGHT_PX - (1030 - PAGE_MARGIN_PX + (PAGE_CONTENT_HEIGHT_PX - (500 - PAGE_MARGIN_PX + 30))), 2);
+      });
+    });
+
     it("não mexe no fluxo da folha do Revisar, que é contínua", () => {
       withLayout(900, () => {
         render(folha(false, [500]));
         expect(screen.getByTestId("quebra-500").style.marginBottom).toBe("");
+      });
+    });
+  });
+
+  /*
+    Achado 0701: a prévia paginava no PIXEL (divisão da altura do fluxo pela
+    área útil) enquanto o `@react-pdf` pagina no BLOCO — ele nunca corta dentro
+    de uma `View`, e o bloco que não cabe inteiro vai todo para a folha
+    seguinte, deixando branco no pé. O branco perdido em cada virada não entrava
+    na conta, e o erro é cumulativo: o contador anunciava "3 páginas A4" para um
+    arquivo com `Pages: 4`, e a régua caía no meio de um bloco que o papel nunca
+    parte.
+  */
+  describe("a prévia pagina no bloco, como o arquivo (achado 0701)", () => {
+    const withBlocos = (height: number, run: () => void) => {
+      const heightSpy = vi
+        .spyOn(HTMLElement.prototype, "offsetHeight", "get")
+        .mockReturnValue(height);
+      const rectSpy = vi
+        .spyOn(HTMLElement.prototype, "getBoundingClientRect")
+        .mockImplementation(function (this: HTMLElement) {
+          const top = Number(this.dataset.testTop ?? 0);
+          const bottom = Number(this.dataset.testBottom ?? top);
+          return {
+            top,
+            bottom,
+            height: bottom - top,
+            left: 0,
+            right: 0,
+            width: 0,
+            x: 0,
+            y: top,
+            toJSON: () => ({}),
+          } as DOMRect;
+        });
+      try {
+        run();
+      } finally {
+        heightSpy.mockRestore();
+        rectSpy.mockRestore();
+      }
+    };
+
+    /*
+      Três blocos: o primeiro ocupa quase a folha inteira, o segundo atravessa a
+      virada. No arquivo o segundo desce inteiro para a folha 2 e os ~116px que
+      sobram no pé da folha 1 não são aproveitados — o que empurra o terceiro, e
+      o fim do documento, para uma TERCEIRA folha que a divisão por pixel não
+      prevê. (Achado 0507: cada bloco cabe numa folha; o mais alto que a área
+      útil não é empurrado, tem teste próprio.)
+    */
+    const folha = (
+      <PageSheet paginated toolbar={null}>
+        <div data-folha-bloco="" data-testid="bloco-1" data-test-top="53.33" data-test-bottom="953.33" />
+        <div data-folha-bloco="" data-testid="bloco-2" data-test-top="953.33" data-test-bottom="1853.33" />
+        <div data-folha-bloco="" data-test-top="1853.33" data-test-bottom="1983.33" />
+      </PageSheet>
+    );
+
+    it("conta a folha que o branco do pé empurra", () => {
+      withBlocos(1930, () => {
+        render(folha);
+        // Pelo pixel seriam 2 folhas (1930 / 1016,34); no papel são 3.
+        expect(screen.getByTestId("page-count")).toHaveTextContent("3 páginas A4");
+      });
+    });
+
+    it("empurra para a folha seguinte o bloco que não cabe inteiro", () => {
+      withBlocos(1930, () => {
+        render(folha);
+        expect(
+          Number.parseFloat(screen.getByTestId("bloco-2").style.marginTop),
+        ).toBeCloseTo(PAGE_MARGIN_PX + PAGE_CONTENT_HEIGHT_PX - 953.33, 2);
+      });
+    });
+
+    it("desenha a régua entre os blocos, nunca no meio de um", () => {
+      withBlocos(1930, () => {
+        render(folha);
+        expect(ruleYs()).toEqual([1069.67, 2086.01]);
+      });
+    });
+
+    it("deixa o bloco aninhado viajar com o de topo", () => {
+      // O enunciado dentro da questão é bloco também, mas quem decide a virada
+      // é o de topo — como a `View` de topo no PDF. Empurrar o aninhado partiria
+      // a questão, que é exatamente o que o arquivo nunca faz.
+      withBlocos(1930, () => {
+        render(
+          <PageSheet paginated toolbar={null}>
+            <div data-folha-bloco="" data-test-top="53.33" data-test-bottom="953.33" />
+            <div data-folha-bloco="" data-testid="bloco-2" data-test-top="953.33" data-test-bottom="1853.33">
+              <div
+                data-folha-bloco=""
+                data-testid="enunciado"
+                data-test-top="953.33"
+                data-test-bottom="1853.33"
+              />
+            </div>
+            <div data-folha-bloco="" data-test-top="1853.33" data-test-bottom="1983.33" />
+          </PageSheet>,
+        );
+        expect(screen.getByTestId("page-count")).toHaveTextContent("3 páginas A4");
+        expect(screen.getByTestId("enunciado").style.marginTop).toBe("");
+        expect(
+          Number.parseFloat(screen.getByTestId("bloco-2").style.marginTop),
+        ).toBeCloseTo(PAGE_MARGIN_PX + PAGE_CONTENT_HEIGHT_PX - 953.33, 2);
+      });
+    });
+
+    /*
+      Achado 0507: bloco mais alto que a área útil não cabe inteiro em folha
+      nenhuma, e o arquivo o começa onde ele está e o parte. Empurrá-lo só
+      queimava o pé da folha 1 e inventava uma folha que o PDF não tem.
+    */
+    it("não empurra o bloco mais alto que uma folha inteira", () => {
+      withBlocos(1950, () => {
+        render(
+          <PageSheet paginated toolbar={null}>
+            <div data-folha-bloco="" data-test-top="53.33" data-test-bottom="353.33" />
+            <div data-folha-bloco="" data-testid="alto" data-test-top="353.33" data-test-bottom="2003.33" />
+          </PageSheet>,
+        );
+        expect(screen.getByTestId("alto").style.marginTop).toBe("");
+        expect(screen.getByTestId("page-count")).toHaveTextContent("2 páginas A4");
+      });
+    });
+
+    /*
+      Achado 1137: o arquivo parte a questão mais alta que a folha ENTRE os
+      filhos dela (parágrafo, figura, linha de alternativa), nunca dentro de uma
+      figura ou de uma linha. A prévia virava no pixel, com a régua passando por
+      trás da figura e cortando "b) Opção 33B" ao meio.
+    */
+    const questaoAlta = (figuraBottom = 1308) => (
+      <PageSheet paginated toolbar={null}>
+        <div data-folha-bloco="" data-test-top="53.33" data-test-bottom="353.33" />
+        <div data-folha-bloco="" data-testid="questao" data-test-top="353.33" data-test-bottom="1448">
+          <div data-test-top="353.33" data-test-bottom="400" />
+          <div data-folha-bloco="" data-testid="figura" data-test-top="408" data-test-bottom={figuraBottom}>
+            <div data-testid="img" data-test-top="408" data-test-bottom={figuraBottom} />
+          </div>
+          <div data-test-top="1316" data-test-bottom="1346" />
+          <div data-testid="alt-b" style={{ marginTop: "8px" }} data-test-top="1410" data-test-bottom="1440">
+            <span data-test-top="1410" data-test-bottom="1440">
+              b) Opção 33B
+            </span>
+          </div>
+        </div>
+      </PageSheet>
+    );
+
+    it("desce inteira a figura que atravessa a virada da questão alta (achado 1137)", () => {
+      withBlocos(1394.67, () => {
+        render(questaoAlta());
+        // A figura começa em 354,67 do fluxo e a folha 1 acaba em 1016,34.
+        expect(Number.parseFloat(screen.getByTestId("img").style.marginTop)).toBeCloseTo(
+          PAGE_MARGIN_PX + PAGE_CONTENT_HEIGHT_PX - 408,
+          2,
+        );
+        expect(screen.getByTestId("questao").style.marginTop).toBe("");
+        expect(screen.getByTestId("figura").style.marginTop).toBe("");
+      });
+    });
+
+    it("desce inteira a linha que atravessa a virada, somando à margem própria (achado 1137)", () => {
+      withBlocos(1394.67, () => {
+        render(questaoAlta());
+        // Empurrada pela figura (661,67px), a alternativa b abre em 2071,67 da
+        // folha e a página 2 acaba em 2086,01: desce 14,34px, por cima dos 8px
+        // que ela já tinha (o inline troca a margem, não soma).
+        const shiftFigura = PAGE_MARGIN_PX + PAGE_CONTENT_HEIGHT_PX - 408;
+        const spacer = PAGE_MARGIN_PX + 2 * PAGE_CONTENT_HEIGHT_PX - (1410 + shiftFigura);
+        expect(Number.parseFloat(screen.getByTestId("alt-b").style.marginTop)).toBeCloseTo(
+          8 + spacer,
+          2,
+        );
+        expect(screen.getByTestId("page-count")).toHaveTextContent("3 páginas A4");
+      });
+    });
+
+    it("refaz o empurrão dos filhos a cada medida, sem acumular (achado 1137)", () => {
+      withBlocos(1394.67, () => {
+        const { rerender } = render(questaoAlta());
+        rerender(questaoAlta());
+        expect(Number.parseFloat(screen.getByTestId("img").style.marginTop)).toBeCloseTo(
+          PAGE_MARGIN_PX + PAGE_CONTENT_HEIGHT_PX - 408,
+          2,
+        );
+        expect(screen.getByTestId("page-count")).toHaveTextContent("3 páginas A4");
+      });
+    });
+
+    it("corta no pixel a figura mais alta que uma folha inteira (achado 1137)", () => {
+      withBlocos(1394.67, () => {
+        render(questaoAlta(1500));
+        expect(screen.getByTestId("img").style.marginTop).toBe("");
+      });
+    });
+
+    /*
+      Achado 0708: o `@react-pdf` decide a virada pela caixa MAIS a margem de
+      baixo do bloco, e todo bloco do PDF carrega o vão entre blocos
+      (`blockSpacing`) como `marginBottom`, inclusive o último. O bloco que
+      termina dentro da área útil por menos que esse vão desce inteiro no
+      arquivo; a prévia o deixava na folha e anunciava uma página a menos.
+    */
+    const rente = (pageStyle?: { blockSpacing: number }) => (
+      <PageSheet paginated toolbar={null} pageStyle={pageStyle}>
+        <div data-folha-bloco="" data-test-top="53.33" data-test-bottom="853.33" />
+        <div data-folha-bloco="" data-testid="ultimo" data-test-top="869.33" data-test-bottom="1059.33" />
+      </PageSheet>
+    );
+
+    it("empurra o bloco cuja caixa cabe mas cujo vão de baixo não cabe", () => {
+      // Fim do último bloco: 1006px no fluxo, 10px antes do pé da área útil;
+      // com o vão default de 16px, 1022px, fora — o PDF o manda para a folha 2.
+      withBlocos(1006, () => {
+        render(rente());
+        expect(screen.getByTestId("page-count")).toHaveTextContent("2 páginas A4");
+        expect(
+          Number.parseFloat(screen.getByTestId("ultimo").style.marginTop),
+        ).toBeCloseTo(PAGE_MARGIN_PX + PAGE_CONTENT_HEIGHT_PX - 869.33, 2);
+      });
+    });
+
+    it("usa o espaçamento do Formato como o vão que conta na virada", () => {
+      // Com 8px de vão, 1006 + 8 = 1014 cabe na área útil: o PDF não empurra.
+      withBlocos(1006, () => {
+        render(rente({ blockSpacing: 8 }));
+        expect(screen.getByTestId("page-count")).toHaveTextContent("1 página A4");
+        expect(screen.getByTestId("ultimo").style.marginTop).toBe("");
+      });
+    });
+
+    /*
+      Achado 0392: o título de seção que coube no pé da folha ficava lá, e o
+      bloco que ele encabeça (que não coube) abria a folha seguinte. Título
+      nunca fecha uma folha: quando o bloco seguinte desce, o título desce junto.
+    */
+    const comTitulo = (titleAttr: Record<string, string>) => (
+      <PageSheet paginated toolbar={null}>
+        <div data-folha-bloco="" data-test-top="53.33" data-test-bottom="903.33" />
+        <div
+          data-folha-bloco=""
+          {...titleAttr}
+          data-testid="titulo"
+          data-test-top="903.33"
+          data-test-bottom="933.33"
+        />
+        <div data-folha-bloco="" data-testid="bloco-2" data-test-top="953.33" data-test-bottom="1853.33" />
+      </PageSheet>
+    );
+
+    it("leva o título junto quando o bloco que ele encabeça desce (achado 0392)", () => {
+      withBlocos(1800, () => {
+        render(comTitulo({ "data-folha-titulo": "" }));
+        expect(
+          Number.parseFloat(screen.getByTestId("titulo").style.marginTop),
+        ).toBeCloseTo(PAGE_MARGIN_PX + PAGE_CONTENT_HEIGHT_PX - 903.33, 2);
+        // O bloco desce pelo empurrão do título, sem empurrão próprio.
+        expect(screen.getByTestId("bloco-2").style.marginTop).toBe("");
+        expect(screen.getByTestId("page-count")).toHaveTextContent("2 páginas A4");
+      });
+    });
+
+    it("não puxa o bloco anterior que não é título (achado 0392)", () => {
+      withBlocos(1800, () => {
+        render(comTitulo({}));
+        expect(screen.getByTestId("titulo").style.marginTop).toBe("");
+        expect(
+          Number.parseFloat(screen.getByTestId("bloco-2").style.marginTop),
+        ).toBeCloseTo(PAGE_MARGIN_PX + PAGE_CONTENT_HEIGHT_PX - 953.33, 2);
+      });
+    });
+
+    it("não empurra o título que já abre a folha (achado 0392)", () => {
+      // Título no topo da folha 1 e bloco que não cabe nem com ele: descer o
+      // título só queimaria uma folha inteira.
+      withBlocos(1100, () => {
+        render(
+          <PageSheet paginated toolbar={null}>
+            <div
+              data-folha-bloco=""
+              data-folha-titulo=""
+              data-testid="titulo"
+              data-test-top="53.33"
+              data-test-bottom="83.33"
+            />
+            <div data-folha-bloco="" data-testid="bloco" data-test-top="103.33" data-test-bottom="1053.33" />
+          </PageSheet>,
+        );
+        expect(screen.getByTestId("titulo").style.marginTop).toBe("");
+      });
+    });
+
+    it("não mexe no fluxo da folha do Revisar, que é contínua", () => {
+      withBlocos(1930, () => {
+        render(
+          <PageSheet toolbar={null}>
+            <div data-folha-bloco="" data-testid="bloco-1" data-test-top="53.33" data-test-bottom="953.33" />
+            <div data-folha-bloco="" data-testid="bloco-2" data-test-top="953.33" data-test-bottom="1983.33" />
+          </PageSheet>,
+        );
+        expect(screen.getByTestId("bloco-2").style.marginTop).toBe("");
       });
     });
   });
@@ -1426,4 +1886,330 @@ describe("PageSheet", () => {
       });
     });
   });
+
+  /*
+    Achado 0262: o cabeçalho da tabela se repete no topo de cada folha em que
+    ela continua no PDF (linha `fixed`) e no .docx (`tblHeader`), e a prévia
+    desenhava um `<thead>` só. A tela que promete mostrar o arquivo mostrava
+    uma tabela sem rótulo de coluna depois da virada — e, pior, não reservava a
+    altura que o cabeçalho repetido gasta em cada folha nova, então a contagem
+    de folhas ficava sistematicamente curta (o mecanismo do 0607).
+  */
+  describe("a prévia repete o cabeçalho da tabela, como o arquivo (achado 0262)", () => {
+    const withTabela = (
+      height: (repetidos: number) => number,
+      run: () => void,
+    ) => {
+      const heightSpy = vi
+        .spyOn(HTMLElement.prototype, "offsetHeight", "get")
+        .mockImplementation(() =>
+          height(document.querySelectorAll("[data-folha-thead-repetido]").length),
+        );
+      const rectSpy = vi
+        .spyOn(HTMLElement.prototype, "getBoundingClientRect")
+        .mockImplementation(function (this: HTMLElement) {
+          // As posições do mock são fixas, ou seja, a geometria SEM o que a
+          // folha insere (achado 1108): a cópia e o vão não ocupam nada aqui,
+          // senão a folha descontaria uma altura que não empurrou ninguém.
+          const inserido = this.closest("[data-folha-thead-repetido], [data-folha-espaco]");
+          const top = inserido ? 0 : Number(this.dataset.testTop ?? 0);
+          const bottom = inserido ? 0 : Number(this.dataset.testBottom ?? top);
+          return {
+            top,
+            bottom,
+            height: bottom - top,
+            left: 0,
+            right: 0,
+            width: 0,
+            x: 0,
+            y: top,
+            toJSON: () => ({}),
+          } as DOMRect;
+        });
+      try {
+        run();
+      } finally {
+        heightSpy.mockRestore();
+        rectSpy.mockRestore();
+      }
+    };
+
+    // Fim da área imprimível da folha 1: a linha que começa depois disso já é
+    // conteúdo da folha 2.
+    const VIRADA = PAGE_MARGIN_PX + PAGE_CONTENT_HEIGHT_PX;
+
+    const tabela = (
+      <table data-folha-tabela="" data-testid="tabela">
+        <thead>
+          <tr data-test-top={PAGE_MARGIN_PX} data-test-bottom={PAGE_MARGIN_PX + 40}>
+            <th>Aluno</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr data-testid="linha-1" data-test-top={PAGE_MARGIN_PX + 40} data-test-bottom={PAGE_MARGIN_PX + 80}>
+            <td>Ana</td>
+          </tr>
+          <tr data-testid="linha-2" data-test-top={VIRADA - 40} data-test-bottom={VIRADA}>
+            <td>Bruno</td>
+          </tr>
+          <tr data-testid="linha-3" data-test-top={VIRADA + 10} data-test-bottom={VIRADA + 50}>
+            <td>Carla</td>
+          </tr>
+        </tbody>
+      </table>
+    );
+
+    const corpo = () =>
+      Array.from(screen.getByTestId("tabela").querySelectorAll("tbody > tr"));
+
+    it("desenha o cabeçalho de novo na folha em que a tabela continua", () => {
+      withTabela(() => 900, () => {
+        render(<PageSheet paginated toolbar={null}>{tabela}</PageSheet>);
+        const linhas = corpo();
+        const repetido = linhas[2];
+        expect(repetido.hasAttribute("data-folha-thead-repetido")).toBe(true);
+        expect(repetido.textContent).toBe("Aluno");
+        expect(repetido.querySelectorAll("th")).toHaveLength(1);
+        // Imediatamente antes da primeira linha da folha 2, e em nenhum outro lugar.
+        expect(linhas[3]).toBe(screen.getByTestId("linha-3"));
+        expect(
+          screen.getByTestId("tabela").querySelectorAll("[data-folha-thead-repetido]"),
+        ).toHaveLength(1);
+      });
+    });
+
+    it("conta a folha que a altura do cabeçalho repetido empurra", () => {
+      // 2.000px de fluxo cabem em 2 folhas; os 40px do cabeçalho repetido
+      // passam do pé da segunda e compram a terceira.
+      withTabela((repetidos) => 2000 + 40 * repetidos, () => {
+        render(<PageSheet paginated toolbar={null}>{tabela}</PageSheet>);
+        expect(screen.getByTestId("page-count")).toHaveTextContent("3 páginas A4");
+      });
+    });
+
+    it("tira o cabeçalho repetido quando a tabela volta a caber numa folha", () => {
+      withTabela(() => 900, () => {
+        const { rerender } = render(<PageSheet paginated toolbar={null}>{tabela}</PageSheet>);
+        expect(
+          screen.getByTestId("tabela").querySelectorAll("[data-folha-thead-repetido]"),
+        ).toHaveLength(1);
+        // A edição encurta o que vem antes: a linha 3 sobe para a folha 1.
+        rerender(
+          <PageSheet paginated toolbar={null}>
+            <table data-folha-tabela="" data-testid="tabela">
+              <thead>
+                <tr data-test-top={PAGE_MARGIN_PX} data-test-bottom={PAGE_MARGIN_PX + 40}>
+                  <th>Aluno</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr data-testid="linha-1" data-test-top={PAGE_MARGIN_PX + 40} data-test-bottom={PAGE_MARGIN_PX + 80}>
+                  <td>Ana</td>
+                </tr>
+                <tr data-testid="linha-2" data-test-top={PAGE_MARGIN_PX + 80} data-test-bottom={PAGE_MARGIN_PX + 120}>
+                  <td>Bruno</td>
+                </tr>
+                <tr data-testid="linha-3" data-test-top={PAGE_MARGIN_PX + 120} data-test-bottom={PAGE_MARGIN_PX + 160}>
+                  <td>Carla</td>
+                </tr>
+              </tbody>
+            </table>
+          </PageSheet>,
+        );
+        expect(
+          screen.getByTestId("tabela").querySelectorAll("[data-folha-thead-repetido]"),
+        ).toHaveLength(0);
+        expect(corpo().map((linha) => linha.textContent)).toEqual(["Ana", "Bruno", "Carla"]);
+      });
+    });
+
+    it("não repete nada enquanto a tabela cabe numa folha só", () => {
+      withTabela(() => 900, () => {
+        render(
+          <PageSheet paginated toolbar={null}>
+            <table data-folha-tabela="" data-testid="tabela">
+              <thead>
+                <tr data-test-top={PAGE_MARGIN_PX} data-test-bottom={PAGE_MARGIN_PX + 40}>
+                  <th>Aluno</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr data-test-top={PAGE_MARGIN_PX + 40} data-test-bottom={PAGE_MARGIN_PX + 80}>
+                  <td>Ana</td>
+                </tr>
+              </tbody>
+            </table>
+          </PageSheet>,
+        );
+        expect(
+          screen.getByTestId("tabela").querySelectorAll("[data-folha-thead-repetido]"),
+        ).toHaveLength(0);
+      });
+    });
+
+    it("ignora a tabela sem cabeçalho ou sem corpo", () => {
+      withTabela(() => 900, () => {
+        render(
+          <PageSheet paginated toolbar={null}>
+            <table data-folha-tabela="" data-testid="sem-cabecalho">
+              <tbody>
+                <tr data-test-top={VIRADA + 10} data-test-bottom={VIRADA + 50}>
+                  <td>Ana</td>
+                </tr>
+              </tbody>
+            </table>
+            <table data-folha-tabela="" data-testid="sem-corpo">
+              <thead>
+                <tr data-test-top={PAGE_MARGIN_PX} data-test-bottom={PAGE_MARGIN_PX + 40}>
+                  <th>Aluno</th>
+                </tr>
+              </thead>
+            </table>
+          </PageSheet>,
+        );
+        expect(document.querySelectorAll("[data-folha-thead-repetido]")).toHaveLength(0);
+      });
+    });
+
+    it("não repete na folha do Revisar, que é contínua (achado 0198)", () => {
+      withTabela(() => 900, () => {
+        render(<PageSheet toolbar={null}>{tabela}</PageSheet>);
+        expect(
+          screen.getByTestId("tabela").querySelectorAll("[data-folha-thead-repetido]"),
+        ).toHaveLength(0);
+      });
+    });
+  });
+
+  /*
+    Achado 1108: a cópia do cabeçalho (0262) era ancorada pela linha cujo topo,
+    medido COM a cópia já no fluxo, caía na folha seguinte. A linha que
+    atravessava a régua ficava no lugar e a cópia ia para depois dela (ou, no
+    ponto fixo oposto, para cima da régua). No arquivo a linha que não cabe
+    inteira desce (`wrap={false}`, 0602) e o cabeçalho repetido abre a folha
+    seguinte, então cada folha da prévia cabia uma linha a mais que a do PDF e
+    a contagem saía uma folha curta.
+
+    O mock aqui é um layout de verdade em miniatura: cada `<tr>` empilha pela
+    ordem do DOM, então o que a folha insere empurra o que vem depois, como no
+    navegador.
+  */
+  describe("a linha que atravessa a régua desce com o cabeçalho repetido (achado 1108)", () => {
+    const CABECALHO = 40;
+    const LINHA = 100;
+    const VIRADA = PAGE_MARGIN_PX + PAGE_CONTENT_HEIGHT_PX;
+
+    const alturaDa = (tr: HTMLElement) => {
+      const espaco = tr.querySelector<HTMLElement>("td[style]");
+      if (tr.hasAttribute("data-folha-espaco")) return Number.parseFloat(espaco!.style.height);
+      return tr.querySelector("th") ? CABECALHO : LINHA;
+    };
+
+    const layout = (table: HTMLElement) => {
+      const tops = new Map<HTMLElement, [number, number]>();
+      let y = PAGE_MARGIN_PX;
+      table.querySelectorAll<HTMLElement>("tr").forEach((tr) => {
+        const h = alturaDa(tr);
+        tops.set(tr, [y, y + h]);
+        y += h;
+      });
+      tops.set(table, [PAGE_MARGIN_PX, y]);
+      return tops;
+    };
+
+    const comLayout = (run: () => void) => {
+      const altura = () => {
+        const table = document.querySelector<HTMLElement>("[data-folha-tabela]");
+        const [top, bottom] = layout(table!).get(table!)!;
+        return bottom - top;
+      };
+      const heightSpy = vi
+        .spyOn(HTMLElement.prototype, "offsetHeight", "get")
+        .mockImplementation(altura);
+      const rectSpy = vi
+        .spyOn(HTMLElement.prototype, "getBoundingClientRect")
+        .mockImplementation(function (this: HTMLElement) {
+          const table = this.closest<HTMLElement>("[data-folha-tabela]");
+          const caixa = table ? layout(table).get(this) : undefined;
+          const [top, bottom] = caixa ?? [0, 0];
+          return {
+            top,
+            bottom,
+            height: bottom - top,
+            left: 0,
+            right: 0,
+            width: 0,
+            x: 0,
+            y: top,
+            toJSON: () => ({}),
+          } as DOMRect;
+        });
+      try {
+        run();
+      } finally {
+        heightSpy.mockRestore();
+        rectSpy.mockRestore();
+      }
+    };
+
+    // Cabeçalho de 40px + 9 linhas de 100px = 940px: a 10ª linha (índice 9)
+    // começa a 76px da régua e termina 24px depois dela.
+    const tabela = (linhas: number) => (
+      <table data-folha-tabela="" data-folha-bloco="" data-testid="tabela">
+        <thead>
+          <tr>
+            <th>Etapa</th>
+          </tr>
+        </thead>
+        <tbody>
+          {Array.from({ length: linhas }, (_, i) => (
+            <tr key={i} data-testid={`linha-${i}`}>
+              <td>{`Etapa ${i + 1}`}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    );
+
+    it("abre a folha seguinte com o cabeçalho e desce a linha que não cabe", () => {
+      comLayout(() => {
+        render(<PageSheet paginated toolbar={null}>{tabela(12)}</PageSheet>);
+        const repetido = document.querySelector<HTMLElement>("[data-folha-thead-repetido]")!;
+        expect(repetido).not.toBeNull();
+        // A cópia vem imediatamente antes da linha que atravessaria a régua...
+        expect(repetido.nextElementSibling).toBe(screen.getByTestId("linha-9"));
+        // ...e começa NA régua, nunca antes dela.
+        expect(repetido.getBoundingClientRect().top).toBeCloseTo(VIRADA, 1);
+        expect(screen.getByTestId("linha-9").getBoundingClientRect().top).toBeCloseTo(
+          VIRADA + CABECALHO,
+          1,
+        );
+        // O vão no pé da folha não ganha cabeçalho nem linha de dado.
+        const espaco = repetido.previousElementSibling as HTMLElement;
+        expect(espaco.hasAttribute("data-folha-espaco")).toBe(true);
+        expect(espaco.getAttribute("aria-hidden")).toBe("true");
+      });
+    });
+
+    it("conta as folhas pelas linhas que cabem em cada uma, como o PDF", () => {
+      // 9 linhas por folha (cabeçalho + 9 x 100px): 28 linhas pedem 4 folhas.
+      // Sem descer a linha que atravessa, cabiam 10 e a prévia dizia 3.
+      comLayout(() => {
+        render(<PageSheet paginated toolbar={null}>{tabela(28)}</PageSheet>);
+        expect(screen.getByTestId("page-count")).toHaveTextContent("4 páginas A4");
+        expect(document.querySelectorAll("[data-folha-thead-repetido]")).toHaveLength(3);
+      });
+    });
+
+    it("converge: remedir a mesma geometria não mexe no DOM", () => {
+      comLayout(() => {
+        const { rerender } = render(<PageSheet paginated toolbar={null}>{tabela(12)}</PageSheet>);
+        const antes = document.querySelector("[data-folha-espaco]");
+        rerender(<PageSheet paginated toolbar={null}>{tabela(12)}</PageSheet>);
+        expect(document.querySelector("[data-folha-espaco]")).toBe(antes);
+        expect(document.querySelectorAll("[data-folha-espaco]")).toHaveLength(1);
+      });
+    });
+  });
+
 });

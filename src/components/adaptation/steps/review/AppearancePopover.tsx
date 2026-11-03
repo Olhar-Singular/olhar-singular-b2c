@@ -8,7 +8,7 @@
  * Unidades: o usuário pensa em px (tamanho 11–28); `pageStyle.fontSize` é
  * armazenado em pt (paridade direta com o PDF). Conversão px↔pt fica isolada aqui.
  */
-import type { RefObject } from "react";
+import { useRef, useState, type RefObject } from "react";
 import { Anchor as PopoverAnchor } from "@radix-ui/react-popover";
 import { Type } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -37,12 +37,11 @@ type Props = {
 
 type PopoverProps = Props & {
   /**
-   * Achado 0152: superfície da folha (a moldura da mesa). Quando informada, é
-   * ELA que ancora o painel, não o gatilho: o botão "Formato" mora na barra de
-   * chrome em cima do papel, e abrir a partir dele joga o painel sobre as
-   * primeiras linhas do documento — justo a região onde o efeito de fonte,
-   * corpo e espaçamento aparece primeiro. Ancorado na moldura e aberto à
-   * esquerda, o painel cai no vão ao lado do papel.
+   * Achados 0152/0159: superfície que contém a mesa (`page-mesa`) e a folha
+   * (`page-sheet`). Ao abrir, o painel mede o vão entre a folha e a mesa e,
+   * se um dos lados comporta o painel, ancora NA FOLHA e abre nesse vão (não
+   * cobre o papel). Ancorar no embrulho da mesa jogava o painel à esquerda da
+   * mesa, sobre a sidebar ou fora da janela. Sem vão, volta ao gatilho.
    */
   anchorRef?: RefObject<HTMLElement | null>;
 };
@@ -200,10 +199,70 @@ export function AppearanceControls({ value, onChange }: Props) {
   );
 }
 
+/** Largura do painel (`w-72`) e afastamento da âncora: o vão precisa comportar os dois. */
+const PANEL_WIDTH_PX = 288;
+const SIDE_OFFSET_PX = 12;
+
+type HorizontalSpan = { left: number; right: number };
+
+export type FormatPlacement = {
+  anchor: "sheet" | "trigger";
+  side: "left" | "right" | "bottom";
+  align: "start" | "end";
+};
+
+const TRIGGER_PLACEMENT: FormatPlacement = { anchor: "trigger", side: "bottom", align: "end" };
+
+/**
+ * Achado 0159: decide onde o painel Formato abre a partir dos retângulos
+ * medidos. O Radix não corrige o eixo x com `side="left"` (o `shift` só age no
+ * eixo do alinhamento), então a decisão de lado tem que ser tomada aqui: um vão
+ * da mesa (limitado pela janela) ao lado da folha só serve se comportar o
+ * painel inteiro; senão o painel abre abaixo do gatilho, dentro da janela.
+ */
+export function resolveFormatPlacement(
+  rects: { mesa: HorizontalSpan; sheet: HorizontalSpan; viewportWidth: number } | null,
+): FormatPlacement {
+  if (!rects) return TRIGGER_PLACEMENT;
+  const { mesa, sheet, viewportWidth } = rects;
+  const needed = PANEL_WIDTH_PX + SIDE_OFFSET_PX;
+  const leftGap = sheet.left - Math.max(mesa.left, 0);
+  const rightGap = Math.min(mesa.right, viewportWidth) - sheet.right;
+  if (leftGap >= needed) return { anchor: "sheet", side: "left", align: "start" };
+  if (rightGap >= needed) return { anchor: "sheet", side: "right", align: "start" };
+  return TRIGGER_PLACEMENT;
+}
+
 export function AppearancePopover({ value, onChange, anchorRef }: PopoverProps) {
+  const [open, setOpen] = useState(false);
+  const [placement, setPlacement] = useState<FormatPlacement>(TRIGGER_PLACEMENT);
+  const sheetRef = useRef<HTMLElement | null>(null);
+
+  // Mede no momento de abrir: o vão depende de zoom, sidebar e largura da janela.
+  const handleOpenChange = (next: boolean) => {
+    if (next) {
+      const surface = anchorRef?.current;
+      const mesa = surface?.querySelector<HTMLElement>('[data-testid="page-mesa"]');
+      const sheet = surface?.querySelector<HTMLElement>('[data-testid="page-sheet"]');
+      sheetRef.current = sheet ?? null;
+      setPlacement(
+        resolveFormatPlacement(
+          mesa && sheet
+            ? {
+                mesa: mesa.getBoundingClientRect(),
+                sheet: sheet.getBoundingClientRect(),
+                viewportWidth: window.innerWidth,
+              }
+            : null,
+        ),
+      );
+    }
+    setOpen(next);
+  };
+
   return (
-    <Popover>
-      {anchorRef && <PopoverAnchor virtualRef={anchorRef} />}
+    <Popover open={open} onOpenChange={handleOpenChange}>
+      {placement.anchor === "sheet" && <PopoverAnchor virtualRef={sheetRef as RefObject<HTMLElement>} />}
       <PopoverTrigger asChild>
         <Button
           size="sm"
@@ -217,16 +276,17 @@ export function AppearancePopover({ value, onChange, anchorRef }: PopoverProps) 
         </Button>
       </PopoverTrigger>
       {/*
-        Achado 0152: `side="left"` + `align="start"` tiram o painel de cima do
-        papel — ele sai ao lado da folha, sobre a mesa, e o professor vê o texto
-        mudar enquanto clica. `collisionPadding` mantém o painel dentro da
-        janela quando não há vão (telas estreitas), caso em que o Radix vira o
-        lado por conta própria.
+        Achados 0152/0159: o lado vem de `resolveFormatPlacement`. Com vão, o
+        painel sai ao lado da folha, sobre a mesa, e o professor vê o texto
+        mudar enquanto clica; sem vão, abre abaixo do gatilho. O
+        `collisionPadding` só desloca no eixo do alinhamento: ele não traz de
+        volta um painel que estoura no eixo do lado.
       */}
       <PopoverContent
-        side="left"
-        align="start"
-        sideOffset={12}
+        side={placement.side}
+        align={placement.align}
+        sideOffset={SIDE_OFFSET_PX}
+        data-format-anchor={placement.anchor}
         collisionPadding={16}
         aria-label="Formato"
         className="w-72 border-surface-chrome-line bg-surface-chrome text-surface-ink"

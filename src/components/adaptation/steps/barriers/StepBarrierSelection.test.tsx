@@ -18,7 +18,7 @@ const mockBarrierProfiles = [
   },
 ];
 
-const mockMutateAsync = vi.fn().mockResolvedValue(undefined);
+const mockMutateAsync = vi.fn().mockResolvedValue({ id: "new-1" });
 
 vi.mock("@/hooks/useBarrierProfiles", () => ({
   useBarrierProfiles: vi.fn(() => ({
@@ -71,10 +71,20 @@ function renderStep(data: WizardData = baseData) {
 describe("StepBarrierSelection", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockMutateAsync.mockResolvedValue(undefined);
+    mockMutateAsync.mockResolvedValue({ id: "new-1" });
     mockUseAuth.mockReturnValue({ profile: { access_kind: "legacy", credit_balance: 30, plan_credits: 0, plan_period_end: null } });
     vi.mocked(useBarrierProfiles).mockReturnValue({ data: mockBarrierProfiles, isLoading: false } as never);
     vi.mocked(useCreateBarrierProfile).mockReturnValue({ mutateAsync: mockMutateAsync, isPending: false } as never);
+  });
+
+  it("does not draw a permanent ring on the Adaptar CTA that mimics the focus indicator", () => {
+    renderStep();
+    const cta = screen.getByRole("button", { name: "Adaptar" });
+    const permanentRing = cta.className
+      .split(/\s+/)
+      .filter((c) => /^(hover:)?ring(-offset)?(-\d|-primary|$)/.test(c));
+    expect(permanentRing).toEqual([]);
+    expect(cta.className).toContain("focus-visible:ring-2");
   });
 
   it("renders the barrier step heading", () => {
@@ -274,6 +284,26 @@ describe("StepBarrierSelection", () => {
     expect(select).not.toHaveAttribute("aria-describedby");
   });
 
+  it("clears the 'select a profile' error as soon as a profile is picked, without clicking Adaptar again", async () => {
+    const user = userEvent.setup();
+    renderStep();
+    await user.click(screen.getByRole("button", { name: /adaptar/i }));
+    expect(screen.getByRole("alert")).toHaveTextContent(/selecione um perfil/i);
+    await user.selectOptions(screen.getByRole("combobox"), "prof-1");
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    const select = screen.getByRole("combobox");
+    expect(select).not.toHaveAttribute("aria-invalid");
+    expect(select).not.toHaveAttribute("aria-describedby");
+  });
+
+  it("keeps the error when the empty option is picked", async () => {
+    const user = userEvent.setup();
+    renderStep();
+    await user.click(screen.getByRole("button", { name: /adaptar/i }));
+    await user.selectOptions(screen.getByRole("combobox"), "");
+    expect(screen.getByRole("alert")).toHaveTextContent(/selecione um perfil/i);
+  });
+
   it("shows error when profile has no barriers and user clicks Adaptar", async () => {
     const user = userEvent.setup();
     renderStep({ ...baseData, barrierProfileId: "prof-1", barriers: [] });
@@ -336,9 +366,21 @@ describe("StepBarrierSelection", () => {
       barrierProfileId: "prof-1",
       barriers: [{ dimension: "tea", barrier_key: "tea_abstracao", label: "TEA", is_active: true }],
     });
-    expect(screen.getByText(/Seus créditos acabaram/i)).toBeInTheDocument();
+    // 0470: with 3 credits left they did not "run out"; say how many and the cost.
+    expect(screen.getByText(/Você tem 3 créditos; esta adaptação custa 12\./i)).toBeInTheDocument();
+    expect(screen.queryByText(/Seus créditos acabaram/i)).not.toBeInTheDocument();
     expect(screen.getByRole("link", { name: /comprar créditos extras/i })).toHaveAttribute("href", "/creditos");
     expect(screen.getByRole("link", { name: /^Assinar$/ })).toHaveAttribute("href", "/assinar");
+  });
+
+  it("says the credits ran out only when the balance is zero (0470)", () => {
+    mockUseAuth.mockReturnValue({ profile: { access_kind: "legacy", credit_balance: 0, plan_credits: 0, plan_period_end: null } });
+    renderStep({
+      ...baseData,
+      barrierProfileId: "prof-1",
+      barriers: [{ dimension: "tea", barrier_key: "tea_abstracao", label: "TEA", is_active: true }],
+    });
+    expect(screen.getByText(/Seus créditos acabaram/i)).toBeInTheDocument();
   });
 
   it("shows credit cost badge when barriers exist and the account pays", () => {
@@ -399,7 +441,7 @@ describe("StepBarrierSelection", () => {
       // 15 covers the 12 of the adaptation alone, not the 17 of the upload path.
       mockUseAuth.mockReturnValue({ profile: { access_kind: "legacy", credit_balance: 15, plan_credits: 0, plan_period_end: null } });
       renderStep({ ...baseData, barrierProfileId: "prof-1", barriers: teaBarrier, activityInputMode: "upload", uploadedExam });
-      expect(screen.getByText(/Seus créditos acabaram/i)).toBeInTheDocument();
+      expect(screen.getByText(/Você tem 15 créditos; esta adaptação custa 17\./i)).toBeInTheDocument();
     });
 
     it("does not charge the reading of a file left attached after leaving the upload mode", () => {
@@ -464,6 +506,16 @@ describe("StepBarrierSelection", () => {
       expect(screen.getByText(/Criar perfil de barreira/i)).toBeInTheDocument();
     });
 
+    it("does not scroll the whole dialog and closes it from Cancelar (0385)", async () => {
+      vi.mocked(useBarrierProfiles).mockReturnValue({ data: [], isLoading: false } as never);
+      renderStep();
+      fireEvent.click(screen.getByRole("button", { name: /criar perfil/i }));
+      const dialog = await screen.findByRole("dialog");
+      expect(dialog.className).not.toMatch(/overflow-y-auto/);
+      fireEvent.click(screen.getByRole("button", { name: /Cancelar/i }));
+      await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    });
+
     it("clicking '+ Novo' opens the creation dialog", async () => {
       const user = userEvent.setup();
       renderStep();
@@ -495,6 +547,18 @@ describe("StepBarrierSelection", () => {
       await waitFor(() =>
         expect(mockMutateAsync).toHaveBeenCalledWith(expect.objectContaining({ name: "Perfil Teste" })),
       );
+    });
+
+    it("blocks creating a profile whose name already exists (0386)", async () => {
+      const user = userEvent.setup();
+      renderStep();
+      await user.click(screen.getByRole("button", { name: /novo/i }));
+      await waitFor(() => screen.getByRole("dialog"));
+      await user.type(screen.getByLabelText(/Nome do perfil/i), "aluno tea");
+      await user.click(within(screen.getByRole("dialog")).getAllByRole("checkbox")[0]);
+      await user.click(screen.getByRole("button", { name: /salvar perfil/i }));
+      expect(await screen.findByText(/Já existe um perfil com esse nome/i)).toBeInTheDocument();
+      expect(mockMutateAsync).not.toHaveBeenCalled();
     });
 
     it("dialog closes after successful submission", async () => {
@@ -539,8 +603,39 @@ describe("StepBarrierSelection", () => {
       );
     });
 
+    it("selects the profile just created, not the previous one, when other profiles exist (0383)", async () => {
+      const user = userEvent.setup();
+      const created = { id: "new-2", user_id: "user-1", barriers: ["tea_abstracao"], name: "Perfil Caca R15", observation: null, created_at: "2026-06-18" };
+      mockMutateAsync.mockResolvedValue(created);
+      const { rerender } = renderStep();
+
+      fireEvent.click(screen.getByRole("button", { name: /novo/i }));
+      await screen.findByRole("dialog");
+      await user.type(screen.getByLabelText(/Nome do perfil/i), "Perfil Caca R15");
+      await user.click(within(screen.getByRole("dialog")).getAllByRole("checkbox")[0]);
+      await user.click(screen.getByRole("button", { name: /salvar perfil/i }));
+      await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+
+      // The list has not refetched yet: the previous profile must not be picked.
+      expect(mockUpdateData).not.toHaveBeenCalledWith(expect.objectContaining({ barrierProfileId: "prof-1" }));
+
+      vi.mocked(useBarrierProfiles).mockReturnValue({ data: [created, ...mockBarrierProfiles], isLoading: false } as never);
+      const qc2 = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+      rerender(
+        <QueryClientProvider client={qc2}>
+          <MemoryRouter><StepBarrierSelection data={baseData} updateData={mockUpdateData} onNext={mockOnNext} onPrev={mockOnPrev} /></MemoryRouter>
+        </QueryClientProvider>,
+      );
+
+      await waitFor(() =>
+        expect(mockUpdateData).toHaveBeenCalledWith(expect.objectContaining({ barrierProfileId: "new-2" })),
+      );
+      expect(mockUpdateData).not.toHaveBeenCalledWith(expect.objectContaining({ barrierProfileId: "prof-1" }));
+    });
+
     it("auto-select: maps unknown key to dimension 'other' when profiles refetch", async () => {
       const user = userEvent.setup();
+      mockMutateAsync.mockResolvedValue({ id: "p-unk" });
       vi.mocked(useBarrierProfiles).mockReturnValue({ data: [], isLoading: false } as never);
       const { rerender } = renderStep();
 
@@ -580,6 +675,72 @@ describe("StepBarrierSelection", () => {
       await user.click(screen.getByRole("button", { name: /criar perfil/i }));
       await waitFor(() => screen.getByRole("dialog"));
       expect(screen.getByRole("button", { name: /salvando/i })).toBeDisabled();
+    });
+  });
+
+  /**
+   * 1122: the dialog is opened by state, with no `DialogTrigger`, so Radix
+   * restores focus to `previouslyFocusedElement`, which ends up being `<body>`.
+   * Closing must hand focus back to the button that opened it; after a profile
+   * is created, focus goes to the select showing the new profile.
+   */
+  describe("focus return when the dialog closes (1122)", () => {
+    async function fillAndSave(user: ReturnType<typeof userEvent.setup>, name: string) {
+      await user.type(screen.getByLabelText(/Nome do perfil/i), name);
+      await user.click(within(screen.getByRole("dialog")).getAllByRole("checkbox")[0]);
+      await user.click(screen.getByRole("button", { name: /salvar perfil/i }));
+    }
+
+    it("returns focus to '+ Novo' when the dialog is dismissed with Escape", async () => {
+      renderStep();
+      const novo = screen.getByRole("button", { name: /novo/i });
+      fireEvent.click(novo);
+      const dialog = await screen.findByRole("dialog");
+      fireEvent.keyDown(dialog, { key: "Escape" });
+      await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+      expect(document.activeElement).toBe(novo);
+    });
+
+    it("returns focus to 'Criar perfil' when the dialog is closed by the X", async () => {
+      vi.mocked(useBarrierProfiles).mockReturnValue({ data: [], isLoading: false } as never);
+      renderStep();
+      const trigger = screen.getByRole("button", { name: /criar perfil/i });
+      fireEvent.click(trigger);
+      await screen.findByRole("dialog");
+      fireEvent.click(screen.getByRole("button", { name: /close/i }));
+      await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+      expect(document.activeElement).toBe(trigger);
+    });
+
+    it("focuses the profile select after creating a profile from '+ Novo'", async () => {
+      const user = userEvent.setup();
+      renderStep();
+      fireEvent.click(screen.getByRole("button", { name: /novo/i }));
+      await screen.findByRole("dialog");
+      await fillAndSave(user, "Outro");
+      await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+      await waitFor(() => expect(document.activeElement).toBe(screen.getByLabelText(/Perfil de barreira/i)));
+    });
+
+    it("focuses the profile select once it appears after creating the first profile", async () => {
+      const user = userEvent.setup();
+      vi.mocked(useBarrierProfiles).mockReturnValue({ data: [], isLoading: false } as never);
+      const { rerender } = renderStep();
+      fireEvent.click(screen.getByRole("button", { name: /criar perfil/i }));
+      await screen.findByRole("dialog");
+      await fillAndSave(user, "Primeiro");
+      await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+      expect(document.activeElement).toBe(document.body);
+
+      const newProfile = { id: "new-1", user_id: "u1", barriers: ["tea_abstracao"], name: "Primeiro", observation: null, created_at: "2026-06-18" };
+      vi.mocked(useBarrierProfiles).mockReturnValue({ data: [newProfile], isLoading: false } as never);
+      const qc2 = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+      rerender(
+        <QueryClientProvider client={qc2}>
+          <MemoryRouter><StepBarrierSelection data={baseData} updateData={mockUpdateData} onNext={mockOnNext} onPrev={mockOnPrev} /></MemoryRouter>
+        </QueryClientProvider>,
+      );
+      await waitFor(() => expect(document.activeElement).toBe(screen.getByLabelText(/Perfil de barreira/i)));
     });
   });
 });

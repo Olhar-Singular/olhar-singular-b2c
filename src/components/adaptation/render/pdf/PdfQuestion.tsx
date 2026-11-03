@@ -27,11 +27,18 @@ import { View, Text } from "@react-pdf/renderer";
 import type { Block } from "@/lib/adaptation/canonical/schema";
 import { nodeStyleToPdf, pageBreakBefore } from "./nodeStyleToPdf";
 import { PdfRichText } from "./PdfRichText";
-import { PdfAnswer } from "./PdfAnswer";
+import { PdfAnswer, tableLeadPresencePt } from "./PdfAnswer";
 import { PdfBlock } from "./PdfBlock";
 import { PdfParagraph } from "./PdfLeafBlocks";
 import { questionNumbers } from "../questionNumbering";
-import { BASE_FONT_PT, INK_MUTED, pdfTextSize, questionNumberColumnPt } from "../pageTokens";
+import {
+  BASE_FONT_PT,
+  INK_MUTED,
+  PAGE_HEIGHT_PT,
+  PAGE_MARGIN_PT,
+  pdfTextSize,
+  questionNumberColumnPt,
+} from "../pageTokens";
 import { resolveElementFontSizes, resolvePageStyle, type ElementFontSizesPt } from "../pageStyle";
 
 type QuestionBlock = Extract<Block, { type: "question" }>;
@@ -52,8 +59,22 @@ const DEFAULT_ELEMENT_SIZES = resolveElementFontSizes(resolvePageStyle());
  * documento: dois paragrafos do mesmo enunciado saiam com o dobro do respiro da
  * previa. 6pt = 8px, o mesmo que as duas telas usam entre irmaos do stem
  * (`space-y-2` no QuestionView, `p + p` do `.question-stem` na folha).
+ * Vale tambem depois do enunciado e da instrucao (achado 0270): o papel usava
+ * 4pt ali e as telas 8px, e a previa, que pagina sobre essa geometria, empurrava
+ * blocos para folhas onde o arquivo nao os punha.
  */
 const QUESTION_INNER_GAP_PT = 6;
+
+/**
+ * Presença à frente do marco do grupo abertura + APOIO (achado 0530): a área
+ * útil da folha. O react-pdf a limita ao fim do último irmão do grupo (a
+ * caixa), então ela pede "o grupo inteiro" sempre que o grupo cabe numa folha.
+ * Grupo maior que a folha: pede só a folha, e no topo dela isso já está
+ * cumprido, então não há descida para uma folha em branco. O `- 1` absorve o
+ * arredondamento do token: o A4 do react-pdf tem 841,89pt, não 842, e a
+ * presença de uma folha cheia ficava 0,11pt acima do que a folha oferece.
+ */
+const KEEP_WITH_SCAFFOLDING_PT = PAGE_HEIGHT_PT - 2 * PAGE_MARGIN_PT - 1;
 
 export function PdfQuestion({
   block,
@@ -82,7 +103,7 @@ export function PdfQuestion({
 
   const enunciadoView = (prefix?: ReactNode) =>
     hasEnunciado ? (
-      <View style={{ marginBottom: 4 }}>
+      <View style={{ marginBottom: QUESTION_INNER_GAP_PT }}>
         <Text style={{ ...pdfTextSize(elementSizes.stem) }}>
           {prefix}
           <PdfRichText content={block.enunciado!} fontSize={elementSizes.stem} />
@@ -136,12 +157,48 @@ export function PdfQuestion({
     />
   ));
 
+  const leadView = enunciadoLeads ? (
+    enunciadoView(numberRun)
+  ) : (
+    <PdfParagraph block={leadingStem} blockGap={QUESTION_INNER_GAP_PT} numberPrefix={numberRun} baseFontSize={baseFontSize} />
+  );
+  const afterLead = paragraphLeads ? 1 : 0;
+  const nextAfterLead = block.stem[afterLead];
+
+  /**
+   * APOIO logo depois do texto de abertura (achado 0530). A caixa é
+   * indivisível (0177) e o react-pdf quebra ANTES dela quando não cabe,
+   * deixando número + enunciado sozinhos no pé da folha. No grupo abertura +
+   * caixa, um marco de altura zero exige à frente a presença do grupo inteiro
+   * (`KEEP_WITH_SCAFFOLDING_PT`) e, quando ela falta, o grupo desce junto. O
+   * react-pdf só quebra antes de um nó com irmão anterior, daí o segundo
+   * marco abrindo o grupo. Nada vira `wrap={false}`: abertura longa continua
+   * fatiável e nada é cortado.
+   *
+   * A FIGURA logo depois da abertura (achado 1135) tem a mesma forma: o
+   * <Image> do react-pdf é indivisível e "Observe a figura e responda:" ficava
+   * sozinho no pé da folha. Mesmo grupo, mesmo marco.
+   */
+  const leadKeepsIndivisible =
+    (nextAfterLead?.type === "scaffolding" || nextAfterLead?.type === "image") &&
+    !pageBreakBefore(nextAfterLead.style);
+
+  const leadGroup = leadKeepsIndivisible ? (
+    <View>
+      <View style={{ height: 0 }} />
+      <View style={{ height: 0 }} minPresenceAhead={KEEP_WITH_SCAFFOLDING_PT} />
+      {leadView}
+      {stemBlocks[afterLead]}
+    </View>
+  ) : (
+    leadView
+  );
+
   const body =
     enunciadoLeads || paragraphLeads ? (
       <View style={{ paddingLeft: numberColumn }}>
-        {enunciadoLeads ? enunciadoView(numberRun) : null}
-        {paragraphLeads ? <PdfParagraph block={leadingStem} blockGap={QUESTION_INNER_GAP_PT} numberPrefix={numberRun} baseFontSize={baseFontSize} /> : null}
-        {paragraphLeads ? stemBlocks.slice(1) : stemBlocks}
+        {leadGroup}
+        {stemBlocks.slice(afterLead + (leadKeepsIndivisible ? 1 : 0))}
         {position === "below" && enunciadoView()}
       </View>
     ) : (
@@ -155,19 +212,61 @@ export function PdfQuestion({
       </View>
     );
 
+  /** `gapBelow`: a junta até a resposta, que a questão-tabela tira daqui (0515). */
+  const instructionView = (gapBelow: number) =>
+    block.instruction && (
+      <View style={{ marginBottom: gapBelow }}>
+        <Text style={{ fontStyle: "italic", color: INK_MUTED, ...pdfTextSize(elementSizes.instruction) }}>
+          <PdfRichText content={block.instruction} fontSize={elementSizes.instruction} />
+        </Text>
+      </View>
+    );
+
+  const answerView = <PdfAnswer answer={block.answer} elementSizes={elementSizes} baseFontSize={baseFontSize} />;
+
+  /**
+   * Questão-tabela (achado 0515): o guard do 0193 mora DENTRO da resposta e,
+   * ao empurrar a tabela para a folha seguinte, deixava número, enunciado e
+   * instrução sozinhos no pé da folha. Aqui o grupo enunciado + instrução
+   * exige, abaixo dele, o papel do cabeçalho + uma linha, e desce inteiro
+   * quando ele falta.
+   *
+   * O grupo e a resposta saem como IRMÃOS no fluxo de quem contém a questão
+   * (fragmento, não uma `View` única): o react-pdf só quebra antes de um nó
+   * que tem irmão anterior, então dentro da `View` da questão o grupo, primeiro
+   * filho, nunca desceria. Fora dela, no topo da folha, o próprio react-pdf
+   * recusa a quebra (não gera folha em branco).
+   *
+   * A junta abaixo da instrução vira recuo de cima da resposta: o react-pdf
+   * soma a margem de baixo de um nó à presença que ele exige, e a margem que
+   * transbordava o pé da folha empurrava SÓ a instrução para a folha seguinte,
+   * deixando o enunciado sozinho. A tabela longa continua fatiável linha a
+   * linha (0702): nada aqui é `wrap={false}`.
+   */
+  if (block.answer.kind === "table") {
+    const nodeStyle = nodeStyleToPdf(block.style);
+    const gapAbove = block.instruction ? QUESTION_INNER_GAP_PT : 0;
+    return (
+      <>
+        <View
+          minPresenceAhead={tableLeadPresencePt(baseFontSize) + gapAbove}
+          style={{ flexDirection: "column", ...nodeStyle, marginBottom: 0 }}
+        >
+          {body}
+          {instructionView(0)}
+        </View>
+        <View style={{ flexDirection: "column", marginBottom: blockGap, ...nodeStyle, paddingTop: gapAbove }}>
+          {answerView}
+        </View>
+      </>
+    );
+  }
+
   return (
     <View style={{ flexDirection: "column", marginBottom: blockGap, ...nodeStyleToPdf(block.style) }}>
       {body}
-
-      {block.instruction && (
-        <View style={{ marginBottom: 4 }}>
-          <Text style={{ fontStyle: "italic", color: INK_MUTED, ...pdfTextSize(elementSizes.instruction) }}>
-            <PdfRichText content={block.instruction} fontSize={elementSizes.instruction} />
-          </Text>
-        </View>
-      )}
-
-      <PdfAnswer answer={block.answer} elementSizes={elementSizes} baseFontSize={baseFontSize} />
+      {instructionView(QUESTION_INNER_GAP_PT)}
+      {answerView}
     </View>
   );
 }

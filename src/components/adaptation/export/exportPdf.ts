@@ -17,6 +17,7 @@ import type { PanelSettings } from "./panelSettings";
 import { DEFAULT_PANEL_SETTINGS } from "./panelSettings";
 import { AdaptationPdf } from "@/components/adaptation/render/pdf/AdaptationPdf";
 import { registerPdfFonts } from "@/components/adaptation/render/pdf/registerFonts";
+import { documentTitle } from "@/components/adaptation/titleField";
 
 /** Build the react-pdf <Document> element for the given document + settings + optional page style. */
 export function buildPdfDocument(
@@ -28,9 +29,17 @@ export function buildPdfDocument(
   return createElement(AdaptationPdf, { document, settings, pageStyle });
 }
 
-/** Derive a safe download filename from the panel header title. */
-export function pdfFileName(settings: PanelSettings = DEFAULT_PANEL_SETTINGS): string {
-  const title = settings.header.title?.trim();
+/**
+ * Derive a safe download filename from the panel header title.
+ *
+ * Achado 0100: with no header title, fall back to the document's first heading
+ * (`documentTitle`), the same chain the printed title and the PDF /Title use.
+ */
+export function pdfFileName(
+  settings: PanelSettings = DEFAULT_PANEL_SETTINGS,
+  document?: CanonicalDocument,
+): string {
+  const title = settings.header.title?.trim() || (document ? documentTitle(document) : "");
   if (!title) return "atividade-adaptada.pdf";
   const slug = title
     .toLowerCase()
@@ -52,7 +61,7 @@ export async function downloadPdf(
   const url = URL.createObjectURL(blob);
   const link = window.document.createElement("a");
   link.href = url;
-  link.download = pdfFileName(settings);
+  link.download = pdfFileName(settings, document);
   window.document.body.appendChild(link);
   link.click();
   link.remove();

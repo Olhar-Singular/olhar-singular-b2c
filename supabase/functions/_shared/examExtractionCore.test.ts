@@ -5,6 +5,7 @@ import {
   buildExtractionMessages,
   isAcceptedPageImage,
   parseExtractionResponse,
+  parseExtractionHeader,
   validateExamExtractionRequest,
   validateQuestionBankExtractionRequest,
   OCR_SYSTEM_PROMPT,
@@ -16,6 +17,7 @@ import {
   MAX_PAGE_IMAGES_TOTAL_CHARS,
   MAX_FILE_NAME_CHARS,
   EXTRACTION_TIMEOUT_MS,
+  EXTRACTION_TOOL_SCHEMA,
 } from "./examExtractionCore";
 
 describe("buildExtractionMessages", () => {
@@ -93,6 +95,47 @@ describe("parseExtractionResponse", () => {
   it("returns the questions array from a valid tool call", () => {
     const aiData = withToolCallArgs(JSON.stringify({ questions: [{ text: "Q1", subject: "Matemática" }] }));
     expect(parseExtractionResponse(aiData)).toEqual([{ text: "Q1", subject: "Matemática" }]);
+  });
+
+  it("turns a literal backslash-n escaped by the model into a real line break (0277)", () => {
+    const aiData = withToolCallArgs(
+      JSON.stringify({
+        questions: [
+          {
+            text: "Observe a tabela:\\n\\nFruta\\r\\nPreço",
+            subject: "Matemática",
+            options: ["a)\\nUm", "b) Dois"],
+            resolution: "Passo 1\\nPasso 2",
+          },
+        ],
+      }),
+    );
+    expect(parseExtractionResponse(aiData)).toEqual([
+      {
+        text: "Observe a tabela:\n\nFruta\nPreço",
+        subject: "Matemática",
+        options: ["a)\nUm", "b) Dois"],
+        resolution: "Passo 1\nPasso 2",
+      },
+    ]);
+  });
+
+  it("keeps backslash-n inside math delimiters (LaTeX like \\neq) untouched", () => {
+    const text = "Se $x \\neq 0$ e \\(a \\nabla b\\) então\\nfim";
+    const aiData = withToolCallArgs(JSON.stringify({ questions: [{ text, subject: "Matemática" }] }));
+    expect(parseExtractionResponse(aiData)[0].text).toBe(
+      "Se $x \\neq 0$ e \\(a \\nabla b\\) então\nfim",
+    );
+  });
+
+  it("leaves non-string fields and non-object questions as they came", () => {
+    const aiData = withToolCallArgs(
+      JSON.stringify({ questions: [{ text: 42, subject: "X", options: [1, "a\\nb"] }, null] }),
+    );
+    expect(parseExtractionResponse(aiData)).toEqual([
+      { text: 42, subject: "X", options: [1, "a\nb"] },
+      null,
+    ]);
   });
 
   it("returns an empty array when there is no tool call", () => {
@@ -291,5 +334,61 @@ describe("named constants", () => {
   it("exposes an extraction timeout well under the edge runtime's own wall-clock limit", () => {
     expect(EXTRACTION_TIMEOUT_MS).toBe(100_000);
     expect(EXTRACTION_TIMEOUT_MS).toBeLessThan(400_000);
+  });
+});
+
+describe("figure_description rule (0472)", () => {
+  const ruleLine =
+    OCR_SYSTEM_PROMPT.split("\n").find((line) => line.includes('"figure_description"')) ?? "";
+
+  it("limits the description to what is printed in the figure", () => {
+    expect(ruleLine).toMatch(/ONLY what is visibly printed/);
+  });
+
+  it("forbids naming labels or values the figure does not print, e.g. taken from the alternatives", () => {
+    expect(ruleLine).toMatch(/NEVER name a label, category or value that is not printed/);
+    expect(ruleLine).toMatch(/alternatives/);
+  });
+
+  it("forbids answering the question or comparing what it asks the student to compare", () => {
+    expect(ruleLine).toMatch(/NEVER say which option answers the question/);
+    expect(ruleLine).toMatch(/compare the values the question asks the student to compare/);
+  });
+
+  it("repeats the restriction in the tool schema field description", () => {
+    const items = EXTRACTION_TOOL_SCHEMA.function.parameters.properties.questions.items;
+    expect(items.properties.figure_description.description).toMatch(/only visible elements/i);
+    expect(items.properties.figure_description.description).toMatch(/never the answer/i);
+  });
+});
+
+describe("document header: title and general instruction (0473)", () => {
+  function withToolCallArgs(args: string) {
+    return { choices: [{ message: { tool_calls: [{ function: { arguments: args } }] } }] };
+  }
+
+  it("asks the model for the exam title and the instruction printed before question 1", () => {
+    const props = EXTRACTION_TOOL_SCHEMA.function.parameters.properties as Record<string, { type: string }>;
+    expect(props.title.type).toBe("string");
+    expect(props.intro.type).toBe("string");
+    expect(OCR_SYSTEM_PROMPT).toMatch(/"title"/);
+    expect(OCR_SYSTEM_PROMPT).toMatch(/"intro"/);
+  });
+
+  it("reads the title and intro from the tool call, trimmed and with real line breaks", () => {
+    const aiData = withToolCallArgs(
+      JSON.stringify({ title: "  Atividade de Matematica - Feira ", intro: "Leia.\\nResponda.", questions: [] }),
+    );
+    expect(parseExtractionHeader(aiData)).toEqual({ title: "Atividade de Matematica - Feira", intro: "Leia.\nResponda." });
+  });
+
+  it("returns nulls for missing, blank or non-string fields", () => {
+    expect(parseExtractionHeader(withToolCallArgs(JSON.stringify({ title: " ", intro: 3 })))).toEqual({
+      title: null,
+      intro: null,
+    });
+    expect(parseExtractionHeader(withToolCallArgs("{not json"))).toEqual({ title: null, intro: null });
+    expect(parseExtractionHeader(withToolCallArgs("null"))).toEqual({ title: null, intro: null });
+    expect(parseExtractionHeader(null)).toEqual({ title: null, intro: null });
   });
 });

@@ -17,11 +17,23 @@ import {
   setOrderingContent,
   reorderOrdering,
   setGapAnswer,
+  setGapTip,
+  setGapAlternatives,
   addGap,
   removeGap,
   setAnswerLines,
   setTableCell,
   changeAnswerKind,
+  addTrueFalseItem,
+  removeTrueFalseItem,
+  addCheckboxItem,
+  removeCheckboxItem,
+  addOrderingItem,
+  removeOrderingItem,
+  addTableRow,
+  removeTableRow,
+  addTableColumn,
+  removeTableColumn,
 } from "./answerOps";
 
 const rt = (text: string): RichText => [{ type: "text", text }];
@@ -362,7 +374,25 @@ describe("reorderOrdering", () => {
       ordering.items[0].id,
       ordering.items[1].id,
     ]);
-    expect(next.items.map((i) => i.position)).toEqual([0, 1, 2]);
+    // Achado 1101: `position` is the answer key, the array order is the printed order.
+    expect(next.items.map((i) => i.position)).toEqual([2, 0, 1]);
+  });
+
+  it("keeps each item's answer-key position (base 1 from the AI) when moving", () => {
+    const keyed: QuestionAnswer = {
+      kind: "ordering",
+      items: [
+        { id: "99999999-9999-4999-8999-999999999999", content: text("A"), position: 1 },
+        { id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", content: text("B"), position: 2 },
+        { id: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb", content: text("C"), position: 3 },
+      ],
+    };
+    const next = reorderOrdering(keyed, 0, 1);
+    expect(next.kind === "ordering" && next.items.map((i) => [i.content, i.position])).toEqual([
+      [text("B"), 2],
+      [text("A"), 1],
+      [text("C"), 3],
+    ]);
   });
 
   it("moves an item down", () => {
@@ -417,16 +447,58 @@ describe("removeGap", () => {
     expect(next.gaps[0].id).toBe(fillBlank.gaps[1].id);
   });
 
-  it("keeps at least one gap", () => {
+  // Achado 0503: com a lacuna impressa sincronizada, remover a última é
+  // coerente — `buildAnswer` já nasce com `gaps: []` ao trocar o tipo.
+  it("permite remover a última lacuna", () => {
     const single: Extract<QuestionAnswer, { kind: "fillBlank" }> = {
       kind: "fillBlank",
       gaps: [fillBlank.gaps[0]],
     };
-    expect(removeGap(single, single.gaps[0].id)).toBe(single);
+    expect(removeGap(single, single.gaps[0].id).gaps).toEqual([]);
   });
 
   it("returns unchanged for non-fillBlank", () => {
     expect(removeGap(mc, "x")).toBe(mc);
+  });
+});
+
+/**
+ * Achado 0502: `tip` e `alternatives` entravam no canônico pela IA e ficavam sem
+ * leitor nem editor. Agora o card os edita — string vazia apaga o campo, para o
+ * documento não guardar `tip: ""`.
+ */
+describe("setGapTip", () => {
+  it("sets the tip of the targeted gap", () => {
+    const next = setGapTip(fillBlank, fillBlank.gaps[0].id, "comeca com E");
+    expect(next.gaps[0].tip).toBe("comeca com E");
+    expect(next.gaps[1].tip).toBeUndefined();
+  });
+
+  it("drops the field when the tip is blank", () => {
+    const withTip = setGapTip(fillBlank, fillBlank.gaps[0].id, "dica");
+    const next = setGapTip(withTip, fillBlank.gaps[0].id, "   ");
+    expect(next.gaps[0]).not.toHaveProperty("tip");
+  });
+
+  it("returns unchanged for non-fillBlank", () => {
+    expect(setGapTip(mc, "x", "d")).toBe(mc);
+  });
+});
+
+describe("setGapAlternatives", () => {
+  it("splits the comma-separated list, trimming and dropping empties", () => {
+    const next = setGapAlternatives(fillBlank, fillBlank.gaps[0].id, " evaporação , ,EVAPORACAO ");
+    expect(next.gaps[0].alternatives).toEqual(["evaporação", "EVAPORACAO"]);
+  });
+
+  it("drops the field when nothing is left", () => {
+    const withAlts = setGapAlternatives(fillBlank, fillBlank.gaps[0].id, "a");
+    const next = setGapAlternatives(withAlts, fillBlank.gaps[0].id, " , ");
+    expect(next.gaps[0]).not.toHaveProperty("alternatives");
+  });
+
+  it("returns unchanged for non-fillBlank", () => {
+    expect(setGapAlternatives(mc, "x", "a")).toBe(mc);
   });
 });
 
@@ -636,5 +708,126 @@ describe("changeAnswerKind", () => {
     const a4 = changeAnswerKind(a3, "multipleChoice", g);
     expect(a4.kind).toBe("multipleChoice");
     expect(QuestionAnswerSchema.safeParse(a4).success).toBe(true);
+  });
+});
+
+/**
+ * Achado 0369: V/F, checkbox, ordenação e tabela não tinham como crescer nem
+ * encolher no card. `changeAnswerKind` cria 1 item (ou tabela 1x2) e a
+ * quantidade ficava definitiva.
+ */
+describe("0369 — add/remove em trueFalse, checkbox, ordering e table", () => {
+  const ID = (n: number) => `${String(n).repeat(8)}-${String(n).repeat(4)}-4${String(n).repeat(3)}-8${String(n).repeat(3)}-${String(n).repeat(12)}`;
+  const g = () => ID(9);
+  const tf: QuestionAnswer = {
+    kind: "trueFalse",
+    items: [
+      { id: ID(1), content: rt("a"), value: true },
+      { id: ID(2), content: rt("b"), value: false },
+    ],
+  };
+  const cb: QuestionAnswer = {
+    kind: "checkbox",
+    items: [
+      { id: ID(1), content: rt("a"), checked: true },
+      { id: ID(2), content: rt("b"), checked: false },
+    ],
+  };
+  const ord: QuestionAnswer = {
+    kind: "ordering",
+    items: [
+      { id: ID(1), content: rt("a"), position: 0 },
+      { id: ID(2), content: rt("b"), position: 1 },
+      { id: ID(3), content: rt("c"), position: 2 },
+    ],
+  };
+  const tbl: QuestionAnswer = {
+    kind: "table",
+    rows: [
+      [rt("a"), rt("b")],
+      [rt("c"), rt("d")],
+    ],
+  };
+
+  it("trueFalse: adds an empty statement and removes by id, keeping at least one", () => {
+    const added = addTrueFalseItem(tf, g);
+    expect(added).toEqual({ ...tf, items: [...(tf as { items: unknown[] }).items, { id: ID(9), content: [], value: true }] });
+    expect(QuestionAnswerSchema.safeParse(added).success).toBe(true);
+    const removed = removeTrueFalseItem(tf, ID(1));
+    expect(removed).toEqual({ kind: "trueFalse", items: [{ id: ID(2), content: rt("b"), value: false }] });
+    expect(removeTrueFalseItem(removed, ID(2))).toBe(removed);
+    expect(addTrueFalseItem(cb)).toBe(cb);
+    expect(removeTrueFalseItem(cb, ID(1))).toBe(cb);
+  });
+
+  it("checkbox: adds an unchecked option and removes by id, keeping at least one", () => {
+    const added = addCheckboxItem(cb, g);
+    expect(added).toEqual({ ...cb, items: [...(cb as { items: unknown[] }).items, { id: ID(9), content: [], checked: false }] });
+    const removed = removeCheckboxItem(cb, ID(2));
+    expect(removed).toEqual({ kind: "checkbox", items: [{ id: ID(1), content: rt("a"), checked: true }] });
+    expect(removeCheckboxItem(removed, ID(1))).toBe(removed);
+    expect(addCheckboxItem(tf)).toBe(tf);
+    expect(removeCheckboxItem(tf, ID(1))).toBe(tf);
+  });
+
+  it("ordering: adds at the end after the highest position and keeps the answer key on remove, keeping at least one", () => {
+    const added = addOrderingItem(ord, g);
+    expect(added.kind === "ordering" && added.items.at(-1)).toEqual({ id: ID(9), content: [], position: 3 });
+    // Achado 1101: base-1 key shuffled in print; "+ Item" must not collide with position 3.
+    const keyed: QuestionAnswer = {
+      kind: "ordering",
+      items: [
+        { id: ID(1), content: rt("a"), position: 3 },
+        { id: ID(2), content: rt("b"), position: 1 },
+        { id: ID(3), content: rt("c"), position: 2 },
+      ],
+    };
+    const addedKeyed = addOrderingItem(keyed, g);
+    expect(addedKeyed.kind === "ordering" && addedKeyed.items.at(-1)).toEqual({ id: ID(9), content: [], position: 4 });
+    expect(removeOrderingItem(keyed, ID(2))).toEqual({
+      kind: "ordering",
+      items: [
+        { id: ID(1), content: rt("a"), position: 3 },
+        { id: ID(3), content: rt("c"), position: 2 },
+      ],
+    });
+    const removed = removeOrderingItem(ord, ID(1));
+    expect(removed).toEqual({
+      kind: "ordering",
+      items: [
+        { id: ID(2), content: rt("b"), position: 1 },
+        { id: ID(3), content: rt("c"), position: 2 },
+      ],
+    });
+    const single: QuestionAnswer = { kind: "ordering", items: [{ id: ID(1), content: [], position: 0 }] };
+    expect(removeOrderingItem(single, ID(1))).toBe(single);
+    expect(addOrderingItem(tf)).toBe(tf);
+    expect(removeOrderingItem(tf, ID(1))).toBe(tf);
+  });
+
+  it("table: adds/removes rows and columns keeping rows rectangular and at least 1x1", () => {
+    expect(addTableRow(tbl)).toEqual({ kind: "table", rows: [[rt("a"), rt("b")], [rt("c"), rt("d")], [[], []]] });
+    expect(addTableRow({ kind: "table", rows: [] })).toEqual({ kind: "table", rows: [[[]]] });
+    expect(addTableColumn(tbl)).toEqual({ kind: "table", rows: [[rt("a"), rt("b"), []], [rt("c"), rt("d"), []]] });
+    expect(addTableColumn({ kind: "table", rows: [] })).toEqual({ kind: "table", rows: [[[]]] });
+    expect(removeTableRow(tbl, 0)).toEqual({ kind: "table", rows: [[rt("c"), rt("d")]] });
+    expect(removeTableColumn(tbl, 1)).toEqual({ kind: "table", rows: [[rt("a")], [rt("c")]] });
+    const oneRow: QuestionAnswer = { kind: "table", rows: [[rt("a"), rt("b")]] };
+    expect(removeTableRow(oneRow, 0)).toBe(oneRow);
+    const oneCol: QuestionAnswer = { kind: "table", rows: [[rt("a")], [rt("b")]] };
+    expect(removeTableColumn(oneCol, 0)).toBe(oneCol);
+    expect(removeTableRow(tbl, 5)).toBe(tbl);
+    expect(removeTableColumn(tbl, -1)).toBe(tbl);
+    expect(removeTableColumn(tbl, 2)).toBe(tbl);
+    expect(addTableRow(tf)).toBe(tf);
+    expect(addTableColumn(tf)).toBe(tf);
+    expect(removeTableRow(tf, 0)).toBe(tf);
+    expect(removeTableColumn(tf, 0)).toBe(tf);
+  });
+
+  it("table: a ragged table becomes rectangular when growing", () => {
+    const ragged: QuestionAnswer = { kind: "table", rows: [[rt("a")], [rt("b"), rt("c")]] };
+    expect(addTableRow(ragged)).toEqual({ kind: "table", rows: [[rt("a"), []], [rt("b"), rt("c")], [[], []]] });
+    expect(addTableColumn(ragged)).toEqual({ kind: "table", rows: [[rt("a"), [], []], [rt("b"), rt("c"), []]] });
   });
 });

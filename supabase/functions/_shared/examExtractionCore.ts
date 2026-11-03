@@ -65,7 +65,7 @@ EXTRACTION RULES:
 - Extract ALL question formats, not only multiple choice: open-ended/essay (dissertativa), true-false (verdadeiro/falso), fill-in-the-blank (completar lacunas), matching (associação/colunas), and multiple choice. A question without alternatives is still a question — extract it with an empty "options" array.
 - Accepted numbering patterns: "1." / "1)" / "Q1" / "Questão 1" / "QUESTÃO 1" / Roman numerals ("I.", "II.", "III.")
 - NEVER invent, deduce, or complete truncated statements — return the text exactly as it appears in the document
-- Ignore headers, footers, school name, teacher name, watermarks
+- Ignore headers, footers, school name, teacher name, watermarks (the activity's own title and general instruction are NOT headers: return them in "title" and "intro")
 - Preserve all units and math symbols exactly (m/s², 10⁸, ≥, ≤, etc.)
 
 FIELD RULES:
@@ -73,8 +73,10 @@ FIELD RULES:
 - "correct_answer": set ONLY if an explicit answer key appears in the document (e.g. "Gabarito: B", "Resposta: C"). Index: 0=A, 1=B, 2=C, 3=D, 4=E. Use -1 in ALL other cases — never solve or guess.
 - "resolution": short explanation (1-3 sentences)
 - "has_figure": true if the question text references a figure, diagram, graph, table, or image — even if it is not visible in the scan
-- "figure_description": describe what the figure shows, or what the question says about it if not visible
+- "figure_description": describe ONLY what is visibly printed in the figure (shapes, how many bars/items, titles, axis labels, legends and numbers that are actually written on it), or what the question says about it if not visible. NEVER name a label, category or value that is not printed in the figure: do not deduce it from the alternatives, the order of the bars or the question text (e.g. if the bars have no month names, do not call any bar "Março"). NEVER say which option answers the question, and do not compare the values the question asks the student to compare (e.g. do not say which bar is the tallest when the question asks which is the largest).
 - "image_page": which page image (1-indexed) contains the figure. 0 if no figure.
+- "title": the activity's own title exactly as printed at the top (e.g. "Atividade de Geografia - O ciclo da água"). Omit it when the document prints no title; NEVER invent or deduce one. Not the school name, teacher name, student/date fields or page headers.
+- "intro": the general instruction printed before the first question and addressed to the whole activity (e.g. "Observe a figura abaixo e responda."), verbatim. Omit it when there is none; never move a question's own statement here.
 - "figure_bbox": normalized bounding box (0.0 to 1.0) relative to page: { "x": left, "y": top, "width": width, "height": height }`;
 
 export const EXTRACT_PROMPT = `Extraia todas as questões deste documento/imagem. Para cada questão extraia todos os campos solicitados pela função save_questions. Seja meticuloso: extraia TODAS as questões visíveis.`;
@@ -87,6 +89,8 @@ export const EXTRACTION_TOOL_SCHEMA = {
     parameters: {
       type: "object",
       properties: {
+        title: { type: "string", description: "The activity's own title as printed; omitted when there is none" },
+        intro: { type: "string", description: "General instruction printed before question 1, verbatim; omitted when there is none" },
         questions: {
           type: "array",
           items: {
@@ -99,7 +103,7 @@ export const EXTRACTION_TOOL_SCHEMA = {
               correct_answer: { type: "integer", description: "0-based index of correct answer. -1 if unknown" },
               resolution: { type: "string", description: "Short explanation (1-3 sentences)" },
               has_figure: { type: "boolean", description: "Whether question has an associated figure" },
-              figure_description: { type: "string", description: "Description of the figure" },
+              figure_description: { type: "string", description: "Description of only visible elements of the figure; never the answer to the question" },
               image_page: { type: "integer", description: "1-indexed page containing the figure. 0 if none" },
               figure_bbox: {
                 type: "object",
@@ -173,6 +177,33 @@ export interface ExtractedQuestion {
   figure_bbox?: { x: number; y: number; width: number; height: number };
 }
 
+/** Math spans ($$..$$, $..$, \(..\), \[..\]) where a backslash-n is LaTeX (\neq), not a break. */
+const MATH_SPAN = /(\$\$[\s\S]*?\$\$|\$[^$]*\$|\\\([\s\S]*?\\\)|\\\[[\s\S]*?\\\])/;
+/** A literal backslash + r/n pair the model double-escaped in the tool call arguments. */
+const LITERAL_BREAK = /\\r\\n|\\n|\\r/g;
+
+/** Turn literal "\n" sequences into real line breaks, outside math spans. */
+function unescapeLiteralBreaks(value: unknown): unknown {
+  if (typeof value !== "string") return value;
+  return value
+    .split(MATH_SPAN)
+    .map((part, i) => (i % 2 === 1 ? part : part.replace(LITERAL_BREAK, "\n")))
+    .join("");
+}
+
+/** The model sometimes escapes line breaks twice; normalize the free-text fields. */
+function normalizeQuestionBreaks(question: any): any {
+  if (!question || typeof question !== "object") return question;
+  const normalized = { ...question };
+  for (const key of ["text", "resolution"] as const) {
+    if (key in normalized) normalized[key] = unescapeLiteralBreaks(normalized[key]);
+  }
+  if (Array.isArray(normalized.options)) {
+    normalized.options = normalized.options.map(unescapeLiteralBreaks);
+  }
+  return normalized;
+}
+
 /**
  * Parse the AI gateway's raw JSON response into the extracted question list.
  * Never throws: a missing/malformed tool call yields an empty array, mirroring
@@ -184,10 +215,38 @@ export function parseExtractionResponse(aiData: unknown): ExtractedQuestion[] {
   if (!rawArgs) return [];
   try {
     const parsed = JSON.parse(rawArgs);
-    return Array.isArray(parsed.questions) ? parsed.questions : [];
+    return Array.isArray(parsed.questions) ? parsed.questions.map(normalizeQuestionBreaks) : [];
   } catch {
     return [];
   }
+}
+
+/** The activity-level text printed outside the questions (0473). */
+export interface ExtractionHeader {
+  title: string | null;
+  intro: string | null;
+}
+
+function headerField(value: unknown): string | null {
+  const normalized = unescapeLiteralBreaks(value);
+  if (typeof normalized !== "string") return null;
+  return normalized.trim() || null;
+}
+
+/**
+ * Read the activity's title and general instruction from the same tool call
+ * as parseExtractionResponse. Never throws: anything missing or malformed
+ * reads as null, so the extraction behaves exactly as before.
+ */
+export function parseExtractionHeader(aiData: unknown): ExtractionHeader {
+  const rawArgs = (aiData as any)?.choices?.[0]?.message?.tool_calls?.[0]?.function?.arguments;
+  let parsed: any = null;
+  try {
+    parsed = rawArgs ? JSON.parse(rawArgs) : null;
+  } catch {
+    parsed = null;
+  }
+  return { title: headerField(parsed?.title), intro: headerField(parsed?.intro) };
 }
 
 /** The JSON body of extract-exam-for-adaptation, validated. */

@@ -17,13 +17,13 @@ import {
   PAGE_MARGIN_PT,
   pdfTextSize,
 } from "../pageTokens";
-import { latexLayoutAtom, readableMathText } from "../mathAtom";
+import { latexBalancedLines, latexLayoutAtom, MONO_ADVANCE_EM } from "../mathAtom";
 
 /** Largura da folha A4 do `@react-pdf`, em pontos. */
 const A4_WIDTH_PT = 595.28;
 
 /** Avanço de um caractere da Courier, em `em` (a família é monoespaçada). */
-const COURIER_ADVANCE_EM = 0.6;
+const COURIER_ADVANCE_EM = MONO_ADVANCE_EM;
 
 /**
  * Quantos caracteres de fórmula cabem na coluna útil da folha.
@@ -52,9 +52,10 @@ export const MATH_PDF_MAX_ATOM_CHARS = mathPdfMaxAtomChars();
 /**
  * Return the text to display for a math node in the PDF.
  *
- * Com `alt` preenchido o papel imprime a descrição legível, como as views de
- * tela já fazem (achado 0401): ela é texto em linguagem natural, então viaja
- * quebrável e sem a costura do LaTeX. Sem `alt`, segue o LaTeX cru.
+ * É sempre o LaTeX, nunca o `alt` do nó (achado 0803): o `alt` é o texto
+ * alternativo da fórmula, um rótulo curto para leitor de tela ("teorema de
+ * pitagoras"), e no lugar da equação deixava a prova sem a conta. Mesma
+ * política do "Copiar" (`plainText.ts`, achado 0125).
  *
  * Os espaços saem inquebráveis (`latexLayoutAtom`): sem isso o textkit trata
  * cada espaço do LaTeX como ponto de quebra e parte a fórmula no meio, ao
@@ -64,35 +65,13 @@ export const MATH_PDF_MAX_ATOM_CHARS = mathPdfMaxAtomChars();
  */
 export function mathToPdfText(
   latex: string,
-  alt?: string,
   contextFontSizePt: number = BASE_FONT_PT,
 ): string {
-  const readable = readableMathText({ latex, alt });
-  if (readable) return readable;
   return latexLayoutAtom(latex, mathPdfMaxAtomChars(contextFontSizePt));
 }
 
 /**
- * Onde cortar `rest` para que a linha fique perto de `target` caracteres.
- *
- * Devolve o fim da linha e por onde continuar (o espaço usado na quebra é
- * consumido). Sem nenhum espaço no trecho que cabe, corta no seco no alvo.
- */
-function balancedCut(rest: string, target: number, maxChars: number): { end: number; next: number } {
-  const head = rest.slice(0, maxChars + 1);
-  let best = -1;
-  for (let i = 0; i < head.length; i += 1) {
-    if (!/\s/.test(head[i])) continue;
-    if (best < 0 || Math.abs(i - target) < Math.abs(best - target)) best = i;
-  }
-  return best < 0 ? { end: target, next: target } : { end: best, next: best + 1 };
-}
-
-/**
  * Quebra o LaTeX do bloco em linhas EQUILIBRADAS que cabem na coluna útil.
- *
- * Com `alt` preenchido não há LaTeX a quebrar: a descrição legível sai inteira
- * numa linha e o textkit a quebra como prosa (achado 0401).
  *
  * Existe porque `alignItems: "center"` só centra uma caixa que ENCOLHE ao
  * conteúdo: quando o `<Text>` é mais largo que a coluna, o Yoga clampa a caixa
@@ -117,22 +96,9 @@ function balancedCut(rest: string, target: number, maxChars: number): { end: num
  */
 export function mathBlockLines(
   latex: string,
-  alt?: string,
   contextFontSizePt: number = BASE_FONT_PT,
 ): string[] {
-  const readable = readableMathText({ latex, alt });
-  if (readable) return [readable];
-  const maxChars = mathPdfMaxAtomChars(contextFontSizePt);
-  const lines: string[] = [];
-  let rest = latex.trim();
-  while (rest.length > maxChars) {
-    const target = Math.ceil(rest.length / Math.ceil(rest.length / maxChars));
-    const { end, next } = balancedCut(rest, target, maxChars);
-    lines.push(rest.slice(0, end));
-    rest = rest.slice(next).trimStart();
-  }
-  lines.push(rest);
-  return lines.map((line) => latexLayoutAtom(line, maxChars));
+  return latexBalancedLines(latex, mathPdfMaxAtomChars(contextFontSizePt));
 }
 
 /**

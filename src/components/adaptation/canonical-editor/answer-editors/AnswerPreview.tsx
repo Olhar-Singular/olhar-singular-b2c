@@ -10,18 +10,29 @@
  * in the stem text.
  */
 
-import { Fragment, type ComponentProps } from "react";
+import { Fragment, type ComponentProps, type CSSProperties } from "react";
 import type { QuestionAnswer } from "@/lib/adaptation/canonical/schema";
 import { indexToLetter } from "@/components/adaptation/render/letters";
 import { ALTERNATIVE_MARKER_CLASS } from "@/components/adaptation/render/answers/markerColumn";
+import { CheckboxBox } from "@/components/adaptation/render/CheckboxBox";
 import {
   ANSWER_LINE_COLOR,
   ANSWER_LINE_GAP_PX,
   ANSWER_LINE_WIDTH_PX,
   ANSWER_ITEM_GAP_PX,
+  MATCHING_LINK_GAP_PX,
   ALTERNATIVE_MARKER_GAP_PX,
+  INK_MUTED,
+  ORDERING_MARKER_TEXT,
+  TRUE_FALSE_MARKER_GAP_PX,
+  TRUE_FALSE_MARKER_TEXT,
+  TABLE_CELL_PADDING_PX,
+  RULE_COLOR,
+  RULE_WIDTH_PX,
+  BASE_LINE_HEIGHT,
 } from "@/components/adaptation/render/pageTokens";
 import { RichTextField } from "../RichTextField";
+import { tableCellLabel } from "./tableCellLabel";
 import {
   setAlternativeContent,
   setCheckboxContent,
@@ -37,14 +48,13 @@ interface AnswerPreviewProps {
   disabled?: boolean;
 }
 
+/**
+ * A caixa do checkbox é a MESMA das outras três superfícies (achado 0358): a
+ * medida, a espessura e a tinta vêm de `pageTokens` via `CheckboxBox`; aqui
+ * fica só o `data-testid` histórico da folha.
+ */
 function Bullet() {
-  return (
-    <span
-      data-testid="preview-bullet"
-      data-shape="square"
-      className="mt-1 h-[17px] w-[17px] shrink-0 rounded-[4px] border-[1.5px] border-surface-ink-faint"
-    />
-  );
+  return <CheckboxBox testId="preview-bullet" />;
 }
 
 /**
@@ -54,6 +64,23 @@ function Bullet() {
 function PreviewField(props: ComponentProps<typeof RichTextField>) {
   return <RichTextField {...props} plain />;
 }
+
+/**
+ * A caixa da célula de tabela é a MESMA das outras superfícies (achado 0606):
+ * recuo, traço e entrelinha vêm de `pageTokens`, exatamente como em `TableView`
+ * (prévia do Exportar) e em `PdfAnswer`. Antes a folha do Revisar tinha recuo
+ * próprio (`p-1.5`, 6px contra 4px) e a mesma tabela saía até 73% mais alta
+ * aqui — e é NESTA tela que o professor decide se a atividade cabe na folha.
+ */
+const TABLE_LAYOUT_STYLE: CSSProperties = { tableLayout: "fixed" };
+
+const TABLE_CELL_STYLE: CSSProperties = {
+  padding: `${TABLE_CELL_PADDING_PX}px`,
+  borderWidth: `${RULE_WIDTH_PX}px`,
+  // Achado 0522: tinta da régua do documento, a mesma do PDF e do Word.
+  borderColor: RULE_COLOR,
+  lineHeight: BASE_LINE_HEIGHT,
+};
 
 export function AnswerPreview({ answer, onChange, disabled = false }: AnswerPreviewProps) {
   switch (answer.kind) {
@@ -87,7 +114,11 @@ export function AnswerPreview({ answer, onChange, disabled = false }: AnswerPrev
 
     case "checkbox":
       return (
-        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 sm:gap-x-7" data-testid="answer-preview-checkbox">
+        <div
+          className="flex flex-col"
+          style={{ rowGap: `${ANSWER_ITEM_GAP_PX}px` }}
+          data-testid="answer-preview-checkbox"
+        >
           {answer.items.map((item, i) => (
             <div key={item.id} className="flex min-w-0 items-start gap-2.5">
               <Bullet />
@@ -105,18 +136,23 @@ export function AnswerPreview({ answer, onChange, disabled = false }: AnswerPrev
 
     case "trueFalse":
       return (
-        <div className="flex flex-col gap-2.5" data-testid="answer-preview-trueFalse">
+        <div
+          className="flex flex-col"
+          style={{ rowGap: `${ANSWER_ITEM_GAP_PX}px` }}
+          data-testid="answer-preview-trueFalse"
+        >
           {answer.items.map((item, i) => (
-            <div key={item.id} className="flex min-w-0 items-start gap-3">
-              <span className="flex shrink-0 items-center gap-3 pt-0.5 text-sm text-surface-ink-soft">
-                <span className="flex items-center gap-1">
-                  <span className="h-[17px] w-[17px] rounded-full border-[1.5px] border-surface-ink-faint" />
-                  <span>V</span>
-                </span>
-                <span className="flex items-center gap-1">
-                  <span className="h-[17px] w-[17px] rounded-full border-[1.5px] border-surface-ink-faint" />
-                  <span>F</span>
-                </span>
+            <div
+              key={item.id}
+              className="flex min-w-0 items-start"
+              style={{ columnGap: `${TRUE_FALSE_MARKER_GAP_PX}px` }}
+            >
+              <span
+                data-testid="preview-true-false-marker"
+                className="shrink-0 font-medium"
+                aria-label="Marque Verdadeiro ou Falso"
+              >
+                {TRUE_FALSE_MARKER_TEXT}
               </span>
               <div className="min-w-0 flex-1">
                 <PreviewField
@@ -134,13 +170,20 @@ export function AnswerPreview({ answer, onChange, disabled = false }: AnswerPrev
 
     case "ordering":
       return (
-        <div className="flex flex-col gap-2.5" data-testid="answer-preview-ordering">
+        <div
+          className="flex flex-col"
+          style={{ rowGap: `${ANSWER_ITEM_GAP_PX}px` }}
+          data-testid="answer-preview-ordering"
+        >
           {answer.items.map((item, i) => (
             <div key={item.id} className="flex min-w-0 items-center gap-2.5">
               <span
                 data-testid="preview-order-box"
-                className="h-6 w-6 shrink-0 rounded-[5px] border-[1.5px] border-surface-ink-faint"
-              />
+                className="shrink-0 font-medium"
+                aria-label="Escreva a ordem"
+              >
+                {ORDERING_MARKER_TEXT}
+              </span>
               <PreviewField
                 value={item.content}
                 disabled={disabled}
@@ -155,7 +198,14 @@ export function AnswerPreview({ answer, onChange, disabled = false }: AnswerPrev
 
     case "matching":
       return (
-        <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-x-4 gap-y-2.5" data-testid="answer-preview-matching">
+        <div
+          className="grid grid-cols-[1fr_auto_1fr] items-center"
+          style={{
+            rowGap: `${ANSWER_ITEM_GAP_PX}px`,
+            columnGap: `${MATCHING_LINK_GAP_PX}px`,
+          }}
+          data-testid="answer-preview-matching"
+        >
           {answer.pairs.map((pair, i) => (
             <Fragment key={pair.id}>
               <PreviewField
@@ -165,7 +215,15 @@ export function AnswerPreview({ answer, onChange, disabled = false }: AnswerPrev
                 placeholder="Coluna A"
                 ariaLabel={`Coluna A, par ${i + 1}`}
               />
-              <span className="text-surface-ink-faint">↔</span>
+              {/*
+                O `↔` é o único sinal de que existe tarefa aqui ("ligue um lado
+                ao outro"), e saía em `--sf-ink-faint`: 2,45:1 sobre o papel
+                branco, abaixo dos 3:1 da WCAG 1.4.11, e token do CHROME do app
+                sobre uma folha que é branca nos dois temas. A tinta vem de
+                `INK_MUTED` (5,3:1), o token de documento que a prévia do
+                Exportar já mostra (achado 0447).
+              */}
+              <span style={{ color: INK_MUTED }}>↔</span>
               <PreviewField
                 value={pair.right}
                 disabled={disabled}
@@ -178,20 +236,60 @@ export function AnswerPreview({ answer, onChange, disabled = false }: AnswerPrev
         </div>
       );
 
-    case "table":
+    case "table": {
+      // rows[0] é cabeçalho — mesma leitura da prévia (TableView), do PDF
+      // (PdfAnswer) e do Word (exportDocx). Aqui isso precisa ser visível E
+      // semântico: sem <th scope="col"> o leitor de tela anuncia a tabela sem
+      // nome de coluna, e sem peso o professor edita sem saber qual linha vira
+      // cabeçalho no arquivo. O peso (font-semibold, sem fundo) é o que o PDF
+      // imprime, então a folha na tela continua igual ao papel.
+      const [header, ...body] = answer.rows;
       return (
-        <table className="w-full border-collapse" data-testid="answer-preview-table">
-          <tbody>
-            {answer.rows.map((row, ri) => (
-              <tr key={ri}>
-                {row.map((cell, ci) => (
-                  <td key={ci} className="min-w-[60px] border border-surface-line-2 p-1.5 align-top">
+        <table
+          className="w-full border-collapse"
+          // Achado 0195: colunas em partes iguais, a mesma grade do PDF e do
+          // Word. Com o layout automático a tela mostrava uma proporção
+          // (conteúdo mais largo manda) que o arquivo não reproduz.
+          style={TABLE_LAYOUT_STYLE}
+          data-testid="answer-preview-table"
+        >
+          {header && (
+            <thead>
+              <tr>
+                {header.map((cell, ci) => (
+                  <th
+                    key={ci}
+                    scope="col"
+                    style={TABLE_CELL_STYLE}
+                    className="border text-left align-top font-semibold"
+                  >
                     <PreviewField
                       value={cell}
                       disabled={disabled}
-                      onChange={(rt) => onChange(setTableCell(answer, ri, ci, rt))}
+                      onChange={(rt) => onChange(setTableCell(answer, 0, ci, rt))}
+                      placeholder="Cabeçalho"
+                      ariaLabel={`Cabeçalho da coluna ${ci + 1}`}
+                    />
+                  </th>
+                ))}
+              </tr>
+            </thead>
+          )}
+          <tbody>
+            {body.map((row, ri) => (
+              <tr key={ri}>
+                {row.map((cell, ci) => (
+                  <td
+                    key={ci}
+                    style={TABLE_CELL_STYLE}
+                    className="border align-top"
+                  >
+                    <PreviewField
+                      value={cell}
+                      disabled={disabled}
+                      onChange={(rt) => onChange(setTableCell(answer, ri + 1, ci, rt))}
                       placeholder="Célula"
-                      ariaLabel={`Célula linha ${ri + 1} coluna ${ci + 1}`}
+                      ariaLabel={tableCellLabel(header?.[ci], ri, ci)}
                     />
                   </td>
                 ))}
@@ -200,6 +298,7 @@ export function AnswerPreview({ answer, onChange, disabled = false }: AnswerPrev
           </tbody>
         </table>
       );
+    }
 
     case "fillBlank":
       return null;

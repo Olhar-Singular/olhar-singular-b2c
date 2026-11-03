@@ -65,6 +65,22 @@ describe("ExportPanel", () => {
     expect(globalThis.document.getElementById(hintId!)).toHaveTextContent(TITLE_FIELD_HINT);
     expect(screen.getByText(TITLE_FIELD_HINT)).toBeInTheDocument();
   });
+  // Achado 0464: o indicador nativo do calendário era esticado (inset-0/w-full/h-full)
+  // sobre o campo Data inteiro; qualquer clique abria o calendário e engolia a
+  // digitação. O indicador deve ficar restrito à área do ícone à direita.
+  it("não estica o indicador do calendário sobre o campo Data inteiro", () => {
+    render(<Harness onDownload={vi.fn().mockResolvedValue(undefined)} />);
+    const tokens = screen.getByLabelText("Data").className.split(/\s+/);
+    const indicator = tokens.filter((t) => t.startsWith("[&::-webkit-calendar-picker-indicator]:"));
+    const props = indicator.map((t) => t.slice("[&::-webkit-calendar-picker-indicator]:".length));
+    expect(props).not.toContain("inset-0");
+    expect(props).not.toContain("w-full");
+    expect(props).not.toContain("left-0");
+    expect(props).toContain("right-0");
+    expect(props).toContain("w-10");
+    expect(tokens).not.toContain("cursor-pointer");
+  });
+
   it("copies the plain-text projection", async () => {
     const writeText = vi.fn().mockResolvedValue(undefined);
     Object.assign(navigator, { clipboard: { writeText } });
@@ -126,6 +142,16 @@ describe("ExportPanel", () => {
     expect(onPageBreakPerQuestionChange).toHaveBeenLastCalledWith(true);
     fireEvent.click(screen.getByRole("switch"));
     expect(onPageBreakPerQuestionChange).toHaveBeenLastCalledWith(false);
+  });
+
+  // Achado 0517: com valor controlado, o switch e o arquivo seguem o pai.
+  it("uses the controlled page-break value from the parent", async () => {
+    const onDownload = vi.fn<(d: CanonicalDocument, s: PanelSettings, ps?: PageStyle) => Promise<void>>().mockResolvedValue(undefined);
+    render(<ExportPanel document={document} onDownload={onDownload} pageBreakPerQuestion />);
+    expect(screen.getByRole("switch")).toHaveAttribute("aria-checked", "true");
+    fireEvent.click(screen.getByRole("button", { name: /Exportar PDF/i }));
+    await waitFor(() => expect(onDownload).toHaveBeenCalled());
+    expect(onDownload.mock.calls[0][1].pageBreakPerQuestion).toBe(true);
   });
 
   it("is safe to toggle the page break without a parent listener", () => {
@@ -705,5 +731,154 @@ describe("aviso antes de copiar (0411)", () => {
 
     await waitFor(() => expect(writeText).toHaveBeenCalled());
     expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 0361 — desistir do aviso (Escape ou "Cancelar") também não pode largar o foco
+// no BODY. Só o caminho de confirmar (0419) devolvia o gatilho; quem lê que a
+// fórmula não sobrevive e decide NÃO baixar é justamente quem precisa voltar ao
+// documento, e era jogado para o topo da página.
+// ---------------------------------------------------------------------------
+
+describe("foco depois de desistir do aviso (0361)", () => {
+  it("devolve o foco ao botão 'Exportar PDF' ao cancelar", async () => {
+    render(<ExportPanel document={mathDocument} onDownload={vi.fn()} />);
+
+    const trigger = screen.getByRole("button", { name: /Exportar PDF/i });
+    trigger.focus();
+    fireEvent.click(trigger);
+    fireEvent.click(await screen.findByRole("button", { name: /Cancelar/i }));
+
+    await waitFor(() => expect(globalThis.document.activeElement).toBe(trigger));
+  });
+
+  it("devolve o foco ao botão 'Exportar PDF' ao fechar com Escape", async () => {
+    render(<ExportPanel document={mathDocument} onDownload={vi.fn()} />);
+
+    const trigger = screen.getByRole("button", { name: /Exportar PDF/i });
+    trigger.focus();
+    fireEvent.click(trigger);
+    const dialog = await screen.findByRole("alertdialog");
+    fireEvent.keyDown(dialog, { key: "Escape", code: "Escape" });
+
+    await waitFor(() => expect(globalThis.document.activeElement).toBe(trigger));
+  });
+
+  it("devolve o foco ao botão 'Exportar Word' ao cancelar", async () => {
+    render(
+      <ExportPanel document={lossyDocument} onDownload={vi.fn()} onDownloadWord={vi.fn()} />,
+    );
+
+    const trigger = screen.getByRole("button", { name: /Exportar Word/i });
+    trigger.focus();
+    fireEvent.click(trigger);
+    fireEvent.click(await screen.findByRole("button", { name: /Cancelar/i }));
+
+    await waitFor(() => expect(globalThis.document.activeElement).toBe(trigger));
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 0376 — o aviso do "Copiar" também largava o foco no BODY em todas as saídas:
+// o handler padrão do Radix faz `preventDefault` e foca o `triggerRef`, que é
+// `null` num diálogo aberto por estado. Não é verdade que o Radix devolve sozinho.
+// ---------------------------------------------------------------------------
+
+describe("foco depois do aviso do Copiar (0376)", () => {
+  const openCopyWarning = async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.assign(navigator, { clipboard: { writeText } });
+    render(<ExportPanel document={mathDocument} onDownload={vi.fn()} />);
+    const trigger = screen.getByRole("button", { name: "Copiar" });
+    trigger.focus();
+    fireEvent.click(trigger);
+    const dialog = await screen.findByRole("alertdialog");
+    return { trigger, dialog, writeText };
+  };
+
+  it("devolve o foco ao botão 'Copiar' ao confirmar", async () => {
+    const { trigger, writeText } = await openCopyWarning();
+    fireEvent.click(screen.getByRole("button", { name: /Copiar mesmo assim/i }));
+
+    await waitFor(() => expect(writeText).toHaveBeenCalled());
+    await waitFor(() => expect(globalThis.document.activeElement).toBe(trigger));
+  });
+
+  it("devolve o foco ao botão 'Copiar' ao cancelar", async () => {
+    const { trigger } = await openCopyWarning();
+    fireEvent.click(screen.getByRole("button", { name: /Cancelar/i }));
+
+    await waitFor(() => expect(globalThis.document.activeElement).toBe(trigger));
+  });
+
+  it("devolve o foco ao botão 'Copiar' ao fechar com Escape", async () => {
+    const { trigger, dialog } = await openCopyWarning();
+    fireEvent.keyDown(dialog, { key: "Escape", code: "Escape" });
+
+    await waitFor(() => expect(globalThis.document.activeElement).toBe(trigger));
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 0360 — a exportação DIRETA (documento sem imagem e sem fórmula, que não abre
+// aviso nenhum) também larga o foco no BODY: `setExporting(true)` desabilita o
+// próprio gatilho focado no mesmo commit. É o caminho mais comum do produto, e
+// a correção do 0419 só cobriu quem passa pelo diálogo.
+// ---------------------------------------------------------------------------
+
+describe("foco depois de exportar sem aviso (0360)", () => {
+  /**
+   * O jsdom NÃO tira o foco de um elemento que vira `disabled` — o navegador
+   * tira, e é exatamente daí que vem o bug. O helper reproduz esse passo: clica
+   * no gatilho e, enquanto a geração corre com o botão desabilitado, faz o que
+   * o navegador faria (jogar o foco no `<body>`). Sem isso o teste passa verde
+   * num bug real.
+   */
+  const clickAndLoseFocusLikeTheBrowser = (trigger: HTMLElement) => {
+    trigger.focus();
+    fireEvent.click(trigger);
+    expect(trigger).toBeDisabled();
+    // `body.focus()` só move o foco no jsdom se o body for focável; o
+    // `tabIndex` é do teste, não do produto, e sai logo em seguida.
+    globalThis.document.body.tabIndex = -1;
+    globalThis.document.body.focus();
+    globalThis.document.body.removeAttribute("tabindex");
+    expect(globalThis.document.activeElement).toBe(globalThis.document.body);
+  };
+
+  it("devolve o foco ao botão 'Exportar PDF' quando a geração termina", async () => {
+    const onDownload = vi.fn().mockResolvedValue(undefined);
+    render(<ExportPanel document={document} onDownload={onDownload} />);
+
+    const trigger = screen.getByRole("button", { name: /Exportar PDF/i });
+    clickAndLoseFocusLikeTheBrowser(trigger);
+
+    await waitFor(() => expect(onDownload).toHaveBeenCalled());
+    await waitFor(() => expect(globalThis.document.activeElement).toBe(trigger));
+  });
+
+  it("devolve o foco ao botão 'Exportar Word' quando a geração termina", async () => {
+    const onDownloadWord = vi.fn().mockResolvedValue(undefined);
+    render(
+      <ExportPanel document={document} onDownload={vi.fn()} onDownloadWord={onDownloadWord} />,
+    );
+
+    const trigger = screen.getByRole("button", { name: /Exportar Word/i });
+    clickAndLoseFocusLikeTheBrowser(trigger);
+
+    await waitFor(() => expect(onDownloadWord).toHaveBeenCalled());
+    await waitFor(() => expect(globalThis.document.activeElement).toBe(trigger));
+  });
+
+  it("devolve o foco ao botão 'Exportar PDF' mesmo quando a geração falha", async () => {
+    const onDownload = vi.fn().mockRejectedValue(new Error("boom"));
+    render(<ExportPanel document={document} onDownload={onDownload} />);
+
+    const trigger = screen.getByRole("button", { name: /Exportar PDF/i });
+    clickAndLoseFocusLikeTheBrowser(trigger);
+
+    await waitFor(() => expect(onDownload).toHaveBeenCalled());
+    await waitFor(() => expect(globalThis.document.activeElement).toBe(trigger));
   });
 });

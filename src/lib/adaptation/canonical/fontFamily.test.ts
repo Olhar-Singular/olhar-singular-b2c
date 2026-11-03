@@ -71,14 +71,14 @@ describe("isFontFamilyToken", () => {
 
 describe("token maps in BOTH directions (screen + PDF parity)", () => {
   it.each([
-    ["sans", "Helvetica, Arial, sans-serif", "Helvetica"],
-    ["serif", "Times New Roman, Times, serif", "Times-Roman"],
+    ["sans", "Helvetica, Arial, sans-serif", "Liberation Sans"],
+    ["serif", "Times New Roman, Times, serif", "Liberation Serif"],
     ["mono", "Courier New, Courier, monospace", "Courier"],
     ["atkinson", "'Atkinson Hyperlegible', sans-serif", "Atkinson Hyperlegible"],
     ["lexend", "'Lexend', sans-serif", "Lexend"],
     ["opendyslexic", "'OpenDyslexic', sans-serif", "OpenDyslexic"],
-    ["georgia", "Georgia, serif", "Times-Roman"],
-    ["arial", "Arial, Helvetica, sans-serif", "Helvetica"],
+    ["georgia", "Georgia, serif", "Liberation Serif"],
+    ["arial", "Arial, Helvetica, sans-serif", "Liberation Sans"],
   ])("%s → css %s / pdf %s", (token, css, pdf) => {
     expect(fontFamilyToCss(token)).toBe(css);
     expect(fontFamilyToPdf(token)).toBe(pdf);

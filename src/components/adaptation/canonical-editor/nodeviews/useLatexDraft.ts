@@ -48,6 +48,10 @@ export interface LatexDraft {
   accessibleName: string;
   /** Razão pela qual o rascunho não parseia, ou `null`. Nada foi commitado. */
   error: string | null;
+  /** Marca o par `{latex, alt}` a devolver se a edição for cancelada. */
+  begin: () => void;
+  /** Desfaz a edição inteira: volta ao par marcado por `begin`. */
+  cancel: () => void;
 }
 
 export function useLatexDraft(
@@ -57,6 +61,10 @@ export function useLatexDraft(
 ): LatexDraft {
   const [draft, setDraft] = useState(latex);
   const [altStale, setAltStale] = useState(false);
+  // Achado 0259: o ponto de volta do cancelamento. Não dá para reconstruí-lo na
+  // saída, porque `onChange` já commitou tecla a tecla — ele é capturado na
+  // ABERTURA do editor e é o único vestígio do que o nó tinha antes.
+  const [committed, setCommitted] = useState<{ latex: string; alt: string | null }>({ latex, alt });
 
   // Follow the attr when it changes from OUTSIDE this input (undo, re-seed of
   // the document, a sibling editing the same node).
@@ -82,6 +90,17 @@ export function useLatexDraft(
         return;
       }
       updateAttributes({ latex: next });
+    },
+    begin: () => setCommitted({ latex, alt }),
+    cancel: () => {
+      // Escrever o par de volta é o que devolve o `alt` junto com a fórmula: é
+      // o mesmo `onChange` que derruba um e outro. Sem mudança pendente não se
+      // toca no nó — um Escape de quem só espiou não pode sujar o autosave.
+      if (committed.latex !== latex || committed.alt !== alt) {
+        updateAttributes({ latex: committed.latex, alt: committed.alt });
+      }
+      setDraft(committed.latex);
+      setAltStale(false);
     },
     onBlur: () => {
       // Sair do campo com rascunho vazio OU quebrado devolve a fórmula que está

@@ -16,7 +16,13 @@ export function BlockMathView({ block }: { block: BlockMathBlock }) {
       data-testid="block-math"
       role="math"
       aria-label={block.alt ?? block.latex}
-      className="my-3 text-center"
+      /* Sem margem própria: o vão vem do `rowGap: var(--doc-block-spacing)` do
+         `CanonicalRenderer`. O `my-3` daqui era SOMADO a esse gap (gap de flex
+         não colapsa com margem), e por ser item de flex o bloco ainda segurava
+         dentro de si o `margin: 1em 0` do `.katex-display` em vez de deixá-lo
+         colapsar como faz a folha do Revisar: 32 px de altura e 12 px de vão a
+         mais que o papel (achado 0189). */
+      className="text-center"
       style={nodeStyleToCss(block.style)}
     >
       {/* Achado 0438: o subtree do KaTeX é decoração e sai do texto do

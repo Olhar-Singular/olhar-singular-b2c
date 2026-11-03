@@ -28,11 +28,10 @@ export const PAGE_HEIGHT_PT = 842;
 export const BASE_FONT_PT = 12;
 
 /**
- * Corpo do TÍTULO por nível, em pontos (text-2xl/xl/lg da tela = 24/20/18px
- * convertidos px→pt). Ponto único do PDF (`PdfHeading`) e do Word
- * (`blockToDocxParagraphs`): sem ele o .docx caía no estilo `Heading1` da lib
- * `docx` e o título saía em 16pt azul, enquanto o PDF imprimia 18pt preto
- * (achado 0164).
+ * Corpo do TÍTULO por nível no corpo base de 12pt, em pontos (text-2xl/xl/lg
+ * da tela = 24/20/18px convertidos px→pt). Hoje é só a ORIGEM das proporções
+ * de `HEADING_FONT_RATIOS`: PDF, telas e Word (achados 0412 e 0527) resolvem o
+ * título por `resolveElementFontSizes`, que escala com o corpo do documento.
  */
 export const HEADING_PT: Record<1 | 2 | 3, number> = { 1: 18, 2: 15, 3: 13.5 };
 /** Entrelinha base (multiplicador). */
@@ -153,6 +152,27 @@ export const ANSWER_LINE_GAP_PX = 18;
 export const ANSWER_LINE_WIDTH_PX = RULE_WIDTH_PX;
 
 /**
+ * Recuo interno da CÉLULA de uma tabela de resposta, em px de tela. Ponto único
+ * das duas superfícies impressas — a prévia do Exportar e o PDF —, na mesma
+ * família de `SCAFFOLDING_PADDING_PX` (achado 0607).
+ *
+ * A célula era o último bloco com dois box models escritos à mão: a prévia usava
+ * `text-sm` (14px, entrelinha 20px) com `px-2 py-1`, e o PDF, `padding: 3` (3pt)
+ * com o CORPO do documento (12pt x `BASE_LINE_HEIGHT` = 22,4px). A linha da
+ * prévia media ~29px contra ~31,7px do papel, quase 9% a menos por linha. Como a
+ * contagem de folhas da prévia mede o próprio DOM, uma tabela de 31 linhas cabia
+ * na conta da tela ("1 página A4", rodapé "Página 1 de 1") e saía do arquivo com
+ * duas — e é justamente aí que a virada dentro da tabela chega ao professor sem
+ * nenhum aviso na tela.
+ *
+ * O valor é o que o papel já imprimia (3pt = 4px): quem se move é a prévia, que
+ * passa a medir a caixa do PDF. O corpo e a entrelinha deixam de ser escritos na
+ * célula e passam a vir do documento nas duas superfícies, então o popover
+ * "Formato" escala a tabela igual nas duas.
+ */
+export const TABLE_CELL_PADDING_PX = 4;
+
+/**
  * Cadência do tracejado da pauta: comprimento do traço e do vão, em px de tela.
  * Ponto único das TRÊS superfícies, fechando a família de `ANSWER_LINE_COLOR`
  * (cor), `ANSWER_LINE_GAP_PX` (passo) e `ANSWER_LINE_WIDTH_PX` (espessura).
@@ -206,6 +226,96 @@ export const ANSWER_ITEM_GAP_PX = 8;
  */
 export const ALTERNATIVE_MARKER_COLUMN_PT = 22;
 export const ALTERNATIVE_MARKER_GAP_PX = 8;
+
+/**
+ * Marcador de verdadeiro/falso impresso para o aluno assinalar, e o vão entre
+ * ele e a afirmação. Ponto único do texto e do vão, na família do
+ * `ALTERNATIVE_MARKER_GAP_PX` (achado 0359).
+ *
+ * O vão adotado é o das duas telas (`gap-3` = 12px na folha do Revisar e na
+ * prévia do Exportar); quem se move é o PDF, que imprimia 1,99pt e colava o `F`
+ * na primeira palavra da afirmação.
+ *
+ * A LARGURA da coluna não é token nenhum de propósito: era a constante de 60pt
+ * do `PdfAnswer`, calibrada contra um glifo que mede 58,008pt na base de 12pt —
+ * 2pt de folga para um texto que escala com o "Tamanho do texto" do popover
+ * Formato e com a família escolhida, exatamente o que o achado 0182 corrigiu no
+ * marcador de alternativa. A coluna passa a ser o próprio conteúdo do marcador
+ * (`flexShrink: 0` + `marginRight`), então ela acompanha fonte e corpo sem
+ * precisar de calibragem.
+ */
+/*
+ * Espaço SIMPLES de propósito (achado 0199): HTML (`white-space: normal`) e o
+ * `@react-pdf` colapsam espaço consecutivo, então só o run do `docx` honrava o
+ * espaço duplo — o Word saía com um marcador mais largo e a afirmação começando
+ * noutro ponto. A folga da caixa que o aluno marca é largura declarada
+ * (`TRUE_FALSE_MARKER_GAP_PX` / `_PT`), nunca caractere de espaço.
+ */
+export const TRUE_FALSE_MARKER_TEXT = "( ) V ( ) F";
+export const TRUE_FALSE_MARKER_GAP_PX = 12;
+
+/**
+ * Vão lateral entre cada coluna de texto e o elo `↔` da questão de Associação.
+ * Ponto único das TRÊS superfícies (achado 0197), na família do
+ * `ALTERNATIVE_MARKER_GAP_PX`.
+ *
+ * Estava escrito à mão uma vez por superfície e as cópias discordavam:
+ * `gap-x-4` (16px) na folha do Revisar contra `gap-2` (8px) na prévia do
+ * Exportar e `marginHorizontal: 6` pt (= 8px) no PDF. Como as duas colunas são
+ * `1fr`, 8px a mais de vão de cada lado encolhem cada coluna em 8px justamente
+ * na tela em que o professor edita: o par que ele alinha na folha quebra noutro
+ * ponto no arquivo que o aluno recebe.
+ *
+ * O valor adotado é o do papel (6pt = 8px, o que o PDF já imprimia e a prévia já
+ * mostrava): quem se move é o Revisar, o único fora.
+ */
+export const MATCHING_LINK_GAP_PX = 8;
+
+/**
+ * Marcador do espaço onde o aluno escreve a ordem, na questão de Ordenação.
+ * Ponto único das quatro superfícies (achado 0448): a prévia do Exportar, o PDF
+ * e o Word já imprimiam `____`, mas a folha do Revisar desenhava um quadrado
+ * vazado, ou seja, o mesmo traço da caixa de seleção. Os dois desenhos pedem
+ * coisas diferentes do aluno (marcar × escrever o número), e o professor decide
+ * a atividade olhando a folha que o passo Revisar promete ser a prévia do
+ * impresso. Vence o `____`, que é o que o papel entrega.
+ */
+export const ORDERING_MARKER_TEXT = "____";
+
+/**
+ * Caixa do checkbox: lado, espessura e raio da borda, em px de tela. Ponto único
+ * das QUATRO superfícies, na família de `ANSWER_LINE_*` — a caixa é, como a
+ * pauta, um traço que o documento imprime para o aluno marcar (achado 0358).
+ *
+ * O marcador era o último que cada superfície resolvia sozinha, e as duas que o
+ * professor consegue conferir eram justamente as que concordavam: quadrado
+ * vazado de 17px na folha do Revisar e de 16px na prévia do Exportar. O PDF e o
+ * Word emitiam o TEXTO `[ ]`, ou seja, dois colchetes finos e baixos (~13px de
+ * traço medidos no papel) onde as telas mostram uma caixa fechada — alvo menor e
+ * menos legível para marcar com X, exatamente o contrário do que o produto
+ * precisa entregar a um aluno com barreira de aprendizagem.
+ *
+ * O valor adotado é o MAIOR dos dois da tela (17px, o da folha do Revisar), pela
+ * razão de `ANSWER_LINE_GAP_PX`: encolher o alvo seria piorar a acessibilidade.
+ * Quem mais se move é o papel, que passa a DESENHAR a caixa (`Canvas`, como a
+ * pauta desde o achado 0154) em vez de escrevê-la com glifos.
+ */
+export const CHECKBOX_BOX_PX = 17;
+
+/** Espessura da borda da caixa, par de `CHECKBOX_BOX_PX`. */
+export const CHECKBOX_BOX_BORDER_PX = 1.5;
+
+/** Raio do canto da caixa, par de `CHECKBOX_BOX_PX`. */
+export const CHECKBOX_BOX_RADIUS_PX = 4;
+
+/**
+ * Tinta da borda da caixa: a mesma da pauta, `ANSWER_LINE_COLOR`. As duas telas
+ * também discordavam aqui (`border-surface-ink-faint` na folha do Revisar contra
+ * `border-border` na prévia), e nenhuma das duas era token de documento — eram
+ * tokens do CHROME do app, que inclusive invertem no tema escuro sobre um papel
+ * que continua branco (mesmo motivo de `FOLHA_*`, achado 0342).
+ */
+export const CHECKBOX_BOX_COLOR = ANSWER_LINE_COLOR;
 
 /**
  * Coluna do NÚMERO da questão: distância do x do rótulo ("1.") ao x do
@@ -379,6 +489,9 @@ export const ANSWER_LINE_DASH_PT = ANSWER_LINE_DASH_PX / PT_TO_PX;
 /** `ANSWER_LINE_DASH_SPACE_PX` na unidade do PDF (pt), pela mesma razão 72/96. */
 export const ANSWER_LINE_DASH_SPACE_PT = ANSWER_LINE_DASH_SPACE_PX / PT_TO_PX;
 
+/** `TABLE_CELL_PADDING_PX` na unidade do PDF (pt), pela mesma razão 72/96. */
+export const TABLE_CELL_PADDING_PT = TABLE_CELL_PADDING_PX / PT_TO_PX;
+
 /** `RULE_WIDTH_PX` na unidade do PDF (pt), pela mesma razão 72/96. */
 export const RULE_WIDTH_PT = RULE_WIDTH_PX / PT_TO_PX;
 
@@ -387,6 +500,21 @@ export const ANSWER_ITEM_GAP_PT = ANSWER_ITEM_GAP_PX / PT_TO_PX;
 
 /** `ALTERNATIVE_MARKER_GAP_PX` na unidade do PDF (pt), pela mesma razão 72/96. */
 export const ALTERNATIVE_MARKER_GAP_PT = ALTERNATIVE_MARKER_GAP_PX / PT_TO_PX;
+
+/** `TRUE_FALSE_MARKER_GAP_PX` na unidade do PDF (pt), pela mesma razão 72/96. */
+export const TRUE_FALSE_MARKER_GAP_PT = TRUE_FALSE_MARKER_GAP_PX / PT_TO_PX;
+
+/** `MATCHING_LINK_GAP_PX` na unidade do PDF (pt), pela mesma razão 72/96. */
+export const MATCHING_LINK_GAP_PT = MATCHING_LINK_GAP_PX / PT_TO_PX;
+
+/** `CHECKBOX_BOX_PX` na unidade do PDF (pt), pela mesma razão 72/96. */
+export const CHECKBOX_BOX_PT = CHECKBOX_BOX_PX / PT_TO_PX;
+
+/** `CHECKBOX_BOX_BORDER_PX` na unidade do PDF (pt), pela mesma razão 72/96. */
+export const CHECKBOX_BOX_BORDER_PT = CHECKBOX_BOX_BORDER_PX / PT_TO_PX;
+
+/** `CHECKBOX_BOX_RADIUS_PX` na unidade do PDF (pt), pela mesma razão 72/96. */
+export const CHECKBOX_BOX_RADIUS_PT = CHECKBOX_BOX_RADIUS_PX / PT_TO_PX;
 
 /** `QUESTION_NUMBER_GAP_PX` na unidade do PDF (pt), pela mesma razão 72/96. */
 export const QUESTION_NUMBER_GAP_PT = QUESTION_NUMBER_GAP_PX / PT_TO_PX;

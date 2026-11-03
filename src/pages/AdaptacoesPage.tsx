@@ -350,7 +350,7 @@ export default function AdaptacoesPage() {
             {/* Dito na cara, porque o oposto é justamente o que se teme: as
                 adaptações são trabalho pago, e o FK é ON DELETE SET NULL. */}
             <AlertDialogDescription>
-              As adaptações que estão nela NÃO serão excluídas — elas voltam para Sem pasta.
+              As adaptações que estão nela NÃO serão excluídas: elas voltam para Sem pasta.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter className="flex-col">

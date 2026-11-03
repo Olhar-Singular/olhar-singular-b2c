@@ -1,5 +1,6 @@
+import { useState } from "react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor, within } from "@testing-library/react";
 import { toast } from "sonner";
 import { StepActivityInput } from "./StepActivityInput";
 import type { WizardData } from "@/lib/adaptation/wizard/wizardState";
@@ -9,14 +10,27 @@ import { MAX_ACTIVITY_CHARS } from "@/lib/domain/activityLimits";
 
 const bankQuestionsResult: { data: unknown[] | null; error: unknown } = { data: [], error: null };
 
+// Like PostgREST, a request returns at most `max_rows` (1000 by default) rows,
+// and `.range(from, to)` picks the window inside the result.
+const POSTGREST_MAX_ROWS = 1000;
+let requestedRange: [number, number] | null = null;
+
 const fromChain = {
   select: vi.fn().mockReturnThis(),
   order: vi.fn().mockReturnThis(),
   limit: vi.fn().mockReturnThis(),
   eq: vi.fn().mockReturnThis(),
   ilike: vi.fn().mockReturnThis(),
+  range: vi.fn(function (this: unknown, from: number, to: number) {
+    requestedRange = [from, to];
+    return this;
+  }),
   then(resolve: (v: unknown) => unknown) {
-    return Promise.resolve(bankQuestionsResult).then(resolve);
+    const [from, to] = requestedRange ?? [0, Number.MAX_SAFE_INTEGER];
+    requestedRange = null;
+    const { data, error } = bankQuestionsResult;
+    const rows = data && data.slice(from, Math.min(to + 1, from + POSTGREST_MAX_ROWS));
+    return Promise.resolve({ data: rows, error }).then(resolve);
   },
 };
 
@@ -35,6 +49,7 @@ const fetchSpy = vi.fn();
 
 beforeEach(() => {
   vi.clearAllMocks();
+  requestedRange = null;
   bankQuestionsResult.data = [];
   bankQuestionsResult.error = null;
   getSessionSpy.mockResolvedValue({ data: { session: { access_token: "tok" } } });
@@ -83,6 +98,34 @@ describe("StepActivityInput — Colar Texto tab", () => {
     fireEvent.click(screen.getByRole("button", { name: /Próximo/i }));
     expect(onNext).not.toHaveBeenCalled();
     expect(screen.getByRole("alert")).toHaveTextContent(/Digite ou cole/i);
+  });
+
+  // Regressão 1117: o erro só aparecia no role="alert"; a caixa não era marcada
+  // nem recebia o foco, então o leitor de tela não sabia onde estava o problema
+  // e, em 1366x768, a mensagem nascia abaixo da dobra.
+  it.each([
+    ["vazia", ""],
+    ["só espaços", "     "],
+    ["acima do limite", "a".repeat(MAX_ACTIVITY_CHARS + 1)],
+  ])("marks and focuses the textarea when the activity is %s", (_label, activityText) => {
+    render(
+      <StepActivityInput
+        data={{ ...baseData, activityText }}
+        updateData={vi.fn()}
+        onNext={vi.fn()}
+        onPrev={vi.fn()}
+      />,
+    );
+    const textarea = screen.getByLabelText(/Conteúdo da atividade/i);
+    expect(textarea).not.toHaveAttribute("aria-invalid");
+    expect(textarea).not.toHaveAttribute("aria-describedby");
+    fireEvent.click(screen.getByRole("button", { name: /Próximo/i }));
+    const alert = screen.getByRole("alert");
+    expect(textarea).toHaveAttribute("aria-invalid", "true");
+    expect(alert.id).toBeTruthy();
+    expect(textarea).toHaveAttribute("aria-describedby", alert.id);
+    expect(textarea).toHaveClass("border-destructive");
+    expect(textarea).toHaveFocus();
   });
 
   it("calls onNext when textarea has content", () => {
@@ -141,6 +184,42 @@ describe("StepActivityInput — Banco de Questões tab", () => {
     render(<StepActivityInput data={baseData} updateData={vi.fn()} onNext={vi.fn()} onPrev={vi.fn()} />);
     expect(screen.getByRole("button", { name: /Colar Texto/i })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /Banco de Questões/i })).toBeInTheDocument();
+  });
+
+  it("exposes which tab is active via aria-pressed (1133)", () => {
+    render(<StepActivityInput data={baseData} updateData={vi.fn()} onNext={vi.fn()} onPrev={vi.fn()} />);
+    const manual = screen.getByRole("button", { name: /Colar Texto/i });
+    const bank = screen.getByRole("button", { name: /^Banco de Questões$/i });
+    expect(manual).toHaveAttribute("aria-pressed", "true");
+    expect(bank).toHaveAttribute("aria-pressed", "false");
+    fireEvent.click(bank);
+    expect(manual).toHaveAttribute("aria-pressed", "false");
+    expect(bank).toHaveAttribute("aria-pressed", "true");
+  });
+
+  it("names the subject and difficulty filters of the bank dialog (1133)", async () => {
+    render(<StepActivityInput data={baseData} updateData={vi.fn()} onNext={vi.fn()} onPrev={vi.fn()} />);
+    fireEvent.click(screen.getByRole("button", { name: /Banco de Questões/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Abrir Banco de Questões/i }));
+    await waitFor(() => screen.getByRole("dialog"));
+    expect(screen.getByRole("combobox", { name: "Filtrar por matéria" })).toBeInTheDocument();
+    expect(screen.getByRole("combobox", { name: "Filtrar por dificuldade" })).toBeInTheDocument();
+  });
+
+  it("lets the bank filters share the full row on narrow screens (0537)", async () => {
+    render(<StepActivityInput data={baseData} updateData={vi.fn()} onNext={vi.fn()} onPrev={vi.fn()} />);
+    fireEvent.click(screen.getByRole("button", { name: /Banco de Questões/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Abrir Banco de Questões/i }));
+    await waitFor(() => screen.getByRole("dialog"));
+    const subject = screen.getByRole("combobox", { name: "Filtrar por matéria" });
+    const difficulty = screen.getByRole("combobox", { name: "Filtrar por dificuldade" });
+    // Below `sm` the filters wrap under the search: their wrapper takes the whole row
+    // and each trigger grows, so the right edge lines up with the search and the cards.
+    const wrapper = subject.parentElement as HTMLElement;
+    expect(difficulty.parentElement).toBe(wrapper);
+    expect(wrapper).toHaveClass("w-full", "sm:w-auto");
+    expect(subject).toHaveClass("flex-1", "sm:flex-none", "sm:w-40");
+    expect(difficulty).toHaveClass("flex-1", "sm:flex-none", "sm:w-36");
   });
 
   it("switching to bank tab shows Abrir Banco button and hides textarea", () => {
@@ -265,19 +344,58 @@ describe("StepActivityInput — tab visibility", () => {
 // ── fetchBankQuestions filters (lines 116-120) ─────────────────────────────
 
 describe("StepActivityInput — fetchBankQuestions filters", () => {
-  it("applies ilike filter when bankSearch is non-empty", async () => {
-    bankQuestionsResult.data = [
-      { id: "q1", text: "Questão de Física", subject: "Física", topic: null, difficulty: null, image_url: null, options: null },
-    ];
+  // 1131: the search runs in the browser, over the same fields as the bank
+  // page, accent-insensitive, and never turns `%`/`_` into LIKE wildcards.
+  function openBankDialog() {
     render(<StepActivityInput data={baseData} updateData={vi.fn()} onNext={vi.fn()} onPrev={vi.fn()} />);
     fireEvent.click(screen.getByRole("button", { name: /Banco de Questões/i }));
     fireEvent.click(screen.getByRole("button", { name: /Abrir Banco de Questões/i }));
-    await waitFor(() => screen.getByRole("dialog"));
-    const searchInput = screen.getByPlaceholderText("Buscar questões...");
-    fireEvent.change(searchInput, { target: { value: "Física" } });
-    await waitFor(() => {
-      expect(fromChain.ilike).toHaveBeenCalledWith("text", "%Física%");
-    });
+  }
+  const searchRows = [
+    { id: "s1", text: "Explique o processo de fotossíntese.", subject: "Ciências", topic: null, difficulty: null, image_url: null, options: null },
+    { id: "s2", text: "Qual é a capital do Brasil?", subject: "Geografia", topic: "Capitais", difficulty: null, image_url: null, options: null },
+    { id: "s3", text: "Palavra comprida", subject: "Português", topic: "Ortografia", difficulty: null, image_url: null, options: null },
+    { id: "s4", text: "Aumentou 50% do preço", subject: "Matemática", topic: null, difficulty: null, image_url: null, options: null },
+  ];
+
+  it("finds a question typed without accents (1131)", async () => {
+    bankQuestionsResult.data = searchRows;
+    openBankDialog();
+    await waitFor(() => screen.getByText("Qual é a capital do Brasil?"));
+    fireEvent.change(screen.getByPlaceholderText("Buscar questões..."), { target: { value: "fotossintese" } });
+    await waitFor(() => expect(screen.queryByText("Qual é a capital do Brasil?")).toBeNull());
+    expect(screen.getByText("Explique o processo de fotossíntese.")).toBeInTheDocument();
+    expect(fromChain.ilike).not.toHaveBeenCalled();
+  });
+
+  it("matches subject and topic like the bank page (1131)", async () => {
+    bankQuestionsResult.data = searchRows;
+    openBankDialog();
+    await waitFor(() => screen.getByText("Palavra comprida"));
+    fireEvent.change(screen.getByPlaceholderText("Buscar questões..."), { target: { value: "ortografia" } });
+    await waitFor(() => expect(screen.queryByText("Qual é a capital do Brasil?")).toBeNull());
+    expect(screen.getByText("Palavra comprida")).toBeInTheDocument();
+    fireEvent.change(screen.getByPlaceholderText("Buscar questões..."), { target: { value: "  GEOGRAFIA " } });
+    await waitFor(() => screen.getByText("Qual é a capital do Brasil?"));
+    expect(screen.queryByText("Palavra comprida")).toBeNull();
+  });
+
+  it("treats % and _ as literal characters (1131)", async () => {
+    bankQuestionsResult.data = searchRows;
+    openBankDialog();
+    await waitFor(() => screen.getByText("Palavra comprida"));
+    fireEvent.change(screen.getByPlaceholderText("Buscar questões..."), { target: { value: "_" } });
+    await waitFor(() => expect(screen.getByText(/Nenhuma questão encontrada/)).toBeInTheDocument());
+    fireEvent.change(screen.getByPlaceholderText("Buscar questões..."), { target: { value: "50%" } });
+    await waitFor(() => screen.getByText("Aumentou 50% do preço"));
+    expect(screen.queryByText("Palavra comprida")).toBeNull();
+  });
+
+  it("does not cap the bank list at a fixed number of rows (1131)", async () => {
+    bankQuestionsResult.data = searchRows;
+    openBankDialog();
+    await waitFor(() => screen.getByText("Palavra comprida"));
+    expect(fromChain.limit).not.toHaveBeenCalledWith(50);
   });
 
   it("applies eq filter when subject filter is set to a specific subject", async () => {
@@ -288,8 +406,7 @@ describe("StepActivityInput — fetchBankQuestions filters", () => {
     fireEvent.click(screen.getByRole("button", { name: /Banco de Questões/i }));
     fireEvent.click(screen.getByRole("button", { name: /Abrir Banco de Questões/i }));
     await waitFor(() => screen.getByRole("dialog"));
-    // comboboxes have no accessible name — subject is first (w-40), difficulty is second (w-36)
-    const [subjectTrigger] = screen.getAllByRole("combobox");
+    const subjectTrigger = screen.getByRole("combobox", { name: "Filtrar por matéria" });
     fireEvent.click(subjectTrigger);
     await waitFor(() => screen.getByRole("option", { name: "Matemática" }));
     fireEvent.click(screen.getByRole("option", { name: "Matemática" }));
@@ -306,9 +423,7 @@ describe("StepActivityInput — fetchBankQuestions filters", () => {
     fireEvent.click(screen.getByRole("button", { name: /Banco de Questões/i }));
     fireEvent.click(screen.getByRole("button", { name: /Abrir Banco de Questões/i }));
     await waitFor(() => screen.getByRole("dialog"));
-    // comboboxes have no accessible name — subject is first (w-40), difficulty is second (w-36)
-    const comboboxes = screen.getAllByRole("combobox");
-    const difficultyTrigger = comboboxes[1];
+    const difficultyTrigger = screen.getByRole("combobox", { name: "Filtrar por dificuldade" });
     fireEvent.click(difficultyTrigger);
     await waitFor(() => screen.getByRole("option", { name: "Fácil" }));
     fireEvent.click(screen.getByRole("option", { name: "Fácil" }));
@@ -329,7 +444,7 @@ describe("StepActivityInput — fetchBankQuestions filters", () => {
     fireEvent.click(screen.getByRole("button", { name: /Banco de Questões/i }));
     fireEvent.click(screen.getByRole("button", { name: /Abrir Banco de Questões/i }));
     await waitFor(() => {
-      expect(screen.getByText("Nenhuma questão encontrada.")).toBeInTheDocument();
+      expect(screen.getByText(/Seu banco ainda não tem questões/)).toBeInTheDocument();
     });
     fromChain.then = originalThen;
   });
@@ -359,39 +474,63 @@ describe("StepActivityInput — toggleQuestion deselect", () => {
   });
 });
 
-// ── confirmBankSelection deduplication (line 163) ─────────────────────────
+// ── Count what actually enters the activity (1130) ────────────────────────
 
-describe("StepActivityInput — confirmBankSelection deduplication", () => {
-  it("does not add a question that is already in selectedQuestions", async () => {
-    const existingQ = { id: "q1", text: "Questão já selecionada", subject: "Física", topic: null, difficulty: null, image_url: null, options: null };
-    bankQuestionsResult.data = [existingQ];
-    const dataWithExisting: WizardData = { ...baseData, selectedQuestions: [existingQ], activityText: "1) Questão já selecionada" };
-    const updateData = vi.fn();
-    render(<StepActivityInput data={dataWithExisting} updateData={updateData} onNext={vi.fn()} onPrev={vi.fn()} />);
+describe("StepActivityInput — the add button and toast count what enters (1130)", () => {
+  function openBank(data: WizardData, updateData = vi.fn()) {
+    render(<StepActivityInput data={data} updateData={updateData} onNext={vi.fn()} onPrev={vi.fn()} />);
     fireEvent.click(screen.getByRole("button", { name: /Banco de Questões/i }));
     fireEvent.click(screen.getByRole("button", { name: /Abrir Banco de Questões/i }));
-    // Wait for dialog and question to appear inside the dialog
+    return updateData;
+  }
+
+  it("shows questions already in the activity as checked and not selectable", async () => {
+    const existingQ = { id: "q1", text: "Questão já selecionada", subject: "Física", topic: null, difficulty: null, image_url: null, options: null };
+    bankQuestionsResult.data = [existingQ];
+    const data: WizardData = { ...baseData, selectedQuestions: [existingQ], activityText: "1) Questão já selecionada" };
+    openBank(data);
     const dialog = await waitFor(() => screen.getByRole("dialog", { name: /Selecionar Questões/i }));
-    await waitFor(() => {
-      const textEl = dialog.querySelector("p.text-sm.line-clamp-2");
-      expect(textEl).not.toBeNull();
-    });
-    // Click the question row inside the dialog (scope to dialog to avoid selected list)
-    const questionRow = dialog.querySelector("p.text-sm.line-clamp-2")!;
-    fireEvent.click(questionRow);
-    // Now the "Adicionar 1" button should appear
-    await waitFor(() => {
-      expect(screen.getByRole("button", { name: /Adicionar 1/i })).toBeInTheDocument();
-    });
+    const card = await waitFor(() => within(dialog).getByRole("checkbox", { name: /Questão já selecionada/ }));
+    expect(card).toHaveAttribute("aria-checked", "true");
+    expect(card).toHaveAttribute("aria-disabled", "true");
+    expect(within(card).getByText(/Já adicionada/i)).toBeInTheDocument();
+    fireEvent.click(card);
+    fireEvent.keyDown(card, { key: " " });
+    expect(screen.getByRole("button", { name: /Adicionar 0/i })).toBeDisabled();
+  });
+
+  it("keeps a checked question when the filter hides it, adds it and counts it", async () => {
+    bankQuestionsResult.data = [
+      { id: "q7", text: "Resolva: x/2 + 3 = 7", subject: "Matemática", topic: null, difficulty: "medio", image_url: null, options: null },
+      { id: "q8", text: "Fotossíntese", subject: "Ciências", topic: null, difficulty: null, image_url: null, options: null },
+    ];
+    const updateData = openBank(baseData);
+    await waitFor(() => screen.getByText("Resolva: x/2 + 3 = 7"));
+    fireEvent.click(screen.getByText("Resolva: x/2 + 3 = 7"));
+    // The search no longer shows the checked question.
+    fireEvent.change(screen.getByPlaceholderText("Buscar questões..."), { target: { value: "Foto" } });
+    await waitFor(() => screen.getByText("Fotossíntese"));
+    expect(screen.queryByText("Resolva: x/2 + 3 = 7")).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: /Adicionar 1/i }));
     expect(updateData).toHaveBeenCalledWith(
-      expect.objectContaining({
-        selectedQuestions: expect.arrayContaining([expect.objectContaining({ id: "q1" })]),
-      }),
+      expect.objectContaining({ selectedQuestions: [expect.objectContaining({ id: "q7" })] }),
     );
-    // Should still be exactly 1 question (no duplicate)
-    const call = updateData.mock.calls[0][0];
-    expect(call.selectedQuestions).toHaveLength(1);
+    expect(toast.success).toHaveBeenCalledWith("1 questão(ões) adicionada(s)");
+  });
+
+  it("toasts the number of questions added, not the number checked on screen", async () => {
+    const existingQ = { id: "q1", text: "Capital", subject: "Geografia", topic: null, difficulty: null, image_url: null, options: null };
+    bankQuestionsResult.data = [
+      existingQ,
+      { id: "q2", text: "Sete vezes oito", subject: "Matemática", topic: null, difficulty: null, image_url: null, options: null },
+    ];
+    const data: WizardData = { ...baseData, selectedQuestions: [existingQ], activityText: "1) Capital" };
+    const updateData = openBank(data);
+    await waitFor(() => screen.getByText("Sete vezes oito"));
+    fireEvent.click(screen.getByText("Sete vezes oito"));
+    fireEvent.click(screen.getByRole("button", { name: /Adicionar 1/i }));
+    expect(updateData.mock.calls[0][0].selectedQuestions.map((q: { id: string }) => q.id)).toEqual(["q1", "q2"]);
+    expect(toast.success).toHaveBeenCalledWith("1 questão(ões) adicionada(s)");
   });
 });
 
@@ -675,5 +814,527 @@ describe("StepActivityInput — limite de tamanho", () => {
     );
     fireEvent.click(screen.getByRole("button", { name: /Próximo/i }));
     expect(onNext).toHaveBeenCalled();
+  });
+});
+
+// ── bank question cards reachable by keyboard (1126) ───────────────────────
+
+describe("StepActivityInput — bank question cards are keyboard accessible", () => {
+  async function openBankWith(text: string) {
+    bankQuestionsResult.data = [
+      { id: "q1", text, subject: "Física", topic: null, difficulty: null, image_url: null, options: null },
+    ];
+    render(<StepActivityInput data={baseData} updateData={vi.fn()} onNext={vi.fn()} onPrev={vi.fn()} />);
+    fireEvent.click(screen.getByRole("button", { name: /Banco de Questões/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Abrir Banco de Questões/i }));
+    return waitFor(() => screen.getByRole("checkbox", { name: new RegExp(text) }));
+  }
+
+  it("exposes each card as a focusable checkbox with its checked state", async () => {
+    const card = await openBankWith("Questão por teclado");
+    expect(card).toHaveAttribute("tabindex", "0");
+    expect(card).toHaveAttribute("aria-checked", "false");
+    fireEvent.click(card);
+    await waitFor(() => expect(card).toHaveAttribute("aria-checked", "true"));
+  });
+
+  it("toggles the card with Space and Enter", async () => {
+    const card = await openBankWith("Questão por teclado");
+    fireEvent.keyDown(card, { key: " " });
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: /Adicionar 1/i })).toBeEnabled();
+    });
+    fireEvent.keyDown(card, { key: "Enter" });
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: /Adicionar 0/i })).toBeInTheDocument();
+    });
+  });
+
+  it("ignores other keys and keys from nested elements", async () => {
+    const card = await openBankWith("Questão por teclado");
+    fireEvent.keyDown(card, { key: "a" });
+    fireEvent.keyDown(screen.getByText("Questão por teclado"), { key: "Enter" });
+    expect(card).toHaveAttribute("aria-checked", "false");
+  });
+});
+
+describe("StepActivityInput — manual edits are never discarded silently (1129, 1138)", () => {
+  const q1 = { id: "q1", text: "Questão um", subject: "Física", topic: null, difficulty: null, image_url: null, options: null };
+  const q2 = { id: "q2", text: "Questão dois", subject: "Física", topic: null, difficulty: null, image_url: null, options: null };
+  const editedText = "1) Questão um\n\n2) Questão dois\n\n3) PERGUNTA DIGITADA A MAO";
+
+  // 1138: the warning is the app's AlertDialog, never the browser's window.confirm.
+  function keepEdit() {
+    fireEvent.click(within(screen.getByRole("alertdialog")).getByRole("button", { name: "Manter minha edição" }));
+  }
+  function replaceText() {
+    fireEvent.click(within(screen.getByRole("alertdialog")).getByRole("button", { name: "Substituir texto" }));
+  }
+
+  it("asks in the app dialog (not window.confirm), naming the consequence and the verbs", () => {
+    const confirmSpy = vi.spyOn(window, "confirm");
+    const data: WizardData = { ...baseData, selectedQuestions: [q1, q2], activityText: editedText };
+    render(<StepActivityInput data={data} updateData={vi.fn()} onNext={vi.fn()} onPrev={vi.fn()} />);
+    fireEvent.click(screen.getByRole("button", { name: /Banco de Questões/i }));
+    fireEvent.click(screen.getAllByRole("button", { name: /Remover questão/i })[0]);
+    expect(confirmSpy).not.toHaveBeenCalled();
+    const dialog = screen.getByRole("alertdialog");
+    expect(within(dialog).getByRole("heading", { name: /Substituir o texto editado/i })).toBeInTheDocument();
+    expect(dialog).toHaveTextContent(/a edição será perdida/i);
+    expect(within(dialog).getByRole("button", { name: "Substituir texto" })).toBeInTheDocument();
+    expect(within(dialog).getByRole("button", { name: "Manter minha edição" })).toBeInTheDocument();
+    confirmSpy.mockRestore();
+  });
+
+  it("asks before rebuilding the text on remove and keeps it when the user cancels", () => {
+    const updateData = vi.fn();
+    const data: WizardData = { ...baseData, selectedQuestions: [q1, q2], activityText: editedText };
+    render(<StepActivityInput data={data} updateData={updateData} onNext={vi.fn()} onPrev={vi.fn()} />);
+    fireEvent.click(screen.getByRole("button", { name: /Banco de Questões/i }));
+    fireEvent.click(screen.getAllByRole("button", { name: /Remover questão/i })[0]);
+    keepEdit();
+    expect(updateData).not.toHaveBeenCalled();
+    expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
+  });
+
+  it("rebuilds the text on remove when the user confirms", () => {
+    const updateData = vi.fn();
+    const data: WizardData = { ...baseData, selectedQuestions: [q1, q2], activityText: editedText };
+    render(<StepActivityInput data={data} updateData={updateData} onNext={vi.fn()} onPrev={vi.fn()} />);
+    fireEvent.click(screen.getByRole("button", { name: /Banco de Questões/i }));
+    fireEvent.click(screen.getAllByRole("button", { name: /Remover questão/i })[0]);
+    expect(updateData).not.toHaveBeenCalled();
+    replaceText();
+    expect(updateData).toHaveBeenCalledWith(
+      expect.objectContaining({ selectedQuestions: [q2], activityText: "1) Questão dois", result: null }),
+    );
+  });
+
+  it("does not ask when the text still matches the bank list", () => {
+    const updateData = vi.fn();
+    const data: WizardData = { ...baseData, selectedQuestions: [q1, q2], activityText: "1) Questão um\n\n2) Questão dois" };
+    render(<StepActivityInput data={data} updateData={updateData} onNext={vi.fn()} onPrev={vi.fn()} />);
+    fireEvent.click(screen.getByRole("button", { name: /Banco de Questões/i }));
+    fireEvent.click(screen.getAllByRole("button", { name: /Remover questão/i })[0]);
+    expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
+    expect(updateData).toHaveBeenCalledWith(expect.objectContaining({ activityText: "1) Questão dois" }));
+  });
+
+  it("asks before adding bank questions over an edited text and keeps it when the user cancels", async () => {
+    bankQuestionsResult.data = [
+      { id: "q3", text: "Questão três", subject: "Física", topic: null, difficulty: null, image_url: null, options: null },
+    ];
+    const updateData = vi.fn();
+    const data: WizardData = { ...baseData, selectedQuestions: [q1, q2], activityText: editedText };
+    render(<StepActivityInput data={data} updateData={updateData} onNext={vi.fn()} onPrev={vi.fn()} />);
+    fireEvent.click(screen.getByRole("button", { name: /Banco de Questões/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Abrir Banco de Questões/i }));
+    await waitFor(() => screen.getByText("Questão três"));
+    fireEvent.click(screen.getByText("Questão três"));
+    fireEvent.click(screen.getByRole("button", { name: /Adicionar 1/i }));
+    keepEdit();
+    expect(updateData).not.toHaveBeenCalled();
+    expect(toast.success).not.toHaveBeenCalled();
+  });
+
+  it("asks before adding bank questions over text typed with no bank questions yet", async () => {
+    bankQuestionsResult.data = [
+      { id: "q3", text: "Questão três", subject: "Física", topic: null, difficulty: null, image_url: null, options: null },
+    ];
+    const updateData = vi.fn();
+    const data: WizardData = { ...baseData, activityText: "texto colado à mão" };
+    render(<StepActivityInput data={data} updateData={updateData} onNext={vi.fn()} onPrev={vi.fn()} />);
+    fireEvent.click(screen.getByRole("button", { name: /Banco de Questões/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Abrir Banco de Questões/i }));
+    await waitFor(() => screen.getByText("Questão três"));
+    fireEvent.click(screen.getByText("Questão três"));
+    fireEvent.click(screen.getByRole("button", { name: /Adicionar 1/i }));
+    expect(updateData).not.toHaveBeenCalled();
+    replaceText();
+    expect(updateData).toHaveBeenCalledWith(expect.objectContaining({ activityText: "1) Questão três" }));
+  });
+});
+
+/**
+ * 1127: the bank dialog is opened by state, with no `DialogTrigger`, so Radix
+ * restores focus to `<body>` on close. Closing must hand focus back to the
+ * "Abrir Banco de Questões" button, whether by Escape or after adding.
+ */
+describe("StepActivityInput — focus return when the bank dialog closes (1127)", () => {
+  function openBank() {
+    render(<StepActivityInput data={baseData} updateData={vi.fn()} onNext={vi.fn()} onPrev={vi.fn()} />);
+    fireEvent.click(screen.getByRole("button", { name: /Banco de Questões/i }));
+    const trigger = screen.getByRole("button", { name: /Abrir Banco de Questões/i });
+    fireEvent.click(trigger);
+    return trigger;
+  }
+
+  it("returns focus to 'Abrir Banco de Questões' when dismissed with Escape", async () => {
+    const trigger = openBank();
+    const dialog = await screen.findByRole("dialog", { name: /Selecionar Questões/i });
+    fireEvent.keyDown(dialog, { key: "Escape" });
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    expect(document.activeElement).toBe(trigger);
+  });
+
+  it("returns focus to 'Abrir Banco de Questões' after adding questions", async () => {
+    bankQuestionsResult.data = [
+      { id: "q2", text: "Sete vezes oito", subject: "Matemática", topic: null, difficulty: null, image_url: null, options: null },
+    ];
+    const trigger = openBank();
+    await waitFor(() => screen.getByText("Sete vezes oito"));
+    fireEvent.click(screen.getByText("Sete vezes oito"));
+    fireEvent.click(screen.getByRole("button", { name: /Adicionar 1/i }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    expect(document.activeElement).toBe(trigger);
+  });
+});
+
+describe("StepActivityInput — removing a selected question keeps focus and is announced (1128)", () => {
+  const mk = (id: string, text: string) => ({ id, text, subject: "Física", topic: null, difficulty: null, image_url: null, options: null });
+  const qs = [mk("q1", "Questão um"), mk("q2", "Questão dois"), mk("q3", "Questão três"), mk("q4", "Questão quatro")];
+
+  function Harness({ initial }: { initial: typeof qs }) {
+    const [data, setData] = useState<WizardData>({
+      ...baseData,
+      selectedQuestions: initial,
+      activityText: initial.map((q, i) => `${i + 1}) ${q.text}`).join("\n\n"),
+    });
+    return (
+      <StepActivityInput
+        data={data}
+        updateData={(partial) => setData((d) => ({ ...d, ...partial }))}
+        onNext={vi.fn()}
+        onPrev={vi.fn()}
+      />
+    );
+  }
+
+  function openBankTab() {
+    fireEvent.click(screen.getByRole("button", { name: /^Banco de Questões$/i }));
+  }
+
+  it("gives each remove button a name that identifies its question", () => {
+    render(<Harness initial={qs} />);
+    openBankTab();
+    const names = screen.getAllByRole("button", { name: /Remover questão/i }).map((b) => b.getAttribute("aria-label"));
+    expect(names).toEqual(["Remover questão 1", "Remover questão 2", "Remover questão 3", "Remover questão 4"]);
+  });
+
+  it("moves focus to the next question's remove button instead of <body>", () => {
+    render(<Harness initial={qs} />);
+    openBankTab();
+    const third = screen.getByRole("button", { name: "Remover questão 3" });
+    third.focus();
+    fireEvent.click(third);
+    expect(screen.queryByText("Questão três")).not.toBeInTheDocument();
+    // The old 4th question is now the 3rd one.
+    expect(document.activeElement).toBe(screen.getByRole("button", { name: "Remover questão 3" }));
+    expect(document.activeElement).not.toBe(document.body);
+  });
+
+  it("falls back to the previous question when the last one is removed", () => {
+    render(<Harness initial={qs} />);
+    openBankTab();
+    fireEvent.click(screen.getByRole("button", { name: "Remover questão 4" }));
+    expect(document.activeElement).toBe(screen.getByRole("button", { name: "Remover questão 3" }));
+  });
+
+  it("falls back to the bank opener when the list empties", () => {
+    render(<Harness initial={[qs[0]]} />);
+    openBankTab();
+    fireEvent.click(screen.getByRole("button", { name: "Remover questão 1" }));
+    expect(document.activeElement).toBe(screen.getByRole("button", { name: /Abrir Banco de Questões/i }));
+  });
+
+  it("announces the removal and the new count in a polite live region", () => {
+    render(<Harness initial={qs} />);
+    openBankTab();
+    expect(screen.getByRole("status")).toBeEmptyDOMElement();
+    fireEvent.click(screen.getByRole("button", { name: "Remover questão 2" }));
+    expect(screen.getByRole("status")).toHaveTextContent("Questão removida. 3 questão(ões) selecionada(s).");
+  });
+
+  it("does not move focus nor announce when the user cancels the rebuild", async () => {
+    function Edited() {
+      const [data, setData] = useState<WizardData>({ ...baseData, selectedQuestions: qs, activityText: "editado à mão" });
+      return <StepActivityInput data={data} updateData={(p) => setData((d) => ({ ...d, ...p }))} onNext={vi.fn()} onPrev={vi.fn()} />;
+    }
+    render(<Edited />);
+    openBankTab();
+    const second = screen.getByRole("button", { name: "Remover questão 2" });
+    second.focus();
+    fireEvent.click(second);
+    fireEvent.click(within(screen.getByRole("alertdialog")).getByRole("button", { name: "Manter minha edição" }));
+    // 1138: closing the warning hands focus back to the button that opened it.
+    await waitFor(() => expect(document.activeElement).toBe(second));
+    expect(screen.getByRole("status")).toBeEmptyDOMElement();
+  });
+
+  it("uses a remove target larger than 24x24", () => {
+    render(<Harness initial={qs} />);
+    openBankTab();
+    const btn = screen.getByRole("button", { name: "Remover questão 1" });
+    expect(btn.className).not.toMatch(/\bh-6\b/);
+    expect(btn.className).toMatch(/\bh-8\b/);
+    expect(btn.className).toMatch(/\bw-8\b/);
+  });
+});
+
+describe("StepActivityInput — long unbroken words wrap inside the cards (1132)", () => {
+  // A token wider than the card (URL, formula, code) does not wrap by default; the
+  // line-clamp's overflow:hidden then cuts it mid-word with no ellipsis.
+  const longToken = "Pneumoultramicroscopicossilicovulcanoconiotico_sem_espacos_para_testar_quebra_de_linha";
+  const q = { id: "q1", text: longToken, subject: "Física", topic: null, difficulty: null, image_url: null, options: null };
+
+  it("lets the long word break in the selected-question list", () => {
+    const data: WizardData = { ...baseData, selectedQuestions: [q], activityText: `1) ${longToken}` };
+    render(<StepActivityInput data={data} updateData={vi.fn()} onNext={vi.fn()} onPrev={vi.fn()} />);
+    fireEvent.click(screen.getByRole("button", { name: /^Banco de Questões$/i }));
+    expect(screen.getByText(longToken)).toHaveClass("break-words");
+  });
+
+  it("lets the long word break in the bank dialog card", async () => {
+    bankQuestionsResult.data = [q];
+    render(<StepActivityInput data={baseData} updateData={vi.fn()} onNext={vi.fn()} onPrev={vi.fn()} />);
+    fireEvent.click(screen.getByRole("button", { name: /Banco de Questões/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Abrir Banco de Questões/i }));
+    const text = await within(await screen.findByRole("dialog")).findByText(longToken);
+    expect(text).toHaveClass("break-words");
+  });
+});
+
+describe("StepActivityInput — bank dialog never claims empty before querying (1134)", () => {
+  function openBankDialog() {
+    render(<StepActivityInput data={baseData} updateData={vi.fn()} onNext={vi.fn()} onPrev={vi.fn()} />);
+    fireEvent.click(screen.getByRole("button", { name: /^Banco de Questões$/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Abrir Banco de Questões/i }));
+  }
+
+  it("shows loading, not 'empty', right after reopening the dialog", async () => {
+    openBankDialog();
+    await within(await screen.findByRole("dialog")).findByText(/ainda não tem questões/i);
+    fireEvent.keyDown(screen.getByRole("dialog"), { key: "Escape" });
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    bankQuestionsResult.data = [
+      { id: "n1", text: "Questão nova", subject: "Física", topic: null, difficulty: null, image_url: null, options: null },
+    ];
+    fireEvent.click(screen.getByRole("button", { name: /Abrir Banco de Questões/i }));
+    const dialog = await screen.findByRole("dialog");
+    // Before the debounced query resolves, the stale empty state must not show.
+    expect(within(dialog).queryByText(/ainda não tem questões/i)).toBeNull();
+    expect(within(dialog).queryByText(/Nenhuma questão encontrada/i)).toBeNull();
+    expect(within(dialog).getByRole("status", { name: /Carregando questões/i })).toBeInTheDocument();
+    await within(dialog).findByText("Questão nova");
+  });
+
+  it("tells an empty bank apart and offers the paste-text path", async () => {
+    openBankDialog();
+    const dialog = await screen.findByRole("dialog");
+    await within(dialog).findByText(/Seu banco ainda não tem questões/i);
+    expect(within(dialog).queryByText(/Nenhuma questão encontrada/i)).toBeNull();
+    fireEvent.click(within(dialog).getByRole("button", { name: /Colar Texto/i }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    expect(screen.getByLabelText(/Conteúdo da atividade/i)).toBeInTheDocument();
+  });
+
+  // 0533: the bank tab (and its trigger) unmounts on this path, so focus must
+  // land on the textarea the button promised instead of falling to <body>.
+  it("focuses the activity textarea after 'Colar Texto' from the empty bank", async () => {
+    openBankDialog();
+    const dialog = await screen.findByRole("dialog");
+    await within(dialog).findByText(/Seu banco ainda não tem questões/i);
+    fireEvent.click(within(dialog).getByRole("button", { name: /Colar Texto/i }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    expect(screen.getByLabelText(/Conteúdo da atividade/i)).toHaveFocus();
+  });
+
+  it("says the search/filter found nothing and lets the user clear it", async () => {
+    bankQuestionsResult.data = [
+      { id: "s1", text: "Questão de Física", subject: "Física", topic: null, difficulty: null, image_url: null, options: null },
+    ];
+    openBankDialog();
+    const dialog = await screen.findByRole("dialog");
+    await within(dialog).findByText("Questão de Física");
+    fireEvent.change(within(dialog).getByPlaceholderText("Buscar questões..."), { target: { value: "zzz" } });
+    await within(dialog).findByText(/Nenhuma questão encontrada para esta busca ou filtro/i);
+    expect(within(dialog).queryByText(/ainda não tem questões/i)).toBeNull();
+    fireEvent.click(within(dialog).getByRole("button", { name: /Limpar filtros/i }));
+    await within(dialog).findByText("Questão de Física");
+    expect(within(dialog).getByPlaceholderText("Buscar questões...")).toHaveValue("");
+  });
+
+  // 0535: 'Limpar filtros' unmounts itself, so focus must land on the search
+  // field instead of falling back to the dialog container.
+  it("focuses the search field after 'Limpar filtros'", async () => {
+    bankQuestionsResult.data = [
+      { id: "s1", text: "Questão de Física", subject: "Física", topic: null, difficulty: null, image_url: null, options: null },
+    ];
+    openBankDialog();
+    const dialog = await screen.findByRole("dialog");
+    await within(dialog).findByText("Questão de Física");
+    fireEvent.change(within(dialog).getByPlaceholderText("Buscar questões..."), { target: { value: "zzz" } });
+    const clear = await within(dialog).findByRole("button", { name: /Limpar filtros/i });
+    clear.focus();
+    fireEvent.click(clear);
+    await within(dialog).findByText("Questão de Física");
+    expect(within(dialog).getByPlaceholderText("Buscar questões...")).toHaveFocus();
+  });
+});
+
+/**
+ * 0534: the bank dialog state (selection, search, filters) lives in the step,
+ * so closing the dialog must reset it. Otherwise an abandoned selection comes
+ * back checked, an old search hides most of the bank, and a selection hidden by
+ * the filter is added without the user seeing it.
+ */
+describe("StepActivityInput — the bank dialog starts clean on every opening (0534)", () => {
+  const q7 = { id: "q7", text: "Resolva: x/2 + 3 = 7", subject: "Matemática", topic: null, difficulty: "medio", image_url: null, options: null };
+  const q8 = { id: "q8", text: "Fotossíntese", subject: "Ciências", topic: null, difficulty: null, image_url: null, options: null };
+
+  function renderOnBankTab(data: WizardData = baseData) {
+    render(<StepActivityInput data={data} updateData={vi.fn()} onNext={vi.fn()} onPrev={vi.fn()} />);
+    fireEvent.click(screen.getByRole("button", { name: /Banco de Questões/i }));
+  }
+
+  async function openDialog() {
+    fireEvent.click(screen.getByRole("button", { name: /Abrir Banco de Questões/i }));
+    return screen.findByRole("dialog", { name: /Selecionar Questões/i });
+  }
+
+  async function closeWithEscape(dialog: HTMLElement) {
+    fireEvent.keyDown(dialog, { key: "Escape" });
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+  }
+
+  it("drops a selection abandoned by closing the dialog", async () => {
+    bankQuestionsResult.data = [q7, q8];
+    renderOnBankTab();
+    let dialog = await openDialog();
+    fireEvent.click(await within(dialog).findByText("Fotossíntese"));
+    expect(within(dialog).getByRole("button", { name: /Adicionar 1/i })).toBeEnabled();
+    await closeWithEscape(dialog);
+
+    dialog = await openDialog();
+    const card = await within(dialog).findByRole("checkbox", { name: /Fotossíntese/ });
+    expect(card).toHaveAttribute("aria-checked", "false");
+    expect(within(dialog).getByRole("button", { name: /Adicionar 0/i })).toBeDisabled();
+  });
+
+  it("clears the search and the filters when the dialog closes", async () => {
+    bankQuestionsResult.data = [q7, q8];
+    renderOnBankTab();
+    let dialog = await openDialog();
+    fireEvent.change(within(dialog).getByPlaceholderText("Buscar questões..."), { target: { value: "Foto" } });
+    fireEvent.click(within(dialog).getByRole("combobox", { name: "Filtrar por matéria" }));
+    fireEvent.click(await screen.findByRole("option", { name: "Matemática" }));
+    await closeWithEscape(dialog);
+
+    dialog = await openDialog();
+    expect(within(dialog).getByPlaceholderText("Buscar questões...")).toHaveValue("");
+    expect(within(dialog).getByRole("combobox", { name: "Filtrar por matéria" })).toHaveTextContent("Todas");
+    await within(dialog).findByText("Fotossíntese");
+    expect(within(dialog).getByText("Resolva: x/2 + 3 = 7")).toBeInTheDocument();
+  });
+
+  it("clears the search after adding questions too", async () => {
+    bankQuestionsResult.data = [q7, q8];
+    renderOnBankTab();
+    let dialog = await openDialog();
+    fireEvent.change(within(dialog).getByPlaceholderText("Buscar questões..."), { target: { value: "Foto" } });
+    fireEvent.click(await within(dialog).findByText("Fotossíntese"));
+    fireEvent.click(within(dialog).getByRole("button", { name: /Adicionar 1/i }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+
+    dialog = await openDialog();
+    expect(within(dialog).getByPlaceholderText("Buscar questões...")).toHaveValue("");
+  });
+
+  it("says how many selected questions the current search or filter hides", async () => {
+    bankQuestionsResult.data = [q7, q8];
+    renderOnBankTab();
+    const dialog = await openDialog();
+    fireEvent.click(await within(dialog).findByText("Resolva: x/2 + 3 = 7"));
+    expect(within(dialog).queryByText(/fora deste filtro/)).toBeNull();
+    fireEvent.change(within(dialog).getByPlaceholderText("Buscar questões..."), { target: { value: "Foto" } });
+    await within(dialog).findByText("Fotossíntese");
+    expect(within(dialog).getByText("1 selecionada(s) fora deste filtro")).toBeInTheDocument();
+  });
+});
+
+/**
+ * 0536 — the close button comes from the shadcn `DialogContent` (protected file)
+ * without padding or size: its box was the icon's, 16 x 16, below the 24 x 24 CSS px
+ * of WCAG 2.2 SC 2.5.8 (AA). The bank dialog grows the target as the consumer.
+ */
+describe("StepActivityInput — bank dialog close button target (0536)", () => {
+  it("grows the Dialog-injected close button to the 24 x 24 floor", async () => {
+    render(<StepActivityInput data={baseData} updateData={vi.fn()} onNext={vi.fn()} onPrev={vi.fn()} />);
+    fireEvent.click(screen.getByRole("button", { name: /Banco de Questões/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Abrir Banco de Questões/i }));
+    const dialog = await waitFor(() => screen.getByRole("dialog", { name: /Selecionar Questões/i }));
+    const close = within(dialog).getByRole("button", { name: "Close" });
+    // `[&>button]:*` utilities only reach DIRECT children of the content
+    expect(close.parentElement).toBe(dialog);
+    for (const cls of [
+      "[&>button]:min-h-[24px]",
+      "[&>button]:min-w-[24px]",
+      "[&>button]:p-1",
+      "[&>button]:-m-1",
+    ]) {
+      expect(dialog).toHaveClass(cls);
+    }
+  });
+});
+
+describe("StepActivityInput — the whole bank is reachable without rendering it all (1139)", () => {
+  function bankRows(count: number) {
+    return Array.from({ length: count }, (_, i) => ({
+      id: `b${i}`, text: `Questão número ${i}`, subject: "Física", topic: null,
+      difficulty: null, image_url: null, options: null,
+    }));
+  }
+  function openBankDialog() {
+    render(<StepActivityInput data={baseData} updateData={vi.fn()} onNext={vi.fn()} onPrev={vi.fn()} />);
+    fireEvent.click(screen.getByRole("button", { name: /Banco de Questões/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Abrir Banco de Questões/i }));
+  }
+
+  it("finds a question past the server row limit", async () => {
+    bankQuestionsResult.data = bankRows(2500);
+    openBankDialog();
+    await waitFor(() => screen.getByText("Questão número 0"));
+    fireEvent.change(screen.getByPlaceholderText("Buscar questões..."), { target: { value: "número 2499" } });
+    await waitFor(() => expect(screen.getByText("Questão número 2499")).toBeInTheDocument());
+  });
+
+  it("renders the list in pages and loads more on request", async () => {
+    bankQuestionsResult.data = bankRows(45);
+    openBankDialog();
+    await waitFor(() => screen.getByText("Questão número 0"));
+    expect(screen.getAllByRole("checkbox")).toHaveLength(20);
+    fireEvent.click(screen.getByRole("button", { name: /Carregar mais/i }));
+    expect(screen.getAllByRole("checkbox")).toHaveLength(40);
+    fireEvent.click(screen.getByRole("button", { name: /Carregar mais/i }));
+    expect(screen.getAllByRole("checkbox")).toHaveLength(45);
+    expect(screen.queryByRole("button", { name: /Carregar mais/i })).toBeNull();
+  });
+
+  it("moves focus to the first card the load revealed", async () => {
+    bankQuestionsResult.data = bankRows(21);
+    openBankDialog();
+    await waitFor(() => screen.getByText("Questão número 0"));
+    fireEvent.click(screen.getByRole("button", { name: "Carregar mais (1 restante)" }));
+    expect(screen.getAllByRole("checkbox")[20]).toHaveFocus();
+  });
+
+  it("starts again from the first page when the search changes", async () => {
+    bankQuestionsResult.data = bankRows(45);
+    openBankDialog();
+    await waitFor(() => screen.getByText("Questão número 0"));
+    fireEvent.click(screen.getByRole("button", { name: /Carregar mais/i }));
+    expect(screen.getAllByRole("checkbox")).toHaveLength(40);
+    fireEvent.change(screen.getByPlaceholderText("Buscar questões..."), { target: { value: "questão" } });
+    await waitFor(() => expect(screen.getAllByRole("checkbox")).toHaveLength(20));
   });
 });

@@ -1,6 +1,7 @@
-import { useId, useMemo, useRef, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { cn } from "@/lib/utils";
 import { ArrowLeft, ArrowRight, FileText, Info, RefreshCw, Save } from "lucide-react";
 import { EditorContent, BubbleMenu } from "@tiptap/react";
 import { isTextSelection } from "@tiptap/core";
@@ -18,6 +19,7 @@ import {
 import { AppearancePopover } from "./AppearancePopover";
 import { MetadataDrawer } from "./MetadataDrawer";
 import { OriginalExamDialog } from "./OriginalExamDialog";
+import { EMPTY_FOLDER_NAME_MESSAGE, NEW_FOLDER_HINT } from "./newFolderField";
 import { SelectionBubble } from "@/components/adaptation/canonical-editor/SelectionBubble";
 import { SELECTION_BUBBLE_TIPPY_OPTIONS } from "@/components/adaptation/canonical-editor/selectionBubbleTippy";
 import { resolvePageStyle } from "@/components/adaptation/render/pageStyle";
@@ -81,6 +83,8 @@ type Props = {
   /** Name typed for a folder that does not exist yet; created on save. */
   newFolder?: string;
   onNewFolderChange?: (name: string) => void;
+  /** Why the typed folder name was refused (e.g. it repeats a folder); tied to the field. */
+  newFolderError?: string | null;
   /**
    * Degrau de zoom da folha, guardado pelo wizard (achado 0251). O passo é
    * desmontado a cada troca de passo, então a escolha do professor só sobrevive
@@ -99,7 +103,14 @@ type Props = {
    * compare, and ImageNodeView can offer "Recortar do original". Absent for
    * adaptações montadas pelo Banco de Questões (no source file to compare).
    */
-  originalExam?: { file: File; pageImages: string[]; userId: string | null } | null;
+  originalExam?: {
+    file: File;
+    /** Word's `pageImages` are embedded figures, not pages (achado 0280). */
+    fileType?: "pdf" | "docx";
+    text?: string;
+    pageImages: string[];
+    userId: string | null;
+  } | null;
 };
 
 /**
@@ -117,6 +128,11 @@ const NEW_FOLDER = "__nova_pasta__";
  * (§Reset). Stable across renders — UploadedExamExtension (which DOES vary
  * per adaptation) is added separately, memoized on `originalExam`.
  */
+// Secondary actions on the paper-palette action bar (finding 0705): override the
+// app tokens of `variant="outline"`, which flip in dark mode while the bar does not.
+const PAPER_SECONDARY_BUTTON =
+  "border-surface-chrome-line bg-surface-paper text-surface-ink hover:bg-surface-mesa hover:text-surface-ink";
+
 const REVIEW_EXTENSIONS = [PageBreakMarker, OriginalDocExtension];
 
 /**
@@ -147,6 +163,7 @@ export function StepReview({
   onFolderChange,
   newFolder = "",
   onNewFolderChange,
+  newFolderError = null,
   zoomIndex,
   onZoomIndexChange,
   canSave = false,
@@ -155,10 +172,13 @@ export function StepReview({
   originalExam = null,
 }: Props) {
   const titleHintId = useId();
+  const newFolderErrorId = useId();
+  const newFolderHintId = useId();
   const [aboutOpen, setAboutOpen] = useState(false);
   // 0349 — a gaveta não tem `SheetTrigger` (é controlada), então o gatilho para
   // onde o foco volta no fechamento tem que ser entregue à mão.
   const aboutTriggerRef = useRef<HTMLButtonElement>(null);
+  const originalTriggerRef = useRef<HTMLButtonElement>(null);
   const surfaceRef = useRef<HTMLDivElement>(null);
   const [originalOpen, setOriginalOpen] = useState(false);
   // Local: whether the "Nova pasta…" field is open. The NAME goes up so the
@@ -170,6 +190,22 @@ export function StepReview({
   // campo. Por isso o foco é redirecionado no `onCloseAutoFocus` (o hook que o
   // Radix expõe justamente para isso), com estas duas refs: uma marca que o
   // fechamento em curso veio de "+ Nova pasta…", a outra aponta para o campo.
+  // 0508 — o salvar do wizard cria a pasta e devolve o id dela em `folderId`.
+  // A pasta passou a ser a escolhida, então o modo "nova pasta" acabou: sem
+  // isto o campo ficava aberto e vazio, e o próximo salvar criaria outra pasta.
+  useEffect(() => {
+    setCreatingFolder(false);
+  }, [folderId]);
+  // 0513: Enter confirmed the name and closed the field, but the save refused
+  // it (repeated name). Reopen it, or the reason has nowhere to show up.
+  useEffect(() => {
+    if (newFolderError) setCreatingFolder(true);
+  }, [newFolderError]);
+  // 0513: Enter / Salvar found the field empty. Local because it never needs
+  // the parent: the name is simply missing.
+  const [folderNameMissing, setFolderNameMissing] = useState(false);
+  const folderFieldError =
+    newFolderError ?? (folderNameMissing ? EMPTY_FOLDER_NAME_MESSAGE : null);
   const newFolderRef = useRef<HTMLInputElement>(null);
   const focusNewFolder = useRef(false);
   const folderTriggerRef = useRef<HTMLButtonElement>(null);
@@ -180,11 +216,16 @@ export function StepReview({
    * Select é o sentinela NEW_FOLDER. Por isso o rótulo é calculado aqui em vez
    * de deixar o Radix imprimir o item selecionado.
    */
-  const folderLabel = folders.find((f) => f.id === folderId)?.name ?? "Sem pasta";
+  const pendingFolder = newFolder.trim();
+  const folderLabel =
+    !creatingFolder && pendingFolder
+      ? `${pendingFolder} (nova)`
+      : (folders.find((f) => f.id === folderId)?.name ?? "Sem pasta");
 
   /** Escape cancela o modo transitório (APG) e devolve o foco ao gatilho. */
   const cancelNewFolder = () => {
     setCreatingFolder(false);
+    setFolderNameMissing(false);
     onNewFolderChange?.("");
     folderTriggerRef.current?.focus();
   };
@@ -255,8 +296,17 @@ export function StepReview({
           dos controles é `shrink-0` e, dividindo a mesma linha em 390 px, não
           sobrava largura nenhuma — o campo ia a 0 px e o selo transbordava por
           baixo dos selects opacos (achado 0227).
+
+          De `sm` para cima o mesmo mecanismo continuava vivo (achado 0801): em
+          768 px o grupo da direita pede 624,6 px dos ~689 px úteis da barra e o
+          campo caía no piso do próprio padding, 18 px, com o selo cortado por
+          baixo do select de pasta. `min-w-0` é o contrário de um piso, então a
+          partir de `sm` ele dá lugar a uma largura mínima absoluta: como a
+          barra é `flex-wrap`, o grupo dos controles quebra para a linha de
+          baixo assim que as duas metades não cabem — sem depender de adivinhar
+          em qual breakpoint isso acontece.
         */}
-        <div className="flex min-w-0 basis-full items-center gap-2 sm:flex-1 sm:basis-0">
+        <div className="flex min-w-0 basis-full items-center gap-2 sm:min-w-[16rem] sm:flex-1 sm:basis-0">
           {/*
             Achado 0250: este campo escreve no MESMO `header.title` que o campo
             "Título" do passo Exportar — nomear aqui também imprime o título na
@@ -286,8 +336,12 @@ export function StepReview({
           )}
         </div>
         {/* Em telas estreitas os botões viram só ícone (rótulo a partir de `sm`),
-            senão o grupo `shrink-0` transborda a viewport e é clipado. */}
-        <div className="flex shrink-0 flex-wrap items-center gap-1">
+            senão o grupo `shrink-0` transborda a viewport e é clipado.
+            `max-w-full` + `min-w-0` (achado 0532): sem limite, o grupo media o
+            `max-content` e o `flex-wrap` nunca valia; em 390 px com "Ver prova
+            original" o ícone "Sobre" passava da borda do cartão. Limitado à
+            largura da barra, os ícones quebram para a linha de baixo. */}
+        <div className="flex min-w-0 max-w-full shrink-0 flex-wrap items-center gap-1">
           {/* shadcn Select, não o <select> nativo: a lista de <option> é
               desenhada pelo navegador e não aceita as cores nem a fonte do
               projeto. O popover é portalado, então recebe a paleta surface-*
@@ -299,12 +353,15 @@ export function StepReview({
               // would leave an empty one behind whenever someone changes their
               // mind and never saves — so it is created on save, or never.
               if (v === NEW_FOLDER) {
+                // 0509: só abre o campo. A pasta atual fica intacta até um
+                // nome ser salvo, para o Escape ter o que devolver.
                 focusNewFolder.current = true;
+                setFolderNameMissing(false);
                 setCreatingFolder(true);
-                onFolderChange?.(null);
                 return;
               }
               setCreatingFolder(false);
+              setFolderNameMissing(false);
               onNewFolderChange?.("");
               onFolderChange?.(v === NO_FOLDER ? null : v);
             }}
@@ -339,10 +396,29 @@ export function StepReview({
               ref={newFolderRef}
               autoFocus
               aria-label="Nome da nova pasta"
+              aria-invalid={folderFieldError ? true : undefined}
+              aria-describedby={folderFieldError ? newFolderErrorId : newFolderHintId}
+              title={NEW_FOLDER_HINT}
               placeholder="Ex.: 6º ano B"
               value={newFolder}
-              onChange={(e) => onNewFolderChange?.(e.target.value)}
+              onChange={(e) => {
+                setFolderNameMissing(false);
+                onNewFolderChange?.(e.target.value);
+              }}
               onKeyDown={(e) => {
+                // 0513: Enter confirma o nome. Válido, fecha o campo e o
+                // gatilho mostra a pasta pendente (criada no salvar); vazio,
+                // o campo fica aberto e diz por quê.
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  if (!pendingFolder) {
+                    setFolderNameMissing(true);
+                    return;
+                  }
+                  setCreatingFolder(false);
+                  folderTriggerRef.current?.focus();
+                  return;
+                }
                 if (e.key !== "Escape") return;
                 // Sem `stopPropagation` o Escape sobe e fecha o diálogo/wizard
                 // em volta, o que perderia bem mais do que o campo.
@@ -350,8 +426,18 @@ export function StepReview({
                 e.stopPropagation();
                 cancelNewFolder();
               }}
-              className="mr-1 h-7 w-36 border-surface-chrome-line bg-surface-paper text-xs text-surface-ink"
+              className="mr-1 h-7 w-36 border-surface-chrome-line bg-surface-paper text-xs text-surface-ink aria-[invalid=true]:border-destructive"
             />
+          )}
+          {creatingFolder && folderFieldError && (
+            <span id={newFolderErrorId} role="alert" className="mr-1 text-xs font-medium text-destructive">
+              {folderFieldError}
+            </span>
+          )}
+          {creatingFolder && (
+            <span id={newFolderHintId} className="sr-only">
+              {NEW_FOLDER_HINT}
+            </span>
           )}
 
           <Select
@@ -383,8 +469,8 @@ export function StepReview({
             <RefreshCw className="w-4 h-4" />
             <span className="hidden sm:ml-1 sm:inline">Regerar</span>
           </Button>
-          {/* Achado 0152: o painel se ancora na superfície da folha, não neste
-              botão — daqui ele abriria por cima do papel que formata. */}
+          {/* Achados 0152/0159: o painel mede a folha dentro da superfície e
+              abre no vão da mesa ao lado dela; sem vão, abre abaixo deste botão. */}
           <AppearancePopover
             value={resolvePageStyle(pageStyle)}
             onChange={handleAppearanceChange}
@@ -392,12 +478,16 @@ export function StepReview({
           />
           {originalExam && (
             <Button
+              ref={originalTriggerRef}
               size="sm"
               variant="ghost"
               onClick={() => setOriginalOpen(true)}
-              className="shrink-0 text-surface-ink-soft hover:text-surface-ink"
+              aria-label="Ver prova original"
+              title="Ver prova original"
+              className="shrink-0 px-2 text-surface-ink-soft hover:text-surface-ink sm:px-3"
             >
-              <FileText className="w-4 h-4 mr-1" /> Ver prova original
+              <FileText className="w-4 h-4" />
+              <span className="hidden sm:ml-1 sm:inline">Ver prova original</span>
             </Button>
           )}
           <Button
@@ -428,12 +518,23 @@ export function StepReview({
         <OriginalExamDialog
           open={originalOpen}
           onOpenChange={setOriginalOpen}
+          restoreFocusRef={originalTriggerRef}
           pageImages={originalExam.pageImages}
+          fileType={originalExam.fileType}
+          text={originalExam.text}
         />
       )}
 
       {editor && (
-        <div ref={surfaceRef} onKeyDown={handleSurfaceKeyDown}>
+        /* Achado 0806: a barra de ações do pé é `sticky` e o cabeçalho mobile é
+           `fixed`; um controle coberto por eles conta como visível, então o Tab
+           parava atrás da barra sem rolar. A margem de rolagem nos descendentes
+           reserva a altura das duas barras quando o foco rola um alvo à vista. */
+        <div
+          ref={surfaceRef}
+          onKeyDown={handleSurfaceKeyDown}
+          className="[&_*]:scroll-mb-24 [&_*]:scroll-mt-16 lg:[&_*]:scroll-mt-0"
+        >
           {/* Bubble de seleção (plano §6.2): aparece só com seleção não-vazia no
               editor principal — editores aninhados (RichTextField) são instâncias
               separadas, então o bubble não os atinge.
@@ -472,7 +573,15 @@ export function StepReview({
         da folha, onde mora a última pauta da questão aberta.
       */}
       <div className="sticky bottom-0 z-10 flex flex-wrap justify-between gap-2 border-t border-surface-chrome-line bg-surface-chrome px-2 py-3">
-        <Button variant="outline" onClick={onPrev} aria-label="Voltar" className="shrink-0">
+        {/* Achado 0705: a barra segue a paleta do papel (clara nos dois temas);
+            os secundários também, senão o `outline` cru do app vira laje escura
+            no tema escuro. "Exportar" fica teal: é a cor de ação do app. */}
+        <Button
+          variant="outline"
+          onClick={onPrev}
+          aria-label="Voltar"
+          className={cn("shrink-0", PAPER_SECONDARY_BUTTON)}
+        >
           <ArrowLeft className="w-4 h-4 mr-2" /> Voltar
         </Button>
         <div className="flex min-w-0 items-center gap-2">
@@ -482,13 +591,29 @@ export function StepReview({
               que 390px e empurravam "Exportar", a ação primária do passo, para
               fora da viewport. Abaixo de `sm` este vira só ícone, o mesmo
               tratamento que a barra de chrome do topo recebeu no achado 0010. */}
+          {/* Achado 0511: `disabled` nativo durante o salvamento derrubava o
+              foco do próprio botão para o `<body>`. Em curso, ele fica só
+              `aria-disabled` e ignora o clique, segurando o foco. */}
           <Button
             variant="outline"
-            onClick={() => onSave?.()}
-            disabled={!canSave || saving}
+            onClick={() => {
+              if (saving) return;
+              // 0513: campo de nova pasta aberto e vazio não salva calado.
+              if (creatingFolder && !pendingFolder) {
+                setFolderNameMissing(true);
+                newFolderRef.current?.focus();
+                return;
+              }
+              onSave?.();
+            }}
+            disabled={!canSave}
+            aria-disabled={saving || undefined}
             aria-label="Salvar adaptação"
             title="Salvar adaptação"
-            className="shrink-0 px-2 sm:px-4"
+            className={cn(
+              "shrink-0 px-2 sm:px-4 aria-disabled:opacity-50",
+              PAPER_SECONDARY_BUTTON,
+            )}
           >
             <Save className="w-4 h-4" />
             <span className="hidden sm:ml-2 sm:inline">

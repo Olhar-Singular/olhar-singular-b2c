@@ -16,11 +16,50 @@ type Props = {
 
 const MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024;
 
+// pdf.js / JSZip throw raw English messages ("Invalid PDF structure.",
+// "Corrupted zip: ..."); the teacher gets this instead, the detail stays in the console.
+const PARSE_ERROR_MESSAGE =
+  "Não foi possível ler este arquivo. Ele pode estar corrompido: abra no Word e salve de novo, ou exporte o PDF outra vez, e envie novamente.";
+
+// pdf.js rejects an open-password PDF with a PasswordException. The file is fine,
+// so the "corrupted" advice above would send the teacher down the wrong path.
+const PASSWORD_ERROR_MESSAGE =
+  "Este PDF está protegido por senha. Remova a senha (abra o PDF e salve ou imprima como PDF sem proteção) e envie novamente.";
+
+/** pdf.js exceptions are identified by `name`; Object() keeps non-object throws (strings, null) safe. */
+function isPdfPasswordError(e: unknown): boolean {
+  return Object(e).name === "PasswordException";
+}
+
 export function StepUploadExam({ data, updateData, onNext, onLoadingChange }: Props) {
   const [processing, setProcessing] = useState(false);
   const [error, setError] = useState("");
+  const [dragging, setDragging] = useState(false);
+  const [announcement, setAnnouncement] = useState("");
   const fileRef = useRef<HTMLInputElement>(null);
+  const dropzoneRef = useRef<HTMLDivElement>(null);
+  const focusDropzoneOnDetachRef = useRef(false);
+  const continueRef = useRef<HTMLButtonElement>(null);
+  const focusContinueOnAttachRef = useRef(false);
   const attached = data.uploadedExam ?? null;
+
+  // Removing the file unmounts the card holding the trash button, which would
+  // drop keyboard focus on <body>. Once the dropzone is re-enabled (tabbable
+  // again), hand focus to it so the teacher can pick the next file right away.
+  useEffect(() => {
+    if (attached || !focusDropzoneOnDetachRef.current) return;
+    focusDropzoneOnDetachRef.current = false;
+    dropzoneRef.current?.focus();
+  }, [attached]);
+
+  // Attaching a file disables the dropzone (tabIndex -1), stranding focus on a
+  // control that no longer does anything. Only after a fresh attach (never on
+  // mount with a file already there), move focus to Continuar, the next action.
+  useEffect(() => {
+    if (!attached || !focusContinueOnAttachRef.current) return;
+    focusContinueOnAttachRef.current = false;
+    continueRef.current?.focus();
+  }, [attached]);
 
   // Guards against a stray completion after this step is left mid-parse (Voltar
   // is disabled while processing, but the wizard's step pills / sidebar nav are
@@ -53,12 +92,15 @@ export function StepUploadExam({ data, updateData, onNext, onLoadingChange }: Pr
 
   /** Detaches the current file, re-enabling the dropzone for a new upload. */
   function handleRemoveFile() {
+    focusDropzoneOnDetachRef.current = true;
     updateData({ uploadedExam: null });
     setError("");
+    setAnnouncement("Arquivo removido. Escolha outro arquivo para adaptar.");
   }
 
   async function handleFile(file: File) {
     setError("");
+    setAnnouncement("");
 
     if (file.size > MAX_FILE_SIZE_BYTES) {
       setError("Arquivo muito grande (máximo 10MB).");
@@ -84,6 +126,8 @@ export function StepUploadExam({ data, updateData, onNext, onLoadingChange }: Pr
          parsing" and "stores the locally-parsed file" tests); v8's branch
          instrumentation misattributes the fall-through hit on this exact shape. */
       if (!mountedRef.current) return;
+      focusContinueOnAttachRef.current = true;
+      setAnnouncement(`Arquivo ${file.name} pronto para adaptar. Continue para escolher o perfil de barreira.`);
       // Dropping the previous result is what makes a SECOND adaptation
       // possible: StepGenerate only generates while `data.result` is empty, so
       // a leftover one makes the Gerar step silently do nothing and land the
@@ -96,7 +140,7 @@ export function StepUploadExam({ data, updateData, onNext, onLoadingChange }: Pr
     } catch (e) {
       console.error("Exam parsing error:", e);
       if (!mountedRef.current) return;
-      setError(e instanceof Error ? e.message : "Falha ao processar o arquivo. Tente novamente.");
+      setError(isPdfPasswordError(e) ? PASSWORD_ERROR_MESSAGE : PARSE_ERROR_MESSAGE);
     } finally {
       if (mountedRef.current) {
         setProcessing(false);
@@ -111,24 +155,82 @@ export function StepUploadExam({ data, updateData, onNext, onLoadingChange }: Pr
     e.target.value = "";
   }
 
+  function openFilePicker() {
+    if (!attached) fileRef.current?.click();
+  }
+
+  // The dashed area is the only way to pick a file. As a <div role="button"> it
+  // gets no native Enter/Space activation, so the keyboard is wired by hand.
+  function handleDropzoneKeyDown(e: React.KeyboardEvent<HTMLDivElement>) {
+    if (e.key !== "Enter" && e.key !== " ") return;
+    e.preventDefault();
+    openFilePicker();
+  }
+
+  // The dropzone is busy while a file is attached or still being parsed.
+  const dropDisabled = !!attached || processing;
+
+  // preventDefault runs unconditionally: without it the browser's default for a
+  // dropped file is to open it in the tab, taking the teacher out of the app.
+  function handleDragOver(e: React.DragEvent<HTMLDivElement>) {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = dropDisabled ? "none" : "copy";
+    if (!dropDisabled) setDragging(true);
+  }
+
+  function handleDragLeave() {
+    setDragging(false);
+  }
+
+  function handleDrop(e: React.DragEvent<HTMLDivElement>) {
+    e.preventDefault();
+    setDragging(false);
+    if (dropDisabled) return;
+    const files = e.dataTransfer.files;
+    // One exam per adaptation: refuse the batch out loud instead of silently
+    // keeping files[0] and discarding the rest (the teacher would pay for one
+    // and believe all were sent).
+    if (files.length > 1) {
+      setAnnouncement("");
+      setError(`Envie um arquivo por vez: você soltou ${files.length} arquivos. Solte só o que quer adaptar.`);
+      return;
+    }
+    const file = files[0];
+    if (file) void handleFile(file);
+  }
+
   return (
     <div className="space-y-4">
       <div>
         <h2 className="text-xl font-semibold text-foreground">Adaptar direto do arquivo</h2>
         <p className="text-sm text-muted-foreground mt-1">
-          Envie o arquivo (PDF ou Word) — a atividade é adaptada automaticamente, inteira, preservando a
+          Envie o arquivo (PDF ou Word): a atividade é adaptada automaticamente, inteira, preservando a
           ordem das questões e as imagens originais. Você já cai direto na edição da versão adaptada.
         </p>
       </div>
 
       <div
-        onClick={() => {
-          if (!attached) fileRef.current?.click();
-        }}
-        className={`border-2 border-dashed rounded-lg p-8 text-center transition-colors ${
+        ref={dropzoneRef}
+        role="button"
+        tabIndex={attached ? -1 : 0}
+        aria-disabled={!!attached}
+        // The name follows the state: a fixed "Escolher arquivo" would tell a
+        // screen-reader user the opposite of what just happened.
+        aria-label={attached ? "Arquivo pronto para adaptar" : "Escolher arquivo PDF ou Word"}
+        onClick={openFilePicker}
+        onKeyDown={handleDropzoneKeyDown}
+        onDragOver={handleDragOver}
+        onDragLeave={handleDragLeave}
+        onDrop={handleDrop}
+        // border-input (not the default --border) keeps the control's boundary
+        // at 3:1 (WCAG 1.4.11). No opacity when attached: the area then carries
+        // the success message, which must keep its 4.5:1 text contrast.
+        className={`border-2 border-dashed rounded-lg p-8 text-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ${
           attached
-            ? "cursor-not-allowed opacity-60"
-            : "cursor-pointer hover:border-primary hover:bg-primary/5"
+            ? "cursor-not-allowed border-input"
+            : dragging
+              ? "cursor-pointer border-primary bg-primary/5"
+              : "cursor-pointer border-input hover:border-primary hover:bg-primary/5"
         }`}
       >
         <input
@@ -146,7 +248,7 @@ export function StepUploadExam({ data, updateData, onNext, onLoadingChange }: Pr
             <p className="text-sm text-muted-foreground">Lendo o arquivo...</p>
             <p className="text-xs text-muted-foreground/70 flex items-center gap-1.5">
               <Clock className="w-3.5 h-3.5" />
-              Pode levar alguns instantes — não feche esta aba.
+              Pode levar alguns instantes, não feche esta aba.
             </p>
           </div>
         ) : attached ? (
@@ -157,7 +259,9 @@ export function StepUploadExam({ data, updateData, onNext, onLoadingChange }: Pr
         ) : (
           <div className="flex flex-col items-center gap-2">
             <Upload className="w-8 h-8 text-muted-foreground" />
-            <p className="text-sm font-medium">Arraste um PDF ou Word aqui, ou clique para escolher</p>
+            <p className="text-sm font-medium">
+              {dragging ? "Solte o arquivo aqui" : "Arraste um PDF ou Word aqui, ou clique para escolher"}
+            </p>
           </div>
         )}
       </div>
@@ -166,7 +270,7 @@ export function StepUploadExam({ data, updateData, onNext, onLoadingChange }: Pr
         <div className="flex items-center justify-between gap-3 rounded-lg border bg-muted/40 p-3">
           <div className="flex items-center gap-2 min-w-0">
             <FileText className="w-4 h-4 text-primary shrink-0" />
-            <p className="text-sm font-medium truncate font-serif">{attached.fileName}</p>
+            <p className="text-sm font-medium truncate">{attached.fileName}</p>
           </div>
           <Button
             variant="ghost"
@@ -180,6 +284,8 @@ export function StepUploadExam({ data, updateData, onNext, onLoadingChange }: Pr
         </div>
       )}
 
+      <p role="status" aria-live="polite" className="sr-only">{announcement}</p>
+
       {error && (
         <p role="alert" className="text-sm text-destructive">{error}</p>
       )}
@@ -190,7 +296,7 @@ export function StepUploadExam({ data, updateData, onNext, onLoadingChange }: Pr
           Voltar
         </Button>
         {attached && (
-          <Button onClick={handleContinue}>
+          <Button ref={continueRef} onClick={handleContinue}>
             Continuar
             <ArrowRight className="w-4 h-4 ml-2" />
           </Button>
