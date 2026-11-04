@@ -17,7 +17,7 @@ Plataforma educacional B2C. **Educadores adaptam atividades pedagógicas (provas
 
 | Fluxo | Página | Hook(s) | Edge function | Resumo |
 |-------|--------|---------|---------------|--------|
-| **Adaptar** | `AdaptarPage`, `EditAdaptationPage`, `MyAdaptationsPage` | `useAdaptations`, `useAdaptationDraft` | `adapt-activity`, `extract-exam-for-adaptation` (upload direto) | Wizard: Tipo → Atividade → Barreiras → Gerar (IA) → **Revisar** (superfície única Tiptap canônico: edição inline + card da questão + Aparência) → Exportar PDF. A **edge function** grava a linha em `adaptations` (draft) e o cliente só a atualiza por autosave. No upload direto, o Gerar primeiro **lê o arquivo com IA (cobrado à parte, ver gotcha de reserva)** e só então adapta; a leitura devolve também `title`/`intro` (título e instrução geral da prova), que abrem o texto enviado ao `adapt-activity`. |
+| **Adaptar** | `AdaptarPage`, `EditAdaptationPage`, `MyAdaptationsPage` | `useAdaptations`, `useAdaptationDraft` | `adapt-activity`, `extract-exam-for-adaptation` (upload direto) | Wizard: Tipo → Atividade → Barreiras → Gerar (IA) → **Revisar** (superfície única Tiptap canônico: edição inline + card da questão + Aparência) → Exportar PDF. A **edge function** grava a linha em `adaptations` (draft) e o cliente só a atualiza por autosave. No upload direto, o Gerar primeiro **lê o arquivo com IA (cobrado à parte, ver gotcha de reserva)** e só então adapta; a leitura devolve também `title`/`intro` (título e instrução geral da prova), que abrem o texto enviado ao `adapt-activity`, e `issues` (C-03, ver gotcha "Leitura do arquivo"). |
 | **Perfis de barreira** | `BarrierProfilesPage` | `useBarrierProfiles` | — | Perfis (aluno + barreiras) reutilizados no passo "Barreiras". |
 | **Banco de questões** | `QuestionBankPage` | `useQuestionBank` | `extract-questions` | Extrai questões de PDF de prova. |
 | **Chat** | `ChatPage` | `useChatSessions`, `useSendMessage` | `chat` | Orientação pedagógica via IA. 3 créditos por conversa nova (máx. 10 conversas), até 20 trocas por conversa; mensagem de até 4000 caracteres (`src/lib/domain/chatLimits.ts`, espelhado em `_shared/chatTurn.ts`). Ver gotcha do chat. |
@@ -34,14 +34,150 @@ Plataforma educacional B2C. **Educadores adaptam atividades pedagógicas (provas
 - `src/lib/adaptation/` — núcleo do Adaptar: documento **canônico** (`canonical/`: DSL, blocos, cores) + schema **Tiptap** (`tiptap/`). **Compartilhado** entre editor (browser) e edge function (Deno). Antes de mexer: skill `validate-adaptar`.
 - `src/lib/domain/` — parsers, tipos e limites (`questionParser`, `QuestionType`, `SUBJECTS`, `activityLimits`, `chatLimits`, `extractionCost`).
 - `src/components/adaptation/render/pdf/` — geração de PDF (`@react-pdf/renderer`, math/LaTeX, fontes). **ÁREA FRÁGIL** → agente `pdf-debugger`.
+  **Fontes do PDF = pilha com fallback por glifo** (C-01): todo `fontFamily` emitido no PDF passa por
+  `pdfFontStack` (`render/pdf/fontStack.ts`: `[família, "DejaVu Sans"]`; fórmula `["Courier", "DejaVu
+  Sans Mono", "DejaVu Sans"]`), senão o símbolo que a família não tem (≤ √ ∈ ℝ, e o grego nas fontes de
+  acessibilidade) vira outro caractere. As fontes de símbolos saem de `scripts/build-symbol-fonts.py`
+  e **nenhuma fonte embutida pode ter glifo composto** (o fontkit guarda o glifo criado como componente
+  sem code point e a letra some do texto extraído; vale também para `á`/`Α` na Liberation, Atkinson e
+  Lexend: `scripts/font_composites.py`, guarda em `fontAssets.test.ts` e `greekHomoglyph.test.tsx`; a
+  Liberation não cobre grego, quem cobre é a DejaVu). O aviso "Nenhuma fonte do PDF tem estes
+  caracteres" (`pdfExportWarnings(document, pageStyle, header)`) vale para toda família, varre o
+  cabeçalho do Exportar e o enunciado, ignora controle/largura zero/marca bidi/acento combinante e só
+  lista o que nenhuma fonte desenha (✏, emoji, cirílico). O PDF compõe o texto em NFC antes do layout
+  (`render/pdf/nfc.ts`, acento decomposto colado do macOS).
+  Medir com `symbolCoverage.test.tsx` e `npm run test:pdf-smoke`; detalhes no agente `pdf-debugger`.
+  **Origem e licença das fontes de símbolos:** `public/fonts/DejaVuSans-Symbols.ttf` e
+  `DejaVuSansMono-Symbols.ttf` são subconjuntos do DejaVu Sans / DejaVu Sans Mono 2.37 (pacote Debian
+  `fonts-dejavu-core`), licença Bitstream Vera + domínio público (não é OFL, o dono aceitou). O texto
+  da licença (o `LICENSE` do upstream DejaVu, com o aviso da Arev) fica ao lado delas, em
+  `public/fonts/LICENSE-DejaVu.txt`, e deve permanecer lá.
 - `supabase/functions/_shared/`: lógica testável das edge functions (o `index.ts` é só glue HTTP). Erro que sai para o cliente passa por `_shared/publicError.ts` (`errorResponse` no catch externo: loga e responde 500 genérico; só `PublicError` ou um `json({ error })` explícito carregam texto ao usuário), porque o front mostra `body.error` cru no toast. supabase-js entra pelo import map (`deno.json`), fixado na versão do `package-lock.json`.
 - `supabase/migrations/` — schema, RPCs de crédito, RLS (owner-based; super-admin cross-tenant).
 
 ## Gotchas de dados (mordem)
 
+- **Leitura do arquivo no upload direto: nada some nem é completado em silêncio** (C-02/C-03).
+  `src/lib/utils/docx-math.ts` (`linearizeDocumentMath`, chamado por `extractDocxWithImages` E por
+  `extractDocxText`) conserta o `.docx` antes do mammoth: equação OMML vira texto (`x^2 - 7x`,
+  `sqrt(144)`, `matrix(1,2; 3,4)`, `system(x+y=5; x-y=1)`, `overline(3)`), **sobrescrito/subscrito de run
+  (`w:vertAlign`) vira `^`/`_`** (x² = `x^2`, 10³ = `10^3`, parênteses quando colaria no texto
+  seguinte: `x^(2)y`, `H_(2)O`; nunca `103`), e objeto OLE/MathType ou figura em EMF/WMF/GIF viram os
+  marcadores de `src/lib/domain/unreadMarker.ts` (`[fórmula não lida]`, `[imagem não lida]`,
+  `[objeto não lido]`). Esse arquivo é a ÚNICA fonte do texto dos marcadores: o cliente escreve, o
+  prompt de `examExtractionCore` e o de `adaptationPrompt` mandam mantê-los e **nunca completar**
+  (e não marcar gabarito nessa questão). Depois da IA, `_shared/examExtractionCheck.ts`
+  (`checkExtraction`, chamado por `buildExamExtractionResponse`) compara o resultado com o texto
+  enviado quando há texto aproveitável (PDF escaneado/foto não tem): número ou expressão que não
+  existe na entrada = `invented`; marcador sobrando = `unread`; verbo de comando sem objeto
+  ("Calcule .") = `gap`; marcador a menos que na entrada = `lost_marker`. A comparação é por
+  "esqueleto" (letras, dígitos e operadores; sem espaço, `^`, parênteses, nem barra de fração), porque
+  o PDF perde a posição do expoente. **Só informa**: a resposta ganha `issues`, a extração liquida e a
+  geração segue como antes (crédito e bloqueio intactos). `src/lib/domain/examIssues.ts` tem o tipo
+  `ExtractionIssue` (importado pela edge fn), a validação da resposta e as frases em pt-BR. O
+  professor vê em dois lugares: `StepUploadExam` mostra `findInputProblems(text)` antes de qualquer
+  cobrança, e `StepReview` mostra `extractionIssues` (guardado em `WizardData.extractionIssues`, por
+  `StepGenerate.onExtractionIssues`; não persiste na adaptação salva). Corpus real de regressão (as 13
+  extrações E01-E13 da bateria de 11/2026): 0 falso positivo, E02/E13 com 7 de 7 inventadas apontadas.
+  **Robustez (lote 5b):** `checkExtraction` nunca derruba a extração já liquidada: coage tudo para
+  texto e `buildExamExtractionResponse` tem try/catch (`issues: []` no pior caso). Compara `10^3` x
+  `10³`, `2^10` x `2¹⁰`, `10^(-3)` x `10⁻³`, `3^(n+1)` x `3ⁿ⁺¹`, `1200,50` x `1.200,50`, `3 x 4` x
+  `3 × 4`, `>=` x `≥`, `\frac{1}{2}` x `1/2` x `½` (nunca item `NaN`). Cada issue leva `of` (quantas
+  questões a leitura tinha) e `excerpt` (começo da questão): `describeExtractionIssues(issues, {labels})`
+  diz "Questão N" pelo número que a FOLHA imprime (`sheetQuestionLabels`, de `customNumber` ou ordinal) e,
+  se a IA dividiu/fundiu questões, pelo começo do texto. Marcador `[... não lida]` que sobra no
+  documento vira aviso no PDF, no Word e no Copiar (`unreadMarkerWarnings`) e no Banco de questões.
+- **Lote 9, 9C (ajustes da revisão da Parte A).** (L9A-1) fração SOZINHA na linha (sem texto de cada lado)
+  só vira `(num)/(den)` quando a página DESENHA a barra: `src/lib/utils/pdfFractionBars.ts`
+  (`fractionBarsFromOperatorList(opList, OPS)`) lê do operator list do pdfjs 6 os traços finos horizontais
+  (retângulo preenchido ≤ 1,5 pt ou linha traçada fina, com a CTM aplicada) e `pageTextFromItems(items, bars)`
+  exige barra entre as duas linhas, cobrindo-as e sem passar muito da largura delas, e sem palavra de 4+
+  letras nem rótulo `(A)`/`A)`. `parsePdf` lê as barras com try/catch (falhou = sem barra = linhas intactas).
+  Fração com vizinho na mesma linha (N2, P05, P20) segue pela regra geométrica de antes. LIMITE conhecido:
+  fração isolada cuja barra não sai do operator list (imagem, glifo de fonte) vira duas linhas simples,
+  nunca `a/b` adivinhado. (L9A-2) a classificação de sobrescrito é por LINHA (`Segment.height`: menor que
+  0,8 da maior altura da linha e a até 0,6 dela da linha-base), não pela altura mais comum da página: em
+  página de fórmula (Courier 16,9 pt) a linha de 12 pt logo abaixo deixou de colar na linha da fórmula.
+  (L9A-4) `review_issues` é gravado como irmão opcional de `document` em `adaptation_result`
+  (`ReviewIssueSchema` em `canonical/schema.ts`, `withReviewIssues` em `_shared/adaptActivityCore.ts`; sem
+  aviso, sem chave); o edge devolve em `adaptation` o MESMO objeto gravado (o autosave leva o campo de
+  volta) e `rowToWizardData` o lê (`parseExtractionIssues`) para o Revisar mostrar ao reabrir. Sem migration
+  (jsonb). (L9A-5) `INSTRUCTION_NUMBER` só tira o número quando há verbo de instrução na MESMA frase
+  ("marque", "responda", "descreva"...) ou limite colado ("até", "no máximo"); "são 7 casas" é dado. (L9A-6)
+  `fractionGuard` lê `\frac`/`\sqrt` com chaves aninhadas (`rewriteCommand`, parser de chaves balanceadas),
+  não trata `f(x)/g(x)` (colchete colado em letra) nem `(a)/(b)`, `(12)/(03)`, `(Fonte: IBGE)/2020` como fração
+  agrupada. (L9A-7) `lostRowBreak` ignora `\ ` colado a `\text{...}` e dentro dele (`maskTextGroups`).
+  (L9A-9) mutantes de geometria do `pdfTextLayout` cobertos, um teste por condição.
+- **Lote 10 (última correção de matemática).** (N-M-003) fórmula inline vazia ou só de espaço sozinha no
+  campo não derruba mais o PDF: `PdfRichText.printsNothing` devolve `" "` (a marca U+00AD como 1º caractere
+  dava fonte nula no textkit, `unitsPerEm` de `null`). (N-U-006, M-010, L9BC-9) nenhum hífen dentro de
+  fórmula: `formulaPieces` põe a cola `SOFT_JOINT_STYLE` ANTES do pedaço e o NBSP no fim do anterior quando a
+  junta é espaço; `markNoHyphen` põe U+00AD depois do 1º caractere; título, legenda e apoio passam
+  `columnPt` (`PdfPlainText` corta token longo). (L9BC-1) linha de tabela mais alta que a folha:
+  `render/pdf/tableRowFit.ts` solta o cabeçalho fixo (`headerNeedsRelease`: um `fixed`+`wrap={false}` maior
+  que a folha trava o paginador) e fatia a linha ALTA POR CONTA PRÓPRIA em faixas indivisíveis
+  (`tableRowBands`; L10-1: deixar o react-pdf fatiar uma linha com duas células na virada de folha perde
+  texto e desalinha colunas). Linha estimada até 90% da folha continua inteira e `wrap={false}`; só uma
+  fórmula maior que a faixa (sem onde cortar) volta ao fatiamento do react-pdf. (N-U-008) o hífen em
+  `\end{aligned}-` vinha de DOIS espaços seguidos virarem uma sílaba `"  "` no textkit (a palavra antes
+  ganha ponto de hifenização): `hyphenateWord` devolve um espaço por sílaba; texto colado na fórmula
+  (`(` + fórmula + `)`) ganha a junta macia `joint` em `PdfRichText`. (N-M-004, L9BC-10)
+  `lostRowBreak` só acusa `\ ` onde seria quebra de linha (`followsOperator`: `+\ 380` e `\text{se}\ x`
+  passam; `\text{sim}\ 0` NÃO é acusado, por decisão). (L9BC-3/4) em `pdfTextLayout` o vizinho na linha
+  também exige barra, a ≥ 0,2 do corpo abaixo da base do numerador (sublinhado de 0,1 não é barra).
+  (L9BC-5) `OPERATOR_LIST_TIMEOUT_MS` (5 s) em `pageFractionBars`: estourou = sem barra. (N-U-007) a "primeira
+  fórmula" do aviso da prévia (`mathPreviewNotice`) vem da ordem da folha (`mathInOrder`: enunciado antes das
+  alternativas); título e dica do aviso do Revisar vêm de `adaptationNoticeCopy` (`examIssues.ts`, "números"
+  só quando todos os avisos são de número). A regra "editar limpa o aviso" NÃO mudou (decisão do dono).
+- **Saída da IA na adaptação (lote 6).** (C-04) Questão que manda "observar a figura/gráfico/tabela" sem
+  os dados no texto NÃO ganha medida, ponto ou alternativa: regra `FIGURA, GRÁFICO OU TABELA SEM DADOS`
+  no prompt (mantém a referência e diz que a figura é necessária; marcador `[imagem não lida]` se vier)
+  e checagem determinística `_shared/adaptationReview.ts` (`reviewAdaptationSafely`, chamada em
+  `adapt-activity/index.ts` ANTES de gravar a linha, com try/catch; resposta ganha `review_issues` e, desde o Lote 9C, a mesma lista é gravada em `adaptation_result.review_issues`). Escopo
+  estreito POR MEDIÇÃO: só enunciado, instrução e alternativas (nunca o apoio, que tem exemplo próprio) de
+  questão que cita figura/gráfico/tabela, só NÚMEROS ausentes da atividade (não expressões), ignorando
+  90/100/180/360 ("ângulo reto", "por cento"). Escopo largo (qualquer número/expressão em qualquer
+  questão) deu 61 questões apontadas em 232 (26%): a IA acrescenta fórmula e exemplo no enunciado de
+  propósito. Escopo atual nos 33 documentos reais: 0 falso positivo, 3 de 3 verdadeiros (G14 Q4/Q5, G27
+  Q5). Também aponta `marker_dropped` (marcador de não lida que a IA tirou). Só informa: crédito,
+  liquidação e reask intactos. O cliente guarda em `WizardData.adaptationIssues`
+  (`GeneratedRow.reviewIssues`, de `StepGenerate`) e `StepReview` mostra um segundo aviso, em qualquer
+  modo de entrada; não persiste na adaptação salva. (C-20) O prompt manda o apoio SEM rótulo ("Passo 1:")
+  porque a folha numera os itens, e `_shared/scaffoldingLabelGuard.ts` (`stripScaffoldingLabels`)
+  remove o que passar: rótulo só quando é PALAVRA (Passo/Etapa) + número + separador, ou `N.`/`N)` colado
+  e seguido de espaço; NÃO é a regex do `questionNumberGuard` (C-14 come o primeiro operando). Nos 676
+  itens reais: 129 normalizados, 0 restantes. (C-21) O bloco `ESTRUTURA DO PROFESSOR` vale em TODO modo
+  (não só no MODO FIEL): mesma ordem e quantidade de questões, V/F com várias afirmações = UMA questão
+  `trueFalse` (`TRUE_FALSE_EXAMPLE_QUESTION`, validado no schema real pelo teste), tabela compartilhada
+  escrita uma vez antes da primeira questão. (C-35) A prévia do Exportar mostra, antes do clique,
+  `mathPreviewNotice` (`exportWarnings.ts`): PDF, Word e Copiar imprimem o texto LaTeX, com a 1ª fórmula do
+  documento de exemplo; se alguma fórmula tem descrição (alt), diz que ela não sai no arquivo.
+- **LaTeX inválido da IA e defeitos de borda (lote 7, C-10..C-15, C-18, C-31..C-33)**. `interpretAiResponse`
+  (`_shared/adaptActivityCore.ts`) conserta o JSON ANTES do schema (`latexGuard.repairJsonLatex`: FF/BS
+  de `\frac`/`\beta` com uma barra são sempre consertados; TAB/LF/CR só quando a palavra restaurada é
+  comando conhecido; `%` cru vira `\%`; tudo logado) e valida cada `latex` com KaTeX, a MESMA regra do
+  editor (`src/lib/domain/latexValidation.ts`: `latexParseError(latex, {displayMode})` rejeita `%` cru, `\href`/`\includegraphics` (a folha os
+  desenha em vermelho, `trust` desligado) e usa o MESMO modo da folha: `blockMath` é display
+  (`\begin{equation}` vale), inline não (N-M-002); `latexProblem` também caractere de controle e `\`+espaço
+  dentro de matriz/`array`/`cases`/`aligned` = barra de quebra de linha perdida, L7-2). Inválido entra no reask existente (UM só, dentro do orçamento
+  `attemptTimeoutMs`); se continua inválido a adaptação é ENTREGUE com `review_issues` `invalid_latex`
+  por questão (nunca falha nem muda a cobrança); falha de tentativa posterior entrega o candidato
+  guardado. O prompt manda `___` fora da fórmula, `array` só com colunas c/l/r (sem `@{}`) e `\%`.
+  `questionNumberGuard` (C-14, L7-3) só corta rótulo que é palavra (`Questão 1:`), `Q1)`/`Q1:` (o `Q1 = 5`
+  fica), `N)`/`N.` colado com 1 ou 2 dígitos (`2024. Foi` fica) ou `N - ` seguido de palavra (nunca
+  `9 - 4 =`, `12 - cm`, `7 - dois`). `exportDocx` passa documento e settings por `xmlSafe` (C-13,
+  sem caractere inválido em XML). Editor: o atributo `latex` é sempre string (`schema.ts`, C-33) e
+  o plugin do `InlineMathNode` tira marca (negrito/cor) do átomo, o canônico não a tem (C-31).
+  **Sobrescrito/subscrito tem UMA regra**, `src/lib/domain/scriptText.ts` (`scriptToText`,
+  `linearizeHtmlScripts`): `x^2`, `10^3`, `3^(n+1)`, `H_(2)O`. Usada pelo `docx-math`, pelo colar na
+  folha (`transformPastedHTML` de `useCanonicalEditor` e de `RichTextField`, C-11) e por `htmlToText`
+  (C-32), que `buildActivityText` aplica ao enunciado e às alternativas das questões salvas pelo Editor
+  Manual (HTML). Não crie outra conversão de sup/sub.
+
 - Saldo de crédito = coluna **`credit_balance`** (NÃO `credits`).
 - Documento adaptado vive em **`adaptations.adaptation_result->'document'`** (`->'blocks'` é o array de blocos canônicos). Coluna `content` antiga foi dropada (migration `20260604000000_adaptations_canonical`).
 - Cabeçalho do PDF (título/escola/professor/data) vive em **`adaptation_result->'header'`** — sibling opcional de `document` (additive, igual ao `pageStyle`; ausente = sem header, legacy round-trip). Editado no passo **Exportar** (`ExportPanel` é controlado pelo wizard via `setHeader`), persiste pelo autosave. A coluna **`adaptations.title`** (usada no histórico, que não lê o blob) espelha o `header.title` manual; se vazio, cai no título derivado no servidor (`deriveAdaptationTitle`: `header.title`, senão 1º `heading` do documento gerado, senão "Atividade adaptada"; a mesma derivação de `documentTitle`, que o Revisar sugere). Logo o "Título" de Exportar **é** o título do histórico.
+- Avisos da revisão (C-04/C-10) vivem em **`adaptation_result->'review_issues'`** — outro sibling opcional de `document` (aditivo, sem migration; ausente quando não há aviso). Gravado por `adapt-activity` (`withReviewIssues`), levado de volta pelo autosave e lido em `rowToWizardData` para o Revisar mostrar ao reabrir.
 - **Quem cria a linha em `adaptations` é a EDGE FUNCTION, não o cliente** (migration
   `20260723160000_adaptations_request_id`). `adapt-activity` insere o rascunho via service_role
   **antes** de dar `settle` na reserva (`_shared/adaptationPersistence.ts`) e devolve
@@ -130,7 +266,8 @@ Plataforma educacional B2C. **Educadores adaptam atividades pedagógicas (provas
   quatro superfícies (tela `AnswerView`, PDF `PdfAnswer`, Word `exportDocx`, texto puro
   `documentToPlainText`) e a regra é a mesma nas quatro: `trueFalse` com `(  ) V  (  ) F`,
   `checkbox` com `[ ]`, `ordering` na **ordem autoral** (nunca `sort` por `position`) e `fillBlank`
-  sem nada (as lacunas vivem inline no enunciado). O `documentToPlainText` era a exceção: imprimia
+  sem nada (as lacunas vivem inline no enunciado). O "Copiar" imprime o `enunciado` da questão
+  (antes ou depois do corpo, conforme `enunciadoPosition`, como a folha: achado C-19). O `documentToPlainText` era a exceção: imprimia
   `( V )`, `[x]`, a ordem correta e `(1) <resposta>`. O botão "Copiar" fica ao lado de "Exportar
   PDF"/"Exportar Word" e serve pra colar num Word/e-mail — vazar ali entrega o gabarito ao aluno
   num clique. Mapper novo sem esconder o gabarito quebra os testes de `plainText.test.ts`.
@@ -356,7 +493,7 @@ Plataforma educacional B2C. **Educadores adaptam atividades pedagógicas (provas
   `refund-last-charge` responde **502** (retentável) em vez de 422 ("fale com o suporte"). O
   `admin-dashboard` soma `refund_count` (faturas com `refunded_at`) por usuário, mostrado como
   "estornos: N" na `UsersTable`.
-- **Analytics (Fase 6).** `src/lib/analytics/`: Consent Mode v2 com tudo `denied` até o `ConsentBanner` (montado no `AppRoot`) decidir; o link **Preferências de cookies** (`components/common/CookiePreferencesButton`, no `LandingFooter`, no rodapé do `PublicShell` e no `UserAccountMenu`) chama `requestConsentReopen()` (`consent.ts`): a faixa volta sobre a decisão gravada com o foco no primeiro botão e, ao decidir, o foco volta ao botão que a abriu; `hasDecidedConsent`/`useConsentDecided` (camada de decisão na sessão) ficam `false` até a nova decisão e a decisão antiga só muda quando o usuário clica; nas `GTM_BLOCKED_PATHS` nem a faixa nem o botão aparecem; `bootAnalytics` roda a cada navegação (defaults uma vez, GTM via `loadGtm` só com `VITE_GTM_ID` e **nunca** em `/assinar`/`/definir-senha`, atribuição em `sessionStorage`: `utm_*`/`gclid`/`fbclid`/`referrer` sempre, `_ga`/`_fbp`/`_fbc` só com consentimento). Eventos tipados em `events.ts` (`view_item_list`, `select_item`, `begin_checkout`, `add_payment_info`, `subscription_started`, `purchase` só no cartão síncrono, `trial_started`, `paywall_shown`, `consent_updated`, e `cta_click` com `origem` ∈ `header|hero|planos|fechamento|barra-mobile` via `trackCtaClick`, o único evento do clique em CTA da landing, base da tag `Lead` do Meta no GTM); `event_id` = id da compra/assinatura. `SubscribePage` envia a `attribution` no `subscribe` (gravada em `subscriptions.attribution`). Servidor: `_shared/analyticsEvents.ts` (GA4 MP + Meta CAPI, e-mail SHA-256 só com `ad_user_data`, sem `client_id` sem `analytics_storage`, no-op sem os 4 secrets, timeout 3s, nunca lança; `META_TEST_EVENT_CODE` opcional e transitório vira `test_event_code` na raiz do body da CAPI) chamado por `subscribe`, `create-card-payment`, `mp-webhook` (purchase, renewed, payment_failed) e `cancel-subscription`. Nada de e-mail/CPF no `dataLayer`. Setup do GTM/Meta (tag base, `Lead` no `cta_click`, por que `Subscribe`/`StartTrial`/`Purchase` são só do servidor, como validar): `docs/analytics-gtm-meta-pixel.md`.
+- **Analytics (Fase 6).** `src/lib/analytics/`: Consent Mode v2 com tudo `denied` até o `ConsentBanner` (montado no `AppRoot`) decidir; o link **Preferências de cookies** (`components/common/CookiePreferencesButton`, no `LandingFooter`, no rodapé do `PublicShell` e no `UserAccountMenu`) chama `requestConsentReopen()` (`consent.ts`): a faixa volta sobre a decisão gravada com o foco no primeiro botão e, ao decidir, o foco volta ao botão que a abriu; `hasDecidedConsent`/`useConsentDecided` (camada de decisão na sessão) ficam `false` até a nova decisão e a decisão antiga só muda quando o usuário clica; nas `GTM_BLOCKED_PATHS` nem a faixa nem o botão aparecem; `bootAnalytics` roda a cada navegação (defaults uma vez, GTM via `loadGtm` só com `VITE_GTM_ID` e **nunca** em `/assinar`/`/definir-senha`, Meta Pixel direto via `metaPixel.ts` (`bootMetaPixel`, só com `VITE_META_PIXEL_ID`, mesmas rotas bloqueadas, nasce `consent revoke` e libera com `ad_storage` granted, uma `PageView` por rota; `trackCtaClick` também dispara o `Lead` com `origem`; não crie tag Meta no GTM, duplicaria), atribuição em `sessionStorage`: `utm_*`/`gclid`/`fbclid`/`referrer` sempre, `_ga`/`_fbp`/`_fbc` só com consentimento). Eventos tipados em `events.ts` (`view_item_list`, `select_item`, `begin_checkout`, `add_payment_info`, `subscription_started`, `purchase` só no cartão síncrono, `trial_started`, `paywall_shown`, `consent_updated`, e `cta_click` com `origem` ∈ `header|hero|planos|fechamento|barra-mobile` via `trackCtaClick`, o único evento do clique em CTA da landing, base da tag `Lead` do Meta no GTM); `event_id` = id da compra/assinatura. `SubscribePage` envia a `attribution` no `subscribe` (gravada em `subscriptions.attribution`). Servidor: `_shared/analyticsEvents.ts` (GA4 MP + Meta CAPI, e-mail SHA-256 só com `ad_user_data`, sem `client_id` sem `analytics_storage`, no-op sem os 4 secrets, timeout 3s, nunca lança; `META_TEST_EVENT_CODE` opcional e transitório vira `test_event_code` na raiz do body da CAPI) chamado por `subscribe`, `create-card-payment`, `mp-webhook` (purchase, renewed, payment_failed) e `cancel-subscription`. Nada de e-mail/CPF no `dataLayer`. Setup do GTM/Meta (tag base, `Lead` no `cta_click`, por que `Subscribe`/`StartTrial`/`Purchase` são só do servidor, como validar): `docs/analytics-gtm-meta-pixel.md`.
 - **Landing (2026-10-04).** `LandingPage` (`/`) compõe, em `src/components/landing/`: `LandingHeader` (sticky, âncoras `#como-funciona`/`#precos`/`#faq`), `HeroSection` (prop `videoUrl` opcional; o CSP `media-src` libera só `'self'` e `https://*.supabase.co`, e provedores externos de vídeo precisariam de `frame-src`), `ProofSection` (antes/depois, abas ARIA só abaixo de 760px por CSS; `LandingPage` passa `beforeImage`/`afterImage` = `src/assets/landing/prova-antes.webp`/`prova-depois.webp`, recortes 4:5 de 1200x1500 de uma prova de Ciências real: o "antes" é a folha tipo Word e o "depois" é a saída do renderizador de impressão da própria plataforma, gerada em 2026-10-26 no ambiente `verify-adaptar`), `PainSection`, `VideoSection` (dois clipes verticais 9:16 click-to-play, `depoimento` e `mito`, servidos do bucket público **`landing`** do Supabase Storage em `videos/<id>.mp4` (migration `20261026132823_landing_bucket`, só leitura pública; upload por `supabase storage cp --experimental`, nunca pelo browser), pôsteres em `src/assets/landing/video-*.webp`, evento `video_play` uma vez por clipe e por visita, um clipe pausa o outro), `HowItWorksSection`, `FeaturesSection`, `IsaSection`, `TestimonialsSection`, `EthicsSection`, `PricingSection`, `FaqSection`, `FinalCtaSection`, `LandingFooter` (termina com `CookiePreferencesButton`), `MobileCtaBar`. **Tema escopado e fixo claro**: classe `.landing` (tokens `--lp-*` em `src/index.css`, utilitários `lp-*`/`font-poppins` em `tailwind.config.ts`, só `theme.extend`); não use shadcn `Button` dentro dela, o `LandingCta` é o único ponto de CTA (dispara `trackCtaClick`); a cor do CTA é o verde da marca, sem laranja: `primary` = `bg-lp-teal-deep` com texto branco nas seções claras, `on-dark` = `bg-lp-teal` com texto ink na faixa escura do fechamento (teal-deep sumiria no fundo), e o selo "Popular" dos planos segue o `primary`. Preços saem do banco (`usePlans`+`publicPlans`, `usePackages`+`publicPackages`, fallback nos `DEFAULT_*` de `subscriptionUi.ts`); nada de preço hardcoded. Copy guardada por `copyGuard.test.ts` (em `.tsx`: `grátis` só na linha com `teste`/`testar`, e **nenhum identificador** com `stripe`, nem `stripes`) e por `landingCopy.test.tsx`. Imagens: `src/assets/landing/*.webp`, geradas de `new_lp/images` por `scripts/convert-landing-images.sh` (ImageMagick no host; `new_lp/` inteiro está no `.gitignore`: guarda o `.docx` com o token do CAPI); todo `<img>` com `width`/`height`/`alt`, e nenhuma foto se repete na página (só o logo; guard em `LandingPage.test.tsx`): o Hero usa `turma-diversa` e a `PainSection` usa `professora-planejando` (recorte 4:3 da `231958`). A `MobileCtaBar` fica em `z-40`, abaixo do `ConsentBanner` (`z-50`), para nunca cobrir o aceite. Sem foto de especialista até existir material real; marca pública é "Olhar Singular" e a assistente é "ISA".
 - **Deploy de function é pelo CI** (`.github/workflows/supabase.yml`, push em `main` tocando `supabase/**`: db push → deploy de toda pasta em `supabase/functions/*/` → gen types). O CI **não** cria secrets nem apaga function órfã: `ACCESS_TOKEN_MP_PROD`/`VERIFY_TOKEN_MP_PROD`/`APP_URL` são setados à mão no remoto e functions removidas do repo precisam de `supabase functions delete`. Type-check local das functions: `make fn-check` (Deno via Docker). Desenvolver cartão sem cobrar: `make fn-serve-mp-test` (credenciais do usuário de teste do MP, bloco STAGING do `.env`; sandbox não tem Pix).
 - Pacotes compráveis vivem na tabela **`credit_packages`** (migration `20260912000000`): `active`, `admin_only`, `highlight`, `sort_order`; preço muda por UPDATE, não por deploy. RLS: `anon` vê ativos não `admin_only` (sem tocar em `profiles`); `authenticated` vê também os `admin_only` se for super-admin; escrita só `service_role` (privilégios de escrita **revogados**, senão o UPDATE de um usuário casaria 0 linhas em silêncio). Os checkouts recebem `{ packageId }` e validam com `selectPackage(rows, id, { allowAdminOnly })` (`_shared/creditPackages.ts`): o preço sai da linha, nunca do request. O pacote de teste (1 crédito · R$1,00, smoke real) é a linha `admin_only`; a `CreditsPage` só renderiza o que a RLS devolve, sem caso especial.
@@ -371,3 +508,37 @@ Lógica/unit → **Vitest** (gate 100%). Banco/RPC/RLS → **pgTAP** (`make test
 ## Manter este mapa vivo
 
 Mudou um fluxo, caminho, coluna ou contrato citado aqui? **Atualize esta skill na mesma tarefa** (regra em CLAUDE.md → "manter skills e agentes atualizados").
+
+- **Lote 9, Parte A (borda da entrada e da IA).** (N-I-001) PDF: `src/lib/utils/pdfTextLayout.ts`
+  (`pageTextFromItems`, usado por `parsePdf`) reconstrói a FRAÇÃO EMPILHADA pela geometria dos runs do
+  pdfjs (duas linhas de corpo cheio, centradas uma sobre a outra, sem barra na camada de texto) e escreve
+  `(num)/(den)` com colchete quando há espaço ou operador; 3+ linhas empilhadas ou fração aninhada viram
+  `[fórmula não lida]`. Texto sem fração segue a regra antiga (17 PDFs reais: só N2 e P05 mudaram). O
+  prompt da extração manda que SÓ a imagem decida o agrupamento (`STACKED FRACTIONS`) e o da adaptação que
+  `(a)/(b)` é UMA fração (`\frac{a}{b}` com o numerador inteiro). `_shared/fractionGuard.ts`
+  (`lostFractions`) compara as frações agrupadas da entrada com as da saída por esqueleto
+  (`delatex` + superscritos) e vira `fraction` em `examExtractionCheck`/`adaptationReview`
+  (`ExtractionIssue.kind` ganhou `fraction` e `answer_key`). (L7-1) `adaptationPrompt.ts` exporta
+  `LATEX_DELIVERY_DEADLINE_MS` (140 s, abaixo do corte de 150 s do gateway), `LATEX_REASK_MIN_MS` (60 s) e
+  `latexReaskFits`; `shouldReaskForLatex` só reenvia se `elapsed + 60 s < 140 s`, senão entrega com
+  `invalid_latex`; `attemptTimeoutWithinDeadlineMs` (Lote 9B) limita TODA tentativa ao prazo de 140 s,
+  com ou sem candidato guardado: o reask de schema (não LaTeX) que podia chegar a 210-240 s, depois do
+  corte de 150 s do gateway (documento salvo, crédito liquidado, nova tentativa cobrando de novo), agora é
+  abortado no prazo, `failure()` estorna a reserva e a professora tenta de novo sem pagar duas vezes (mesmos
+  status, mesma regra de cobrança: só documento entregue é cobrado). (F6-1) A regra NÃO LIDO
+  usa uma chave-reserva (1ª alternativa `correct`, V/F `"value": false`, não resolver) sem mudar o schema, e
+  `adaptationReview` emite `answer_key` ("confira o gabarito") quando a questão tem marcador. (F6-2/F6-3)
+  `scaffoldingLabelGuard` não capitaliza fórmula, π nem unidade (`capitalise`); a revisão ignora "marque 1
+  alternativa"/"em 3 linhas"/"Passo 1" (`INSTRUCTION_NUMBER`) e lê "dez" como 10 (`numeralsOfWords`).
+
+- **Lote 9, Parte B (PDF, editor e prazo).** (N-M-001/N-U-001, C-16) fórmula em coluna estreita não perde nem
+  corta caractere: `columnPt` desce de `PdfQuestion` até `PdfRichText`/`PdfMath` (`render/pdf/columnWidth.ts`),
+  `mathPdfSegments` corta em ponto seguro sem hífen (detalhe e guardas em `pdf-debugger`). (F-L) faces que
+  apontam para o MESMO `.ttf` (Lexend itálico, OpenDyslexic bold-itálico, símbolos) compartilham a fonte
+  parseada (`shareAliasedFaces`), senão o 2º export perdia uma letra no texto copiável. (N-U-002)
+  `unreadMarkerWarnings` concorda no singular ("vai impresso ... do jeito que está"). (N-U-003)
+  `latexParseError(latex, { ptBr: true })` (`katexReasonPtBr`, tabela `KATEX_REASONS`) diz a razão do KaTeX em
+  português no editor (`useLatexDraft`); a borda da IA (`latexProblem`) segue com as palavras do KaTeX.
+  (N-U-004) `render/pdf/keepTogether.tsx` segura alternativas na mesma folha. (N-U-005) o seletor do banco, a
+  lista de selecionadas e a página do banco passam o texto por `htmlToText` (a busca também), como o que vai
+  para a IA. (L7-1) ver o prazo acima.

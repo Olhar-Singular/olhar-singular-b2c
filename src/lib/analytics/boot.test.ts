@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach } from "vitest";
 import { bootAnalytics, resetAnalyticsBoot } from "./boot";
 import { resetDataLayer } from "./dataLayer";
 import { resetGtm } from "./gtm";
+import { resetMetaPixel } from "./metaPixel";
 import { CONSENT_STORAGE_KEY, CONSENT_VERSION, DENIED_ALL, GRANTED_ALL } from "./consent";
 import { ATTRIBUTION_STORAGE_KEY } from "./attribution";
 
@@ -10,9 +11,12 @@ describe("bootAnalytics", () => {
     resetAnalyticsBoot();
     resetDataLayer();
     resetGtm();
+    resetMetaPixel();
+    delete window.fbq;
+    delete window._fbq;
     window.localStorage.clear();
     window.sessionStorage.clear();
-    document.head.querySelectorAll("script[data-gtm]").forEach((s) => s.remove());
+    document.head.querySelectorAll("script[data-gtm], script[data-meta-pixel]").forEach((s) => s.remove());
   });
 
   it("applies denied defaults once, loads GTM on allowed routes and captures attribution", () => {
@@ -38,5 +42,14 @@ describe("bootAnalytics", () => {
   it("falls back to the environment id and clock", () => {
     const out = bootAnalytics({ pathname: "/", search: "", referrer: "", cookie: "" });
     expect(out.gtmLoaded).toBe(false);
+  });
+
+  it("starts the Meta Pixel with the stored ad consent, and never on the checkout", () => {
+    window.localStorage.setItem(CONSENT_STORAGE_KEY, JSON.stringify({ version: CONSENT_VERSION, consent: GRANTED_ALL, decidedAt: "x" }));
+    bootAnalytics({ pathname: "/assinar", search: "", referrer: "", cookie: "", metaPixelId: "123" });
+    expect(window.fbq).toBeUndefined();
+    bootAnalytics({ pathname: "/", search: "", referrer: "", cookie: "", metaPixelId: "123" });
+    expect(window.fbq?.queue.map((c) => [...c])).toEqual([["consent", "revoke"], ["init", "123"], ["consent", "grant"], ["track", "PageView"]]);
+    expect(document.head.querySelectorAll("script[data-meta-pixel]")).toHaveLength(1);
   });
 });

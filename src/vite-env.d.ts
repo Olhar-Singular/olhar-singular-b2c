@@ -8,4 +8,6 @@ interface ImportMetaEnv {
   readonly VITE_MP_PUBLIC_KEY?: string;
   /** Google Tag Manager container id; absent = no analytics injected. */
   readonly VITE_GTM_ID?: string;
+  /** Meta Pixel id (public, same value as the server's META_PIXEL_ID); absent = no browser pixel. */
+  readonly VITE_META_PIXEL_ID?: string;
 }
