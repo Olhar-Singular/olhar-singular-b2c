@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import { bootMetaPixel, readMetaPixelId, resetMetaPixel, trackMetaLead } from "./metaPixel";
+import { bootMetaPixel, readMetaPixelId, resetMetaPixel, trackMetaInitiateCheckout, trackMetaViewContent } from "./metaPixel";
 import { DENIED_ALL, GRANTED_ALL } from "./consent";
 
 const calls = () => (window.fbq?.queue ?? []).map((entry) => [...entry]);
@@ -80,11 +80,19 @@ describe("metaPixel", () => {
     expect(window.fbq).toBe(existing);
   });
 
-  it("sends Lead with the CTA origin only while the pixel is loaded", () => {
-    trackMetaLead("hero");
+  it("sends InitiateCheckout with the CTA origin only while the pixel is loaded", () => {
+    trackMetaInitiateCheckout("hero");
     expect(window.fbq).toBeUndefined();
     bootMetaPixel("123", "/", null);
-    trackMetaLead("hero");
-    expect(calls().at(-1)).toEqual(["track", "Lead", { origem: "hero" }]);
+    trackMetaInitiateCheckout("hero");
+    expect(calls().at(-1)).toEqual(["track", "InitiateCheckout", { origem: "hero" }]);
+  });
+
+  it("sends ViewContent for the plans only while the pixel is loaded", () => {
+    trackMetaViewContent(["basico"]);
+    expect(window.fbq).toBeUndefined();
+    bootMetaPixel("123", "/", null);
+    trackMetaViewContent(["basico", "pro"]);
+    expect(calls().at(-1)).toEqual(["track", "ViewContent", { content_name: "Planos", content_type: "product", content_ids: ["basico", "pro"], currency: "BRL" }]);
   });
 });
