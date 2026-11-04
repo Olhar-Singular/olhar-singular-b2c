@@ -43,11 +43,16 @@ describe("metaPixel", () => {
     bootMetaPixel("123", "/", GRANTED_ALL);
     bootMetaPixel("123", "/", DENIED_ALL);
     expect(calls().filter((c) => c[0] === "consent")).toEqual([["consent", "revoke"], ["consent", "grant"], ["consent", "revoke"]]);
+    resetMetaPixel();
+    delete window.fbq;
+    bootMetaPixel("123", "/", GRANTED_ALL);
+    bootMetaPixel("123", "/", DENIED_ALL);
+    expect(calls().filter((c) => c[0] === "consent")).toEqual([["consent", "revoke"]]);
   });
 
-  it("starts granted when the stored decision already allows ads", () => {
+  it("starts straight on init, with no revoke or grant queued, when the stored decision already allows ads", () => {
     bootMetaPixel("123", "/", GRANTED_ALL);
-    expect(calls()).toEqual([["consent", "revoke"], ["init", "123"], ["consent", "grant"], ["track", "PageView"]]);
+    expect(calls()).toEqual([["init", "123"], ["track", "PageView"]]);
   });
 
   it("fires one PageView per path, not per search change or consent update", () => {

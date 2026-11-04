@@ -56,8 +56,13 @@ export function bootMetaPixel(id: string, pathname: string, consent: Consent | n
   if (!id || !isGtmAllowedOn(pathname)) return false;
   const fbq = installFbq();
 
+  const granted = consent?.ad_storage === "granted";
+
   if (loadedId !== id) {
-    fbq("consent", "revoke");
+    // Queueing revoke, init and grant before fbevents.js loads leaves the pixel
+    // uninitialised (no config request, no hits), so a visitor who already
+    // accepted starts straight on init and only the others start held.
+    if (!granted) fbq("consent", "revoke");
     fbq("init", id);
     const script = doc.createElement("script");
     script.async = true;
@@ -65,10 +70,9 @@ export function bootMetaPixel(id: string, pathname: string, consent: Consent | n
     script.dataset.metaPixel = id;
     doc.head.appendChild(script);
     loadedId = id;
-    consentGranted = false;
+    consentGranted = granted;
   }
 
-  const granted = consent?.ad_storage === "granted";
   if (granted !== consentGranted) {
     fbq("consent", granted ? "grant" : "revoke");
     consentGranted = granted;
