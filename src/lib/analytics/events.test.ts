@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { resetDataLayer } from "./dataLayer";
 import { GRANTED_ALL } from "./consent";
+import { bootMetaPixel, resetMetaPixel } from "./metaPixel";
 import {
   trackAddPaymentInfo,
   trackBeginCheckout,
@@ -58,6 +59,17 @@ describe("funnel events", () => {
       expect(window.dataLayer?.at(-1)).toEqual({ event: "cta_click", origem });
     },
   );
+
+  it("trackCtaClick also sends the Meta Lead once the pixel is running", () => {
+    resetMetaPixel();
+    delete window.fbq;
+    bootMetaPixel("123", "/", null);
+    trackCtaClick("planos");
+    expect(window.fbq?.queue.at(-1)).toEqual(["track", "Lead", { origem: "planos" }]);
+    resetMetaPixel();
+    delete window.fbq;
+    document.head.querySelectorAll("script[data-meta-pixel]").forEach((el) => el.remove());
+  });
 });
 
 describe("landing video events", () => {

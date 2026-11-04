@@ -7,7 +7,7 @@ já emite os eventos; as tags e os segredos ficam fora do repositório.
 
 | Origem | O que envia | Onde nasce |
 | --- | --- | --- |
-| **Browser (GTM)** | `PageView` (tag base) e `Lead` (clique em CTA da landing) | `src/lib/analytics/events.ts` empurra `cta_click` no `dataLayer`; o GTM dispara as tags |
+| **Browser (direto)** | `PageView` (uma por rota) e `Lead` (clique em CTA da landing, com `origem`) | `src/lib/analytics/metaPixel.ts` carrega o `fbevents.js` com `VITE_META_PIXEL_ID`, sem GTM; nasce revogado e só libera ao aceitar anúncios no banner |
 | **Servidor (CAPI)** | `Subscribe`, `StartTrial`, `Purchase` (e `SubscriptionPaymentFailed`, `SubscriptionCancelled`, `Refund` como eventos personalizados) | `supabase/functions/_shared/analyticsEvents.ts`, chamado por `subscribe`, `create-card-payment`, `mp-webhook`, `cancel-subscription` e `refund-last-charge` |
 
 A CAPI só liga quando `META_PIXEL_ID` **e** `META_CAPI_TOKEN` existem. Cada evento leva
@@ -16,15 +16,20 @@ só com `ad_user_data` concedido; `fbp`/`fbc` só com `ad_storage` concedido.
 
 ## Pré-requisitos (fora do repositório)
 
-1. **`VITE_GTM_ID` no Vercel** (Production) e um novo build. Sem ele nada carrega: hoje o
-   bundle de produção não tem o id do container.
+1. **`VITE_META_PIXEL_ID` no Vercel** (Production e Preview) e um novo build: liga o Pixel no
+   navegador sem GTM (mesmo valor do `META_PIXEL_ID`; o id é público). `VITE_GTM_ID` é opcional e
+   só serve para outras tags (GA4 etc.).
 2. **Secrets no Supabase remoto**: `META_PIXEL_ID` e `META_CAPI_TOKEN`. O CI não cria secrets.
    Para validar, acrescente temporariamente `META_TEST_EVENT_CODE` e remova depois.
 3. **Meta Business**: verificar o domínio `professor.olharsingular.com` e configurar a
    prioridade de eventos (Aggregated Event Measurement) para `Purchase`, `Subscribe`,
    `StartTrial` e `Lead`.
 
-## Container do GTM
+## Container do GTM (opcional)
+
+**Não crie tag do Meta Pixel no GTM**: o app já envia `PageView` e `Lead` direto, e uma tag
+igual no container duplicaria os eventos. O GTM continua recebendo `cta_click` no `dataLayer`
+para GA4 ou outras tags.
 
 Evento do `dataLayer` emitido pela landing:
 
@@ -32,12 +37,14 @@ Evento do `dataLayer` emitido pela landing:
 { event: "cta_click", origem: "header" | "hero" | "planos" | "fechamento" | "barra-mobile" }
 ```
 
+Se for usar `cta_click` em outra tag:
+
 1. **Variável** de camada de dados `origem` (Data Layer Variable, versão 2).
 2. **Acionador** "CTA clique": evento personalizado `cta_click`.
 3. **Tag base** "Meta Pixel PageView": o Pixel do Meta com o ID do pixel, em All Pages.
    Em *Configurações de consentimento*, exigir `ad_storage` (e `ad_user_data` se usar
    correspondência avançada). Sem isso a tag dispara `PageView` antes do aceite.
-4. **Tag** "Meta Lead": evento padrão `Lead` com o acionador "CTA clique". Opcional:
+4. (Não fazer, ver aviso acima) **Tag** "Meta Lead": evento padrão `Lead` com o acionador "CTA clique". Opcional:
    `InitiateCheckout` no lugar de `Lead`, se a campanha otimizar por ele. Mesmo consentimento
    da tag base. Passar `origem` como parâmetro personalizado para segmentar.
 
@@ -65,8 +72,9 @@ CAPI, sem duplicata. Duas consequências:
    na aba que o evento chega com o `event_id` esperado.
 3. **Remover `META_TEST_EVENT_CODE`** ao terminar: enquanto existir, todos os eventos de
    produção vão para a aba de teste e não contam para campanhas.
-4. Para o lado do browser: GTM em modo Preview na landing, clicar em cada CTA e conferir que
-   `cta_click` chega com a `origem` certa e que a tag `Lead` dispara só com consentimento.
+4. Para o lado do browser: abrir a landing com o Meta Pixel Helper, aceitar os cookies de
+   anúncios no banner e clicar em cada CTA: `PageView` e `Lead` (com `origem`) aparecem. Em
+   "Só essenciais" o Helper acusa o pixel mas os eventos ficam retidos, sem cookie.
 
 ## CSP
 
