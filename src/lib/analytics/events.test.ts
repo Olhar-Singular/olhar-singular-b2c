@@ -60,12 +60,23 @@ describe("funnel events", () => {
     },
   );
 
-  it("trackCtaClick also sends the Meta Lead once the pixel is running", () => {
+  it("trackCtaClick also sends the Meta InitiateCheckout once the pixel is running", () => {
     resetMetaPixel();
     delete window.fbq;
     bootMetaPixel("123", "/", null);
     trackCtaClick("planos");
-    expect(window.fbq?.queue.at(-1)).toEqual(["track", "Lead", { origem: "planos" }]);
+    expect(window.fbq?.queue.at(-1)).toEqual(["track", "InitiateCheckout", { origem: "planos" }]);
+    resetMetaPixel();
+    delete window.fbq;
+    document.head.querySelectorAll("script[data-meta-pixel]").forEach((el) => el.remove());
+  });
+
+  it("trackViewPlans also sends the Meta ViewContent with the plan slugs", () => {
+    resetMetaPixel();
+    delete window.fbq;
+    bootMetaPixel("123", "/", null);
+    trackViewPlans([PRO]);
+    expect(window.fbq?.queue.at(-1)).toEqual(["track", "ViewContent", { content_name: "Planos", content_type: "product", content_ids: ["profissional"], currency: "BRL" }]);
     resetMetaPixel();
     delete window.fbq;
     document.head.querySelectorAll("script[data-meta-pixel]").forEach((el) => el.remove());

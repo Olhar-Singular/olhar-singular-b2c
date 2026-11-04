@@ -4,7 +4,7 @@
 // deduplicate browser and server hits.
 
 import { pushEvent } from "@/lib/analytics/dataLayer";
-import { trackMetaLead } from "@/lib/analytics/metaPixel";
+import { trackMetaInitiateCheckout, trackMetaViewContent } from "@/lib/analytics/metaPixel";
 import type { Consent } from "@/lib/analytics/consent";
 
 export interface PlanItem {
@@ -24,6 +24,7 @@ export function trackViewPlans(plans: PlanItem[]): void {
     item_list_name: "Planos",
     items: plans.map(planItem),
   });
+  trackMetaViewContent(plans.map((plan) => plan.slug));
 }
 
 export function trackSelectPlan(plan: PlanItem): void {
@@ -78,10 +79,10 @@ export function trackPaywallShown(reason: "no_credits" | "trial_expired"): void 
 
 export type CtaOrigem = "header" | "hero" | "planos" | "fechamento" | "barra-mobile";
 
-/** Landing CTA click. The Meta Pixel `Lead` goes straight from the app (metaPixel.ts); GTM can still listen to `cta_click` for other tags. */
+/** Landing CTA click. The Meta Pixel `InitiateCheckout` goes straight from the app (metaPixel.ts); GTM can still listen to `cta_click` for other tags. */
 export function trackCtaClick(origem: CtaOrigem): void {
   pushEvent("cta_click", { origem });
-  trackMetaLead(origem);
+  trackMetaInitiateCheckout(origem);
 }
 
 export type LandingVideoId = "depoimento" | "mito";

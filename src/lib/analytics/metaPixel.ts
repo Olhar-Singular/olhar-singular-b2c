@@ -81,9 +81,16 @@ export function bootMetaPixel(id: string, pathname: string, consent: Consent | n
   return true;
 }
 
-/** Landing CTA click as the standard Lead event; the origin rides as a custom parameter. */
-export function trackMetaLead(origem: CtaOrigem): void {
-  if (loadedId && window.fbq) window.fbq("track", "Lead", { origem });
+/** Landing CTA click (7-day trial or subscribe) as the standard InitiateCheckout; the origin rides as a custom parameter. */
+export function trackMetaInitiateCheckout(origem: CtaOrigem): void {
+  if (loadedId && window.fbq) window.fbq("track", "InitiateCheckout", { origem });
+}
+
+/** The plans were shown to the visitor: the standard ViewContent over the plan catalogue. */
+export function trackMetaViewContent(slugs: string[]): void {
+  if (loadedId && window.fbq) {
+    window.fbq("track", "ViewContent", { content_name: "Planos", content_type: "product", content_ids: slugs, currency: "BRL" });
+  }
 }
 
 /** Exposed for tests. */

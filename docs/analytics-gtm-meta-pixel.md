@@ -7,7 +7,7 @@ já emite os eventos; as tags e os segredos ficam fora do repositório.
 
 | Origem | O que envia | Onde nasce |
 | --- | --- | --- |
-| **Browser (direto)** | `PageView` (uma por rota) e `Lead` (clique em CTA da landing, com `origem`) | `src/lib/analytics/metaPixel.ts` carrega o `fbevents.js` com `VITE_META_PIXEL_ID`, sem GTM; nasce revogado e só libera ao aceitar anúncios no banner |
+| **Browser (direto)** | `PageView` (uma por rota), `ViewContent` (planos exibidos na landing) e `InitiateCheckout` (clique em qualquer CTA de teste/assinar, com `origem`) | `src/lib/analytics/metaPixel.ts` carrega o `fbevents.js` com `VITE_META_PIXEL_ID`, sem GTM; nasce revogado e só libera ao aceitar anúncios no banner |
 | **Servidor (CAPI)** | `Subscribe`, `StartTrial`, `Purchase` (e `SubscriptionPaymentFailed`, `SubscriptionCancelled`, `Refund` como eventos personalizados) | `supabase/functions/_shared/analyticsEvents.ts`, chamado por `subscribe`, `create-card-payment`, `mp-webhook`, `cancel-subscription` e `refund-last-charge` |
 
 A CAPI só liga quando `META_PIXEL_ID` **e** `META_CAPI_TOKEN` existem. Cada evento leva
@@ -23,11 +23,11 @@ só com `ad_user_data` concedido; `fbp`/`fbc` só com `ad_storage` concedido.
    Para validar, acrescente temporariamente `META_TEST_EVENT_CODE` e remova depois.
 3. **Meta Business**: verificar o domínio `professor.olharsingular.com` e configurar a
    prioridade de eventos (Aggregated Event Measurement) para `Purchase`, `Subscribe`,
-   `StartTrial` e `Lead`.
+   `StartTrial` e `InitiateCheckout`.
 
 ## Container do GTM (opcional)
 
-**Não crie tag do Meta Pixel no GTM**: o app já envia `PageView` e `Lead` direto, e uma tag
+**Não crie tag do Meta Pixel no GTM**: o app já envia `PageView`, `ViewContent` e `InitiateCheckout` direto, e uma tag
 igual no container duplicaria os eventos. O GTM continua recebendo `cta_click` no `dataLayer`
 para GA4 ou outras tags.
 
@@ -44,9 +44,7 @@ Se for usar `cta_click` em outra tag:
 3. **Tag base** "Meta Pixel PageView": o Pixel do Meta com o ID do pixel, em All Pages.
    Em *Configurações de consentimento*, exigir `ad_storage` (e `ad_user_data` se usar
    correspondência avançada). Sem isso a tag dispara `PageView` antes do aceite.
-4. (Não fazer, ver aviso acima) **Tag** "Meta Lead": evento padrão `Lead` com o acionador "CTA clique". Opcional:
-   `InitiateCheckout` no lugar de `Lead`, se a campanha otimizar por ele. Mesmo consentimento
-   da tag base. Passar `origem` como parâmetro personalizado para segmentar.
+4. (Não fazer, ver aviso acima) Tags Meta no GTM: o app já envia `InitiateCheckout` no clique dos CTAs.
 
 O app inicia o Consent Mode v2 com tudo `denied` até o visitante decidir no banner
 (`src/lib/analytics/consent.ts`); o GTM carrega antes da decisão, então o consentimento
@@ -73,7 +71,7 @@ CAPI, sem duplicata. Duas consequências:
 3. **Remover `META_TEST_EVENT_CODE`** ao terminar: enquanto existir, todos os eventos de
    produção vão para a aba de teste e não contam para campanhas.
 4. Para o lado do browser: abrir a landing com o Meta Pixel Helper, aceitar os cookies de
-   anúncios no banner e clicar em cada CTA: `PageView` e `Lead` (com `origem`) aparecem. Em
+   anúncios no banner e clicar em cada CTA: `PageView`, `ViewContent` e `InitiateCheckout` (com `origem`) aparecem. Em
    "Só essenciais" o Helper acusa o pixel mas os eventos ficam retidos, sem cookie.
 
 ## CSP
