@@ -49,7 +49,7 @@ describe("bootAnalytics", () => {
     bootAnalytics({ pathname: "/assinar", search: "", referrer: "", cookie: "", metaPixelId: "123" });
     expect(window.fbq).toBeUndefined();
     bootAnalytics({ pathname: "/", search: "", referrer: "", cookie: "", metaPixelId: "123" });
-    expect(window.fbq?.queue.map((c) => [...c])).toEqual([["consent", "revoke"], ["init", "123"], ["consent", "grant"], ["track", "PageView"]]);
+    expect(window.fbq?.queue.map((c) => [...c])).toEqual([["init", "123"], ["track", "PageView"]]);
     expect(document.head.querySelectorAll("script[data-meta-pixel]")).toHaveLength(1);
   });
 });
