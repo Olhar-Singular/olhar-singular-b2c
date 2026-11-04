@@ -44,8 +44,7 @@ describe("bootAnalytics", () => {
     expect(out.gtmLoaded).toBe(false);
   });
 
-  it("starts the Meta Pixel with the stored ad consent, and never on the checkout", () => {
-    window.localStorage.setItem(CONSENT_STORAGE_KEY, JSON.stringify({ version: CONSENT_VERSION, consent: GRANTED_ALL, decidedAt: "x" }));
+  it("starts the Meta Pixel whatever the consent, and never on the checkout", () => {
     bootAnalytics({ pathname: "/assinar", search: "", referrer: "", cookie: "", metaPixelId: "123" });
     expect(window.fbq).toBeUndefined();
     bootAnalytics({ pathname: "/", search: "", referrer: "", cookie: "", metaPixelId: "123" });

@@ -36,7 +36,7 @@ export function bootAnalytics(input: BootInput): BootResult {
   }
 
   const gtmLoaded = loadGtm(input.gtmId ?? readGtmId(), input.pathname);
-  bootMetaPixel(input.metaPixelId ?? readMetaPixelId(), input.pathname, consent);
+  bootMetaPixel(input.metaPixelId ?? readMetaPixelId(), input.pathname);
 
   const session = sessionStore();
   const captured = captureAttribution({
