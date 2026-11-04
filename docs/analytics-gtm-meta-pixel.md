@@ -7,7 +7,7 @@ já emite os eventos; as tags e os segredos ficam fora do repositório.
 
 | Origem | O que envia | Onde nasce |
 | --- | --- | --- |
-| **Browser (direto)** | `PageView` (uma por rota), `ViewContent` (planos exibidos na landing) e `InitiateCheckout` (clique em qualquer CTA de teste/assinar, com `origem`) | `src/lib/analytics/metaPixel.ts` carrega o `fbevents.js` com `VITE_META_PIXEL_ID`, sem GTM; nasce revogado e só libera ao aceitar anúncios no banner |
+| **Browser (direto)** | `PageView` (uma por rota), `ViewContent` (planos exibidos na landing) e `InitiateCheckout` (clique em qualquer CTA de teste/assinar, com `origem`) | `src/lib/analytics/metaPixel.ts` carrega o `fbevents.js` com `VITE_META_PIXEL_ID`, sem GTM; **não espera o banner de cookies** (decisão do dono em 2026-11-04): envia em toda visita, aceite ou não |
 | **Servidor (CAPI)** | `Subscribe`, `StartTrial`, `Purchase` (e `SubscriptionPaymentFailed`, `SubscriptionCancelled`, `Refund` como eventos personalizados) | `supabase/functions/_shared/analyticsEvents.ts`, chamado por `subscribe`, `create-card-payment`, `mp-webhook`, `cancel-subscription` e `refund-last-charge` |
 
 A CAPI só liga quando `META_PIXEL_ID` **e** `META_CAPI_TOKEN` existem. Cada evento leva
@@ -70,9 +70,8 @@ CAPI, sem duplicata. Duas consequências:
    na aba que o evento chega com o `event_id` esperado.
 3. **Remover `META_TEST_EVENT_CODE`** ao terminar: enquanto existir, todos os eventos de
    produção vão para a aba de teste e não contam para campanhas.
-4. Para o lado do browser: abrir a landing com o Meta Pixel Helper, aceitar os cookies de
-   anúncios no banner e clicar em cada CTA: `PageView`, `ViewContent` e `InitiateCheckout` (com `origem`) aparecem. Em
-   "Só essenciais" o Helper acusa o pixel mas os eventos ficam retidos, sem cookie.
+4. Para o lado do browser: abrir a landing com o Meta Pixel Helper, clicar em cada CTA (o banner não
+   influencia o Pixel): `PageView`, `ViewContent` e `InitiateCheckout` (com `origem`) aparecem. 
 
 ## CSP
 

@@ -29,7 +29,7 @@ DATABASE_URL=                  # Connection string completa (remoto)
 > `CRON_SECRET` (bearer que o pg_cron apresenta, via pg_net e Vault, à function
 > `send-trial-reminders`; `_shared/cronAuth.ts`; runbook `docs/runbooks/lembrete-teste-gratis.md`),
 > `GOOGLE_CLIENT_*`, sem prefixo `VITE_`), a `VITE_META_PIXEL_ID` (Pixel da Meta
-> no navegador, direto pelo app, só fora do checkout, retido até o aceite de anúncios; mesmo valor do
+> no navegador, direto pelo app, só fora do checkout, sem esperar o aceite do banner; mesmo valor do
 > `META_PIXEL_ID`) e a `VITE_GTM_ID` (container do GTM, opcional, injetado em runtime só fora do checkout) e a
 > `VITE_MP_PUBLIC_KEY` (public key do Mercado Pago da **mesma aplicação** do
 > `ACCESS_TOKEN_MP_PROD`; vai pro bundle e inicializa o Card Payment Brick). O bloco

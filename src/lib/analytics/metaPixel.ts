@@ -1,10 +1,8 @@
 // Meta Pixel loaded straight from the app (no GTM container needed). Same safety
 // rule as GTM: never on the checkout or the first-access password screen, where
-// the server (CAPI) is the only sender. Consent Mode: the pixel starts revoked,
-// so fbevents.js holds every event and sets no cookie until the visitor accepts
-// ads on the banner; "Só essenciais" keeps it revoked.
+// the server (CAPI) is the only sender. By the owner's decision it does NOT wait
+// for the cookie banner: events go out on every visit, accepted or not.
 
-import type { Consent } from "@/lib/analytics/consent";
 import { isGtmAllowedOn } from "@/lib/analytics/gtm";
 import type { CtaOrigem } from "@/lib/analytics/events";
 
@@ -26,7 +24,6 @@ declare global {
 
 let loadedId: string | null = null;
 let lastPath: string | null = null;
-let consentGranted: boolean | null = null;
 
 export function readMetaPixelId(): string {
   return String(import.meta.env.VITE_META_PIXEL_ID || "").trim();
@@ -49,20 +46,14 @@ function installFbq(): Fbq {
 }
 
 /**
- * Runs on every navigation. Loads the pixel once, mirrors the ad consent and
- * fires one PageView per path. Returns whether the pixel is active here.
+ * Runs on every navigation. Loads the pixel once and fires one PageView per
+ * path. Returns whether the pixel is active here.
  */
-export function bootMetaPixel(id: string, pathname: string, consent: Consent | null, doc: Document = document): boolean {
+export function bootMetaPixel(id: string, pathname: string, doc: Document = document): boolean {
   if (!id || !isGtmAllowedOn(pathname)) return false;
   const fbq = installFbq();
 
-  const granted = consent?.ad_storage === "granted";
-
   if (loadedId !== id) {
-    // Queueing revoke, init and grant before fbevents.js loads leaves the pixel
-    // uninitialised (no config request, no hits), so a visitor who already
-    // accepted starts straight on init and only the others start held.
-    if (!granted) fbq("consent", "revoke");
     fbq("init", id);
     const script = doc.createElement("script");
     script.async = true;
@@ -70,12 +61,6 @@ export function bootMetaPixel(id: string, pathname: string, consent: Consent | n
     script.dataset.metaPixel = id;
     doc.head.appendChild(script);
     loadedId = id;
-    consentGranted = granted;
-  }
-
-  if (granted !== consentGranted) {
-    fbq("consent", granted ? "grant" : "revoke");
-    consentGranted = granted;
   }
 
   if (pathname !== lastPath) {
@@ -101,5 +86,4 @@ export function trackMetaViewContent(slugs: string[]): void {
 export function resetMetaPixel(): void {
   loadedId = null;
   lastPath = null;
-  consentGranted = null;
 }

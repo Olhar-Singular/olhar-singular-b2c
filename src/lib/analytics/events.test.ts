@@ -63,7 +63,7 @@ describe("funnel events", () => {
   it("trackCtaClick also sends the Meta InitiateCheckout once the pixel is running", () => {
     resetMetaPixel();
     delete window.fbq;
-    bootMetaPixel("123", "/", null);
+    bootMetaPixel("123", "/");
     trackCtaClick("planos");
     expect(window.fbq?.queue.at(-1)).toEqual(["track", "InitiateCheckout", { origem: "planos" }]);
     resetMetaPixel();
@@ -74,7 +74,7 @@ describe("funnel events", () => {
   it("trackViewPlans also sends the Meta ViewContent with the plan slugs", () => {
     resetMetaPixel();
     delete window.fbq;
-    bootMetaPixel("123", "/", null);
+    bootMetaPixel("123", "/");
     trackViewPlans([PRO]);
     expect(window.fbq?.queue.at(-1)).toEqual(["track", "ViewContent", { content_name: "Planos", content_type: "product", content_ids: ["profissional"], currency: "BRL" }]);
     resetMetaPixel();
