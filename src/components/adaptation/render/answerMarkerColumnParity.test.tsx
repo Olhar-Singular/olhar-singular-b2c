@@ -32,6 +32,7 @@ import { ALTERNATIVE_MARKER_CLASS } from "./answers/markerColumn";
 import { MultipleChoiceView } from "./answers/MultipleChoiceView";
 import { PdfAnswer } from "./pdf/PdfAnswer";
 import { AnswerPreview } from "../canonical-editor/answer-editors/AnswerPreview";
+import { contentChildren } from "@/test/pdfTree";
 
 vi.mock("../canonical-editor/RichTextField", () => ({
   RichTextField: () => <input />,
@@ -47,7 +48,7 @@ const MC: Extract<QuestionAnswer, { kind: "multipleChoice" }> = {
 
 /** Estilo do marcador da primeira linha na árvore react-pdf de PdfAnswer. */
 function firstMarkerStyle(node: ReactElement): { width?: number } {
-  const rows = (node.props as { children: ReactElement[] }).children;
+  const rows = contentChildren(node);
   const cells = (rows[0].props as { children: ReactElement[] }).children;
   return (cells[0].props as { style: { width?: number } }).style;
 }

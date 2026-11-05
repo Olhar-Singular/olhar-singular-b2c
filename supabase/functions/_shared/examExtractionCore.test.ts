@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 
 import * as frontendCost from "../../../src/lib/domain/extractionCost";
 import {
@@ -18,7 +18,9 @@ import {
   MAX_FILE_NAME_CHARS,
   EXTRACTION_TIMEOUT_MS,
   EXTRACTION_TOOL_SCHEMA,
+  buildExamExtractionResponse,
 } from "./examExtractionCore";
+import { UNREAD_FORMULA, UNREAD_IMAGE, UNREAD_OBJECT } from "../../../src/lib/domain/unreadMarker";
 
 describe("buildExtractionMessages", () => {
   it("puts the OCR system prompt as the first message", () => {
@@ -390,5 +392,108 @@ describe("document header: title and general instruction (0473)", () => {
     expect(parseExtractionHeader(withToolCallArgs("{not json"))).toEqual({ title: null, intro: null });
     expect(parseExtractionHeader(withToolCallArgs("null"))).toEqual({ title: null, intro: null });
     expect(parseExtractionHeader(null)).toEqual({ title: null, intro: null });
+  });
+});
+
+describe("never complete what was not read (C-03)", () => {
+  const rule = () =>
+    OCR_SYSTEM_PROMPT.split("\n").find((line) => line.includes("NÃO LIDO")) ?? "";
+
+  it("tells the model to keep the 'não lida' markers of the native text where they are", () => {
+    for (const marker of [UNREAD_FORMULA, UNREAD_IMAGE, UNREAD_OBJECT]) {
+      expect(rule()).toContain(marker);
+    }
+    expect(rule()).toMatch(/NEVER (?:replace|complete|guess)/i);
+  });
+
+  it("tells the model to write the marker itself when it cannot read a formula, instead of completing it", () => {
+    expect(rule()).toMatch(/cannot read/i);
+    expect(rule()).toContain(`write ${UNREAD_FORMULA}`);
+  });
+
+  it("states that a command with nothing after it stays as printed, never completed", () => {
+    expect(rule()).toMatch(/"Calcule \."/);
+  });
+});
+
+describe("buildExamExtractionResponse", () => {
+  const base = { title: null, intro: null, pdfFileName: "p.docx", creditsCharged: 5 };
+
+  it("carries the questions, the header and the charge exactly as before, plus the issues", () => {
+    const questions = [{ text: "Calcule 7 + 9", subject: "Matemática" }];
+    const body = buildExamExtractionResponse({
+      ...base,
+      title: "Prova",
+      intro: "Responda.",
+      pdfText: "1) Calcule 2 + 2",
+      questions,
+    });
+    expect(body).toMatchObject({
+      questions,
+      title: "Prova",
+      intro: "Responda.",
+      source_file_name: "p.docx",
+      credits_charged: 5,
+    });
+    expect(body.issues).toEqual([
+      { question: 1, kind: "invented", items: ["7+9"], of: 1, excerpt: "Calcule 7 + 9" },
+    ]);
+  });
+
+  it("has an empty issues list when everything is in the text", () => {
+    const body = buildExamExtractionResponse({
+      ...base,
+      pdfText: "1) Calcule 2 + 2",
+      questions: [{ text: "Calcule 2 + 2", subject: "Matemática" }],
+    });
+    expect(body.issues).toEqual([]);
+  });
+});
+
+describe("buildExamExtractionResponse: a checagem nunca derruba a resposta (F2, lote 5b)", () => {
+  const base = { title: null, intro: null, pdfFileName: "p.pdf", pdfText: "1) Quanto é 12 + 3?", creditsCharged: 3 };
+
+  it("alternativas que não são string passam e a resposta sai", () => {
+    const res = buildExamExtractionResponse({
+      ...base,
+      questions: [{ text: "Quanto é 12 + 3?", options: [12, null, "x"] }] as never,
+    });
+    expect(res.questions).toHaveLength(1);
+    expect(res.issues).toEqual([]);
+  });
+
+  it("se a checagem lançar, cai em issues vazio, sem perder as questões", () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const exploding = {
+      get text(): string {
+        throw new Error("boom");
+      },
+    };
+    const res = buildExamExtractionResponse({ ...base, questions: [exploding] as never });
+    expect(res.issues).toEqual([]);
+    expect(res.questions).toHaveLength(1);
+    expect(warn).toHaveBeenCalled();
+    warn.mockRestore();
+  });
+
+  it("erro que não é Error também é registrado", () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const exploding = {
+      get text(): string {
+        throw "texto solto";
+      },
+    };
+    expect(buildExamExtractionResponse({ ...base, questions: [exploding] as never }).issues).toEqual([]);
+    warn.mockRestore();
+  });
+});
+
+
+describe("OCR_SYSTEM_PROMPT: frações empilhadas (N-I-001)", () => {
+  it("manda manter o agrupamento (numerador)/(denominador) e deixa a imagem decidir só o agrupamento", () => {
+    const rule = OCR_SYSTEM_PROMPT.split("\n").find((line) => line.startsWith("- STACKED FRACTIONS")) ?? "";
+    expect(rule).toContain("(2 x + 1)/3");
+    expect(rule).toContain("never rewrite it without the brackets");
+    expect(rule).toContain("the image decides for the grouping only");
   });
 });

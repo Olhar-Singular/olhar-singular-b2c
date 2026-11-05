@@ -48,6 +48,7 @@ import { parsePdf } from "@/lib/utils/pdf-utils";
 import { extractDocxWithImages } from "@/lib/utils/docx-utils";
 import { detectFileType, DOCUMENT_MIME } from "@/lib/utils/fileValidation";
 import { resolveUniqueFileName } from "@/lib/utils/fileNameUtils";
+import { htmlToText } from "@/lib/utils/htmlText";
 import { normalizeTextForDedup, autoCropFromBbox, dataUrlToBlob, stripOptionMarker, stripOptionsFromText } from "@/lib/utils/extraction-utils";
 import { parseDbError, parseEdgeFnError } from "@/lib/utils/errors";
 import QuestionForm from "@/components/forms/QuestionForm";
@@ -56,6 +57,7 @@ import ManualQuestionEditor from "@/components/forms/ManualQuestionEditor";
 import PdfPreviewModal from "@/components/forms/PdfPreviewModal";
 import { SUBJECTS, normalizeSubject } from "@/lib/utils/constants";
 import "katex/dist/katex.min.css";
+import { describeInputProblems, findInputProblems } from "@/lib/domain/examIssues";
 
 const DIFFICULTY_LABEL: Record<string, string> = {
   facil: "Fácil",
@@ -412,7 +414,9 @@ export default function QuestionBankPage() {
       }
 
       setExtractedQuestions(processed);
-      setExtractionWarnings([...limitWarnings, ...warnings]);
+      // The text the browser read from the file: parts it could not read ([fórmula não lida])
+      // or a command with no expression, before the teacher trusts the extracted questions.
+      setExtractionWarnings([...limitWarnings, ...warnings, ...describeInputProblems(findInputProblems(pdfText))]);
       setShowReview(true);
       await refreshProfile();
     } catch (e: unknown) {
@@ -607,7 +611,7 @@ export default function QuestionBankPage() {
   const filteredQuestions = search.trim()
     ? questions.filter(
         (q) =>
-          q.text?.toLowerCase().includes(search.toLowerCase()) ||
+          htmlToText(q.text ?? "").toLowerCase().includes(search.toLowerCase()) ||
           q.subject?.toLowerCase().includes(search.toLowerCase()) ||
           q.topic?.toLowerCase().includes(search.toLowerCase()),
       )
@@ -1133,7 +1137,7 @@ export default function QuestionBankPage() {
                     </CardHeader>
                     <CardContent>
                       <p className="text-sm text-foreground leading-relaxed line-clamp-3">
-                        {q.text?.replace(/<[^>]+>/g, "") || ""}
+                        {htmlToText(q.text ?? "")}
                       </p>
                       {Array.isArray(q.options) && q.options.length > 0 && (
                         <div className="mt-3 space-y-1">
@@ -1149,7 +1153,7 @@ export default function QuestionBankPage() {
                               <span className="font-medium w-4 shrink-0">
                                 {String.fromCharCode(65 + i)})
                               </span>
-                              <span>{opt}</span>
+                              <span>{htmlToText(opt)}</span>
                               {q.correct_answer === i && <span className="ml-auto">✓</span>}
                             </div>
                           ))}

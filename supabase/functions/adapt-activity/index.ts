@@ -20,20 +20,28 @@ import {
   buildRequestBody,
   interpretAiResponse,
   buildReaskMessages,
+  shouldReaskForLatex,
+  betterCandidate,
+  latexReviewIssues,
+  withReviewIssues,
   type ChatMessage,
+  type InterpretSuccess,
 } from "../_shared/adaptActivityCore.ts";
+import { latexIssueErrors } from "../_shared/latexGuard.ts";
 import { extractImageMarkers, stripFabricatedImages } from "../_shared/imageSourceGuard.ts";
 import { inspectAdaptationQuality } from "../_shared/adaptationQuality.ts";
 import { stripGapTokens } from "../_shared/gapTokenGuard.ts";
 import { sizeGapBlanks } from "../_shared/gapWidthGuard.ts";
 import { stripQuestionNumbers } from "../_shared/questionNumberGuard.ts";
+import { stripScaffoldingLabels } from "../_shared/scaffoldingLabelGuard.ts";
+import { reviewAdaptationSafely } from "../_shared/adaptationReview.ts";
 import {
   buildSystemPrompt,
   buildUserPrompt,
   MAX_ACTIVITY_CHARS,
   MAX_ACTIVITY_TYPE_CHARS,
   MAX_OBSERVATION_CHARS,
-  attemptTimeoutMs,
+  attemptTimeoutWithinDeadlineMs,
   type PromptBarrier,
 } from "../_shared/adaptationPrompt.ts";
 import { aiActivityJsonSchema } from "../../../src/lib/adaptation/canonical/ai.ts";
@@ -187,6 +195,138 @@ serve(async (req) => {
       const systemPrompt = buildSystemPrompt(barriers, { fidelityMode: fidelity_mode === true });
       const jsonSchema = aiActivityJsonSchema();
 
+      // Everything that happens once a document is accepted: persist, settle, log, respond. A closure
+      // so a candidate kept from an earlier attempt (formulas KaTeX could not show, C-10) can be
+      // delivered after a later attempt fails.
+      type Candidate = {
+        result: InterpretSuccess["result"];
+        latexIssues: InterpretSuccess["latexIssues"];
+        attempt: number;
+        aiData: unknown;
+        aiDurationMs: number;
+        totalTokens: number | null;
+      };
+      const deliver = async (c: Candidate): Promise<Response> => {
+        const adaptation = stripScaffoldingLabels(
+          sizeGapBlanks(
+            stripQuestionNumbers(
+              stripGapTokens(stripFabricatedImages(c.result, allowedImageSrcs)),
+            ),
+          ),
+        );
+
+        // OBSERVE ONLY — does not reask, does not fail the request. Schema
+        // validation cannot tell a complete adaptation from one that came
+        // back with half the questions and no support text, and both are
+        // charged today. Logging first tells us how often each signal fires
+        // before we decide what enforcement should cost the user.
+        // Passed straight, with no cast. The `as unknown as` that used to be
+        // here is exactly what let a shape mismatch reach production: it
+        // silenced the one check that would have caught `blocks` living
+        // under `document`. If AdaptationResult drifts, this stops compiling.
+        const qualitySignals = inspectAdaptationQuality(
+          adaptation,
+          typeof expected_question_count === "number" ? expected_question_count : undefined,
+        );
+        if (qualitySignals.length > 0) {
+          console.warn(
+            "adaptation quality signals:",
+            JSON.stringify({ attempt: c.attempt, signals: qualitySignals }),
+          );
+        }
+
+        // INFORMATIONAL (C-04, C-10): the questions whose numbers the activity never gave and the
+        // formulas that stayed invalid. Pure and unable to fail the request, so it is computed
+        // BEFORE the write: the notices are stored as an optional sibling of `document` (L9A-4,
+        // additive, no migration) and the teacher sees them again when reopening the
+        // adaptation. Credit, settlement and reask are untouched by it.
+        const reviewIssues = [...reviewAdaptationSafely(sanitizedActivity, adaptation), ...latexReviewIssues(adaptation, c.latexIssues)];
+        const storedAdaptation = withReviewIssues(adaptation, reviewIssues);
+
+        // PERSIST BEFORE SETTLING. The response body used to be the ONLY copy
+        // of a document the user had already paid for — the browser did the
+        // INSERT on its first autosave, so a closed tab, a dead network or an
+        // aborted request between here and there lost the work for good.
+        // Writing the row first means the charge is only ever made final for
+        // an adaptation that is already durable; a failed write refunds via
+        // `failure()` and the user is simply told to try again.
+        const persisted = await persistAdaptation(
+          serviceClient as unknown as AdaptationInsertClient,
+          {
+            userId: user.id,
+            requestId: requestId.id,
+            originalActivity: sanitizedActivity,
+            activityType: sanitizedType,
+            barrierProfileId: barrier_profile_id,
+            barriersUsed: barriers,
+            observationNotes: sanitizedObservations,
+            adaptationResult: storedAdaptation,
+            creditsCharged: creditsCharged,
+          },
+        );
+        if (!persisted.ok) {
+          console.error(
+            "adaptation persist failed for user:",
+            user.id,
+            "reservation:",
+            requestId.id,
+            persisted.error,
+          );
+          return await failure(500, "Não foi possível salvar a adaptação. Tente novamente.");
+        }
+
+        // The document exists AND is stored: the charge is final. Settle
+        // BEFORE responding, so a reservation is never left open for a
+        // delivery that happened (which the job would otherwise refund).
+        try {
+          await runCreditRpc("settle_credit_reservation", () =>
+            serviceClient.rpc("settle_credit_reservation", {
+              p_id: requestId.id,
+            }) as PromiseLike<{ data: CreditRpcResult | null; error: unknown }>);
+        } catch (e) {
+          // Failing to settle only risks refunding a charge we were entitled
+          // to keep — never the user's money. Log and deliver anyway.
+          console.error("Settle failed for user:", user.id, "reservation:", requestId.id, e);
+        }
+
+        // Awaited: this is the last thing before the response, and a
+        // fire-and-forget insert dies with the isolate — which is why
+        // successful generations have been missing from the cost dashboard.
+        await logAiUsage({
+          user_id: user.id,
+          action_type: "adaptation",
+          model: modelName,
+          input_tokens: (c.aiData as { usage?: { prompt_tokens?: number } })?.usage?.prompt_tokens || 0,
+          output_tokens: (c.aiData as { usage?: { completion_tokens?: number } })?.usage?.completion_tokens || 0,
+          request_duration_ms: c.aiDurationMs,
+          status: "success",
+          metadata: { activity_type: sanitizedType, barriers_count: barriers.length, attempt: c.attempt },
+        }).catch(() => {});
+
+        return new Response(
+          JSON.stringify({
+            // The same object that was stored, so the client's autosave writes the notices back.
+            adaptation: storedAdaptation,
+            review_issues: reviewIssues,
+            // The row the client will autosave into — it no longer creates
+            // one. `updated_at` seeds the optimistic-concurrency token so the
+            // first autosave does not have to guess it.
+            adaptation_id: persisted.row.id,
+            adaptation_updated_at: persisted.row.updatedAt,
+            model_used: modelName,
+            tokens_used: c.totalTokens,
+            credits_charged: creditsCharged,
+            disclaimer: "Ferramenta pedagógica. Não realiza diagnóstico. A decisão final é sempre do profissional.",
+          }),
+          { headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        );
+      };
+
+      let latexFallback: Candidate | null = null;
+      let latexReasked = false;
+      // A failure after a deliverable candidate exists delivers it instead of refunding the charge.
+      const failOrDeliver = async (status: number, message: string): Promise<Response> =>
+        latexFallback ? await deliver(latexFallback) : await failure(status, message);
       // Attempt loop: 1 initial call + up to 2 reasks (MAX_ATTEMPTS total).
       const reaskMessages: ChatMessage[] = [];
       let lastErrors: string[] = [];
@@ -195,9 +335,10 @@ serve(async (req) => {
 
       for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
         // Each attempt gets its own budget, bounded by what is left of the
-        // request-wide one. Firing a call we cannot afford to wait for would
-        // only trade a reportable validation error for an opaque timeout.
-        const budgetMs = attemptTimeoutMs(attempt, Date.now() - requestStart);
+        // request-wide one and by the 150 s gateway cut (a response after it is lost
+        // while the document is saved and billed). Firing a call we cannot afford to
+        // wait for would only trade a reportable validation error for an opaque timeout.
+        const budgetMs = attemptTimeoutWithinDeadlineMs(attempt, Date.now() - requestStart);
         if (budgetMs === 0) break;
 
         const requestBody = buildRequestBody(
@@ -242,7 +383,7 @@ serve(async (req) => {
               : ((fetchErr as Error)?.message || "Network error"),
             metadata: { activity_type: sanitizedType, barriers_count: barriers.length, attempt },
           }).catch(() => {});
-          return await failure(
+          return await failOrDeliver(
             502,
             isTimeout ? "A IA demorou demais para responder. Tente novamente." : "Falha na conexão com a IA.",
           );
@@ -268,9 +409,9 @@ serve(async (req) => {
           }).catch(() => {});
 
           if (aiResponse.status === 429) {
-            return await failure(429, "Limite de requisições IA atingido. Tente novamente em alguns minutos.");
+            return await failOrDeliver(429, "Limite de requisições IA atingido. Tente novamente em alguns minutos.");
           }
-          return await failure(500, "Falha na geração da adaptação.");
+          return await failOrDeliver(500, "Falha na geração da adaptação.");
         }
 
         const aiData = await aiResponse.json();
@@ -279,112 +420,34 @@ serve(async (req) => {
         totalTokens = (aiData as { usage?: { total_tokens?: number } })?.usage?.total_tokens ?? null;
 
         if (!responseContent) {
-          return await failure(500, "Resposta vazia da IA.");
+          return await failOrDeliver(500, "Resposta vazia da IA.");
         }
 
         const interpreted = interpretAiResponse(responseContent);
         if (interpreted.ok) {
-          const adaptation = sizeGapBlanks(
-            stripQuestionNumbers(
-              stripGapTokens(stripFabricatedImages(interpreted.result, allowedImageSrcs)),
-            ),
-          );
-
-          // OBSERVE ONLY — does not reask, does not fail the request. Schema
-          // validation cannot tell a complete adaptation from one that came
-          // back with half the questions and no support text, and both are
-          // charged today. Logging first tells us how often each signal fires
-          // before we decide what enforcement should cost the user.
-          // Passed straight, with no cast. The `as unknown as` that used to be
-          // here is exactly what let a shape mismatch reach production: it
-          // silenced the one check that would have caught `blocks` living
-          // under `document`. If AdaptationResult drifts, this stops compiling.
-          const qualitySignals = inspectAdaptationQuality(
-            adaptation,
-            typeof expected_question_count === "number" ? expected_question_count : undefined,
-          );
-          if (qualitySignals.length > 0) {
-            console.warn(
-              "adaptation quality signals:",
-              JSON.stringify({ attempt, signals: qualitySignals }),
-            );
+          if (interpreted.repairedLatex.length > 0) {
+            console.warn("adaptation latex repaired:", JSON.stringify({ attempt, repairs: interpreted.repairedLatex }));
           }
-
-          // PERSIST BEFORE SETTLING. The response body used to be the ONLY copy
-          // of a document the user had already paid for — the browser did the
-          // INSERT on its first autosave, so a closed tab, a dead network or an
-          // aborted request between here and there lost the work for good.
-          // Writing the row first means the charge is only ever made final for
-          // an adaptation that is already durable; a failed write refunds via
-          // `failure()` and the user is simply told to try again.
-          const persisted = await persistAdaptation(
-            serviceClient as unknown as AdaptationInsertClient,
-            {
-              userId: user.id,
-              requestId: requestId.id,
-              originalActivity: sanitizedActivity,
-              activityType: sanitizedType,
-              barrierProfileId: barrier_profile_id,
-              barriersUsed: barriers,
-              observationNotes: sanitizedObservations,
-              adaptationResult: adaptation,
-              creditsCharged: creditsCharged,
-            },
-          );
-          if (!persisted.ok) {
-            console.error(
-              "adaptation persist failed for user:",
-              user.id,
-              "reservation:",
-              requestId.id,
-              persisted.error,
-            );
-            return await failure(500, "Não foi possível salvar a adaptação. Tente novamente.");
+          const candidate: Candidate = {
+            result: interpreted.result,
+            latexIssues: interpreted.latexIssues,
+            attempt,
+            aiData,
+            aiDurationMs,
+            totalTokens,
+          };
+          // C-10: a formula KaTeX cannot show gets ONE reask (inside this loop, so the 240 s budget
+          // still rules). If the model does not fix it, the document is delivered anyway, with a
+          // per-question notice: never a failure, never a different charge.
+          if (shouldReaskForLatex(interpreted.latexIssues.length, attempt, MAX_ATTEMPTS, latexReasked, Date.now() - requestStart)) {
+            latexFallback = betterCandidate(latexFallback, candidate);
+            latexReasked = true;
+            lastErrors = latexIssueErrors(interpreted.latexIssues);
+            console.warn("adaptation latex invalid, reasking:", JSON.stringify({ attempt, errors: lastErrors.slice(0, 5) }));
+            reaskMessages.push(...buildReaskMessages(responseContent, lastErrors));
+            continue;
           }
-
-          // The document exists AND is stored: the charge is final. Settle
-          // BEFORE responding, so a reservation is never left open for a
-          // delivery that happened (which the job would otherwise refund).
-          try {
-            await runCreditRpc("settle_credit_reservation", () =>
-              serviceClient.rpc("settle_credit_reservation", {
-                p_id: requestId.id,
-              }) as PromiseLike<{ data: CreditRpcResult | null; error: unknown }>);
-          } catch (e) {
-            // Failing to settle only risks refunding a charge we were entitled
-            // to keep — never the user's money. Log and deliver anyway.
-            console.error("Settle failed for user:", user.id, "reservation:", requestId.id, e);
-          }
-
-          // Awaited: this is the last thing before the response, and a
-          // fire-and-forget insert dies with the isolate — which is why
-          // successful generations have been missing from the cost dashboard.
-          await logAiUsage({
-            user_id: user.id,
-            action_type: "adaptation",
-            model: modelName,
-            input_tokens: (aiData as { usage?: { prompt_tokens?: number } })?.usage?.prompt_tokens || 0,
-            output_tokens: (aiData as { usage?: { completion_tokens?: number } })?.usage?.completion_tokens || 0,
-            request_duration_ms: aiDurationMs,
-            status: "success",
-            metadata: { activity_type: sanitizedType, barriers_count: barriers.length, attempt },
-          }).catch(() => {});
-
-          return new Response(
-            JSON.stringify({
-              adaptation,
-              // The row the client will autosave into — it no longer creates
-              // one. `updated_at` seeds the optimistic-concurrency token so the
-              // first autosave does not have to guess it.
-              adaptation_id: persisted.row.id,
-              adaptation_updated_at: persisted.row.updatedAt,
-              model_used: modelName,
-              tokens_used: totalTokens,
-              credits_charged: creditsCharged,
-              disclaimer: "Ferramenta pedagógica. Não realiza diagnóstico. A decisão final é sempre do profissional.",
-            }),
-            { headers: { ...corsHeaders, "Content-Type": "application/json" } },
-          );
+          return await deliver(betterCandidate(latexFallback, candidate));
         }
 
         // Validation failed — record and (if attempts remain) reask.
@@ -405,6 +468,10 @@ serve(async (req) => {
           reaskMessages.push(...buildReaskMessages(responseContent, interpreted.errors));
         }
       }
+
+      // A budget that ran out (or attempts that failed) AFTER a valid document with unshowable formulas:
+      // deliver that one rather than lose a paid adaptation.
+      if (latexFallback) return await deliver(latexFallback);
 
       // Exhausted all attempts without a valid document.
       console.error("adapt-activity validation exhausted for user:", user.id, lastErrors.slice(0, 5));

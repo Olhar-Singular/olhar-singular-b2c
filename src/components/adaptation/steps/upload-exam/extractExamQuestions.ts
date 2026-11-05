@@ -2,6 +2,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { autoCropFromBbox } from "@/lib/utils/extraction-utils";
 import { uploadImageDataUrl } from "@/lib/utils/imageUpload";
 import { parseInvokeError } from "@/lib/utils/errors";
+import { parseExtractionIssues, type ExtractionIssue } from "@/lib/domain/examIssues";
 import type { UploadedExam } from "@/lib/adaptation/wizard/wizardState";
 import type { ExamExtractedHeader, ExamExtractedQuestion } from "./buildActivityTextFromExtraction";
 
@@ -33,8 +34,15 @@ export type ExtractExamQuestionsResult =
   /**
    * `charged`: this call ran (and paid for) the extraction; false when it reused one.
    * `header`: the exam's title/general instruction, absent when it prints neither.
+   * `issues`: what the deterministic check found in the result (C-03), absent when nothing.
    */
-  | { status: "ok"; questions: ExamExtractedQuestion[]; header?: ExamExtractedHeader; charged: boolean }
+  | {
+      status: "ok";
+      questions: ExamExtractedQuestion[];
+      header?: ExamExtractedHeader;
+      issues?: ExtractionIssue[];
+      charged: boolean;
+    }
   /** The extraction ran (and was charged) but found no question. */
   | { status: "empty" }
   /**
@@ -50,7 +58,10 @@ export type ExtractExamQuestionsResult =
  * the UploadedExam object itself: attaching a file always creates a new one
  * (StepUploadExam), and the WeakMap lets a dropped file take its entry along.
  */
-const extractionCache = new WeakMap<UploadedExam, { questions: ExamExtractedQuestion[]; header?: ExamExtractedHeader }>();
+const extractionCache = new WeakMap<
+  UploadedExam,
+  { questions: ExamExtractedQuestion[]; header?: ExamExtractedHeader; issues?: ExtractionIssue[] }
+>();
 
 /** A header field from the response: only a string counts. */
 function headerText(value: unknown): string | null {
@@ -115,7 +126,12 @@ export async function extractExamQuestions(
   }
   const title = headerText(fnResult?.title);
   const intro = headerText(fnResult?.intro);
-  const extraction = title || intro ? { questions: resolved, header: { title, intro } } : { questions: resolved };
+  const issues = parseExtractionIssues(fnResult);
+  const extraction = {
+    questions: resolved,
+    ...(title || intro ? { header: { title, intro } } : {}),
+    ...(issues.length > 0 ? { issues } : {}),
+  };
   extractionCache.set(exam, extraction);
   return { status: "ok", ...extraction, charged: true };
 }

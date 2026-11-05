@@ -14,6 +14,7 @@
 
 import { Document, Page, View, Text } from "@react-pdf/renderer";
 import type { CanonicalDocument, PageStyle } from "@/lib/adaptation/canonical/schema";
+import { normalizeNfc } from "./nfc";
 import type { PanelSettings, HeaderSettings } from "@/components/adaptation/export/panelSettings";
 import {
   DEFAULT_PANEL_SETTINGS,
@@ -125,7 +126,11 @@ type Props = {
   pageStyle?: PageStyle;
 };
 
-export function AdaptationPdf({ document, settings = DEFAULT_PANEL_SETTINGS, pageStyle }: Props) {
+export function AdaptationPdf({ document: rawDocument, settings: rawSettings = DEFAULT_PANEL_SETTINGS, pageStyle }: Props) {
+  // Acento decomposto (colado do macOS) vira o caractere composto ANTES do layout:
+  // as fontes do arquivo não têm a marca combinante (B1, lote 4b).
+  const document = normalizeNfc(rawDocument);
+  const settings = normalizeNfc(rawSettings);
   const resolved = resolvePageStyle(pageStyle);
   // Convert blockSpacing from px (screen unit) to pt (PDF unit).
   const blockGap = px2pt(resolved.blockSpacing);

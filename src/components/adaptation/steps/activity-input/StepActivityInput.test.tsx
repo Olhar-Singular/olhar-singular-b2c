@@ -250,6 +250,31 @@ describe("StepActivityInput — Banco de Questões tab", () => {
     });
   });
 
+  it("o seletor e a lista de selecionadas mostram texto limpo, não o HTML do banco (N-U-005)", async () => {
+    bankQuestionsResult.data = [
+      {
+        id: "q1",
+        text: "<p>Calcule 10<sup>3</sup> e H<sub>2</sub>O</p>",
+        subject: "Química",
+        topic: null,
+        difficulty: null,
+        image_url: null,
+        options: ["<p>A <strong>primeira</strong></p>", "B"],
+      },
+    ];
+    const selectedFromParent = [
+      { id: "q1", text: "<p>Calcule 10<sup>3</sup> e H<sub>2</sub>O</p>", subject: "Química", topic: null, difficulty: null, image_url: null, options: ["<p>A <strong>primeira</strong></p>"] },
+    ];
+    // A lista de selecionadas (já no passo) e o diálogo do banco, lado a lado.
+    render(<StepActivityInput data={{ ...baseData, selectedQuestions: selectedFromParent } as never} updateData={vi.fn()} onNext={vi.fn()} onPrev={vi.fn()} />);
+    fireEvent.click(screen.getByRole("button", { name: /Banco de Questões/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Abrir Banco de Questões/i }));
+    await waitFor(() => screen.getByRole("dialog"));
+    await waitFor(() => expect(screen.getAllByText(/Calcule 10\^3 e H_\(2\)O/).length).toBeGreaterThanOrEqual(1));
+    expect(document.body.textContent).not.toMatch(/<\/?(p|sup|sub|strong)>/);
+    expect(document.body.textContent).toContain("A primeira");
+  });
+
   it("selecting a question and confirming calls updateData with text and selectedQuestions", async () => {
     bankQuestionsResult.data = [
       { id: "q1", text: "Questão 1", subject: "Matemática", topic: null, difficulty: null, image_url: null, options: ["A", "B"] },

@@ -46,6 +46,8 @@ import QuestionRichEditor from "@/components/forms/QuestionRichEditor";
 import { htmlToText } from "@/lib/utils/htmlText";
 import { SUBJECTS as subjects } from "@/lib/utils/constants";
 import "katex/dist/katex.min.css";
+import { ExamIssuesNotice } from "@/components/adaptation/steps/upload-exam/ExamIssuesNotice";
+import { describeInputProblems, findInputProblems } from "@/lib/domain/examIssues";
 
 type ManualQuestion = {
   text: string;
@@ -307,8 +309,15 @@ export default function ManualQuestionEditor({ file, onFinish }: Props) {
                   draggable={false}
                 />
               ) : fileType === "docx" && docxText ? (
-                <div className="bg-background rounded p-4 text-sm whitespace-pre-wrap leading-relaxed text-foreground select-text cursor-text">
-                  {docxText}
+                <div className="space-y-3">
+                  <ExamIssuesNotice
+                    title="Partes que a leitura não alcançou"
+                    lines={describeInputProblems(findInputProblems(docxText))}
+                    hint="Confira estas questões com o original antes de copiar para o banco."
+                  />
+                  <div className="bg-background rounded p-4 text-sm whitespace-pre-wrap leading-relaxed text-foreground select-text cursor-text">
+                    {docxText}
+                  </div>
                 </div>
               ) : (
                 <p className="text-center text-muted-foreground">Não foi possível renderizar o documento.</p>

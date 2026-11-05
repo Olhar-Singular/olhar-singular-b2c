@@ -19,6 +19,9 @@ import type {
   RichText,
 } from "@/lib/adaptation/canonical/schema";
 import { documentToPlainText } from "@/lib/adaptation/canonical/plainText";
+import type { HeaderSettings } from "@/components/adaptation/export/panelSettings";
+import { UNREAD_MARKER_PATTERN } from "@/lib/domain/unreadMarker";
+import { isPdfPrintable } from "@/components/adaptation/render/pdf/fontStack";
 
 /** Walk every block, including question stems (which nest). */
 export function everyBlock(blocks: Block[]): Block[] {
@@ -107,6 +110,69 @@ function mathNodes(document: CanonicalDocument): { latex: string }[] {
   return [...blockNodes, ...inlineNodes];
 }
 
+/** O aviso fixo da prévia do Exportar (C-35): o que o arquivo faz com a fórmula que a prévia mostra bonita. */
+export interface MathPreviewNotice {
+  /** Frase fixa, sem jargão, sobre a diferença entre a prévia e o arquivo. */
+  text: string;
+  /** A primeira fórmula do próprio documento, como ela sai escrita no arquivo. */
+  example: string;
+  hasAlt: boolean;
+  /** Só quando alguma fórmula tem descrição (alt): ela NÃO sai no arquivo, só o código. */
+  altText: string | null;
+}
+
+const EXAMPLE_MAX_CHARS = 40;
+
+/** The formula as the file prints it, short enough for a sentence and never cut inside a command. */
+function exampleOf(latex: string): string {
+  if (latex.length <= EXAMPLE_MAX_CHARS) return latex;
+  return `${latex.slice(0, EXAMPLE_MAX_CHARS).replace(/\\[a-zA-Z]*$/, "")}…`;
+}
+
+/** The formulas of one RichText, in reading order. */
+const inlineMathOf = (rich: RichText | undefined): { latex: string; alt?: string }[] =>
+  (rich ?? []).flatMap((inline) => (inline.type === "inlineMath" ? [{ latex: inline.latex, alt: inline.alt }] : []));
+
+/**
+ * Every formula in the order the teacher SEES them on the sheet (N-U-007): for a question, the
+ * enunciado above or below the stem (`enunciadoPosition`), the stem's own blocks, then the
+ * instruction and the answer. (`everyBlock` is a flat list for counting; it puts the question's own
+ * fields before its nested stem, which is not the order of the page.)
+ */
+function mathInOrder(blocks: Block[]): { latex: string; alt?: string }[] {
+  return blocks.flatMap((block): { latex: string; alt?: string }[] => {
+    if (block.type === "blockMath") return [{ latex: block.latex, alt: block.alt }];
+    if (block.type !== "question") return richTextsOf(block).flatMap(inlineMathOf);
+    const enunciado = inlineMathOf(block.enunciado);
+    const stem = mathInOrder(block.stem);
+    return [
+      ...(block.enunciadoPosition === "above" ? [...enunciado, ...stem] : [...stem, ...enunciado]),
+      ...inlineMathOf(block.instruction),
+      ...answerRichTexts(block.answer).flatMap(inlineMathOf),
+    ];
+  });
+}
+
+/**
+ * O aviso que a prévia do Exportar mostra ANTES de qualquer clique (C-35). A prévia desenha a
+ * fórmula formatada (KaTeX) e o PDF, o Word e o "Copiar" imprimem o código dela: sem este aviso
+ * a conferência visual contradiz o arquivo. Mostra a primeira fórmula do próprio documento como
+ * exemplo. O texto alternativo (alt) nunca sai no arquivo, e o aviso diz isso quando existe.
+ * `null` quando o documento não tem fórmula.
+ */
+export function mathPreviewNotice(document: CanonicalDocument): MathPreviewNotice | null {
+  const math = mathInOrder(document.blocks);
+  if (math.length === 0) return null;
+  const hasAlt = math.some((m) => !!m.alt?.trim());
+  return {
+    text:
+      "A prévia abaixo mostra as fórmulas formatadas, mas no PDF, no Word e ao copiar elas saem como texto LaTeX, o código da fórmula, sem formatação matemática.",
+    example: exampleOf(math[0].latex),
+    hasAlt,
+    altText: hasAlt ? "A descrição que você escreveu para a fórmula não sai no arquivo: sai só o código." : null,
+  };
+}
+
 /**
  * O que as saídas textuais perdem da fórmula. Um ponto só para PDF, Word e
  * "Copiar": as três imprimem o LaTeX, e o `alt` nunca substitui a equação
@@ -131,6 +197,21 @@ export function mathLossWarnings(document: CanonicalDocument): string[] {
  * Vale só para os dois ARQUIVOS: o "Copiar" entrega texto puro e não tem
  * tipografia a perder.
  */
+/**
+ * A marker the reading left ("[fórmula não lida]") and nobody completed prints on the exam
+ * as it is. PDF, Word and Copiar all say so before the download (F5, lote 5b).
+ */
+export function unreadMarkerWarnings(document: CanonicalDocument): string[] {
+  const found = documentToPlainText(document).match(new RegExp(UNREAD_MARKER_PATTERN.source, "giu")) ?? [];
+  if (found.length === 0) return [];
+  const many = found.length > 1;
+  return [
+    `${found.length} ${many ? "trechos" : "trecho"} ${many ? "ainda dizem" : "ainda diz"} "não lido" ` +
+      `(${[...new Set(found)].join(", ")}) e ${many ? "vão impressos" : "vai impresso"} na prova do jeito que ${many ? "estão" : "está"}. ` +
+      "Complete ou apague antes de exportar.",
+  ];
+}
+
 export const MATH_TYPOGRAPHY_WARNING =
   "A fórmula também não usa a fonte do documento: sai em monoespaçada e num " +
   "corpo próprio, mesmo que você tenha escolhido outra fonte no Formato.";
@@ -140,47 +221,13 @@ export function documentHasMath(document: CanonicalDocument): boolean {
 }
 
 /**
- * As famílias CLÁSSICAS do PDF cobrem pouco mais que a CP1252 (0444).
+ * Os caracteres do documento que NENHUMA fonte do PDF desenha, sem repetição e
+ * na ordem em que aparecem (C-01).
  *
- * Enquanto elas eram as built-in Type 1 do @react-pdf, o motivo era o encoding:
- * pedir um caractere de fora da CP1252 não levantava erro, o byte que sobrava
- * na codificação virava OUTRO caractere — o professor via a seta na folha, via
- * a seta na prévia e o aluno recebia aspas. Desde a 0445 elas são arquivos
- * embutidos (Liberation), então o caractere ausente sai em branco em vez de
- * trocado; o repertório, porém, continua latim + pontuação, sem dingbat
- * (`✓`, `☐`) nem emoji. Só as três fontes de acessibilidade têm a cobertura
- * larga, então o aviso segue conservador para as clássicas até a 0444 medir a
- * cobertura real de cada arquivo.
- *
- * O teste é por TOKEN, não pelo nome da família no PDF: `mono` ainda cai numa
- * built-in e as outras já não caem, mas o limite de repertório é o mesmo.
- */
-const PDF_CLASSIC_TOKENS = new Set(["sans", "serif", "mono", "georgia", "arial"]);
-
-/**
- * Os 27 caracteres que a CP1252 acomoda na faixa 0x80-0x9F, onde a Latin-1 tem
- * controles: aspas curvas, travessões, reticências, bullet, marca registrada.
- * Fora deles a tabela é ASCII imprimível mais a Latin-1 alta (acentos).
- */
-const WINANSI_HIGH_CODES = new Set([
-  0x20ac, 0x201a, 0x0192, 0x201e, 0x2026, 0x2020, 0x2021, 0x02c6, 0x2030, 0x0160,
-  0x2039, 0x0152, 0x017d, 0x2018, 0x2019, 0x201c, 0x201d, 0x2022, 0x2013, 0x2014,
-  0x02dc, 0x2122, 0x0161, 0x203a, 0x0153, 0x017e, 0x0178,
-]);
-
-function isWinAnsi(character: string): boolean {
-  // `charCodeAt` e não `codePointAt`: fora do BMP ele devolve o SUBSTITUTO
-  // alto, que também não está na CP1252 (um emoji continua sendo reprovado) e
-  // dispensa o ramo de fallback que nenhum caractere alcança.
-  const code = character.charCodeAt(0);
-  if (code >= 0x20 && code <= 0x7e) return true;
-  if (code >= 0xa0 && code <= 0xff) return true;
-  return WINANSI_HIGH_CODES.has(code);
-}
-
-/**
- * Os caracteres do documento que a fonte built-in do PDF não representa, sem
- * repetição e na ordem em que aparecem.
+ * Toda família tem a fonte de símbolos como segunda opção (`fontStack.ts`), que
+ * cobre a matemática escolar, o grego e a Latin Estendida; o que sobra aqui é o
+ * que o arquivo não tem como desenhar (dingbat `✏`, emoji, cirílico, CJK) e que
+ * sairia em branco ou trocado por outro símbolo.
  *
  * A varredura usa a MESMA projeção textual do botão "Copiar": ela já percorre
  * todo campo que vira texto no papel (enunciado, instrução, alternativa, par de
@@ -188,9 +235,26 @@ function isWinAnsi(character: string): boolean {
  * escapar daqui sem escapar de lá junto. As quebras de linha que a projeção
  * insere não são conteúdo e saem da conta.
  */
-export function pdfUnsupportedCharacters(document: CanonicalDocument): string[] {
-  const text = documentToPlainText(document).replace(/\s/g, "");
-  return [...new Set([...text].filter((character) => !isWinAnsi(character)))];
+/** Controle e formatação (largura zero, marca bidi, hífen opcional) e marca combinante. */
+const INVISIBLE = /^[\p{Cc}\p{Cf}\p{M}]$/u;
+
+export function pdfUnsupportedCharacters(
+  document: CanonicalDocument,
+  header?: HeaderSettings,
+): string[] {
+  // O cabeçalho do Exportar (título, escola, professor) também vai para o papel (M1). Em
+  // NFC, porque o PDF compõe o acento decomposto antes do layout (`nfc.ts`).
+  const text = documentToPlainText(document, { header }).normalize("NFC").replace(/\s/g, "");
+  return [
+    ...new Set(
+      [...text].filter(
+        (character) =>
+          // Invisível não é alarme (B1): controle, largura zero, marca bidi, hífen opcional
+          // (\p{Cc}, \p{Cf}) e marca combinante que sobrou depois do NFC (\p{M}).
+          !INVISIBLE.test(character) && !isPdfPrintable(character.codePointAt(0) as number),
+      ),
+    ),
+  ];
 }
 
 /**
@@ -264,8 +328,9 @@ export function emptyItemWarnings(document: CanonicalDocument): string[] {
 export function pdfExportWarnings(
   document: CanonicalDocument,
   pageStyle?: PageStyle,
+  header?: HeaderSettings,
 ): string[] {
-  const warnings: string[] = emptyItemWarnings(document);
+  const warnings: string[] = [...unreadMarkerWarnings(document), ...emptyItemWarnings(document)];
 
   // O `alt` é o campo de acessibilidade da imagem na folha, mas o
   // `@react-pdf/renderer` não gera PDF marcado (sem `/StructTreeRoot`, sem
@@ -294,18 +359,14 @@ export function pdfExportWarnings(
   }
 
   // O caractere que a folha mostra tem que ser o caractere que o arquivo
-  // imprime. Enquanto o PDF não embute uma fonte com cobertura Unicode para
-  // TODO documento, o mínimo é nomear, antes do download, o que vai sair
-  // trocado (0444).
-  if (!family || PDF_CLASSIC_TOKENS.has(family)) {
-    const unsupported = pdfUnsupportedCharacters(document);
-    if (unsupported.length > 0) {
-      warnings.push(
-        `A fonte padrão do PDF não tem estes caracteres: ${unsupported.join(" ")}. ` +
-          "No arquivo eles saem trocados por outro símbolo. Troque-os por texto " +
-          "(acentos e travessão funcionam) ou escolha uma fonte de acessibilidade no Formato.",
-      );
-    }
+  // imprime. Vale para TODA família: a fonte de símbolos entra em todas as
+  // pilhas (C-01), então o que sobra aqui não depende da escolha do Formato.
+  const unsupported = pdfUnsupportedCharacters(document, header);
+  if (unsupported.length > 0) {
+    warnings.push(
+      `Nenhuma fonte do PDF tem estes caracteres: ${unsupported.join(" ")}. ` +
+        "No arquivo eles saem em branco ou trocados por outro símbolo. Troque-os por texto.",
+    );
   }
 
   return warnings;
@@ -352,7 +413,7 @@ function hasInlineFormatting(rich: RichText): boolean {
 
 export function copyExportWarnings(document: CanonicalDocument): string[] {
   const blocks = everyBlock(document.blocks);
-  const warnings = mathLossWarnings(document);
+  const warnings = [...unreadMarkerWarnings(document), ...mathLossWarnings(document)];
   if (blocks.some((block) => block.type === "image")) {
     warnings.push(COPY_IMAGE_WARNING);
   }

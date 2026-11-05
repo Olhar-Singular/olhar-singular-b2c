@@ -48,6 +48,7 @@ import {
   escapedLength,
   isActivityOverLimit,
 } from "@/lib/domain/activityLimits";
+import { htmlToText } from "@/lib/utils/htmlText";
 import type { WizardData, SelectedQuestion } from "@/lib/adaptation/wizard/wizardState";
 
 type Props = {
@@ -93,7 +94,7 @@ function foldForSearch(value: string): string {
 }
 
 function matchesBankSearch(q: BankQuestion, term: string): boolean {
-  return [q.text, q.subject, q.topic].some((field) => !!field && foldForSearch(field).includes(term));
+  return [htmlToText(q.text), q.subject, q.topic].some((field) => !!field && foldForSearch(field).includes(term));
 }
 
 // 1139: PostgREST returns at most `max_rows` (1000 by default) rows per request
@@ -482,7 +483,7 @@ export function StepActivityInput({ data, updateData, onNext, onPrev }: Props) {
                   <div className="flex gap-3">
                     <span className="text-xs font-bold text-primary shrink-0 mt-0.5">{i + 1})</span>
                     <div className="flex-1 min-w-0 space-y-2">
-                      <p className="text-sm line-clamp-3 pr-8 break-words">{q.text}</p>
+                      <p className="text-sm line-clamp-3 pr-8 break-words">{htmlToText(q.text)}</p>
                       {q.image_url && (
                         <div
                           className="inline-block cursor-zoom-in"
@@ -500,7 +501,7 @@ export function StepActivityInput({ data, updateData, onNext, onPrev }: Props) {
                         <div className="space-y-0.5 pl-2">
                           {q.options.map((o, j) => (
                             <p key={j} className="text-xs text-muted-foreground">
-                              {String.fromCharCode(65 + j)}) {o}
+                              {String.fromCharCode(65 + j)}) {htmlToText(o)}
                             </p>
                           ))}
                         </div>
@@ -662,7 +663,7 @@ export function StepActivityInput({ data, updateData, onNext, onPrev }: Props) {
                         {isSelected && <Check className="w-3 h-3 text-primary-foreground" />}
                       </div>
                       <div className="flex-1 min-w-0 space-y-2">
-                        <p className="text-sm line-clamp-2 break-words">{q.text}</p>
+                        <p className="text-sm line-clamp-2 break-words">{htmlToText(q.text)}</p>
                         {q.image_url && (
                           <div
                             className="relative inline-block cursor-zoom-in"

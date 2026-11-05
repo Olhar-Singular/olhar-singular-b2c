@@ -23,7 +23,7 @@ function textOf(node: ReactNode): string {
   return Children.toArray(el.props.children).map(textOf).join("");
 }
 
-type TextStyle = { fontFamily?: string };
+type TextStyle = { fontFamily?: string | string[] };
 
 /** O estilo de todo elemento da árvore, já expandidos os componentes. */
 function textStyles(node: ReactNode, out: TextStyle[] = []): TextStyle[] {
@@ -49,7 +49,7 @@ describe("PDF imprime a fórmula, nunca o texto alternativo (achado 0803)", () =
     }) as ReactElement;
     expect(textOf(el)).toBe("a^2 + b^2 = c^2");
     expect(textOf(el)).not.toContain("pitagoras");
-    expect(textStyles(el).some((s) => s.fontFamily === "Courier")).toBe(true);
+    expect(textStyles(el).some((s) => [s.fontFamily].flat()[0] === "Courier")).toBe(true);
   });
 
   it("inline com alt imprime o LaTeX, em Courier", () => {
@@ -58,9 +58,10 @@ describe("PDF imprime a fórmula, nunca o texto alternativo (achado 0803)", () =
       { type: "inlineMath", latex: "E = mc^2", alt: "E igual a m c ao quadrado" },
     ];
     const el = PdfRichText({ content }) as ReactElement;
-    expect(textOf(el)).toContain("E = mc^2");
+    // a marca de "não hifenize" (U+00AD) não imprime nada
+    expect(textOf(el).replace(/\u00ad/g, "")).toContain("E = mc^2");
     expect(textOf(el)).not.toContain("ao quadrado");
-    expect(textStyles(el).some((s) => s.fontFamily === "Courier")).toBe(true);
+    expect(textStyles(el).some((s) => [s.fontFamily].flat()[0] === "Courier")).toBe(true);
   });
 
   it("bloco sem alt continua imprimindo o LaTeX", () => {

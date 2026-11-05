@@ -193,3 +193,66 @@ describe("public/fonts/*.ttf — binary integrity (PDF corruption guard)", () =>
     ).not.toContain("liga");
   });
 });
+
+// ---------------------------------------------------------------------------
+// C-01 (lote 4) — fontes de SÍMBOLOS: nenhum glifo composto.
+//
+// O fontkit guarda o primeiro objeto de glifo criado para cada id, com os
+// `codePoints` da primeira chamada. Um glifo buscado como COMPONENTE de outro
+// (o `√` dentro do `∛`) nasce sem code point e fica assim: depois, o `√` pintado
+// sozinho sai certo no papel, mas sem entrada no ToUnicode do PDF, e o
+// `pdftotext`, o copiar-colar e o leitor de tela perdem o símbolo — só em
+// documentos que usam `∛` ANTES do `√` no mesmo processo. Sem composto no
+// arquivo, o problema não existe. `scripts/build-symbol-fonts.py` decompõe.
+// ---------------------------------------------------------------------------
+
+/** Quantos glifos do `glyf` são compostos (numberOfContours < 0). */
+function compositeGlyphCount(buf: Buffer): number {
+  const head = findTable(buf, "head")!;
+  const maxp = findTable(buf, "maxp")!;
+  const loca = findTable(buf, "loca")!;
+  const glyf = findTable(buf, "glyf")!;
+  const longOffsets = buf.readInt16BE(head.offset + 50) === 1;
+  const numGlyphs = u16(buf, maxp.offset + 4);
+  const at = (i: number) =>
+    longOffsets ? u32(buf, loca.offset + i * 4) : u16(buf, loca.offset + i * 2) * 2;
+  let composites = 0;
+  for (let i = 0; i < numGlyphs; i++) {
+    if (at(i + 1) > at(i) && buf.readInt16BE(glyf.offset + at(i)) < 0) composites++;
+  }
+  return composites;
+}
+
+describe("nenhuma fonte embutida tem glifo composto (A1, lote 4b)", () => {
+  // Mesma causa do `√` dentro do `∛`, agora nas letras: `á` contém `a`, `Α` (grego) contém
+  // `A`. Um texto acentuado exportado antes apagava `a e c o ...` do texto extraído do PDF
+  // seguinte. Regenerar com scripts/build-classic-fonts.py, build-symbol-fonts.py ou
+  // decompose-font-composites.py (todos usam a decomposição de scripts/font_composites.py).
+  it.each(fontFiles)("%s não tem glifo composto", (file) => {
+    expect(compositeGlyphCount(readFileSync(join(FONTS_DIR, file)))).toBe(0);
+  });
+
+  it.each(fontFiles.filter((f) => f.startsWith("Liberation")))(
+    "%s não cobre o bloco grego (quem cobre é a DejaVu, pela pilha de fontStack.ts)",
+    (file) => {
+      const buf = readFileSync(join(FONTS_DIR, file));
+      const sub = selectUnicodeSubtable(buf, findTable(buf, "cmap")!.offset)!;
+      const greek = [0x0391, 0x0395, 0x039d, 0x039f, 0x03a4, 0x03bf, 0x03c0].filter(
+        (cp) => glyphIdFor(buf, sub, cp) !== 0,
+      );
+      expect(greek).toEqual([]);
+    },
+  );
+});
+
+describe("fontes de símbolos (C-01)", () => {
+  const symbolFiles = readdirSync(FONTS_DIR).filter((f) => f.endsWith("-Symbols.ttf"));
+
+  it("existem as duas (proporcional e monoespaçada)", () => {
+    expect(symbolFiles.sort()).toEqual(["DejaVuSans-Symbols.ttf", "DejaVuSansMono-Symbols.ttf"]);
+  });
+
+  it.each(symbolFiles)("%s não tem glifo composto (o ToUnicode do PDF depende disso)", (file) => {
+    expect(compositeGlyphCount(readFileSync(join(FONTS_DIR, file)))).toBe(0);
+  });
+});

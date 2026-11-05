@@ -11,12 +11,21 @@ import {
   AI_REASK_TIMEOUT_MS,
   AI_TOTAL_BUDGET_MS,
   attemptTimeoutMs,
+  attemptTimeoutWithinDeadlineMs,
+  latexReaskFits,
+  LATEX_DELIVERY_DEADLINE_MS,
   getRelevantProfiles,
   buildSystemPrompt,
   buildUserPrompt,
   SCAFFOLDING_EXAMPLE_QUESTION,
+  TRUE_FALSE_EXAMPLE_QUESTION,
+  LATEX_ARRAY_EXAMPLE,
+  LATEX_PERCENT_EXAMPLE,
 } from "./adaptationPrompt";
 import { AiBlockSchema } from "../../../src/lib/adaptation/canonical/ai";
+import { UNREAD_FORMULA, UNREAD_IMAGE, UNREAD_OBJECT } from "../../../src/lib/domain/unreadMarker";
+import { stripScaffoldingLabel } from "./scaffoldingLabelGuard";
+import { latexProblem } from "../../../src/lib/domain/latexValidation";
 
 describe("scaffolding mandate", () => {
   const prompt = () => buildSystemPrompt([{ dimension: "tea" }]);
@@ -364,5 +373,158 @@ describe("content preservation on every path (0393)", () => {
 
   it("does not read 'describe an informative table' as licence to drop its values", () => {
     expect(prompt()).toMatch(/descrevê-la em parágrafos NÃO autoriza omitir/);
+  });
+});
+
+describe("conteúdo não lido (C-03)", () => {
+  const rule = () =>
+    buildSystemPrompt([{ dimension: "tea" }])
+      .split("\n")
+      .find((line) => line.includes("NÃO LIDO")) ?? "";
+
+  it("manda manter o marcador de 'não lida' no lugar, sem inventar a conta nem resolver", () => {
+    for (const marker of [UNREAD_FORMULA, UNREAD_IMAGE, UNREAD_OBJECT]) expect(rule()).toContain(marker);
+    expect(rule()).toMatch(/NUNCA/);
+    expect(rule()).toMatch(/gabarito/i);
+  });
+
+  it("não contradiz o schema: manda reservar a 1ª alternativa e value false, e avisar (F6-1)", () => {
+    expect(rule()).not.toMatch(/Não marque gabarito/);
+    expect(rule()).toMatch(/ESPAÇO RESERVADO/);
+    expect(rule()).toMatch(/PRIMEIRA alternativa/);
+    expect(rule()).toMatch(/"value": false/);
+  });
+});
+
+// C-04: a rule that says "describe the figure in text" invited the model to invent the figure's data
+// (points of a graph, sides of a rectangle) the teacher never wrote.
+describe("figura sem dados (C-04)", () => {
+  const rule = () =>
+    buildSystemPrompt([{ dimension: "tea" }])
+      .split("\n")
+      .find((line) => line.includes("FIGURA, GRÁFICO OU TABELA SEM DADOS")) ?? "";
+
+  it("proíbe inventar número, medida, ponto ou alternativa que o professor não escreveu", () => {
+    expect(rule()).toMatch(/NUNCA invente[^.]*número[^.]*medida[^.]*ponto/);
+    expect(rule()).toMatch(/alternativa/);
+  });
+
+  it("manda manter a referência à figura e dizer que ela é necessária, no lugar de descrevê-la", () => {
+    expect(rule()).toMatch(/mantenha a referência/i);
+    expect(rule()).toMatch(/figura é necessária/i);
+  });
+
+  it("aponta o marcador de imagem não lida, que já existe, em vez de um conceito novo", () => {
+    expect(rule()).toContain(UNREAD_IMAGE);
+  });
+
+  it("não manda mais descrever em texto uma figura que o professor não deu", () => {
+    expect(buildSystemPrompt([{ dimension: "tea" }])).not.toMatch(/descreva-a em TEXTO \(um parágrafo\)/);
+  });
+});
+
+// C-20: "Passo 1:" inside an item the sheet numbers again printed "2. Passo 1: ...".
+describe("apoio sem rótulo de passo (C-20)", () => {
+  it("manda não escrever o rótulo, porque a folha já numera os itens", () => {
+    const p = buildSystemPrompt([{ dimension: "tea" }]);
+    expect(p).toMatch(/a folha já numera os itens[\s\S]{0,40}NÃO escreva "Passo 1:"/);
+  });
+
+  it("os itens do exemplo não trazem rótulo (o que o modelo copia)", () => {
+    const scaffold = SCAFFOLDING_EXAMPLE_QUESTION.stem.find((b) => b.type === "scaffolding") as { items: string[] };
+    for (const item of scaffold.items) expect(stripScaffoldingLabel(item)).toBe(item);
+  });
+});
+
+// C-21: the teacher's structure survives outside the exam-upload mode too.
+describe("estrutura do professor em todo modo (C-21)", () => {
+  const prompt = () => buildSystemPrompt([{ dimension: "tea" }]);
+
+  it("mantém a ordem e a quantidade das questões mesmo sem o modo fiel", () => {
+    expect(prompt()).not.toContain("MODO FIEL");
+    expect(prompt()).toMatch(/mesma ORDEM e a mesma QUANTIDADE de questões/);
+    expect(prompt()).toMatch(/gabarito do professor/i);
+  });
+
+  it("uma questão V/F com várias afirmações continua uma questão", () => {
+    expect(prompt()).toMatch(/UMA questão "trueFalse" com um item por afirmação/);
+    expect(prompt()).toMatch(/nunca[^.]*uma questão por afirmação/i);
+  });
+
+  it("a tabela que várias questões usam é escrita uma vez, não repetida em cada questão", () => {
+    expect(prompt()).toMatch(/UMA vez[^.]*antes da primeira questão[^.]*não a repita/i);
+  });
+
+  it("o exemplo de V/F é válido no schema real e está no prompt", () => {
+    expect(() => AiBlockSchema.parse(TRUE_FALSE_EXAMPLE_QUESTION)).not.toThrow();
+    expect(prompt()).toContain(JSON.stringify(TRUE_FALSE_EXAMPLE_QUESTION));
+    const items = (TRUE_FALSE_EXAMPLE_QUESTION.answer as { items: unknown[] }).items;
+    expect(items.length).toBeGreaterThanOrEqual(2);
+    expect(JSON.stringify(items)).not.toMatch(/"(Verdadeiro|Falso|V|F)"/);
+  });
+
+  it("o modo fiel continua com a regra de ordem própria", () => {
+    expect(buildSystemPrompt([{ dimension: "tea" }], { fidelityMode: true })).toContain("ORDEM ORIGINAL");
+  });
+});
+
+// C-10 prompt side (I-004, I-005) and C-18: the three ways the model wrote LaTeX the sheet cannot show.
+describe("LaTeX válido no prompt (C-10, C-18)", () => {
+  const prompt = () => buildSystemPrompt([{ dimension: "tea" }]);
+  const rule = () => prompt().split("\n").find((l) => l.startsWith("- MATEMÁTICA")) ?? "";
+
+  it("manda a lacuna ficar FORA da fórmula (I-004)", () => {
+    expect(rule()).toMatch(/NUNCA[^.]*lacuna[^.]*___[^.]*dentro de "latex"/);
+    expect(rule()).toMatch(/texto comum/);
+  });
+
+  it("manda o array sem @{} (I-005) e dá um exemplo que o KaTeX aceita", () => {
+    expect(rule()).toContain("@{}");
+    expect(rule()).toMatch(/NUNCA[^.]*@\{\}/);
+    expect(rule()).toContain(LATEX_ARRAY_EXAMPLE);
+    expect(latexProblem(LATEX_ARRAY_EXAMPLE)).toBeNull();
+  });
+
+  it("diz o que o % exige (\\%) e o exemplo é válido", () => {
+    expect(rule()).toMatch(/%[^.]*\\%/);
+    expect(rule()).toContain(LATEX_PERCENT_EXAMPLE);
+    expect(latexProblem(LATEX_PERCENT_EXAMPLE)).toBeNull();
+  });
+
+  it("lembra que a barra do comando é DUPLA no JSON (C-12)", () => {
+    expect(rule()).toMatch(/barra[^.]*dupla|duas barras/i);
+  });
+
+  it("manda manter o numerador inteiro de (numerador)/(denominador) (N-I-001)", () => {
+    expect(rule()).toContain("(2 x + 1)/3");
+    expect(rule()).toContain("2x + \\frac{1}{3}");
+    expect(rule()).toMatch(/numerador INTEIRO/);
+  });
+});
+
+
+describe("prazo de entrega com fórmula inválida (L7-1)", () => {
+  it("o prazo fica abaixo do corte de 150 s do gateway", () => {
+    expect(LATEX_DELIVERY_DEADLINE_MS).toBeLessThan(150_000);
+  });
+
+  it("o reask só começa se terminar (60 s) antes do prazo", () => {
+    expect(latexReaskFits(0)).toBe(true);
+    expect(latexReaskFits(79_999)).toBe(true);
+    expect(latexReaskFits(80_000)).toBe(false);
+  });
+
+  it("nenhuma tentativa passa do prazo, tenha ou não um documento em mãos (reask de schema incluído)", () => {
+    expect(attemptTimeoutWithinDeadlineMs(1, 0)).toBe(90_000); // the first call keeps its own cap
+    expect(attemptTimeoutWithinDeadlineMs(2, 20_000)).toBe(120_000); // the reask cap is below what is left
+    expect(attemptTimeoutWithinDeadlineMs(2, 50_000)).toBe(90_000); // 140 - 50: it ends before the 150 s cut
+    expect(attemptTimeoutWithinDeadlineMs(2, 100_000)).toBe(40_000);
+    expect(attemptTimeoutWithinDeadlineMs(3, 115_000)).toBe(0); // 25 s left: not worth a call
+    expect(attemptTimeoutWithinDeadlineMs(2, 230_000)).toBe(0);
+  });
+
+  it("um reask depois de 90 s da 1ª chamada ainda termina antes de 150 s (o caso de 210 s a 240 s)", () => {
+    const afterFirstCall = 90_000;
+    expect(afterFirstCall + attemptTimeoutWithinDeadlineMs(2, afterFirstCall)).toBeLessThan(150_000);
   });
 });

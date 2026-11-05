@@ -23,6 +23,7 @@ import { OrderingView } from "./answers/OrderingView";
 import { MatchingView } from "./answers/MatchingView";
 import { PdfAnswer } from "./pdf/PdfAnswer";
 import { AnswerPreview } from "../canonical-editor/answer-editors/AnswerPreview";
+import { contentChildren } from "@/test/pdfTree";
 
 vi.mock("../canonical-editor/RichTextField", () => ({
   RichTextField: () => <input />,
@@ -38,7 +39,7 @@ const MC: Extract<QuestionAnswer, { kind: "multipleChoice" }> = {
 
 /** Estilo da primeira linha de item na árvore react-pdf devolvida por PdfAnswer. */
 function firstRowStyle(node: ReactElement): { marginBottom?: number } {
-  const children = (node.props as { children: ReactElement[] }).children;
+  const children = contentChildren(node);
   return (children[0].props as { style: { marginBottom?: number } }).style;
 }
 

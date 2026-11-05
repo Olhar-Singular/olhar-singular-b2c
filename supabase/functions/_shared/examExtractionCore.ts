@@ -11,6 +11,8 @@
 
 import { sanitize } from "./sanitize.ts";
 import { requireRequestId, resolveRequestId } from "./creditReservation.ts";
+import { checkExtraction } from "./examExtractionCheck.ts";
+import { UNREAD_FORMULA, UNREAD_IMAGE, UNREAD_OBJECT } from "../../../src/lib/domain/unreadMarker.ts";
 
 /** Credits per extraction. Mirrors src/lib/domain/extractionCost.ts (sync test). */
 export const EXTRACTION_COST = 5;
@@ -60,11 +62,13 @@ Images may have 2-3 columns, figures, tables, and multiple questions per page.
 
 EXTRACTION RULES:
 - If a "TEXTO NATIVO EXTRAÍDO" block is provided, it is the authoritative, ground-truth source for every question's text and alternatives — copy it verbatim instead of re-reading the pixels. Use the page images only to detect figures/diagrams, their position, and the reading order — never to override text that the native block already provides.
+- STACKED FRACTIONS: the reading writes a fraction printed with the numerator over the denominator as (numerator)/(denominator), or as numerator/denominator when both are a single token (e.g. "(2 x + 1)/3", "1/2"). Keep that grouping exactly: never rewrite it without the brackets ("2x + 1/3" is a different value), and never move a term in or out of the numerator or the denominator. When the page image shows a different grouping than the native text, the image decides for the grouping only: write the fraction as the image shows it, in the same (numerator)/(denominator) form.
 - Read left column top-to-bottom, then right column top-to-bottom
 - Extract EVERY question visible — do NOT stop after the first one, do NOT skip any
 - Extract ALL question formats, not only multiple choice: open-ended/essay (dissertativa), true-false (verdadeiro/falso), fill-in-the-blank (completar lacunas), matching (associação/colunas), and multiple choice. A question without alternatives is still a question — extract it with an empty "options" array.
 - Accepted numbering patterns: "1." / "1)" / "Q1" / "Questão 1" / "QUESTÃO 1" / Roman numerals ("I.", "II.", "III.")
 - NEVER invent, deduce, or complete truncated statements — return the text exactly as it appears in the document
+- NÃO LIDO: the native text may carry ${UNREAD_FORMULA}, ${UNREAD_IMAGE} or ${UNREAD_OBJECT} where the file had something the reading did not reach. Keep each marker exactly where it is and NEVER replace it with a guess: write no expression, number or figure in its place, and never "fix" a statement such as "Calcule ." by supplying what is missing — return it as printed. When you cannot read a formula, number or expression in the images, write ${UNREAD_FORMULA} in its place: an unread formula is correct, an invented one is a wrong value the teacher will print.
 - Ignore headers, footers, school name, teacher name, watermarks (the activity's own title and general instruction are NOT headers: return them in "title" and "intro")
 - Preserve all units and math symbols exactly (m/s², 10⁸, ≥, ≤, etc.)
 
@@ -217,6 +221,43 @@ export function parseExtractionResponse(aiData: unknown): ExtractedQuestion[] {
     const parsed = JSON.parse(rawArgs);
     return Array.isArray(parsed.questions) ? parsed.questions.map(normalizeQuestionBreaks) : [];
   } catch {
+    return [];
+  }
+}
+
+/**
+ * The JSON body of extract-exam-for-adaptation. `issues` is the deterministic check of
+ * the result against the input text (C-03): the questions the teacher must look at.
+ * It informs only: the extraction settles and the generation goes on exactly as before.
+ */
+export function buildExamExtractionResponse(args: {
+  questions: ExtractedQuestion[];
+  title: string | null;
+  intro: string | null;
+  pdfFileName: string;
+  pdfText: string;
+  creditsCharged: number;
+}) {
+  return {
+    questions: args.questions,
+    title: args.title,
+    intro: args.intro,
+    source_file_name: args.pdfFileName,
+    credits_charged: args.creditsCharged,
+    issues: safeIssues(args.pdfText, args.questions),
+  };
+}
+
+/**
+ * The check informs only and runs AFTER the extraction was charged and settled: a throw here
+ * would turn a paid extraction into a 500 with nothing to show (F2, lote 5b). Any failure
+ * means "nothing to report".
+ */
+function safeIssues(pdfText: string, questions: ExtractedQuestion[]): ReturnType<typeof checkExtraction> {
+  try {
+    return checkExtraction(pdfText, questions);
+  } catch (error) {
+    console.warn("extraction check failed, no issues reported:", error instanceof Error ? error.message : error);
     return [];
   }
 }

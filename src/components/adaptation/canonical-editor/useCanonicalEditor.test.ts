@@ -344,6 +344,12 @@ describe("useCanonicalEditor", () => {
     expect(vi.mocked(toast.warning).mock.calls[0][0]).toContain("tabela colada");
   });
 
+  it("writes a pasted superscript as ^ text so x<sup>2</sup> does not become x2 (C-11)", () => {
+    const html = pasteTransform()?.("<p>x<sup>2</sup> + H<sub>2</sub>O</p>");
+    expect(html).toBe("<p>x^2 + H_(2)O</p>");
+    expect(vi.mocked(toast.warning)).not.toHaveBeenCalled();
+  });
+
   it("warns in the plural when several tables are pasted", () => {
     pasteTransform()?.("<table><tr><td>A</td></tr></table><table><tr><td>B</td></tr></table>");
     expect(vi.mocked(toast.warning).mock.calls[0][0]).toContain("As 2 tabelas coladas");

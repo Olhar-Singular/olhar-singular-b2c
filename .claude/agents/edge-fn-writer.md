@@ -15,13 +15,18 @@ Você é o especialista em edge functions Deno/Supabase deste projeto. Suas entr
 
 ```
 supabase/functions/
-├── deno.json            # import map: @supabase/supabase-js (versão EXATA do package-lock), zod, zod-to-json-schema
+├── deno.json            # import map: @supabase/supabase-js (versão EXATA do package-lock), zod, zod-to-json-schema, katex (esm.sh@0.16.45, só p/ validar LaTeX na borda da IA; ~260 KB do grafo, import 7-16 ms, 1ª renderização ~5 ms)
 ├── _shared/             # LÓGICA EXTRAÍDA + TESTADA (cada *.ts tem *.test.ts):
 │   ├── aiConfig.ts      # getAiConfig() → { apiKey, baseUrl, resolveModel } (Google/Gemini via AI_API_KEY)
 │   ├── logAiUsage.ts    # logAiUsage() — grava uso de IA em ai_usage_logs
 │   ├── credits.ts       # chargeCredits() / chargeErrorResponse() — débito por balde (mode charged|exempt); runCreditRpc()
 │   ├── creditReservation.ts # interpretReservation()/reservationErrorResponse()/resolveRequestId()/requireRequestId() (request_id obrigatório) — reserva crash-safe
 │   ├── examExtractionCore.ts # extração por IA (extract-questions e extract-exam-for-adaptation): EXTRACTION_COST, validateExamExtractionRequest (limites + allowlist de data URL + request_id obrigatório) e validateQuestionBankExtractionRequest (mesmos limites, request_id opcional do extract-questions), buildExtractionMessages, parseExtractionResponse
+│   ├── examExtractionCheck.ts # checagem determinística do resultado da extração contra o texto enviado (C-03): número/expressão inventado, marcador "não lida", lacuna "Calcule ."; só informa (`issues` na resposta), não bloqueia nem cobra. Tipos e frases em src/lib/domain/examIssues.ts, marcadores em src/lib/domain/unreadMarker.ts
+│   ├── adaptationReview.ts # checagem da adaptação contra a atividade enviada (C-04): número novo em questão que cita figura/gráfico/tabela + marcador de não lida removido; `reviewAdaptationSafely` (try/catch) roda ANTES de gravar a linha e vira `review_issues` (resposta e `adaptation_result.review_issues` via `withReviewIssues` de adaptActivityCore, aditivo) (`answer_key`, `fraction`, `marker_dropped`); o reask de LaTeX só ocorre se `latexReaskFits` (prazo de entrega 140 s < corte de 150 s do gateway) na resposta do adapt-activity; TODA tentativa (reask de schema incluído) obedece a esse prazo via `attemptTimeoutWithinDeadlineMs` em `adaptationPrompt.ts` (Lote 9B): estoura, aborta, `failure()` estorna. Só informa. Reusa `referenceOf` de examExtractionCheck.ts
+│   ├── latexGuard.ts    # LaTeX na borda da IA (C-10/C-12/C-18): repairJsonLatex (FF/BS/TAB de `\frac`/`\beta` com 1 barra, % cru → \%; só `latex`, loga), findLatexIssues (KaTeX = a mesma regra do editor, `latexProblem`, no modo da folha: `blockMath` é display, N-M-002), latexIssueErrors (reask) e latexIssuesToReview (`invalid_latex`). 1 reask só; segue entregando com aviso por questão, sem falhar nem mudar a cobrança
+│   ├── fractionGuard.ts # fração agrupada da entrada `(2x+1)/3` sem fração equivalente na saída (N-I-001): `lostFractions`, `questionOfFraction`; lê `\frac`/`\sqrt` com chaves aninhadas e ignora `f(x)/g(x)`, `(a)/(b)` e notas entre parênteses; vira `fraction` em examExtractionCheck/adaptationReview
+│   ├── scaffoldingLabelGuard.ts # tira "Passo N:"/"N." do começo dos itens de apoio (C-20); NÃO é a regex do questionNumberGuard (C-14)
 │   ├── chatTurn.ts      # chat: parseUserTurn (só a ÚLTIMA mensagem do cliente), admitTurn (limite de trocas e turno pendente pelo histórico GRAVADO), buildAiContext, sessionTitle
 │   ├── adminSetAccess.ts # validateSetAccessInput() — trial/exempt/legacy ou extendDays 7/14/30
 │   ├── creditGuard.ts   # guarda de saldo antes de operação cara
@@ -222,7 +227,7 @@ if (!auth.ok) return json({ error: auth.error }, auth.status); // 401 / 403 / 50
 
 ## Regras duras
 
-1. **Imports**: URLs `https://deno.land/std` ou `https://esm.sh` com **versão exata** (nunca só o major), OU bare specifier mapeado no `deno.json` (`@supabase/supabase-js`, `zod`, `zod-to-json-schema`). O supabase-js entra SEMPRE pelo bare `@supabase/supabase-js`, fixado na versão do `package-lock.json` (guardado por `denoImportGraph.test.ts`: subiu o supabase-js no front, suba o `deno.json` junto). Para deps novas via bare specifier, adicione ao import map do `deno.json`. Imports relativos de pacotes em `src/` precisam de extensão `.ts` explícita (Deno não resolve sem)
+1. **Imports**: URLs `https://deno.land/std` ou `https://esm.sh` com **versão exata** (nunca só o major), OU bare specifier mapeado no `deno.json` (`@supabase/supabase-js`, `zod`, `zod-to-json-schema`, `katex`). O supabase-js entra SEMPRE pelo bare `@supabase/supabase-js`, fixado na versão do `package-lock.json` (guardado por `denoImportGraph.test.ts`: subiu o supabase-js no front, suba o `deno.json` junto). Para deps novas via bare specifier, adicione ao import map do `deno.json`. Imports relativos de pacotes em `src/` precisam de extensão `.ts` explícita (Deno não resolve sem)
 2. **Não pule autenticação** a menos que seja explícito que a rota é pública
 3. **Sempre retorne JSON** com `Content-Type: application/json`
 4. **Sempre inclua CORS headers** em todas as responses (sucesso e erro)

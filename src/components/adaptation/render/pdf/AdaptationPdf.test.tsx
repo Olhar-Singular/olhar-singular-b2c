@@ -89,7 +89,7 @@ describe("AdaptationPdf", () => {
       settings,
       pageStyle: { fontFamily: "lexend" },
     });
-    expect(el.props.children.props.style.fontFamily).toBe("Lexend");
+    expect(el.props.children.props.style.fontFamily).toEqual(["Lexend", "DejaVu Sans"]);
   });
 
   it("applies fontSize from pageStyle to the <Page> style", () => {
@@ -110,7 +110,7 @@ describe("AdaptationPdf", () => {
     // que a folha da tela resolve (achado 0007). Desde a 0445 ela é um arquivo
     // que viaja dentro do PDF (Liberation Sans, métrica da Arial/Helvetica que
     // o built-in imprimia), e não mais o built-in não embutido.
-    expect(el.props.children.props.style.fontFamily).toBe("Liberation Sans");
+    expect(el.props.children.props.style.fontFamily).toEqual(["Liberation Sans", "DejaVu Sans"]);
   });
 
   it("does NOT use settings.fontFamily for the <Page> style (font now comes from pageStyle)", () => {
@@ -122,7 +122,7 @@ describe("AdaptationPdf", () => {
       pageStyle: undefined,
     });
     // Sem pageStyle, a fonte vem do token default dos pageTokens — nunca de `settings`.
-    expect(el.props.children.props.style.fontFamily).toBe(pageTokensToPdf().fontFamily);
+    expect(el.props.children.props.style.fontFamily).toEqual(pageTokensToPdf().fontFamily);
   });
 
   it("covers every block type via a PdfBlock per block", () => {
@@ -138,7 +138,9 @@ describe("AdaptationPdf", () => {
   });
 
   it("renders math as its LaTeX source, never as the alt (0803)", () => {
-    const { text } = collect(AdaptationPdf({ document: renderDocument }));
+    const { text: raw } = collect(AdaptationPdf({ document: renderDocument }));
+    // a marca de "não hifenize" (U+00AD) não imprime nada; sai do texto para comparar o que se vê
+    const text = raw.replace(/\u00ad/g, "");
     expect(text).not.toContain("a sobre b");
     expect(text).toContain("\\frac{a}{b}");
     expect(text).not.toContain("teorema de Pitágoras");

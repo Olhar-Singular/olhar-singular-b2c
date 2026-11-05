@@ -6,8 +6,13 @@ import { FONT_FAMILY_TOKENS, fontFamilyToPdf } from "@/lib/adaptation/canonical/
 // Mock @react-pdf/renderer before importing registerFonts
 const mockRegister = vi.fn();
 const mockRegisterHyphenationCallback = vi.fn();
+const mockGetRegisteredFonts = vi.fn(() => ({}));
 vi.mock("@react-pdf/renderer", () => ({
-  Font: { register: mockRegister, registerHyphenationCallback: mockRegisterHyphenationCallback },
+  Font: {
+    register: mockRegister,
+    registerHyphenationCallback: mockRegisterHyphenationCallback,
+    getRegisteredFonts: mockGetRegisteredFonts,
+  },
 }));
 
 // We import dynamically inside each test so we can reset module state between runs.
@@ -19,6 +24,17 @@ describe("registerPdfFonts", () => {
     mockRegisterHyphenationCallback.mockClear();
     // Reset module registry so the `done` guard is cleared between tests.
     vi.resetModules();
+  });
+
+  it("makes faces that point at the same file share one parsed font (F-L)", async () => {
+    const primary = { src: "/fonts/Lexend-Regular.ttf", data: { shared: true }, load: vi.fn(async () => {}) };
+    const alias = { src: "/fonts/Lexend-Regular.ttf", data: null as unknown, load: vi.fn(async () => {}) };
+    mockGetRegisteredFonts.mockReturnValueOnce({ Lexend: { sources: [primary, alias] } });
+    const { registerPdfFonts } = await import("./registerFonts");
+    registerPdfFonts();
+
+    await alias.load();
+    expect(alias.data).toBe(primary.data);
   });
 
   it("calls Font.register for each a11y family (Atkinson Hyperlegible, Lexend, OpenDyslexic)", async () => {
@@ -117,6 +133,18 @@ describe("registerPdfFonts", () => {
     expect(callback("")).toEqual([""]);
   });
 
+  it("returns each space of a run of spaces as its own syllable (N-U-008: two spaces became one syllable and put a hyphen point on the word before)", async () => {
+    const { registerPdfFonts } = await import("./registerFonts");
+    registerPdfFonts();
+    const callback = mockRegisterHyphenationCallback.mock.calls[0][0] as (word: string | null) => string[];
+    expect(callback(" ")).toEqual([" "]);
+    expect(callback("  ")).toEqual([" ", " "]);
+    expect(callback("     ")).toEqual([" ", " ", " ", " ", " "]);
+    // a null token and a word with an inner space-free body are untouched
+    expect(callback(null)).toEqual([""]);
+    expect(callback("a b")).toEqual(["a b"]);
+  });
+
   it("splits an unbreakable long token into parts so the PDF keeps every character (achado 0115)", async () => {
     const { registerPdfFonts, UNBREAKABLE_WORD_THRESHOLD, WORD_CHUNK_SIZE } = await import("./registerFonts");
     registerPdfFonts();
@@ -133,6 +161,33 @@ describe("registerPdfFonts", () => {
     expect(callback("a".repeat(UNBREAKABLE_WORD_THRESHOLD + 1)).join("")).toBe(
       "a".repeat(UNBREAKABLE_WORD_THRESHOLD + 1),
     );
+  });
+
+  it("never hyphenates a formula atom: a NBSP-joined LaTeX token stays whole (C-15)", async () => {
+    const { registerPdfFonts, FORMULA_ATOM_MAX_CHARS } = await import("./registerFonts");
+    registerPdfFonts();
+    const callback = mockRegisterHyphenationCallback.mock.calls[0][0] as (word: string) => string[];
+    // 35 chars, one token because the spaces are NBSP: used to be cut into 8-char chunks,
+    // and textkit then printed "(x-" on one line and "+ y)" on the next.
+    const atom = "(x + y) \\cdot (x - y) = x^2 - y^2".replace(/ /g, "\u00a0");
+    expect(atom.length).toBeGreaterThan(30);
+    expect(callback(atom)).toEqual([atom]);
+    const widest = "a\u00a0".repeat(FORMULA_ATOM_MAX_CHARS / 2);
+    expect(callback(widest)).toEqual([widest]);
+    // Past what any column holds the characters are still preserved (achado 0115).
+    const runaway = "a\u00a0".repeat(FORMULA_ATOM_MAX_CHARS);
+    expect(callback(runaway).length).toBeGreaterThan(1);
+    expect(callback(runaway).join("")).toBe(runaway);
+  });
+
+  it("a marked formula piece stays whole whatever its length or spacing (L10 G1)", async () => {
+    const { registerPdfFonts, NO_HYPHEN_MARK, FORMULA_ATOM_MAX_CHARS } = await import("./registerFonts");
+    registerPdfFonts();
+    const callback = mockRegisterHyphenationCallback.mock.calls[0][0] as (word: string) => string[];
+    // no NBSP and wider than any atom: only the mark keeps it from being cut into 8-char chunks
+    const piece = `${NO_HYPHEN_MARK}${"1+".repeat(FORMULA_ATOM_MAX_CHARS)}`;
+    expect(callback(piece)).toEqual([piece]);
+    expect(callback(piece.replace(NO_HYPHEN_MARK, "")).length).toBeGreaterThan(1);
   });
 
   it("tolerates a null word (textkit types the callback argument as string | null)", async () => {

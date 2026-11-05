@@ -45,6 +45,7 @@ import { findFolderByName, duplicateFolderMessage, isDuplicateFolderError } from
 import { useMarkReady } from "@/hooks/useAdaptations";
 import { computeAccess } from "@/lib/domain/access";
 import { calcAdaptationCost } from "@/lib/domain/barriers";
+import type { ExtractionIssue } from "@/lib/domain/examIssues";
 import type { AdaptationResult, CanonicalDocument, DocumentHeader, PageStyle } from "@/lib/adaptation/canonical/schema";
 
 const STEPS = [
@@ -382,6 +383,12 @@ export default function CanonicalAdaptationWizard({ editMode }: Props = {}) {
     setData((prev) => ({ ...prev, ...partial }));
   }, []);
 
+  // C-03: what the check of the AI extraction found; Revisar shows it. Informs only.
+  const handleExtractionIssues = useCallback(
+    (extractionIssues: ExtractionIssue[]) => updateData({ extractionIssues }),
+    [updateData],
+  );
+
   const onNext = useCallback(() => {
     setStepIndex((i) => Math.min(i + 1, STEPS.length - 1));
   }, []);
@@ -422,7 +429,7 @@ export default function CanonicalAdaptationWizard({ editMode }: Props = {}) {
           pageStyle: stashedResult.pageStyle ?? result.pageStyle,
         }
       : result;
-    setData((prev) => setResult(prev, adopted));
+    setData((prev) => ({ ...setResult(prev, adopted), adaptationIssues: row.reviewIssues ?? [] }));
     // A nova adaptação chegou: a anterior não é mais uma saída de emergência.
     setStashedResult(null);
     setDraftId(row.id);
@@ -676,6 +683,7 @@ export default function CanonicalAdaptationWizard({ editMode }: Props = {}) {
             onPrev={onPrev}
             onLoadingChange={setIsGenerating}
             onRestorePrevious={stashedResult ? restorePreviousResult : undefined}
+            onExtractionIssues={handleExtractionIssues}
           />
         );
       case "review":
@@ -727,6 +735,8 @@ export default function CanonicalAdaptationWizard({ editMode }: Props = {}) {
             canSave={!!draftId}
             saving={markReady.isPending}
             onSave={handleSave}
+            extractionIssues={uploadedExam ? data.extractionIssues : null}
+            adaptationIssues={data.adaptationIssues}
             originalExam={
               // Only the file this adaptation was generated from; one left
               // attached after switching to paste/bank is not "the original".

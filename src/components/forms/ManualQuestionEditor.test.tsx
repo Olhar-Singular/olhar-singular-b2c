@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, waitFor, fireEvent } from "@testing-library/react";
+import { render, waitFor, fireEvent, screen } from "@testing-library/react";
 import ManualQuestionEditor from "./ManualQuestionEditor";
 
 const parsePdfMock = vi.fn();
@@ -116,6 +116,14 @@ describe("ManualQuestionEditor — file loading", () => {
     detectFileTypeMock.mockReturnValueOnce("docx");
     render(<ManualQuestionEditor file={docxFile()} onFinish={vi.fn()} />);
     await waitFor(() => expect(extractDocxTextMock).toHaveBeenCalled());
+  });
+
+  it("DOCX com parte não lida: o painel do texto avisa antes da professora copiar (F5, lote 5b)", async () => {
+    detectFileTypeMock.mockReturnValueOnce("docx");
+    extractDocxTextMock.mockResolvedValueOnce("1) Resolva [imagem não lida].");
+    render(<ManualQuestionEditor file={docxFile()} onFinish={vi.fn()} />);
+    expect(await screen.findByRole("status", { name: /não alcançou/i })).toBeInTheDocument();
+    expect(screen.getByText(/Questão 1: tem uma parte que o arquivo não deixou ler/i)).toBeInTheDocument();
   });
 
   it("toasts error when parsePdf throws", async () => {

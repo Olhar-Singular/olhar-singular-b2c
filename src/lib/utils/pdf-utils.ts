@@ -1,4 +1,6 @@
 import * as pdfjsLib from "pdfjs-dist";
+import { pageTextFromItems } from "./pdfTextLayout";
+import { fractionBarsFromOperatorList, type FractionBar } from "./pdfFractionBars";
 import pdfjsWorker from "pdfjs-dist/build/pdf.worker.min.mjs?url";
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfjsWorker;
@@ -63,6 +65,30 @@ async function withPdfDocument<T>(
   }
 }
 
+/** Longest wait for a page's operator list (the whole of a 59-page exam read in 1,3 s, the slowest page in 0,26 s). */
+export const OPERATOR_LIST_TIMEOUT_MS = 5000;
+
+/**
+ * The thin rules of the page (fraction bars). Best effort: when the operator list cannot be
+ * read the page is simply read without a bar signal, which leaves ambiguous stacks as the
+ * plain lines they came as (never a guessed fraction).
+ */
+async function pageFractionBars(page: PdfPage): Promise<FractionBar[]> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    // The bar is a refinement, never a reason to freeze the upload: an operator list that does not
+    // come back in time is given up on and the page is read without the bar signal (L9BC-5).
+    const timeout = new Promise<never>((_, reject) => {
+      timer = setTimeout(() => reject(new Error("operator list timed out")), OPERATOR_LIST_TIMEOUT_MS);
+    });
+    return fractionBarsFromOperatorList(await Promise.race([page.getOperatorList(), timeout]), pdfjsLib.OPS);
+  } catch {
+    return [];
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 export async function parsePdf(
   file: File,
   onProgress?: (page: number, total: number) => void
@@ -82,13 +108,21 @@ export async function parsePdf(
       // single space destroyed the one structural cue the extraction model has:
       // an enunciado and its alternatives arrived as a single blob, and the
       // extraction prompt is told to treat that blob as the source of truth.
-      // `hasEOL` marks the runs that ended a visual line — honour it.
-      const pageText = (textContent.items as Array<{ str: string; hasEOL?: boolean }>)
-        .map((item) => item.str + (item.hasEOL ? "\n" : " "))
-        .join("")
-        .replace(/[ \t]+\n/g, "\n")
-        .replace(/\n{3,}/g, "\n\n")
-        .trim();
+      // `hasEOL` marks the runs that ended a visual line, and the positions say which
+      // two lines are one stacked fraction (N-I-001): see `pageTextFromItems`.
+      const pageText = pageTextFromItems(
+        (textContent.items as Array<{ str: string; transform: number[]; width: number; height: number; hasEOL?: boolean }>).map(
+          (item) => ({
+            str: item.str,
+            x: item.transform[4],
+            y: item.transform[5],
+            width: item.width,
+            height: item.height,
+            hasEOL: item.hasEOL,
+          }),
+        ),
+        await pageFractionBars(page),
+      );
       fullText += `\n--- Página ${i} ---\n${pageText}`;
 
       if (pageImages.length < MAX_IMAGE_PAGES) {

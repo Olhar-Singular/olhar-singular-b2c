@@ -202,7 +202,7 @@ export function ExportPanel({
   };
 
   const handleExport = async () => {
-    const warnings = pdfExportWarnings(document, pageStyle);
+    const warnings = pdfExportWarnings(document, pageStyle, header);
     if (warnings.length > 0) {
       openPending({ format: "pdf", warnings });
       return;

@@ -22,6 +22,9 @@ import type { QuestionAnswer, RichText } from "@/lib/adaptation/canonical/schema
 import { indexToLetter } from "../letters";
 import { MONO_ADVANCE_EM } from "../mathAtom";
 import { PdfRichText } from "./PdfRichText";
+import { shareColumnPt } from "./columnWidth";
+import { headerNeedsRelease, tableCellColumnPt, tableRowBands } from "./tableRowFit";
+import { KEEP_PAGE_PT, keepTogether } from "./keepTogether";
 import { mathPdfInlineStyle } from "./mathToPdfText";
 import { resolveElementFontSizes, resolvePageStyle, type ElementFontSizesPt } from "../pageStyle";
 import {
@@ -57,15 +60,24 @@ import {
 const ROW = { flexDirection: "row", marginBottom: ANSWER_ITEM_GAP_PT } as const;
 const LAST_ROW = { flexDirection: "row" } as const;
 const rowStyle = (index: number, count: number) => (index < count - 1 ? ROW : LAST_ROW);
-// flexShrink: 0 prevents the marker column from collapsing when the row is
-// tight, which would push marker text over the content column. A largura vem
-// do corpo do item (achado 0182): com a coluna fixa em pt e o glifo escalando
-// com o popover Formato, era o TEXTO do marcador que quebrava dentro da caixa.
+// A COLUNA do marcador tem largura fixa (22pt na base de 12pt), em qualquer fonte: é ela
+// que alinha o texto das alternativas com a tela. O TEXTO do marcador, porém, nunca pode
+// ceder à coluna (achado I1, lote 4b): na OpenDyslexic, larga, o `b)` mais o espaço
+// fantasma (`markerGhost`) passava da caixa e o textkit o quebrava com hífen (`b-` / `)`);
+// `m)` quebra sozinho a partir de 22pt, e `aa)` em toda fonte. Então a coluna é uma <View>
+// de largura fixa (`flexShrink: 0`, sem clipe) e o <Text> dentro dela é largo o bastante
+// para o marcador nunca precisar de segunda linha, transbordando sem tinta para o vão.
+// A largura do Text não mexe em coluna nenhuma: quem o mede é a View.
+const MARKER_TEXT_ROOM = 4;
+const markerColumnStyle = (fontSizePt: number) =>
+  ({
+    width: alternativeMarkerColumnPt(fontSizePt),
+    flexShrink: 0,
+  }) as const;
 const markerStyle = (fontSizePt: number) =>
   ({
     ...pdfTextSize(fontSizePt),
-    width: alternativeMarkerColumnPt(fontSizePt),
-    flexShrink: 0,
+    width: alternativeMarkerColumnPt(fontSizePt) * MARKER_TEXT_ROOM,
   }) as const;
 // flexBasis: 0 é obrigatório. Sem ele o Yoga deriva a base medindo o texto
 // contra a largura CHEIA do pai e só depois encolhe a caixa para caber ao
@@ -180,6 +192,16 @@ type MatchingLinkPainter = {
 
 /** Comprimento da seta, proporcional ao corpo do item. */
 const matchingLinkWidthPt = (fontSizePt: number) => fontSizePt * 0.9;
+/** O que o elo (a seta e o vão dos dois lados) tira das duas colunas de texto do pareamento. */
+const matchingLinkSpacePt = (fontSizePt: number) => matchingLinkWidthPt(fontSizePt) + 2 * MATCHING_LINK_GAP_PT;
+/**
+ * O que o marcador de V/F tira do texto da afirmação. O glifo `( ) V ( ) F` mede 4,83 em na
+ * base; 6 em cobre as famílias mais largas (OpenDyslexic), e errar para MAIS só parte a fórmula
+ * antes do necessário, nunca a corta (N-M-001).
+ */
+const trueFalseMarkerColumnPt = (fontSizePt: number) => 6 * fontSizePt + TRUE_FALSE_MARKER_GAP_PT;
+/** O marcador `____` da ordenação: 4 traços de 0,5 em, com folga, mais o vão. */
+const orderingMarkerColumnPt = (fontSizePt: number) => 3 * fontSizePt + ALTERNATIVE_MARKER_GAP_PT;
 /** Tamanho de cada ponta, em fração do comprimento. */
 const MATCHING_LINK_HEAD_RATIO = 0.31;
 
@@ -339,6 +361,13 @@ export function PdfAnswer({
   // follows the document font size (see resolveElementFontSizes).
   const itemStyle = pdfTextSize(elementSizes.alternative);
   const MARKER = markerStyle(elementSizes.alternative);
+  const MARKER_COLUMN = markerColumnStyle(elementSizes.alternative);
+  // How wide the text of each kind of item really is (N-M-001): the sheet minus what sits beside it.
+  const markerItemColumn = shareColumnPt(undefined, { minus: alternativeMarkerColumnPt(elementSizes.alternative) });
+  const tfColumn = shareColumnPt(undefined, { minus: trueFalseMarkerColumnPt(elementSizes.alternative) });
+  const orderingColumn = shareColumnPt(undefined, { minus: orderingMarkerColumnPt(elementSizes.alternative) });
+  const matchingColumn = shareColumnPt(undefined, { minus: matchingLinkSpacePt(elementSizes.alternative), parts: 2 });
+  const cellColumn = tableCellColumnPt;
   switch (answer.kind) {
     case "open": {
       const lines = answer.answerLines ?? 3;
@@ -357,15 +386,18 @@ export function PdfAnswer({
     case "multipleChoice":
       return (
         <View>
+          {keepTogether(KEEP_PAGE_PT)}
           {answer.alternatives.map((alt, i, all) => (
             <View key={alt.id} style={rowStyle(i, all.length)}>
-              <Text style={MARKER}>
-                {indexToLetter(i)})
-                {markerGhost(alt.content, elementSizes.alternative)}
-              </Text>
+              <View style={MARKER_COLUMN}>
+                <Text style={MARKER}>
+                  {indexToLetter(i)})
+                  {markerGhost(alt.content, elementSizes.alternative)}
+                </Text>
+              </View>
               <View style={FLEX}>
                 <Text style={itemStyle}>
-                  <PdfRichText content={alt.content} fontSize={elementSizes.alternative} />
+                  <PdfRichText content={alt.content} fontSize={elementSizes.alternative} columnPt={markerItemColumn} />
                 </Text>
               </View>
             </View>
@@ -375,6 +407,7 @@ export function PdfAnswer({
     case "trueFalse":
       return (
         <View>
+          {keepTogether(KEEP_PAGE_PT)}
           {answer.items.map((item, i, all) => (
             <View key={item.id} style={rowStyle(i, all.length)}>
               <Text
@@ -388,7 +421,7 @@ export function PdfAnswer({
               </Text>
               <View style={FLEX}>
                 <Text style={itemStyle}>
-                  <PdfRichText content={item.content} fontSize={elementSizes.alternative} />
+                  <PdfRichText content={item.content} fontSize={elementSizes.alternative} columnPt={tfColumn} />
                 </Text>
               </View>
             </View>
@@ -398,6 +431,7 @@ export function PdfAnswer({
     case "checkbox":
       return (
         <View>
+          {keepTogether(KEEP_PAGE_PT)}
           {answer.items.map((item, i, all) => (
             <View key={item.id} style={rowStyle(i, all.length)}>
               <View style={checkboxMarkerStyle(elementSizes.alternative)}>
@@ -405,7 +439,7 @@ export function PdfAnswer({
               </View>
               <View style={FLEX}>
                 <Text style={itemStyle}>
-                  <PdfRichText content={item.content} fontSize={elementSizes.alternative} />
+                  <PdfRichText content={item.content} fontSize={elementSizes.alternative} columnPt={markerItemColumn} />
                 </Text>
               </View>
             </View>
@@ -415,11 +449,12 @@ export function PdfAnswer({
     case "matching":
       return (
         <View>
+          {keepTogether(KEEP_PAGE_PT)}
           {answer.pairs.map((pair, i, all) => (
             <View key={pair.id} style={rowStyle(i, all.length)}>
               <View style={FLEX}>
                 <Text style={itemStyle}>
-                  <PdfRichText content={pair.left} fontSize={elementSizes.alternative} />
+                  <PdfRichText content={pair.left} fontSize={elementSizes.alternative} columnPt={matchingColumn} />
                 </Text>
               </View>
               <View style={matchingLinkStyle(elementSizes.alternative)}>
@@ -430,7 +465,7 @@ export function PdfAnswer({
               </View>
               <View style={FLEX}>
                 <Text style={itemStyle}>
-                  <PdfRichText content={pair.right} fontSize={elementSizes.alternative} />
+                  <PdfRichText content={pair.right} fontSize={elementSizes.alternative} columnPt={matchingColumn} />
                 </Text>
               </View>
             </View>
@@ -440,6 +475,7 @@ export function PdfAnswer({
     case "ordering":
       return (
         <View>
+          {keepTogether(KEEP_PAGE_PT)}
           {answer.items.map((item, i, all) => (
             <View key={item.id} style={rowStyle(i, all.length)}>
               <Text
@@ -454,7 +490,7 @@ export function PdfAnswer({
               </Text>
               <View style={FLEX}>
                 <Text style={itemStyle}>
-                  <PdfRichText content={item.content} fontSize={elementSizes.alternative} />
+                  <PdfRichText content={item.content} fontSize={elementSizes.alternative} columnPt={orderingColumn} />
                 </Text>
               </View>
             </View>
@@ -467,6 +503,7 @@ export function PdfAnswer({
       return <View />;
     case "table": {
       const [header, ...body] = answer.rows;
+      const headerReleased = !!header && headerNeedsRelease(header, baseFontSize, cellColumn(header.length));
       // Simulate border-collapse (Yoga has none): the container draws the top+left
       // edges, each cell draws its right+bottom — so every interior line is drawn
       // once instead of doubled.
@@ -485,6 +522,43 @@ export function PdfAnswer({
         // ter a mesma altura de linha (achado 0607).
         padding: TABLE_CELL_PADDING_PT,
       } as const;
+      /**
+       * Uma linha da tabela como uma ou mais FAIXAS indivisíveis (L10-1). Linha que cabe numa
+       * folha é uma faixa só, `wrap={false}` (0602). Linha mais alta é fatiada por nós em faixas
+       * que cabem, cada uma `wrap={false}`: o react-pdf escolhe a folha de cada faixa e nunca
+       * parte uma, então nenhuma célula perde texto nem sai da coluna. Nas emendas a célula não
+       * tem fio de baixo nem recuo, para ler como uma célula só. Sempre há onde cortar (a fórmula
+       * parte em pontos seguros do LaTeX): nenhuma linha do corpo fica para o fatiamento do react-pdf.
+       */
+      const renderBands = (row: RichText[], isHeader: boolean, key: number | string = "header") => {
+        const columnPt = cellColumn(row.length);
+        const grid = tableRowBands(row, baseFontSize, columnPt);
+        return grid.map((band, j) => {
+          const first = j === 0;
+          const last = j === grid.length - 1;
+          const seamStyle = {
+            ...(first ? {} : { paddingTop: 0 }),
+            ...(last ? {} : { paddingBottom: 0, borderBottomWidth: 0 }),
+          };
+          return (
+            <View
+              key={`${key}-${j}`}
+              wrap={false}
+              style={{ flexDirection: "row" }}
+            >
+              {band.map((c, i) => (
+                <View key={i} style={{ ...cell, ...seamStyle }}>
+                  {(c.length > 0 || grid.length === 1) && (
+                    <Text style={isHeader ? { fontWeight: "bold" } : undefined}>
+                      <PdfRichText content={c} fontSize={baseFontSize} columnPt={columnPt} />
+                    </Text>
+                  )}
+                </View>
+              ))}
+            </View>
+          );
+        });
+      };
       return (
         <>
           {/*
@@ -505,33 +579,27 @@ export function PdfAnswer({
               borderColor: RULE_COLOR,
             }}
           >
-            {header && (
-              // `wrap={false}`: sem isso o react-pdf fatia a linha na virada de
-              // página e deixa a moldura numa folha e o texto na outra (0602).
-              // `fixed`: no react-pdf só o que é fixo reaparece a cada folha em
-              // que o pai continua — é o que repete o cabeçalho e evita a página
-              // com linhas de dados sem rótulo de coluna (0603).
-              <View fixed wrap={false} style={{ flexDirection: "row" }}>
-                {header.map((c, i) => (
-                  <View key={i} style={cell}>
-                    <Text style={{ fontWeight: "bold" }}>
-                      <PdfRichText content={c} fontSize={baseFontSize} />
-                    </Text>
+            {header && headerReleased
+              ? renderBands(header, true)
+              : header && (
+                  // `wrap={false}`: sem isso o react-pdf fatia a linha na virada de
+                  // página e deixa a moldura numa folha e o texto na outra (0602).
+                  // `fixed`: no react-pdf só o que é fixo reaparece a cada folha em
+                  // que o pai continua — é o que repete o cabeçalho e evita a página
+                  // com linhas de dados sem rótulo de coluna (0603). Cabeçalho que
+                  // ocuparia boa parte da folha (célula gigante) não é fixo: repintado
+                  // em toda folha, ele travava o paginador (L9BC-1, `tableRowFit.ts`).
+                  <View fixed wrap={false} style={{ flexDirection: "row" }}>
+                    {header.map((c, i) => (
+                      <View key={i} style={cell}>
+                        <Text style={{ fontWeight: "bold" }}>
+                          <PdfRichText content={c} fontSize={baseFontSize} columnPt={cellColumn(header.length)} />
+                        </Text>
+                      </View>
+                    ))}
                   </View>
-                ))}
-              </View>
-            )}
-            {body.map((row, r) => (
-              <View key={r} wrap={false} style={{ flexDirection: "row" }}>
-                {row.map((c, i) => (
-                  <View key={i} style={cell}>
-                    <Text>
-                      <PdfRichText content={c} fontSize={baseFontSize} />
-                    </Text>
-                  </View>
-                ))}
-              </View>
-            ))}
+                )}
+            {body.map((row, r) => renderBands(row, false, r))}
           </View>
         </>
       );

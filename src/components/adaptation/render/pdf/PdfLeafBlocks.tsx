@@ -28,7 +28,7 @@ import type { ReactNode } from "react";
 import { View, Text, Image } from "@react-pdf/renderer";
 import type { Block } from "@/lib/adaptation/canonical/schema";
 import { nodeStyleToPdf } from "./nodeStyleToPdf";
-import { PdfRichText } from "./PdfRichText";
+import { PdfRichText, PdfPlainText } from "./PdfRichText";
 import {
   PAGE_MARGIN_PT,
   DEFAULT_IMAGE_WIDTH_PX,
@@ -47,6 +47,7 @@ import {
   pdfTextSize,
 } from "../pageTokens";
 import { resolveElementFontSizes, resolvePageStyle, type ElementFontSizesPt } from "../pageStyle";
+import { shareColumnPt } from "./columnWidth";
 
 /** Sizes used when a leaf block is rendered standalone. */
 const DEFAULT_ELEMENT_SIZES = resolveElementFontSizes(resolvePageStyle());
@@ -72,10 +73,13 @@ export function PdfHeading({
   block,
   blockGap = 12,
   elementSizes = DEFAULT_ELEMENT_SIZES,
+  columnPt,
 }: {
   block: HeadingBlock;
   blockGap?: number;
   elementSizes?: ElementFontSizesPt;
+  /** Largura REAL da coluna do título, em pt (`columnWidth.ts`); ausente = a folha. */
+  columnPt?: number;
 }) {
   // Extract marginBottom from nodeStyleToPdf (spacingAfter) and fall back to blockGap.
   // Other text styles (fontSize, fontWeight, textAlign, color, fontFamily) stay on
@@ -94,7 +98,7 @@ export function PdfHeading({
   return (
     <View style={{ marginBottom }} minPresenceAhead={keepWithNext}>
       <Text style={{ ...pdfTextSize(headingSizePt(block.level, elementSizes)), fontWeight: "bold", ...textStyle }}>
-        <PdfRichText content={block.content} fontSize={headingSizePt(block.level, elementSizes)} />
+        <PdfRichText content={block.content} fontSize={headingSizePt(block.level, elementSizes)} columnPt={columnPt} />
       </Text>
     </View>
   );
@@ -111,8 +115,11 @@ export function PdfParagraph({
   blockGap = 12,
   numberPrefix,
   baseFontSize = BASE_FONT_PT,
+  columnPt,
 }: {
   block: ParagraphBlock;
+  /** Largura REAL da coluna do parágrafo, em pt (`columnWidth.ts`); ausente = a folha. */
+  columnPt?: number;
   blockGap?: number;
   numberPrefix?: ReactNode;
   /** Corpo do documento (pt), herdado do <Page>: é o contexto da fórmula inline (0402). */
@@ -125,7 +132,7 @@ export function PdfParagraph({
     <View style={{ marginBottom }}>
       <Text style={textStyle}>
         {numberPrefix}
-        <PdfRichText content={block.content} fontSize={baseFontSize} />
+        <PdfRichText content={block.content} fontSize={baseFontSize} columnPt={columnPt} />
       </Text>
     </View>
   );
@@ -160,10 +167,13 @@ export function PdfImage({
   block,
   blockGap = 12,
   elementSizes = DEFAULT_ELEMENT_SIZES,
+  columnPt,
 }: {
   block: ImageBlock;
   blockGap?: number;
   elementSizes?: ElementFontSizesPt;
+  /** Largura REAL da coluna da figura, em pt: a legenda cabe nela (`columnWidth.ts`); ausente = a folha. */
+  columnPt?: number;
 }) {
   const alignItems = block.alignment ? IMAGE_ALIGN[block.alignment] : "flex-start";
   return (
@@ -189,11 +199,21 @@ export function PdfImage({
       />
       {block.caption && (
         <Text style={{ ...pdfTextSize(elementSizes.caption), color: INK_MUTED, marginTop: 2 }}>
-          <PdfRichText content={block.caption} fontSize={elementSizes.caption} />
+          <PdfRichText content={block.caption} fontSize={elementSizes.caption} columnPt={columnPt} />
         </Text>
       )}
     </View>
   );
+}
+
+/**
+ * Largura REAL do texto do passo `i` do andaime, em pt: a folha menos a moldura (borda e recuo
+ * dos dois lados) e a coluna do ordinal (`columnWidth.ts`).
+ */
+function stepColumnPt(i: number, elementSizes: ElementFontSizesPt): number {
+  return shareColumnPt(undefined, {
+    minus: 2 * (SCAFFOLDING_PADDING_PT + RULE_WIDTH_PT) + scaffoldingStepColumnPt(String(i + 1), elementSizes.stem),
+  });
 }
 
 export function PdfScaffolding({
@@ -251,7 +271,9 @@ export function PdfScaffolding({
           >
             {i + 1}.
           </Text>
-          <Text style={{ flexGrow: 1, flexShrink: 1 }}>{item}</Text>
+          <Text style={{ flexGrow: 1, flexShrink: 1 }}>
+            <PdfPlainText text={item} fontSize={elementSizes.stem} columnPt={stepColumnPt(i, elementSizes)} />
+          </Text>
         </View>
       ))}
     </View>

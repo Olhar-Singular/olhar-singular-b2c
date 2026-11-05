@@ -4,6 +4,8 @@ import {
   mathBlockLines,
   MATH_PDF_STYLE,
   MATH_PDF_MAX_ATOM_CHARS,
+  mathPdfColumnChars,
+  mathPdfSegments,
 } from "./mathToPdfText";
 
 describe("mathToPdfText", () => {
@@ -22,7 +24,8 @@ describe("mathToPdfText", () => {
   });
 
   it("exposes a monospace style for math runs", () => {
-    expect(MATH_PDF_STYLE.fontFamily).toBe("Courier");
+    // Courier primeiro (a métrica da fórmula); depois as de símbolos (C-01).
+    expect(MATH_PDF_STYLE.fontFamily).toEqual(["Courier", "DejaVu Sans Mono", "DejaVu Sans"]);
     expect(MATH_PDF_STYLE.fontSize).toBeGreaterThan(0);
   });
 });
@@ -31,10 +34,11 @@ describe("mathToPdfText — fórmula maior que a coluna (achado 0427)", () => {
   const BLOCO =
     "\\int_{0}^{1} \\frac{x^2 + 1}{\\sqrt{x^3 + 2x}}\\,dx = \\sum_{n=1}^{\\infty} \\frac{1}{n^2}";
 
-  it("mantém os espaços quebráveis para não perder texto no papel", () => {
+  it("parte a fórmula em pedaços que cabem, sem perder texto no papel", () => {
     const out = mathToPdfText(BLOCO);
-    expect(out).toBe(BLOCO);
-    expect(out).not.toContain(" ");
+    // the pieces are atoms (NBSP inside) joined by the LaTeX's own spaces: same text, same order
+    expect(out.replace(/\u00a0/g, " ")).toBe(BLOCO);
+    for (const piece of out.split(" ")) expect(piece.length).toBeLessThanOrEqual(MATH_PDF_MAX_ATOM_CHARS);
   });
 
   it("o teto de caracteres cabe na coluna útil da folha A4", () => {
@@ -74,5 +78,40 @@ describe("mathBlockLines — a fórmula em bloco quebra equilibrada (achados 043
     const lines = mathBlockLines(semEspaco);
     const alvo = Math.ceil(semEspaco.length / 2);
     expect(lines).toEqual(["x".repeat(alvo), "x".repeat(semEspaco.length - alvo)]);
+  });
+});
+
+describe("mathPdfColumnChars e mathPdfSegments: a coluna de verdade (N-M-001)", () => {
+  const charPt = (ctx = 12) => 0.6 * MATH_PDF_STYLE.fontSize * (ctx / 12);
+
+  it("sem coluna conhecida vale a coluna útil da folha", () => {
+    expect(mathPdfColumnChars(undefined)).toBe(MATH_PDF_MAX_ATOM_CHARS);
+  });
+
+  it("uma coluna estreita comporta menos caracteres, nunca mais que a folha, nunca menos que 1", () => {
+    const narrow = mathPdfColumnChars(150);
+    expect(narrow).toBe(Math.floor(150 / charPt()));
+    expect(narrow).toBeLessThan(MATH_PDF_MAX_ATOM_CHARS);
+    expect(mathPdfColumnChars(10_000)).toBe(MATH_PDF_MAX_ATOM_CHARS);
+    expect(mathPdfColumnChars(1)).toBe(1);
+  });
+
+  it("a fórmula que cabe na coluna continua UM átomo", () => {
+    const segments = mathPdfSegments("x = 1 + 2", 12, 300);
+    expect(segments).toHaveLength(1);
+  });
+
+  it("a fórmula da questão de pareamento parte em pedaços que cabem na coluna, sem hífen e sem perda", () => {
+    const latex = String.raw`x = \frac{-b \pm \sqrt{b^2 - 4ac}}{2a}`;
+    const columnPt = 200;
+    const chars = mathPdfColumnChars(columnPt);
+    const segments = mathPdfSegments(latex, 12, columnPt);
+    expect(segments.length).toBeGreaterThan(1);
+    for (const s of segments) expect(s.text.length).toBeLessThanOrEqual(chars);
+    expect(mathToPdfText(latex, 12, columnPt).replace(/\u00a0/g, " ")).toBe(latex);
+  });
+
+  it("o tamanho do corpo muda quantos caracteres cabem", () => {
+    expect(mathPdfColumnChars(200, 16)).toBeLessThan(mathPdfColumnChars(200, 12));
   });
 });

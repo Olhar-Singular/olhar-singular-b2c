@@ -24,6 +24,11 @@
  * PDF draws formulas in, and the cap-height compensation in `pageTokens.ts`
  * (achados 0424/0429) is calibrated on the built-in's metric.
  *
+ * Symbol fonts (C-01): "DejaVu Sans" and "DejaVu Sans Mono" are the SECOND entry
+ * of every font stack (`fontStack.ts`), so a character the chosen family lacks
+ * (≤ √ ∈ ℝ, Greek in the accessibility fonts) is drawn from them instead of
+ * falling to the built-in Helvetica that @react-pdf always appends.
+ *
  * Every family registers all four weight/style combinations: @react-pdf does
  * NOT fall back across variants — rendering an unregistered one rejects the
  * whole export with "Could not resolve font". Variants without a dedicated
@@ -35,6 +40,7 @@
  */
 
 import { Font } from "@react-pdf/renderer";
+import { SYMBOL_FONT_FAMILY, SYMBOL_MONO_FONT_FAMILY } from "./fontStack";
 
 let done = false;
 
@@ -47,6 +53,17 @@ export const UNBREAKABLE_WORD_THRESHOLD = 30;
 
 /** Size of each piece a runaway token is cut into. Smaller = tighter to the margin. */
 export const WORD_CHUNK_SIZE = 8;
+
+/**
+ * Widest formula atom (LaTeX whose spaces are NBSP, see `latexLayoutAtom`) that
+ * is still emitted whole. `mathToPdfText` only builds an atom up to the column
+ * width in characters (≈ 85 at the base size, a bit more in a smaller body), so
+ * anything under this is a formula that fits a line: it moves to the next line
+ * intact instead of being cut at a chunk boundary, where textkit appends a "-"
+ * and prints `(x-` / `+ y)` (C-15). Past it, it is not a formula atom any more
+ * and the runaway-token rule keeps every character.
+ */
+export const FORMULA_ATOM_MAX_CHARS = 140;
 
 /**
  * Hyphenation callback (achado 0115).
@@ -65,9 +82,25 @@ export const WORD_CHUNK_SIZE = 8;
  * its characters. textkit appends its own "-" at whatever chunk boundary it
  * actually breaks on; losing content is never an acceptable alternative.
  */
+/**
+ * Marca (hífen condicional, U+00AD) que o mapper da fórmula põe no começo de cada pedaço: o
+ * textkit a REMOVE do texto depois de chamar `hyphenateWord`, então ela não vira glifo, mas
+ * aqui avisa "este token é um pedaço de fórmula que cabe na coluna: não corte, não hifene"
+ * (N-U-001). Sem ela, uma fórmula sem espaço (`1+2+...+80`, `x^{n-k-1}y^k`) acima do limite de
+ * palavra era picada em pedaços de 8 com hífen no meio.
+ */
+export const NO_HYPHEN_MARK = "\u00ad";
+
 export function hyphenateWord(word: string | null): string[] {
   const value = word ?? "";
+  // Dois espaços seguidos chegam aqui como UM token (o textkit parte o texto em `/([ ]+)/`). Como
+  // sílaba única `"  "`, ela é diferente de `" "` e o `getNodes` põe um ponto de hifenização na
+  // palavra que a antecede: a linha que quebra ali imprime "-" (`AL07-`, `\end{aligned}-`,
+  // N-U-008). Um espaço por sílaba: mesmo texto, mesma largura, nenhum ponto de hifenização.
+  if (value.length > 1 && /^ +$/.test(value)) return Array.from(value);
+  if (value.includes(NO_HYPHEN_MARK)) return [value];
   if (value.length <= UNBREAKABLE_WORD_THRESHOLD) return [value];
+  if (value.length <= FORMULA_ATOM_MAX_CHARS && value.includes("\u00a0")) return [value];
 
   const parts: string[] = [];
   for (let i = 0; i < value.length; i += WORD_CHUNK_SIZE) {
@@ -86,6 +119,16 @@ export type PdfFontVariant = {
 /** Uma família e as suas quatro variantes. */
 export type PdfFontRegistration = { family: string; fonts: PdfFontVariant[] };
 
+/** As quatro variantes peso × estilo de uma fonte que tem um arquivo só. */
+function symbolVariants(src: string): PdfFontVariant[] {
+  return [
+    { src, fontWeight: "normal", fontStyle: "normal" },
+    { src, fontWeight: "bold", fontStyle: "normal" },
+    { src, fontWeight: "normal", fontStyle: "italic" },
+    { src, fontWeight: "bold", fontStyle: "italic" },
+  ];
+}
+
 /**
  * Toda família que o documento pode imprimir, com o arquivo de cada variante.
  *
@@ -96,6 +139,18 @@ export type PdfFontRegistration = { family: string; fonts: PdfFontVariant[] };
  * "Could not resolve font" só na exportação de verdade.
  */
 export const PDF_FONT_REGISTRATIONS: PdfFontRegistration[] = [
+  // Fontes de SÍMBOLOS (C-01): segunda opção de toda pilha (`fontStack.ts`). Cada
+  // uma tem um arquivo só; as quatro variantes apontam para ele, senão uma
+  // fórmula em negrito ou itálico rejeitaria o PDF inteiro ("Could not resolve
+  // font"). Sai de `scripts/build-symbol-fonts.py`.
+  {
+    family: SYMBOL_FONT_FAMILY,
+    fonts: symbolVariants("/fonts/DejaVuSans-Symbols.ttf"),
+  },
+  {
+    family: SYMBOL_MONO_FONT_FAMILY,
+    fonts: symbolVariants("/fonts/DejaVuSansMono-Symbols.ttf"),
+  },
   {
     family: "Liberation Sans",
     fonts: [
@@ -145,6 +200,38 @@ export const PDF_FONT_REGISTRATIONS: PdfFontRegistration[] = [
   },
 ];
 
+/** The part of a registered @react-pdf font face that `shareAliasedFaces` touches. */
+type FontFaceSource = { src: string; data: unknown; load: () => Promise<unknown> };
+
+/**
+ * Faces that point at the SAME file (Lexend italics, OpenDyslexic bold-italic, the
+ * symbol fonts) must share ONE parsed font, not one copy per face.
+ *
+ * @react-pdf parses a copy per registered face, but pdfkit embeds a single font per
+ * PostScript name, so with two copies the glyph objects of the embedded one are
+ * created at embed time with no code points and stay cached in the (reused) font.
+ * The next export that lays text out with that copy hands pdfkit glyphs whose
+ * ToUnicode entry is empty, and the PDF text layer loses that letter ("Lembre-se"
+ * copied as "embre-se", F-L). The paper was always right. Sharing the parsed font
+ * makes layout and embedding see the same glyph objects.
+ */
+export function shareAliasedFaces(families: Record<string, { sources: FontFaceSource[] }>): void {
+  for (const { sources } of Object.values(families)) {
+    const primaryBySrc = new Map<string, FontFaceSource>();
+    for (const source of sources) {
+      const primary = primaryBySrc.get(source.src);
+      if (!primary) {
+        primaryBySrc.set(source.src, source);
+        continue;
+      }
+      source.load = async () => {
+        await primary.load();
+        source.data = primary.data;
+      };
+    }
+  }
+}
+
 export function registerPdfFonts(): void {
   if (done) return;
   done = true;
@@ -154,4 +241,5 @@ export function registerPdfFonts(): void {
   for (const registration of PDF_FONT_REGISTRATIONS) {
     Font.register(registration);
   }
+  shareAliasedFaces(Font.getRegisteredFonts() as unknown as Record<string, { sources: FontFaceSource[] }>);
 }

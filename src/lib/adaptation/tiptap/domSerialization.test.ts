@@ -70,3 +70,43 @@ describe("canonical ProseMirror schema — real DOM (de)serialization", () => {
     expect(() => parser.parse(el)).not.toThrow();
   });
 });
+
+/**
+ * C-33: Tiptap turns a numeric-looking HTML attribute into a Number on parse, so a
+ * formula "10" came back as 10 and the canonical schema (latex: string) rejected it.
+ */
+describe("math nodes keep `latex` a string through HTML round-trips (C-33)", () => {
+  const schema = getEditorSchema();
+  const parse = (html: string) => {
+    const el = document.createElement("div");
+    el.innerHTML = html;
+    return PMDOMParser.fromSchema(schema).parse(el);
+  };
+
+  it.each(["10", "0.5", "-3", "1e3", ""])("inline formula %j", (latex) => {
+    const doc = parse(`<p>a <span data-type="inline-math" latex="${latex}">${latex}</span> b</p>`);
+    let found: unknown = undefined;
+    doc.descendants((node) => {
+      if (node.type.name === "inlineMath") found = node.attrs.latex;
+    });
+    expect(found).toBe(latex);
+  });
+
+  it.each(["10", "7"])("block formula %j", (latex) => {
+    const doc = parse(`<div data-type="block-math" latex="${latex}">${latex}</div>`);
+    let found: unknown = undefined;
+    doc.descendants((node) => {
+      if (node.type.name === "blockMath") found = node.attrs.latex;
+    });
+    expect(found).toBe(latex);
+  });
+
+  it("falls back to the text content when the attribute is absent", () => {
+    const doc = parse(`<p><span data-type="inline-math">x^2</span></p>`);
+    let found: unknown;
+    doc.descendants((node) => {
+      if (node.type.name === "inlineMath") found = node.attrs.latex;
+    });
+    expect(found).toBe("x^2");
+  });
+});

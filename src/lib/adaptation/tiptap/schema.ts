@@ -23,6 +23,7 @@ import Underline from "@tiptap/extension-underline";
 import TextStyle from "@tiptap/extension-text-style";
 import Color from "@tiptap/extension-color";
 import { Node, Mark, Extension, mergeAttributes } from "@tiptap/core";
+import { Plugin, PluginKey } from "@tiptap/pm/state";
 import { FontSize } from "@/lib/tiptap/fontSizeExtension";
 import { normalizeColor } from "../canonical/colors";
 
@@ -70,6 +71,18 @@ function jsonAttribute<T>(name: string, defaultValue: T) {
 }
 
 /**
+ * The `latex` attribute of a formula node. Tiptap converts a numeric-looking HTML
+ * attribute (`latex="10"`) into a Number while parsing, and the canonical schema wants a
+ * string, so a pasted or reloaded "10" broke validation (C-33). Read it back as text, and
+ * from the node's own text when the attribute is missing (renderHTML writes both).
+ */
+const latexAttribute = {
+  default: "",
+  parseHTML: (element: HTMLElement): string =>
+    element.getAttribute("latex") ?? element.textContent,
+};
+
+/**
  * A numeric attribute. HTML attributes are strings, so a plain `width` came
  * back from a paste as `"320"` and failed the canonical `z.number()` exactly
  * like the missing `answer` did — same freeze, quieter cause.
@@ -103,6 +116,26 @@ const blockBaseAttributes = {
 // Inline atom: inlineMath
 // ---------------------------------------------------------------------------
 
+/**
+ * The canonical `inlineMath` carries no marks, so a bold or colour that ProseMirror put on
+ * the atom showed on the sheet and vanished on reload (C-31). The mark must simply not stick
+ * to a formula: this strips it after any change, in the same undo step, and the text around
+ * the formula keeps its marks.
+ */
+const stripMathMarks = new Plugin({
+  key: new PluginKey("stripInlineMathMarks"),
+  appendTransaction(transactions, _oldState, newState) {
+    if (!transactions.some((t) => t.docChanged)) return null;
+    const tr = newState.tr;
+    newState.doc.descendants((node, pos) => {
+      if (node.type.name === "inlineMath" && node.marks.length > 0) {
+        tr.removeMark(pos, pos + node.nodeSize, null);
+      }
+    });
+    return tr.docChanged ? tr : null;
+  },
+});
+
 export const InlineMathNode = Node.create({
   name: "inlineMath",
   group: "inline",
@@ -111,9 +144,12 @@ export const InlineMathNode = Node.create({
   selectable: true,
   addAttributes() {
     return {
-      latex: { default: "" },
+      latex: latexAttribute,
       alt: { default: null as string | null },
     };
+  },
+  addProseMirrorPlugins() {
+    return [stripMathMarks];
   },
   parseHTML() {
     return [{ tag: "span[data-type='inline-math']" }];
@@ -140,7 +176,7 @@ export const BlockMathNode = Node.create({
   addAttributes() {
     return {
       ...blockBaseAttributes,
-      latex: { default: "" },
+      latex: latexAttribute,
       alt: { default: null as string | null },
     };
   },

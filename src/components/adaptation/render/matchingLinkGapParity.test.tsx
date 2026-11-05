@@ -21,6 +21,7 @@ import { MATCHING_LINK_GAP_PX, MATCHING_LINK_GAP_PT } from "./pageTokens";
 import { MatchingView } from "./answers/MatchingView";
 import { PdfAnswer } from "./pdf/PdfAnswer";
 import { AnswerPreview } from "../canonical-editor/answer-editors/AnswerPreview";
+import { contentChildren } from "@/test/pdfTree";
 
 vi.mock("../canonical-editor/RichTextField", () => ({
   RichTextField: () => <input />,
@@ -36,7 +37,7 @@ const MATCHING: Extract<QuestionAnswer, { kind: "matching" }> = {
 
 /** Estilo da caixa do elo (o filho do meio) na primeira linha da árvore react-pdf. */
 function linkStyle(node: ReactElement): { marginHorizontal?: number } {
-  const rows = (node.props as { children: ReactElement[] }).children;
+  const rows = contentChildren(node);
   const cells = (rows[0].props as { children: ReactElement[] }).children;
   return (cells[1].props as { style: { marginHorizontal?: number } }).style;
 }

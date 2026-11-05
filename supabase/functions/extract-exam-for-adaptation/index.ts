@@ -13,6 +13,7 @@ import {
   parseExtractionResponse,
   parseExtractionHeader,
   validateExamExtractionRequest,
+  buildExamExtractionResponse,
   EXTRACTION_COST,
   EXTRACTION_TOOL_SCHEMA,
   EXTRACTION_TIMEOUT_MS,
@@ -195,7 +196,8 @@ serve(async (req) => {
         console.error("Settle failed for user:", user.id, "reservation:", requestId, e);
       }
 
-      return json({ questions, title, intro, source_file_name: pdfFileName, credits_charged: creditsCharged });
+      // `issues` (C-03) only informs the teacher; the charge above is final either way.
+      return json(buildExamExtractionResponse({ questions, title, intro, pdfFileName, pdfText, creditsCharged }));
     } catch (inner) {
       // Backstop: an unexpected failure after the charge must still refund.
       await reverseReservation();

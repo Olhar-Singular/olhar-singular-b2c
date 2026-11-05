@@ -9,6 +9,7 @@
  * new object (or the same reference when there is nothing to change).
  */
 
+import type { ExtractionIssue } from "@/lib/domain/examIssues";
 import type {
   AdaptationResult,
   CanonicalDocument,
@@ -64,6 +65,16 @@ export type WizardData = {
   activityInputMode: "bank" | "upload";
   /** Set by the upload path instead of activityText — extraction is deferred to "Gerar". */
   uploadedExam?: UploadedExam | null;
+  /**
+   * What the check of the AI extraction found in the uploaded exam (C-03), for Revisar to
+   * show. Informs only; set by Gerar, cleared whenever another file is attached.
+   */
+  extractionIssues?: ExtractionIssue[] | null;
+  /**
+   * What the check of the AI adaptation found (C-04): questions with numbers the activity never
+   * gave, a not-read marker the AI removed. Set when the adaptation arrives; informs only.
+   */
+  adaptationIssues?: ExtractionIssue[] | null;
   selectedQuestions: SelectedQuestion[];
   barriers: BarrierItem[];
   barrierProfileId: string | null;

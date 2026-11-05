@@ -94,12 +94,14 @@ import { indexToLetter } from "../render/letters";
 import {
   documentHasMath,
   emptyItemWarnings,
+  unreadMarkerWarnings,
   everyBlock,
   mathLossWarnings,
   MATH_TYPOGRAPHY_WARNING,
 } from "./exportWarnings";
 import { perQuestionBreakFlags } from "../render/perQuestionBreaks";
 import { latexBalancedLines, latexLayoutAtom, MONO_ADVANCE_EM } from "../render/mathAtom";
+import { headerNeedsRelease, rowNeedsSplit, tableCellColumnPt } from "../render/pdf/tableRowFit";
 import { DEFAULT_PANEL_SETTINGS, formatHeaderDateBR, type PanelSettings } from "./panelSettings";
 import { HEADER_SPACING_PT } from "../render/headerSpacing";
 import { documentTitle, FALLBACK_TITLE } from "../titleField";
@@ -695,6 +697,7 @@ function answerToDocx(
       // maior que uma folha era empurrada toda para a seguinte, deixando o pé
       // da folha em branco; a integridade de cada linha já vem do `cantSplit`.
       const { keepNext: _keepNext, ...dataCellParagraph } = style.paragraph;
+      const bodyPt = runPt(style.run, style.bodyPt);
       const row = (cells: RichText[], bold: boolean) =>
         new TableRow({
           // `tableHeader` é o que faz o Word repetir a primeira linha no topo de
@@ -703,8 +706,16 @@ function answerToDocx(
           // folha, o mesmo contrato do `wrap={false}` no PDF (0602/0603).
           // `tableHeader: false` ainda emite a tag (a lib só checa `undefined`),
           // o que marcaria TODA linha como cabeçalho — daí o spread condicional.
-          ...(bold ? { tableHeader: true } : {}),
-          cantSplit: true,
+          // N-U-009: a MESMA regra do PDF (`tableRowFit`). Cabeçalho alto
+          // (`headerNeedsRelease`) não repete: repetido em toda folha ele come o
+          // papel e o Word/LibreOffice corta o fim das linhas do corpo. Linha
+          // alta (`rowNeedsSplit`) não leva `cantSplit`: indivisível e maior que
+          // o espaço da folha, ela é cortada no pé em vez de continuar na seguinte.
+          ...(bold && !headerNeedsRelease(cells, bodyPt, tableCellColumnPt(cells.length))
+            ? { tableHeader: true }
+            : {}),
+          // `cantSplit: false` também emitiria a tag, pelo mesmo motivo
+          ...(rowNeedsSplit(cells, bodyPt, tableCellColumnPt(cells.length)) ? {} : { cantSplit: true }),
           children: cells.map(
             (cell) =>
               new TableCell({
@@ -1096,7 +1107,7 @@ export function docxExportWarnings(
 ): string[] {
   const blocks = everyBlock(document.blocks);
   // Item de resposta vazio: a mesma frase do PDF (achado 1105).
-  const warnings: string[] = emptyItemWarnings(document);
+  const warnings: string[] = [...unreadMarkerWarnings(document), ...emptyItemWarnings(document)];
 
   if (blocks.some((b) => b.type === "image")) {
     warnings.push(
@@ -1369,16 +1380,44 @@ export function docxFooter(header: DocumentHeader): Footer {
   });
 }
 
-/* v8 ignore start */
-export async function downloadDocx(
-  document: CanonicalDocument,
-  settings: PanelSettings = DEFAULT_PANEL_SETTINGS,
+/**
+ * C-13: XML 1.0 forbids most control characters (NUL, BS, VT, FF...), and a single one in a `<w:t>`
+ * makes Word refuse the WHOLE file. Text pasted from a PDF can carry a form feed. Form feed and
+ * vertical tab were whitespace, so they become a space; the rest has no meaning and goes. Applied
+ * to every string of the document and header before anything is turned into a run, so no text
+ * path (stem, alternative, support, header, formula) can skip it.
+ */
+const XML_SPACE_CONTROLS = /[\u000B\u000C]/g;
+const XML_INVALID_CONTROLS = /[\u0000-\u0008\u000E-\u001F]/g;
+
+export function xmlSafe<T>(value: T): T {
+  if (typeof value === "string") {
+    return value.replace(XML_SPACE_CONTROLS, " ").replace(XML_INVALID_CONTROLS, "") as T;
+  }
+  if (Array.isArray(value)) {
+    const mapped = value.map(xmlSafe);
+    return (mapped.some((m, i) => m !== value[i]) ? mapped : value) as T;
+  }
+  if (value && typeof value === "object") {
+    const entries = Object.entries(value as Record<string, unknown>);
+    const mapped = entries.map(([k, v]) => [k, xmlSafe(v)] as const);
+    return (mapped.some(([, v], i) => v !== entries[i][1]) ? Object.fromEntries(mapped) : value) as T;
+  }
+  return value;
+}
+
+/** The whole Word document, built from cleaned input. Pure, so it is testable without a download. */
+export function buildDocxDocument(
+  rawDocument: CanonicalDocument,
+  rawSettings: PanelSettings = DEFAULT_PANEL_SETTINGS,
   pageStyle?: PageStyle,
-): Promise<void> {
+): Document {
+  const document = xmlSafe(rawDocument);
+  const settings = xmlSafe(rawSettings);
   const header = settings.header;
   const contentParagraphs = docxContentBlocks(document, settings, pageStyle);
 
-  const doc = new Document({
+  return new Document({
     ...documentMetadata(header, document),
     styles: docxDocumentStyles(pageStyle),
     sections: [
@@ -1389,6 +1428,16 @@ export async function downloadDocx(
       },
     ],
   });
+}
+
+/* v8 ignore start */
+export async function downloadDocx(
+  document: CanonicalDocument,
+  settings: PanelSettings = DEFAULT_PANEL_SETTINGS,
+  pageStyle?: PageStyle,
+): Promise<void> {
+  const header = settings.header;
+  const doc = buildDocxDocument(document, settings, pageStyle);
 
   const blob = await Packer.toBlob(doc);
   const url = URL.createObjectURL(blob);

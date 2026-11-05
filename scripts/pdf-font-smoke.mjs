@@ -107,6 +107,35 @@ const FAMILIES = [
   },
 ];
 
+/**
+ * Fontes de SÍMBOLOS (C-01, lote 4): segunda opção de toda pilha. Um arquivo só
+ * por fonte; as quatro variantes apontam para ele (lock-step com registerFonts.ts).
+ */
+const SYMBOL_FAMILIES = [
+  { family: "DejaVu Sans", file: "DejaVuSans-Symbols.ttf" },
+  { family: "DejaVu Sans Mono", file: "DejaVuSansMono-Symbols.ttf" },
+].map(({ family, file }) => ({
+  family,
+  fonts: ["normal", "bold"].flatMap((fontWeight) =>
+    ["normal", "italic"].map((fontStyle) => ({ src: fontUrl(file), fontWeight, fontStyle })),
+  ),
+}));
+
+/** Pilhas por família, como `fontStack.ts` as monta: a família, depois os símbolos. */
+const SYMBOL_STACKS = [
+  ["Liberation Sans", "DejaVu Sans"],
+  ["Liberation Serif", "DejaVu Sans"],
+  ["Atkinson Hyperlegible", "DejaVu Sans"],
+  ["Lexend", "DejaVu Sans"],
+  ["OpenDyslexic", "DejaVu Sans"],
+  ["Courier", "DejaVu Sans Mono", "DejaVu Sans"],
+];
+
+/** Os símbolos que não podem sumir nem virar outro (mesma lista do teste de unidade). */
+const REQUIRED_SYMBOLS = JSON.parse(
+  readFileSync(fileURLToPath(new URL("../src/test/mathSymbols.json", import.meta.url)), "utf8"),
+).required;
+
 /** Every weight×style combination react-pdf resolves independently. */
 const VARIANTS = [
   { fontWeight: "normal", fontStyle: "normal", label: "regular" },
@@ -145,11 +174,11 @@ function pgmInkPct(buf) {
 
 async function main() {
   // 0. Pre-flight: every referenced font file must exist.
-  const missing = FAMILIES.flatMap((f) => f.fonts.map((v) => v.src)).filter((p) => !existsSync(p));
+  const missing = [...FAMILIES, ...SYMBOL_FAMILIES].flatMap((f) => f.fonts.map((v) => v.src)).filter((p) => !existsSync(p));
   if (missing.length) fail(`missing font file(s):\n  ${[...new Set(missing)].join("\n  ")}`);
 
   // 1. Register the real fonts (throws if a file is not a usable font).
-  for (const f of FAMILIES) {
+  for (const f of [...FAMILIES, ...SYMBOL_FAMILIES]) {
     Font.register({ family: f.family, fonts: f.fonts });
   }
 
@@ -283,11 +312,38 @@ async function main() {
       );
     }
     console.log("✓ every font used by the document is embedded (pdffonts emb = yes)");
+
+    // 7. Símbolos (C-01): cada pilha imprime o conjunto inteiro, e o texto extraído do
+    //    arquivo pronto tem que trazê-lo igual. Uma pilha por render, na ordem em que o
+    //    export da professora as encontra num mesmo processo (a Liberation primeiro).
+    for (const stack of SYMBOL_STACKS) {
+      const symbolDoc = h(
+        Document,
+        null,
+        h(
+          Page,
+          { size: "A4", style: { padding: 40, fontSize: 11, fontFamily: stack } },
+          ...REQUIRED_SYMBOLS.map((ch, i) =>
+            h(Text, { key: i }, `K${String(i).padStart(3, "0")} a ${ch} b`),
+          ),
+        ),
+      );
+      const symbolPdf = join(dir, `symbols-${stack[0].replace(/\W+/g, "_")}.pdf`);
+      writeFileSync(symbolPdf, await renderToBuffer(symbolDoc));
+      const text = spawnSync("pdftotext", ["-raw", "-enc", "UTF-8", symbolPdf, "-"], {
+        encoding: "utf8",
+      }).stdout;
+      const lost = REQUIRED_SYMBOLS.filter((ch) => !text.includes(` a ${ch} b`));
+      if (lost.length) {
+        fail(`pilha ${stack.join(" > ")}: símbolo(s) perdido(s) ou trocado(s) no PDF: ${lost.join(" ")}`);
+      }
+      console.log(`✓ pilha ${stack.join(" > ")}: ${REQUIRED_SYMBOLS.length} símbolos, texto extraído igual`);
+    }
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
 
-  console.log("\n✅ pdf-font-smoke: PASS (rendered + rasterized, glyphs visible)");
+  console.log("\n✅ pdf-font-smoke: PASS (rendered + rasterized, glyphs visible, symbols intact)");
 }
 
 main().catch((err) => fail(err?.stack ?? String(err)));

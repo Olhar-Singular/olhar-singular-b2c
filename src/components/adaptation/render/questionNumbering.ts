@@ -24,3 +24,15 @@ export function questionNumbers(blocks: readonly Block[]): Array<number | undefi
     return undefined;
   });
 }
+
+/**
+ * The number the sheet prints for each top-level question, in order: `customNumber`
+ * when set, otherwise the ordinal. Used to name a question in a notice the way the
+ * teacher sees it.
+ */
+export function sheetQuestionLabels(blocks: readonly Block[]): string[] {
+  const numbers = questionNumbers(blocks);
+  return blocks.flatMap((block, i) =>
+    block.type === "question" ? [block.customNumber ?? String(numbers[i])] : [],
+  );
+}

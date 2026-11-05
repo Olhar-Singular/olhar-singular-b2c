@@ -45,7 +45,7 @@ export function BlockMathNodeView({ node, updateAttributes, editor, deleteNode, 
   const disabled = !editor.isEditable;
   // Latex vazio é irrepresentável e o alt não sobrevive à troca da fórmula
   // (achado 0436) — ver useLatexDraft.
-  const draft = useLatexDraft(latex, alt, updateAttributes);
+  const draft = useLatexDraft(latex, alt, updateAttributes, true);
   // Escape fecha o editor e devolve o foco à fórmula (achado 0416), cancelando
   // a edição em vez de confirmá-la (achado 0259).
   const editing = useMathEditing({ onOpen: draft.begin, onCancel: draft.cancel });

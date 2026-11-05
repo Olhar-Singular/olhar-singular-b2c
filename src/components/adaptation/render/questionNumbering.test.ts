@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import type { Block } from "@/lib/adaptation/canonical/schema";
-import { questionNumbers } from "./questionNumbering";
+import { questionNumbers, sheetQuestionLabels } from "./questionNumbering";
 
 const id = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, "0")}`;
 
@@ -30,5 +30,16 @@ describe("questionNumbers", () => {
   it("assigns undefined to non-question blocks and skips them in the count", () => {
     const blocks = [para(1), question(2), para(4), question(5)];
     expect(questionNumbers(blocks)).toEqual([undefined, 1, undefined, 2]);
+  });
+});
+
+describe("sheetQuestionLabels", () => {
+  it("lists what the sheet prints: the custom number when set, the ordinal otherwise", () => {
+    const blocks = [para(1), question(2), { ...question(3), customNumber: "1a" }, question(4)];
+    expect(sheetQuestionLabels(blocks)).toEqual(["1", "1a", "3"]);
+  });
+
+  it("is empty for a document with no questions", () => {
+    expect(sheetQuestionLabels([para(1)])).toEqual([]);
   });
 });

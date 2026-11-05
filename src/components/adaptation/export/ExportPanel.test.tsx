@@ -428,6 +428,22 @@ describe("aviso antes do download do PDF (0003)", () => {
     expect(toast.success).not.toHaveBeenCalled();
   });
 
+  it("caractere sem fonte no CABEÇALHO do Exportar também abre o aviso (M1)", async () => {
+    const onDownload = vi.fn().mockResolvedValue(undefined);
+    render(
+      <ExportPanel
+        document={{ schemaVersion: 1, blocks: [] }}
+        header={{ title: "Prova ✏" }}
+        onDownload={onDownload}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /Exportar PDF/i }));
+
+    expect(await screen.findByText(/Nenhuma fonte do PDF tem estes caracteres: ✏/)).toBeInTheDocument();
+    expect(onDownload).not.toHaveBeenCalled();
+  });
+
   it("confirmar baixa o PDF e só então diz que gerou", async () => {
     const { toast } = await import("sonner");
     const onDownload = vi.fn().mockResolvedValue(undefined);

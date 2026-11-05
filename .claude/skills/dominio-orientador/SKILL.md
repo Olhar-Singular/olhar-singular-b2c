@@ -117,8 +117,11 @@ Plataforma educacional B2C. **Educadores adaptam atividades pedagógicas (provas
   `render/pdf/tableRowFit.ts` solta o cabeçalho fixo (`headerNeedsRelease`: um `fixed`+`wrap={false}` maior
   que a folha trava o paginador) e fatia a linha ALTA POR CONTA PRÓPRIA em faixas indivisíveis
   (`tableRowBands`; L10-1: deixar o react-pdf fatiar uma linha com duas células na virada de folha perde
-  texto e desalinha colunas). Linha estimada até 90% da folha continua inteira e `wrap={false}`; só uma
-  fórmula maior que a faixa (sem onde cortar) volta ao fatiamento do react-pdf. (N-U-008) o hífen em
+  texto e desalinha colunas). Linha estimada até 90% da folha continua inteira e `wrap={false}`; `tableRowBands`
+  NUNCA devolve `null` (L11-1): a fórmula grande é partida nos mesmos pontos seguros que o PDF já usa
+  (`mathPdfSegments`) e troca de faixa por eles, então o react-pdf nunca fatia linha do corpo. O Word
+  (`exportDocx.ts`, N-U-009) aplica a mesma regra: cabeçalho alto não leva `tblHeader`, linha alta não
+  leva `cantSplit` (`tableCellColumnPt` é a coluna única do PDF e do Word). (N-U-008) o hífen em
   `\end{aligned}-` vinha de DOIS espaços seguidos virarem uma sílaba `"  "` no textkit (a palavra antes
   ganha ponto de hifenização): `hyphenateWord` devolve um espaço por sílaba; texto colado na fórmula
   (`(` + fórmula + `)`) ganha a junta macia `joint` em `PdfRichText`. (N-M-004, L9BC-10)

@@ -185,13 +185,21 @@ vi.mock("./steps/generate/StepGenerate", () => ({
     onNext,
     onLoadingChange,
     onRestorePrevious,
+    onExtractionIssues,
   }: {
-    onResult: (r: AdaptationResult, row: { id: string; updatedAt: string }) => void;
+    onResult: (r: AdaptationResult, row: { id: string; updatedAt: string; reviewIssues?: unknown[] }) => void;
     onNext: () => void;
     onLoadingChange?: (loading: boolean) => void;
     onRestorePrevious?: () => void;
+    onExtractionIssues?: (issues: { question: number | null; kind: string; items: string[] }[]) => void;
   }) => (
     <>
+      <button
+        data-testid="do-issues"
+        onClick={() => onExtractionIssues?.([{ question: 2, kind: "invented", items: ["7+9"] }])}
+      >
+        issues
+      </button>
       <pre data-testid="generate-can-restore">{String(!!onRestorePrevious)}</pre>
       {onRestorePrevious && (
         <button data-testid="restore-previous" onClick={onRestorePrevious}>
@@ -217,6 +225,18 @@ vi.mock("./steps/generate/StepGenerate", () => ({
       {/* Simulates React 18 unmount race: onLoadingChange(false) is NOT called
           before onNext, mimicking the real StepGenerate where the useEffect
           may not fire when the component is unmounted in the same batch. */}
+      <button
+        data-testid="do-generate-review"
+        onClick={() => {
+          onResult(makeResult(), {
+            ...serverRow(++generationCount),
+            reviewIssues: [{ question: 4, kind: "new_value", items: ["10"] }],
+          });
+          onNext();
+        }}
+      >
+        generate-review
+      </button>
       <button
         data-testid="do-generate-no-lc"
         onClick={() => {
@@ -245,6 +265,8 @@ vi.mock("./steps/review/StepReview", () => ({
     onPrev,
     onCaptureFailure,
     originalExam,
+    extractionIssues,
+    adaptationIssues,
     title,
     onTitleChange,
     subject,
@@ -274,6 +296,8 @@ vi.mock("./steps/review/StepReview", () => ({
       pageImages: string[];
       userId: string | null;
     } | null;
+    extractionIssues?: unknown;
+    adaptationIssues?: unknown;
     title?: string;
     onTitleChange?: (t: string) => void;
     subject?: string | null;
@@ -314,6 +338,8 @@ vi.mock("./steps/review/StepReview", () => ({
         limpar nome da pasta
       </button>
       <button data-testid="review-save" onClick={() => onSave?.()}>salvar na revisar</button>
+      <pre data-testid="review-issues">{JSON.stringify(extractionIssues ?? null)}</pre>
+      <pre data-testid="review-adaptation-issues">{JSON.stringify(adaptationIssues ?? null)}</pre>
       <pre data-testid="review-original-exam">
         {originalExam ? JSON.stringify({
               fileName: originalExam.file.name,
@@ -1096,6 +1122,77 @@ describe("CanonicalAdaptationWizard", () => {
   it("passes originalExam=null into StepReview when the adaptation has no uploadedExam (Banco de Questões)", () => {
     renderWithProviders(<CanonicalAdaptationWizard editMode={editSeed()} />);
     expect(screen.getByTestId("review-original-exam")).toHaveTextContent("null");
+  });
+
+  const uploadSeed = (extra: Record<string, unknown> = {}) => ({
+    adaptationId: "edit-1",
+    initialData: {
+      activityType: "prova",
+      activityText: "",
+      activityInputMode: "upload" as const,
+      uploadedExam: {
+        fileName: "prova.pdf",
+        fileType: "pdf" as const,
+        text: "1) Q1",
+        pageImages: [],
+        file: new File(["x"], "prova.pdf", { type: "application/pdf" }),
+      },
+      selectedQuestions: [],
+      barriers: [],
+      barrierProfileId: null,
+      result: makeResult(),
+      ...extra,
+    },
+    initialUpdatedAt: "2026-01-01T00:00:00Z",
+  });
+
+  it("hands the extraction's issues to StepReview only for an adaptation generated from a file (C-03)", () => {
+    const issues = [{ question: 1, kind: "invented", items: ["3"] }];
+    const { unmount } = renderWithProviders(
+      <CanonicalAdaptationWizard editMode={uploadSeed({ extractionIssues: issues })} />,
+    );
+    expect(screen.getByTestId("review-issues")).toHaveTextContent(JSON.stringify(issues));
+    unmount();
+    renderWithProviders(
+      <CanonicalAdaptationWizard
+        editMode={uploadSeed({ extractionIssues: issues, activityInputMode: "bank" })}
+      />,
+    );
+    expect(screen.getByTestId("review-issues")).toHaveTextContent("null");
+  });
+
+  it("hands the adaptation's own issues to Revisar for any input, and a new generation replaces them (C-04)", async () => {
+    renderWithProviders(<CanonicalAdaptationWizard editMode={uploadSeed({ activityInputMode: "bank", uploadedExam: null })} />);
+    fireEvent.click(screen.getByRole("button", { name: /Regerar/i }));
+    fireEvent.click(within(screen.getByRole("alertdialog")).getByRole("button", { name: /^Regerar$/i }));
+    await waitFor(() => expect(screen.getByTestId("do-generate-review")).toBeInTheDocument());
+    fireEvent.click(screen.getByTestId("do-generate-review"));
+    expect(screen.getByTestId("review-adaptation-issues")).toHaveTextContent(
+      JSON.stringify([{ question: 4, kind: "new_value", items: ["10"] }]),
+    );
+    fireEvent.click(screen.getByRole("button", { name: /Regerar/i }));
+    fireEvent.click(within(screen.getByRole("alertdialog")).getByRole("button", { name: /^Regerar$/i }));
+    await waitFor(() => expect(screen.getByTestId("do-generate")).toBeInTheDocument());
+    fireEvent.click(screen.getByTestId("do-generate"));
+    expect(screen.getByTestId("review-adaptation-issues")).toHaveTextContent("[]");
+  });
+
+  it("shows in Revisar the notices that were stored with the adaptation when it is reopened (L9A-4)", () => {
+    const stored = [{ question: 4, kind: "new_value", items: ["10"] }];
+    renderWithProviders(<CanonicalAdaptationWizard editMode={uploadSeed({ activityInputMode: "bank", uploadedExam: null, adaptationIssues: stored })} />);
+    expect(screen.getByTestId("review-adaptation-issues")).toHaveTextContent(JSON.stringify(stored));
+  });
+
+  it("keeps the issues StepGenerate reports and shows them in Revisar after the generation (C-03)", async () => {
+    renderWithProviders(<CanonicalAdaptationWizard editMode={uploadSeed()} />);
+    fireEvent.click(screen.getByRole("button", { name: /Regerar/i }));
+    fireEvent.click(within(screen.getByRole("alertdialog")).getByRole("button", { name: /^Regerar$/i }));
+    await waitFor(() => expect(screen.getByTestId("do-generate")).toBeInTheDocument());
+    fireEvent.click(screen.getByTestId("do-issues"));
+    fireEvent.click(screen.getByTestId("do-generate"));
+    expect(screen.getByTestId("review-issues")).toHaveTextContent(
+      JSON.stringify([{ question: 2, kind: "invented", items: ["7+9"] }]),
+    );
   });
 
   it("passes the uploaded file, pages and userId into StepReview when uploadedExam is set", () => {

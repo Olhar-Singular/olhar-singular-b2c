@@ -331,6 +331,20 @@ export const DocumentHeaderSchema = z
   })
   .strict();
 
+/**
+ * A review notice (C-04 / C-10) stored with the result so it is still there when the
+ * teacher reopens the adaptation (L9A-4). `kind` stays a plain string here: the reader
+ * (`parseExtractionIssues`) drops a kind this version does not know, so a notice written
+ * by a newer edge function never makes an older client reject the whole document.
+ */
+export const ReviewIssueSchema = z.object({
+  question: z.number().nullable(),
+  kind: z.string(),
+  items: z.array(z.string()),
+  of: z.number().optional(),
+  excerpt: z.string().optional(),
+});
+
 export const AdaptationResultSchema = z.object({
   schemaVersion: z.literal(SCHEMA_VERSION),
   document: CanonicalDocumentSchema,
@@ -343,6 +357,9 @@ export const AdaptationResultSchema = z.object({
   // Additive & optional: never injected on read, so legacy docs parse identically.
   pageStyle: PageStyleSchema.optional(),
   header: DocumentHeaderSchema.optional(),
+  // Additive & optional (L9A-4): the edge function writes the informational notices here
+  // (omitted when there are none); the autosave carries it back unchanged.
+  review_issues: z.array(ReviewIssueSchema).optional(),
 });
 
 // ---------------------------------------------------------------------------

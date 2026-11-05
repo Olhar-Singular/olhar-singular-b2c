@@ -26,10 +26,12 @@ import type { ReactNode } from "react";
 import { View, Text } from "@react-pdf/renderer";
 import type { Block } from "@/lib/adaptation/canonical/schema";
 import { nodeStyleToPdf, pageBreakBefore } from "./nodeStyleToPdf";
+import { shareColumnPt } from "./columnWidth";
 import { PdfRichText } from "./PdfRichText";
 import { PdfAnswer, tableLeadPresencePt } from "./PdfAnswer";
 import { PdfBlock } from "./PdfBlock";
 import { PdfParagraph } from "./PdfLeafBlocks";
+import { KEEP_QUESTION_PT, keepTogether } from "./keepTogether";
 import { questionNumbers } from "../questionNumbering";
 import {
   BASE_FONT_PT,
@@ -76,6 +78,9 @@ const QUESTION_INNER_GAP_PT = 6;
  */
 const KEEP_WITH_SCAFFOLDING_PT = PAGE_HEIGHT_PT - 2 * PAGE_MARGIN_PT - 1;
 
+/** As respostas que são uma lista de itens curtos, que não devem se separar entre folhas. */
+const ITEM_ANSWERS = new Set(["multipleChoice", "trueFalse", "checkbox", "ordering", "matching"]);
+
 export function PdfQuestion({
   block,
   number,
@@ -106,7 +111,7 @@ export function PdfQuestion({
       <View style={{ marginBottom: QUESTION_INNER_GAP_PT }}>
         <Text style={{ ...pdfTextSize(elementSizes.stem) }}>
           {prefix}
-          <PdfRichText content={block.enunciado!} fontSize={elementSizes.stem} />
+          <PdfRichText content={block.enunciado!} fontSize={elementSizes.stem} columnPt={stemColumn} />
         </Text>
       </View>
     ) : null;
@@ -141,6 +146,10 @@ export function PdfQuestion({
     enunciadoLeads ? elementSizes.stem : baseFontSize,
   );
 
+  // The stem sits in a column narrower than the sheet by the number's column: a formula wider
+  // than that overflows the box (N-M-001).
+  const stemColumn = shareColumnPt(undefined, { minus: numberColumn });
+
   /** O rótulo, como run de texto: entra na linha, não ao lado dela. */
   const numberRun = (
     <Text style={{ fontWeight: "bold", textIndent: -numberColumn }}>{`${displayNumber}. `}</Text>
@@ -154,13 +163,14 @@ export function PdfQuestion({
       blockGap={QUESTION_INNER_GAP_PT}
       elementSizes={elementSizes}
       baseFontSize={baseFontSize}
+      columnPt={stemColumn}
     />
   ));
 
   const leadView = enunciadoLeads ? (
     enunciadoView(numberRun)
   ) : (
-    <PdfParagraph block={leadingStem} blockGap={QUESTION_INNER_GAP_PT} numberPrefix={numberRun} baseFontSize={baseFontSize} />
+    <PdfParagraph block={leadingStem} blockGap={QUESTION_INNER_GAP_PT} numberPrefix={numberRun} baseFontSize={baseFontSize} columnPt={stemColumn} />
   );
   const afterLead = paragraphLeads ? 1 : 0;
   const nextAfterLead = block.stem[afterLead];
@@ -217,7 +227,7 @@ export function PdfQuestion({
     block.instruction && (
       <View style={{ marginBottom: gapBelow }}>
         <Text style={{ fontStyle: "italic", color: INK_MUTED, ...pdfTextSize(elementSizes.instruction) }}>
-          <PdfRichText content={block.instruction} fontSize={elementSizes.instruction} />
+          <PdfRichText content={block.instruction} fontSize={elementSizes.instruction} columnPt={stemColumn} />
         </Text>
       </View>
     );
@@ -262,8 +272,24 @@ export function PdfQuestion({
     );
   }
 
+  /**
+   * Questão de alternativas curta viaja inteira (N-U-004): `a) b) c)` no pé da folha
+   * com `d)` no topo da seguinte. Aberta, de linhas e de tabela fluem como antes.
+   */
+  const rootStyle = { flexDirection: "column", marginBottom: blockGap, ...nodeStyleToPdf(block.style) } as const;
+  if (ITEM_ANSWERS.has(block.answer.kind)) {
+    return (
+      <View style={rootStyle}>
+        {keepTogether(KEEP_QUESTION_PT)}
+        {body}
+        {instructionView(QUESTION_INNER_GAP_PT)}
+        {answerView}
+      </View>
+    );
+  }
+
   return (
-    <View style={{ flexDirection: "column", marginBottom: blockGap, ...nodeStyleToPdf(block.style) }}>
+    <View style={rootStyle}>
       {body}
       {instructionView(QUESTION_INNER_GAP_PT)}
       {answerView}

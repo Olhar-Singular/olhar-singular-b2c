@@ -39,7 +39,8 @@ describe("pageTokens", () => {
       fontSize: 12,
       lineHeight: 1.4,
       color: "#22201C",
-      fontFamily: "Liberation Sans",
+      // A pilha: a família e, em segundo lugar, a fonte de símbolos (C-01).
+      fontFamily: ["Liberation Sans", "DejaVu Sans"],
     });
   });
 
@@ -71,12 +72,12 @@ describe("pageTokens — parametrizado por pageStyle (Fase 4a)", () => {
   it("pageTokensToPdf aplica fontSize em pt e mapeia o fontFamily do token", () => {
     const pdf = pageTokensToPdf({ fontFamily: "serif", fontSize: 13, blockSpacing: 20 });
     expect(pdf.fontSize).toBe(13);
-    expect(pdf.fontFamily).toBe("Liberation Serif");
+    expect(pdf.fontFamily).toEqual(["Liberation Serif", "DejaVu Sans"]);
   });
 
   it("pageTokensToPdf sem fontFamily emite a família do token default (o built-in de antes)", () => {
     const pdf = pageTokensToPdf({ fontFamily: undefined, fontSize: 12, blockSpacing: 16 });
-    expect(pdf.fontFamily).toBe("Liberation Sans");
+    expect(pdf.fontFamily).toEqual(["Liberation Sans", "DejaVu Sans"]);
   });
 });
 
@@ -93,17 +94,17 @@ describe("pageTokens — paridade de fonte sem override (achado 0007)", () => {
     const pdf = pageTokensToPdf(resolved);
 
     expect(css.fontFamily).toBe(fontFamilyToCss(DEFAULT_FONT_FAMILY_TOKEN));
-    expect(pdf.fontFamily).toBe(fontFamilyToPdf(DEFAULT_FONT_FAMILY_TOKEN));
+    expect(pdf.fontFamily).toEqual([fontFamilyToPdf(DEFAULT_FONT_FAMILY_TOKEN), "DejaVu Sans"]);
   });
 
   it("mantém o PDF na métrica da Helvetica, agora embutida (o default não reflui nada)", () => {
-    expect(pageTokensToPdf().fontFamily).toBe("Liberation Sans");
+    expect(pageTokensToPdf().fontFamily).toEqual(["Liberation Sans", "DejaVu Sans"]);
   });
 
   it("um override explícito continua vencendo o default nas duas superfícies", () => {
     const resolved = { fontFamily: "lexend", fontSize: 12, blockSpacing: 16 };
     expect(pageTokensToCss(resolved).fontFamily).toBe("'Lexend', sans-serif");
-    expect(pageTokensToPdf(resolved).fontFamily).toBe("Lexend");
+    expect(pageTokensToPdf(resolved).fontFamily).toEqual(["Lexend", "DejaVu Sans"]);
   });
 });
 

@@ -10,6 +10,7 @@
 import type { CSSProperties } from "react";
 import type { ResolvedPageStyle } from "./pageStyle";
 import { fontFamilyToCss, fontFamilyToPdf } from "@/lib/adaptation/canonical/fontFamily";
+import { pdfFontStack } from "./pdf/fontStack";
 
 /** Margem da página A4, em pontos (1pt = 1/72in) — igual ao PDF atual. */
 export const PAGE_MARGIN_PT = 40;
@@ -825,7 +826,7 @@ export function pageTokensToPdf(resolved: ResolvedPageStyle = DEFAULT_RESOLVED) 
     fontSize: resolved.fontSize,
     lineHeight: BASE_LINE_HEIGHT,
     color: DEFAULT_INK,
-    fontFamily: fontFamilyToPdf(resolved.fontFamily ?? DEFAULT_FONT_FAMILY_TOKEN),
+    fontFamily: pdfFontStack(fontFamilyToPdf(resolved.fontFamily ?? DEFAULT_FONT_FAMILY_TOKEN)),
   };
 }
 

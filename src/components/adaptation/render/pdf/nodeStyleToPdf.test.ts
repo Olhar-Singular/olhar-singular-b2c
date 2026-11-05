@@ -17,7 +17,7 @@ describe("nodeStyleToPdf", () => {
         spacingAfter: 12,
       }),
     ).toEqual({
-      fontFamily: "Liberation Serif",
+      fontFamily: ["Liberation Serif", "DejaVu Sans"],
       fontSize: 10.5,      // 14px → 10.5pt
       // O corpo próprio vem acompanhado da razão de entrelinha: sem ela o
       // react-pdf congelaria o 1,4 do <Page> em 16,8pt absolutos (achado 0429).
@@ -35,7 +35,7 @@ describe("nodeStyleToPdf", () => {
   });
 
   it("passes an unknown fontFamily through unchanged (legacy docs)", () => {
-    expect(nodeStyleToPdf({ fontFamily: "Georgia" }).fontFamily).toBe("Georgia");
+    expect(nodeStyleToPdf({ fontFamily: "Georgia" }).fontFamily).toEqual(["Georgia", "DejaVu Sans"]);
   });
 
   it("drops a disallowed color (palette guard)", () => {

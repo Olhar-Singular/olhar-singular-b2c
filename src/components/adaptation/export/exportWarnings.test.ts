@@ -1,7 +1,8 @@
 import { describe, it, expect } from "vitest";
-import { copyExportWarnings, MATH_LOSS_WARNING, pdfExportWarnings } from "./exportWarnings";
+import { copyExportWarnings, MATH_LOSS_WARNING, mathPreviewNotice, pdfExportWarnings } from "./exportWarnings";
 import { docxExportWarnings } from "./exportDocx";
 import type { CanonicalDocument } from "@/lib/adaptation/canonical/schema";
+import { FONT_FAMILY_TOKENS } from "@/lib/adaptation/canonical/fontFamily";
 
 const id = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, "0")}`;
 
@@ -281,28 +282,99 @@ describe("aviso de tipografia da fórmula (0415)", () => {
 });
 
 // ---------------------------------------------------------------------------
-// 0444 — as fontes built-in do PDF só carregam a CP1252. Um caractere de fora
-// dela (uma seta, um sinal de diferente, um emoji) não estoura: sai trocado por
-// outro glifo, calado. O professor precisa saber ANTES de baixar o arquivo.
+// 0444 + C-01 — o caractere que a folha mostra tem que ser o que o arquivo
+// imprime. Desde o lote 4 toda família do PDF tem uma fonte de SÍMBOLOS como
+// segunda opção (`fontStack.ts`), então a matemática escolar não é mais motivo
+// de aviso. Continua sendo o que NENHUMA fonte do arquivo desenha (dingbat `✏`,
+// emoji, cirílico, CJK): sai em branco ou trocado, calado, e a professora
+// precisa saber ANTES de baixar.
 // ---------------------------------------------------------------------------
 
-describe("aviso de caractere fora da CP1252 (0444)", () => {
+describe("aviso de caractere sem desenho em nenhuma fonte do PDF (0444, C-01)", () => {
   const withText = (text: string) =>
     doc([{ id: id(1), type: "paragraph", content: [{ type: "text", text }] }]);
+  const families = [undefined, ...FONT_FAMILY_TOKENS];
 
-  it("lista o caractere que a fonte padrão não tem", () => {
-    const warning = pdfExportWarnings(withText("Se 3 → 9, então 4 → ?")).join(" ");
-    expect(warning).toMatch(/→/);
-    expect(warning).toMatch(/acentuad|CP1252|fonte/i);
+  it("lista o caractere que nenhuma fonte do PDF tem", () => {
+    const warning = pdfExportWarnings(withText("Marque ✏ e ⚠ e 😀")).join(" ");
+    expect(warning).toMatch(/✏/);
+    expect(warning).toMatch(/⚠/);
+    expect(warning).toMatch(/😀/);
+    expect(warning).toMatch(/nenhuma fonte do PDF/i);
+  });
+
+  it("não lista o que a fonte de símbolos ganhou: ✓ ✔ ✗ ✘ ★ ☆ ♥ ♦ ♠ ♣ ⟶ ⟹ ⌀ ⩽ ⩾ ☐ ☑", () => {
+    expect(pdfExportWarnings(withText("✓ ✔ ✗ ✘ ★ ☆ ♥ ♦ ♠ ♣ ⟵ ⟶ ⟷ ⟸ ⟹ ⟺ ⌀ ⩽ ⩾ ☐ ☑"))).toEqual([]);
+  });
+
+  it("não lista o que é invisível: controle, largura zero, marca bidi, hífen opcional (B1)", () => {
+    const invisible = "a\u200Bb\u200Cc\u200Dd\u2060e\uFEFFf\u200Eg\u200Fh\u202Ai\u202Cj\u2066k\u2069l\u00ADm\u0007n\u0000o";
+    expect(pdfExportWarnings(withText(invisible))).toEqual([]);
+  });
+
+  it("não lista acento combinante: o decomposto do macOS é composto antes de imprimir (B1)", () => {
+    expect(pdfExportWarnings(withText("e\u0301 a\u0303 c\u0327 o\u0302 A\u0301"))).toEqual([]);
+    // sem forma composta, a marca solta também não é alarme
+    expect(pdfExportWarnings(withText("x\u0304 y\u0302"))).toEqual([]);
+  });
+
+  it("varre o cabeçalho do Exportar: título, escola e professor (M1)", () => {
+    const base = withText("texto comum");
+    const warning = pdfExportWarnings(base, undefined, {
+      title: "Prova ✏",
+      school: "Escola 😀",
+      teacher: "Prof. Ж",
+    }).join(" ");
+    expect(warning).toMatch(/✏/);
+    expect(warning).toMatch(/😀/);
+    expect(warning).toMatch(/Ж/);
+    // cabeçalho sem problema não acrescenta aviso
+    expect(pdfExportWarnings(base, undefined, { title: "Prova ✓ ★", date: "2026-11-03" })).toEqual([]);
+  });
+
+  it("varre o enunciado da questão, que a folha imprime (M2, C-19)", () => {
+    const warning = pdfExportWarnings(
+      doc([
+        {
+          id: id(1),
+          type: "question",
+          stem: [{ id: id(2), type: "paragraph", content: [{ type: "text", text: "Corpo" }] }],
+          enunciado: [{ type: "text", text: "Leia ✏ com atenção" }],
+          answer: { kind: "open" },
+        } as never,
+      ]),
+    ).join(" ");
+    expect(warning).toMatch(/✏/);
+  });
+
+  it("não manda mais trocar de família: nenhuma família resolve o que o arquivo não tem", () => {
+    const warning = pdfExportWarnings(withText("✏")).join(" ");
+    expect(warning).not.toMatch(/acessibilidade/);
   });
 
   it("não repete o mesmo caractere duas vezes", () => {
-    const warning = pdfExportWarnings(withText("≠ ≠ ≠")).join(" ");
-    expect(warning.match(/≠/g)).toHaveLength(1);
+    const warning = pdfExportWarnings(withText("✏ ✏ ✏")).join(" ");
+    expect(warning.match(/✏/g)).toHaveLength(1);
   });
 
-  it("acento, cedilha e travessão passam: estão na CP1252", () => {
-    expect(pdfExportWarnings(withText("Cão – ações “aspas” e reticências…"))).toEqual([]);
+  it("símbolo de matemática, grego e acento passam em TODA família (a fonte de símbolos cobre)", () => {
+    const text = "x ≤ y → z ≠ √9 ∈ ℝ, α Ω, a₀ xⁿ ½ ² € Cão – ações “aspas” e reticências… ł";
+    for (const family of families) {
+      // (Lexend ainda avisa do itálico: é outro aviso, e este é só sobre caractere.)
+      expect(
+        pdfExportWarnings(withText(text), { fontFamily: family }).join(" "),
+        String(family),
+      ).not.toMatch(/nenhuma fonte/i);
+    }
+  });
+
+  it("o aviso vale para TODA família, inclusive as de acessibilidade", () => {
+    for (const family of families) {
+      expect(
+        pdfExportWarnings(withText("✏"), { fontFamily: family }).join(" "),
+        String(family),
+      ).toMatch(/✏/);
+    }
   });
 
   it("varre o texto das respostas, não só o dos parágrafos", () => {
@@ -318,7 +390,7 @@ describe("aviso de caractere fora da CP1252 (0444)", () => {
             pairs: [
               {
                 id: id(3),
-                left: [{ type: "text", text: "Peixe ✓" }],
+                left: [{ type: "text", text: "Peixe ✏" }],
                 right: [{ type: "text", text: "Rio" }],
               },
             ],
@@ -326,19 +398,7 @@ describe("aviso de caractere fora da CP1252 (0444)", () => {
         },
       ]),
     ).join(" ");
-    expect(warning).toMatch(/✓/);
-  });
-
-  it("fonte de acessibilidade embutida não recebe o aviso da CP1252", () => {
-    expect(
-      pdfExportWarnings(withText("Se 3 → 9"), { fontFamily: "opendyslexic" }).join(" "),
-    ).not.toMatch(/→/);
-  });
-
-  it("uma fonte clássica cai numa built-in e recebe o aviso", () => {
-    expect(pdfExportWarnings(withText("Se 3 → 9"), { fontFamily: "georgia" }).join(" ")).toMatch(
-      /→/,
-    );
+    expect(warning).toMatch(/✏/);
   });
 
   it("o Word não herda o aviso: a fonte é resolvida na máquina de quem abre", () => {
@@ -478,5 +538,204 @@ describe("aviso de item vazio nas respostas (1105)", () => {
     ]);
     expect(pdfExportWarnings(document)).toEqual([]);
     expect(docxExportWarnings(document)).toEqual([]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Lote 5b (F5): o marcador "não lido" que sobrou no documento sai impresso na prova.
+// PDF, Word e Copiar avisam antes de baixar.
+// ---------------------------------------------------------------------------
+
+describe("aviso de marcador 'não lido' que sobrou no documento (F5)", () => {
+  const withMarker = (text: string) =>
+    doc([{ id: id(1), type: "paragraph", content: [{ type: "text", text }] }]);
+  const question = (answerText: string) =>
+    doc([
+      {
+        id: id(1),
+        type: "question",
+        stem: [{ id: id(2), type: "paragraph", content: [{ type: "text", text: "Calcule" }] }],
+        answer: {
+          kind: "multipleChoice",
+          alternatives: [{ id: id(3), content: [{ type: "text", text: answerText }], correct: false }],
+        },
+      } as never,
+    ]);
+
+  it("PDF, Word e Copiar avisam, com o texto do marcador", () => {
+    const d = withMarker("Calcule [fórmula não lida] agora");
+    for (const warnings of [pdfExportWarnings(d), docxExportWarnings(d), copyExportWarnings(d)]) {
+      const text = warnings.join(" ");
+      expect(text).toMatch(/\[fórmula não lida\]/);
+      expect(text).toMatch(/impr/i);
+    }
+  });
+
+  it("acha o marcador na alternativa e conta quantos são", () => {
+    const text = pdfExportWarnings(question("[imagem não lida] e [objeto não lido]")).join(" ");
+    expect(text).toMatch(/2 trechos/);
+  });
+
+  it("documento sem marcador não ganha aviso", () => {
+    expect(pdfExportWarnings(withMarker("Calcule 2 + 2"))).toEqual([]);
+    expect(docxExportWarnings(withMarker("Calcule 2 + 2"))).toEqual([]);
+    expect(copyExportWarnings(withMarker("Calcule 2 + 2"))).toEqual([]);
+  });
+
+  it("um marcador só usa o singular, com tudo concordando (N-U-002)", () => {
+    const [warning] = pdfExportWarnings(withMarker("[fórmula não lida]"));
+    expect(warning).toBe(
+      '1 trecho ainda diz "não lido" ([fórmula não lida]) e vai impresso na prova do jeito que está. ' +
+        "Complete ou apague antes de exportar.",
+    );
+  });
+
+  it("vários marcadores usam o plural em todas as palavras", () => {
+    const [warning] = pdfExportWarnings(question("[imagem não lida] e [objeto não lido]"));
+    expect(warning).toBe(
+      '2 trechos ainda dizem "não lido" ([imagem não lida], [objeto não lido]) e vão impressos na prova do jeito que estão. ' +
+        "Complete ou apague antes de exportar.",
+    );
+  });
+});
+
+describe("mathPreviewNotice (C-35): o aviso na prévia, antes do clique", () => {
+  const para = (n: number, text: string) => ({ id: id(n), type: "paragraph" as const, content: [{ type: "text" as const, text }] });
+
+  it("não há aviso num documento sem fórmula", () => {
+    expect(mathPreviewNotice(doc([para(1, "olá")]))).toBeNull();
+  });
+
+  it("mostra o exemplo do próprio documento: a primeira fórmula, como sai no arquivo", () => {
+    const notice = mathPreviewNotice(
+      doc([para(1, "antes"), { id: id(2), type: "blockMath", latex: "\\frac{1}{2}" }, { id: id(3), type: "blockMath", latex: "x^2" }]),
+    );
+    expect(notice?.example).toBe("\\frac{1}{2}");
+    expect(notice?.text).toMatch(/PDF/);
+    expect(notice?.text).toMatch(/Word/);
+    expect(notice?.text).toMatch(/copiar/i);
+    expect(notice?.text).toMatch(/texto LaTeX/);
+    expect(notice?.hasAlt).toBe(false);
+    expect(notice?.altText).toBeNull();
+  });
+
+  // N-U-007: "a primeira fórmula" é a primeira que a professora vê na folha, não a primeira que a varredura acha.
+  describe("a primeira fórmula é a da ordem da folha (N-U-007)", () => {
+    const math = (latex: string) => [{ type: "inlineMath" as const, latex }];
+    const stemWith = (latex: string) => ({ id: id(2), type: "paragraph" as const, content: [{ type: "text" as const, text: "Resolva " }, ...math(latex)] });
+    const alternatives = { kind: "multipleChoice" as const, alternatives: [{ id: id(3), content: math("x = 3"), correct: true }] };
+
+    it("o enunciado (stem) vem antes das alternativas", () => {
+      const notice = mathPreviewNotice(doc([{ id: id(1), type: "question", stem: [stemWith("2x - 6 = 0")], answer: alternatives }]));
+      expect(notice?.example).toBe("2x - 6 = 0");
+    });
+
+    it("o campo enunciado abaixo do stem (padrão) vem depois do stem e antes das alternativas", () => {
+      const notice = mathPreviewNotice(
+        doc([{ id: id(1), type: "question", stem: [stemWith("a + 1")], enunciado: math("b + 2"), answer: alternatives }]),
+      );
+      expect(notice?.example).toBe("a + 1");
+    });
+
+    it("o campo enunciado ACIMA do stem vem primeiro", () => {
+      const notice = mathPreviewNotice(
+        doc([
+          { id: id(1), type: "question", stem: [stemWith("a + 1")], enunciado: math("b + 2"), enunciadoPosition: "above", answer: alternatives },
+        ]),
+      );
+      expect(notice?.example).toBe("b + 2");
+    });
+
+    it("só o enunciado tem fórmula: vem antes da instrução e das alternativas", () => {
+      const notice = mathPreviewNotice(
+        doc([
+          {
+            id: id(1),
+            type: "question",
+            stem: [{ id: id(2), type: "paragraph", content: [{ type: "text", text: "Sem fórmula" }] }],
+            enunciado: math("e = 1"),
+            instruction: math("i = 2"),
+            answer: alternatives,
+          },
+        ]),
+      );
+      expect(notice?.example).toBe("e = 1");
+    });
+
+    it("a instrução vem antes das alternativas e depois do stem", () => {
+      const notice = mathPreviewNotice(
+        doc([
+          {
+            id: id(1),
+            type: "question",
+            stem: [{ id: id(2), type: "paragraph", content: [{ type: "text", text: "Sem fórmula" }] }],
+            instruction: math("i = 2"),
+            answer: alternatives,
+          },
+        ]),
+      );
+      expect(notice?.example).toBe("i = 2");
+    });
+
+    it("uma questão com fórmula só nas alternativas, depois de um parágrafo com fórmula, segue a ordem do documento", () => {
+      const notice = mathPreviewNotice(
+        doc([stemWith("p = 1"), { id: id(1), type: "question", stem: [{ id: id(4), type: "paragraph", content: [{ type: "text", text: "q" }] }], answer: alternatives }]),
+      );
+      expect(notice?.example).toBe("p = 1");
+    });
+
+    it("a fórmula em bloco dentro do stem conta na ordem, e a de bloco de fora também", () => {
+      const notice = mathPreviewNotice(
+        doc([
+          {
+            id: id(1),
+            type: "question",
+            stem: [{ id: id(2), type: "blockMath", latex: "s = 9" }],
+            answer: alternatives,
+          },
+        ]),
+      );
+      expect(notice?.example).toBe("s = 9");
+    });
+  });
+
+  it("acha a fórmula inline dentro de uma alternativa de questão, em ordem de documento", () => {
+    const notice = mathPreviewNotice(
+      doc([
+        {
+          id: id(1),
+          type: "question",
+          stem: [para(2, "q")],
+          answer: { kind: "multipleChoice", alternatives: [{ id: id(3), content: [{ type: "inlineMath", latex: "a+b" }], correct: true }] },
+        },
+        { id: id(4), type: "blockMath", latex: "z" },
+      ]),
+    );
+    expect(notice?.example).toBe("a+b");
+  });
+
+  it("encurta o exemplo quando a fórmula é longa, sem cortar no meio de um comando", () => {
+    const long = "\\frac{" + "1234567890".repeat(10) + "}{2}";
+    const example = mathPreviewNotice(doc([{ id: id(1), type: "blockMath", latex: long }]))!.example;
+    expect(example.length).toBeLessThanOrEqual(41);
+    expect(example.endsWith("…")).toBe(true);
+  });
+
+  it("diz a verdade sobre a descrição (alt): ela NÃO sai no arquivo, só o código", () => {
+    const withAlt = mathPreviewNotice(doc([{ id: id(1), type: "blockMath", latex: "\\frac{1}{2}", alt: "um meio" }]));
+    expect(withAlt?.hasAlt).toBe(true);
+    expect(withAlt?.altText).toMatch(/descrição[^.]*não sai/i);
+    expect(withAlt?.altText).toMatch(/só o código/);
+  });
+
+  it("vê a descrição de uma fórmula inline também", () => {
+    const notice = mathPreviewNotice(
+      doc([{ id: id(1), type: "paragraph", content: [{ type: "inlineMath", latex: "x", alt: "xis" }] }]),
+    );
+    expect(notice?.hasAlt).toBe(true);
+  });
+
+  it("não contradiz o diálogo: o aviso do clique segue sendo o mesmo texto", () => {
+    expect(MATH_LOSS_WARNING).toMatch(/texto LaTeX/);
   });
 });

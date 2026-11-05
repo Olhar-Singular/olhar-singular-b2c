@@ -28,8 +28,8 @@ function mathFontSizes(node: unknown, out: number[] = []): number[] {
   }
   if (!isValidElement(node)) return out;
   const el = node as ReactElement;
-  const style = (el.props as { style?: { fontFamily?: string; fontSize?: number } }).style;
-  if (style?.fontFamily === "Courier" && typeof style.fontSize === "number") {
+  const style = (el.props as { style?: { fontFamily?: string | string[]; fontSize?: number } }).style;
+  if ([style?.fontFamily].flat()[0] === "Courier" && typeof style?.fontSize === "number") {
     out.push(style.fontSize);
   }
   if (typeof el.type === "function") {

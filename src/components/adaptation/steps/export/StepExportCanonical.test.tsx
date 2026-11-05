@@ -285,4 +285,38 @@ describe("StepExportCanonical", () => {
     expect(bar.className).toMatch(/(?:^|\s)bg-card(?:\s|$)/);
     expect(bar.className).toMatch(/(?:^|\s)border-border(?:\s|$)/);
   });
+
+  it("sem fórmula, não mostra o aviso de fórmula na prévia", () => {
+    renderStep();
+    expect(screen.queryByRole("status", { name: /fórmulas/i })).not.toBeInTheDocument();
+  });
+
+  it("com fórmula, avisa na própria prévia, antes do clique, com o exemplo do documento (C-35)", () => {
+    renderStep({
+      result: {
+        ...result,
+        document: {
+          schemaVersion: 1,
+          blocks: [{ id: id(9), type: "blockMath", latex: "\\frac{1}{2}", alt: "um meio" }],
+        },
+      },
+    });
+    const notice = screen.getByRole("status", { name: /fórmulas saem diferentes/i });
+    expect(notice).toHaveTextContent("A prévia abaixo mostra as fórmulas formatadas");
+    expect(notice).toHaveTextContent("\\frac{1}{2}");
+    expect(notice).toHaveTextContent(/descrição[^.]*não sai/i);
+    // It sits before the preview sheet, not after it.
+    const sheet = screen.getByTestId("renderer");
+    expect(notice.compareDocumentPosition(sheet) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it("sem descrição na fórmula, não fala de descrição", () => {
+    renderStep({
+      result: {
+        ...result,
+        document: { schemaVersion: 1, blocks: [{ id: id(9), type: "blockMath", latex: "x^2" }] },
+      },
+    });
+    expect(screen.getByRole("status", { name: /fórmulas saem diferentes/i })).not.toHaveTextContent(/descrição/i);
+  });
 });

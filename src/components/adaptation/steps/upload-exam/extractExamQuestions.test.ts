@@ -137,6 +137,24 @@ describe("extractExamQuestions", () => {
     });
   });
 
+  it("carries the function's issues (C-03) and keeps them when the extraction is reused", async () => {
+    const issues = [{ question: 1, kind: "invented", items: ["7+9"] }];
+    invokeMock.mockResolvedValueOnce({ data: { questions: [{ text: "Calcule 7 + 9" }], issues }, error: null });
+    const first = await extractExamQuestions(pdfExam, "user-1");
+    expect(first).toMatchObject({ status: "ok", charged: true, issues });
+    const again = await extractExamQuestions(pdfExam, "user-1");
+    expect(again).toMatchObject({ status: "ok", charged: false, issues });
+  });
+
+  it("drops malformed issues and leaves the field out when there is nothing to show", async () => {
+    invokeMock.mockResolvedValueOnce({
+      data: { questions: [{ text: "Q" }], issues: [{ question: "x", kind: "invented", items: [] }] },
+      error: null,
+    });
+    const result = await extractExamQuestions(pdfExam, "user-1");
+    expect(result).not.toHaveProperty("issues");
+  });
+
   it("returns status 'empty' when no questions come back", async () => {
     invokeMock.mockResolvedValueOnce({ data: { questions: [] }, error: null });
     const result = await extractExamQuestions(pdfExam, "user-1");

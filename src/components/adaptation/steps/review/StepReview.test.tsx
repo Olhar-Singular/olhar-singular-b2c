@@ -979,6 +979,87 @@ describe("StepReview", () => {
     });
   });
 
+  describe("extractionIssues (C-03)", () => {
+    it("shows, above the sheet, the questions the reading flagged, without blocking Exportar", () => {
+      setup({
+        extractionIssues: [
+          { question: 1, kind: "invented", items: ["x+y=5"] },
+          { question: 4, kind: "unread", items: ["[fórmula não lida]"] },
+        ],
+      });
+      const notice = screen.getByRole("status", { name: /confira estas questões com o original/i });
+      expect(notice).toHaveTextContent("Questão 1: tem valores que não aparecem no arquivo enviado (x+y=5).");
+      expect(notice).toHaveTextContent("Questão 4: tem uma parte que não deu para ler");
+      expect(screen.getByRole("button", { name: /exportar/i })).toBeEnabled();
+    });
+
+    it("names the question by the number the sheet prints, not by its position in the reading (F5)", () => {
+      const q = (n: number, customNumber?: string) => ({
+        id: id(n),
+        type: "question" as const,
+        stem: [{ id: id(n + 100), type: "paragraph" as const, content: [{ type: "text" as const, text: "q" }] }],
+        answer: { kind: "open" as const },
+        customNumber,
+      });
+      setup({
+        document: { ...DOC, blocks: [DOC.blocks[0], q(11), q(12, "7"), q(13)] } as CanonicalDocument,
+        extractionIssues: [
+          { question: 2, kind: "unread", items: ["[fórmula não lida]"], of: 3, excerpt: "q" },
+          { question: 1, kind: "gap", items: [], of: 5, excerpt: "Calcule a área" },
+        ],
+      });
+      const notice = screen.getByRole("status", { name: /confira estas questões com o original/i });
+      expect(notice).toHaveTextContent("Questão 7: tem uma parte que não deu para ler");
+      expect(notice).toHaveTextContent('A questão "Calcule a área": parece estar sem a conta');
+    });
+
+    it("shows nothing when there is no issue (or none was computed)", () => {
+      setup();
+      expect(screen.queryByRole("status", { name: /confira estas questões/i })).not.toBeInTheDocument();
+      setup({ extractionIssues: [] });
+      expect(screen.queryByRole("status", { name: /confira estas questões/i })).not.toBeInTheDocument();
+    });
+  });
+
+  describe("adaptationIssues (C-04)", () => {
+    it("shows, apart from the reading's notice, the numbers the AI added to a question", () => {
+      setup({
+        extractionIssues: [{ question: 1, kind: "unread", items: ["[fórmula não lida]"] }],
+        adaptationIssues: [{ question: 1, kind: "new_value", items: ["10"] }],
+      });
+      const notice = screen.getByRole("status", { name: /confira estes números com a atividade original/i });
+      expect(notice).toHaveTextContent("Questão 1: tem números que a atividade enviada não trazia (10).");
+      expect(screen.getByRole("status", { name: /confira estas questões com o original/i })).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: /exportar/i })).toBeEnabled();
+    });
+
+    // L9BC-6: the title and the hint say "números" only for a notice that is only about numbers.
+    it("does not call it 'números' when the notice is about a formula, a fraction or an answer key", () => {
+      setup({ adaptationIssues: [{ question: 1, kind: "invalid_latex", items: ["\\frac{1}{"] }] });
+      const notice = screen.getByRole("status", { name: /confira estes trechos com a atividade original/i });
+      expect(notice).toHaveTextContent("tem uma fórmula que não foi possível mostrar");
+      expect(notice).not.toHaveTextContent(/números/);
+      expect(screen.queryByRole("status", { name: /confira estes números/i })).not.toBeInTheDocument();
+    });
+
+    it("keeps 'números' when numbers are mixed with another kind only if every issue is about numbers", () => {
+      setup({
+        adaptationIssues: [
+          { question: 1, kind: "new_value", items: ["10"] },
+          { question: 2, kind: "invalid_latex", items: ["x^"] },
+        ],
+      });
+      expect(screen.getByRole("status", { name: /confira estes trechos com a atividade original/i })).toBeInTheDocument();
+    });
+
+    it("shows nothing when the check found nothing (or was not computed, as in an old adaptation)", () => {
+      setup({ adaptationIssues: [] });
+      expect(screen.queryByRole("status", { name: /confira estes (números|trechos)/i })).not.toBeInTheDocument();
+      setup();
+      expect(screen.queryByRole("status", { name: /confira estes (números|trechos)/i })).not.toBeInTheDocument();
+    });
+  });
+
   describe("originalExam (Adaptar direto do arquivo)", () => {
     it("does not show 'Ver prova original' when there is no original file (Banco de Questões)", () => {
       setup();

@@ -42,7 +42,7 @@ const result: AdaptationResult = {
  * The server persists the adaptation and hands back the row it created (A7),
  * so every successful invoke answers with the document AND its row identity.
  */
-const SERVER_ROW = { id: "row-1", updatedAt: "2026-07-23T10:00:00Z" };
+const SERVER_ROW = { id: "row-1", updatedAt: "2026-07-23T10:00:00Z", reviewIssues: [] };
 
 const okResponse = () => ({
   data: {
@@ -236,7 +236,22 @@ describe("StepGenerate", () => {
     expect(onResult).toHaveBeenCalledWith(result, {
       id: "row-1",
       updatedAt: "2026-07-23T10:00:00Z",
+      reviewIssues: [],
     });
+  });
+
+  it("hands over what the server's check of the adaptation found (C-04), dropping what it cannot read", async () => {
+    const onResult = vi.fn();
+    const found = { question: 4, kind: "new_value", items: ["10"], of: 5, excerpt: "A figura" };
+    invokeMock.mockResolvedValueOnce({
+      data: { ...okResponse().data, review_issues: [found, { kind: "bogus" }, "x"] },
+      error: null,
+    });
+    renderWithProviders(
+      <StepGenerate data={baseData} onResult={onResult} onNext={vi.fn()} onPrev={vi.fn()} />,
+    );
+    await waitFor(() => expect(onResult).toHaveBeenCalled());
+    expect(onResult.mock.calls[0][1].reviewIssues).toEqual([found]);
   });
 
   it("fails loudly when the server answers without a persisted row", async () => {
@@ -703,6 +718,49 @@ describe("StepGenerate", () => {
     await waitFor(() => expect(invokeMock).toHaveBeenCalled());
     expect(extractExamQuestionsMock).toHaveBeenCalledWith(uploadedExam, "user-1", expect.any(AbortSignal));
     expect(invokeMock.mock.calls[0][1].body.original_activity).toBe("1) Primeira");
+  });
+
+  it("hands the extraction's issues to the wizard without pausing or blocking the generation (C-03)", async () => {
+    const issues = [{ question: 1, kind: "invented", items: ["7+9"] }];
+    extractExamQuestionsMock.mockResolvedValueOnce({
+      status: "ok",
+      questions: [{ text: "Calcule 7 + 9", options: null, image_url: null }],
+      issues,
+    });
+    invokeMock.mockResolvedValueOnce(okResponse());
+    const onExtractionIssues = vi.fn();
+    const onResult = vi.fn();
+    renderWithProviders(
+      <StepGenerate
+        data={uploadData}
+        onResult={onResult}
+        onNext={vi.fn()}
+        onPrev={vi.fn()}
+        onExtractionIssues={onExtractionIssues}
+      />,
+    );
+    await waitFor(() => expect(onResult).toHaveBeenCalled());
+    expect(onExtractionIssues).toHaveBeenCalledWith(issues);
+    expect(invokeMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("clears the issues when a (re)extraction comes back without any", async () => {
+    extractExamQuestionsMock.mockResolvedValueOnce({
+      status: "ok",
+      questions: [{ text: "Primeira", options: null, image_url: null }],
+    });
+    invokeMock.mockResolvedValueOnce(okResponse());
+    const onExtractionIssues = vi.fn();
+    renderWithProviders(
+      <StepGenerate
+        data={uploadData}
+        onResult={vi.fn()}
+        onNext={vi.fn()}
+        onPrev={vi.fn()}
+        onExtractionIssues={onExtractionIssues}
+      />,
+    );
+    await waitFor(() => expect(onExtractionIssues).toHaveBeenCalledWith([]));
   });
 
   it("sends the exam's title and general instruction before the questions (0473)", async () => {

@@ -109,9 +109,18 @@ function blockToLines(block: Block, number: number): string[] {
       // visually apart from alternatives ("a)").
       const prefix = `${block.customNumber ?? number}. `;
       let questionCount = 0;
-      const stem = block.stem.flatMap((child) =>
+      const stemLines = block.stem.flatMap((child) =>
         blockToLines(child, child.type === "question" ? ++questionCount : 0),
       );
+      // O `enunciado` é texto impresso na folha (PDF, Word e tela o desenham): "below"
+      // por padrão, depois do corpo, ou "above", antes dele. Omiti-lo fazia do "Copiar"
+      // a única saída que apagava o texto (achado C-19). O número vai na 1ª linha de
+      // quem abre a questão, como na folha.
+      const enunciadoLines = block.enunciado?.length ? [richTextToText(block.enunciado)] : [];
+      const stem =
+        block.enunciadoPosition === "above"
+          ? [...enunciadoLines, ...stemLines]
+          : [...stemLines, ...enunciadoLines];
       if (stem.length > 0) stem[0] = prefix + stem[0];
       const instruction = block.instruction ? [richTextToText(block.instruction)] : [];
       return [...stem, ...instruction, ...answerToLines(block.answer)];

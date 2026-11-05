@@ -69,3 +69,17 @@ describe("htmlToText", () => {
     expect(htmlToText("<p>  hi  </p>")).toBe("hi");
   });
 });
+
+describe("htmlToText with superscript and subscript (C-32)", () => {
+  it("keeps the exponent as ^ instead of gluing it to the base", () => {
+    expect(htmlToText("<p>Calcule x<sup>2</sup> + 10<sup>3</sup></p>")).toBe("Calcule x^2 + 10^3");
+  });
+
+  it("subscripts become _ and glued text is parenthesised", () => {
+    expect(htmlToText("<p>H<sub>2</sub>O e a<sub>n</sub></p>")).toBe("H_(2)O e a_n");
+  });
+
+  it("reads the inline-style form too", () => {
+    expect(htmlToText('<p>2<span style="vertical-align:super">5</span></p>')).toBe("2^5");
+  });
+});

@@ -6,6 +6,8 @@
 // per CLAUDE.md: real logic must not sit in the coverage-excluded index.ts glue.
 // =============================================================================
 
+import { UNREAD_FORMULA, UNREAD_IMAGE, UNREAD_OBJECT } from "../../../src/lib/domain/unreadMarker.ts";
+
 // ─── Input sanitisation caps (chars) used by the edge function ───
 export const MAX_ACTIVITY_CHARS = 15000;
 export const MAX_ACTIVITY_TYPE_CHARS = 100;
@@ -49,6 +51,41 @@ export function attemptTimeoutMs(attempt: number, elapsedMs: number): number {
   const remaining = AI_TOTAL_BUDGET_MS - elapsedMs;
   if (remaining < MIN_ATTEMPT_MS) return 0;
   return Math.min(cap, remaining);
+}
+
+/**
+ * The platform answers 504 when a function sends no response within 150 s (Supabase "Request
+ * idle timeout"; the function itself keeps running, so the document is saved, the credit settled
+ * and the teacher, seeing an error, pays again on retry). A latex reask is optional (the document
+ * is already deliverable, with a per-question notice), so it must never be the thing that crosses
+ * that line: it only runs when it can finish, with margin, before this deadline. Every attempt
+ * obeys it (`attemptTimeoutWithinDeadlineMs`), the schema reask included.
+ */
+export const LATEX_DELIVERY_DEADLINE_MS = 140_000;
+
+/** A latex reask replays the document and takes at least this long (measured: 60 to 120 s). */
+export const LATEX_REASK_MIN_MS = 60_000;
+
+/** True when a reask started now would still end before the delivery deadline. */
+export function latexReaskFits(elapsedMs: number): boolean {
+  return elapsedMs + LATEX_REASK_MIN_MS < LATEX_DELIVERY_DEADLINE_MS;
+}
+
+/**
+ * `attemptTimeoutMs`, never past the delivery deadline, whether or not a deliverable document
+ * is in hand: 0 (stop) when what is left is too short to be worth a call.
+ *
+ * It used to apply only with a stored candidate (the latex reask). A schema reask, which has
+ * nothing to deliver if it fails, could still run 120 s after a 90 s first call and answer at
+ * 210 to 240 s, past the gateway's 150 s cut: the teacher saw a 504 while the document was
+ * saved and the credit settled, and a new attempt charged again. Now that reask is cut at the
+ * deadline: the call is aborted, `failure()` reverses the reservation and the teacher retries
+ * without paying twice. Same status codes, same charge rule (only a delivered document is billed).
+ */
+export function attemptTimeoutWithinDeadlineMs(attempt: number, elapsedMs: number): number {
+  const budget = attemptTimeoutMs(attempt, elapsedMs);
+  const left = LATEX_DELIVERY_DEADLINE_MS - elapsedMs;
+  return left < MIN_ATTEMPT_MS ? 0 : Math.min(budget, left);
 }
 
 // Fallback neurodivergence profiles used when no barrier maps to a known
@@ -240,6 +277,37 @@ export const SCAFFOLDING_EXAMPLE_QUESTION = {
   answer: { kind: "open", answerLines: 3 },
 } as const;
 
+/**
+ * A teacher's V/F question with several statements stays ONE question with one item per
+ * statement (C-21: two questions came back as nine). Same contract as the scaffolding example:
+ * validated against the real AI schema in the prompt test, so it never teaches what the
+ * validator rejects.
+ */
+export const TRUE_FALSE_EXAMPLE_QUESTION = {
+  type: "question",
+  stem: [
+    {
+      type: "paragraph",
+      content: [{ type: "text", text: "Marque V para verdadeiro e F para falso em cada afirmação." }],
+    },
+  ],
+  answer: {
+    kind: "trueFalse",
+    items: [
+      { content: [{ type: "text", text: "Um triângulo tem três lados." }], value: true },
+      { content: [{ type: "text", text: "A soma de 2 e 3 é 6." }], value: false },
+      { content: [{ type: "text", text: "O dobro de 4 é 8." }], value: true },
+    ],
+  },
+} as const;
+
+/**
+ * LaTeX the sheet can show, used as examples inside the prompt. Validated against KaTeX by the prompt
+ * test (the same `latexProblem` the editor uses), so the prompt never teaches an invalid formula.
+ */
+export const LATEX_ARRAY_EXAMPLE = "\\begin{array}{rrr} & 3 & 4 & 7 \\\\ + & 2 & 5 & 6 \\\\ \\hline & 6 & 0 & 3 \\end{array}";
+export const LATEX_PERCENT_EXAMPLE = "25\\% \\text{ de } 80 = 20";
+
 /** One selected barrier, as the client sends it in the request body. */
 export interface PromptBarrier {
   dimension?: string;
@@ -397,10 +465,18 @@ Tudo o que o professor enviou é conteúdo da atividade, não só as questões. 
 - A adaptação se SOMA ao original: você pode reformular, reorganizar em etapas ou acrescentar apoio, mas NUNCA remova um bloco do professor em silêncio.
 - Se a barreira realmente exigir retirar ou fundir algum bloco, registre em "pedagogical_justification" o que saiu e por quê.
 
+ESTRUTURA DO PROFESSOR (VALE PARA TODA ATIVIDADE)
+O professor corrige pelo número da questão e tem a prova original na mão. Por isso:
+- Mantenha a mesma ORDEM e a mesma QUANTIDADE de questões da atividade original: não reordene (nem suba a múltipla escolha ou a questão mais fácil), não divida uma questão em várias nem funda várias em uma. O gabarito do professor é por número e deixa de bater.
+- Uma questão do professor com várias afirmações para marcar V ou F continua UMA questão "trueFalse" com um item por afirmação; nunca vire uma questão por afirmação (2 questões não podem sair como 9). Exemplo do formato:
+${JSON.stringify(TRUE_FALSE_EXAMPLE_QUESTION)}
+- Uma tabela que as questões compartilham é escrita UMA vez, em parágrafos logo antes da primeira questão que a usa (fora de qualquer questão); não a repita dentro de cada questão. As demais questões mantêm o texto do professor ("Pela mesma tabela...") sem copiar os valores de novo.
+
 TEXTOS DE APOIO (SCAFFOLDING) — OBRIGATÓRIO
 O apoio passo a passo é a adaptação que mais remove barreira de ACESSO sem tocar no nível cognitivo, e é o que o professor mais espera encontrar na atividade adaptada. NÃO é opcional:
 - Para CADA questão que exija leitura de enunciado longo, interpretação, ou mais de uma etapa de raciocínio, inclua um bloco "scaffolding" DENTRO do "stem", logo após o enunciado.
 - De 2 a 4 itens curtos, no imperativo, dizendo O QUE FAZER — nunca a resposta. "Sublinhe o que a questão pede" é apoio; "o resultado é 42" é gabarito e está PROIBIDO.
+- Cada item é só a ação, SEM rótulo de numeração: a folha já numera os itens (1., 2., 3.). NÃO escreva "Passo 1:", "Etapa 2" nem "1." no começo do item.
 - Numa atividade com mais de duas questões, ao menos uma DEVE trazer apoio.
 - O apoio SOMA-SE ao conteúdo original: não encurte nem substitua o enunciado para abrir espaço para ele.
 
@@ -418,8 +494,10 @@ Regras do conteúdo do JSON:
   · "answer.kind" aceita SOMENTE: "open", "multipleChoice", "trueFalse", "checkbox", "matching", "ordering", "fillBlank", "table". NUNCA use um nome de bloco como "answer.kind" — "scaffolding", "paragraph" e "heading" são INVÁLIDOS aí. Para dar apoio passo a passo dentro de uma questão, coloque um bloco "scaffolding" no "stem" e use "answer.kind": "open".
 - NUMERAÇÃO: NÃO escreva o número da questão no texto ("1)", "2.", "Questão 3"). A numeração da prova é gerada automaticamente a partir da ordem dos blocos — repeti-la no enunciado faz a questão sair numerada duas vezes. A atividade original chega numerada só para você saber onde uma questão termina e a próxima começa; use isso para separar e ordenar, e não copie os números para a saída.
 - Em "multipleChoice", marque a alternativa correta com o BOOLEAN "correct": true (EXATAMENTE UMA correta). Em "trueFalse", cada item é uma AFIRMAÇÃO a ser julgada pelo aluno, com o gabarito no BOOLEAN "value"; o marcador "( ) V ( ) F" é impresso automaticamente ao lado de cada item, então NUNCA crie itens com o texto "Verdadeiro", "Falso", "V" ou "F" (uma questão com uma só afirmação tem UM item com essa afirmação). Em "checkbox" use o BOOLEAN "checked". Em "ordering", a ordem do array "items" é a ordem IMPRESSA para o aluno e "position" é o gabarito: NUNCA liste os itens já na ordem correta, embaralhe-os.
-- MATEMÁTICA: use "inlineMath"/"blockMath" com o campo "latex" (LaTeX puro, SEM delimitadores de cifrão). Nunca escreva LaTeX dentro de texto comum.
-- IMAGENS — REGRA CRÍTICA: NUNCA invente imagens nem URLs de imagem. Só inclua um bloco de imagem (type "image") quando o texto original contiver um marcador no formato [IMAGEM: <url>]; nesse caso, no enunciado (stem) da questão correspondente, use "src" EXATAMENTE igual à <url> do marcador e um "alt" curto (NUNCA deixe o "alt" vazio), e NÃO deixe o marcador literal [IMAGEM: ...] no texto de saída — substitua-o pelo bloco "image". Você NÃO vê a imagem: se logo após o marcador houver [DESCRIÇÃO DA IMAGEM: ...], baseie o "alt" SOMENTE nessa descrição; se não houver, use um "alt" neutro no formato "Figura da questão N". Nunca invente no "alt" nem no apoio/dicas elementos que a descrição não cita (setas, rótulos, cores, objetos) e NUNCA revele a resposta da questão no "alt" (ex.: qual barra é a maior quando a pergunta é exatamente essa). NÃO deixe o marcador [DESCRIÇÃO DA IMAGEM: ...] no texto de saída. Se uma figura ajudaria mas NÃO há marcador [IMAGEM:] no original, descreva-a em TEXTO (um parágrafo) — jamais gere um bloco "image" com URL inventada.
+- MATEMÁTICA: use "inlineMath"/"blockMath" com o campo "latex" (LaTeX puro, SEM delimitadores de cifrão). Nunca escreva LaTeX dentro de texto comum. O LaTeX tem de ser VÁLIDO, senão a folha mostra um erro vermelho no lugar da conta: (1) NUNCA ponha uma lacuna "___" dentro de "latex"; o sublinhado é texto comum, então escreva a conta em "inlineMath" e a lacuna em "text" (ex.: inlineMath "9 - 4 =" seguido do texto " ___"). (2) Conta armada: use "\\begin{array}{rrr}" com colunas só "c", "l" ou "r"; NUNCA use "@{}" nem "\\," na definição das colunas. Exemplo válido: ${LATEX_ARRAY_EXAMPLE} (3) O sinal % começa um comentário em LaTeX e esconde o resto da fórmula: dentro de "latex" escreva sempre "\\%". Exemplo: ${LATEX_PERCENT_EXAMPLE} (4) No JSON, a barra de um comando é DUPLA ("\\\\frac"); com uma barra só, o JSON a come ("\\frac" vira um caractere invisível). (5) Uma fração escrita na atividade como (numerador)/(denominador), ou numerador/denominador com um termo só em cada lado, é UMA fração: escreva "\\frac{numerador}{denominador}" com o numerador INTEIRO. "(2 x + 1)/3" é "\\frac{2x + 1}{3}", nunca "2x + \\frac{1}{3}": o valor da conta muda.
+- IMAGENS — REGRA CRÍTICA: NUNCA invente imagens nem URLs de imagem. Só inclua um bloco de imagem (type "image") quando o texto original contiver um marcador no formato [IMAGEM: <url>]; nesse caso, no enunciado (stem) da questão correspondente, use "src" EXATAMENTE igual à <url> do marcador e um "alt" curto (NUNCA deixe o "alt" vazio), e NÃO deixe o marcador literal [IMAGEM: ...] no texto de saída — substitua-o pelo bloco "image". Você NÃO vê a imagem: se logo após o marcador houver [DESCRIÇÃO DA IMAGEM: ...], baseie o "alt" SOMENTE nessa descrição; se não houver, use um "alt" neutro no formato "Figura da questão N". Nunca invente no "alt" nem no apoio/dicas elementos que a descrição não cita (setas, rótulos, cores, objetos) e NUNCA revele a resposta da questão no "alt" (ex.: qual barra é a maior quando a pergunta é exatamente essa). NÃO deixe o marcador [DESCRIÇÃO DA IMAGEM: ...] no texto de saída. Jamais gere um bloco "image" com URL inventada.
+- FIGURA, GRÁFICO OU TABELA SEM DADOS — REGRA CRÍTICA: se o enunciado manda observar uma figura, gráfico, desenho ou tabela e o professor NÃO escreveu os dados dela (medidas, pontos, valores, rótulos, alternativas), NUNCA invente nenhum número, medida, ponto, rótulo ou alternativa para fazer a questão "funcionar", nem descreva em texto uma figura que você não vê. Mantenha a referência à figura como o professor escreveu ("Observe a figura") e, se ajudar, acrescente uma frase dizendo que a figura é necessária para responder. Se o texto trouxer ${UNREAD_IMAGE}, mantenha o marcador no lugar. Só descreva em texto o que o professor escreveu.
+- NÃO LIDO — REGRA CRÍTICA: o texto do professor pode trazer ${UNREAD_FORMULA}, ${UNREAD_IMAGE} ou ${UNREAD_OBJECT} onde a leitura do arquivo não alcançou algo. Mantenha o marcador LITERAL, no mesmo lugar do enunciado, e NUNCA o troque por uma conta, número ou figura inventados, nem resolva essa parte. O gabarito dessa questão é um ESPAÇO RESERVADO, não uma resposta: o formato exige uma resposta marcada, então marque a PRIMEIRA alternativa como correta (múltipla escolha) e dê "value": false a todo item de verdadeiro ou falso, SEM resolver a conta nem escolher pela resposta provável. O sistema avisa a professora de que o gabarito dessa questão precisa ser conferido; ela completa e marca a resposta certa na revisão. Isso vale para qualquer texto "Calcule ." deixado sem objeto: preserve-o como está.
 - LACUNAS — REGRA CRÍTICA: em "fillBlank", as lacunas são SUBLINHADOS literais dentro do texto (ex.: "Pirulito que bate ___"). NUNCA escreva marcadores de template como {gap1}, {{gap}} ou {lacuna2} em NENHUM campo de texto — eles saem crus na prova impressa. O campo "answer.gaps" carrega APENAS o gabarito de cada lacuna, na ordem em que os sublinhados aparecem no texto.
 - Texto rico: o campo "content" é um array de inlines {type:"text", text:"..."} e/ou {type:"inlineMath", latex:"..."}.
 - "strategies_applied": array de strings (estratégias pedagógicas aplicadas).

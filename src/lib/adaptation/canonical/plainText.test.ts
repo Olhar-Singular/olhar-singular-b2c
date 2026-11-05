@@ -174,6 +174,60 @@ describe("documentToPlainText", () => {
     expect(documentToPlainText(doc)).toBe(`Responda.\n${openLines(3)}`);
   });
 
+  describe("enunciado da questão (C-19)", () => {
+    const question = (extra: Record<string, unknown>): CanonicalDocument => ({
+      schemaVersion: 1,
+      blocks: [
+        {
+          id: id(1),
+          type: "question",
+          stem: [{ id: id(2), type: "paragraph", content: [{ type: "text", text: "Corpo." }] }],
+          enunciado: [{ type: "text", text: "Leia o texto e responda." }],
+          answer: { kind: "fillBlank", gaps: [] },
+          ...extra,
+        } as never,
+      ],
+    });
+
+    it("sai depois do corpo por padrão, como a folha o imprime (posição 'below')", () => {
+      expect(documentToPlainText(question({}))).toBe("1. Corpo.\nLeia o texto e responda.");
+    });
+
+    it("sai antes do corpo, e o número vai na primeira linha, com 'above'", () => {
+      expect(documentToPlainText(question({ enunciadoPosition: "above" }))).toBe(
+        "1. Leia o texto e responda.\nCorpo.",
+      );
+    });
+
+    it("questão só com enunciado leva o número nele", () => {
+      expect(documentToPlainText(question({ stem: [] }))).toBe("1. Leia o texto e responda.");
+    });
+
+    it("enunciado vazio não acrescenta linha, e fórmula nele sai como LaTeX", () => {
+      expect(documentToPlainText(question({ enunciado: [] }))).toBe("1. Corpo.");
+      expect(
+        documentToPlainText(
+          question({ enunciado: [{ type: "inlineMath", latex: "x^2", alt: "x ao quadrado" }] }),
+        ),
+      ).toBe("1. Corpo.\nx^2");
+    });
+
+    it("o gabarito continua oculto: enunciado entra, resposta marcada não", () => {
+      const text = documentToPlainText(
+        question({
+          answer: {
+            kind: "multipleChoice",
+            alternatives: [
+              { id: id(3), content: [{ type: "text", text: "sim" }], correct: true },
+              { id: id(4), content: [{ type: "text", text: "não" }], correct: false },
+            ],
+          },
+        }),
+      );
+      expect(text).toBe("1. Corpo.\nLeia o texto e responda.\na) sim\nb) não");
+    });
+  });
+
   it("auto-numbers a question nested inside another question's stem", () => {
     const doc: CanonicalDocument = {
       schemaVersion: 1,

@@ -46,8 +46,11 @@ export function PdfMath({
   block,
   blockGap = 12,
   fontSize = BASE_FONT_PT,
+  columnPt,
 }: {
   block: BlockMathBlock;
+  /** Largura REAL da coluna do bloco, em pt (`columnWidth.ts`); ausente = a folha. */
+  columnPt?: number;
   blockGap?: number;
   /** Corpo do documento (pt): a fórmula escala com ele, como na tela (achado 0402). */
   fontSize?: number;
@@ -59,7 +62,7 @@ export function PdfMath({
   return (
     <View style={{ marginBottom, alignItems }}>
       <View>
-        {mathBlockLines(block.latex, fontSize).map((line, i) => (
+        {mathBlockLines(block.latex, fontSize, columnPt).map((line, i) => (
           <Text
             key={i}
             style={{ ...mathPdfStyle(fontSize), textAlign: "left", ...textStyle }}

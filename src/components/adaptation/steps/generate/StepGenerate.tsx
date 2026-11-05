@@ -19,6 +19,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { insufficientCreditsMessage } from "@/lib/domain/access";
 import { calcAdaptationCost } from "@/lib/domain/barriers";
 import { EXTRACTION_COST } from "@/lib/domain/extractionCost";
+import { parseExtractionIssues, type ExtractionIssue } from "@/lib/domain/examIssues";
 import { extractExamQuestions } from "../upload-exam/extractExamQuestions";
 import {
   buildActivityTextFromExtraction,
@@ -51,6 +52,8 @@ export type GeneratedRow = {
   id: string;
   /** Seeds the autosave optimistic-concurrency token — no extra round-trip. */
   updatedAt: string;
+  /** What the server's check of the adaptation found (C-04). Informs only; empty when none. */
+  reviewIssues?: ExtractionIssue[];
 };
 
 type Props = {
@@ -68,9 +71,22 @@ type Props = {
    * anterior continuasse intacto no servidor: só um reload devolvia o Passo 5.
    */
   onRestorePrevious?: () => void;
+  /**
+   * The check of the AI extraction against the file's text (C-03). Reported as soon as
+   * the extraction returns, for Revisar to show; the generation does not wait for it.
+   */
+  onExtractionIssues?: (issues: ExtractionIssue[]) => void;
 };
 
-export function StepGenerate({ data, onResult, onNext, onPrev, onLoadingChange, onRestorePrevious }: Props) {
+export function StepGenerate({
+  data,
+  onResult,
+  onNext,
+  onPrev,
+  onLoadingChange,
+  onRestorePrevious,
+  onExtractionIssues,
+}: Props) {
   const { user, refreshProfile } = useAuth();
   const queryClient = useQueryClient();
   // The file to read at this step, per the mode the teacher is in (null on the
@@ -225,6 +241,7 @@ export function StepGenerate({ data, onResult, onNext, onPrev, onLoadingChange, 
     onResult(fnResult.adaptation as AdaptationResult, {
       id: adaptationId,
       updatedAt: adaptationUpdatedAt,
+      reviewIssues: parseExtractionIssues(fnResult.review_issues),
     });
     refreshCredits();
     onNext();
@@ -304,6 +321,7 @@ export function StepGenerate({ data, onResult, onNext, onPrev, onLoadingChange, 
       }
       extracted = result.questions;
       header = result.header;
+      onExtractionIssues?.(result.issues ?? []);
     } catch (e) {
       /* v8 ignore next -- AbortController race */
       if ((e as Error).name === "AbortError" || controller.signal.aborted) return;
@@ -326,7 +344,7 @@ export function StepGenerate({ data, onResult, onNext, onPrev, onLoadingChange, 
     }
 
     await proceedToAdapt(buildActivityTextFromExtraction(extracted, header), controller, extracted.length);
-  }, [data, uploadedExam, user, proceedToAdapt, onLoadingChange, refreshCredits]);
+  }, [data, uploadedExam, user, proceedToAdapt, onLoadingChange, onExtractionIssues, refreshCredits]);
 
   function confirmTruncate() {
     /* v8 ignore next -- guard: the dialog only renders while pendingExtracted is set */

@@ -3,7 +3,8 @@ import mammoth from "mammoth";
 import { linearizeDocumentMath } from "./docx-math";
 
 export async function extractDocxText(file: File): Promise<string> {
-  const arrayBuffer = await file.arrayBuffer();
+  // Equations, superscripts and unreadable objects would be lost or flattened (C-02).
+  const arrayBuffer = await linearizeDocumentMath(await file.arrayBuffer());
   const result = await mammoth.extractRawText({ arrayBuffer });
   return result.value;
 }
@@ -16,7 +17,7 @@ export async function extractDocxText(file: File): Promise<string> {
 const EXTRACTABLE_IMAGE_TYPES = new Set(["image/png", "image/jpeg", "image/webp"]);
 
 export async function extractDocxWithImages(file: File): Promise<{ text: string; images: string[] }> {
-  // Word equations would be silently dropped by mammoth (0276).
+  // Word equations, superscripts and unreadable objects (0276, C-02).
   const arrayBuffer = await linearizeDocumentMath(await file.arrayBuffer());
   const images: string[] = [];
 

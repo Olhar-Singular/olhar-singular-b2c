@@ -15,6 +15,7 @@ import {
   ELEMENT_FONT_RATIOS,
   type ElementFontSizesPt,
 } from "../pageStyle";
+import { contentChildren } from "@/test/pdfTree";
 
 const id = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, "0")}`;
 const rt = (t: string) => [{ type: "text" as const, text: t }];
@@ -494,6 +495,7 @@ describe("PdfMath", () => {
 
 describe("PdfRichText — fórmula inline é um átomo de layout (0425)", () => {
   it("emite o LaTeX inline sem espaço quebrável, sem tocar no texto ao redor", () => {
+    // a marca de "não hifenize" (U+00AD) não imprime nada; sai do texto para comparar o que se vê
     const txt = textOf(
       PdfRichText({
         content: [
@@ -502,7 +504,7 @@ describe("PdfRichText — fórmula inline é um átomo de layout (0425)", () => 
           { type: "text", text: " no conjunto dos reais." },
         ],
       }),
-    );
+    ).replace(/\u00ad/g, "");
     expect(txt).toContain("(x+1)^2\u00a0=\u00a00");
     expect(txt).toContain("ela e equivalente a ");
   });
@@ -673,7 +675,7 @@ describe("Layout — PdfAnswer marker has flexShrink:0 (prevents row overlap)", 
     };
     const el = PdfAnswer({ answer }) as ReactElement;
     // Outer <View> → first row <View> → first child <Text> (the marker)
-    const firstRow = (el.props as { children: ReactElement[] }).children[0] as ReactElement;
+    const firstRow = contentChildren(el)[0];
     const markerText = (firstRow.props as { children: ReactElement[] }).children[0] as ReactElement;
     expect((markerText.props.style as { flexShrink?: number }).flexShrink).toBe(0);
   });
@@ -684,7 +686,7 @@ describe("Layout — PdfAnswer marker has flexShrink:0 (prevents row overlap)", 
       pairs: [{ id: id(1), left: rt("A"), right: rt("B") }],
     };
     const el = PdfAnswer({ answer }) as ReactElement;
-    const firstRow = (el.props as { children: ReactElement[] }).children[0] as ReactElement;
+    const firstRow = contentChildren(el)[0];
     // Row children: [leftView, connectorText, rightView]
     const connector = (firstRow.props as { children: ReactElement[] }).children[1] as ReactElement;
     expect((connector.props.style as { flexShrink?: number }).flexShrink).toBe(0);

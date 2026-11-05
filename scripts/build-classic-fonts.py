@@ -36,10 +36,14 @@ O resultado é travado por `src/components/adaptation/render/pdf/fontAssets.test
 (TrueType real, cobertura pt-BR, sem `liga`) e por `fontsEmbedded.test.ts`.
 """
 
+import sys
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from fontTools import subset
 from fontTools.ttLib import TTFont
+from font_composites import decompose_composites
 
 SOURCE_DIR = Path("/usr/share/fonts/truetype/liberation")
 FONTS_DIR = Path(__file__).resolve().parent.parent / "public" / "fonts"
@@ -48,12 +52,17 @@ FACES = ["Regular", "Bold", "Italic", "BoldItalic"]
 FAMILIES = ["LiberationSans", "LiberationSerif"]
 
 # Repertório mantido: ASCII + Latin-1 + Latin Extended-A/B, espaçamentos
-# modificadores, grego (alt de fórmula), pontuação geral, moedas, símbolos
-# matemáticos, setas e formas geométricas (a caixa do checkbox).
+# modificadores, pontuação geral, moedas, símbolos matemáticos, setas e formas
+# geométricas (a caixa do checkbox).
+#
+# SEM GREGO (achado A1, lote 4b): na Liberation `Α Ε Ν Ο Τ ο` são glifos COMPOSTOS que
+# contêm o `A E N O T o` latino. O fontkit guarda o primeiro objeto de cada id de glifo e
+# o componente nasce sem code point: depois de um grego, a letra latina sumia do texto
+# extraído do PDF (copiar, leitor de tela). O grego vem da DejaVu (sem composto), pela
+# pilha de `fontStack.ts`.
 UNICODE_RANGES = [
     (0x0020, 0x024F),
     (0x02B0, 0x02FF),
-    (0x0370, 0x03FF),
     (0x2000, 0x2BFF),
 ]
 
@@ -70,6 +79,8 @@ def feature_tags(font: TTFont) -> set[str]:
 
 def build(src: Path, dest: Path) -> None:
     font = TTFont(src)
+    # Composto vira contorno simples ANTES do subset (achado A1: ver font_composites.py).
+    decompose_composites(font)
     options = subset.Options()
     options.layout_features = sorted(feature_tags(font) - {"liga"})
     options.glyph_names = True

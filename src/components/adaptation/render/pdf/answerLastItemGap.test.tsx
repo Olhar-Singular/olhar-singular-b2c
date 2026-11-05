@@ -15,13 +15,14 @@ import type { ReactElement } from "react";
 import type { QuestionAnswer } from "@/lib/adaptation/canonical/schema";
 import { ANSWER_ITEM_GAP_PT, ANSWER_LINE_GAP_PT } from "../pageTokens";
 import { PdfAnswer } from "./PdfAnswer";
+import { contentChildren } from "@/test/pdfTree";
 
 type Style = { marginBottom?: number };
 
 /** Estilos das linhas (filhos diretos do contêiner) que PdfAnswer devolve. */
 function rowStyles(answer: QuestionAnswer): Style[] {
   const node = PdfAnswer({ answer }) as ReactElement;
-  const children = (node.props as { children: ReactElement[] }).children;
+  const children = contentChildren(node);
   return children.map((c) => (c.props as { style: Style }).style);
 }
 

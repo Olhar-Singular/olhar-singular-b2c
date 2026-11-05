@@ -57,7 +57,9 @@ export interface LatexDraft {
 export function useLatexDraft(
   latex: string,
   alt: string | null,
-  updateAttributes: (attrs: { latex?: string; alt?: string | null }) => void
+  updateAttributes: (attrs: { latex?: string; alt?: string | null }) => void,
+  /** A block formula is drawn in display mode, so it is validated in display mode (N-M-002). */
+  displayMode = false,
 ): LatexDraft {
   const [draft, setDraft] = useState(latex);
   const [altStale, setAltStale] = useState(false);
@@ -72,7 +74,7 @@ export function useLatexDraft(
     setDraft(latex);
   }, [latex]);
 
-  const error = latexParseError(draft);
+  const error = latexParseError(draft, { displayMode, ptBr: true });
 
   return {
     value: draft,
@@ -83,7 +85,7 @@ export function useLatexDraft(
       setDraft(next);
       if (next.length === 0) return;
       // Achado 0434: o nó só recebe o que o KaTeX consegue ler.
-      if (latexParseError(next) !== null) return;
+      if (latexParseError(next, { displayMode }) !== null) return;
       if (alt !== null && next !== latex) {
         updateAttributes({ latex: next, alt: null });
         setAltStale(true);

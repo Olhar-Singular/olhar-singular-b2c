@@ -29,6 +29,7 @@ import {
   ScaffoldingNode,
   QuestionNode,
 } from "@/lib/adaptation/tiptap/schema";
+import { linearizeHtmlScripts } from "@/lib/domain/scriptText";
 import { flattenPastedTables } from "./pastedTables";
 import { QuestionNodeView } from "./nodeviews/QuestionNodeView";
 import { ImageNodeView } from "./nodeviews/ImageNodeView";
@@ -146,8 +147,12 @@ export function useCanonicalEditor({
       // Word virava o parágrafo "AB", sem separador e sem aviso (achado 0450).
       // Achatamos antes do parser, preservando a fronteira das células, e
       // avisamos que a tabela não sobreviveu como tabela.
+      //
+      // Sobrescrito/subscrito: o schema canônico não tem essa marca e o parser a
+      // descartava, então `x<sup>2</sup>` virava `x2` (C-11). Vira `x^2`, a mesma
+      // convenção do .docx (`scriptText.ts`, a única regra).
       transformPastedHTML: (html: string) => {
-        const { html: flattened, tables } = flattenPastedTables(html);
+        const { html: flattened, tables } = flattenPastedTables(linearizeHtmlScripts(html));
         if (tables > 0) {
           toast.warning(
             tables === 1

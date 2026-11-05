@@ -28,7 +28,7 @@ import { pageTokensToPdf } from "../pageTokens";
 
 const mockRegister = vi.fn();
 vi.mock("@react-pdf/renderer", () => ({
-  Font: { register: mockRegister, registerHyphenationCallback: vi.fn() },
+  Font: { register: mockRegister, registerHyphenationCallback: vi.fn(), getRegisteredFonts: vi.fn(() => ({})) },
 }));
 
 /** Famílias built-in do `@react-pdf` (Type 1 padrão do PDF, jamais embutidas). */

@@ -4,6 +4,8 @@ import { ArrowLeft, ArrowRight, CheckCircle2, Clock, FileText, Loader2, Trash2, 
 import { detectFileType } from "@/lib/utils/fileValidation";
 import { parsePdf } from "@/lib/utils/pdf-utils";
 import { extractDocxWithImages } from "@/lib/utils/docx-utils";
+import { describeInputProblems, findInputProblems } from "@/lib/domain/examIssues";
+import { ExamIssuesNotice } from "./ExamIssuesNotice";
 import type { WizardData } from "@/lib/adaptation/wizard/wizardState";
 
 type Props = {
@@ -136,6 +138,7 @@ export function StepUploadExam({ data, updateData, onNext, onLoadingChange }: Pr
       updateData({
         uploadedExam: { fileName: file.name, fileType, text, pageImages, file },
         result: null,
+        extractionIssues: null,
       });
     } catch (e) {
       console.error("Exam parsing error:", e);
@@ -282,6 +285,14 @@ export function StepUploadExam({ data, updateData, onNext, onLoadingChange }: Pr
             <Trash2 className="w-4 h-4" />
           </Button>
         </div>
+      )}
+
+      {attached && (
+        <ExamIssuesNotice
+          title="Partes que a leitura não alcançou"
+          lines={describeInputProblems(findInputProblems(attached.text))}
+          hint="Você pode continuar. A leitura marca o que não consegue ler e não completa por conta própria, mas confira estas questões com o original antes de imprimir."
+        />
       )}
 
       <p role="status" aria-live="polite" className="sr-only">{announcement}</p>

@@ -14,7 +14,10 @@ import {
   buildAdaptationResult,
 } from "../../../src/lib/adaptation/canonical/ai.ts";
 import type { AdaptationResult } from "../../../src/lib/adaptation/canonical/schema.ts";
+import { latexReaskFits } from "./adaptationPrompt.ts";
 import { findLabelOnlyTrueFalseItems } from "./trueFalseGuard.ts";
+import { findLatexIssues, repairJsonLatex, latexIssuesToReview, type LatexIssue } from "./latexGuard.ts";
+import type { ExtractionIssue } from "../../../src/lib/domain/examIssues.ts";
 
 /** A chat message in the OpenAI-compatible format used by the AI gateway. */
 export interface ChatMessage {
@@ -73,7 +76,14 @@ export function buildRequestBody(
   };
 }
 
-export type InterpretSuccess = { ok: true; result: AdaptationResult };
+export type InterpretSuccess = {
+  ok: true;
+  result: AdaptationResult;
+  /** Formulas KaTeX still cannot show after the deterministic repair (C-10). The document is otherwise valid. */
+  latexIssues: LatexIssue[];
+  /** What the repair fixed (a JSON escape that ate a backslash, a raw %): for the log (C-12). */
+  repairedLatex: string[];
+};
 export type InterpretFailure = { ok: false; errors: string[] };
 export type InterpretResult = InterpretSuccess | InterpretFailure;
 
@@ -85,6 +95,9 @@ export type InterpretResult = InterpretSuccess | InterpretFailure;
  *  - the JSON does not satisfy the AI activity schema;
  *  - normalization/domain validation rejects the document;
  *  - a trueFalse question lists the V/F options as its items (trueFalseGuard).
+ *
+ * A formula KaTeX cannot show is NOT a failure here: the document is returned with
+ * `latexIssues`, and the caller decides (reask once, then deliver with a notice; C-10).
  */
 export function interpretAiResponse(rawContent: string): InterpretResult {
   let json: unknown;
@@ -95,7 +108,10 @@ export function interpretAiResponse(rawContent: string): InterpretResult {
     return { ok: false, errors: [`Invalid JSON from model: ${reason}`] };
   }
 
-  const parsed = parseAiActivity(json);
+  // C-12/C-18: a `\frac` that arrived as FF + "rac", a raw `%`. Repaired before the schema sees it.
+  const repaired = repairJsonLatex(json);
+
+  const parsed = parseAiActivity(repaired.json);
   if (!parsed.ok) {
     return { ok: false, errors: parsed.errors };
   }
@@ -104,7 +120,7 @@ export function interpretAiResponse(rawContent: string): InterpretResult {
     const result = buildAdaptationResult(parsed.value);
     const trueFalseErrors = findLabelOnlyTrueFalseItems(result);
     if (trueFalseErrors.length > 0) return { ok: false, errors: trueFalseErrors };
-    return { ok: true, result };
+    return { ok: true, result, latexIssues: findLatexIssues(result), repairedLatex: repaired.repairs };
   } catch (e) {
     const reason = e instanceof Error ? e.message : "unknown error";
     return { ok: false, errors: [`Document validation failed: ${reason}`] };
@@ -143,4 +159,39 @@ export function buildReaskMessages(
     { role: "assistant", content: rawContent },
     nextReaskMessage(errors),
   ];
+}
+
+/**
+ * Latex problems get ONE reask, inside the existing attempt loop, and only if it still fits
+ * before the delivery deadline (a reask costs 60 to 120 s and the gateway cuts at 150 s: L7-1).
+ * The attempt must also have a next attempt.
+ */
+export function shouldReaskForLatex(
+  issueCount: number,
+  attempt: number,
+  maxAttempts: number,
+  alreadyReaskedForLatex: boolean,
+  elapsedMs: number,
+): boolean {
+  return issueCount > 0 && attempt < maxAttempts && !alreadyReaskedForLatex && latexReaskFits(elapsedMs);
+}
+
+/** Of two valid candidates, the one with fewer unshowable formulas; a tie goes to the newer one. */
+export function betterCandidate<T extends { latexIssues: unknown[] }>(previous: T | null, next: T): T {
+  return previous && previous.latexIssues.length < next.latexIssues.length ? previous : next;
+}
+
+/**
+ * The result as it is stored and returned: the notices ride along as an optional sibling of
+ * `document` so they survive a reopen (L9A-4). Additive: with nothing to say the result is
+ * returned as is, with no key, exactly as before.
+ */
+export function withReviewIssues(result: AdaptationResult, issues: ExtractionIssue[]): AdaptationResult {
+  return issues.length > 0 ? { ...result, review_issues: issues } : result;
+}
+
+/** The per-question notices for the formulas that stayed invalid (C-10). Informational. */
+export function latexReviewIssues(result: AdaptationResult, issues: LatexIssue[]): ExtractionIssue[] {
+  const questions = (result.document.blocks as Array<{ type?: string }>).filter((b) => b?.type === "question").length;
+  return latexIssuesToReview(issues, questions);
 }

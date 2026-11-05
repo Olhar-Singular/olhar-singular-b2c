@@ -37,16 +37,17 @@ function dispatch(
   blockGap: number,
   elementSizes: ElementFontSizesPt,
   baseFontSize: number,
+  columnPt: number | undefined,
 ) {
   switch (block.type) {
     case "heading":
-      return <PdfHeading block={block} blockGap={blockGap} elementSizes={elementSizes} />;
+      return <PdfHeading block={block} blockGap={blockGap} elementSizes={elementSizes} columnPt={columnPt} />;
     case "paragraph":
-      return <PdfParagraph block={block} blockGap={blockGap} baseFontSize={baseFontSize} />;
+      return <PdfParagraph block={block} blockGap={blockGap} baseFontSize={baseFontSize} columnPt={columnPt} />;
     case "blockMath":
-      return <PdfMath block={block} blockGap={blockGap} fontSize={baseFontSize} />;
+      return <PdfMath block={block} blockGap={blockGap} fontSize={baseFontSize} columnPt={columnPt} />;
     case "image":
-      return <PdfImage block={block} blockGap={blockGap} elementSizes={elementSizes} />;
+      return <PdfImage block={block} blockGap={blockGap} elementSizes={elementSizes} columnPt={columnPt} />;
     case "scaffolding":
       return <PdfScaffolding block={block} elementSizes={elementSizes} />;
     case "divider":
@@ -70,6 +71,7 @@ export function PdfBlock({
   blockGap = 12,
   elementSizes = DEFAULT_ELEMENT_SIZES,
   baseFontSize = BASE_FONT_PT,
+  columnPt,
 }: {
   block: Block;
   number?: number;
@@ -80,8 +82,10 @@ export function PdfBlock({
    * parágrafo e a fórmula, o tamanho da matemática impressa (achado 0402).
    */
   baseFontSize?: number;
+  /** Largura REAL da coluna do bloco, em pt (`columnWidth.ts`): o stem de uma questão é mais estreito que a folha. */
+  columnPt?: number;
 }) {
-  const node = dispatch(block, number, blockGap, elementSizes, baseFontSize);
+  const node = dispatch(block, number, blockGap, elementSizes, baseFontSize, columnPt);
   if (pageBreakBefore(block.style)) {
     return <View break>{node}</View>;
   }

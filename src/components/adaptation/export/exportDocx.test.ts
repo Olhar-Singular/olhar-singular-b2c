@@ -15,7 +15,11 @@ import {
   docxFooter,
   docxDocumentStyles,
   DOCX_CONTENT_WIDTH_TWIPS,
+  buildDocxDocument,
+  xmlSafe,
 } from "./exportDocx";
+import { DEFAULT_PANEL_SETTINGS } from "./panelSettings";
+import { headerNeedsRelease, rowNeedsSplit, tableCellColumnPt } from "../render/pdf/tableRowFit";
 import {
   HEADING_PT,
   PAGE_MARGIN_PT,
@@ -618,6 +622,66 @@ describe("B15 · conteúdo que precisa chegar ao Word", () => {
     // linha de dados: não é cabeçalho, mas também não se parte
     expect(has(body, "w:tblHeader")).toBe(false);
     expect(has(body, "w:cantSplit")).toBe(true);
+  });
+
+  describe("table alta: o mesmo contrato do PDF (N-U-009)", () => {
+    const hasTag = (node: unknown, rootKey: string): boolean => {
+      if (Array.isArray(node)) return node.some((n) => hasTag(n, rootKey));
+      if (node === null || typeof node !== "object") return false;
+      if ((node as { rootKey?: string }).rootKey === rootKey) return true;
+      return Object.values(node as Record<string, unknown>).some((v) => hasTag(v, rootKey));
+    };
+    const rowsOf = (rows: Inline[][], bodyPt?: number) => {
+      const table = blockToDocxParagraphs(q({ kind: "table", rows }), 1, undefined, false, bodyPt).find(
+        (b) => b instanceof Table,
+      ) as Table;
+      return (table as unknown as { root: TableRow[] }).root.filter(
+        (n) => (n as unknown as { rootKey?: string }).rootKey === "w:tr",
+      );
+    };
+    const words = (n: number): Inline[] => text("palavra ".repeat(n).trim());
+
+    it("cabeçalho que ocuparia boa parte da folha não repete (sem tblHeader) e a linha alta não ganha cantSplit", () => {
+      const [header, body] = rowsOf([
+        [words(100), words(100)],
+        [words(100), words(100)],
+      ]);
+      expect(hasTag(header, "w:tblHeader")).toBe(false);
+      expect(hasTag(header, "w:cantSplit")).toBe(true);
+      expect(hasTag(body, "w:tblHeader")).toBe(false);
+      expect(hasTag(body, "w:cantSplit")).toBe(true);
+      const [tallHeader, tallBody] = rowsOf([
+        [words(100), words(100)],
+        [words(900), words(900)],
+      ]);
+      expect(hasTag(tallHeader, "w:tblHeader")).toBe(false);
+      expect(hasTag(tallBody, "w:cantSplit")).toBe(false);
+    });
+
+    for (const cols of [2, 3, 4]) {
+      it(`a fronteira é a do PDF, com ${cols} colunas: o cabeçalho solta onde headerNeedsRelease solta, a linha onde rowNeedsSplit fatia`, () => {
+        const column = tableCellColumnPt(cols);
+        const rowOf = (n: number) => Array.from({ length: cols }, () => words(n));
+        const firstWhere = (fn: (row: Inline[][]) => boolean) => {
+          for (let n = 1; ; n += 1) if (fn(rowOf(n))) return n;
+        };
+        const release = firstWhere((r) => headerNeedsRelease(r, 12, column));
+        const split = firstWhere((r) => rowNeedsSplit(r, 12, column));
+        expect(release).toBeGreaterThan(1);
+        expect(split).toBeGreaterThan(release);
+        const at = (n: number) => rowsOf([rowOf(n), rowOf(n)]);
+        expect(hasTag(at(release - 1)[0], "w:tblHeader")).toBe(true);
+        expect(hasTag(at(release)[0], "w:tblHeader")).toBe(false);
+        expect(hasTag(at(split - 1)[1], "w:cantSplit")).toBe(true);
+        expect(hasTag(at(split)[1], "w:cantSplit")).toBe(false);
+      });
+    }
+
+    it("o corpo da fonte entra na conta: o mesmo texto a 24 pt solta o cabeçalho que a 12 pt repetia", () => {
+      const rows = [[words(40), words(40)], [words(2), words(2)]];
+      expect(hasTag(rowsOf(rows, 12)[0], "w:tblHeader")).toBe(true);
+      expect(hasTag(rowsOf(rows, 24)[0], "w:tblHeader")).toBe(false);
+    });
   });
 
   it("table declara a grade com a largura útil da página dividida pelas colunas", () => {
@@ -2495,7 +2559,7 @@ describe("Word quebra a fórmula longa num espaço do LaTeX, nunca no meio do co
     expect(lines.length).toBe(2);
     expect(breaks(out)).toBe(1);
     // Nada se perde: as linhas, reunidas por um espaço, são a fórmula inteira.
-    expect(lines.join(" ").replace(/ /g, " ")).toBe(LONGA);
+    expect(lines.join(" ").replace(/\u00a0/g, " ")).toBe(LONGA);
     for (const line of lines) {
       expect(line.length).toBeLessThanOrEqual(71);
       // Dentro da linha não sobra ponto de quebra para o Word inventar outro.
@@ -2541,5 +2605,74 @@ describe("Word quebra a fórmula longa num espaço do LaTeX, nunca no meio do co
   it("inlineMath que cabe continua costurada", () => {
     const runs = richTextToRuns([{ type: "inlineMath", latex: "x^2 + 1" }]);
     expect(docxText(runs)).toBe("x^2 + 1");
+  });
+});
+
+// C-13: a control character in text or formula made `document.xml` invalid XML, and Word refused the file.
+describe("buildDocxDocument never writes invalid XML (C-13)", () => {
+  const FF = "\u000C";
+  const BS = "\u0008";
+  const VT = "\u000B";
+  const NUL = "\u0000";
+  const SOH = "\u0001";
+  const XML_INVALID = /[\u0000-\u0008\u000B\u000C\u000E-\u001F]/;
+
+  const dirty: CanonicalDocument = {
+    schemaVersion: 1,
+    blocks: [
+      { id: "00000000-0000-4000-8000-000000000001", type: "heading", level: 1, content: [{ type: "text", text: `Prova${FF}de${NUL}Mat` }] },
+      { id: "00000000-0000-4000-8000-000000000002", type: "paragraph", content: [{ type: "text", text: `a${BS}b${VT}c` }, { type: "inlineMath", latex: `x${BS}+${SOH}y` }] },
+      { id: "00000000-0000-4000-8000-000000000003", type: "blockMath", latex: `\\frac{1}{2}${FF}${BS}${SOH}` },
+      {
+        id: "00000000-0000-4000-8000-000000000004",
+        type: "question",
+        stem: [{ id: "00000000-0000-4000-8000-000000000005", type: "paragraph", content: [{ type: "text", text: `Q${NUL}1` }] }],
+        answer: {
+          kind: "multipleChoice",
+          alternatives: [{ id: "00000000-0000-4000-8000-000000000006", content: [{ type: "text", text: `alt${FF}A` }], correct: true }],
+        },
+      },
+      { id: "00000000-0000-4000-8000-000000000007", type: "scaffolding", items: [`passo${BS}1`] },
+    ],
+  };
+
+  async function documentXml(document: CanonicalDocument, header = {}): Promise<string> {
+    const { Packer } = await import("docx");
+    const { default: JSZip } = await import("jszip");
+    const settings = { ...DEFAULT_PANEL_SETTINGS, header };
+    const buffer = await Packer.toBuffer(buildDocxDocument(document, settings));
+    const zip = await JSZip.loadAsync(buffer);
+    return await zip.file("word/document.xml")!.async("string");
+  }
+
+  it("strips control characters from text and formulas, keeping the rest of the text", async () => {
+    const xml = await documentXml(dirty);
+    expect(xml).not.toMatch(XML_INVALID);
+    expect(xml).toContain("Prova de");
+    expect(xml).toContain("Mat");
+    expect(xml).toContain("a");
+    expect(xml).toContain("\\frac{1}{2}");
+    expect(xml).toContain("passo");
+  });
+
+  it("also cleans the header fields", async () => {
+    const xml = await documentXml(dirty, { title: `Titulo${FF}X`, school: `Escola${BS}Y` });
+    expect(xml).not.toMatch(XML_INVALID);
+    expect(xml).toContain("Titulo");
+    expect(xml).toContain("Escola");
+  });
+
+  it("leaves a clean document byte-identical in its text", async () => {
+    const clean: CanonicalDocument = { schemaVersion: 1, blocks: [{ id: "00000000-0000-4000-8000-000000000001", type: "paragraph", content: [{ type: "text", text: "Olá, mundo\ncom quebra" }] }] };
+    const xml = await documentXml(clean);
+    expect(xml).toContain("Olá, mundo");
+    expect(xml).toContain("com quebra");
+  });
+
+  it("xmlSafe turns form feed and vertical tab into a space and drops the rest, in any nested string", () => {
+    expect(xmlSafe(`a${FF}b${VT}c${NUL}d${BS}e`)).toBe("a b cde");
+    expect(xmlSafe({ n: 1, ok: true, nil: null, list: [`x${SOH}`, { deep: `y${FF}` }] })).toEqual({ n: 1, ok: true, nil: null, list: ["x", { deep: "y " }] });
+    const same = { a: "limpo" };
+    expect(xmlSafe(same)).toBe(same);
   });
 });

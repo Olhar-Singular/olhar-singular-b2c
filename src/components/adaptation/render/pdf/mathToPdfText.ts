@@ -17,10 +17,14 @@ import {
   PAGE_MARGIN_PT,
   pdfTextSize,
 } from "../pageTokens";
-import { latexBalancedLines, latexLayoutAtom, MONO_ADVANCE_EM } from "../mathAtom";
+import { latexBalancedLines, latexLayoutSegments, MONO_ADVANCE_EM, type MathSegment } from "../mathAtom";
+import { MATH_FONT_FAMILY, pdfFontStack } from "./fontStack";
 
 /** Largura da folha A4 do `@react-pdf`, em pontos. */
 const A4_WIDTH_PT = 595.28;
+
+/** Largura da coluna útil da folha (A4 menos as duas margens), em pontos. */
+export const PDF_CONTENT_WIDTH_PT = A4_WIDTH_PT - 2 * PAGE_MARGIN_PT;
 
 /** Avanço de um caractere da Courier, em `em` (a família é monoespaçada). */
 const COURIER_ADVANCE_EM = MONO_ADVANCE_EM;
@@ -41,13 +45,46 @@ const COURIER_ADVANCE_EM = MONO_ADVANCE_EM;
  */
 export function mathPdfMaxAtomChars(contextFontSizePt: number = BASE_FONT_PT): number {
   return Math.floor(
-    (A4_WIDTH_PT - 2 * PAGE_MARGIN_PT) /
-      (COURIER_ADVANCE_EM * mathPdfFontSizePt(contextFontSizePt)),
+    PDF_CONTENT_WIDTH_PT / (COURIER_ADVANCE_EM * mathPdfFontSizePt(contextFontSizePt)),
   );
 }
 
 /** O teto no tamanho BASE, para quem renderiza um nó solto. */
 export const MATH_PDF_MAX_ATOM_CHARS = mathPdfMaxAtomChars();
+
+/**
+ * Quantos caracteres de fórmula cabem numa coluna de `columnPt` pontos.
+ *
+ * `columnPt` é a largura REAL de quem hospeda a fórmula (alternativa, célula, coluna do
+ * pareamento), e não a da folha. Sem ela vale a folha: a fórmula num parágrafo solto.
+ * Nunca passa da folha e nunca é menor que 1: coluna absurdamente estreita ainda recebe
+ * a fórmula, um caractere por linha, em vez de perdê-la.
+ */
+export function mathPdfColumnChars(
+  columnPt: number | undefined,
+  contextFontSizePt: number = BASE_FONT_PT,
+): number {
+  const page = mathPdfMaxAtomChars(contextFontSizePt);
+  if (columnPt === undefined) return page;
+  const fit = Math.floor(columnPt / (COURIER_ADVANCE_EM * mathPdfFontSizePt(contextFontSizePt)));
+  return Math.max(1, Math.min(page, fit));
+}
+
+/**
+ * A fórmula inline como pedaços que cabem na coluna (`latexLayoutSegments`).
+ *
+ * Cabendo, é UM átomo (espaços inquebráveis, achado 0425). Não cabendo, são átomos unidos
+ * onde o LaTeX tinha espaço ou num ponto seguro, e a quebra cai numa dessas juntas: sem
+ * hífen e sem perder caractere (N-M-001, N-U-001). O átomo único, mais largo que a coluna,
+ * era o que o papel cortava (achado 0427).
+ */
+export function mathPdfSegments(
+  latex: string,
+  contextFontSizePt: number = BASE_FONT_PT,
+  columnPt?: number,
+): MathSegment[] {
+  return latexLayoutSegments(latex, mathPdfColumnChars(columnPt, contextFontSizePt));
+}
 
 /**
  * Return the text to display for a math node in the PDF.
@@ -59,15 +96,19 @@ export const MATH_PDF_MAX_ATOM_CHARS = mathPdfMaxAtomChars();
  *
  * Os espaços saem inquebráveis (`latexLayoutAtom`): sem isso o textkit trata
  * cada espaço do LaTeX como ponto de quebra e parte a fórmula no meio, ao
- * contrário da caixa KaTeX da tela (achado 0425). O átomo só vale até
- * `MATH_PDF_MAX_ATOM_CHARS`: passando disso ele não caberia em linha nenhuma e o
- * textkit descartaria o excedente em silêncio (achado 0427).
+ * contrário da caixa KaTeX da tela (achado 0425). A fórmula só é partida quando
+ * não cabe na coluna (`mathPdfSegments`): aí ela não caberia em linha nenhuma e o
+ * textkit descartaria o excedente em silêncio (achado 0427). O texto devolvido é o
+ * dos pedaços unidos pelo que a junta imprime (um espaço, ou nada).
  */
 export function mathToPdfText(
   latex: string,
   contextFontSizePt: number = BASE_FONT_PT,
+  columnPt?: number,
 ): string {
-  return latexLayoutAtom(latex, mathPdfMaxAtomChars(contextFontSizePt));
+  return mathPdfSegments(latex, contextFontSizePt, columnPt)
+    .map((segment) => (segment.joint === "space" ? " " : "") + segment.text)
+    .join("");
 }
 
 /**
@@ -97,8 +138,9 @@ export function mathToPdfText(
 export function mathBlockLines(
   latex: string,
   contextFontSizePt: number = BASE_FONT_PT,
+  columnPt?: number,
 ): string[] {
-  return latexBalancedLines(latex, mathPdfMaxAtomChars(contextFontSizePt));
+  return latexBalancedLines(latex, mathPdfColumnChars(columnPt, contextFontSizePt));
 }
 
 /**
@@ -113,7 +155,7 @@ export function mathBlockLines(
  */
 export function mathPdfStyle(contextFontSizePt: number = BASE_FONT_PT) {
   return {
-    fontFamily: "Courier",
+    fontFamily: pdfFontStack(MATH_FONT_FAMILY),
     ...pdfTextSize(mathPdfFontSizePt(contextFontSizePt)),
   } as const;
 }

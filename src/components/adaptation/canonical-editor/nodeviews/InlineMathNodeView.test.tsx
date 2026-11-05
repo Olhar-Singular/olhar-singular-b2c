@@ -558,6 +558,22 @@ describe("InlineMathNodeView — LaTeX inválido (achado 0434)", () => {
     expect(updateAttributes).not.toHaveBeenCalled();
   });
 
+  it("recusa \\begin{equation} inline e \\href, como a folha (N-M-002)", () => {
+    const { updateAttributes } = typeLatex("\\begin{equation} x \\end{equation}");
+    expect(updateAttributes).not.toHaveBeenCalled();
+    expect(screen.getByRole("alert")).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText("Expressão LaTeX inline"), { target: { value: "\\href{https://x.com}{a}" } });
+    expect(updateAttributes).not.toHaveBeenCalled();
+    expect(screen.getByRole("alert")).toHaveTextContent(/href/);
+  });
+
+  it("diz a razão em português, sem as palavras do KaTeX (N-U-003)", () => {
+    typeLatex("x^2^3");
+    const alert = screen.getByRole("alert");
+    expect(alert).toHaveTextContent("Fórmula inválida: dois expoentes seguidos na mesma base");
+    expect(alert.textContent).not.toMatch(/Double|superscript|position/);
+  });
+
   it("marca o campo como inválido e descreve o erro em texto anunciado", () => {
     typeLatex("\\frac{1{");
     const input = screen.getByLabelText("Expressão LaTeX inline");

@@ -8,15 +8,21 @@ const destroyTask = vi.fn();
 
 vi.mock("pdfjs-dist", () => ({
   GlobalWorkerOptions: { workerSrc: "" },
+  // The operator numbers `fractionBarsFromOperatorList` reads.
+  OPS: { save: 10, restore: 11, transform: 12, setLineWidth: 2, stroke: 20, closeStroke: 21, fill: 22, eoFill: 23, fillStroke: 24, eoFillStroke: 25, closeFillStroke: 26, closeEOFillStroke: 27, endPath: 28, constructPath: 91 },
   // Every loading task carries `destroy`; a test's own task shape wins.
   getDocument: (...args: unknown[]) => ({ destroy: destroyTask, ...getDocument(...args) }),
 }));
 
-import { parsePdf, renderPdfPage, getPdfPageCount } from "./pdf-utils";
+import { parsePdf, renderPdfPage, getPdfPageCount, OPERATOR_LIST_TIMEOUT_MS } from "./pdf-utils";
+
+/** pdf.js runs always carry a position; these sit on one row, so no fraction is ever stacked. */
+const onOneRow = <T extends { str: string }>(items: T[]) =>
+  items.map((item, k) => ({ width: 5, height: 12, transform: [1, 0, 0, 1, 10 + 6 * k, 700], ...item }));
 
 function makePage(text: string) {
   return {
-    getTextContent: vi.fn().mockResolvedValue({ items: text.split(" ").map((str) => ({ str })) }),
+    getTextContent: vi.fn().mockResolvedValue({ items: onOneRow(text.split(" ").map((str) => ({ str }))) }),
     getViewport: vi.fn().mockReturnValue({ width: 100, height: 200 }),
     render: vi.fn().mockReturnValue({ promise: Promise.resolve() }),
     cleanup: vi.fn(),
@@ -26,7 +32,7 @@ function makePage(text: string) {
 /** A page whose text runs carry pdf.js's real `hasEOL` line-break flag. */
 function makePageWithItems(items: Array<{ str: string; hasEOL?: boolean }>) {
   return {
-    getTextContent: vi.fn().mockResolvedValue({ items }),
+    getTextContent: vi.fn().mockResolvedValue({ items: onOneRow(items) }),
     getViewport: vi.fn().mockReturnValue({ width: 100, height: 200 }),
     render: vi.fn().mockReturnValue({ promise: Promise.resolve() }),
     cleanup: vi.fn(),
@@ -97,6 +103,70 @@ describe("pdf-utils — parsePdf", () => {
   // Flattening every run with a single space turned "Qual é o valor? (a) 2
   // (b) 4" into one undifferentiated blob, and the extraction prompt is told
   // to treat that blob as the source of truth.
+  // L9A-1: a lone centred pair is a fraction only when the page draws a bar between the lines.
+  describe("lone stacked pair", () => {
+    const stacked = () => [
+      { str: "Margem", transform: [1, 0, 0, 1, 90, 700], width: 40, height: 12 },
+      { str: "a", transform: [1, 0, 0, 1, 240, 650], width: 5, height: 12, hasEOL: true },
+      { str: "b", transform: [1, 0, 0, 1, 240, 635], width: 5, height: 12 },
+    ];
+    const pageWith = (getOperatorList: unknown) => ({
+      getTextContent: vi.fn().mockResolvedValue({ items: stacked() }),
+      ...(getOperatorList ? { getOperatorList } : {}),
+      getViewport: vi.fn().mockReturnValue({ width: 100, height: 200 }),
+      render: vi.fn().mockReturnValue({ promise: Promise.resolve() }),
+      cleanup: vi.fn(),
+    });
+    const barList = () =>
+      Promise.resolve({
+        fnArray: [91],
+        argsArray: [[22, [Float32Array.from([0, 236, 642.2, 1, 249, 642.2, 1, 249, 642.8, 1, 236, 642.8, 4])], [0, 0, 0, 0]]],
+      });
+
+    it("groups it when the operator list has a bar between the two lines", async () => {
+      singlePage(pageWith(vi.fn().mockImplementation(barList)) as never);
+      expect((await parsePdf(fakeFile())).text).toContain("Margem\na/b");
+    });
+
+    it("keeps two lines when there is no bar", async () => {
+      singlePage(pageWith(vi.fn().mockResolvedValue({ fnArray: [], argsArray: [] })) as never);
+      expect((await parsePdf(fakeFile())).text).toContain("Margem a\nb");
+    });
+
+    // L9BC-5: a getOperatorList that never comes back must not freeze the upload.
+    it("gives up on an operator list that never returns and reads the page without bars", async () => {
+      vi.useFakeTimers();
+      try {
+        singlePage(pageWith(vi.fn().mockReturnValue(new Promise(() => {}))) as never);
+        const parsing = parsePdf(fakeFile());
+        await vi.advanceTimersByTimeAsync(OPERATOR_LIST_TIMEOUT_MS + 1);
+        expect((await parsing).text).toContain("Margem a\nb");
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it("does not wait for the timeout when the operator list comes back", async () => {
+      vi.useFakeTimers();
+      try {
+        singlePage(pageWith(vi.fn().mockImplementation(barList)) as never);
+        const parsing = parsePdf(fakeFile());
+        await vi.advanceTimersByTimeAsync(0);
+        expect((await parsing).text).toContain("Margem\na/b");
+        expect(vi.getTimerCount()).toBe(0);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it("keeps two lines when the operator list cannot be read", async () => {
+      singlePage(pageWith(vi.fn().mockRejectedValue(new Error("boom"))) as never);
+      expect((await parsePdf(fakeFile())).text).toContain("Margem a\nb");
+      singlePage(pageWith(undefined) as never);
+      expect((await parsePdf(fakeFile())).text).toContain("Margem a\nb");
+    });
+  });
+
   it("keeps the line breaks the PDF actually has", async () => {
     singlePage(
       makePageWithItems([
@@ -107,6 +177,23 @@ describe("pdf-utils — parsePdf", () => {
     );
     const result = await parsePdf(fakeFile());
     expect(result.text).toContain("Qual é o valor de x?\n(a) 2\n(b) 4");
+  });
+
+  it("writes a stacked fraction as (numerator)/denominator from the run positions (N-I-001)", async () => {
+    const at = (x: number, y: number, width = 6) => ({ transform: [1, 0, 0, 1, x, y], width, height: 12 });
+    // the bar the PDF draws between the two lines (3,5 pt under the numerator's baseline)
+    const bar = Float32Array.from([0, 166, 659.6, 1, 195, 659.6, 1, 195, 660.2, 1, 166, 660.2, 4]);
+    singlePage({
+      ...makePageWithItems([
+        { str: "f(x) =", ...at(90, 656.5, 40) },
+        { str: "2x + 1", ...at(166, 663.4, 28), hasEOL: true },
+        { str: "3", ...at(177, 648.3) },
+        { str: ", calcule f(4).", ...at(196, 655.6, 64) },
+      ]),
+      getOperatorList: vi.fn().mockResolvedValue({ fnArray: [91], argsArray: [[22, [bar], [0, 0, 0, 0]]] }),
+    } as never);
+    const result = await parsePdf(fakeFile());
+    expect(result.text).toContain("f(x) = (2x + 1)/3 , calcule f(4).");
   });
 
   it("still joins runs inside the same line with a space", async () => {

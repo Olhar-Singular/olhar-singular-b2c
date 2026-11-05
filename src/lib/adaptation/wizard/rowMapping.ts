@@ -10,6 +10,7 @@
 import type { AdaptationRow } from "@/lib/adaptation/persistence/adaptationsRepo";
 import type { BarrierItem, WizardData } from "@/lib/adaptation/wizard/wizardState";
 import { INITIAL_WIZARD_DATA } from "@/lib/adaptation/wizard/wizardState";
+import { parseExtractionIssues } from "@/lib/domain/examIssues";
 
 /**
  * `barriers_used` is written by the edge function from the already-filtered
@@ -34,5 +35,7 @@ export function rowToWizardData(row: AdaptationRow): WizardData {
     barrierProfileId: row.barrier_profile_id,
     observationNotes: row.observation_notes ?? undefined,
     result: row.adaptation_result,
+    // The notices the edge function stored with the result: reopening shows them in Revisar (L9A-4).
+    adaptationIssues: parseExtractionIssues(row.adaptation_result.review_issues),
   };
 }

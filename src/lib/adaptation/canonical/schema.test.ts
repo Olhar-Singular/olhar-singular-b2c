@@ -273,3 +273,26 @@ describe("AdaptationResultSchema — pageStyle (additive, optional)", () => {
     expect(parsed.pageStyle).toEqual({ fontFamily: "atkinson", fontSize: 14, blockSpacing: 24 });
   });
 });
+
+describe("AdaptationResultSchema — review_issues (additive, optional, L9A-4)", () => {
+  it("does not inject review_issues (round-trip identity for legacy documents)", () => {
+    const input = baseResult();
+    const parsed = AdaptationResultSchema.parse(input);
+    expect(parsed).toEqual(input);
+    expect("review_issues" in parsed).toBe(false);
+  });
+
+  it("keeps the notices the edge function stored next to the document", () => {
+    const review_issues = [
+      { question: 2, kind: "new_value", items: ["15"], of: 5, excerpt: "Observe o gráfico" },
+      { question: null, kind: "marker_dropped", items: [] },
+    ];
+    const parsed = AdaptationResultSchema.parse({ ...baseResult(), review_issues });
+    expect(parsed.review_issues).toEqual(review_issues);
+  });
+
+  it("rejects a notice that is not a question/kind/items record", () => {
+    expect(AdaptationResultSchema.safeParse({ ...baseResult(), review_issues: [{ kind: "new_value" }] }).success).toBe(false);
+    expect(AdaptationResultSchema.safeParse({ ...baseResult(), review_issues: "x" }).success).toBe(false);
+  });
+});

@@ -41,6 +41,17 @@ beforeEach(() => {
 
 const t = (text: string): RichText => [{ type: "text", text }];
 
+describe("RichTextField — pasted superscript (C-11)", () => {
+  it("writes a pasted <sup> and a vertical-align span as ^ text instead of gluing the digit", () => {
+    render(<RichTextField value={t("a")} onChange={vi.fn()} />);
+    const transform = (capturedConfig as { editorProps?: { transformPastedHTML?: (h: string) => string } })
+      .editorProps?.transformPastedHTML;
+    expect(transform?.("<p>x<sup>2</sup> e 10<span style=\"vertical-align:super\">3</span></p>")).toBe(
+      "<p>x^2 e 10^3</p>",
+    );
+  });
+});
+
 describe("RichTextField — component", () => {
   it("returns null when editor is not ready", () => {
     vi.mocked(useEditor).mockReturnValueOnce(null as never);

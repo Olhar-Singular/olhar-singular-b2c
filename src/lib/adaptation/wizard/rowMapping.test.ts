@@ -44,6 +44,26 @@ describe("rowToWizardData", () => {
   });
 });
 
+describe("rowToWizardData — review notices (L9A-4)", () => {
+  it("brings back the notices stored with the result, so reopening shows them in Revisar", () => {
+    const stored = { question: 2, kind: "new_value", items: ["15"] };
+    const data = rowToWizardData({ ...ROW, adaptation_result: { ...validResult, review_issues: [stored] } });
+    expect(data.adaptationIssues).toEqual([stored]);
+  });
+
+  it("has no notices for a row saved before they were stored", () => {
+    expect(rowToWizardData(ROW).adaptationIssues).toEqual([]);
+  });
+
+  it("drops a stored notice whose kind this version does not know", () => {
+    const data = rowToWizardData({
+      ...ROW,
+      adaptation_result: { ...validResult, review_issues: [{ question: 1, kind: "from_the_future", items: [] }] },
+    });
+    expect(data.adaptationIssues).toEqual([]);
+  });
+});
+
 describe("rowToWizardData — barriers persisted without is_active", () => {
   it("marks a persisted barrier as active when the column omits is_active", () => {
     const data = rowToWizardData({

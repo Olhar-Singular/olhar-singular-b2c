@@ -253,6 +253,43 @@ describe("QuestionBankPage", () => {
     await waitFor(() => expect(screen.getByText("Qual é a capital?")).toBeInTheDocument());
   });
 
+  it("mostra o texto limpo de uma questão salva como HTML, com expoente e índice (N-U-005)", async () => {
+    mockUseQuestions.mockReturnValue({
+      data: [
+        {
+          id: "q1",
+          text: "<p>Calcule 10<sup>3</sup> e H<sub>2</sub>O</p>",
+          subject: "Química",
+          topic: null,
+          difficulty: "facil",
+          options: ["<p>A <strong>primeira</strong></p>", "B"],
+          correct_answer: 0,
+          created_at: "2026-04-21T00:00:00Z",
+        },
+      ],
+      isLoading: false,
+      isSuccess: true,
+    });
+    render(<QuestionBankPage />, { wrapper });
+    await waitFor(() => expect(screen.getByText("Calcule 10^3 e H_(2)O")).toBeInTheDocument());
+    expect(screen.getByText("A primeira")).toBeInTheDocument();
+    expect(document.body.textContent).not.toMatch(/<\/?(p|sup|sub|strong)>/);
+  });
+
+  it("a busca olha o texto, não as tags do HTML salvo", async () => {
+    mockUseQuestions.mockReturnValue({
+      data: [{ id: "q1", text: "<p>Calcule <strong>soma</strong></p>", subject: "Matemática", topic: null, difficulty: "facil", options: null, correct_answer: null, created_at: "2026-04-21T00:00:00Z" }],
+      isLoading: false,
+      isSuccess: true,
+    });
+    render(<QuestionBankPage />, { wrapper });
+    const search = screen.getByPlaceholderText(/buscar/i);
+    fireEvent.change(search, { target: { value: "strong" } });
+    await waitFor(() => expect(screen.queryByText(/Calcule soma/)).toBeNull());
+    fireEvent.change(search, { target: { value: "calcule soma" } });
+    await waitFor(() => expect(screen.getByText("Calcule soma")).toBeInTheDocument());
+  });
+
   it("shows loader while questions are loading", () => {
     mockUseQuestions.mockReturnValue({ data: [], isLoading: true, isSuccess: false });
     const { container } = render(<QuestionBankPage />, { wrapper });
@@ -1684,6 +1721,27 @@ describe("QuestionBankPage", () => {
       expect(extractDocxWithImages).toHaveBeenCalled();
     });
     await waitFor(() => screen.getByText("Questão docx"));
+  });
+
+  it("extract: parte que o DOCX não deixou ler aparece nos avisos da extração (F5, lote 5b)", async () => {
+    const { extractDocxWithImages } = await import("@/lib/utils/docx-utils");
+    const { detectFileType } = await import("@/lib/utils/fileValidation");
+    (detectFileType as ReturnType<typeof vi.fn>).mockReturnValueOnce("docx").mockReturnValueOnce("docx");
+    (extractDocxWithImages as ReturnType<typeof vi.fn>).mockResolvedValue({
+      text: "1) Calcule [fórmula não lida].\n2) Quanto é 2 + 2?",
+      images: [],
+    });
+    invokeSpy.mockResolvedValue({
+      data: { questions: [{ text: "Calcule [fórmula não lida].", subject: "Física" }] },
+      error: null,
+    });
+    render(<QuestionBankPage />, { wrapper });
+    fireEvent.click(screen.getByRole("tab", { name: /Provas/i }));
+    const input = document.querySelector("input[data-upload-input]") as HTMLInputElement;
+    fireEvent.change(input, { target: { files: [new File(["docx"], "prova.docx", { type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document" })] } });
+    await waitFor(() => screen.getByRole("button", { name: /Extrair com IA/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Extrair com IA/i }));
+    await waitFor(() => expect(screen.getAllByText(/Questão 1: tem uma parte que o arquivo não deixou ler/i).length).toBeGreaterThan(0));
   });
 
   it("extract: source is docx_extract when file is .docx", async () => {

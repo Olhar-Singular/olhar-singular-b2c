@@ -5,6 +5,7 @@ import { DocumentHeaderView } from "@/components/adaptation/render/DocumentHeade
 import { DocumentFooterView } from "@/components/adaptation/render/DocumentFooterView";
 import { ExportPanel } from "@/components/adaptation/export/ExportPanel";
 import { PageSheet } from "@/components/adaptation/PageSheet";
+import { mathPreviewNotice } from "@/components/adaptation/export/exportWarnings";
 import type { AdaptationResult, DocumentHeader } from "@/lib/adaptation/canonical/schema";
 
 type Props = {
@@ -39,6 +40,7 @@ export function StepExportCanonical({
   onRestart,
 }: Props) {
   const document = result.document;
+  const mathNotice = mathPreviewNotice(document);
   /*
     A escolha da quebra é só de exportação (não entra no documento salvo), mas a
     prévia precisa dela para desenhar onde a página vira (achado 0110). Uma só
@@ -99,6 +101,22 @@ export function StepExportCanonical({
         (achado 0242) — a mesma divergência que o `DocumentHeaderView` já tinha
         fechado no topo. Mesmo texto, pela mesma `pdfFooterLabel`.
       */}
+      {mathNotice && (
+        <div
+          role="status"
+          aria-label="As fórmulas saem diferentes no arquivo"
+          className="rounded-md border border-border bg-muted/50 px-3 py-2 text-sm text-foreground"
+        >
+          <p className="font-medium">As fórmulas saem diferentes no arquivo</p>
+          <p>{mathNotice.text}</p>
+          <p>
+            Por exemplo, a primeira fórmula do seu documento sai escrita assim:{" "}
+            <code className="rounded bg-background px-1 py-0.5 font-mono">{mathNotice.example}</code>
+          </p>
+          {mathNotice.altText && <p>{mathNotice.altText}</p>}
+        </div>
+      )}
+
       <PageSheet
         pageStyle={result.pageStyle}
         paginated

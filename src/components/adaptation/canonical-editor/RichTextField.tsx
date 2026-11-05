@@ -31,6 +31,7 @@
 
 import { useEffect, useRef } from "react";
 import { useEditor, EditorContent, BubbleMenu } from "@tiptap/react";
+import { linearizeHtmlScripts } from "@/lib/domain/scriptText";
 import { SelectionBubble } from "./SelectionBubble";
 import { SELECTION_BUBBLE_TIPPY_OPTIONS } from "./selectionBubbleTippy";
 import { cn } from "@/lib/utils";
@@ -86,6 +87,8 @@ export function RichTextField({
       onChange(next);
     },
     editorProps: {
+      // x<sup>2</sup> colado virava "x2" (C-11): o campo não tem marca de expoente.
+      transformPastedHTML: linearizeHtmlScripts,
       attributes: {
         class: cn(
           // `rich-text-field` marks this as a NESTED inline editor so the folha's

@@ -23,6 +23,7 @@ import { EMPTY_FOLDER_NAME_MESSAGE, NEW_FOLDER_HINT } from "./newFolderField";
 import { SelectionBubble } from "@/components/adaptation/canonical-editor/SelectionBubble";
 import { SELECTION_BUBBLE_TIPPY_OPTIONS } from "@/components/adaptation/canonical-editor/selectionBubbleTippy";
 import { resolvePageStyle } from "@/components/adaptation/render/pageStyle";
+import { sheetQuestionLabels } from "@/components/adaptation/render/questionNumbering";
 import { SUBJECTS } from "@/lib/utils/constants";
 import {
   Select,
@@ -31,6 +32,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { ExamIssuesNotice } from "@/components/adaptation/steps/upload-exam/ExamIssuesNotice";
+import { adaptationNoticeCopy, describeExtractionIssues, type ExtractionIssue } from "@/lib/domain/examIssues";
 import "katex/dist/katex.min.css";
 import type { Block, CanonicalDocument, PageStyle } from "@/lib/adaptation/canonical/schema";
 
@@ -103,6 +106,13 @@ type Props = {
    * compare, and ImageNodeView can offer "Recortar do original". Absent for
    * adaptações montadas pelo Banco de Questões (no source file to compare).
    */
+  /**
+   * What the check of the AI reading found in the uploaded exam (C-03): questions with a
+   * part the reading did not reach or with values that are not in the file. Informs only.
+   */
+  extractionIssues?: ExtractionIssue[] | null;
+  /** What the check of the adaptation found (C-04): numbers the activity never gave. Informs only. */
+  adaptationIssues?: ExtractionIssue[] | null;
   originalExam?: {
     file: File;
     /** Word's `pageImages` are embedded figures, not pages (achado 0280). */
@@ -170,7 +180,10 @@ export function StepReview({
   saving = false,
   onSave,
   originalExam = null,
+  extractionIssues = null,
+  adaptationIssues = null,
 }: Props) {
+  const adaptationNotice = adaptationNoticeCopy(adaptationIssues ?? []);
   const titleHintId = useId();
   const newFolderErrorId = useId();
   const newFolderHintId = useId();
@@ -524,6 +537,19 @@ export function StepReview({
           text={originalExam.text}
         />
       )}
+
+      <ExamIssuesNotice
+        className="mx-2 my-2"
+        title="Confira estas questões com o original"
+        lines={describeExtractionIssues(extractionIssues ?? [], { labels: sheetQuestionLabels(document.blocks) })}
+        hint="A leitura da prova pode ter errado ou deixado de ler estes trechos. Corrija direto na folha antes de exportar."
+      />
+      <ExamIssuesNotice
+        className="mx-2 my-2"
+        title={adaptationNotice.title}
+        lines={describeExtractionIssues(adaptationIssues ?? [], { labels: sheetQuestionLabels(document.blocks) })}
+        hint={adaptationNotice.hint}
+      />
 
       {editor && (
         /* Achado 0806: a barra de ações do pé é `sticky` e o cabeçalho mobile é

@@ -97,6 +97,16 @@ describe("BlockMathNodeView", () => {
     expect(screen.getByTestId("blockmath-render")).toBeInTheDocument();
   });
 
+  it("validates in display mode, like the sheet draws it: \\begin{equation} is accepted in a block (N-M-002)", () => {
+    const { props, updateAttributes } = makeProps();
+    render(<BlockMathNodeView {...props} />);
+    fireEvent.click(screen.getByTestId("blockmath-render"));
+    const input = screen.getByLabelText("Expressão LaTeX");
+    fireEvent.change(input, { target: { value: "\\begin{equation} x = 1 \\end{equation}" } });
+    expect(updateAttributes).toHaveBeenCalledWith({ latex: "\\begin{equation} x = 1 \\end{equation}" });
+    expect(screen.queryByRole("alert")).toBeNull();
+  });
+
   it("does not enter edit mode when disabled", () => {
     const { props } = makeProps({}, false);
     render(<BlockMathNodeView {...props} />);
@@ -553,6 +563,13 @@ describe("BlockMathNodeView — LaTeX inválido (achado 0434)", () => {
   it("não comita no nó o LaTeX que não parseia", () => {
     const { updateAttributes } = typeLatex("\\frac{1{");
     expect(updateAttributes).not.toHaveBeenCalled();
+  });
+
+  it("diz a razão em português, sem as palavras do KaTeX (N-U-003)", () => {
+    typeLatex("x^2^3");
+    const alert = screen.getByRole("alert");
+    expect(alert).toHaveTextContent("Fórmula inválida: dois expoentes seguidos na mesma base");
+    expect(alert.textContent).not.toMatch(/Double|superscript|position/);
   });
 
   it("marca o campo como inválido e descreve o erro em texto anunciado", () => {

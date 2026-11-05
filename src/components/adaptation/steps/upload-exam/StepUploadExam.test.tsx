@@ -109,6 +109,7 @@ describe("StepUploadExam", () => {
     await waitFor(() => expect(updateData).toHaveBeenCalledWith({
       uploadedExam: { fileName: "prova.pdf", fileType: "pdf", text: "1) Q1", pageImages: [], file },
       result: null,
+      extractionIssues: null,
     }));
     expect(onNext).not.toHaveBeenCalled();
   });
@@ -118,6 +119,42 @@ describe("StepUploadExam", () => {
   // nothing: the teacher uploads a second exam and lands back on the FIRST
   // adaptation. The generated row is already saved server-side, so dropping
   // the local copy costs nothing — it stays in "Minhas adaptações".
+  it("warns, before anything is paid, about the parts of the file the reading did not reach (C-03)", () => {
+    const exam = {
+      ...attachedExam(),
+      text: "1) Resolva o sistema:\n2) Calcule [fórmula não lida].\n3) Simplifique .\n4) Quanto é 2 + 2?",
+    };
+    renderWithProviders(
+      <StepUploadExam data={{ ...baseData, uploadedExam: exam }} updateData={vi.fn()} onNext={vi.fn()} onPrev={vi.fn()} />,
+    );
+    const notice = screen.getByRole("status", { name: /partes que a leitura não alcançou/i });
+    expect(notice).toHaveTextContent("Questão 2: tem uma parte que o arquivo não deixou ler (fórmula ou figura).");
+    expect(notice).toHaveTextContent("Questão 3: parece estar sem a conta ou a expressão.");
+    expect(notice).not.toHaveTextContent("Questão 4");
+    // Informs only: the way forward is untouched.
+    expect(screen.getByRole("button", { name: /continuar/i })).toBeEnabled();
+  });
+
+  it("shows no warning for a file that reads clean", () => {
+    renderWithProviders(
+      <StepUploadExam
+        data={{ ...baseData, uploadedExam: attachedExam() }}
+        updateData={vi.fn()}
+        onNext={vi.fn()}
+        onPrev={vi.fn()}
+      />,
+    );
+    expect(screen.queryByRole("status", { name: /partes que a leitura não alcançou/i })).not.toBeInTheDocument();
+  });
+
+  it("drops the previous extraction's issues together with the previous result when a new file is attached", async () => {
+    const updateData = vi.fn();
+    renderWithProviders(<StepUploadExam data={baseData} updateData={updateData} onNext={vi.fn()} onPrev={vi.fn()} />);
+    selectFile(pdfFile());
+    await waitFor(() => expect(updateData).toHaveBeenCalled());
+    expect(updateData).toHaveBeenCalledWith(expect.objectContaining({ result: null, extractionIssues: null }));
+  });
+
   it("discards the previous adaptation when a different exam is attached", async () => {
     const updateData = vi.fn();
     const withPreviousResult = {
@@ -143,6 +180,7 @@ describe("StepUploadExam", () => {
     await waitFor(() => expect(updateData).toHaveBeenCalledWith({
       uploadedExam: { fileName: "prova.docx", fileType: "docx", text: "1) Q1", pageImages: ["data:image/png;base64,IMG"], file },
       result: null,
+      extractionIssues: null,
     }));
   });
 
@@ -264,6 +302,7 @@ describe("StepUploadExam", () => {
         expect(updateData).toHaveBeenCalledWith({
           uploadedExam: { fileName: "prova.pdf", fileType: "pdf", text: "1) Q1", pageImages: [], file },
           result: null,
+          extractionIssues: null,
         }),
       );
     });

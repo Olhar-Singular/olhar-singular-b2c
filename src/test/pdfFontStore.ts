@@ -21,6 +21,7 @@ import { join } from "node:path";
 import {
   PDF_FONT_REGISTRATIONS,
   hyphenateWord,
+  shareAliasedFaces,
 } from "@/components/adaptation/render/pdf/registerFonts";
 
 /** `/fonts/X.ttf` (URL servida por `public/`) → caminho absoluto no disco. */
@@ -39,10 +40,12 @@ export function createPdfFontStore(): FontStoreInstance {
   const store = makeStore() as {
     register: (r: { family: string; fonts: { src: string }[] }) => void;
     registerHyphenationCallback: (cb: (word: string | null) => string[]) => void;
+    getRegisteredFonts: () => Parameters<typeof shareAliasedFaces>[0];
   };
   store.registerHyphenationCallback(hyphenateWord);
   for (const { family, fonts } of PDF_FONT_REGISTRATIONS) {
     store.register({ family, fonts: fonts.map((f) => ({ ...f, src: toFilePath(f.src) })) });
   }
+  shareAliasedFaces(store.getRegisteredFonts());
   return store as FontStoreInstance;
 }
