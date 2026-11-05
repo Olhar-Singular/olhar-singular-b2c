@@ -44,7 +44,8 @@ jobs:
         run: supabase link --project-ref "$SUPABASE_PROJECT_ID"
 
       - name: Apply migrations
-        run: supabase db push -p "$SUPABASE_DB_PASSWORD"
+        # --remote: since the "latest" CLI, this command targets the local database by default.
+        run: supabase db push --remote -p "$SUPABASE_DB_PASSWORD"
         env:
           SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
 
