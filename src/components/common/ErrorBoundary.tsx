@@ -1,4 +1,5 @@
 import { Component, type ErrorInfo, type ReactNode } from "react";
+import { captureError } from "@/lib/observability/sentry";
 import { ErrorFallback } from "./ErrorFallback";
 
 type Props = {
@@ -23,6 +24,7 @@ export class ErrorBoundary extends Component<Props, State> {
 
   componentDidCatch(error: Error, info: ErrorInfo): void {
     console.error("ErrorBoundary caught an error:", error, info.componentStack);
+    captureError(error, info.componentStack);
   }
 
   reset = (): void => {

@@ -2,6 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import { useQueryClient } from "@tanstack/react-query";
 import type { Session, User } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
+import { setSentryUser } from "@/lib/observability/sentry";
 import type { Database } from "@/integrations/supabase/types";
 
 type Profile = Database["public"]["Tables"]["profiles"]["Row"];
@@ -85,6 +86,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const sessionUserId = session?.user?.id;
+  useEffect(() => {
+    setSentryUser(sessionUserId ?? null);
+  }, [sessionUserId]);
+
   const refreshProfile = useCallback(async () => {
     if (sessionUserId) await fetchProfile(sessionUserId);
   }, [sessionUserId]);

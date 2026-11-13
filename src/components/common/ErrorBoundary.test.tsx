@@ -2,6 +2,9 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 import { ErrorBoundary } from "./ErrorBoundary";
 
+const { captureError } = vi.hoisted(() => ({ captureError: vi.fn() }));
+vi.mock("@/lib/observability/sentry", () => ({ captureError }));
+
 function Boom(): never {
   throw new Error("kaboom");
 }
@@ -42,6 +45,19 @@ describe("ErrorBoundary", () => {
       </ErrorBoundary>,
     );
     expect(consoleErrorSpy).toHaveBeenCalled();
+  });
+
+  it("reports the captured error to Sentry with the component stack", () => {
+    captureError.mockClear();
+    render(
+      <ErrorBoundary>
+        <Boom />
+      </ErrorBoundary>,
+    );
+    expect(captureError).toHaveBeenCalledWith(
+      expect.objectContaining({ message: "kaboom" }),
+      expect.stringContaining("Boom"),
+    );
   });
 
   it("renders children again after clicking 'Tentar novamente'", () => {

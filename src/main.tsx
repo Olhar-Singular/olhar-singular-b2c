@@ -3,12 +3,16 @@ import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { ThemeProvider } from "next-themes";
 import App from "./App";
+import { initSentry } from "@/lib/observability/sentry";
 import "./index.css";
 
 // @react-pdf/renderer (PDF export) and its deps (fontkit/brotli) reach for the
 // Node `Buffer` global, which browsers don't provide — without this the export
 // crashes with "Buffer is not defined". Must run before any module touches it.
 globalThis.Buffer = globalThis.Buffer ?? Buffer;
+
+// Before the first render, so errors thrown while mounting are reported too.
+initSentry();
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>

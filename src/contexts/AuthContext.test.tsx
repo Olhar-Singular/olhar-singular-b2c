@@ -3,6 +3,9 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { AuthProvider, useAuthContext } from "./AuthContext";
 
+const { setSentryUser } = vi.hoisted(() => ({ setSentryUser: vi.fn() }));
+vi.mock("@/lib/observability/sentry", () => ({ setSentryUser }));
+
 const mockSession = {
   user: { id: "user-123", email: "teste@teste.com" },
   access_token: "token",
@@ -168,6 +171,27 @@ describe("AuthContext", () => {
     await waitFor(() =>
       expect(screen.getByTestId("credits")).toHaveTextContent("-")
     );
+  });
+
+  it("identifies the signed-in user to Sentry by id and clears it on sign-out", async () => {
+    const { supabase } = await import("@/integrations/supabase/client");
+    vi.mocked(supabase.auth.getSession).mockResolvedValue({
+      data: { session: mockSession as never },
+    });
+
+    renderAuth(
+      <AuthProvider>
+        <TestConsumer />
+      </AuthProvider>
+    );
+    await waitFor(() => expect(setSentryUser).toHaveBeenLastCalledWith("user-123"));
+    await waitFor(() => expect(authStateCallback).not.toBeNull());
+
+    act(() => {
+      authStateCallback!("SIGNED_OUT", null);
+    });
+
+    await waitFor(() => expect(setSentryUser).toHaveBeenLastCalledWith(null));
   });
 
   it("calls supabase.auth.signOut from the signOut method", async () => {

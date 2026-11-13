@@ -53,3 +53,6 @@ coverage
 
 # Material da LP nova (export de referência + .docx com o token do Meta CAPI): nunca versionar
 new_lp/
+
+# Sentry build plugin token
+.env.sentry-build-plugin

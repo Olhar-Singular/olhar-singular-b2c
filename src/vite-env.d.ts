@@ -10,4 +10,8 @@ interface ImportMetaEnv {
   readonly VITE_GTM_ID?: string;
   /** Meta Pixel id (public, same value as the server's META_PIXEL_ID); absent = no browser pixel. */
   readonly VITE_META_PIXEL_ID?: string;
+  /** Sentry DSN of the frontend project (public by design); absent = monitoring off. */
+  readonly VITE_SENTRY_DSN?: string;
+  /** Commit SHA exposed by Vercel at build time; tags Sentry events with the release. */
+  readonly VITE_VERCEL_GIT_COMMIT_SHA?: string;
 }
