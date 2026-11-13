@@ -19,7 +19,7 @@ SELECT is_empty($$
    CROSS JOIN (VALUES ('anon'), ('authenticated')) AS r(role)
    CROSS JOIN (VALUES ('TRUNCATE'), ('REFERENCES'), ('TRIGGER')) AS p(priv)
    WHERE t.schemaname = 'public'
-     AND has_table_privilege(r.role, format('public.%I', t.tablename), p.priv)
+     AND has_table_privilege(r.role, format('%I.%I', t.schemaname, t.tablename), p.priv)
 $$, 'anon/authenticated hold no TRUNCATE, REFERENCES or TRIGGER on any public table');
 
 -- MAINTAIN (VACUUM/ANALYZE/REINDEX/CLUSTER/LOCK) exists from Postgres 17 on.
@@ -29,7 +29,7 @@ SELECT CASE WHEN current_setting('server_version_num')::int >= 170000
       FROM pg_tables t
      CROSS JOIN (VALUES ('anon'), ('authenticated')) AS r(role)
      WHERE t.schemaname = 'public'
-       AND has_table_privilege(r.role, format('public.%I', t.tablename), 'MAINTAIN')
+       AND has_table_privilege(r.role, format('%I.%I', t.schemaname, t.tablename), 'MAINTAIN')
   $$, 'anon/authenticated hold no MAINTAIN on any public table')
   ELSE skip('MAINTAIN privilege needs Postgres 17', 1)
 END;
@@ -42,7 +42,7 @@ SELECT is_empty($$
     FROM pg_tables t
    CROSS JOIN (VALUES ('INSERT'), ('UPDATE'), ('DELETE')) AS c(cmd)
    WHERE t.schemaname = 'public'
-     AND has_table_privilege('anon', format('public.%I', t.tablename), c.cmd)
+     AND has_table_privilege('anon', format('%I.%I', t.schemaname, t.tablename), c.cmd)
      AND NOT EXISTS (
        SELECT 1 FROM pg_policies pol
         WHERE pol.schemaname = 'public' AND pol.tablename = t.tablename
@@ -77,7 +77,7 @@ SELECT is_empty($$
    WHERE pol.schemaname = 'public'
      AND pol.roles && ARRAY['authenticated', 'public']::name[]
      AND pol.cmd IN (c.cmd, 'ALL')
-     AND NOT has_table_privilege('authenticated', format('public.%I', pol.tablename), c.cmd)
+     AND NOT has_table_privilege('authenticated', format('%I.%I', pol.schemaname, pol.tablename), c.cmd)
 $$, 'authenticated keeps every privilege its policies rely on');
 
 SELECT ok(
@@ -94,7 +94,7 @@ SELECT is_empty($$
                       ('TRUNCATE'), ('REFERENCES'), ('TRIGGER')) AS p(priv)
    WHERE t.schemaname = 'public'
      AND t.tablename <> 'zz_grants_probe'
-     AND NOT has_table_privilege('service_role', format('public.%I', t.tablename), p.priv)
+     AND NOT has_table_privilege('service_role', format('%I.%I', t.schemaname, t.tablename), p.priv)
 $$, 'service_role keeps every table privilege on every public table');
 
 SELECT * FROM finish();
