@@ -71,6 +71,13 @@ describe("QuestionForm — render", () => {
     expect(screen.queryByText(/Adicionar Questão|Editar Questão/)).toBeNull();
   });
 
+  it("exposes an accessible name and description to screen readers", async () => {
+    render(<QuestionForm open onOpenChange={vi.fn()} question={null} onSaved={vi.fn()} />);
+    const dialog = await screen.findByRole("dialog");
+    expect(dialog).toHaveAccessibleName();
+    expect(dialog).toHaveAccessibleDescription();
+  });
+
   it("shows 'Adicionar Questão' header when no question prop", () => {
     render(<QuestionForm open onOpenChange={vi.fn()} question={null} onSaved={vi.fn()} />);
     expect(screen.getByText("Adicionar Questão")).toBeInTheDocument();

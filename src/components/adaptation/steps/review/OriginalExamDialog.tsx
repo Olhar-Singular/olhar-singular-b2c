@@ -17,6 +17,7 @@ import type { RefObject } from "react";
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
@@ -87,6 +88,7 @@ export function OriginalExamDialog({
       >
         <DialogHeader>
           <DialogTitle>Prova original</DialogTitle>
+          <DialogDescription className="sr-only">Conteúdo do arquivo original, para comparar com a adaptação.</DialogDescription>
         </DialogHeader>
         {fileType === "docx" ? (
           <DocxContent text={text} figures={pageImages} />

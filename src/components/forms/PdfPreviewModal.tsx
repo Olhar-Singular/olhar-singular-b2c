@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
@@ -169,6 +170,7 @@ export default function PdfPreviewModal({ open, onOpenChange, file, onCrop, init
       <DialogContent className="max-w-4xl max-h-[95vh]">
         <DialogHeader>
           <DialogTitle className="truncate">{file?.name || "Prévia do PDF"}</DialogTitle>
+          <DialogDescription className="sr-only">Prévia das páginas do PDF, com opção de recorte.</DialogDescription>
         </DialogHeader>
 
         <div className="flex flex-col items-center gap-4">

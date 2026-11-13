@@ -2604,6 +2604,7 @@ describe("QuestionBankPage", () => {
 
     it("shows zoom controls inside preview dialog", async () => {
       await openProvasPreview();
+      expect(screen.getByRole("dialog")).toHaveAccessibleDescription();
       expect(screen.getByRole("button", { name: /reduzir zoom/i })).toBeInTheDocument();
       expect(screen.getByRole("button", { name: /aumentar zoom/i })).toBeInTheDocument();
       expect(screen.getByText("100%")).toBeInTheDocument();
@@ -2976,6 +2977,7 @@ describe("QuestionBankPage", () => {
     fireEvent.click(screen.getByRole("button", { name: /ampliar imagem/i }));
     await waitFor(() => expect(screen.getByRole("dialog")).toBeInTheDocument());
     expect(screen.getByAltText(/imagem ampliada/i)).toBeInTheDocument();
+    expect(screen.getByRole("dialog")).toHaveAccessibleDescription();
   });
 
   it("closing image modal hides the dialog", async () => {
@@ -3006,6 +3008,7 @@ describe("QuestionBankPage", () => {
       render(<QuestionBankPage />, { wrapper });
       expect(screen.getByRole("dialog")).toBeInTheDocument();
       expect(screen.getByText(/ainda está em andamento/i)).toBeInTheDocument();
+      expect(screen.getByRole("dialog")).toHaveAccessibleDescription(/créditos não serão devolvidos/i);
     });
 
     it("calls reset() when user clicks 'Continuar aqui'", () => {

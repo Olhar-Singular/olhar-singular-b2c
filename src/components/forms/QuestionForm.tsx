@@ -3,6 +3,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
@@ -169,6 +170,7 @@ export default function QuestionForm({ open, onOpenChange, question, onSaved }: 
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>{question ? "Editar Questão" : "Adicionar Questão"}</DialogTitle>
+            <DialogDescription className="sr-only">Preencha o enunciado e os demais campos da questão.</DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
             <div>

@@ -12,6 +12,13 @@ function setup(over: Partial<React.ComponentProps<typeof OriginalExamDialog>> = 
 }
 
 describe("OriginalExamDialog", () => {
+
+  it("exposes an accessible name and description to screen readers", async () => {
+    setup();
+    const dialog = await screen.findByRole("dialog");
+    expect(dialog).toHaveAccessibleName();
+    expect(dialog).toHaveAccessibleDescription();
+  });
   it("renders the title", () => {
     setup();
     expect(screen.getByText("Prova original")).toBeInTheDocument();

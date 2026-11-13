@@ -29,6 +29,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
@@ -95,6 +96,7 @@ function ImageZoomModal({ url, onClose }: { url: string | null; onClose: () => v
       <DialogContent className="max-w-5xl max-h-[90vh] flex flex-col">
         <DialogHeader>
           <DialogTitle>Imagem da questão</DialogTitle>
+          <DialogDescription className="sr-only">Imagem da questão em tamanho ampliado.</DialogDescription>
         </DialogHeader>
         <div className="flex-1 overflow-auto flex justify-center items-start p-4">
           {url && (
@@ -126,6 +128,7 @@ function FilePreviewDialog({
         <DialogHeader className="pb-0">
           <div className="flex items-center gap-3 flex-wrap">
             <DialogTitle className="flex-1 truncate">{file?.name ?? "Prévia do arquivo"}</DialogTitle>
+            <DialogDescription className="sr-only">Prévia do arquivo enviado, com controles de zoom.</DialogDescription>
             <div className="flex items-center gap-1.5 shrink-0">
               <Button size="sm" variant="outline" aria-label="Reduzir zoom" onClick={() => setZoom((z) => Math.max(25, z - 25))}>
                 <ZoomOut className="w-4 h-4" />
@@ -912,9 +915,9 @@ export default function QuestionBankPage() {
             <DialogHeader>
               <DialogTitle>Processamento ainda está em andamento</DialogTitle>
             </DialogHeader>
-            <p className="text-sm text-muted-foreground">
+            <DialogDescription>
               A IA ainda está processando o arquivo. Se sair agora, o resultado será perdido e os créditos não serão devolvidos.
-            </p>
+            </DialogDescription>
             <div className="flex justify-end gap-2 pt-2">
               <Button variant="outline" onClick={() => navGuard.reset?.()}>
                 Continuar aqui

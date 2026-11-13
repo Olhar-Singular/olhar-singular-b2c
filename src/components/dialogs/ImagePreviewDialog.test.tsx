@@ -3,6 +3,13 @@ import { render, screen } from "@testing-library/react";
 import ImagePreviewDialog from "./ImagePreviewDialog";
 
 describe("ImagePreviewDialog", () => {
+
+  it("exposes an accessible name and description to screen readers", async () => {
+    render(<ImagePreviewDialog open onOpenChange={vi.fn()} imageUrl="https://x.png" />);
+    const dialog = await screen.findByRole("dialog");
+    expect(dialog).toHaveAccessibleName();
+    expect(dialog).toHaveAccessibleDescription();
+  });
   it("does not render image when closed", () => {
     render(<ImagePreviewDialog open={false} onOpenChange={vi.fn()} imageUrl="https://x.png" />);
     expect(screen.queryByRole("img")).toBeNull();

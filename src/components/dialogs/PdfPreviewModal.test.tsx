@@ -21,6 +21,13 @@ beforeEach(() => {
 });
 
 describe("PdfPreviewModal", () => {
+
+  it("exposes an accessible name and description to screen readers", async () => {
+    render(<PdfPreviewModal open onOpenChange={vi.fn()} file={fakePdfFile()} />);
+    const dialog = await screen.findByRole("dialog");
+    expect(dialog).toHaveAccessibleName();
+    expect(dialog).toHaveAccessibleDescription();
+  });
   it("does not render when closed", () => {
     render(<PdfPreviewModal open={false} onOpenChange={vi.fn()} file={fakePdfFile()} />);
     expect(screen.queryByText(/Preview PDF/)).toBeNull();

@@ -63,6 +63,13 @@ beforeEach(() => {
 // Tests
 // ---------------------------------------------------------------------------
 describe("PdfPreviewModal (forms)", () => {
+
+  it("exposes an accessible name and description to screen readers", async () => {
+    render(<PdfPreviewModal open onOpenChange={vi.fn()} file={fakePdfFile()} />);
+    const dialog = await screen.findByRole("dialog");
+    expect(dialog).toHaveAccessibleName();
+    expect(dialog).toHaveAccessibleDescription();
+  });
   // ── rendering ──────────────────────────────────────────────────────────
 
   it("does not render content when closed (open=false)", () => {

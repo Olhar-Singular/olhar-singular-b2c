@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from "react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { ChevronLeft, ChevronRight, Download, Loader2, Crop, Move } from "lucide-react";
 import { renderPdfPage, getPdfPageCount } from "@/lib/utils/pdf-utils";
@@ -135,6 +135,7 @@ export default function PdfPreviewModal({ open, onOpenChange, file, onCrop, init
       <DialogContent className="max-w-4xl max-h-[95vh]">
         <DialogHeader>
           <DialogTitle className="truncate">{file?.name || "Preview PDF"}</DialogTitle>
+          <DialogDescription className="sr-only">Prévia das páginas do PDF, com opção de recorte.</DialogDescription>
         </DialogHeader>
         <div className="flex flex-col items-center gap-4">
           {cropping && (

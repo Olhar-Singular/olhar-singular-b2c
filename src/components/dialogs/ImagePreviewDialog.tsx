@@ -14,6 +14,8 @@ export default function ImagePreviewDialog({ open, onOpenChange, imageUrl, title
       <DialogPrimitive.Portal>
         <DialogPrimitive.Overlay className="fixed inset-0 z-[100] bg-black/50 backdrop-blur-sm data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0" />
         <DialogPrimitive.Content className="fixed left-[50%] top-[50%] z-[100] translate-x-[-50%] translate-y-[-50%] w-[90vw] max-w-3xl max-h-[85vh] outline-none">
+          <DialogPrimitive.Title className="sr-only">{title}</DialogPrimitive.Title>
+          <DialogPrimitive.Description className="sr-only">Imagem em tamanho ampliado.</DialogPrimitive.Description>
           <div className="relative rounded-xl overflow-hidden bg-background shadow-2xl border">
             <DialogPrimitive.Close className="absolute top-3 right-3 z-10 rounded-full bg-foreground/80 hover:bg-foreground text-background p-1.5 shadow-lg transition-colors">
               <X className="h-5 w-5" />
