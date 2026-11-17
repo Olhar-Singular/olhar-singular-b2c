@@ -83,6 +83,8 @@ export type CheckoutResult =
         | "trial_requires_new_account" | "cpf_required" | "trial_used"
         | Extract<SubscribeResult, { ok: false }>["error"];
       httpStatus: number;
+      /** prepaid_active only: end of the running Pix prepaid plan (ISO). */
+      until?: string;
     };
 
 export async function runAnonymousCheckout(input: CheckoutInput, deps: CheckoutDeps): Promise<CheckoutResult> {
@@ -143,6 +145,7 @@ export async function runAnonymousCheckout(input: CheckoutInput, deps: CheckoutD
 
   if (!result.ok) {
     // The account (if just created) stays: decision 14. No session either.
+    if (result.error === "prepaid_active") return { ok: false, error: result.error, httpStatus: result.httpStatus, until: result.until };
     return { ok: false, error: result.error, httpStatus: result.httpStatus };
   }
 

@@ -2,9 +2,12 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "@supabase/supabase-js";
 import {
   extractApprovedGrant,
+  extractRefundedPurchase,
   extractRejectedPurchase,
   parsePaymentNotification,
 } from "../_shared/mpEvents.ts";
+import { settleApprovedPlan, settleRefundedPlan, type PlanSettlementDeps } from "../_shared/pixPlanSettlement.ts";
+import { sendPrepaidConfirmation } from "../_shared/prepaidEmails.ts";
 import { validateMpSignature } from "../_shared/mpSignature.ts";
 import { approvePurchaseAndGrant, rejectPendingPurchase } from "../_shared/purchaseGrant.ts";
 import { parseSubscriptionNotification } from "../_shared/mpPreapproval.ts";
@@ -220,6 +223,29 @@ serve(async (req) => {
     const payment = mpResp.json;
     const admin = createClient(supabaseUrl, serviceKey);
 
+    // A Pix prepaid plan (credit_purchases.kind = 'plan') settles on its own
+    // path: the buyer's account may be born here (R4) and money that went back
+    // takes the plan's credits out (R3). Extras keep the original path below.
+    const purchaseKind = async (purchaseId: string): Promise<string | null> => {
+      const { data, error } = await admin.from("credit_purchases").select("kind").eq("id", purchaseId).maybeSingle();
+      // A read failure must not be acknowledged: 500 and MP retries.
+      if (error) throw new Error(`credit_purchases kind lookup failed: ${error.message}`);
+      return data?.kind ?? null;
+    };
+
+    const refunded = extractRefundedPurchase(payment);
+    if (refunded) {
+      if ((await purchaseKind(refunded.purchaseId)) !== "plan") return json({ received: true });
+      const outcome = await settleRefundedPlan({ purchaseId: refunded.purchaseId, paymentId }, {
+        refund: async (purchaseId, refundPaymentId) => {
+          const { data, error } = await admin.rpc("refund_prepaid_plan", { p_purchase_id: purchaseId, p_payment_id: refundPaymentId });
+          if (error || !data) throw new Error(`refund_prepaid_plan failed: ${error?.message ?? "empty payload"}`);
+          return data as Record<string, unknown>;
+        },
+      });
+      return json({ received: true, refunded: outcome.refunded, credits_removed: outcome.creditsRemoved });
+    }
+
     const grant = extractApprovedGrant(payment);
     if (!grant) {
       // Declined or expired payment closes out the pending purchase (never an
@@ -234,6 +260,103 @@ serve(async (req) => {
       }
       // Still pending (in_process/pending) or unknown: acknowledge, wait for the next ping.
       return json({ received: true });
+    }
+
+    if ((await purchaseKind(grant.purchaseId)) === "plan") {
+      const appUrl = normalizeAppUrl(Deno.env.get("APP_URL"));
+      const planDeps: PlanSettlementDeps = {
+        loadPurchase: async (purchaseId) => {
+          const { data, error } = await admin
+            .from("credit_purchases")
+            .select("kind, status, user_id, buyer_email, buyer_name, terms_version, plan_months, amount_brl, credits_granted")
+            .eq("id", purchaseId)
+            .maybeSingle();
+          if (error) throw new Error(`credit_purchases lookup failed: ${error.message}`);
+          return data;
+        },
+        userIdByEmail: async (email) => {
+          const { data, error } = await admin.rpc("user_id_by_email", { p_email: email });
+          if (error) throw new Error(`user_id_by_email failed: ${error.message}`);
+          return (data as string | null) ?? null;
+        },
+        // Same account shape as the card funnel (subscribe/index.ts): random
+        // password, confirmed e-mail, forced password step on first login.
+        createUser: async ({ email, fullName }) => {
+          const password = crypto.randomUUID() + crypto.randomUUID();
+          const { data, error } = await admin.auth.admin.createUser({
+            email,
+            password,
+            email_confirm: true,
+            user_metadata: { full_name: fullName, must_set_password: true },
+          });
+          if (error) {
+            const code = (error as { code?: string }).code ?? "";
+            if (code === "email_exists" || error.status === 422 || /already/i.test(error.message)) return "exists";
+            throw new Error(`createUser failed: ${error.message}`);
+          }
+          const flag = () => admin.from("profiles").update({ must_set_password: true, full_name: fullName }).eq("id", data.user.id);
+          let { error: flagError } = await flag();
+          if (flagError) ({ error: flagError } = await flag());
+          if (flagError) throw new Error(`must_set_password flag failed: ${flagError.message}`);
+          return { id: data.user.id };
+        },
+        loadContact: async (userId) => {
+          const { data: account } = await admin.auth.admin.getUserById(userId);
+          const email = account?.user?.email;
+          if (!email) return null;
+          const { data: profile } = await admin.from("profiles").select("full_name").eq("id", userId).maybeSingle();
+          return { email, fullName: profile?.full_name ?? null };
+        },
+        approve: async (purchaseId, approvePaymentId, userId) => {
+          const { data, error } = await admin.rpc("approve_prepaid_plan", {
+            p_purchase_id: purchaseId,
+            p_payment_id: approvePaymentId,
+            p_user_id: userId,
+          });
+          if (error || !data) throw new Error(`approve_prepaid_plan failed: ${error?.message ?? "empty payload"}`);
+          return data as Record<string, unknown>;
+        },
+        // The same login e-mail the card funnel asks for on the client; it
+        // lands on /definir-senha, where the new account sets its password.
+        sendLoginLink: async (email) => {
+          const anon = createClient(supabaseUrl, Deno.env.get("SUPABASE_ANON_KEY")!);
+          const { error } = await anon.auth.signInWithOtp({
+            email,
+            options: { shouldCreateUser: false, emailRedirectTo: `${appUrl}/definir-senha` },
+          });
+          if (error) throw new Error(error.message);
+        },
+        sendConfirmation: (input) => sendPrepaidConfirmation(
+          { fetch, config: readEmailConfig(Deno.env), log: (message, ...args) => console.warn(message, ...args), info: (message, ...args) => console.log(message, ...args) },
+          input,
+        ),
+        log: (message, ...args) => console.warn(message, ...args),
+      };
+
+      const planOutcome = await settleApprovedPlan({ purchaseId: grant.purchaseId, paymentId, appUrl }, planDeps);
+      if (planOutcome.granted) {
+        const { data: planRow } = await admin
+          .from("credit_purchases")
+          .select("amount_brl, credits_granted, plan_months")
+          .eq("id", grant.purchaseId)
+          .maybeSingle();
+        await dispatchAnalytics(sendAnalyticsEvents(
+          [{
+            name: "purchase",
+            eventId: grant.purchaseId,
+            userId: planOutcome.userId as string,
+            valueBrl: planRow ? Number(planRow.amount_brl) : null,
+            params: {
+              kind: "prepaid_plan",
+              credits: planRow?.credits_granted ?? 0,
+              plan_months: planRow?.plan_months ?? 0,
+              account_created: planOutcome.accountCreated === true,
+            },
+          }],
+          readAnalyticsConfig(Deno.env),
+        ));
+      }
+      return json({ received: true, plan_granted: planOutcome.granted });
     }
 
     // Claim + grant happen in one database transaction, so a crash here can

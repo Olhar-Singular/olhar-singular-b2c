@@ -106,9 +106,9 @@ export function isRecentRejection(subscription: SubscriptionView | null | undefi
 export const TRIAL_DAYS = 7;
 export const TRIAL_CREDITS = 50;
 
-// The trial runs on the cheapest public plan: the server decides (subscribeFlow),
-// this mirror only feeds the copy. Null while the catalogue is empty. Tie
-// broken by slug: the server orders the same way (price_brl, slug).
+// The trial runs on the plan chosen at checkout; the cheapest public plan is
+// its default there and the "a partir de" floor in the landing copy. Null while
+// the catalogue is empty. Tie broken by slug, like the plans query (price_brl, slug).
 export function cheapestPublicPlan(plans: PlanView[]): PlanView | null {
   return plans
     .filter((p) => !p.adminOnly)
@@ -133,7 +133,7 @@ export function isCardTrial(sub: SubscriptionView | null | undefined): boolean {
 
 // Version of the Terms of Use the checkout records on the profile. Bump when
 // the legal text changes; the pages under /termos show the same value.
-export const TERMS_VERSION = "2026-10.2";
+export const TERMS_VERSION = "2026-11.1";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 
@@ -153,6 +153,18 @@ export function validateAccountForm(form: {
   if (email !== form.emailConfirmation.trim().toLowerCase()) return "email_mismatch";
   if (!form.acceptedTerms) return "terms";
   return null;
+}
+
+/** The e-mail the buyer typed twice, normalised, once it is valid and both fields match; else null. */
+export function confirmedEmail(form: { email: string; emailConfirmation: string }): string | null {
+  const email = form.email.trim().toLowerCase();
+  if (!EMAIL_RE.test(email) || email !== form.emailConfirmation.trim().toLowerCase()) return null;
+  return email;
+}
+
+/** The account the checkout sends, from a form that already passed validateAccountForm. */
+export function normalizeAccount(form: { fullName: string; email: string }): { fullName: string; email: string } {
+  return { fullName: form.fullName.trim(), email: form.email.trim().toLowerCase() };
 }
 
 export const ACCOUNT_FORM_MESSAGES: Record<AccountFormError, string> = {

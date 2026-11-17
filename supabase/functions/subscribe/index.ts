@@ -12,6 +12,7 @@ import { normalizeAppUrl } from "../_shared/appUrl.ts";
 import { readEmailConfig } from "../_shared/email.ts";
 import { sendSubscriptionConfirmation } from "../_shared/subscriptionEmails.ts";
 import { errorResponse } from "../_shared/publicError.ts";
+import { prepaidActiveMessage } from "../_shared/prepaidPlans.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -49,6 +50,7 @@ const FLOW_ERRORS: Record<string, string> = {
   trial_requires_new_account: "Você já tem conta: o teste é só para contas novas. Assine um plano em Créditos.",
   cpf_required: "Informe um CPF válido para começar o teste.",
   trial_used: "Este CPF já usou o teste. Você pode assinar um plano com o mesmo cartão.",
+  prepaid_active: "Você tem um plano à vista ativo. Para continuar, renove no Pix ou assine no cartão depois do fim dele.",
 };
 
 // A pending subscription older than this is a dead attempt and must not block a
@@ -59,7 +61,7 @@ const PENDING_GRACE_MINUTES = 15;
 // endpoint (verify_jwt = false): with a valid user JWT it is the logged-in
 // flow; without one the account is created from the payment (decision 12) and
 // the buyer enters through the login link sent to the e-mail. With `trial:
-// true` in the anonymous flow the cheapest public plan starts free for 7 days.
+// true` in the anonymous flow the chosen plan starts free for 7 days.
 // Decisions live in runAnonymousCheckout / runSubscribe (unit-tested); this
 // file wires Supabase and Mercado Pago into them.
 serve(async (req) => {
@@ -106,24 +108,16 @@ serve(async (req) => {
         const { data } = await admin.from("plans").select("*").eq("slug", slug).maybeSingle();
         return data;
       },
-      loadCheapestPublicPlan: async () => {
-        const { data, error } = await admin
-          .from("plans")
-          .select("*")
-          .eq("active", true)
-          .eq("admin_only", false)
-          // Deterministic pick on a price tie: same order the client mirrors
-          // in cheapestPublicPlan (src/lib/domain/subscriptionUi.ts).
-          .order("price_brl", { ascending: true })
-          .order("slug", { ascending: true })
-          .limit(1)
-          .maybeSingle();
-        if (error) throw new Error(`plans lookup failed: ${error.message}`);
-        return data;
-      },
       loadProfile: async (userId) => {
         const { data } = await admin.from("profiles").select("access_kind, is_super_admin, full_name").eq("id", userId).maybeSingle();
         return data;
+      },
+      prepaidActiveUntil: async (userId) => {
+        const { data, error } = await admin.rpc("prepaid_plan_active", { p_user_id: userId });
+        // A read failure must not look like "no prepaid plan": it would charge
+        // the card for months already paid on Pix.
+        if (error) throw new Error(`prepaid_plan_active failed: ${error.message}`);
+        return data ? new Date(data as string) : null;
       },
       findLiveSubscription: async (userId) => {
         const { data, error } = await admin
@@ -307,7 +301,12 @@ serve(async (req) => {
       checkoutDeps,
     );
 
-    if (!outcome.ok) return json({ error: FLOW_ERRORS[outcome.error], code: outcome.error }, outcome.httpStatus);
+    if (!outcome.ok) {
+      const message = outcome.error === "prepaid_active" && outcome.until
+        ? prepaidActiveMessage(outcome.until)
+        : FLOW_ERRORS[outcome.error];
+      return json({ error: message, code: outcome.error, ...(outcome.until ? { until: outcome.until } : {}) }, outcome.httpStatus);
+    }
 
     const { result, accountCreated, recipient } = outcome;
 

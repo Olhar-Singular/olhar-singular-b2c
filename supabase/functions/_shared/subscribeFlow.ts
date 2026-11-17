@@ -3,7 +3,7 @@
 // pending, rejection, never-retry-the-POST) is unit-tested away from Deno and
 // Supabase. subscribe/index.ts only builds `deps`.
 //
-// Trial with card: cheapest public plan, `trial_ends_at` on the row, `start_date` at MP.
+// Trial with card: the requested plan, `trial_ends_at` on the row, `start_date` at MP.
 
 import type { CardFormData } from "./mpCardPayment.ts";
 import { buildPreapprovalBody, interpretPreapproval, trialEndDate, type PlanLike } from "./mpPreapproval.ts";
@@ -26,7 +26,7 @@ export interface SubscribeInput {
   cardLastFour?: string | null;
   backUrl: string;
   attribution?: Record<string, unknown>;
-  /** Trial with card: the cheapest public plan, first charge in TRIAL_DAYS (decision 1). */
+  /** Trial with card on the requested plan, first charge in TRIAL_DAYS (spec 2026-11-15, D2). */
   trial?: boolean;
   /** Clock, injectable for tests; the wall clock otherwise. */
   now?: Date;
@@ -40,12 +40,12 @@ export interface PreapprovalHttp {
 
 export interface SubscribeDeps {
   loadPlan(slug: string): Promise<PlanRow | null>;
-  /** The trial's plan is decided here, never by the client: cheapest active, not admin_only. */
-  loadCheapestPublicPlan(): Promise<PlanRow | null>;
   /** full_name feeds the confirmation e-mail; a dep that does not select it yields subscriberName null. */
   loadProfile(userId: string): Promise<{ access_kind: string; is_super_admin: boolean; full_name?: string | null } | null>;
   /** Live rows (authorized/past_due/paused) AND fresh pending attempts. */
   findLiveSubscription(userId: string): Promise<{ id: string; status: string } | null>;
+  /** RPC prepaid_plan_active: end of a running Pix prepaid period, or null. */
+  prepaidActiveUntil(userId: string): Promise<Date | null>;
   /** Closes pending rows older than the grace window so a fresh attempt is possible. */
   expireStalePending(userId: string): Promise<void>;
   insertSubscription(row: {
@@ -90,7 +90,9 @@ export type SubscribeResult =
        /** Trial with card: ISO of the first charge. Absent on a paid-from-day-one attempt. */
        trialEndsAt?: string } & ContractFacts)
   | ({ ok: true; status: "rejected"; subscriptionId: string; detail: string } & ContractFacts)
-  | { ok: false; error: "invalid_plan" | "exempt_user" | "already_subscribed" | "attempt_in_progress" | "profile_not_found"; httpStatus: number };
+  | { ok: false; error: "invalid_plan" | "exempt_user" | "already_subscribed" | "attempt_in_progress" | "profile_not_found"; httpStatus: number }
+  /** A Pix prepaid plan runs until `until` (ISO): R6 of the Pix plan spec. */
+  | { ok: false; error: "prepaid_active"; httpStatus: 409; until: string };
 
 function toPlanLike(row: PlanRow): PlanLike {
   return {
@@ -110,7 +112,7 @@ export async function runSubscribe(input: SubscribeInput, deps: SubscribeDeps): 
     return { ok: false, error: "exempt_user", httpStatus: 409 };
   }
 
-  const planRow = input.trial ? await deps.loadCheapestPublicPlan() : await deps.loadPlan(input.planSlug);
+  const planRow = await deps.loadPlan(input.planSlug);
   if (!planRow || !planRow.active || (planRow.admin_only && !profile.is_super_admin)) {
     return { ok: false, error: "invalid_plan", httpStatus: 400 };
   }
@@ -127,6 +129,11 @@ export async function runSubscribe(input: SubscribeInput, deps: SubscribeDeps): 
   // path reaches it (synchronous authorized or the webhook).
   const trialEndsAt = input.trial ? trialEndDate(input.now ?? new Date()).toISOString() : null;
   const trialFields = trialEndsAt ? { trialEndsAt } : {};
+
+  // A prepaid period is already paid: charging the card on top would bill the
+  // same months twice (R6). The buyer renews on Pix or subscribes after it.
+  const prepaidUntil = await deps.prepaidActiveUntil(input.userId);
+  if (prepaidUntil) return { ok: false, error: "prepaid_active", httpStatus: 409, until: prepaidUntil.toISOString() };
 
   // Stale pending rows go first, so what findLiveSubscription returns is
   // either a live subscription or an attempt still in flight (double click,

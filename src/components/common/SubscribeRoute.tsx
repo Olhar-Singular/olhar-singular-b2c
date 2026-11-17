@@ -4,8 +4,8 @@ import PublicShell from "@/components/common/PublicShell";
 import SubscribePage from "@/pages/SubscribePage";
 
 // /assinar is one URL with two shells: the app layout for a logged-in user
-// (menu, credits badge, banner) and the public shell for a visitor paying
-// first. Nothing renders until the session is known, so the shell never flips.
+// (menu, credits badge, banner) and the checkout shell (no way out) for a
+// visitor paying first. Nothing renders until the session is known, so the shell never flips.
 export function SubscribeRoute() {
   const { session, loading } = useAuth();
   if (loading) return null;
@@ -17,7 +17,7 @@ export function SubscribeRoute() {
     );
   }
   return (
-    <PublicShell>
+    <PublicShell checkout>
       <SubscribePage />
     </PublicShell>
   );

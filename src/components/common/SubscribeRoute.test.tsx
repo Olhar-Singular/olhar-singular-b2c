@@ -8,7 +8,11 @@ vi.mock("@/components/common/Layout", () => ({
   default: ({ children }: { children: React.ReactNode }) => <div data-testid="app-layout">{children}</div>,
 }));
 vi.mock("@/components/common/PublicShell", () => ({
-  default: ({ children }: { children: React.ReactNode }) => <div data-testid="public-shell">{children}</div>,
+  default: ({ children, checkout }: { children: React.ReactNode; checkout?: boolean }) => (
+    <div data-testid="public-shell" data-checkout={String(!!checkout)}>
+      {children}
+    </div>
+  ),
 }));
 vi.mock("@/pages/SubscribePage", () => ({ default: () => <div data-testid="subscribe-page" /> }));
 
@@ -33,5 +37,7 @@ describe("SubscribeRoute", () => {
     vi.mocked(useAuth).mockReturnValue(buildAuthState({ session: null }) as never);
     renderWithProviders(<SubscribeRoute />);
     expect(screen.getByTestId("public-shell")).toContainElement(screen.getByTestId("subscribe-page"));
+    // Checkout chrome: no way out of the payment screen (briefing, change 2).
+    expect(screen.getByTestId("public-shell")).toHaveAttribute("data-checkout", "true");
   });
 });

@@ -156,7 +156,7 @@ export interface SubscribeInput {
   cardLastFour?: string | null;
   account?: SubscribeAccountInput;
   attribution?: Record<string, unknown>;
-  /** Trial with card (anonymous funnel only): the server picks the cheapest plan. */
+  /** Trial with card (anonymous funnel only) on planSlug: nothing is charged for TRIAL_DAYS. */
   trial?: boolean;
 }
 
@@ -196,9 +196,11 @@ export function useSubscribe() {
       return data as SubscribeResult;
     },
     onSuccess: refresh,
-    // trial_used is answered inline by the page (same card, paid plan, one click).
+    // The page answers these inline: trial_used (same card, paid plan, one
+    // click) and prepaid_active (the message next to the card, with "Renovar no Pix").
     onError: (err: Error) => {
-      if (subscribeErrorCode(err) !== "trial_used") toast.error(parseEdgeFnError(err, SUBSCRIBE_FALLBACK));
+      const code = subscribeErrorCode(err);
+      if (code !== "trial_used" && code !== "prepaid_active") toast.error(parseEdgeFnError(err, SUBSCRIBE_FALLBACK));
     },
   });
 }

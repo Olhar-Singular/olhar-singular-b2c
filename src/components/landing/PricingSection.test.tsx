@@ -82,15 +82,18 @@ describe("PricingSection", () => {
       expect(within(trial).getAllByRole("listitem")).toHaveLength(2);
     });
 
-    it("names the cheapest public plan as the one that follows", () => {
+    it("quotes the cheapest public plan as the floor of the plan the buyer will choose", () => {
       renderWithProviders(<PricingSection />);
-      expect(screen.getByText(/Depois, R\$\s*39,90\/mês \(300 créditos\)\. Cancele antes e não paga nada\./)).toBeInTheDocument();
+      expect(
+        screen.getByText(/Depois, a partir de R\$\s*39,90\/mês, no plano que você escolher\. Cancele antes e não paga nada\./),
+      ).toBeInTheDocument();
+      expect(screen.queryByText(/\(300 créditos\)/)).toBeNull();
     });
 
     it("follows the catalogue for the plan after the trial", () => {
       mockUsePlans.mockReturnValue({ data: [SINGLE_PLAN], isPending: false });
       renderWithProviders(<PricingSection />);
-      expect(screen.getByText(/Depois, R\$\s*42,00\/mês \(120 créditos\)/)).toBeInTheDocument();
+      expect(screen.getByText(/Depois, a partir de R\$\s*42,00\/mês, no plano que você escolher/)).toBeInTheDocument();
     });
 
     it("omits the 'Depois' line when there is no plan to name, keeping the trial CTA", () => {

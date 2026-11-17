@@ -43,7 +43,7 @@ export default function SetPasswordPage() {
         return;
       }
       toast.success("Senha definida! Bem-vindo à plataforma.");
-      navigate("/dashboard", { replace: true });
+      navigate("/adaptar", { replace: true });
     } catch {
       // The hook already toasted; keep the form so the user can try again.
     }

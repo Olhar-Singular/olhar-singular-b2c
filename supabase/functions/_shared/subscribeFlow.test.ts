@@ -25,10 +25,12 @@ function input(overrides: Partial<SubscribeInput> = {}): SubscribeInput {
 
 function deps(overrides: Partial<SubscribeDeps> = {}) {
   const d = {
-    loadPlan: vi.fn(async (slug: string) => (slug === "profissional" ? PLAN : slug === "teste-admin" ? ADMIN_PLAN : null)),
-    loadCheapestPublicPlan: vi.fn(async () => BASIC),
+    loadPlan: vi.fn(async (slug: string) =>
+      slug === "profissional" ? PLAN : slug === "basico" ? BASIC : slug === "teste-admin" ? ADMIN_PLAN : null,
+    ),
     loadProfile: vi.fn(async () => ({ access_kind: "legacy", is_super_admin: false })),
     findLiveSubscription: vi.fn(async () => null),
+    prepaidActiveUntil: vi.fn(async () => null as Date | null),
     expireStalePending: vi.fn(async () => undefined),
     insertSubscription: vi.fn(async () => "sub-1"),
     postPreapproval: vi.fn(async () => ({
@@ -153,6 +155,16 @@ describe("runSubscribe", () => {
     expect(d.insertSubscription).not.toHaveBeenCalled();
   });
 
+  // R6 of the Pix plan: a paid prepaid period must not be paid again on the card.
+  it("refuses while a Pix prepaid plan is running, before MP is called", async () => {
+    const until = new Date("2027-02-15T15:00:00.000Z");
+    const d = deps({ prepaidActiveUntil: vi.fn(async () => until) });
+    expect(await runSubscribe(input(), d)).toEqual({ ok: false, error: "prepaid_active", httpStatus: 409, until: "2027-02-15T15:00:00.000Z" });
+    expect(d.prepaidActiveUntil).toHaveBeenCalledWith("u1");
+    expect(d.insertSubscription).not.toHaveBeenCalled();
+    expect(d.postPreapproval).not.toHaveBeenCalled();
+  });
+
   // A double click (or a card MP is still validating) must not open a second
   // preapproval: stale rows are expired first, a fresh pending one blocks.
   it("refuses a second attempt while a fresh pending one is in flight", async () => {
@@ -216,26 +228,39 @@ describe("runSubscribe", () => {
 describe("runSubscribe (trial with card)", () => {
   const NOW = new Date("2026-09-15T21:52:15.000Z");
 
-  it("ignores planSlug, takes the cheapest public plan, stores trial_ends_at and schedules the first charge", async () => {
+  it("runs on the requested plan, stores trial_ends_at and schedules the first charge", async () => {
     const d = deps();
     const result = await runSubscribe(input({ planSlug: "profissional", trial: true, now: NOW }), d);
 
-    expect(d.loadPlan).not.toHaveBeenCalled();
-    expect(d.loadCheapestPublicPlan).toHaveBeenCalled();
+    expect(d.loadPlan).toHaveBeenCalledWith("profissional");
     expect(d.insertSubscription).toHaveBeenCalledWith({
-      userId: "u1", planId: "pl-basic", payerEmail: "account@test.com", attribution: undefined,
+      userId: "u1", planId: "pl-pro", payerEmail: "account@test.com", attribution: undefined,
       trialEndsAt: "2026-09-22T21:52:15.000Z",
     });
     const [body] = d.postPreapproval.mock.calls[0];
     expect(body).toMatchObject({
-      reason: "Teste 7 dias + Básico - Olhar Singular",
-      auto_recurring: { transaction_amount: 39.9, start_date: "2026-09-22T21:52:15.000Z" },
+      reason: "Teste 7 dias + Profissional - Olhar Singular",
+      auto_recurring: { transaction_amount: 59.9, start_date: "2026-09-22T21:52:15.000Z" },
     });
     expect(d.activate).toHaveBeenCalledWith(expect.objectContaining({ subscriptionId: "sub-1", preapprovalId: "pre-1" }));
     expect(result).toEqual({
       ok: true, status: "authorized", subscriptionId: "sub-1",
-      planSlug: "basico", planName: "Básico", priceBrl: 39.9, monthlyCredits: 300, subscriberName: null, trialEndsAt: "2026-09-22T21:52:15.000Z",
+      planSlug: "profissional", planName: "Profissional", priceBrl: 59.9, monthlyCredits: 480, subscriberName: null, trialEndsAt: "2026-09-22T21:52:15.000Z",
     });
+  });
+
+  it("runs on the cheapest plan when that is the one requested", async () => {
+    const d = deps();
+    const result = await runSubscribe(input({ planSlug: "basico", trial: true, now: NOW }), d);
+    expect(d.postPreapproval.mock.calls[0][0]).toMatchObject({ reason: "Teste 7 dias + Básico - Olhar Singular", auto_recurring: { transaction_amount: 39.9 } });
+    expect(result).toMatchObject({ planSlug: "basico", monthlyCredits: 300 });
+  });
+
+  it("refuses a trial on an admin-only plan for a non-admin", async () => {
+    const d = deps();
+    const result = await runSubscribe(input({ planSlug: "teste-admin", trial: true, now: NOW }), d);
+    expect(result).toEqual({ ok: false, error: "invalid_plan", httpStatus: 400 });
+    expect(d.insertSubscription).not.toHaveBeenCalled();
   });
 
   // The confirmation e-mail (subscriptionEmails.ts) is written from the result,
@@ -245,7 +270,7 @@ describe("runSubscribe (trial with card)", () => {
     expect(await runSubscribe(input(), named)).toMatchObject({ status: "authorized", planName: "Profissional", monthlyCredits: 480, subscriberName: "Ana Souza" });
 
     const trialRun = deps({ loadProfile: vi.fn(async () => ({ access_kind: "legacy", is_super_admin: false, full_name: "Ana Souza" })) });
-    expect(await runSubscribe(input({ trial: true, now: NOW }), trialRun)).toMatchObject({ planName: "Básico", monthlyCredits: 300, subscriberName: "Ana Souza" });
+    expect(await runSubscribe(input({ trial: true, now: NOW }), trialRun)).toMatchObject({ planName: "Profissional", monthlyCredits: 480, subscriberName: "Ana Souza" });
 
     const pending = deps({
       loadProfile: vi.fn(async () => ({ access_kind: "legacy", is_super_admin: false, full_name: "Ana Souza" })),
@@ -266,13 +291,13 @@ describe("runSubscribe (trial with card)", () => {
     const result = await runSubscribe(input({ trial: true, now: NOW }), d);
     expect(result).toEqual({
       ok: true, status: "pending", subscriptionId: "sub-1",
-      planSlug: "basico", planName: "Básico", priceBrl: 39.9, monthlyCredits: 300, subscriberName: null, trialEndsAt: "2026-09-22T21:52:15.000Z",
+      planSlug: "profissional", planName: "Profissional", priceBrl: 59.9, monthlyCredits: 480, subscriberName: null, trialEndsAt: "2026-09-22T21:52:15.000Z",
     });
   });
 
-  it("refuses the trial when no public plan is active", async () => {
-    const d = deps({ loadCheapestPublicPlan: vi.fn(async () => null) });
-    const result = await runSubscribe(input({ trial: true, now: NOW }), d);
+  it("refuses a trial on an unknown plan", async () => {
+    const d = deps();
+    const result = await runSubscribe(input({ planSlug: "nao-existe", trial: true, now: NOW }), d);
     expect(result).toEqual({ ok: false, error: "invalid_plan", httpStatus: 400 });
     expect(d.insertSubscription).not.toHaveBeenCalled();
   });

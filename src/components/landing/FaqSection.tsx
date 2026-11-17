@@ -21,10 +21,9 @@ interface FaqEntry {
 
 // publicPlans() always falls back to DEFAULT_PLANS (all non-admin-only) when the
 // catalogue is empty, so cheapestPublicPlan() over that result is never null here.
+// The trial runs on the plan chosen at checkout, so the cheapest one is the floor.
 function buildFaq(trialPlan: PlanView): FaqEntry[] {
   const priceLabel = formatBrl(trialPlan.priceBrl);
-  const planName = trialPlan.name;
-  const monthlyCredits = trialPlan.monthlyCredits;
   // The first charge lands the day after the trial ends.
   const firstChargeDay = TRIAL_DAYS + 1;
 
@@ -50,8 +49,12 @@ function buildFaq(trialPlan: PlanView): FaqEntry[] {
       a: "Você escolhe um plano mensal e paga no cartão de crédito, em 1x. Todo mês, na mesma data, a cobrança se repete e seus créditos do plano são renovados. Precisa de mais créditos num mês? Compre créditos extras avulsos, por Pix ou cartão, que não expiram. Os pagamentos são processados pelo Mercado Pago.",
     },
     {
+      q: "Dá para pagar com Pix?",
+      a: "Sim. No Pix você paga à vista por 1, 3 ou 12 meses, sem cartão e sem renovação automática, e quanto mais meses, menor o valor mensal. O acesso é liberado em segundos depois do pagamento. Nos planos de 3 e 12 meses, a cota de um mês entra na hora e o restante entra no 8º dia, depois do prazo de garantia: se não servir em até 7 dias, devolvemos o valor integral.",
+    },
+    {
       q: `Como funciona o teste grátis de ${TRIAL_DAYS} dias?`,
-      a: `Você informa nome, e-mail e um cartão de crédito. O cartão é validado (uma cobrança simbólica pode aparecer e é estornada), nada é cobrado por ${TRIAL_DAYS} dias e você recebe ${TRIAL_CREDITS} créditos para experimentar tudo. No ${firstChargeDay}º dia cobramos ${priceLabel} e sua conta vira o plano ${planName}, com ${monthlyCredits} créditos por mês. Cancelou antes do ${firstChargeDay}º dia? Nada é cobrado e o acesso encerra na hora. É um teste por CPF.`,
+      a: `Você informa nome, e-mail e um cartão de crédito. O cartão é validado (uma cobrança simbólica pode aparecer e é estornada), nada é cobrado por ${TRIAL_DAYS} dias e você recebe ${TRIAL_CREDITS} créditos para experimentar tudo. No ${firstChargeDay}º dia cobramos o plano que você escolheu no checkout, a partir de ${priceLabel}/mês, e sua conta passa a receber os créditos dele todo mês. Cancelou antes do ${firstChargeDay}º dia? Nada é cobrado e o acesso encerra na hora. É um teste por CPF.`,
     },
     {
       q: "Posso cancelar quando quiser?",

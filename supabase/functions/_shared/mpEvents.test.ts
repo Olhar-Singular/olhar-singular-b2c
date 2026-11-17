@@ -3,6 +3,7 @@ import {
   parsePaymentNotification,
   extractApprovedGrant,
   extractRejectedPurchase,
+  extractRefundedPurchase,
 } from "./mpEvents";
 
 describe("parsePaymentNotification", () => {
@@ -85,5 +86,22 @@ describe("external_reference must be a credit_purchases uuid", () => {
     expect(
       extractApprovedGrant({ status: "approved", external_reference: "6F1D2C3B-4A5E-4F60-8B7C-9D0E1F2A3B4C" }),
     ).toEqual({ purchaseId: "6f1d2c3b-4a5e-4f60-8b7c-9d0e1f2a3b4c" });
+  });
+});
+
+describe("extractRefundedPurchase", () => {
+  const REF = "0b0f8f2e-6c1a-4f43-9d0e-6f1d2c3b4a59";
+
+  it("returns the purchase for a refunded or charged-back payment", () => {
+    expect(extractRefundedPurchase({ status: "refunded", external_reference: REF })).toEqual({ purchaseId: REF });
+    expect(extractRefundedPurchase({ status: "charged_back", external_reference: REF.toUpperCase() })).toEqual({ purchaseId: REF });
+  });
+
+  it("ignores any other status or a reference that is not ours", () => {
+    expect(extractRefundedPurchase({ status: "approved", external_reference: REF })).toBeNull();
+    expect(extractRefundedPurchase({ status: "cancelled", external_reference: REF })).toBeNull();
+    expect(extractRefundedPurchase({ status: "refunded", external_reference: "pedido-42" })).toBeNull();
+    expect(extractRefundedPurchase({ status: "refunded" })).toBeNull();
+    expect(extractRefundedPurchase({})).toBeNull();
   });
 });

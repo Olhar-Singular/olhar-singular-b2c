@@ -85,8 +85,8 @@ describe("LEGAL_DOCS", () => {
     }
   });
 
-  it("was bumped with the October 2026 clause changes (confirmation e-mail, trial reminder, cookie preferences) and the version passes the checkout filter", () => {
-    expect(TERMS_VERSION).toBe("2026-10.2");
+  it("was bumped with the November 2026 prepaid Pix plan clauses and the version passes the checkout filter", () => {
+    expect(TERMS_VERSION).toBe("2026-11.1");
     expect(TERMS_VERSION).toMatch(TERMS_VERSION_RE);
     expect(JSON.stringify(LEGAL_DOCS)).not.toMatch(DASHES);
     expect(JSON.stringify(LEGAL_DOCS)).not.toMatch(/data de atualização/);
@@ -168,7 +168,7 @@ describe("LEGAL_DOCS", () => {
   it("terms describe the confirmation e-mail with the content the subscribe function actually sends", () => {
     const acceptance = sectionText("termos", "2. Aceitação e capacidade");
     expect(acceptance).toMatch(/Enviamos ao e-mail da Conta \(ou, se ele não puder ser lido, ao e-mail informado no pagamento\) um e-mail de confirmação da contratação/);
-    expect(acceptance).toMatch(/quando o pagamento é aprovado na hora no checkout ou o Teste Grátis é iniciado; quando a operadora deixa o cartão em análise no checkout e a aprovação chega depois; e quando uma assinatura encerrada é reativada por uma nova cobrança aprovada/);
+    expect(acceptance).toMatch(/quando o pagamento é aprovado na hora no checkout ou o Teste Grátis é iniciado; quando a operadora deixa o cartão em análise no checkout e a aprovação chega depois; quando uma assinatura encerrada é reativada por uma nova cobrança aprovada; e quando o pagamento de um plano à vista no Pix é confirmado/);
     expect(acceptance).toMatch(/Não há novo e-mail de confirmação nas renovações mensais nem na primeira cobrança do Teste Grátis/);
     expect(acceptance).not.toMatch(/em todos os casos|Confirmado o pagamento ou iniciado/);
     for (const item of ["o plano", "o valor", "os créditos por mês", "a data da primeira cobrança", "todo mês, na mesma data", "a versão destes Termos aceita, quando disponível no momento do envio", "Política de Reembolso", "área Créditos"]) {
@@ -254,7 +254,7 @@ describe("LEGAL_DOCS", () => {
 
   it("privacy policy lists the server-side conversion events and what each destination receives, as analyticsEvents.ts builds them", () => {
     const sharing = sectionText("privacidade", "7. Com quem compartilhamos");
-    for (const moment of ["início de assinatura ou de teste grátis", "compra de créditos", "renovação da assinatura", "falha de pagamento", "cancelamento", "estorno"]) {
+    for (const moment of ["início de assinatura ou de teste grátis", "compra de plano à vista ou de créditos", "renovação da assinatura", "falha de pagamento", "cancelamento", "estorno"]) {
       expect(sharing).toContain(moment);
     }
     expect(sharing).toMatch(/Ao Google Analytics vai o identificador interno da sua conta/);
@@ -284,19 +284,69 @@ describe("LEGAL_DOCS", () => {
       "2. Estorno da última cobrança da assinatura",
       "3. Teste grátis",
       "4. Créditos extras avulsos",
-      "5. Cobranças indevidas ou em duplicidade",
-      "6. Como e quando o valor volta",
-      "7. Contestação junto à operadora do cartão",
-      "8. Encerramento pela plataforma",
+      "5. Plano à vista no Pix",
+      "6. Cobranças indevidas ou em duplicidade",
+      "7. Como e quando o valor volta",
+      "8. Contestação junto à operadora do cartão",
+      "9. Encerramento pela plataforma",
     ]);
     expect(sectionText("reembolso", "1. Direito de arrependimento")).toMatch(/7 dias corridos/);
     expect(sectionText("reembolso", "2. Estorno da última cobrança da assinatura")).toContain(`${REFUND_WINDOW_DAYS} dias após cancelá-la`);
     expect(sectionText("reembolso", "3. Teste grátis")).toContain(`${TRIAL_DAYS + 1}º dia`);
     expect(sectionText("reembolso", "2. Estorno da última cobrança da assinatura")).not.toMatch(/liberalidade/);
     expect(sectionText("reembolso", "4. Créditos extras avulsos")).toMatch(/proporcional aos créditos não utilizados/);
-    expect(sectionText("reembolso", "7. Contestação junto à operadora do cartão")).toMatch(/é um direito seu/);
+    expect(sectionText("reembolso", "8. Contestação junto à operadora do cartão")).toMatch(/é um direito seu/);
     const extras = sectionText("reembolso", "4. Créditos extras avulsos");
     expect(extras).toContain(`${EXTRAS_REFUND_DAYS} dias corridos`);
     expect(extras).toMatch(/Peça pelo suporte no menu da sua conta\./);
+  });
+
+  it("terms carry the prepaid Pix plan as the checkout sells it: one-off, no renewal, two-part release, rebuy extends, no card subscription alongside", () => {
+    const plans = sectionText("termos", "5. Planos, créditos e pagamento");
+    expect(plans).toMatch(/5\.11\. Plano à vista no Pix\./);
+    expect(plans).toMatch(/pago por Pix em parcela única/);
+    expect(plans).toMatch(/Não há renovação nem cobrança automática/);
+    expect(plans).toMatch(/a cota de um mês .* entra na confirmação do pagamento e o restante entra no 8º dia/);
+    expect(plans).toMatch(/No plano de 1 mês, todos os créditos entram na hora/);
+    expect(plans).toMatch(/soma os créditos e estende o período/);
+    expect(plans).toMatch(/não convive com uma assinatura ativa no cartão/);
+    expect(plans).toMatch(/5\.1\. Os planos de assinatura são mensais/);
+  });
+
+  it("no legal text promises a fiscal document (the product does not issue one)", () => {
+    for (const doc of Object.values(LEGAL_DOCS)) {
+      const text = doc.sections.flatMap((s) => s.paragraphs).join(" ");
+      expect(text).not.toMatch(/documento fiscal|nota fiscal/i);
+    }
+  });
+
+  it("terms give the prepaid plan its 7-day guarantee with full refund through support", () => {
+    const cancel = sectionText("termos", "7. Cancelamento e direito de arrependimento");
+    expect(cancel).toMatch(/7\.4\. No plano à vista no Pix, você tem 7 dias corridos de garantia/);
+    expect(cancel).toMatch(/devolvemos o valor integral/);
+    expect(cancel).toMatch(/pelo Suporte/);
+    expect(sectionText("termos", "2. Aceitação e capacidade")).toMatch(/assinatura, Teste Grátis ou plano à vista/);
+    expect(sectionText("termos", "2. Aceitação e capacidade")).toMatch(/quando o pagamento de um plano à vista no Pix é confirmado/);
+  });
+
+  it("the refund policy has a section for the prepaid plan and its regret clause names it", () => {
+    const prepaid = sectionText("reembolso", "5. Plano à vista no Pix");
+    expect(prepaid).toMatch(/7 dias corridos de garantia a contar da confirmação do pagamento/);
+    expect(prepaid).toMatch(/devolvemos o valor integral, mesmo que parte dos créditos já liberados tenha sido usada/);
+    expect(prepaid).toMatch(/conta de origem do Pix/);
+    expect(prepaid).toMatch(/a parte que ainda não tinha sido liberada é cancelada/);
+    expect(prepaid).toMatch(/libera os créditos em duas partes/);
+    expect(prepaid).toMatch(/8º dia/);
+    expect(sectionText("reembolso", "1. Direito de arrependimento")).toMatch(/da assinatura, do plano à vista ou da compra de créditos extras/);
+    expect(sectionText("reembolso", "1. Direito de arrependimento")).toMatch(/Para o plano à vista no Pix, aplica-se a cláusula 5/);
+    // The sections after it moved one number down.
+    expect(sectionText("reembolso", "6. Cobranças indevidas ou em duplicidade")).toMatch(/^6\.1\. /);
+    expect(sectionText("reembolso", "9. Encerramento pela plataforma")).toMatch(/^9\.1\. /);
+  });
+
+  it("privacy lists the prepaid plan purchase among the conversion events the webhook sends", () => {
+    expect(sectionText("privacidade", "7. Com quem compartilhamos")).toMatch(
+      /nestes momentos: início de assinatura ou de teste grátis, compra de plano à vista ou de créditos, renovação da assinatura/,
+    );
   });
 });

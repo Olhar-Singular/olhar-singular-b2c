@@ -1,3 +1,4 @@
+import { createRef } from "react";
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
@@ -46,8 +47,10 @@ vi.mock("@mercadopago/sdk-react", () => ({
   },
 }));
 
-import MpCardBrick from "./MpCardBrick";
+import MpCardBrick, { type MpCardBrickHandle } from "./MpCardBrick";
 import { resetMpInit } from "@/lib/payments/mpInit";
+
+const BASE_STYLE = { customVariables: { fontSizeMedium: "16px" } };
 
 describe("MpCardBrick", () => {
   beforeEach(() => {
@@ -70,7 +73,7 @@ describe("MpCardBrick", () => {
   it("pins instalments to 1 and passes the amount and payer e-mail to the Brick", () => {
     render(<MpCardBrick amount={29.9} payerEmail="buyer@test.com" onSubmit={vi.fn()} />);
     const props = cardPaymentProps.mock.calls[0][0];
-    expect(props.customization).toEqual({ paymentMethods: { maxInstallments: 1 } });
+    expect(props.customization).toEqual({ paymentMethods: { maxInstallments: 1 }, visual: { style: BASE_STYLE } });
     expect(props.initialization).toEqual({ amount: 29.9, payer: { email: "buyer@test.com" } });
     expect(props.locale).toBe("pt-BR");
   });
@@ -124,6 +127,7 @@ describe("MpCardBrick", () => {
     render(<MpCardBrick amount={29.9} onSubmit={vi.fn()} />);
 
     expect(screen.getByRole("alert")).toHaveTextContent(/indisponível/i);
+    expect(screen.getByRole("alert")).toHaveClass("text-destructive-strong");
     expect(screen.queryByTestId("card-brick")).toBeNull();
     expect(initMercadoPago).not.toHaveBeenCalled();
   });
@@ -160,11 +164,95 @@ describe("MpCardBrick", () => {
   it("labels the Brick's submit button when submitLabel is given, and leaves MP's default otherwise", () => {
     render(<MpCardBrick amount={39.9} onSubmit={vi.fn()} submitLabel="Começar o teste" />);
     expect(cardPaymentProps).toHaveBeenLastCalledWith(
-      expect.objectContaining({ customization: { paymentMethods: { maxInstallments: 1 }, visual: { texts: { formSubmit: "Começar o teste" } } } }),
+      expect.objectContaining({ customization: { paymentMethods: { maxInstallments: 1 }, visual: { style: BASE_STYLE, texts: { formSubmit: "Começar o teste" } } } }),
     );
     render(<MpCardBrick amount={39.9} onSubmit={vi.fn()} />);
     expect(cardPaymentProps).toHaveBeenLastCalledWith(
-      expect.objectContaining({ customization: { paymentMethods: { maxInstallments: 1 } } }),
+      expect.objectContaining({ customization: { paymentMethods: { maxInstallments: 1 }, visual: { style: BASE_STYLE } } }),
     );
+  });
+
+  // iOS zooms into any input under 16px and breaks the layout (briefing, mobile rule 2).
+  it("asks the Brick for 16px text", () => {
+    render(<MpCardBrick amount={39.9} onSubmit={vi.fn()} />);
+    expect(cardPaymentProps.mock.calls[0][0].customization.visual.style.customVariables.fontSizeMedium).toBe("16px");
+  });
+
+  it("hides the Brick's own button and keeps 1x when hideSubmit", () => {
+    render(<MpCardBrick amount={39.9} onSubmit={vi.fn()} hideSubmit />);
+    const { customization } = cardPaymentProps.mock.calls[0][0];
+    expect(customization.visual.hidePaymentButton).toBe(true);
+    expect(customization.paymentMethods).toEqual({ maxInstallments: 1 });
+  });
+});
+
+describe("MpCardBrick submit() (our own button)", () => {
+  const FORM = {
+    token: "tok_9",
+    issuer_id: "24",
+    payment_method_id: "visa",
+    transaction_amount: 39.9,
+    installments: 1,
+    payer: { email: "buyer@test.com", identification: { type: "CPF", number: "12345678909" } },
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    resetMpInit();
+    vi.stubEnv("VITE_MP_PUBLIC_KEY", "APP_USR-public");
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    delete (window as { cardPaymentBrickController?: unknown }).cardPaymentBrickController;
+  });
+
+  function mount(onSubmit = vi.fn().mockResolvedValue(undefined)) {
+    const ref = createRef<MpCardBrickHandle>();
+    render(<MpCardBrick ref={ref} amount={39.9} onSubmit={onSubmit} hideSubmit />);
+    return { ref, onSubmit };
+  }
+
+  function controller(getFormData: () => Promise<unknown>) {
+    (window as { cardPaymentBrickController?: unknown }).cardPaymentBrickController = { getFormData };
+  }
+
+  it("reads the form through the Brick controller and forwards the mapped card", async () => {
+    controller(vi.fn().mockResolvedValue(FORM));
+    const { ref, onSubmit } = mount();
+    await expect(ref.current!.submit()).resolves.toBe(true);
+    expect(onSubmit).toHaveBeenCalledWith({
+      token: "tok_9",
+      payment_method_id: "visa",
+      issuer_id: "24",
+      installments: 1,
+      payer: { email: "buyer@test.com", identification: { type: "CPF", number: "12345678909" } },
+    });
+  });
+
+  it("resolves false and never calls onSubmit when the form is invalid (the Brick shows the field errors)", async () => {
+    controller(vi.fn().mockRejectedValue(new Error("invalid fields")));
+    const rejected = mount();
+    await expect(rejected.ref.current!.submit()).resolves.toBe(false);
+    expect(rejected.onSubmit).not.toHaveBeenCalled();
+  });
+
+  it("resolves false when the controller hands back no data", async () => {
+    controller(vi.fn().mockResolvedValue(null));
+    const { ref, onSubmit } = mount();
+    await expect(ref.current!.submit()).resolves.toBe(false);
+    expect(onSubmit).not.toHaveBeenCalled();
+  });
+
+  it("resolves false when onSubmit rejects (a refusal the caller already reported)", async () => {
+    controller(vi.fn().mockResolvedValue(FORM));
+    const { ref } = mount(vi.fn().mockRejectedValue(new Error("recusado")));
+    await expect(ref.current!.submit()).resolves.toBe(false);
+  });
+
+  it("resolves false while the Brick has not mounted its controller yet", async () => {
+    const { ref, onSubmit } = mount();
+    await expect(ref.current!.submit()).resolves.toBe(false);
+    expect(onSubmit).not.toHaveBeenCalled();
   });
 });

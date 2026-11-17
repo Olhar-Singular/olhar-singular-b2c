@@ -36,6 +36,19 @@ describe("PublicShell", () => {
     unsubscribe();
   });
 
+  it("checkout mode drops the login and the home link, and says payment is secured by Mercado Pago", () => {
+    const { container } = renderWithProviders(<PublicShell checkout>x</PublicShell>, { route: "/assinar?trial=1" });
+    expect(screen.queryByRole("link", { name: "Entrar" })).toBeNull();
+    expect(screen.queryByRole("link", { name: /Olhar Singular/ })).toBeNull();
+    expect(screen.getByRole("img", { name: "Olhar Singular" })).toBeInTheDocument();
+    expect(screen.getByText("Pagamento seguro · Mercado Pago")).toBeInTheDocument();
+    // The checkout is painted in the Mercado Pago green; the small brand text takes the dark green.
+    expect(container.querySelector(".checkout-theme")).not.toBeNull();
+    expect(screen.getByText("Olhar Singular")).toHaveClass("text-primary-strong");
+    expect(screen.getByRole("link", { name: "Termos de Uso" })).toHaveAttribute("href", "/termos");
+    expect(screen.getByRole("link", { name: "Reembolso" })).toHaveAttribute("href", "/reembolso");
+  });
+
   it("leaves Preferências de cookies out of the checkout, where the banner never shows", () => {
     renderWithProviders(<PublicShell>x</PublicShell>, { route: "/assinar?plano=basico" });
     expect(screen.queryByRole("button", { name: "Preferências de cookies" })).toBeNull();

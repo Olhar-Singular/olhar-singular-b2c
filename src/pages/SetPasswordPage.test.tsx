@@ -54,14 +54,14 @@ describe("SetPasswordPage", () => {
     expect(mockSetPassword).not.toHaveBeenCalled();
   });
 
-  it("saves the password and goes to the dashboard", async () => {
+  it("saves the password and goes straight to Adaptar", async () => {
     const user = userEvent.setup();
     const { toast } = await import("sonner");
     renderWithProviders(<SetPasswordPage />);
     await user.type(screen.getByLabelText("Senha"), "segura1");
     await user.type(screen.getByLabelText("Confirme a senha"), "segura1");
     await user.click(screen.getByRole("button", { name: /Salvar senha/ }));
-    await waitFor(() => expect(navigateSpy).toHaveBeenCalledWith("/dashboard", { replace: true }));
+    await waitFor(() => expect(navigateSpy).toHaveBeenCalledWith("/adaptar", { replace: true }));
     expect(mockSetPassword).toHaveBeenCalledWith({ password: "segura1" });
     expect(toast.success).toHaveBeenCalled();
   });
@@ -77,7 +77,7 @@ describe("SetPasswordPage", () => {
     await waitFor(() => expect(navigateSpy).toHaveBeenCalledWith("/auth", { replace: true }));
     expect(mockSignOut).toHaveBeenCalled();
     expect(toast.success).toHaveBeenCalledWith(expect.stringMatching(/Entre com a nova senha/));
-    expect(navigateSpy).not.toHaveBeenCalledWith("/dashboard", expect.anything());
+    expect(navigateSpy).not.toHaveBeenCalledWith("/adaptar", expect.anything());
   });
 
   it("keeps the form when the server refuses (hook toasts)", async () => {

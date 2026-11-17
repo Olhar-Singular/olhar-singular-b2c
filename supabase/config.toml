@@ -83,3 +83,13 @@ verify_jwt = false
 # própria função (_shared/cronAuth.ts).
 [functions.send-trial-reminders]
 verify_jwt = false
+
+# Pix do plano à vista (/assinar?pagamento=pix): funciona sem sessão, como o
+# subscribe. A conta só nasce quando o webhook confirma o pagamento.
+[functions.pix-plan-checkout]
+verify_jwt = false
+
+# Status público da compra do plano à vista, consultado pela tela do QR (só
+# devolve pending/approved/failed de uma compra do tipo plano).
+[functions.pix-plan-status]
+verify_jwt = false

@@ -262,6 +262,21 @@
     --input: 195 20% 58%;
     --ring: 195 38% 52%;
   }
+
+  /* Checkout (/assinar): verde do Mercado Pago (#00a650) no lugar do teal, a
+     pedido do dono (16/11/2026). Branco sobre ele fica em 3,2:1, legivel so
+     como texto grande (WCAG 1.4.3): os botoes verdes usam texto grande em
+     negrito e o texto verde pequeno usa --primary-strong (#007a3d, 5,4:1). */
+  .checkout-theme {
+    --primary: 149 100% 33%;
+    --ring: 149 100% 33%;
+    --primary-strong: 150 100% 24%;
+  }
+  .dark .checkout-theme {
+    --primary: 149 70% 42%;
+    --ring: 149 70% 42%;
+    --primary-strong: 149 60% 70%;
+  }
 }
 
 @layer base {

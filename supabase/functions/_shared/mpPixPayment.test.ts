@@ -40,6 +40,11 @@ describe("buildPixPaymentBody", () => {
     expect(body.description).toBe("1 crédito - Olhar Singular");
   });
 
+  it("uses the description it is given (the prepaid plan names its period)", () => {
+    const body = buildPixPaymentBody({ ...BASE, description: "Plano à vista 3 meses - Olhar Singular" });
+    expect(body.description).toBe("Plano à vista 3 meses - Olhar Singular");
+  });
+
   it("omits payer when the account has no email", () => {
     const body = buildPixPaymentBody({ ...BASE, email: undefined });
     expect(body).not.toHaveProperty("payer");

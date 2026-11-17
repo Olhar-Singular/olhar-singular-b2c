@@ -87,6 +87,11 @@ vi.mock("@/components/credits/CardPaymentDialog", () => ({
   },
 }));
 
+const { mockUseActivePrepaid } = vi.hoisted(() => ({ mockUseActivePrepaid: vi.fn() }));
+vi.mock("@/hooks/usePrepaid", () => ({ useActivePrepaid: mockUseActivePrepaid }));
+// Implementations survive vi.clearAllMocks(): no prepaid plan unless a test says so.
+mockUseActivePrepaid.mockImplementation(() => ({ data: null }));
+
 vi.mock("@/hooks/useAuth", () => ({
   useAuth: vi.fn(() => ({
     profile: { credit_balance: 9, plan_credits: 0, plan_period_end: null, access_kind: "legacy" },
@@ -344,5 +349,30 @@ describe("CreditsPage (CPF)", () => {
     } as never);
     renderWithProviders(<CreditsPage />);
     expect(screen.queryByText(/CPF do titular/)).toBeNull();
+  });
+});
+
+describe("CreditsPage (prepaid plan)", () => {
+  beforeEach(async () => {
+    const auth = await import("@/hooks/useAuth");
+    vi.mocked(auth.useAuth).mockReturnValue({
+      profile: { credit_balance: 0, plan_credits: 300, plan_period_end: "2099-02-15T15:00:00Z", access_kind: "subscriber" },
+    } as never);
+  });
+
+  it("with a running prepaid plan, shows its card instead of the subscription invite", () => {
+    mockUseActivePrepaid.mockReturnValueOnce({
+      data: { periodEnd: new Date("2099-02-15T15:00:00Z"), lockedCredits: 600, unlockAt: new Date("2099-01-08T15:00:00Z") },
+    });
+    renderPage();
+    expect(screen.getByRole("heading", { name: "Plano à vista" })).toBeInTheDocument();
+    expect(screen.getByText("Válido até 15/02/2099")).toBeInTheDocument();
+    expect(screen.queryByTestId("subscription-card")).toBeNull();
+  });
+
+  it("without one, keeps the subscription card", () => {
+    renderPage();
+    expect(screen.getByTestId("subscription-card")).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Plano à vista" })).toBeNull();
   });
 });

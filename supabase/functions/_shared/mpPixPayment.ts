@@ -16,6 +16,8 @@ export interface PixPaymentInput {
   expiresInSeconds?: number;
   /** Reference clock, injected so the expiry is deterministic under test. */
   now?: Date;
+  /** Overrides the "N créditos" text (the prepaid plan names its period instead). */
+  description?: string;
 }
 
 // MP documents date_of_expiration as yyyy-MM-ddTHH:mm:ss.SSS±hh:mm and rejects a
@@ -36,13 +38,14 @@ export function buildPixPaymentBody(input: PixPaymentInput): Record<string, unkn
     notificationUrl,
     expiresInSeconds = PIX_EXPIRES_AFTER_SECONDS,
     now = new Date(),
+    description,
   } = input;
 
   return {
     // In reais, not cents: /v1/payments takes the decimal amount.
     transaction_amount: pkg.amountBrl,
     // Regular hyphen, not an em dash, per project pt-BR punctuation.
-    description: `${pkg.credits} ${pkg.credits === 1 ? "crédito" : "créditos"} - Olhar Singular`,
+    description: description ?? `${pkg.credits} ${pkg.credits === 1 ? "crédito" : "créditos"} - Olhar Singular`,
     payment_method_id: "pix",
     external_reference: purchaseId,
     notification_url: notificationUrl,

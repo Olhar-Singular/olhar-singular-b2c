@@ -1,51 +1,45 @@
-import { useState } from "react";
 import { Link } from "react-router-dom";
-import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { ACCOUNT_FORM_MESSAGES, validateAccountForm } from "@/lib/domain/subscriptionUi";
 
 export interface AccountDraft {
   fullName: string;
   email: string;
 }
 
-interface Props {
-  onConfirm: (account: AccountDraft) => void;
-  initial?: AccountDraft;
+export interface AccountForm {
+  fullName: string;
+  email: string;
+  emailConfirmation: string;
+  acceptedTerms: boolean;
 }
 
-// First step of the anonymous checkout: who is buying. The e-mail is typed
-// twice on purpose (decision 13: no confirmation e-mail is sent, the paid card
-// is the proof, so a typo here would lock the buyer out of their own account).
-export default function AccountStep({ onConfirm, initial }: Props) {
-  const [fullName, setFullName] = useState(initial?.fullName ?? "");
-  const [email, setEmail] = useState(initial?.email ?? "");
-  const [emailConfirmation, setEmailConfirmation] = useState(initial?.email ?? "");
-  const [acceptedTerms, setAcceptedTerms] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+export const EMPTY_ACCOUNT_FORM: AccountForm = { fullName: "", email: "", emailConfirmation: "", acceptedTerms: false };
 
-  function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    const problem = validateAccountForm({ fullName, email, emailConfirmation, acceptedTerms });
-    if (problem) {
-      setError(ACCOUNT_FORM_MESSAGES[problem]);
-      return;
-    }
-    setError(null);
-    onConfirm({ fullName: fullName.trim(), email: email.trim().toLowerCase() });
-  }
+interface Props {
+  value: AccountForm;
+  onChange: (next: AccountForm) => void;
+  /** The checkout's validation message, set when its own button is pressed. */
+  error: string | null;
+}
+
+// Who is buying, on the same screen as the plan and the payment: the page owns
+// the values and checks them when its call to action is pressed. The e-mail is
+// typed twice on purpose (decision 13: no confirmation e-mail is sent, the paid
+// card is the proof, so a typo here would lock the buyer out of their own account).
+export default function AccountStep({ value, onChange, error }: Props) {
+  const set = (patch: Partial<AccountForm>) => onChange({ ...value, ...patch });
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-4" noValidate>
+    <div className="space-y-4">
       <div className="space-y-1.5">
         <Label htmlFor="account-name">Nome completo</Label>
         <Input
           id="account-name"
           autoComplete="name"
-          value={fullName}
-          onChange={(e) => setFullName(e.target.value)}
+          value={value.fullName}
+          onChange={(e) => set({ fullName: e.target.value })}
           placeholder="Como quer ser chamado na plataforma"
         />
       </div>
@@ -55,8 +49,8 @@ export default function AccountStep({ onConfirm, initial }: Props) {
           id="account-email"
           type="email"
           autoComplete="email"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
+          value={value.email}
+          onChange={(e) => set({ email: e.target.value })}
           placeholder="voce@exemplo.com"
         />
       </div>
@@ -66,8 +60,8 @@ export default function AccountStep({ onConfirm, initial }: Props) {
           id="account-email-confirmation"
           type="email"
           autoComplete="off"
-          value={emailConfirmation}
-          onChange={(e) => setEmailConfirmation(e.target.value)}
+          value={value.emailConfirmation}
+          onChange={(e) => set({ emailConfirmation: e.target.value })}
           placeholder="Digite de novo"
         />
         <p className="text-xs text-muted-foreground">
@@ -77,8 +71,8 @@ export default function AccountStep({ onConfirm, initial }: Props) {
       <div className="flex items-start gap-2">
         <Checkbox
           id="account-terms"
-          checked={acceptedTerms}
-          onCheckedChange={(checked) => setAcceptedTerms(checked === true)}
+          checked={value.acceptedTerms}
+          onCheckedChange={(checked) => set({ acceptedTerms: checked === true })}
         />
         <Label htmlFor="account-terms" className="text-sm font-normal leading-snug">
           Li e aceito os{" "}
@@ -97,13 +91,10 @@ export default function AccountStep({ onConfirm, initial }: Props) {
         </Label>
       </div>
       {error && (
-        <p role="alert" className="text-sm text-destructive">
+        <p role="alert" className="text-sm text-destructive-strong">
           {error}
         </p>
       )}
-      <Button type="submit" className="w-full">
-        Continuar para o pagamento
-      </Button>
-    </form>
+    </div>
   );
 }

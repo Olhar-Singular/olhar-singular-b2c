@@ -262,6 +262,23 @@ describe("useSubscribe (anonymous funnel)", () => {
     expect(subscribeErrorCode(new Error("x"))).toBeNull();
     expect(subscribeErrorCode(null)).toBeNull();
   });
+
+  it("does not toast prepaid_active either (the page shows it next to the card, with the way to renew on Pix)", async () => {
+    const { toast } = await import("sonner");
+    const message = "Você tem um plano à vista ativo até 15/02/2027. Para continuar, renove no Pix ou assine no cartão depois dessa data.";
+    const error = Object.assign(new Error("Edge Function returned a non-2xx status code"), {
+      context: new Response(JSON.stringify({ error: message, code: "prepaid_active" }), { status: 409 }),
+    });
+    mockInvoke.mockResolvedValue({ data: null, error });
+    const { result } = renderHook(() => useSubscribe(), { wrapper });
+    let caught: unknown;
+    await act(async () => {
+      try { await result.current.mutateAsync({ planSlug: "basico", card: CARD }); } catch (e) { caught = e; }
+    });
+    expect(subscribeErrorCode(caught)).toBe("prepaid_active");
+    expect((caught as Error).message).toBe(message);
+    expect(toast.error).not.toHaveBeenCalled();
+  });
 });
 
 describe("useSetInitialPassword", () => {

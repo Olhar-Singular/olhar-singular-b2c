@@ -69,13 +69,13 @@ export default function PricingSection() {
         </p>
 
         <div className="mt-8 grid grid-cols-[repeat(auto-fit,minmax(min(230px,100%),1fr))] items-stretch gap-5">
-          {/* Trial with card: always first, runs on the cheapest public plan. */}
+          {/* Trial with card: always first; the buyer picks the plan at checkout, the cheapest is the floor. */}
           <article className={CARD_PLAIN}>
             <h3 className={CARD_LABEL}>Teste grátis {TRIAL_DAYS} dias</h3>
             <p className={CARD_PRICE}>{TRIAL_CREDITS} créditos</p>
             {trialPlan && (
               <p className="text-sm font-semibold text-lp-teal-text">
-                Depois, {formatBrl(trialPlan.priceBrl)}/mês ({trialPlan.monthlyCredits} créditos). Cancele antes e não
+                Depois, a partir de {formatBrl(trialPlan.priceBrl)}/mês, no plano que você escolher. Cancele antes e não
                 paga nada.
               </p>
             )}

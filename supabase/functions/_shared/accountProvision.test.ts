@@ -8,9 +8,9 @@ const CARD = { token: "tok", payment_method_id: "master", payer: { identificatio
 function subscribeDeps(preapproval: Record<string, unknown> = { id: "pre-1", status: "authorized" }): SubscribeDeps {
   return {
     loadPlan: vi.fn(async () => PLAN),
-    loadCheapestPublicPlan: vi.fn(async () => PLAN),
     loadProfile: vi.fn(async () => ({ access_kind: "subscriber", is_super_admin: false })),
     findLiveSubscription: vi.fn(async () => null),
+    prepaidActiveUntil: vi.fn(async () => null),
     expireStalePending: vi.fn(async () => undefined),
     insertSubscription: vi.fn(async () => "sub-1"),
     postPreapproval: vi.fn(async () => ({ ok: true, status: 201, json: preapproval })),
@@ -173,6 +173,12 @@ describe("runAnonymousCheckout", () => {
     const d = deps();
     (d.subscribeDeps.findLiveSubscription as ReturnType<typeof vi.fn>).mockResolvedValue({ id: "old", status: "authorized" });
     expect(await runAnonymousCheckout(anonymous(), d)).toEqual({ ok: false, error: "already_subscribed", httpStatus: 409 });
+  });
+
+  it("carries the end of a running Pix prepaid plan to the answer", async () => {
+    const d = deps();
+    (d.subscribeDeps.prepaidActiveUntil as ReturnType<typeof vi.fn>).mockResolvedValue(new Date("2027-02-15T15:00:00.000Z"));
+    expect(await runAnonymousCheckout(anonymous(), d)).toEqual({ ok: false, error: "prepaid_active", httpStatus: 409, until: "2027-02-15T15:00:00.000Z" });
   });
 
 

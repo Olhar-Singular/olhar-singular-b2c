@@ -1,5 +1,7 @@
 // Legal texts shown at /termos, /privacidade and /reembolso, approved by the
-// lawyer on 2026-10-14. The version shown is the one the checkout records on
+// lawyer on 2026-10-14. The 2026-11.1 clauses of the Pix prepaid plan (Termos
+// 5.11 and 7.4, Reembolso 5; the fiscal-document clause was dropped, the
+// product issues none) still need the lawyer's review before production. The version shown is the one the checkout records on
 // profiles.terms_version, so both move together.
 //
 // Every clause here mirrors a real behaviour of the product (checkout, trial,
@@ -85,10 +87,10 @@ export const LEGAL_DOCS: Record<LegalSlug, LegalDoc> = {
         title: "2. Aceitação e capacidade",
         paragraphs: [
           "2.1. A Plataforma destina-se a pessoas naturais maiores de 18 anos e plenamente capazes, em especial educadores, pedagogos, terapeutas e demais profissionais da educação. Menores de 18 anos não podem criar conta nem utilizar a Plataforma.",
-          "2.2. O aceite destes Termos é registrado no checkout de criação da Conta (assinatura ou Teste Grátis) por meio da caixa de seleção \"Li e aceito\", que apresenta os links para o texto integral dos três documentos. Ficam gravados em nossos sistemas a versão aceita e a data e hora do aceite. Quem já tem Conta e contrata um plano depois não repete o aceite: permanece vinculado à versão aceita na criação da Conta ou, nas contas criadas por convite, à versão vigente no primeiro acesso, e às alterações comunicadas na forma da cláusula 17. Para contas criadas por convite da equipe, o aceite é manifestado no primeiro acesso à Plataforma, e a versão vigente pode ser consultada a qualquer momento nesta página.",
+          "2.2. O aceite destes Termos é registrado no checkout de criação da Conta (assinatura, Teste Grátis ou plano à vista) por meio da caixa de seleção \"Li e aceito\", que apresenta os links para o texto integral dos três documentos. Ficam gravados em nossos sistemas a versão aceita e a data e hora do aceite. Quem já tem Conta e contrata um plano depois não repete o aceite: permanece vinculado à versão aceita na criação da Conta ou, nas contas criadas por convite, à versão vigente no primeiro acesso, e às alterações comunicadas na forma da cláusula 17. Para contas criadas por convite da equipe, o aceite é manifestado no primeiro acesso à Plataforma, e a versão vigente pode ser consultada a qualquer momento nesta página.",
           "2.3. Se você não concordar com qualquer condição destes Termos, não utilize a Plataforma.",
           "2.4. Ao aceitar, você declara que as informações fornecidas são verdadeiras e atuais, que usará a Plataforma apenas para fins lícitos e compatíveis com estes Termos e que é o titular do cartão informado ou está autorizado pelo titular a utilizá-lo. Se o cartão for de outra pessoa, você declara ter dado a ela ciência da Política de Privacidade quanto ao tratamento do CPF e dos dados do pagamento.",
-          `2.5. Enviamos ao e-mail da Conta (ou, se ele não puder ser lido, ao e-mail informado no pagamento) um e-mail de confirmação da contratação, que é o seu comprovante, nos seguintes momentos: quando o pagamento é aprovado na hora no checkout ou o Teste Grátis é iniciado; quando a operadora deixa o cartão em análise no checkout e a aprovação chega depois; e quando uma assinatura encerrada é reativada por uma nova cobrança aprovada. Não há novo e-mail de confirmação nas renovações mensais nem na primeira cobrança do Teste Grátis, já anunciada na confirmação inicial e no lembrete da cláusula 6.2. O e-mail informa: o plano; o valor; os créditos por mês; a data da primeira cobrança (no Teste Grátis) ou a indicação de que a cobrança foi feita no dia; a regra das cobranças seguintes (todo mês, na mesma data); a versão destes Termos aceita, quando disponível no momento do envio; e os links para estes Termos, para a Política de Privacidade, para a Política de Reembolso e para a área Créditos, onde o cancelamento é feito. Guarde este e-mail. Contas novas recebem também, no e-mail cadastrado, o link de acesso para definir a senha, mesmo com o cartão em análise; nesse caso, os créditos são liberados quando a aprovação chegar e, se o link não chegar, um novo pode ser pedido pela opção "Esqueci minha senha" na tela de acesso. Estes Termos, a Política de Privacidade e a Política de Reembolso permanecem disponíveis em ${LEGAL_ENTITY.site}, com a versão vigente, e podem ser salvos ou impressos a qualquer momento.`,
+          `2.5. Enviamos ao e-mail da Conta (ou, se ele não puder ser lido, ao e-mail informado no pagamento) um e-mail de confirmação da contratação, que é o seu comprovante, nos seguintes momentos: quando o pagamento é aprovado na hora no checkout ou o Teste Grátis é iniciado; quando a operadora deixa o cartão em análise no checkout e a aprovação chega depois; quando uma assinatura encerrada é reativada por uma nova cobrança aprovada; e quando o pagamento de um plano à vista no Pix é confirmado. Não há novo e-mail de confirmação nas renovações mensais nem na primeira cobrança do Teste Grátis, já anunciada na confirmação inicial e no lembrete da cláusula 6.2. O e-mail informa: o plano; o valor; os créditos por mês; a data da primeira cobrança (no Teste Grátis) ou a indicação de que a cobrança foi feita no dia; a regra das cobranças seguintes (todo mês, na mesma data); a versão destes Termos aceita, quando disponível no momento do envio; e os links para estes Termos, para a Política de Privacidade, para a Política de Reembolso e para a área Créditos, onde o cancelamento é feito. No plano à vista, o e-mail informa o período contratado, o valor pago, o total de créditos, os créditos que entraram na hora e a data em que entra o restante, a data de fim do acesso, o prazo da garantia da cláusula 7.4, a versão destes Termos aceita, quando disponível, e os mesmos links. Guarde este e-mail. Contas novas recebem também, no e-mail cadastrado, o link de acesso para definir a senha, mesmo com o cartão em análise; nesse caso, os créditos são liberados quando a aprovação chegar e, se o link não chegar, um novo pode ser pedido pela opção "Esqueci minha senha" na tela de acesso. Estes Termos, a Política de Privacidade e a Política de Reembolso permanecem disponíveis em ${LEGAL_ENTITY.site}, com a versão vigente, e podem ser salvos ou impressos a qualquer momento.`,
         ],
       },
       {
@@ -117,7 +119,7 @@ export const LEGAL_DOCS: Record<LegalSlug, LegalDoc> = {
       {
         title: "5. Planos, créditos e pagamento",
         paragraphs: [
-          "5.1. Os planos são mensais e dão direito a uma cota de Créditos do Plano. Os preços e as cotas vigentes são exibidos, em reais e com os tributos incluídos, na página de planos e no checkout, sem nenhuma taxa adicional. O valor e a cota apresentados no momento da contratação prevalecem para o período contratado.",
+          "5.1. Os planos de assinatura são mensais e dão direito a uma cota de Créditos do Plano. Os preços e as cotas vigentes são exibidos, em reais e com os tributos incluídos, na página de planos e no checkout, sem nenhuma taxa adicional. O valor e a cota apresentados no momento da contratação prevalecem para o período contratado.",
           "5.2. O pagamento da assinatura é feito por cartão de crédito, em parcela única, com cobrança recorrente automática na mesma data de cada mês, processada pelo Mercado Pago. A cobrança aparece na fatura do cartão como OLHAR SINGULAR. Os dados completos do cartão são informados diretamente ao Mercado Pago e não transitam nem são armazenados pelo Olhar Singular.",
           "5.3. Renovação. A cada cobrança confirmada, o saldo de Créditos do Plano é substituído pela cota do novo mês. Créditos do Plano não utilizados não acumulam, não são transferidos para o período seguinte e não geram restituição, informação que é apresentada antes da contratação.",
           "5.4. Créditos Extras podem ser comprados avulsos, por Pix ou cartão de crédito, são liberados após a confirmação do pagamento e não expiram enquanto a Conta existir, com ou sem assinatura ativa. Eles são consumidos somente depois de esgotados os Créditos do Plano.",
@@ -127,7 +129,7 @@ export const LEGAL_DOCS: Record<LegalSlug, LegalDoc> = {
           `5.8. Alteração de preços. Qualquer reajuste de preço, de cota ou do custo em créditos será comunicado com, no mínimo, ${LEGAL_NOTICE_DAYS} dias de antecedência, por e-mail e por aviso na Plataforma, e passará a valer apenas a partir da renovação seguinte ao fim desse prazo. Não concordando, basta cancelar a assinatura antes da renovação, sem qualquer ônus.`,
           "5.9. Troca de plano. Para mudar de plano, cancele o plano atual e assine o novo. Os Créditos do Plano novo substituem os do plano antigo.",
           "5.10. Promoções, cupons, créditos de cortesia, prorrogações e contas concedidas por convite podem ter regras próprias e ser encerrados para novas adesões a qualquer momento, respeitadas integralmente as condições já concedidas a quem aderiu durante a vigência.",
-          "5.11. Emitiremos o documento fiscal correspondente às cobranças nos termos da legislação aplicável.",
+          "5.11. Plano à vista no Pix. Você também pode contratar um plano à vista, pago por Pix em parcela única, pelo período e com a quantidade de Créditos do Plano exibidos no checkout. Não há renovação nem cobrança automática: ao fim do período, os Créditos do Plano não utilizados deixam de valer e, para continuar, você contrata um novo plano à vista ou uma assinatura. Para que a garantia da cláusula 7.4 possa ser integral, a cota de um mês (o total de créditos dividido pelo número de meses) entra na confirmação do pagamento e o restante entra no 8º dia após a confirmação, se o pagamento não tiver sido devolvido. No plano de 1 mês, todos os créditos entram na hora. Uma nova compra feita com o plano à vista ainda ativo soma os créditos e estende o período pelo número de meses contratado, a partir do fim do período em curso; sem plano à vista ativo, os Créditos do Plano novos substituem os anteriores, como na cláusula 5.9. O plano à vista não convive com uma assinatura ativa no cartão: para assinar no cartão, aguarde o fim do período à vista ou fale com o Suporte.",
         ],
       },
       {
@@ -147,6 +149,7 @@ export const LEGAL_DOCS: Record<LegalSlug, LegalDoc> = {
           "7.1. Você pode cancelar a assinatura a qualquer momento, na área Créditos, sem multa, sem fidelidade e sem necessidade de contato com o Suporte. Após o cancelamento não há nova cobrança, o acesso aos Créditos do Plano continua até o fim do período já pago e os Créditos Extras permanecem na Conta.",
           "7.2. Como o serviço do período já pago continua disponível até o seu fim, não há reembolso proporcional pelos dias restantes do período em curso, exceto nas hipóteses da Política de Reembolso, que permite estornar integralmente a última cobrança.",
           "7.3. O direito de arrependimento previsto no art. 49 do Código de Defesa do Consumidor pode ser exercido em até 7 dias corridos a contar da contratação ou, no Teste Grátis, da primeira cobrança. Ele é atendido na forma da Política de Reembolso, que oferece, para a assinatura, condições mais amplas que o prazo legal.",
+          "7.4. No plano à vista no Pix, você tem 7 dias corridos de garantia a contar da confirmação do pagamento: se não servir, devolvemos o valor integral, mesmo que parte dos créditos já liberados tenha sido usada. O pedido é feito pelo Suporte, no menu da sua conta, e o valor volta à conta de origem do Pix. Com a devolução, os créditos do plano à vista são removidos e a parte ainda não liberada é cancelada, na forma da Política de Reembolso. Depois desse prazo não há reembolso proporcional pelo período restante, como na cláusula 7.2.",
         ],
       },
       {
@@ -307,7 +310,7 @@ export const LEGAL_DOCS: Record<LegalSlug, LegalDoc> = {
         title: "7. Com quem compartilhamos",
         paragraphs: [
           "7.1. Compartilhamos dados pessoais apenas na medida necessária à prestação do serviço, sob obrigações contratuais de confidencialidade e segurança, com: Supabase (banco de dados, autenticação, armazenamento de arquivos e funções de servidor), como operador; Vercel (hospedagem do site e da aplicação), como operador; Mercado Pago (processamento de pagamentos, assinaturas, estornos e análise antifraude), que atua como controlador independente dos dados de pagamento, sob a sua própria política de privacidade; Google (API Gemini para inteligência artificial, como operador, e Google Analytics e Google Tag Manager para medição, nos termos das cláusulas 5.3 e 9); Meta Platforms (Pixel e API de Conversões para medição de campanhas, nos termos das cláusulas 5.3, 5.5 e 9), que define as próprias finalidades sobre os dados que recebe; Resend (envio de e-mails transacionais, como link de acesso, redefinição de senha, confirmação da contratação e lembrete do teste grátis), como operador.",
-          "7.2. Enviamos ao Google Analytics e à Meta um evento de conversão nestes momentos: início de assinatura ou de teste grátis, compra de créditos, renovação da assinatura, falha de pagamento, cancelamento e estorno. Ao Google Analytics vai o identificador interno da sua conta (um código pseudonimizado, que não é o seu nome nem o seu e-mail) e, se você tiver aceitado cookies de medição, o identificador do cookie _ga; à Meta vai esse identificador interno em hash irreversível (SHA-256). Os dois recebem o valor e a moeda da transação, com base no legítimo interesse descrito na cláusula 5.3. O seu e-mail (em hash) e os cookies de anúncios (_fbp e _fbc) só são incluídos no envio à Meta se você tiver aceitado cookies de marketing na faixa de consentimento.",
+          "7.2. Enviamos ao Google Analytics e à Meta um evento de conversão nestes momentos: início de assinatura ou de teste grátis, compra de plano à vista ou de créditos, renovação da assinatura, falha de pagamento, cancelamento e estorno. Ao Google Analytics vai o identificador interno da sua conta (um código pseudonimizado, que não é o seu nome nem o seu e-mail) e, se você tiver aceitado cookies de medição, o identificador do cookie _ga; à Meta vai esse identificador interno em hash irreversível (SHA-256). Os dois recebem o valor e a moeda da transação, com base no legítimo interesse descrito na cláusula 5.3. O seu e-mail (em hash) e os cookies de anúncios (_fbp e _fbc) só são incluídos no envio à Meta se você tiver aceitado cookies de marketing na faixa de consentimento.",
           "7.3. Também podemos compartilhar dados com autoridades públicas, judiciais ou administrativas quando exigido por lei, ordem judicial ou requisição válida, e para o exercício regular dos nossos direitos.",
           "7.4. Em caso de reorganização societária, fusão, aquisição ou alienação de ativos, os dados poderão ser transferidos ao sucessor, que ficará vinculado a esta Política, com comunicação a você e direito de encerrar a conta.",
           "7.5. Nunca vendemos, alugamos ou cedemos dados pessoais a terceiros para fins de marketing próprio deles.",
@@ -397,8 +400,8 @@ export const LEGAL_DOCS: Record<LegalSlug, LegalDoc> = {
       {
         title: "1. Direito de arrependimento",
         paragraphs: [
-          "1.1. Por se tratar de contratação à distância, você pode desistir da assinatura ou da compra de créditos extras em até 7 dias corridos a contar da contratação ou da compra, nos termos do art. 49 do Código de Defesa do Consumidor, com devolução dos valores pagos. No teste grátis, o prazo para a primeira cobrança conta-se da data em que ela é efetuada.",
-          "1.2. Para a assinatura, o Olhar Singular oferece condições mais amplas que o prazo legal, descritas na cláusula 2, pela mesma ferramenta usada na contratação (a área Créditos). Para os créditos extras, aplica-se a cláusula 4.",
+          "1.1. Por se tratar de contratação à distância, você pode desistir da assinatura, do plano à vista ou da compra de créditos extras em até 7 dias corridos a contar da contratação ou da compra, nos termos do art. 49 do Código de Defesa do Consumidor, com devolução dos valores pagos. No teste grátis, o prazo para a primeira cobrança conta-se da data em que ela é efetuada.",
+          "1.2. Para a assinatura, o Olhar Singular oferece condições mais amplas que o prazo legal, descritas na cláusula 2, pela mesma ferramenta usada na contratação (a área Créditos). Para o plano à vista no Pix, aplica-se a cláusula 5; para os créditos extras, a cláusula 4.",
         ],
       },
       {
@@ -425,28 +428,36 @@ export const LEGAL_DOCS: Record<LegalSlug, LegalDoc> = {
         ],
       },
       {
-        title: "5. Cobranças indevidas ou em duplicidade",
+        title: "5. Plano à vista no Pix",
         paragraphs: [
-          `5.1. Se identificar uma cobrança indevida, em duplicidade ou em valor diferente do contratado, comunique o suporte pelo menu da sua conta, informando a data e o valor. Confirmada a irregularidade, o valor é estornado integralmente pelo mesmo meio de pagamento, com a solicitação ao Mercado Pago em até ${SUPPORT_REPLY_BUSINESS_DAYS} dias úteis.`,
+          "5.1. No plano à vista pago por Pix, você tem 7 dias corridos de garantia a contar da confirmação do pagamento: se não servir para a sua realidade de sala, devolvemos o valor integral, mesmo que parte dos créditos já liberados tenha sido usada. Peça pelo suporte no menu da sua conta.",
+          `5.2. Confirmamos o recebimento do pedido e a devolução é solicitada ao Mercado Pago em até ${SUPPORT_REPLY_BUSINESS_DAYS} dias úteis, para a conta de origem do Pix. Com a devolução, os créditos liberados por aquela compra são removidos da conta, até o saldo existente, a parte que ainda não tinha sido liberada é cancelada e o período contratado recua os meses daquela compra. Os créditos extras avulsos permanecem.`,
+          "5.3. Para que a garantia possa ser integral, o plano à vista libera os créditos em duas partes: a cota de um mês entra na confirmação do pagamento e o restante entra no 8º dia, depois do fim do prazo de garantia, se o pagamento não tiver sido devolvido. Depois desse prazo, não há reembolso proporcional pelo período restante, e os créditos do plano não utilizados deixam de valer ao fim do período contratado.",
         ],
       },
       {
-        title: "6. Como e quando o valor volta",
+        title: "6. Cobranças indevidas ou em duplicidade",
         paragraphs: [
-          "6.1. Os estornos são processados pelo Mercado Pago. Pagamentos com cartão de crédito são devolvidos no mesmo cartão e podem levar até duas faturas para aparecer, conforme o banco emissor. Pagamentos por Pix são devolvidos à conta de origem do pagamento.",
-          "6.2. Os reembolsos são feitos pelo mesmo meio de pagamento utilizado. Se o cartão tiver sido cancelado, o banco emissor repassa o valor ao titular; havendo impossibilidade comprovada, o suporte combina outro meio com você. Eventuais tarifas, juros ou variações cobrados pelo banco emissor não são de responsabilidade do Olhar Singular.",
+          `6.1. Se identificar uma cobrança indevida, em duplicidade ou em valor diferente do contratado, comunique o suporte pelo menu da sua conta, informando a data e o valor. Confirmada a irregularidade, o valor é estornado integralmente pelo mesmo meio de pagamento, com a solicitação ao Mercado Pago em até ${SUPPORT_REPLY_BUSINESS_DAYS} dias úteis.`,
         ],
       },
       {
-        title: "7. Contestação junto à operadora do cartão",
+        title: "7. Como e quando o valor volta",
         paragraphs: [
-          "7.1. Contestar uma cobrança junto ao banco ou à operadora do cartão é um direito seu. Antes disso, recomendamos usar o estorno em autoatendimento da cláusula 2 ou o suporte, que são mais rápidos. Se a operadora reverter uma cobrança de créditos já consumidos e, após o nosso contato, a cobrança for reconhecida como legítima, poderemos suspender a conta até a regularização do valor correspondente aos créditos efetivamente utilizados, com direito a contestação na forma dos Termos de Uso.",
+          "7.1. Os estornos são processados pelo Mercado Pago. Pagamentos com cartão de crédito são devolvidos no mesmo cartão e podem levar até duas faturas para aparecer, conforme o banco emissor. Pagamentos por Pix são devolvidos à conta de origem do pagamento.",
+          "7.2. Os reembolsos são feitos pelo mesmo meio de pagamento utilizado. Se o cartão tiver sido cancelado, o banco emissor repassa o valor ao titular; havendo impossibilidade comprovada, o suporte combina outro meio com você. Eventuais tarifas, juros ou variações cobrados pelo banco emissor não são de responsabilidade do Olhar Singular.",
         ],
       },
       {
-        title: "8. Encerramento pela plataforma",
+        title: "8. Contestação junto à operadora do cartão",
         paragraphs: [
-          "8.1. Se o Olhar Singular encerrar a sua conta por iniciativa própria sem fraude comprovada, ou descontinuar o serviço, devolveremos os valores pagos pelo período não usufruído e pelos créditos extras não utilizados. No encerramento por fraude comprovada, apenas os créditos obtidos com a operação fraudulenta são cancelados, nos termos da cláusula 12 dos Termos de Uso.",
+          "8.1. Contestar uma cobrança junto ao banco ou à operadora do cartão é um direito seu. Antes disso, recomendamos usar o estorno em autoatendimento da cláusula 2 ou o suporte, que são mais rápidos. Se a operadora reverter uma cobrança de créditos já consumidos e, após o nosso contato, a cobrança for reconhecida como legítima, poderemos suspender a conta até a regularização do valor correspondente aos créditos efetivamente utilizados, com direito a contestação na forma dos Termos de Uso.",
+        ],
+      },
+      {
+        title: "9. Encerramento pela plataforma",
+        paragraphs: [
+          "9.1. Se o Olhar Singular encerrar a sua conta por iniciativa própria sem fraude comprovada, ou descontinuar o serviço, devolveremos os valores pagos pelo período não usufruído e pelos créditos extras não utilizados. No encerramento por fraude comprovada, apenas os créditos obtidos com a operação fraudulenta são cancelados, nos termos da cláusula 12 dos Termos de Uso.",
         ],
       },
     ],

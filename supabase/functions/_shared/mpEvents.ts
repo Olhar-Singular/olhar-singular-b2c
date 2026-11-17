@@ -56,3 +56,14 @@ export function extractRejectedPurchase(payment: MpPayment): MpPurchaseRef | nul
   if (!purchaseId) return null;
   return { purchaseId };
 }
+
+// Money that went back to the buyer (a refund from the MP panel or a bank
+// chargeback): the prepaid plan's credits leave the account.
+const MONEY_RETURNED = ["refunded", "charged_back"];
+
+export function extractRefundedPurchase(payment: MpPayment): MpPurchaseRef | null {
+  if (!MONEY_RETURNED.includes(payment.status ?? "")) return null;
+  const purchaseId = purchaseRef(payment);
+  if (!purchaseId) return null;
+  return { purchaseId };
+}

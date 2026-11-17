@@ -378,44 +378,85 @@ export type Database = {
       credit_purchases: {
         Row: {
           amount_brl: number
+          buyer_email: string | null
+          buyer_name: string | null
           created_at: string
           credits_granted: number
           id: string
+          kind: string
           payment_id: string | null
           payment_method: string
+          plan_locked_credits: number
+          plan_months: number | null
+          plan_period_end: string | null
+          plan_released_at: string | null
+          plan_unlock_at: string | null
+          prepaid_plan_id: string | null
           provider: string
+          refunded_at: string | null
           status: string
           status_detail: string | null
+          terms_version: string | null
           updated_at: string
           user_id: string | null
         }
         Insert: {
           amount_brl: number
+          buyer_email?: string | null
+          buyer_name?: string | null
           created_at?: string
           credits_granted: number
           id?: string
+          kind?: string
           payment_id?: string | null
           payment_method?: string
+          plan_locked_credits?: number
+          plan_months?: number | null
+          plan_period_end?: string | null
+          plan_released_at?: string | null
+          plan_unlock_at?: string | null
+          prepaid_plan_id?: string | null
           provider?: string
+          refunded_at?: string | null
           status?: string
           status_detail?: string | null
+          terms_version?: string | null
           updated_at?: string
           user_id?: string | null
         }
         Update: {
           amount_brl?: number
+          buyer_email?: string | null
+          buyer_name?: string | null
           created_at?: string
           credits_granted?: number
           id?: string
+          kind?: string
           payment_id?: string | null
           payment_method?: string
+          plan_locked_credits?: number
+          plan_months?: number | null
+          plan_period_end?: string | null
+          plan_released_at?: string | null
+          plan_unlock_at?: string | null
+          prepaid_plan_id?: string | null
           provider?: string
+          refunded_at?: string | null
           status?: string
           status_detail?: string | null
+          terms_version?: string | null
           updated_at?: string
           user_id?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "credit_purchases_prepaid_plan_id_fkey"
+            columns: ["prepaid_plan_id"]
+            isOneToOne: false
+            referencedRelation: "prepaid_plans"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       credit_reservations: {
         Row: {
@@ -566,6 +607,48 @@ export type Database = {
           id?: string
           monthly_credits?: number
           name?: string
+          price_brl?: number
+          slug?: string
+          sort_order?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      prepaid_plans: {
+        Row: {
+          active: boolean
+          admin_only: boolean
+          created_at: string
+          credits: number
+          highlight: boolean
+          id: string
+          months: number
+          price_brl: number
+          slug: string
+          sort_order: number
+          updated_at: string
+        }
+        Insert: {
+          active?: boolean
+          admin_only?: boolean
+          created_at?: string
+          credits: number
+          highlight?: boolean
+          id?: string
+          months: number
+          price_brl: number
+          slug: string
+          sort_order?: number
+          updated_at?: string
+        }
+        Update: {
+          active?: boolean
+          admin_only?: boolean
+          created_at?: string
+          credits?: number
+          highlight?: boolean
+          id?: string
+          months?: number
           price_brl?: number
           slug?: string
           sort_order?: number
@@ -890,6 +973,10 @@ export type Database = {
         }
         Returns: undefined
       }
+      approve_prepaid_plan: {
+        Args: { p_payment_id: string; p_purchase_id: string; p_user_id: string }
+        Returns: Json
+      }
       approve_purchase_and_grant: {
         Args: { p_payment_id: string; p_purchase_id: string }
         Returns: Json
@@ -976,6 +1063,7 @@ export type Database = {
         }
         Returns: Json
       }
+      prepaid_plan_active: { Args: { p_user_id: string }; Returns: string }
       reconcile_stale_credit_reservations: {
         Args: { p_older_than?: string }
         Returns: Json
@@ -985,6 +1073,10 @@ export type Database = {
         Returns: Json
       }
       refund_last_charge: { Args: { p_user_id: string }; Returns: Json }
+      refund_prepaid_plan: {
+        Args: { p_payment_id: string; p_purchase_id: string }
+        Returns: Json
+      }
       reject_pending_purchase: {
         Args: {
           p_payment_id: string
@@ -993,6 +1085,7 @@ export type Database = {
         }
         Returns: Json
       }
+      release_prepaid_credits: { Args: never; Returns: number }
       release_trial_reminder: {
         Args: { p_subscription_id: string }
         Returns: boolean
@@ -1014,6 +1107,7 @@ export type Database = {
         Returns: Json
       }
       trial_used_by_cpf: { Args: { p_cpf: string }; Returns: boolean }
+      user_id_by_email: { Args: { p_email: string }; Returns: string }
     }
     Enums: {
       [_ in never]: never
@@ -1032,12 +1126,12 @@ export type Tables<
   DefaultSchemaTableNameOrOptions extends
     | keyof (DefaultSchema["Tables"] & DefaultSchema["Views"])
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends (DefaultSchemaTableNameOrOptions extends {
+  TableName extends DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
         DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])
-    : never) = never,
+    : never = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -1061,11 +1155,11 @@ export type TablesInsert<
   DefaultSchemaTableNameOrOptions extends
     | keyof DefaultSchema["Tables"]
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends (DefaultSchemaTableNameOrOptions extends {
+  TableName extends DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
-    : never) = never,
+    : never = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -1086,11 +1180,11 @@ export type TablesUpdate<
   DefaultSchemaTableNameOrOptions extends
     | keyof DefaultSchema["Tables"]
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends (DefaultSchemaTableNameOrOptions extends {
+  TableName extends DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
-    : never) = never,
+    : never = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -1111,11 +1205,11 @@ export type Enums<
   DefaultSchemaEnumNameOrOptions extends
     | keyof DefaultSchema["Enums"]
     | { schema: keyof DatabaseWithoutInternals },
-  EnumName extends (DefaultSchemaEnumNameOrOptions extends {
+  EnumName extends DefaultSchemaEnumNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"]
-    : never) = never,
+    : never = never,
 > = DefaultSchemaEnumNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -1128,11 +1222,11 @@ export type CompositeTypes<
   PublicCompositeTypeNameOrOptions extends
     | keyof DefaultSchema["CompositeTypes"]
     | { schema: keyof DatabaseWithoutInternals },
-  CompositeTypeName extends (PublicCompositeTypeNameOrOptions extends {
+  CompositeTypeName extends PublicCompositeTypeNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"]
-    : never) = never,
+    : never = never,
 > = PublicCompositeTypeNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -1149,3 +1243,4 @@ export const Constants = {
     Enums: {},
   },
 } as const
+

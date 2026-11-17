@@ -182,7 +182,9 @@ describe("FaqSection (subscription)", () => {
     expect(within(panel).getByText(/cartão de crédito/i)).toBeInTheDocument();
     expect(within(panel).getByText(new RegExp(`nada é cobrado por ${TRIAL_DAYS} dias`))).toBeInTheDocument();
     expect(within(panel).getByText(new RegExp(`você recebe ${TRIAL_CREDITS} créditos`))).toBeInTheDocument();
-    expect(within(panel).getByText(new RegExp(`No ${TRIAL_DAYS + 1}º dia cobramos R\\$\\s*39,90`))).toBeInTheDocument();
+    expect(
+      within(panel).getByText(new RegExp(`No ${TRIAL_DAYS + 1}º dia cobramos o plano que você escolheu no checkout, a partir de R\\$\\s*39,90/mês`)),
+    ).toBeInTheDocument();
     expect(within(panel).getByText(new RegExp(`Cancelou antes do ${TRIAL_DAYS + 1}º dia\\?`))).toBeInTheDocument();
     expect(within(panel).getByText(/um teste por CPF/i)).toBeInTheDocument();
     const cancel = await openQuestion("Posso cancelar quando quiser?");
@@ -208,7 +210,9 @@ describe("FaqSection (subscription)", () => {
     const panel = await openQuestion(`Como funciona o teste grátis de ${TRIAL_DAYS} dias?`);
     expect(
       within(panel).getByText(
-        new RegExp(`No ${TRIAL_DAYS + 1}º dia cobramos R\\$\\s*42,00 e sua conta vira o plano Único, com 120 créditos por mês`),
+        new RegExp(
+          `No ${TRIAL_DAYS + 1}º dia cobramos o plano que você escolheu no checkout, a partir de R\\$\\s*42,00/mês, e sua conta passa a receber os créditos dele todo mês\\.`,
+        ),
       ),
     ).toBeInTheDocument();
   });
@@ -223,7 +227,8 @@ describe("FaqSection (subscription)", () => {
     });
     renderWithProviders(<FaqSection />);
     const panel = await openQuestion(`Como funciona o teste grátis de ${TRIAL_DAYS} dias?`);
-    expect(within(panel).getByText(/R\$\s*41,90 e sua conta vira o plano Pro/)).toBeInTheDocument();
+    expect(within(panel).getByText(/a partir de R\$\s*41,90\/mês/)).toBeInTheDocument();
+    expect(within(panel).queryByText(/sua conta vira o plano/)).toBeNull();
   });
 
   it("answers the regret question with the self-service refund of the last charge", async () => {
@@ -269,5 +274,13 @@ describe("FaqSection (limits and data)", () => {
     for (const code of [0x2013, 0x2014]) expect(text).not.toContain(String.fromCharCode(code));
     expect(text).not.toMatch(/Isa\b/);
     expect(text).not.toMatch(/undefined|NaN|\{\{/);
+  });
+
+  it("answers whether Pix is accepted: prepaid plans, two-part release, the 7-day guarantee", async () => {
+    renderWithProviders(<FaqSection />);
+    const panel = await openQuestion("Dá para pagar com Pix?");
+    expect(panel).toHaveTextContent(
+      "Sim. No Pix você paga à vista por 1, 3 ou 12 meses, sem cartão e sem renovação automática, e quanto mais meses, menor o valor mensal. O acesso é liberado em segundos depois do pagamento. Nos planos de 3 e 12 meses, a cota de um mês entra na hora e o restante entra no 8º dia, depois do prazo de garantia: se não servir em até 7 dias, devolvemos o valor integral.",
+    );
   });
 });

@@ -142,10 +142,13 @@ describe("landing copy regression", () => {
     it("quotes the cheapest catalogue plan in the trial card and in the FAQ", () => {
       const { container } = renderCopy();
       const text = pageText(container);
-      expect(text).toMatch(/Depois, R\$\s*41,90\/mês \(310 créditos\)/);
+      expect(text).toMatch(/Depois, a partir de R\$\s*41,90\/mês, no plano que você escolher/);
       expect(text).toMatch(
-        new RegExp(`No ${TRIAL_DAYS + 1}º dia cobramos R\\$\\s*41,90 e sua conta vira o plano Essencial, com 310 créditos por mês`),
+        new RegExp(
+          `No ${TRIAL_DAYS + 1}º dia cobramos o plano que você escolheu no checkout, a partir de R\\$\\s*41,90/mês, e sua conta passa a receber os créditos dele todo mês\\.`,
+        ),
       );
+      expect(text).not.toMatch(/sua conta vira o plano/);
     });
 
     it("does not leak any seeded price, credit count or plan name", () => {

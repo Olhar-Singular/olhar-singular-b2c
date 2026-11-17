@@ -1,9 +1,10 @@
+import { useState } from "react";
 import { describe, it, expect, vi } from "vitest";
 import { screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { renderWithProviders } from "@/test/helpers";
-import AccountStep from "./AccountStep";
-import { canSubscribe, maskCpfForOwner, validateAccountForm } from "@/lib/domain/subscriptionUi";
+import AccountStep, { EMPTY_ACCOUNT_FORM, type AccountForm } from "./AccountStep";
+import { canSubscribe, confirmedEmail, maskCpfForOwner, normalizeAccount, validateAccountForm } from "@/lib/domain/subscriptionUi";
 
 describe("validateAccountForm", () => {
   const ok = { fullName: "Ana Souza", email: "Ana@Example.com", emailConfirmation: "ana@example.com ", acceptedTerms: true };
@@ -40,50 +41,69 @@ describe("maskCpfForOwner", () => {
   });
 });
 
+describe("confirmedEmail", () => {
+  it("gives the normalised e-mail only when it is valid and both fields match", () => {
+    expect(confirmedEmail({ email: " Ana@Example.com", emailConfirmation: "ana@example.com " })).toBe("ana@example.com");
+    expect(confirmedEmail({ email: "ana@example.com", emailConfirmation: "ana@example.co" })).toBeNull();
+    expect(confirmedEmail({ email: "nope", emailConfirmation: "nope" })).toBeNull();
+  });
+});
+
+describe("normalizeAccount", () => {
+  it("trims the name and lower-cases the e-mail", () => {
+    expect(
+      normalizeAccount({ fullName: " Ana Souza ", email: " Ana@Example.com", emailConfirmation: "x", acceptedTerms: true }),
+    ).toEqual({ fullName: "Ana Souza", email: "ana@example.com" });
+  });
+});
+
 describe("AccountStep", () => {
-  async function fill(user: ReturnType<typeof userEvent.setup>, values: { name?: string; email?: string; confirm?: string; terms?: boolean }) {
-    if (values.name) await user.type(screen.getByLabelText("Nome completo"), values.name);
-    if (values.email) await user.type(screen.getByLabelText("E-mail"), values.email);
-    if (values.confirm) await user.type(screen.getByLabelText("Confirme o e-mail"), values.confirm);
-    if (values.terms) await user.click(screen.getByRole("checkbox"));
+  // The page owns the values (they are checked by the checkout's own button).
+  function Harness({ error = null, onChange }: { error?: string | null; onChange?: (v: AccountForm) => void }) {
+    const [value, setValue] = useState<AccountForm>(EMPTY_ACCOUNT_FORM);
+    return (
+      <AccountStep
+        value={value}
+        error={error}
+        onChange={(next) => {
+          setValue(next);
+          onChange?.(next);
+        }}
+      />
+    );
   }
 
-  it("confirms a valid account, normalising the e-mail", async () => {
+  it("is a part of the checkout, not a step: no button of its own", () => {
+    renderWithProviders(<Harness />);
+    expect(screen.queryByRole("button")).toBeNull();
+    expect(screen.getByLabelText("E-mail")).toHaveAttribute("autocomplete", "email");
+    expect(screen.getByLabelText("Nome completo")).toHaveAttribute("autocomplete", "name");
+  });
+
+  it("reports every field to the page", async () => {
     const user = userEvent.setup();
-    const onConfirm = vi.fn();
-    renderWithProviders(<AccountStep onConfirm={onConfirm} />);
-    await fill(user, { name: " Ana Souza ", email: "Ana@Example.com", confirm: "ana@example.com", terms: true });
-    await user.click(screen.getByRole("button", { name: /Continuar para o pagamento/ }));
-    expect(onConfirm).toHaveBeenCalledWith({ fullName: "Ana Souza", email: "ana@example.com" });
+    const onChange = vi.fn();
+    renderWithProviders(<Harness onChange={onChange} />);
+    await user.type(screen.getByLabelText("Nome completo"), "Ana");
+    await user.type(screen.getByLabelText("E-mail"), "a@b.co");
+    await user.type(screen.getByLabelText("Confirme o e-mail"), "a@b.co");
+    await user.click(screen.getByRole("checkbox"));
+    expect(onChange).toHaveBeenLastCalledWith({ fullName: "Ana", email: "a@b.co", emailConfirmation: "a@b.co", acceptedTerms: true });
+    await user.click(screen.getByRole("checkbox"));
+    expect(onChange).toHaveBeenLastCalledWith(expect.objectContaining({ acceptedTerms: false }));
+  });
+
+  it("shows the page's validation message as an alert", () => {
+    renderWithProviders(<Harness error="Os e-mails não coincidem." />);
+    expect(screen.getByRole("alert")).toHaveTextContent("Os e-mails não coincidem.");
+    expect(screen.getByRole("alert")).toHaveClass("text-destructive-strong");
+  });
+
+  it("links to the three legal documents", () => {
+    renderWithProviders(<Harness />);
     expect(screen.queryByRole("alert")).toBeNull();
-  });
-
-  it("blocks a mismatching e-mail and explains why it matters", async () => {
-    const user = userEvent.setup();
-    const onConfirm = vi.fn();
-    renderWithProviders(<AccountStep onConfirm={onConfirm} />);
-    await fill(user, { name: "Ana Souza", email: "ana@example.com", confirm: "ana@exemple.com", terms: true });
-    await user.click(screen.getByRole("button", { name: /Continuar/ }));
-    expect(screen.getByRole("alert")).toHaveTextContent(/não coincidem/);
-    expect(onConfirm).not.toHaveBeenCalled();
-  });
-
-  it("requires the terms and links to them", async () => {
-    const user = userEvent.setup();
-    const onConfirm = vi.fn();
-    renderWithProviders(<AccountStep onConfirm={onConfirm} />);
-    await fill(user, { name: "Ana Souza", email: "ana@example.com", confirm: "ana@example.com" });
-    await user.click(screen.getByRole("button", { name: /Continuar/ }));
-    expect(screen.getByRole("alert")).toHaveTextContent(/Termos de Uso/);
     expect(screen.getByRole("link", { name: "Termos de Uso" })).toHaveAttribute("href", "/termos");
     expect(screen.getByRole("link", { name: "Política de Privacidade" })).toHaveAttribute("href", "/privacidade");
     expect(screen.getByRole("link", { name: "Política de Reembolso" })).toHaveAttribute("href", "/reembolso");
-    expect(onConfirm).not.toHaveBeenCalled();
-  });
-
-  it("pre-fills from a previous draft", () => {
-    renderWithProviders(<AccountStep onConfirm={vi.fn()} initial={{ fullName: "Ana", email: "ana@example.com" }} />);
-    expect(screen.getByLabelText("Nome completo")).toHaveValue("Ana");
-    expect(screen.getByLabelText("Confirme o e-mail")).toHaveValue("ana@example.com");
   });
 });

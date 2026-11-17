@@ -8,9 +8,11 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import PixPaymentDialog from "@/components/credits/PixPaymentDialog";
 import CardPaymentDialog from "@/components/credits/CardPaymentDialog";
+import PrepaidPlanCard from "@/components/credits/PrepaidPlanCard";
 import SubscriptionCard from "@/components/credits/SubscriptionCard";
 import { useAccess } from "@/hooks/useAccess";
 import { useAuth } from "@/hooks/useAuth";
+import { useActivePrepaid } from "@/hooks/usePrepaid";
 import { maskCpfForOwner } from "@/lib/domain/subscriptionUi";
 import { useSubscription } from "@/hooks/useSubscription";
 import { useTransactionHistory, useCreatePixPayment, usePackages } from "@/hooks/useCredits";
@@ -46,6 +48,7 @@ export default function CreditsPage() {
   const { profile } = useAuth();
   const cpfMasked = maskCpfForOwner(profile?.cpf);
   const { data: subscription } = useSubscription();
+  const { data: prepaid } = useActivePrepaid();
   const { data: transactions = [], isLoading } = useTransactionHistory();
   // The catalogue comes from credit_packages; RLS already hides inactive rows
   // and shows the admin-only R$1 smoke package only to super-admins.
@@ -107,8 +110,15 @@ export default function CreditsPage() {
         </CardContent>
       </Card>
 
-      {/* Subscription (hidden for courtesy accounts and while loading) */}
-      <SubscriptionCard subscription={subscription} access={access} isSuperAdmin={!!profile?.is_super_admin} />
+      {/* A running Pix prepaid plan takes the subscription's place (the two never
+          run together, R6): no invite to subscribe, and no refund of an old card
+          charge that would remove the prepaid credits. Otherwise the subscription
+          (hidden for courtesy accounts and while loading). */}
+      {prepaid ? (
+        <PrepaidPlanCard prepaid={prepaid} />
+      ) : (
+        <SubscriptionCard subscription={subscription} access={access} isSuperAdmin={!!profile?.is_super_admin} />
+      )}
 
       {/* Packages */}
       <section className="space-y-4">
