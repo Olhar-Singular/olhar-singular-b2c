@@ -31,8 +31,8 @@ SELECT results_eq(
   'the three public offers carry the prices of D8');
 
 SELECT is(
-  (SELECT count(*)::int FROM public.prepaid_plans WHERE admin_only AND price_brl = 1.00 AND credits = 1),
-  1, 'there is one R$1 admin-only smoke offer');
+  (SELECT count(*)::int FROM public.prepaid_plans WHERE admin_only AND price_brl = 1.00 AND credits = 1 AND NOT active),
+  1, 'the R$1 admin-only smoke offer is retired after the production smoke (17/11/2026)');
 
 SELECT set_config('request.jwt.claims', '{"role":"anon"}', true);
 SET LOCAL role anon;
