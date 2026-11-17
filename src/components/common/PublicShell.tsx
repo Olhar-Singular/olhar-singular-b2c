@@ -6,8 +6,8 @@ import { CookiePreferencesButton } from "@/components/common/CookiePreferencesBu
 
 // Minimal chrome for public pages that are not the landing (legal): brand,
 // "Entrar", and the legal footer. No marketing anchors, no sidebar. In
-// `checkout` mode the header offers no way out of the payment screen (no
-// home link, no "Entrar"), only the secure-payment note; the footer stays.
+// `checkout` mode the header drops "Entrar" and shows the secure-payment note;
+// the logo still leads back to the landing (owner's call, 17/11/2026).
 export default function PublicShell({ children, checkout = false }: { children: React.ReactNode; checkout?: boolean }) {
   const brand = (
     <>
@@ -20,13 +20,9 @@ export default function PublicShell({ children, checkout = false }: { children: 
     <div className={`min-h-screen flex flex-col bg-background${checkout ? " checkout-theme" : ""}`}>
       <header className="border-b border-border bg-card/90">
         <div className={`${width} mx-auto px-4 py-3 flex items-center justify-between`}>
-          {checkout ? (
-            <div className="flex items-center gap-2">{brand}</div>
-          ) : (
-            <Link to="/" className="flex items-center gap-2">
-              {brand}
-            </Link>
-          )}
+          <Link to="/" className="flex items-center gap-2">
+            {brand}
+          </Link>
           {checkout ? (
             <p className="flex items-center gap-1.5 text-sm text-muted-foreground">
               <Lock className="h-4 w-4" aria-hidden="true" />
